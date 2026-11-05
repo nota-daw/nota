@@ -22,6 +22,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -179,7 +180,7 @@ internal sealed class CrQuantView : Control
         double rate = _sr / _hold;
         NotaGraph.Legend(ctx, w - 6, 3, ("source", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed),
             (NotaNum.F($"{_bits:0.0} bit @ {CrushMath.Hz(rate)}"), NotaPalette.VizInk, NotaGraph.Mark.Line));
-        if (enlarged) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "level step shown enlarged");
+        if (enlarged) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, Loc.T("device.crush.level_step_shown_enlarged"));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "10\u2009ms");
     }
 }
@@ -254,7 +255,7 @@ internal sealed class CrSpectrumView : ShDragView
         }
         else
         {
-            var ft = NotaGraph.AxisText("no signal", NotaPalette.TextTertiary);
+            var ft = NotaGraph.AxisText(Loc.T("common.no_signal"), NotaPalette.TextTertiary);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, (top + bot - ft.Height) / 2));
         }
 

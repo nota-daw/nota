@@ -17,6 +17,7 @@
 using System;
 using Avalonia;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -30,7 +31,7 @@ internal sealed class CeLevelView : ShDragView
     /// <summary>Maps a ceiling (dB) to the handle's 0..1 value and back — set by the card.</summary>
     public Func<double, double> CeilToNorm { get; set; } = db => (db + 12) / 12;
     public Func<double, double> NormToCeil { get; set; } = n => -12 + 12 * n;
-    public string Title { get; set; } = "Level and reduction";
+    public string Title { get; set; } = Loc.T("device.ceiling.level_and_reduction");
 
     /// <summary>The level cells (input, output, max GR — each <paramref name="n"/> long from
     /// <paramref name="inAt"/>, <paramref name="outAt"/>, <paramref name="grAt"/>) and the ceiling in dB.</summary>

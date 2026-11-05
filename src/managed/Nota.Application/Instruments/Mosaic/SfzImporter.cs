@@ -122,6 +122,10 @@ public static class SfzImporter
         {
             if (kv.Key.StartsWith("set_cc", StringComparison.Ordinal) && int.TryParse(kv.Key[6..], NumberStyles.Integer, Inv, out int n))
                 cc[n] = (int)Math.Round(Num(kv.Value, 0));
+            // ARIA's high-resolution form, 0..1 (#349: Salamander starts its string resonance,
+            // hammer and pedal noise controllers at 0.5 this way).
+            else if (kv.Key.StartsWith("set_hdcc", StringComparison.Ordinal) && int.TryParse(kv.Key[8..], NumberStyles.Integer, Inv, out int hn))
+                cc[hn] = Math.Clamp((int)Math.Round(Num(kv.Value, 0) * 127), 0, 127);
             else if (kv.Key.StartsWith("label_cc", StringComparison.Ordinal) && int.TryParse(kv.Key[8..], NumberStyles.Integer, Inv, out int l))
                 report.CcLabels[l] = kv.Value;
         }
@@ -284,6 +288,70 @@ public static class SfzImporter
             result[cc] = list.OrderBy(x => x.Item1).Select(x => (x.Item1, x.Item2, $"{name} {x.Item1}–{x.Item2}")).ToList();
         }
         return result;
+    }
+
+    /// <summary>The SFZ a drop asks to open (#349): an .sfz file among <paramref name="paths"/>,
+    /// else the instrument in a dropped folder (its first SFZ no other SFZ there #includes).
+    /// Null when there is none.</summary>
+    public static string? ProgramIn(IEnumerable<string> paths)
+    {
+        var list = paths.ToList();
+        foreach (var p in list)
+            if (IsSfz(p) && File.Exists(p)) return p;
+        foreach (var p in list)
+            if (Directory.Exists(p) && TopLevel(p) is { Count: > 0 } top) return top[0];
+        return null;
+    }
+
+    /// <summary>The envelope, bend range and filter the SFZ names, as Nota Mosaic params (by id).</summary>
+    public static Dictionary<string, float> ParamsFrom(SfzImportReport r)
+    {
+        var d = new Dictionary<string, float>();
+        if (r.Attack is { } a) d["attack"] = MosaicModel.AttackNorm(a);
+        if (r.Decay is { } dc) d["decay"] = MosaicModel.DecayNorm(dc);
+        if (r.Sustain is { } s) d["sustain"] = (float)s;
+        if (r.Release is { } rel) d["release"] = MosaicModel.DecayNorm(rel);
+        if (r.BendSemis is { } b) d["bendrange"] = (float)Math.Clamp(b / 24.0, 0, 1);
+        if (r.CutoffHz is { } c && c < 18000)
+        {
+            d["filtertype"] = 1f / 3f;
+            d["cutoff"] = (float)Math.Clamp(Math.Log(Math.Max(20, c) / 20.0) / Math.Log(1000.0), 0, 1);
+        }
+        return d;
+    }
+
+    /// <summary>Whether a drop carries an SFZ (an .sfz file, or one anywhere in a dropped folder),
+    /// without reading any: cheap enough for every drag-over event.</summary>
+    public static bool HasSfz(IEnumerable<string> paths)
+    {
+        foreach (var p in paths)
+        {
+            if (IsSfz(p) && File.Exists(p)) return true;
+            if (!Directory.Exists(p)) continue;
+            try { if (Directory.EnumerateFiles(p, "*", SearchOption.AllDirectories).Any(IsSfz)) return true; }
+            catch { }
+        }
+        return false;
+    }
+
+    public static bool IsSfz(string path) => Path.GetExtension(path).Equals(".sfz", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The SFZ files under <paramref name="root"/> that no other SFZ there #includes —
+    /// the instruments, not the fragments they are built from — by name.</summary>
+    public static List<string> TopLevel(string root)
+    {
+        List<string> all;
+        try { all = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(IsSfz).OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList(); }
+        catch { return new List<string>(); }
+        var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in all)
+        {
+            string text;
+            try { text = File.ReadAllText(f); } catch { continue; }
+            foreach (Match m in IncludeRx.Matches(text))
+                included.Add(Path.GetFileName(m.Groups[1].Value.Replace('\\', '/')));
+        }
+        return all.Where(f => !included.Contains(Path.GetFileName(f))).ToList();
     }
 
     // ---- loading (#include, #define, comments) ---------------------------------------------

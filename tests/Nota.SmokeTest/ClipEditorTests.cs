@@ -101,5 +101,36 @@ internal static class ClipEditorTests
         double[] stretched = { 0, 2, 5, 10 };   // the last marker dragged out
         yield return (Near(WarpRemap.OldBeatAt(src3, beat3, stretched, 10), 8, 1e-9) && Near(WarpRemap.OldBeatAt(src3, beat3, stretched, 7.5), 6.5, 1e-9),
             "remap: dragging the last marker stretches the last segment");
+
+        // ---- PanelColumns (specs/055) ------------------------------------------------
+        // The MIDI inspector's four sections (Clip, Quantize, Transpose, Selection), 37px apart.
+        double[] insp = { 80, 70, 50, 140 };
+        const double g = 37;
+        double one = PanelColumns.Stack(insp, 0, 4, g);
+        yield return (Near(one, 340 + 3 * g), "columns: one column stacks every section and the gaps between");
+        var fits = PanelColumns.Choose(insp, g, one, true);
+        yield return (fits.Columns == 1 && fits.Split == 4, "columns: one column while it fits the height, even with room for two");
+        var tall = PanelColumns.Choose(insp, g, 300, true);
+        yield return (tall.Columns == 2 && tall.Split == 2 && Near(tall.Height, 190 + g),
+            "columns: two columns when one would scroll — Clip · Quantize, then Transpose · Selection");
+        var narrow = PanelColumns.Choose(insp, g, 300, false);
+        yield return (narrow.Columns == 1 && Near(narrow.Height, one), "columns: a narrow editor keeps one column and scrolls");
+        var cramped = PanelColumns.Choose(insp, g, 100, true);
+        yield return (cramped.Columns == 2 && cramped.Height > 100, "columns: two columns still scroll when even they don't fit");
+        yield return (PanelColumns.Choose(new double[] { 400 }, g, 100, true).Columns == 1, "columns: a lone section never takes a second column");
+        // Every split keeps order and wholeness: the chosen one is the shortest taller column.
+        double[] mixed = { 120, 30, 30, 30, 200, 10 };
+        int k = PanelColumns.BestSplit(mixed, g);
+        double best = Math.Max(PanelColumns.Stack(mixed, 0, k, g), PanelColumns.Stack(mixed, k, 6, g));
+        bool shortest = true;
+        for (int s = 1; s < 6; s++) shortest &= best <= Math.Max(PanelColumns.Stack(mixed, 0, s, g), PanelColumns.Stack(mixed, s, 6, g));
+        yield return (shortest && k is > 0 and < 6, "columns: the split leaves the taller column shortest");
+        // Room for a second column leaves the canvas its minimum and the header what it needs beside the cell.
+        yield return (PanelColumns.RoomForTwo(1000, 463, 480, 0) && !PanelColumns.RoomForTwo(900, 463, 480, 0),
+            "columns: a second column leaves the canvas its minimum width");
+        yield return (!PanelColumns.RoomForTwo(1150, 463, 480, 700) && PanelColumns.RoomForTwo(1163, 463, 480, 700),
+            "columns: a second column leaves the header the width of its controls");
+        yield return (PanelColumns.BestSplit(new double[] { 50, 50 }, g) == 1 && PanelColumns.BestSplit(new double[] { 10, 50, 10 }, g) == 2,
+            "columns: on a tie the first column takes more");
     }
 }

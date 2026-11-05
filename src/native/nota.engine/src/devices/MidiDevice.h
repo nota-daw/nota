@@ -34,12 +34,24 @@ struct MidiEv {
 
 class RackCore;
 
+// A new MIDI device's MidiDevice::lineage().
+inline uint64_t nextMidiDeviceLineage() {
+    static std::atomic<uint64_t> next{0};
+    return next.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 class MidiDevice {
   public:
     // The rack behind this device, if it is one (specs/044): a virtual call where the audio
     // thread walks rack chains every block, instead of a dynamic_cast per device.
     virtual const RackCore* asRack() const { return nullptr; }
     virtual ~MidiDevice() = default;
+
+    // Which device this is, across the copies an edit swaps into its slot (a rack fork, a
+    // loaded state): a new object gets a new id, a copy is given its source's. Take retry
+    // finds a device's automation by it. Message thread only.
+    uint64_t lineage() const { return lineage_; }
+    void inheritLineage(uint64_t id) { lineage_ = id; }
 
     virtual void setSampleRate(double sr, int32_t /*maxBlock*/) {}
 
@@ -146,6 +158,8 @@ class MidiDevice {
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
     int32_t presetTag_ = 0;
+    uint64_t lineage_ = nextMidiDeviceLineage();
 };
+
 
 } // namespace nota

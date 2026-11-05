@@ -23,6 +23,15 @@ public sealed record HistoryRow(
 
 public static class HistoryGraph
 {
+    /// <summary>The selected versions a delete may remove: all but the current one (#228).</summary>
+    public static List<ProjectVersion> Deletable(IEnumerable<HistoryRow> selected)
+        => selected.Where(r => !r.IsHead).Select(r => r.Version).ToList();
+
+    /// <summary>After a refresh, the rows (by index) whose versions were selected before and
+    /// still exist.</summary>
+    public static List<int> KeptSelection(IReadOnlyList<HistoryRow> rows, IReadOnlySet<string> selectedIds)
+        => Enumerable.Range(0, rows.Count).Where(i => selectedIds.Contains(rows[i].Version.Id)).ToList();
+
     public static IReadOnlyList<HistoryRow> Layout(ProjectHistoryState state)
     {
         var order = NewestFirst(state.Versions);

@@ -7,7 +7,13 @@ namespace nota {
 
 float ClipAdsr::gainAt(double t, double len) const {
     double g;
-    if (t < attack) g = t / attack;
+    // No decay stage: rise straight to the sustain level. A split clears the right
+    // piece's decay, and rising to 1 before dropping to sustain would click there.
+    if (decay <= 0.0)
+        g = (attack > 0.0 && t < attack) ? static_cast<double>(sustain) * (t / attack)
+                                         : static_cast<double>(sustain);
+    else if (t < attack)
+        g = attack > 0.0 ? t / attack : 0.0;
     else if (t < attack + decay)
         g = 1.0 - (1.0 - sustain) * ((t - attack) / decay);
     else

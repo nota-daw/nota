@@ -27,6 +27,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -39,8 +40,8 @@ internal interface IMacroSurface
     int MacroParamIndex(int macro);
     string MacroName(int macro);
     void SetMacroName(int macro, string name);
-    /// <summary>What a slot is called in the plural ("pads", "voices").</summary>
-    string SlotNoun { get; }
+    /// <summary>A number of slots in words ("16 pads", "1 voice"), in the language that is running.</summary>
+    string SlotCount(int n);
     /// <summary>The slots a macro can reach (pad chains / voices), in display order.</summary>
     IReadOnlyList<int> Slots();
     string SlotName(int slot);
@@ -91,10 +92,10 @@ internal static class MacroPanel
         if (maps.Count == 0) return "";
         var labels = maps.Select(m => { var (p, d) = s.TargetLabel(m); return Short(d.Length > 0 ? d : p); }).Distinct().ToList();
         var slots = maps.Select(m => m.Chain).Distinct().ToList();
-        string what = labels.Count <= 2 ? string.Join(" + ", labels) : $"{labels.Count} params";
+        string what = labels.Count <= 2 ? string.Join(" + ", labels) : Loc.Plural("device.rack.macros.params", labels.Count);
         string where = slots.Count <= 2
             ? string.Join(", ", slots.Select(s.SlotName))
-            : slots.Count == s.Slots().Count ? (compact ? "all" : $"all {slots.Count} {s.SlotNoun}") : $"{slots.Count} {s.SlotNoun}";
+            : slots.Count == s.Slots().Count ? (compact ? Loc.T("device.rack.macros.all") : Loc.F("device.rack.macros.all_n", s.SlotCount(slots.Count))) : s.SlotCount(slots.Count);
         return $"→ {what} · {where}";
     }
 
@@ -108,12 +109,12 @@ internal static class MacroPanel
         string One(int m)
         {
             int slots = Mappings(s, m).Select(x => x.Chain).Distinct().Count();
-            return $"{s.MacroName(m)} {Pct(Value(e, s, m))} → {slots} {(slots == 1 ? s.SlotNoun.TrimEnd('s') : s.SlotNoun)}";
+            return $"{s.MacroName(m)} {Pct(Value(e, s, m))} → {s.SlotCount(slots)}";
         }
         if (Mappings(s, sel).Count > 0) parts.Add(One(sel));
         for (int m = 0; m < Count && parts.Count < 2; m++) if (m != sel && Mappings(s, m).Count > 0) parts.Add(One(m));
         int free = Count - Assigned(s);
-        parts.Add(free == 0 ? "every macro assigned" : $"{free} free");
+        parts.Add(free == 0 ? Loc.T("device.rack.macros.every_macro_assigned") : Loc.F("device.rack.macros.free", free));
         return string.Join(" · ", parts);
     }
 
@@ -162,7 +163,7 @@ internal static class MacroPanel
         };
         tick.Add(() => { if (!knob.Dragging) { float v = Value(e, s, m); if (Math.Abs(v - knob.Value) > 1e-4) { knob.Value = v; value.Text = Pct(v); } } });
         // A Drum Rack nested in a chain isn't a learn target of its own: map an outer macro to it.
-        if (e is not NestedRackEngineProxy) MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), $"Macro {m + 1} · {s.MacroName(m)}");
+        if (e is not NestedRackEngineProxy) MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), "Macro " + (m + 1) + " · " + s.MacroName(m));
         // ⌥-click types, double-click resets; right-click stays the macro's own menu (the cell's).
         ValueEntry.Attach(knob, $"Macro {m + 1}", value, menu: false);
 
@@ -170,13 +171,13 @@ internal static class MacroPanel
         bool custom = name != $"Macro {m + 1}";
         var title = new TextBlock
         {
-            Text = assigned || custom ? (stacked ? $"Macro {m + 1} · {name}" : $"{m + 1} · {name}") : (stacked ? $"Macro {m + 1}" : $"{m + 1}"),
+            Text = assigned || custom ? (stacked ? Loc.F("common.macro", m + 1, name) : $"{m + 1} · {name}") : (stacked ? $"Macro {m + 1}" : $"{m + 1}"),
             FontSize = 7, FontWeight = FontWeight.Medium, TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = !assigned ? TextDisabled : sel ? AccentBright : NotaPalette.TextStrong,
         };
         var recv = new TextBlock
         {
-            Text = assigned ? Receivers(s, m, compact: !stacked) : "not assigned", FontSize = 7, TextTrimming = TextTrimming.CharacterEllipsis,
+            Text = assigned ? Receivers(s, m, compact: !stacked) : Loc.T("device.rack.macros.not_assigned"), FontSize = 7, TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = assigned ? DeviceCardKit.ModInkBright : TextDisabled,
         };
 
@@ -220,8 +221,8 @@ internal static class MacroPanel
             host = new Panel { Children = { cell, dash } };
         }
         ToolTip.SetTip(host, assigned
-            ? $"{name} — {Receivers(s, m)}\nDrag to turn · click to show its receivers · right-click to map, rename or clear"
-            : $"Macro {m + 1} is free — right-click (or Map) to give it a target");
+            ? Loc.F("device.rack.macros.drag_to_turn_click_to", name, Receivers(s, m))
+            : Loc.F("device.rack.macros.macro_is_free_right_click", m + 1));
         host.PointerPressed += (_, ev) =>
         {
             var pt = ev.GetCurrentPoint(host).Properties;
@@ -240,21 +241,21 @@ internal static class MacroPanel
         if (receivers)
         {
             // Where the card has no receivers panel (Rhythm), they open in a flyout.
-            var rc = new MenuItem { Header = "Receivers and ranges…" };
+            var rc = new MenuItem { Header = Loc.T("device.rack.macros.receivers_and_ranges") };
             rc.Click += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => ShowReceivers(ctx, s, anchor, m));
             f.Items.Add(rc);
         }
         var map = new MenuFlyout();
         s.FillMapMenu(map, m, () => { ctx.NotifyChanged(); ctx.RequestRebuild(); });
-        var mapItem = new MenuItem { Header = "Map to" };
+        var mapItem = new MenuItem { Header = Loc.T("device.rack.macros.map_to") };
         foreach (var it in map.Items.ToList()) { map.Items.Remove(it); mapItem.Items.Add(it); }
         f.Items.Add(mapItem);
-        f.Items.Add(MenuKit.Item("Rename…", GlyphKind.Edit, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRename(ctx, s, anchor, m))));
+        f.Items.Add(MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRename(ctx, s, anchor, m))));
         int n = Mappings(s, m).Count;
         if (n > 0)
         {
             f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Danger($"Clear {n} mapping{(n == 1 ? "" : "s")}", GlyphKind.Trash,
+            f.Items.Add(MenuKit.Danger(Loc.Plural("device.rack.clear_mappings", n), GlyphKind.Trash,
                 () => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); }));
         }
         f.ShowAt(anchor, showAtPointer: true);
@@ -323,18 +324,18 @@ internal static class MacroPanel
         if (maps.Count == 0)
             rows.Children.Add(new TextBlock
             {
-                Text = "Nothing mapped yet. Map gives this knob a pad control, an instrument param or any of the kit's effects.",
+                Text = Loc.T("device.rack.macros.nothing_mapped_yet_map_gives"),
                 FontSize = 8, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
             });
         var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
 
         Border mapBtn = null!;
-        mapBtn = Button("Map", teal: true, () => ShowMapMenu(ctx, s, mapBtn, m));
-        ToolTip.SetTip(mapBtn, "Add a receiver: a pad control, the pad's instrument or one of its effects");
+        mapBtn = Button(Loc.T("device.rack.macros.map"), teal: true, () => ShowMapMenu(ctx, s, mapBtn, m));
+        ToolTip.SetTip(mapBtn, Loc.T("device.rack.macros.add_a_receiver_a_pad"));
         Border renameBtn = null!;
-        renameBtn = Button("Rename", teal: false, () => PromptRename(ctx, s, renameBtn, m));
-        var clearBtn = Button("Clear", teal: false, () => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); });
-        ToolTip.SetTip(clearBtn, "Remove every receiver of this macro");
+        renameBtn = Button(Loc.T("device.rack.macros.rename"), teal: false, () => PromptRename(ctx, s, renameBtn, m));
+        var clearBtn = Button(Loc.T("common.clear"), teal: false, () => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); });
+        ToolTip.SetTip(clearBtn, Loc.T("device.rack.macros.remove_every_receiver_of_this"));
         var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4 };
         buttons.Children.Add(mapBtn);
         Avalonia.Controls.Grid.SetColumn(renameBtn, 1); buttons.Children.Add(renameBtn);
@@ -428,7 +429,7 @@ internal static class MacroPanel
         track.PointerMoved += (_, e) => { if (drag != 0) Apply(e.GetPosition(track).X); };
         track.PointerReleased += (_, e) => { if (drag != 0) { drag = 0; e.Pointer.Capture(null); ctx.NotifyChanged(); } };
         track.PointerCaptureLost += (_, _) => { if (drag != 0) { drag = 0; ctx.NotifyChanged(); } };
-        ToolTip.SetTip(track, "The range the macro sweeps: drag either end · the tick is where it is now");
+        ToolTip.SetTip(track, Loc.T("device.rack.macros.the_range_the_macro_sweeps"));
 
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5 };
         g.Children.Add(hue);
@@ -440,7 +441,7 @@ internal static class MacroPanel
             if (!e.GetCurrentPoint(g).Properties.IsRightButtonPressed) return;
             e.Handled = true;
             var f = new MenuFlyout();
-            f.Items.Add(MenuKit.Danger("Remove this receiver", GlyphKind.Trash,
+            f.Items.Add(MenuKit.Danger(Loc.T("device.rack.macros.remove_this_receiver"), GlyphKind.Trash,
                 () => { s.RemoveMapping(index); ctx.NotifyChanged(); ctx.RequestRebuild(); }));
             f.ShowAt(g, showAtPointer: true);
         };

@@ -25,12 +25,24 @@ struct MidiEv;
 
 class RackCore;
 
+// A new device's Device::lineage().
+inline uint64_t nextDeviceLineage() {
+    static std::atomic<uint64_t> next{0};
+    return next.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 class Device {
   public:
     // The rack behind this device, if it is one (specs/044): a virtual call where the audio
     // thread walks rack chains every block, instead of a dynamic_cast per device.
     virtual const RackCore* asRack() const { return nullptr; }
     virtual ~Device() = default;
+
+    // Which device this is, across the copies an edit swaps into its slot (a rack fork, a
+    // loaded state): a new object gets a new id, a copy is given its source's. Take retry
+    // finds a device's automation by it. Message thread only.
+    uint64_t lineage() const { return lineage_; }
+    void inheritLineage(uint64_t id) { lineage_ = id; }
 
     // Called on the message thread before the device is used (and on sample-rate
     // changes). maxBlock is the largest frame count a process() call may pass.
@@ -276,6 +288,7 @@ class Device {
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};
     std::atomic<uint64_t> scPart_{0};
+    uint64_t lineage_ = nextDeviceLineage();
 };
 
 } // namespace nota

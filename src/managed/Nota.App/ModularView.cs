@@ -24,6 +24,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -62,8 +63,8 @@ public sealed partial class ModularView : UserControl
     private readonly IAudioEngine _engine;
 
     // toolbar / status widgets
-    private readonly ToggleButton _trackBtn = Seg("Track", true);
-    private readonly ToggleButton _globalBtn = Seg("Global", false);
+    private readonly ToggleButton _trackBtn = Seg(Loc.T("common.track"), true);
+    private readonly ToggleButton _globalBtn = Seg(Loc.T("modular.global"), false);
     private readonly TextBlock _zoomLabel = new() { Text = "100\u2009%", FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _statusRight = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
@@ -91,7 +92,7 @@ public sealed partial class ModularView : UserControl
     // Shown on the canvas in Track view while no track is picked (an empty project).
     private readonly TextBlock _emptyHint = new()
     {
-        Text = "Pick a track to see its signal graph", Classes = { "Caption" }, IsVisible = false,
+        Text = Loc.T("modular.pick_a_track_to_see"), Classes = { "Caption" }, IsVisible = false,
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -129,7 +130,7 @@ public sealed partial class ModularView : UserControl
         // hint + minimap overlays (screen-space, not transformed)
         var hint = new TextBlock
         {
-            Text = MenuKit.Keys("Drag from a CV out onto a node to modulate it · Space + drag — pan · ⌘ + wheel — zoom · F — fit · Esc — show fewer"),
+            Text = MenuKit.Keys(Loc.T("modular.drag_from_a_cv_out")),
             FontSize = 9, Foreground = Text4,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(14, 0, 0, 14),
@@ -161,7 +162,7 @@ public sealed partial class ModularView : UserControl
         // Middle row: track-list sidebar (Track view) + the canvas.
         var header = new Border
         {
-            Height = 26, Child = new TextBlock { Text = "Tracks", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) },
+            Height = 26, Child = new TextBlock { Text = Loc.T("modular.tracks"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) },
             BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
         };
         var listCol = new DockPanel { LastChildFill = true };
@@ -266,19 +267,18 @@ public sealed partial class ModularView : UserControl
         _emptyHint.IsVisible = !_global && _trackId <= 0;   // the hint is Track view's; Global has islands
         if (_global) return;
         _sidebar.Children.Clear();
-        int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
+        foreach (int i in ArrangementView.DisplayOrder(_engine))
             if (_engine.TryGetTrackInfo(i, out var ti) && !ti.IsGroup)
                 _sidebar.Children.Add(TrackRow(ti.Id, ti));
         if (_sidebar.Children.Count == 0)
-            _sidebar.Children.Add(new TextBlock { Text = "No tracks yet", Classes = { "Caption" }, Margin = new Thickness(10, 8) });
+            _sidebar.Children.Add(new TextBlock { Text = Loc.T("modular.no_tracks_yet"), Classes = { "Caption" }, Margin = new Thickness(10, 8) });
     }
 
     private Control TrackRow(int trackId, NotaTrackInfo ti)
     {
         bool active = trackId == _trackId;
         string name = _engine.GetTrackName(trackId);
-        if (string.IsNullOrEmpty(name)) name = (ti.IsReturn ? "Return " : ti.IsInstrument ? "Inst " : "Audio ") + trackId;
+        if (string.IsNullOrEmpty(name)) name = ti.IsReturn ? Loc.F("common.return_n", trackId) : ti.IsInstrument ? Loc.F("modular.inst", trackId) : Loc.F("common.audio_n", trackId);
         var color = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, trackId));
         var row = new Border
         {
@@ -384,7 +384,7 @@ public sealed partial class ModularView : UserControl
 
         bool isInstrument = _engine.TryGetTrackInfo(TrackIndex(_trackId), out var ti) && ti.IsInstrument;
         string trackName = _engine.GetTrackName(_trackId);
-        if (string.IsNullOrEmpty(trackName)) trackName = (isInstrument ? "Instrument " : "Audio ") + _trackId;
+        if (string.IsNullOrEmpty(trackName)) trackName = isInstrument ? Loc.F("modular.instrument", _trackId) : Loc.F("common.audio_n", _trackId);
 
         // Pre-scan incoming CV links (this track) so each modulated param gets its own input
         // port on its node — built before the nodes so their port blocks know the count.
@@ -430,7 +430,7 @@ public sealed partial class ModularView : UserControl
         }
         else
         {
-            var src = SimpleNode("input", "Audio in", Sage, new Point(x, y),
+            var src = SimpleNode("input", Loc.T("modular.audio_in"), Sage, new Point(x, y),
                 audioIn: false, audioOut: true, midiIn: false, midiOut: false,
                 badge: "CLIPS", slot: Slot.Input);
             AddNode(src);
@@ -451,7 +451,7 @@ public sealed partial class ModularView : UserControl
 
         // 4) Track output.
         // Same top as the chain, so the main audio cable into it runs straight (ports line up).
-        var outNode = SimpleNode("output", "Track output", Text1, new Point(x, y),
+        var outNode = SimpleNode("output", Loc.T("modular.track_output"), Text1, new Point(x, y),
             audioIn: true, audioOut: false, midiIn: false, midiOut: false, badge: "MASTER", slot: Slot.Output);
         AddNode(outNode);
         if (prevAudio != null) _edgeList.Add(new GEdge(prevAudio, PortKind.Audio, outNode, PortKind.Audio));
@@ -521,10 +521,10 @@ public sealed partial class ModularView : UserControl
         }
 
         int edges = _edgeList.Count;
-        _status.Text = $"{trackName} · {_nodes.Count} nodes · {edges} edge{(edges == 1 ? "" : "s")}";
+        _status.Text = Loc.F("modular.pattern_n", trackName, Loc.F("modular.nodes", _nodes.Count), Loc.Plural("modular.edges", edges));
         var cfg = _engine.GetAudioConfig();
         double ms = cfg.BufferFrames > 0 && cfg.SampleRate > 0 ? cfg.BufferFrames / cfg.SampleRate * 1000.0 : 0;
-        _statusRight.Text = $"{_engine.SampleRate / 1000.0:0.0}\u2009kHz · {cfg.BufferFrames} · {ms:0.0}\u2009ms";
+        _statusRight.Text = Loc.F("modular.khz_ms", _engine.SampleRate / 1000.0, cfg.BufferFrames, ms);
 
         // Re-apply selection to the surviving node (structural edits rebuild the nodes).
         if (_selId != null)
@@ -553,10 +553,9 @@ public sealed partial class ModularView : UserControl
     {
         double y = 60;
         int islands = 0;
-        int n = _engine.TrackCount;
         var islandByTrack = new Dictionary<int, GNode>();
         var trackIds = new List<int>();
-        for (int i = 0; i < n; i++)
+        foreach (int i in ArrangementView.DisplayOrder(_engine))
         {
             if (!_engine.TryGetTrackInfo(i, out var ti) || ti.IsGroup) continue;
             var isl = IslandNode(ti.Id, i, ti);
@@ -583,11 +582,11 @@ public sealed partial class ModularView : UserControl
             }
         }
 
-        _status.Text = $"Global · {islands} island{(islands == 1 ? "" : "s")}"
-            + (xlinks > 0 ? $" · {xlinks} cross-track CV link{(xlinks == 1 ? "" : "s")}" : "");
+        _status.Text = Loc.F("modular.global_n", Loc.Plural("modular.islands", islands))
+            + (xlinks > 0 ? Loc.F("modular.pattern", Loc.Plural("modular.cross_track_cv_links", xlinks)) : "");
         var cfg = _engine.GetAudioConfig();
         double ms = cfg.BufferFrames > 0 && cfg.SampleRate > 0 ? cfg.BufferFrames / cfg.SampleRate * 1000.0 : 0;
-        _statusRight.Text = $"{_engine.SampleRate / 1000.0:0.0}\u2009kHz · {cfg.BufferFrames} · {ms:0.0}\u2009ms";
+        _statusRight.Text = Loc.F("modular.khz_ms", _engine.SampleRate / 1000.0, cfg.BufferFrames, ms);
         if (_selId != null) { var s = _nodes.FirstOrDefault(x => x.Id == _selId); if (s != null) SelectNode(s); }
         _grid.InvalidateVisual();
         _edges.InvalidateVisual();
@@ -599,7 +598,7 @@ public sealed partial class ModularView : UserControl
     private GNode IslandNode(int trackId, int trackIndex, NotaTrackInfo ti)
     {
         string name = _engine.GetTrackName(trackId);
-        if (string.IsNullOrEmpty(name)) name = "Track " + trackId;
+        if (string.IsNullOrEmpty(name)) name = Loc.F("common.track_n", trackId);
         var color = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, trackId));
         int mfx = ti.IsInstrument ? _engine.TrackMidiEffectCount(trackId) : 0;
         int dev = _engine.TrackDeviceCount(trackId);
@@ -627,7 +626,7 @@ public sealed partial class ModularView : UserControl
         var meta = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(meta, Dock.Left);
         meta.Children.Add(new TextBlock { Text = n.Title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center });
-        meta.Children.Add(new TextBlock { Text = $"{nodeCount} NODES", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
+        meta.Children.Add(new TextBlock { Text = Loc.F("modular.nodes_caps", nodeCount), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
         head.Children.Add(meta);
         if (cv > 0)
         {
@@ -640,26 +639,26 @@ public sealed partial class ModularView : UserControl
         col.Children.Add(Row(headBorder, 1));
 
         // collapsed pipe: [source] —bar— [N devices ▸] —bar— [Out]
-        string srcName = ti.IsInstrument ? (_engine.TrackInstrumentKind(trackId) >= 0 ? _engine.DeviceName(trackId, -1) : "Instrument") : "Audio in";
+        string srcName = ti.IsInstrument ? (_engine.TrackInstrumentKind(trackId) >= 0 ? _engine.DeviceName(trackId, -1) : Loc.T("common.instrument")) : Loc.T("modular.audio_in");
         var pipe = new Grid { Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center };
         if (dev > 0)
         {
             pipe.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto");
-            var pill = IslandPill($"{dev} device{(dev == 1 ? "" : "s")} →");
+            var pill = IslandPill(Loc.Plural("modular.devices", dev));
             pill.PointerPressed += (_, e) => { OpenTrack(trackId); e.Handled = true; };
             Grid.SetColumn(pill, 2);
             pipe.Children.Add(IslandChip(srcName, n.Stripe, 0));
             pipe.Children.Add(Pipe(1));
             pipe.Children.Add(pill);
             pipe.Children.Add(Pipe(3));
-            pipe.Children.Add(IslandChip("Out", Text1, 4));
+            pipe.Children.Add(IslandChip(Loc.T("modular.out"), Text1, 4));
         }
         else
         {
             pipe.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto");
             pipe.Children.Add(IslandChip(srcName, n.Stripe, 0));
             pipe.Children.Add(Pipe(1));
-            pipe.Children.Add(IslandChip("Out", Text1, 2));
+            pipe.Children.Add(IslandChip(Loc.T("modular.out"), Text1, 2));
         }
         col.Children.Add(Row(pipe, 2));
 
@@ -671,7 +670,7 @@ public sealed partial class ModularView : UserControl
             for (int i = 0; i < show; i++)
             {
                 int id = _engine.ModulatorIdAt(trackId, i);
-                mrow.Children.Add(IslandChip($"LFO {id}", Brass, -1));
+                mrow.Children.Add(IslandChip(Loc.F("modular.lfo_caps_n", id), Brass, -1));
             }
             if (mods > show) mrow.Children.Add(new TextBlock { Text = $"+{mods - show}", FontSize = 9, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
             col.Children.Add(Row(mrow, 3));
@@ -731,7 +730,7 @@ public sealed partial class ModularView : UserControl
     private GNode InstrumentNode(Point at, string trackName)
     {
         int kind = _engine.TrackInstrumentKind(_trackId);
-        string name = kind >= 0 ? _engine.DeviceName(_trackId, -1) : "Instrument";
+        string name = kind >= 0 ? _engine.DeviceName(_trackId, -1) : Loc.T("common.instrument");
         var n = new GNode($"inst", name, Slate, at)
         {
             AudioOut = true, MidiIn = true, CvIn = true, Slot = Slot.Instrument,   // params are CV targets
@@ -981,12 +980,12 @@ public sealed partial class ModularView : UserControl
 
     private static (string title, string badge) ModKindLabel(int kind) => kind switch
     {
-        1 => ("Env", "ENV"),
+        1 => (Loc.T("modular.env"), "ENV"),
         2 => ("MIDI", "MIDI"),
         3 => ("ADSR", "ADSR"),
-        4 => ("Macro", "MACRO"),
-        5 => ("Math", "MATH"),
-        6 => ("Scope", "SCOPE"),
+        4 => (Loc.T("modular.macro"), "MACRO"),
+        5 => (Loc.T("modular.math"), "MATH"),
+        6 => (Loc.T("modular.scope"), "SCOPE"),
         _ => ("LFO", "LFO"),
     };
 
@@ -1015,38 +1014,38 @@ public sealed partial class ModularView : UserControl
         Control list;
         if (kind == 4)   // Macro: one manual value (it is the CV output)
         {
-            list = ParamList(ModFieldCell("Macro", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
+            list = ParamList(ModFieldCell(Loc.T("modular.macro"), modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + " %"));
         }
         else if (kind == 3)   // ADSR: Attack / Decay / Sustain / Release (+ Depth)
         {
             list = ParamList(
-                ModFieldCell("Attack", modId, 6, 0.1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
-                ModFieldCell("Decay", modId, 8, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
-                ModFieldCell("Sustain", modId, 9, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
-                ModFieldCell("Release", modId, 7, 1f, 4000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
-                ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
+                ModFieldCell(Loc.T("common.attack"), modId, 6, 0.1f, 2000f, v => v.ToString("0", NotaNum.Culture) + " ms"),
+                ModFieldCell(Loc.T("common.decay"), modId, 8, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + " ms"),
+                ModFieldCell(Loc.T("common.sustain"), modId, 9, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + " %"),
+                ModFieldCell(Loc.T("common.release"), modId, 7, 1f, 4000f, v => v.ToString("0", NotaNum.Culture) + " ms"),
+                ModFieldCell(Loc.T("modular.depth"), modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + " %"));
         }
         else if (kind == 1)   // envelope follower: Attack / Release / Depth
         {
             list = ParamList(
-                ModFieldCell("Attack", modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
-                ModFieldCell("Release", modId, 7, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
-                ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
+                ModFieldCell(Loc.T("common.attack"), modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + " ms"),
+                ModFieldCell(Loc.T("common.release"), modId, 7, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + " ms"),
+                ModFieldCell(Loc.T("modular.depth"), modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + " %"));
         }
         else if (kind == 2)   // MIDI→CV: source select + Smooth / Depth
         {
             col.Children.Add(MidiSourceRow(modId));
             list = ParamList(
-                ModFieldCell("Smooth", modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
-                ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
+                ModFieldCell(Loc.T("modular.smooth"), modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + " ms"),
+                ModFieldCell(Loc.T("modular.depth"), modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + " %"));
         }
         else   // LFO: waveform, then Rate (with its Sync / Free toggle) / Depth / Phase
         {
             col.Children.Add(WaveSyncRow(modId));
             list = ParamList(
                 ModRateCell(modId),
-                ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
-                ModFieldCell("Phase", modId, 5, 0f, 1f, v => (v * 360).ToString("0", NotaNum.Culture) + "°"));
+                ModFieldCell(Loc.T("modular.depth"), modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
+                ModFieldCell(Loc.T("modular.phase"), modId, 5, 0f, 1f, v => (v * 360).ToString("0", NotaNum.Culture) + "°"));
         }
         // Under a rule, unless the select row above already drew one.
         col.Children.Add(kind is 0 or 2 ? list : Ruled(list));
@@ -1055,7 +1054,7 @@ public sealed partial class ModularView : UserControl
 
     private static Control Ruled(Control c) => new Border { Child = c, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0) };
 
-    private static readonly string[] MathOpNames = { "Add", "Subtract", "Multiply", "Invert", "Scale", "Min", "Max" };
+    private static readonly string[] MathOpNames = { Loc.T("modular.add_2"), Loc.T("modular.subtract"), Loc.T("modular.multiply"), Loc.T("modular.invert"), Loc.T("modular.scale"), Loc.T("common.min"), Loc.T("modular.max") };
 
     private void BuildMathView(GNode n, int modId)
     {
@@ -1064,8 +1063,8 @@ public sealed partial class ModularView : UserControl
         col.Children.Add(headBorder);
         col.Children.Add(PortsBlock(n));   // A / B CV inputs (drag a cable in) + CV out
         var list = (Panel)ParamList(
-            ModFieldCell("Gain", modId, 4, 0f, 2f, v => v.ToString("0.00", NotaNum.Culture)),
-            ModFieldCell("Offset", modId, 12, -1f, 1f, v => v.ToString("0.00", NotaNum.Culture)));
+            ModFieldCell(Loc.T("modular.gain"), modId, 4, 0f, 2f, v => v.ToString("0.00", NotaNum.Culture)),
+            ModFieldCell(Loc.T("modular.offset"), modId, 12, -1f, 1f, v => v.ToString("0.00", NotaNum.Culture)));
         list.Children.Insert(0, MathLabeledRow("Op", MathOpCombo(modId)));
         col.Children.Add(Ruled(list));
         WrapFrame(n, col, headBorder);
@@ -1090,7 +1089,7 @@ public sealed partial class ModularView : UserControl
         return combo;
     }
 
-    private static readonly string[] MidiSourceNames = { "Vel", "Gate", "Note" };
+    private static readonly string[] MidiSourceNames = { Loc.T("modular.vel"), Loc.T("common.gate"), Loc.T("modular.note") };
 
     private Control MidiSourceRow(int modId)
     {
@@ -1114,7 +1113,7 @@ public sealed partial class ModularView : UserControl
         return stack;
     }
 
-    private static readonly string[] WaveNames = { "Sine", "Tri", "Saw", "Sqr", "Rnd" };
+    private static readonly string[] WaveNames = { Loc.T("modular.sine"), Loc.T("modular.tri"), Loc.T("modular.saw"), Loc.T("modular.sqr"), Loc.T("modular.rnd") };
 
     // LFO waveform selector. The Sync/Free toggle sits on the Rate row (ModRateCell).
     private Control WaveSyncRow(int modId)
@@ -1127,8 +1126,7 @@ public sealed partial class ModularView : UserControl
 
     // A compact Sync/Free toggle beside the Rate row's name.
     private Border SyncToggle(int modId, bool synced) =>
-        ToggleLabel(synced ? "Sync" : "Free", synced ? "Synced to the tempo — click for a free rate in Hz" : "Free rate in Hz — click to sync to the tempo",
-            () => { _engine.ModulatorSet(_trackId, modId, 1, synced ? 0f : 1f); Rebuild(); });
+        ToggleLabel(synced ? Loc.T("modular.sync") : Loc.T("modular.free"), null, () => { _engine.ModulatorSet(_trackId, modId, 1, synced ? 0f : 1f); Rebuild(); });
 
     // A small clickable label chip (Sync/Free, the Scope's ms/Sync).
     private static Border ToggleLabel(string text, string? tip, Action onClick)
@@ -1168,16 +1166,16 @@ public sealed partial class ModularView : UserControl
         var label = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 4,
-            Children = { new TextBlock { Text = "Rate", FontSize = NotaType.RowLabel, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center }, SyncToggle(modId, synced) },
+            Children = { new TextBlock { Text = Loc.T("modular.rate"), FontSize = NotaType.RowLabel, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center }, SyncToggle(modId, synced) },
         };
-        return ParamRow("Rate", (v0 - min) / span, null, frac => fmt((float)(min + frac * span)),
+        return ParamRow(Loc.T("modular.rate"), (v0 - min) / span, null, frac => fmt((float)(min + frac * span)),
             frac => e.ModulatorSet(t, modId, field, (float)(min + frac * span)), null, null,
             () => (e.ModulatorGet(t, modId, field) - min) / span, out _, labelControl: label);
     }
 
     private static string DivisionLabel(double beats)
     {
-        if (beats >= 3.5) return "1 bar";
+        if (beats >= 3.5) return Loc.T("common.1_bar");
         int denom = (int)Math.Round(4.0 / Math.Max(0.0625, beats));
         return "1/" + Math.Clamp(denom, 1, 64);
     }
@@ -1188,7 +1186,7 @@ public sealed partial class ModularView : UserControl
     {
         int t = _trackId; var e = _engine;
         var flyout = new MenuFlyout();
-        flyout.Items.Add(MenuKit.Header(paramName, null, "Parameter"));
+        flyout.Items.Add(MenuKit.Header(paramName, null, Loc.T("modular.parameter")));
         flyout.Items.Add(new Separator());
         // Type value… / Reset to default first, as on every parameter (specs/035).
         foreach (var c in ValueEntry.MenuItems(anchor)) flyout.Items.Add(c);
@@ -1203,11 +1201,11 @@ public sealed partial class ModularView : UserControl
             bool cross = e.CvLinkTargetTrack(owner, li) >= 0;
             string srcLabel = e.CvLinkSourceKind(owner, li) == 1
                 ? e.DeviceParamName(owner, e.CvLinkSourceDevice(owner, li), e.CvLinkSourceParam(owner, li))
-                : "LFO " + e.CvLinkSource(owner, li);
-            var edit = new MenuItem { Header = $"Edit modulation · {srcLabel}{(cross ? " (" + TrackName(owner) + ")" : "")}…" };
+                : Loc.F("modular.lfo_caps_n", e.CvLinkSource(owner, li));
+            var edit = new MenuItem { Header = Loc.F("modular.edit_modulation", srcLabel + (cross ? " (" + TrackName(owner) + ")" : "")) };
             edit.Click += (_, _) => ShowLinkEditor(anchor, owner, li);
             flyout.Items.Add(edit);
-            remove = MenuKit.Danger("Remove modulation", null,
+            remove = MenuKit.Danger(Loc.T("modular.remove_modulation"), null,
                 () => { e.CvLinkRemove(owner, li); Rebuild(); Changed?.Invoke(); });
         }
         else
@@ -1218,7 +1216,7 @@ public sealed partial class ModularView : UserControl
             for (int i = 0; i < mc; i++)
             {
                 int modId = e.ModulatorIdAt(t, i);
-                var mi = new MenuItem { Header = $"Modulate with {(e.ModulatorKind(t, modId) == 1 ? "Env" : "LFO")} {modId}" };
+                var mi = new MenuItem { Header = Loc.F("modular.modulate_with", e.ModulatorKind(t, modId) == 1 ? "Env" : "LFO", modId) };
                 mi.Click += (_, _) => { e.CvLinkAddToTarget(t, modId, targetKind, -1, device, param); Rebuild(); Changed?.Invoke(); };
                 flyout.Items.Add(mi); sources++;
             }
@@ -1228,13 +1226,13 @@ public sealed partial class ModularView : UserControl
             {
                 if (xt != t || (xd == device && xp == param)) continue;
                 int sd = xd, sp = xp;
-                var mi = new MenuItem { Header = $"From {e.DeviceName(t, sd)} · {e.DeviceParamName(t, sd, sp)}" };
+                var mi = new MenuItem { Header = Loc.F("modular.from", e.DeviceName(t, sd), e.DeviceParamName(t, sd, sp)) };
                 mi.Click += (_, _) => { e.CvLinkAddFromParamToTarget(t, sd, sp, targetKind, -1, device, param); Rebuild(); Changed?.Invoke(); };
                 paramSrc.Add(mi);
             }
             if (paramSrc.Count > 0)
             {
-                var sub = new MenuItem { Header = "Modulate from a parameter" };
+                var sub = new MenuItem { Header = Loc.T("modular.modulate_from_a_parameter") };
                 foreach (var it in paramSrc) sub.Items.Add(it);
                 flyout.Items.Add(sub); sources++;
             }
@@ -1255,12 +1253,12 @@ public sealed partial class ModularView : UserControl
             }
             if (cross_.Count > 0)
             {
-                var sub = new MenuItem { Header = "Modulate from another track" };
+                var sub = new MenuItem { Header = Loc.T("modular.modulate_from_another_track") };
                 foreach (var it in cross_) sub.Items.Add(it);
                 flyout.Items.Add(sub); sources++;
             }
             if (sources == 0)
-                flyout.Items.Add(new MenuItem { Header = "Add an LFO / expose a param first", IsEnabled = false });
+                flyout.Items.Add(new MenuItem { Header = Loc.T("modular.add_an_lfo_expose_a"), IsEnabled = false });
         }
 
         // Expose toggle — only device params can be CV sources (param source is device-only).
@@ -1268,7 +1266,7 @@ public sealed partial class ModularView : UserControl
         {
             flyout.Items.Add(new Separator());
             bool exposed = _exposedParams.Contains((t, device, param));
-            var ex = new MenuItem { Header = exposed ? "Unexpose CV output" : "Expose as CV output" };
+            var ex = new MenuItem { Header = exposed ? Loc.T("modular.unexpose_cv_output") : Loc.T("modular.expose_as_cv_output") };
             ex.Click += (_, _) => { if (!_exposedParams.Remove((t, device, param))) _exposedParams.Add((t, device, param)); Rebuild(); };
             flyout.Items.Add(ex);
         }
@@ -1306,7 +1304,7 @@ public sealed partial class ModularView : UserControl
     private string TrackName(int trackId)
     {
         string nm = _engine.GetTrackName(trackId);
-        return string.IsNullOrEmpty(nm) ? "Track " + trackId : nm;
+        return string.IsNullOrEmpty(nm) ? Loc.F("common.track_n", trackId) : nm;
     }
 
     // CV-link depth + mode popover (mockup 1d). The link is owned by ownerTrack.
@@ -1324,7 +1322,7 @@ public sealed partial class ModularView : UserControl
     {
         var title = new TextBlock { Text = e.Tip, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Text3, TextWrapping = TextWrapping.Wrap };
         var flyout = new Flyout { Placement = Avalonia.Controls.PlacementMode.Pointer };
-        var remove = new Button { Content = "Remove connection", FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var remove = new Button { Content = Loc.T("modular.remove_connection"), FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center };
         remove.Click += (_, _) => { flyout.Hide(); RemoveModInputEdge(e); };
         flyout.Content = new StackPanel { Spacing = 8, Width = 200, Children = { title, remove } };
         flyout.ShowAt(_edges);
@@ -1362,18 +1360,18 @@ public sealed partial class ModularView : UserControl
     {
         int t = ownerTrack; var e = _engine;
         int modId = e.CvLinkSource(t, linkIndex);
-        var title = new TextBlock { Text = $"CV LINK · LFO {modId}", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Text3 };
+        var title = new TextBlock { Text = Loc.F("modular.cv_link_lfo_caps", modId), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Text3 };
 
         var depth = new Slider { Minimum = -1, Maximum = 1, Value = e.CvLinkDepth(t, linkIndex), Width = 180, SmallChange = 0.05, LargeChange = 0.2 };
         var depthVal = MonoValue(((int)Math.Round(e.CvLinkDepth(t, linkIndex) * 100)) + "\u2009%");
         depth.PropertyChanged += (_, ev) => { if (ev.Property == Slider.ValueProperty) { e.SetCvLinkDepth(t, linkIndex, (float)depth.Value); depthVal.Text = ((int)Math.Round(depth.Value * 100)) + "\u2009%"; } };
         var depthRow = new DockPanel { LastChildFill = true };
-        var dl = new TextBlock { Text = "Depth", FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var dl = new TextBlock { Text = Loc.T("modular.depth"), FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         DockPanel.SetDock(dl, Dock.Left); DockPanel.SetDock(depthVal, Dock.Right);
         depthRow.Children.Add(dl); depthRow.Children.Add(depthVal); depthRow.Children.Add(depth);
 
         var modeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
-        var modeNames = new[] { "Add", "Multiply", "Override" };
+        var modeNames = new[] { Loc.T("modular.add_2"), Loc.T("modular.multiply"), Loc.T("modular.override") };
         int curMode = e.CvLinkMode(t, linkIndex);
         var chips = new Border[3];
         void SyncModes(int sel) { for (int i = 0; i < 3; i++) { bool on = i == sel; chips[i].Background = on ? NotaPalette.Accent : Brushes.Transparent; chips[i].BorderBrush = on ? NotaPalette.Accent : BorderStrong; ((TextBlock)chips[i].Child!).Foreground = on ? BrassBright : Text2; } }
@@ -1385,10 +1383,10 @@ public sealed partial class ModularView : UserControl
         }
 
         var flyout = new Flyout { Placement = atPointer ? Avalonia.Controls.PlacementMode.Pointer : Avalonia.Controls.PlacementMode.Bottom };
-        var remove = new Button { Content = "Remove modulation", FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var remove = new Button { Content = Loc.T("modular.remove_modulation"), FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center };
         remove.Click += (_, _) => { flyout.Hide(); e.CvLinkRemove(t, linkIndex); Rebuild(); Changed?.Invoke(); };
 
-        var panel = new StackPanel { Spacing = 8, Width = 220, Children = { title, depthRow, new TextBlock { Text = "Mode", FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = Text3 }, modeRow, remove } };
+        var panel = new StackPanel { Spacing = 8, Width = 220, Children = { title, depthRow, new TextBlock { Text = Loc.T("modular.mode"), FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = Text3 }, modeRow, remove } };
         flyout.Content = panel;
         flyout.ShowAt(anchor);
     }
@@ -1447,9 +1445,9 @@ public sealed partial class ModularView : UserControl
         {
             bool inst = n.Slot == Slot.Instrument;
             var power = new SwitchTrack { IsOn = !n.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
-            ToolTip.SetTip(power, inst
-                ? (n.Bypassed ? "Off — click to turn the instrument on (B)" : "On — click to turn the instrument off (B)")
-                : (n.Bypassed ? "Bypassed — click to enable (B)" : "Active — click to bypass (B)"));
+            ToolTip.SetTip(power, (inst
+                ? (n.Bypassed ? Loc.T("device_chain.shell.off_click_to_turn_the") : Loc.T("device_chain.shell.on_click_to_turn_the"))
+                : (n.Bypassed ? Loc.T("device_chain.bypassed_click_to_enable") : Loc.T("device_chain.active_click_to_bypass"))) + " (B)");
             power.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(power).Properties.IsLeftButtonPressed) return;
@@ -1476,7 +1474,7 @@ public sealed partial class ModularView : UserControl
             // Only offer expand when there are more params than the node shows.
             if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
             // A bin, not ×: an × reads as "close", and closing the opened knobs deleted the device (#261).
-            actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => DeleteNode(n)));
+            actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, Loc.T("modular.delete"), () => DeleteNode(n)));
         }
         else if (n.Slot == Slot.Instrument)
         {
@@ -1484,17 +1482,17 @@ public sealed partial class ModularView : UserControl
         }
         else if (n.Slot == Slot.Modulator)
         {
-            actions.Children.Add(BadgeText(string.IsNullOrEmpty(n.Badge) ? "LFO" : n.Badge));
+            actions.Children.Add(BadgeText(string.IsNullOrEmpty(n.Badge) ? Loc.T("modular.lfo_caps") : n.Badge));
             if (n.IsScopeNode)
             {
                 int scopeTrack = _trackId, scopeMod = n.ModId;
                 Control? pop = null;
                 // Opens on release: opened on the press, the release raises the main window over it (macOS).
-                pop = HeaderGlyph(GlyphKind.PopOut, Text3, "Open in a window", () => { });
+                pop = HeaderGlyph(GlyphKind.PopOut, Text3, Loc.T("modular.open_in_a_window"), () => { });
                 pop.PointerReleased += (_, e) => { OpenScopeWindow(scopeTrack, scopeMod, pop!); e.Handled = true; };
                 actions.Children.Add(pop);
             }
-            actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => RemoveModulatorNode(n)));
+            actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, Loc.T("modular.delete"), () => RemoveModulatorNode(n)));
         }
         else if (!string.IsNullOrEmpty(n.Badge))
             actions.Children.Add(BadgeText(n.Badge));
@@ -1619,7 +1617,7 @@ public sealed partial class ModularView : UserControl
             });
             body.Children.Add(new TextBlock
             {
-                Text = $"{ParamRowsShown} of {n.Params.Count} · scroll for more", FontSize = 10, Foreground = Text4, Margin = new Thickness(0, 4, 0, 0),
+                Text = Loc.F("modular.rows_shown_scroll_for_more", ParamRowsShown, n.Params.Count), FontSize = 10, Foreground = Text4, Margin = new Thickness(0, 4, 0, 0),
             });
         }
         else body.Children.Add(stack);
@@ -1628,7 +1626,7 @@ public sealed partial class ModularView : UserControl
 
     private Control CollapseStrip(GNode n)
     {
-        var text = new TextBlock { Text = "Show fewer", FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = Loc.T("modular.show_fewer"), FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center,
             Children = { new Glyph(GlyphKind.ChevronUp, 8) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center }, text } };
         var strip = new Border
@@ -1636,7 +1634,7 @@ public sealed partial class ModularView : UserControl
             Height = 22, Background = Brushes.Transparent, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0),
             Cursor = new Cursor(StandardCursorType.Hand), Child = row,
         };
-        ToolTip.SetTip(strip, "Hide the parameters that aren't modulated (Esc)");
+        ToolTip.SetTip(strip, Loc.T("modular.hide_the_parameters_that_arent"));
         strip.PointerEntered += (_, _) => text.Foreground = Text1;
         strip.PointerExited += (_, _) => text.Foreground = Text3;
         strip.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(strip).Properties.IsLeftButtonPressed) return; ToggleExpand(n); e.Handled = true; };
@@ -1700,7 +1698,7 @@ public sealed partial class ModularView : UserControl
                 // A larger hit target, centred on the dot.
                 dot.HorizontalAlignment = HorizontalAlignment.Center; dot.VerticalAlignment = VerticalAlignment.Center;
                 var hit = new Border { Width = 18, Height = 18, Background = Brushes.Transparent, Child = dot, Cursor = new Cursor(StandardCursorType.Cross) };
-                ToolTip.SetTip(hit, "Drag onto a node to modulate one of its parameters");
+                ToolTip.SetTip(hit, Loc.T("modular.drag_onto_a_node_to_modulate"));
                 hit.PointerPressed += (_, e) => { onPress(e); e.Handled = true; };
                 c = hit; size = 18;
             }
@@ -1889,7 +1887,7 @@ public sealed partial class ModularView : UserControl
             mi.Click += (_, _) => { _engine.CvLinkAddToTarget(t, modId, kind, -1, di, prm); Rebuild(); Changed?.Invoke(); };
             flyout.Items.Add(mi);
         }
-        if (pc == 0) flyout.Items.Add(new MenuItem { Header = "No parameters", IsEnabled = false });
+        if (pc == 0) flyout.Items.Add(new MenuItem { Header = Loc.T("modular.no_parameters"), IsEnabled = false });
         flyout.ShowAt(node.View, showAtPointer: true);
     }
 
@@ -1929,7 +1927,7 @@ public sealed partial class ModularView : UserControl
         int dc = e.TrackDeviceCount(targetTrackId);
         for (int d = 0; d < dc; d++) AddDeviceSub(e.DeviceName(targetTrackId, d), 0, d, e.DeviceParamCount(targetTrackId, d));
 
-        if (flyout.Items.Count == 0) flyout.Items.Add(new MenuItem { Header = "No modulatable parameters on that track", IsEnabled = false });
+        if (flyout.Items.Count == 0) flyout.Items.Add(new MenuItem { Header = Loc.T("modular.no_modulatable_parameters_on_that"), IsEnabled = false });
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -1997,9 +1995,9 @@ public sealed partial class ModularView : UserControl
     // lock in the header says why (#261). Null for a node that can be deleted.
     private static string? FixedReason(GNode n) => n.Slot switch
     {
-        Slot.Input => "Fixed — the track's clips and input enter the chain here, so it can't be deleted.",
-        Slot.Output => "Fixed — the chain leaves the track for the mixer here, so it can't be deleted.",
-        Slot.Instrument => "Fixed — the track's instrument takes its MIDI in. It can't be deleted; drop another instrument on the track to swap it.",
+        Slot.Input => Loc.T("modular.fixed_the_tracks_clips_and"),
+        Slot.Output => Loc.T("modular.fixed_the_chain_leaves_the"),
+        Slot.Instrument => Loc.T("modular.fixed_the_tracks_instrument_takes"),
         _ => null,
     };
 
@@ -2007,7 +2005,7 @@ public sealed partial class ModularView : UserControl
     {
         bool open = _expanded.Contains(n.Id);
         return HeaderGlyph(open ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, Text3,
-            open ? "Show fewer parameters (Esc)" : "Show all parameters", () => ToggleExpand(n));
+            open ? Loc.T("modular.show_fewer_parameters_esc") : Loc.T("modular.show_all_parameters"), () => ToggleExpand(n));
     }
 
     private GNode? Selected() { foreach (var n in _nodes) if (n.Selected) return n; return null; }
@@ -2215,7 +2213,7 @@ public sealed partial class ModularView : UserControl
             addMenu.Items.Add(mi);
         }
         foreach (var node in Nota.Application.Palette.ModularCatalog.All) AddItem(node.Name, node.Kind);   // the palette lists the same nodes
-        var addBtn = Chip("+ Add"); addBtn.Content = Glyph.Labeled("+ Add", GlyphKind.ChevronDown);
+        var addBtn = Chip(Loc.T("modular.add")); addBtn.Content = Glyph.Labeled(Loc.T("modular.add"), GlyphKind.ChevronDown);
         addBtn.Flyout = addMenu;
         left.Children.Add(seg);
         left.Children.Add(addBtn);
@@ -2228,7 +2226,7 @@ public sealed partial class ModularView : UserControl
             Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { zoomOut, zoomIn } },
         };
-        var fit = Chip("Fit"); fit.Click += (_, _) => FitNow();
+        var fit = Chip(Loc.T("modular.fit")); fit.Click += (_, _) => FitNow();
         right.Children.Add(zoomSeg);
         right.Children.Add(fit);
         right.Children.Add(_zoomLabel);
@@ -2342,8 +2340,8 @@ public sealed partial class ModularView : UserControl
         {
             var l = new List<(PortKind, string)>();
             if (IsMathNode) { l.Add((PortKind.Cv, "A")); l.Add((PortKind.Cv, "B")); return l; }
-            if (AudioIn) l.Add((PortKind.Audio, "Audio in"));
-            if (MidiIn) l.Add((PortKind.Midi, "MIDI in"));
+            if (AudioIn) l.Add((PortKind.Audio, Loc.T("modular.audio_in")));
+            if (MidiIn) l.Add((PortKind.Midi, Loc.T("modular.midi_in")));
             // One CV input per incoming link (labelled with the driven param), or a single generic
             // "CV" port while nothing is patched — only on a real CV target, so the graph never lies.
             for (int i = 0; i < CvInputRows; i++) l.Add((PortKind.Cv, i < CvInputLabels.Count ? CvInputLabels[i] : "CV"));
@@ -2353,10 +2351,10 @@ public sealed partial class ModularView : UserControl
         public List<(PortKind kind, string label)> Outputs()
         {
             var l = new List<(PortKind, string)>();
-            if (IsMathNode) { l.Add((PortKind.Cv, "CV out")); return l; }
-            if (AudioOut) l.Add((PortKind.Audio, "Audio out"));
-            if (MidiOut) l.Add((PortKind.Midi, "MIDI out"));
-            if (CvOut) l.Add((PortKind.Cv, "CV out"));
+            if (IsMathNode) { l.Add((PortKind.Cv, Loc.T("modular.cv_out"))); return l; }
+            if (AudioOut) l.Add((PortKind.Audio, Loc.T("modular.audio_out")));
+            if (MidiOut) l.Add((PortKind.Midi, Loc.T("modular.midi_out")));
+            if (CvOut) l.Add((PortKind.Cv, Loc.T("modular.cv_out")));
             return l;
         }
 

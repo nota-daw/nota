@@ -25,6 +25,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -190,7 +191,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             ToolTip.SetTip(seg, tip);
             return seg;
         }
-        Control ModeSeg() => Seg(Flip, new[] { "Gate", "Duck" }, "Mode — Gate lets the signal through above the threshold; Duck turns it down while the key is above it");
+        Control ModeSeg() => Seg(Flip, new[] { "Gate", "Duck" }, Loc.T("device.shutter.mode_gate_lets_the_signal"));
 
         // Outlined chips: the chosen one = accent edge + wash.
         Control Chips(string[] names, Func<int, bool> lit, Action<int> pick, int learnParam, string tip)
@@ -245,7 +246,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         }
         Border ToggleLatch(int p, string text, string tip, bool fill = false)
             => Latch(p, () => On(p), () => SetP(p, On(p) ? 0f : 1f), () => text, tip, fill);
-        Border ListenLatch(bool fill = false) => ToggleLatch(Listen, "Listen", "Listen — hear the key as the detector hears it (after its filter), to tune the band", fill);
+        Border ListenLatch(bool fill = false) => ToggleLatch(Listen, "Listen", Loc.T("device.shutter.listen_hear_the_key_as"), fill);
 
         // Slider row: caps label · track · mono value.
         Control SliderRow(string label, int p, Func<double, string> fmt, bool modulation = false, double labW = 40)
@@ -282,7 +283,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 box.BorderBrush = ext ? NotaPalette.BorderStrong : BorderDef;
                 chev.Foreground = ext ? TextSecondary : TextTertiary;
             });
-            ToolTip.SetTip(box, "Key source — Internal keys off this track; pick another track, or one pad or chain of it, to gate or duck against it");
+            ToolTip.SetTip(box, Loc.T("device.shutter.key_source_internal_keys_off"));
             Learn(box, ExternalKey);
             box.PointerPressed += (_, e) =>
             {
@@ -295,7 +296,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                     mi.Click += (_, _) => pick();
                     fly.Items.Add(mi);
                 }
-                Item("Internal — this track", !ExtOn(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); RefreshAll(); });
+                Item(Loc.T("device.shutter.internal_this_track"), !ExtOn(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); RefreshAll(); });
                 // Picking a source means using it.
                 void Picked()
                 {
@@ -328,7 +329,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             }, out var sync);
             readouts.Add(sync);
             Learn(sw, ExternalKey);
-            ToolTip.SetTip(sw, "External sidechain — the detector listens to the key source instead of this track");
+            ToolTip.SetTip(sw, Loc.T("device.shutter.external_sidechain_the_detector_listens"));
             return sw;
         }
 
@@ -372,8 +373,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         var grPill = new ShPill { Ink = Teal, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch };
         var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var grLbl = Acr("GR"); grLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(inPill, "The level the detector compares — this track's input, or the key when an external sidechain drives it; the dashed tick is the threshold");
-        ToolTip.SetTip(grPill, "Gain reduction — how far the gate has turned the signal down now");
+        ToolTip.SetTip(inPill, Loc.T("device.shutter.the_level_the_detector_compares"));
+        ToolTip.SetTip(grPill, Loc.T("device.shutter.gain_reduction_how_far_the"));
         var stateIn = Mono("", 7, TextPrimary); stateIn.HorizontalAlignment = HorizontalAlignment.Center;
         var stateGr = Mono("", 7, TextPrimary); stateGr.HorizontalAlignment = HorizontalAlignment.Center;
         static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
@@ -408,15 +409,15 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             signal = new ShSignalView();
             WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return,
                 F(Threshold, "Threshold", v => ThrShort(v) + "\u2009dB"), F(Return, "Return", RetF));
-            ToolTip.SetTip(signal, MenuKit.Keys("The input (grey columns) and what passes (the bright line) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it, ⌥-click types it."));
+            ToolTip.SetTip(signal, MenuKit.Keys(Loc.T("device.shutter.the_input_teal_and_what")));
             Learn(signal, Threshold);
 
             var liveBtn = Latch(-1, () => live, () => { live = !live; if (!live) Array.Copy(scope, frozen, kScope); }, () => live ? "Live" : "Frozen",
-                "Live — the graph follows the audio; click to freeze the picture");
+                Loc.T("device.shutter.live_the_graph_follows_the"));
             var ret = Mono("", 7, TextSecondary);
             readouts.Add(() => ret.Text = NotaNum.F($"return {RetDb():0.0}\u2009dB"));
             var head = HeadRow(Row(6, Caps("MODE"), ModeSeg(), new Border { Width = 2 }, Caps("LOOK"),
-                Seg(Lookahead, new[] { "0", "1", "5\u2009ms" }, "Lookahead — the gate opens this much before the transient arrives (the track is delayed by it)"), liveBtn), ret);
+                Seg(Lookahead, new[] { "0", "1", "5\u2009ms" }, Loc.T("device.shutter.lookahead_the_gate_opens_this")), liveBtn), ret);
             var knobs = KnobRow(new[]
             {
                 K(Threshold, "THRESH", ThrShort),
@@ -438,12 +439,12 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             envView = new ShEnvelopeView();
             WireDrag(envView, h => h switch { ShEnvelopeView.HAttack => Attack, ShEnvelopeView.HHold => Hold, ShEnvelopeView.HRelease => Release, _ => Floor },
                 F(Attack, "Attack", AtkF), F(Hold, "Hold", HoldF), F(Release, "Release", RelF), F(Floor, "Floor", FloorF));
-            ToolTip.SetTip(envView, MenuKit.Keys("One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the dashed floor up or down; double-click resets, ⌥-click types."));
+            ToolTip.SetTip(envView, MenuKit.Keys(Loc.T("device.shutter.one_opening_attack_hold_release")));
             Learn(envView, Release);
 
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
-                "Shape — Linear: straight ramps over the times; Log: the classic one-pole curve; Snap: stays open, then shuts hard");
-            var retrig = ToggleLatch(Retrigger, "Retrig", "Retrigger — trigger mode: each hit fires one attack → hold → release, however long the signal stays above the threshold");
+                Loc.T("device.shutter.shape_linear_straight_ramps_over"));
+            var retrig = ToggleLatch(Retrigger, "Retrig", Loc.T("device.shutter.retrigger_trigger_mode_each_hit"));
             var times = Mono("", 7, TextSecondary);
             readouts.Add(() => times.Text = Times());
             var head = HeadRow(Row(6, Caps("SHAPE"), shapes, new Border { Width = 2 }, ModeSeg(), retrig), times);
@@ -452,9 +453,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 K(Attack, "ATTACK", AtkF),
                 K(Hold, "HOLD", HoldF),
                 K(Release, "RELEASE", RelF),
-                K(Floor, "FLOOR", FloorF, Teal, tip: "Floor — the level when closed (−∞ = silence); in Duck, how far the signal goes down"),
+                K(Floor, "FLOOR", FloorF, Teal, tip: Loc.T("device.shutter.floor_the_level_when_closed")),
             },
-            () => P(Floor) <= 0.001f ? (Duck() ? "ducks to silence" : "closes to silence") : NotaNum.F($"floor {FloorDb():0.0}\u2009dB instead of silence"),
+            () => P(Floor) <= 0.001f ? (Duck() ? Loc.T("device.shutter.ducks_to_silence") : Loc.T("device.shutter.closes_to_silence")) : Loc.F("device.shutter.floor_db_instead_of_silence", FloorDb()),
             () => NotaNum.F($"openings {Sc(S_TrigPerBar):0} / bar · {GrText()}"));
             return TabBody(head, envView, knobs);
         }
@@ -467,20 +468,20 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             keyView = new ShKeyView();
             WireDrag(keyView, h => h == ShKeyView.HHp ? DetHP : DetLP, F(DetHP, "SC HP", HpF), F(DetLP, "SC LP", LpF));
-            ToolTip.SetTip(keyView, MenuKit.Keys("The detector's band-pass (the grey curve) — only this part of the key opens the gate — over the reduction in the window (the bright line). Drag the nodes sideways; double-click resets, ⌥-click types."));
+            ToolTip.SetTip(keyView, MenuKit.Keys(Loc.T("device.shutter.the_detectors_band_pass_teal")));
             Learn(keyView, DetHP);
 
             var eq = Latch(DetFilter, () => On(DetFilter), () => SetP(DetFilter, On(DetFilter) ? 0f : 1f), () => On(DetFilter) ? "SC EQ on" : "SC EQ off",
-                "SC EQ — the detector hears the key through its band-pass; off = the full band");
+                Loc.T("device.shutter.sc_eq_the_detector_hears"));
             var look = Mono("", 7, TextSecondary);
             readouts.Add(() => look.Text = NotaNum.F($"look {LookMs()}\u2009ms"));
             var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ModeSeg(), ListenLatch(), eq), look);
             var knobs = KnobRow(new[]
             {
                 K(Threshold, "THRESH", ThrShort),
-                K(Floor, "RANGE", FloorF, tip: "Range — how far the gate closes or the duck goes down (−∞ = all the way)"),
-                K(Return, "RETURN", RetF, Teal, tip: "Return — how far under the threshold the key must fall before the gate closes (stops chatter)"),
-                K(Lookahead, "LOOK", LookF, Teal, steps: 3, tip: "Lookahead — 0, 1 or 5\u2009ms"),
+                K(Floor, "RANGE", FloorF, tip: Loc.T("device.shutter.range_how_far_the_gate")),
+                K(Return, "RETURN", RetF, Teal, tip: Loc.T("device.shutter.return_how_far_under_the")),
+                K(Lookahead, "LOOK", LookF, Teal, steps: 3, tip: Loc.T("device.shutter.lookahead_0_1_or_5")),
             },
             () => NotaNum.F($"key {KeyName()} · {(On(DetFilter) ? "fires on " + HpF(P(DetHP)) + "…" + LpF(P(DetLP)) : "full band")}"),
             () => NotaNum.F($"{(Duck() ? "ducks" : "closes")} to {(P(Floor) <= 0.001f ? "−∞\u2009dB" : NotaNum.F($"{FloorDb():0.0}\u2009dB"))} · {GrText()}"));
@@ -557,7 +558,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             grid.SizeChanged += (_, _) => Paint();
             readouts.Add(() => { if (!drag) Paint(); });
             Learn(host, p);
-            ToolTip.SetTip(host, MenuKit.Keys(tip + " · ⌥-click to type"));
+            ToolTip.SetTip(host, MenuKit.Keys(tip + Loc.T("device.shutter.click_to_type")));
             ValueEntry.Attach(host, F(p, name, fmt), tb);
             return host;
         }
@@ -615,11 +616,11 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 RefreshAll();
             };
             patView.GestureEnd += () => { foreach (int k in touched) End(Step1 + k); touched.Clear(); };
-            ToolTip.SetTip(patView, "The step pattern — each column is one step's level, the line is the gain it makes (smooth and swing bend it). Draw sets steps, Line draws a ramp, Erase clears, Flip toggles on / off.");
+            ToolTip.SetTip(patView, Loc.T("device.shutter.the_step_pattern_each_column"));
 
             var tools = Segments(new[] { "Draw", "Line", "Erase", "Flip" }, () => patTool, i => { patTool = i; if (patView is not null) patView.Tool = i; }, out var toolSync, padX: 6);
             readouts.Add(toolSync);
-            ToolTip.SetTip(tools, "Mouse tool for the grid");
+            ToolTip.SetTip(tools, Loc.T("device.shutter.mouse_tool_for_the_grid"));
 
             Border Arrow(GlyphKind kind, int dir)
             {
@@ -634,14 +635,14 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new DockPanel { Children = { Docked(Arrow(GlyphKind.ChevronLeft, -1), Dock.Left), Docked(Arrow(GlyphKind.ChevronRight, 1), Dock.Right), pname } },
             };
-            ToolTip.SetTip(browser, "Pattern shapes — the arrows step through them (fitted to the grid)");
-            var rnd = Button("Rnd", Randomize, "Roll a new pattern — Complexity sets how busy and how varied it is");
-            var cx = FillBar(PatComplexity, "Complexity", v => "Complexity " + Pct((float)v), "Complexity — how busy and varied Rnd makes the pattern");
+            ToolTip.SetTip(browser, Loc.T("device.shutter.pattern_shapes_the_arrows_step"));
+            var rnd = Button("Rnd", Randomize, Loc.T("device.shutter.roll_a_new_pattern_complexity"));
+            var cx = FillBar(PatComplexity, "Complexity", v => "Complexity " + Pct((float)v), Loc.T("device.shutter.complexity_how_busy_and_varied"));
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,110"), ColumnSpacing = 5, Height = 20 };
             head.Children.Add(tools); head.Children.Add(Col(browser, 1)); head.Children.Add(Col(rnd, 2)); head.Children.Add(Col(cx, 3));
 
-            var smooth = FillBar(PatSmooth, "Smooth", v => "Smooth " + Pct((float)v), "Smooth — ramps into each step instead of jumping (up to half a step)");
-            var swing = FillBar(PatSwing, "Swing", v => NotaNum.F($"Swing {v * 75:0} %"), "Swing — every second step comes late");
+            var smooth = FillBar(PatSmooth, "Smooth", v => "Smooth " + Pct((float)v), Loc.T("device.shutter.smooth_ramps_into_each_step"));
+            var swing = FillBar(PatSwing, "Swing", v => NotaNum.F($"Swing {v * 75:0} %"), Loc.T("device.shutter.swing_every_second_step_comes"));
             var nSt = Mono("", 9, TextPrimary); var nLv = Mono("", 9, TextPrimary);
             readouts.Add(() => { nSt.Text = NSteps().ToString(); nLv.Text = NLevels().ToString(); });
             Border Cycle(TextBlock t, Action a, string tip)
@@ -662,17 +663,17 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                         var next = Resample(cur, StepCounts[si]);
                         SetP(PatSteps, si / 2f);
                         WriteSteps(next);
-                    }, "Steps — 8, 16 or 32 (the pattern is stretched to fit)"),
+                    }, Loc.T("device.shutter.steps_8_16_or_32")),
                     Mono("×", 8, TextTertiary),
                     Cycle(nLv, () =>
                     {
                         var cur = StepsNow();
                         SetP(PatLevels, (Sel(PatLevels, 3) + 1) % 3 / 2f);
                         WriteSteps(Array.ConvertAll(cur, v => Qz(v)));
-                    }, "Levels — 4, 8 or 16 heights a step snaps to")),
+                    }, Loc.T("device.shutter.levels_4_8_or_16"))),
             };
             var target = Seg(PatTarget, new[] { "Off", "Volume", "Map" },
-                "Target — Off; Volume: the pattern gates the audio; Map: the audio is left alone and the pattern drives Pattern Out, a CV source in the Modular view");
+                Loc.T("device.shutter.target_off_volume_the_pattern"));
             var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,Auto,Auto"), ColumnSpacing = 5, Height = 20 };
             foot.Children.Add(smooth); foot.Children.Add(Col(swing, 1)); foot.Children.Add(Col(gridSize, 2)); foot.Children.Add(Col(target, 3));
 
@@ -685,25 +686,25 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
         Control RhythmTab()
         {
-            var rate = K(PatRate, "RATE", _ => RateName(), steps: 5, size: 40, tip: "Rate — how long the whole pattern takes: 1/4 … 4 bars in Sync, 4 … 0.25\u2009Hz in Free");
-            var depth = K(PatDepth, "DEPTH", v => Pct((float)v), Teal, size: 40, tip: "Depth — how far an empty step turns the signal down");
+            var rate = K(PatRate, "RATE", _ => RateName(), steps: 5, size: 40, tip: Loc.T("device.shutter.rate_how_long_the_whole"));
+            var depth = K(PatDepth, "DEPTH", v => Pct((float)v), Teal, size: 40, tip: Loc.T("device.shutter.depth_how_far_an_empty"));
             var knobs = new UniformGrid { Columns = 2, Children = { rate, depth } };
             var clock = Segments(new[] { "Sync", "Free" }, () => On(PatSync) ? 0 : 1, i => { SetP(PatSync, i == 0 ? 1f : 0f); RefreshAll(); }, out var clockSync, fill: true);
             readouts.Add(clockSync);
             Learn(clock, PatSync);
-            ToolTip.SetTip(clock, "Clock — Sync locks the pattern to the song's bars, Free runs it in Hz");
+            ToolTip.SetTip(clock, Loc.T("device.shutter.clock_sync_locks_the_pattern"));
             var clockRow = LabelRow("CLOCK", clock);
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4 };
-            btns.Children.Add(Button("Copy", () => _clipboard = StepsNow(), "Copy the steps"));
-            btns.Children.Add(Col(Button("Paste", () => { if (_clipboard is { } c) WriteSteps(Array.ConvertAll(Resample(c, NSteps()), v => Qz(v))); }, "Paste copied steps (fitted to the grid)", () => _clipboard is not null), 1));
-            btns.Children.Add(Col(Button("Clear", () => WriteSteps(new float[NSteps()]), "Clear every step"), 2));
+            btns.Children.Add(Button("Copy", () => _clipboard = StepsNow(), Loc.T("device.shutter.copy_the_steps")));
+            btns.Children.Add(Col(Button("Paste", () => { if (_clipboard is { } c) WriteSteps(Array.ConvertAll(Resample(c, NSteps()), v => Qz(v))); }, Loc.T("device.shutter.paste_copied_steps_fitted_to"), () => _clipboard is not null), 1));
+            btns.Children.Add(Col(Button("Clear", () => WriteSteps(new float[NSteps()]), Loc.T("device.shutter.clear_every_step")), 2));
             return Spread(
                 knobs,
                 clockRow,
                 btns,
                 new StackPanel { Spacing = 5, Children = {
-                    Toggle(PatRetrig, "Retrig on MIDI note", "Retrig — every MIDI note on this track (or the key track) restarts the pattern"),
-                    Toggle(PatGated, "Only while gate open", "Gated — the pattern plays only while the threshold gate is open (gate × pattern)") } });
+                    Toggle(PatRetrig, Loc.T("device.shutter.retrig_on_midi_note"), Loc.T("device.shutter.retrig_every_midi_note_on")),
+                    Toggle(PatGated, Loc.T("device.shutter.only_while_gate_open"), Loc.T("device.shutter.gated_the_pattern_plays_only")) } });
         }
 
         // ======================================================================
@@ -749,7 +750,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 b.BorderBrush = moving ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
                 t.Foreground = moving ? AccentBright : TextTertiary;
             });
-            ToolTip.SetTip(b, "What the gate is doing now — closed, attack, open, hold or release — and its gain");
+            ToolTip.SetTip(b, Loc.T("device.shutter.what_the_gate_is_doing"));
             return b;
         }
 
@@ -764,8 +765,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 StateBox(),
                 new StackPanel { Spacing = 5, Children = {
                     ExtSwitch(),
-                    Toggle(DetFilter, "Detector filter", "Detector filter — the key goes through the band-pass (Sidechain tab) before the detector"),
-                    Toggle(PeakHold, "Peak hold", "Peak hold — the detector holds each peak longer, so low notes and slow waves don't chatter the gate") } });
+                    Toggle(DetFilter, "Detector filter", Loc.T("device.shutter.detector_filter_the_key_goes")),
+                    Toggle(PeakHold, "Peak hold", Loc.T("device.shutter.peak_hold_the_detector_holds")) } });
         }
 
         Control MetersTab()
@@ -796,13 +797,13 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             btns.Children.Add(ListenLatch(fill: true));
             btns.Children.Add(Col(Latch(-1, () => false, () => engine.DeviceAction(track, di, A_ResetMeters, 0, 0), () => "Reset",
-                "Reset — clear the peak reduction, the opening count and the history", fill: true), 1));
+                Loc.T("device.shutter.reset_clear_the_peak_reduction"), fill: true), 1));
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
                 Docked(new StackPanel { Spacing = 5, Children = {
                     ExtSwitch(),
-                    Toggle(DetFilter, "Detector filter", "Detector filter — the key goes through the band-pass before the detector") } }, Dock.Bottom),
+                    Toggle(DetFilter, "Detector filter", Loc.T("device.shutter.detector_filter_the_key_goes_2")) } }, Dock.Bottom),
                 Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
             return new Border { Padding = new Thickness(8, 6), Child = body };
         }
@@ -836,7 +837,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             };
             extrasHost.Cursor = centreTab == 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         });
-        ToolTip.SetTip(extrasHost, "Signal tab: click to change the window — " + string.Join(" · ", WindowNames));
+        ToolTip.SetTip(extrasHost, Loc.T("device.shutter.signal_tab_click_to_change") + string.Join(" · ", WindowNames));
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => EnvelopeTab(), 2 => SidechainTab(), 3 => PatternTab(), _ => SignalTab() };
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? MetersTab() : DetectorTab();
         Control RhythmBody(int t) => rhythmBodies[t] ??= t == 1 ? DetectorTab() : RhythmTab();
@@ -870,7 +871,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 {
                     tg == 0 ? "Pattern off" : "Pattern", PatternName(), RateName(), NotaNum.F($"{NSteps()} × {NLevels()}"),
                     "smooth " + Pct(P(PatSmooth)), "swing " + NotaNum.F($"{P(PatSwing) * 75:0}\u2009%"), "depth " + Pct(P(PatDepth)),
-                }) + (tg == 0 ? "" : tg == 2 ? " → Map (Pattern Out)" : On(PatGated) ? " → Volume · gated" : " → Volume")
+                }) + (tg == 0 ? "" : tg == 2 ? Loc.T("device.shutter.map_pattern_out") : On(PatGated) ? Loc.T("device.shutter.volume_gated") : " → Volume")
                   + (On(PatRetrig) ? " · MIDI retrig" : "");
             }
             switch (centreTab)
@@ -937,7 +938,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 bool on = tg > 0 && scN >= kScope;
                 patView.Set(patBuf, ns, NLevels(), on ? (int)Sc(kPatAt + P_Step) : -1, on ? Sc(kPatAt + P_Phase) : -1,
                     P(PatSmooth), P(PatSwing) * 0.375, P(PatDepth), tg == 2, tg > 0,
-                    tg == 2 ? "Map → Pattern Out" : tg == 1 ? "gain" : "off");
+                    tg == 2 ? Loc.T("device.shutter.map_pattern_out_2") : tg == 1 ? "gain" : "off");
             }
             if (centreTab == 2 && keyView is not null)
                 keyView.Set(Exp(P(DetHP), 20, 2000), Exp(P(DetLP), 200, 20000), On(DetFilter), h, H_Gate, n, Duck() ? "duck" : "reduction");

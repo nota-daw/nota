@@ -23,6 +23,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -42,7 +43,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
     private const int A_ResetPeaks = 0, A_ResetLoudness = 1;
 
     private static readonly string[] CharNames = { "Clean", "Punch", "Glue" };
-    private static readonly string[] CharWords = { "transparent", "lets the attack through", "slow and dense" };
+    private static readonly string[] CharWords = { "transparent", Loc.T("device.ceiling.lets_the_attack_through"), Loc.T("device.ceiling.slow_and_dense") };
     private static readonly (string Name, float Lufs)[] Targets =
     {
         ("−23\u2009LUFS · broadcast", -23), ("−18\u2009LUFS · audiobook", -18), ("−16\u2009LUFS · podcast", -16), ("−14\u2009LUFS · streaming", -14),
@@ -115,9 +116,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         double FromTarget() => Sc(S_LufsI) - P(Target);
         string TargetWords()
         {
-            if (!HaveI()) return "measuring…";
+            if (!HaveI()) return Loc.T("device.ceiling.measuring");
             double d = FromTarget();
-            return Math.Abs(d) <= 1 ? "on target" : d > 0 ? NotaNum.F($"{d:0.0}\u2009LU loud") : NotaNum.F($"{-d:0.0}\u2009LU quiet");
+            return Math.Abs(d) <= 1 ? Loc.T("device.ceiling.on_target") : d > 0 ? NotaNum.F($"{d:0.0}\u2009LU loud") : NotaNum.F($"{-d:0.0}\u2009LU quiet");
         }
 
         // ---- small builders ---------------------------------------------------------
@@ -264,9 +265,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             return new List<(string, bool, Action)>
             {
-                ("Internal — this track", !ExtOn(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }),
+                (Loc.T("device.ceiling.internal_this_track"), !ExtOn(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }),
             };
-        }, "Key source — Internal limits on this track's own peaks; pick another track to duck this one when that one peaks",
+        }, Loc.T("device.ceiling.key_source_internal_limits_on"),
             sources: () => SidechainSourcePicker.MenuRows(engine, track, di, ctx.NotifyChanged));
 
         Control TargetDrop() => Drop("", () => TargetF(P(Target)), () => false, () =>
@@ -274,7 +275,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             var list = new List<(string, bool, Action)>();
             foreach (var (label, v) in Targets) { float vv = v; list.Add((label, Math.Abs(P(Target) - vv) < 0.05f, () => SetP(Target, vv))); }
             return list;
-        }, "Target — the loudness the meters compare against: −14 for streaming, −16 podcasts, −23 broadcast. It does not change the sound; drag the dashed line for any value", Target);
+        }, Loc.T("device.ceiling.target_the_loudness_the_meters"), Target);
 
         static Grid HeadRow(Control left, Control right)
         {
@@ -287,7 +288,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             var seg = Segments(CharNames, CharI, i => { SetP(Character, i); RefreshAll(); }, out var sync, padX: 6);
             readouts.Add(sync);
             Learn(seg, Character);
-            ToolTip.SetTip(seg, "Character — Clean: transparent, the fastest attack; Punch: a slower attack lets the transient through to the clip; Glue: a slow release and a soft knee under the ceiling");
+            ToolTip.SetTip(seg, Loc.T("device.ceiling.character_clean_transparent_the_fastest"));
             var wordsTb = new TextBlock { FontSize = 7, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => wordsTb.Text = CharWords[CharI()]);
             return words ? Row(6, Caps("CHARACTER"), seg, wordsTb) : Row(6, Caps("CHARACTER"), seg);
@@ -311,14 +312,14 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             {
                 Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children =
                 {
-                    ParamChip(AutoRelease, "Auto rel", "Auto release — the release slows as the reduction deepens (up to 5× at 7\u2009dB), so dense passages don't pump"),
-                    ParamChip(TruePeak, "True peak", "True peak — the detector reads the inter-sample peak (4×), so the ceiling holds in dBTP after conversion"),
+                    ParamChip(AutoRelease, "Auto rel", Loc.T("device.ceiling.auto_release_the_release_slows")),
+                    ParamChip(TruePeak, "True peak", Loc.T("device.ceiling.true_peak_the_detector_reads")),
                 },
             };
             var knobs = Row(2,
-                K(Gain, "GAIN", GainF, "Gain — how hard the signal is driven into the ceiling", lit: () => centreTab != 1),
-                K(Ceil, "CEILING", v => NotaNum.F($"{v:0.0}\u2009dB"), "Ceiling — the output never goes above it (in dBTP with True peak on)"),
-                K(Release, "RELEASE", RelF, "Release — how fast the gain comes back (the character scales it; Auto rel lets the signal decide)",
+                K(Gain, "GAIN", GainF, Loc.T("device.ceiling.gain_how_hard_the_signal"), lit: () => centreTab != 1),
+                K(Ceil, "CEILING", v => NotaNum.F($"{v:0.0}\u2009dB"), Loc.T("device.ceiling.ceiling_the_output_never_goes")),
+                K(Release, "RELEASE", RelF, Loc.T("device.ceiling.release_how_fast_the_gain"),
                     lit: () => centreTab == 1, teal: () => On(AutoRelease)));
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Height = 52, ColumnSpacing = 8 };
             g.Children.Add(knobs);
@@ -352,8 +353,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         string ClipText()
         {
             int n = (int)Sc(S_Clips);
-            string times = n == 1 ? "time" : "times";
-            return CharI() == 1 ? NotaNum.F($"attack passed to the clip · {n} {times}") : NotaNum.F($"reached the clip · {n} {times}");
+            return CharI() == 1 ? Loc.Plural("device.ceiling.attack_passed_to_the_clip", n) : Loc.Plural("device.ceiling.reached_the_clip_times", n);
         }
 
         // ======================================================================
@@ -363,8 +363,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
         var grPill = new ShPill { Ink = NotaPalette.VizInk, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
         var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        ToolTip.SetTip(inPill, "The input after Gain, with the ceiling marked");
-        ToolTip.SetTip(grPill, "Gain reduction, 0 … 24\u2009dB");
+        ToolTip.SetTip(inPill, Loc.T("device.ceiling.the_input_after_gain_with"));
+        ToolTip.SetTip(grPill, Loc.T("device.ceiling.gain_reduction_0_24_db"));
         ToolTip.SetTip(outPill, "The output");
         var colGr = Mono("", 7, TextPrimary); colGr.HorizontalAlignment = HorizontalAlignment.Center;
         var colOut = Mono("", 7, TextPrimary); colOut.HorizontalAlignment = HorizontalAlignment.Center;
@@ -402,11 +402,11 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
             WireDrag(level, Ceil, "Ceiling", CeilF);
-            ToolTip.SetTip(level, MenuKit.Keys("The last 4 s: the input (shaded grey), the part over the ceiling (red) and the output (the bright columns), with the reduction hanging in a strip under it (0 … −12\u2009dB). Drag the ceiling line; ⌥-click to type, double-click resets."));
+            ToolTip.SetTip(level, MenuKit.Keys(Loc.T("device.ceiling.the_last_4_s_the")));
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
-                () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
-                () => NotaNum.F($"over {Sc(S_OverPct) * 100:0} % of the time"));
+                () => ScDb(S_WinInPeak) <= -119 ? Loc.T("common.no_signal") : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
+                () => Loc.F("device.ceiling.over_of_the_time", Sc(S_OverPct) * 100));
             return TabBody(head, level, knobs);
         }
 
@@ -414,7 +414,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control ReductionTab()
         {
             reduction = new CeReductionView();
-            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: the darker grey where a transient got through to the clip, the dashed line is the mean");
+            ToolTip.SetTip(reduction, Loc.T("device.ceiling.the_gain_reduction_over_the"));
             var head = HeadRow(CharSeg(), Info(() => NotaNum.F($"avg {GrF(Sc(S_AvgGr))} · max {GrF(Sc(S_WinMaxGr))}")));
             var knobs = KnobRow(ReleaseRange, ClipText);
             return TabBody(head, reduction, knobs);
@@ -425,9 +425,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
             WireDrag(loudness, Target, "Target", TargetF);
-            ToolTip.SetTip(loudness, MenuKit.Keys("Momentary (the darker grey), short-term (the bright line) and integrated (the lighter grey) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; ⌥-click to type, double-click resets."));
+            ToolTip.SetTip(loudness, MenuKit.Keys(Loc.T("device.ceiling.momentary_teal_short_term_neutral")));
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
-                Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
+                Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : Loc.T("device.ceiling.measuring")));
             var knobs = KnobRow(
                 () => NotaNum.F($"LRA {Sc(S_Lra):0.0}\u2009LU · PLR {(HaveI() ? NotaNum.F($"{Sc(S_Plr):0.0}") : "—")}"),
                 () => NotaNum.F($"GR on average {GrF(Sc(S_AvgGr))}\u2009dB"));
@@ -465,14 +465,14 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control ResetRow(bool loud)
         {
             var reset = Chip(-1, () => false, () => engine.DeviceAction(track, di, loud ? A_ResetLoudness : A_ResetPeaks, 0, 0),
-                loud ? "Reset" : "Reset peaks", loud ? "Reset — start the integrated loudness, the range and the peaks again" : "Reset peaks — clear the peak holds, the max reduction and the clip count", fill: true);
+                loud ? "Reset" : "Reset peaks", loud ? Loc.T("device.ceiling.reset_start_the_integrated_loudness") : Loc.T("device.ceiling.reset_peaks_clear_the_peak"), fill: true);
             reset.HorizontalAlignment = HorizontalAlignment.Right;
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6 };
             g.Children.Add(KeyDrop());
             g.Children.Add(Col(reset, 1));
             return new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = g };
         }
-        Control DeltaSwitch() => Toggle(DeltaP, "Delta · hear what it removes", "Delta — play the difference between the input and the output: what the limiter takes away");
+        Control DeltaSwitch() => Toggle(DeltaP, Loc.T("device.ceiling.delta_hear_what_it_removes"), Loc.T("device.ceiling.delta_play_the_difference_between"));
         Control LookRow() => SliderRow("LOOK", Lookahead, LookF, lit: () => false);
         Control LinkRow() => SliderRow("LINK", StereoLink, LinkF);
 
@@ -504,7 +504,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 1, Children = { Caps("INTEGRATED"), line } },
             };
-            ToolTip.SetTip(box, "Integrated loudness since the last Reset, gated (BS.1770), against the Target");
+            ToolTip.SetTip(box, Loc.T("device.ceiling.integrated_loudness_since_the_last"));
             return Spread(box,
                 MeterGrid(
                     ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
@@ -531,13 +531,13 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 bool d = On(DeltaP);
                 t.Text = d ? "Delta" : "Detector";
                 t.Foreground = d ? AccentBright : TextTertiary;
-                l1.Text = d ? "hearing what it removes" : (Tp() ? "true peak · 4×" : "sample peak") + (ExtOn() ? " · key" : "");
-                l2.Text = d ? "the difference in − out" : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
+                l1.Text = d ? Loc.T("device.ceiling.hearing_what_it_removes") : (Tp() ? Loc.T("device.ceiling.true_peak_4") : "sample peak") + (ExtOn() ? " · key" : "");
+                l2.Text = d ? Loc.T("device.ceiling.the_difference_in_out") : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
                 l1.Foreground = d ? AccentBright : TextPrimary;
                 dot.Background = d ? Brass : Sc(S_Gr) > 0.1 ? Success : NotaPalette.BorderStrong;
                 box.BorderBrush = d ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
             });
-            ToolTip.SetTip(box, "What the limiter listens to — or, with Delta on, that you are hearing only what it takes away");
+            ToolTip.SetTip(box, Loc.T("device.ceiling.what_the_limiter_listens_to"));
             return Spread(
                 LookRow(), LinkRow(),
                 SliderRow("SC HP", ScHp, HpF, modulation: true, lit: () => P(ScHp) > 20.5f),

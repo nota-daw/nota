@@ -25,6 +25,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -449,11 +450,11 @@ public sealed class Eq8Curve : Control, IValueEntryHost
             fly.Items.Add(chan);
         }
         fly.Items.Add(new Separator());
-        var on = new MenuItem { Header = "Band on", ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
+        var on = new MenuItem { Header = Loc.T("device.eq8.band_on"), ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
         on.Click += (_, _) => { Gesture(Eq8.P(b, Eq8.On), () => SetP(b, Eq8.On, BandOn(b) ? 0 : 1)); Edited?.Invoke(); InvalidateVisual(); };
         fly.Items.Add(on);
         fly.Items.Add(new Separator());
-        fly.Items.Add(MenuKit.Item("Type value…", GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
+        fly.Items.Add(MenuKit.Item(Loc.T("common.type_value"), GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
         fly.ShowAt(this, showAtPointer: true);
     }
 

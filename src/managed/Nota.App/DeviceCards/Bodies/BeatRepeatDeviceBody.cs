@@ -24,6 +24,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -171,9 +172,9 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             return seg;
         }
         Control ModeSeg() => Seg(ModeNames, () => Sel(Mode, 3), i => SetP(Mode, i / 2f), Mode,
-            "Mode — Mix: the repeats play over the dry; Insert: they replace it while they play; Gate: only the burst sounds");
+            Loc.T("device.beat_repeat.mode_mix_the_repeats_play"));
         Control IntervalSegC() => Seg(IntervalSeg, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), Interval,
-            "Interval — how often it rolls Chance: 1/8, 1/4, 1/2 note, or every 1, 2, 4 bars", 5);
+            Loc.T("device.beat_repeat.interval_how_often_it_rolls_2"), 5);
         // Grid picks a straight value and keeps the triplet state (a legacy 1/8T / 1/16T turns into the Triplet switch).
         void PickGrid(int baseIdx, bool trip)
         {
@@ -181,7 +182,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             if (On(Triplet) != trip) SetP(Triplet, trip ? 1f : 0f);
         }
         Control GridSegC() => Seg(GridSeg, GridBase, i => PickGrid(i, Trip()), GridP,
-            "Grid — the length of the slice that repeats", 5);
+            Loc.T("device.beat_repeat.grid_the_length_of_the"), 5);
 
         // A latching chip: lit when `lit()`, a click runs `click`. `fill` = a full-width button.
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false)
@@ -204,7 +205,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             readouts.Add(Hi); Hi();
             return b;
         }
-        Control TripletChip() => Latch(Triplet, Trip, () => PickGrid(GridBase(), !Trip()), () => "Triplet", "Triplet — the grid in triplets (a third shorter)");
+        Control TripletChip() => Latch(Triplet, Trip, () => PickGrid(GridBase(), !Trip()), () => "Triplet", Loc.T("device.beat_repeat.triplet_the_grid_in_triplets"));
 
         // Repeat: held while pressed; with Latch on, a click turns it on and the next one off.
         Border RepeatButton(bool fill)
@@ -235,7 +236,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             }
             b.PointerReleased += (_, e) => { if (held) { e.Pointer.Capture(null); Release(); } };
             b.PointerCaptureLost += (_, _) => Release();
-            ToolTip.SetTip(b, "Repeat — repeat the current slice now, for as long as it is held (with Latch: click on, click off)");
+            ToolTip.SetTip(b, Loc.T("device.beat_repeat.repeat_repeat_the_current_slice"));
             Learn(b, RepeatP);
             readouts.Add(Hi); Hi();
             return b;
@@ -352,8 +353,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         var repPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch };
         var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var repLbl = Caps("REP"); repLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(inPill, "The input level");
-        ToolTip.SetTip(repPill, "The repeats' level — after pitch, filter, decay and volume");
+        ToolTip.SetTip(inPill, Loc.T("device.beat_repeat.the_input_level"));
+        ToolTip.SetTip(repPill, Loc.T("device.beat_repeat.the_repeats_level_after_pitch"));
         var colIn = Mono("", 7, TextPrimary); colIn.HorizontalAlignment = HorizontalAlignment.Center;
         var colRep = Mono("", 7, TextPrimary); colRep.HorizontalAlignment = HorizontalAlignment.Center;
         static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
@@ -383,19 +384,19 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         Control TimelineTab()
         {
             timeline = new BrTimelineView();
-            ToolTip.SetTip(timeline, "Two intervals on the grid: each step is the input's level — dim when dry, full where the slice is captured, dimmer with every repeat as it decays. Ticks at the top mark where the interval fires.");
+            ToolTip.SetTip(timeline, Loc.T("device.beat_repeat.two_intervals_on_the_grid"));
             var slice = Mono("", 7, TextSecondary);
             readouts.Add(() => slice.Text = "slice " + MsF(SliceMs(GridBeats())));
             var head = HeadRow(Row(6, ModeSeg(), new Border { Width = 2 }, Caps("INTERVAL"),
-                Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), "Interval — how often it rolls Chance"),
+                Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), Loc.T("device.beat_repeat.interval_how_often_it_rolls")),
                 Caps("GRID"),
-                Drop(GridP, gridDropNames, GridDropIdx, i => PickGrid(i % 4, i >= 4), "Grid — the length of the slice that repeats")), slice);
+                Drop(GridP, gridDropNames, GridDropIdx, i => PickGrid(i % 4, i >= 4), Loc.T("device.beat_repeat.grid_the_length_of_the"))), slice);
             var knobs = KnobRow(new[]
             {
-                K(Chance, "CHANCE", ChanceF, tip: "Chance — how likely each interval fires a repeat", lit: () => true),
-                K(Gate, "GATE", GateF, steps: 17, tip: "Gate — how long the burst lasts, in 16ths of the interval"),
-                K(Offset, "OFFSET", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths"),
-                K(Variation, "VARIATION", VarF, Teal, tip: "Variation — the grid floats up to this many steps (double / half) on each trigger"),
+                K(Chance, "CHANCE", ChanceF, tip: Loc.T("device.beat_repeat.chance_how_likely_each_interval"), lit: () => true),
+                K(Gate, "GATE", GateF, steps: 17, tip: Loc.T("device.beat_repeat.gate_how_long_the_burst")),
+                K(Offset, "OFFSET", OffsetF, steps: 17, tip: Loc.T("device.beat_repeat.offset_where_in_the_interval")),
+                K(Variation, "VARIATION", VarF, Teal, tip: Loc.T("device.beat_repeat.variation_the_grid_floats_up")),
             },
             () => NotaNum.F($"capture {GridName()} → {Passes() - 1} {(Passes() - 1 == 1 ? "repeat" : "repeats")}"),
             () => NotaNum.F($"{IntervalEvery[Sel(Interval, 6)]} · decay {P(Decay) * 100:0}\u2009%"));
@@ -410,18 +411,18 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             slices = new BrSlicesView();
             WireDrag(slices, h => h == BrSlicesView.HGate ? Gate : Offset, F(Offset, "Offset", OffsetF), F(Gate, "Gate", GateF));
-            ToolTip.SetTip(slices, MenuKit.Keys("The last interval's sound (the darker grey) on the grid: the gate from the offset is shaded and the captured slice is the bright line. Drag the offset line or the gate's end sideways; ⌥-click to type, double-click resets."));
+            ToolTip.SetTip(slices, MenuKit.Keys(Loc.T("device.beat_repeat.the_last_intervals_sound_teal")));
             Learn(slices, Offset);
             var head = HeadRow(Row(6, Caps("INTERVAL"), IntervalSegC(), Caps("GRID"), GridSegC(), TripletChip()), new Border());
             var knobs = KnobRow(new[]
             {
-                K(Offset, "OFFSET", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths", lit: () => true),
-                K(Gate, "GATE", GateF, steps: 17, tip: "Gate — how long the burst lasts, in 16ths of the interval", lit: () => true),
-                K(Chance, "CHANCE", ChanceF, tip: "Chance — how likely each interval fires a repeat"),
-                K(Variation, "VARIATION", VarF, Teal, tip: "Variation — the grid floats up to this many steps (double / half) on each trigger"),
+                K(Offset, "OFFSET", OffsetF, steps: 17, tip: Loc.T("device.beat_repeat.offset_where_in_the_interval"), lit: () => true),
+                K(Gate, "GATE", GateF, steps: 17, tip: Loc.T("device.beat_repeat.gate_how_long_the_burst"), lit: () => true),
+                K(Chance, "CHANCE", ChanceF, tip: Loc.T("device.beat_repeat.chance_how_likely_each_interval")),
+                K(Variation, "VARIATION", VarF, Teal, tip: Loc.T("device.beat_repeat.variation_the_grid_floats_up")),
             },
             () => NotaNum.F($"takes {GridName()} at {OffSteps()}/16 · {Passes()} {(Passes() == 1 ? "step" : "steps")}"),
-            () => VarSteps() == 0 ? "the grid holds still" : NotaNum.F($"grid floats ±{VarSteps()} {(VarSteps() == 1 ? "step" : "steps")}"));
+            () => VarSteps() == 0 ? Loc.T("device.beat_repeat.the_grid_holds_still") : NotaNum.F($"grid floats ±{VarSteps()} {(VarSteps() == 1 ? "step" : "steps")}"));
             return TabBody(head, slices, knobs);
         }
 
@@ -436,30 +437,30 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             filter = new BrFilterView();
             WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth,
                 F(FilterFreq, "Freq", FreqF), F(FilterWidth, "Width", WidthF), F(FilterWidth, "Width", WidthF));
-            ToolTip.SetTip(filter, MenuKit.Keys("The repeat filter — only the repeats go through it. Solid: the first repeat; grey dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; ⌥-click to type, double-click resets."));
+            ToolTip.SetTip(filter, MenuKit.Keys(Loc.T("device.beat_repeat.the_repeat_filter_only_the")));
             Learn(filter, FilterFreq);
             var type = Seg(FilterNames, () => On(FilterOn) ? FType() + 1 : 0,
                 i => { if (i == 0) SetP(FilterOn, 0f); else { SetP(FilterType, (i - 1) / 2f); if (!On(FilterOn)) SetP(FilterOn, 1f); } },
-                FilterType, "Filter — Off, or a low-pass, band-pass or high-pass on the repeats");
-            var narrow = Latch(FilterNarrow, () => On(FilterNarrow), () => SetP(FilterNarrow, On(FilterNarrow) ? 0f : 1f), () => "Narrow with repeats",
-                "Narrow with repeats — each repeat narrows the band and moves it with the pitch");
+                FilterType, Loc.T("device.beat_repeat.filter_off_or_a_low"));
+            var narrow = Latch(FilterNarrow, () => On(FilterNarrow), () => SetP(FilterNarrow, On(FilterNarrow) ? 0f : 1f), () => Loc.T("device.beat_repeat.narrow_with_repeats"),
+                Loc.T("device.beat_repeat.narrow_with_repeats_each_repeat"));
             var drop = Mono("", 7, TextSecondary);
             readouts.Add(() => drop.Text = PDecaySt() > 0.01 ? NotaNum.F($"{StF(PitchSt())} → {StF(LaterPitch())} by repeat {LaterRepeat()}") : "pitch " + StF(PitchSt()));
             var head = HeadRow(Row(6, Caps("FILTER"), type, narrow), drop);
             var knobs = KnobRow(new[]
             {
-                K(FilterFreq, "FREQ", FreqF, tip: "Freq — the filter's frequency", lit: () => On(FilterOn)),
-                K(FilterWidth, "WIDTH", WidthF, tip: "Width — the band in octaves (low- and high-pass: less is more resonant)", lit: () => On(FilterOn)),
-                K(Pitch, "PITCH", PitchF, Teal, tip: "Pitch — the repeats transposed, ±12 semitones"),
-                K(PitchDecay, "P. DECAY", PDecF, tip: "Pitch decay — each repeat drops lower, up to 6 semitones a repeat"),
+                K(FilterFreq, "FREQ", FreqF, tip: Loc.T("device.beat_repeat.freq_the_filters_frequency"), lit: () => On(FilterOn)),
+                K(FilterWidth, "WIDTH", WidthF, tip: Loc.T("device.beat_repeat.width_the_band_in_octaves"), lit: () => On(FilterOn)),
+                K(Pitch, "PITCH", PitchF, Teal, tip: Loc.T("device.beat_repeat.pitch_the_repeats_transposed_12")),
+                K(PitchDecay, "P. DECAY", PDecF, tip: Loc.T("device.beat_repeat.pitch_decay_each_repeat_drops")),
             },
             () =>
             {
-                if (!On(FilterOn)) return "the repeats pass unfiltered";
+                if (!On(FilterOn)) return Loc.T("device.beat_repeat.the_repeats_pass_unfiltered");
                 double lo = FreqHz() / Math.Pow(2, WidthOct() / 2), hi = FreqHz() * Math.Pow(2, WidthOct() / 2);
                 return FType() == 1 ? NotaNum.F($"band {HzF(lo)}…{HzF(hi)}") : NotaNum.F($"{(FType() == 0 ? "below" : "above")} {HzF(FreqHz())}");
             },
-            () => On(FilterNarrow) ? "each repeat lower and narrower" : PDecaySt() > 0.01 ? "each repeat lower, same band" : "the same on every repeat");
+            () => On(FilterNarrow) ? Loc.T("device.beat_repeat.each_repeat_lower_and_narrower") : PDecaySt() > 0.01 ? Loc.T("device.beat_repeat.each_repeat_lower_same_band") : Loc.T("device.beat_repeat.the_same_on_every_repeat"));
             return TabBody(head, filter, knobs);
         }
 
@@ -508,13 +509,13 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
                 b.BorderBrush = forced ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
                 t.Foreground = forced ? AccentBright : TextTertiary;
             });
-            ToolTip.SetTip(b, "What the repeater is doing now — waiting for the interval, capturing the slice, or repeating it — and where the transport is");
+            ToolTip.SetTip(b, Loc.T("device.beat_repeat.what_the_repeater_is_doing"));
             return b;
         }
 
         Control Toggles() => new StackPanel { Spacing = 5, Children = {
-            Toggle(FilterOn, "Repeat filter", "Repeat filter — the repeats go through the filter (Filter tab)"),
-            Toggle(LatchP, "Latch", "Latch — the Repeat button stays on after a click instead of only while held") } };
+            Toggle(FilterOn, "Repeat filter", Loc.T("device.beat_repeat.repeat_filter_the_repeats_go")),
+            Toggle(LatchP, "Latch", Loc.T("device.beat_repeat.latch_the_repeat_button_stays")) } };
 
         Control CharacterTab()
         {
@@ -555,7 +556,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             btns.Children.Add(RepeatButton(fill: true));
             btns.Children.Add(Col(Latch(-1, () => false, () => engine.DeviceAction(track, di, A_Reset, 0, 0), () => "Reset",
-                "Reset — stop the repeat and clear the timeline and the meters", fill: true), 1));
+                Loc.T("device.beat_repeat.reset_stop_the_repeat_and"), fill: true), 1));
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
@@ -650,7 +651,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             double ib = IntervalBeats();
             if (centreTab == 0 && timeline is not null)
                 timeline.Set(scope, kCellAt, full ? kCells : 0, ib * 2, ib, GridBeats(), BarBeats(), OffSteps() / 16.0,
-                    Sc(S_WinPhase), Sc(S_Playing) > 0.5, State() == 2 ? NotaNum.F($"Capture and repeat · {RepeatNo()}") : "Capture and repeat");
+                    Sc(S_WinPhase), Sc(S_Playing) > 0.5, State() == 2 ? Loc.F("device.beat_repeat.capture_and_repeat_pass", RepeatNo()) : Loc.T("device.beat_repeat.capture_and_repeat"));
             if (centreTab == 1 && slices is not null)
             {
                 double sliceBeats = Sc(S_SliceBeats) > 0 && State() > 0 ? Sc(S_SliceBeats) : GridBeats();
