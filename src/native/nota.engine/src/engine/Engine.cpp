@@ -730,14 +730,16 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     // playing is the audio thread's — leave it. Any other one an edit just cloned is
     // settled in place. A restored track (undo, redo, take retry) was published before and
     // a render may still be walking it, so it is cloned when its fades would change.
-    if (g && authoring_) {
+    // Every take id comes from nextTakeId_; until one does (or a load restores a kept join),
+    // no clip can join, and this runs on every edit, undo and redo (perf-gate edit-warp-split).
+    if (g && authoring_ && (nextTakeId_ > 0 || joinedEdgesRestored_)) {
         auto shared = [&](const std::shared_ptr<Track>& t) {
             for (const auto& old : authoring_->tracks)
                 if (old == t) return true;
             return authoring_->masterTrack && authoring_->masterTrack == t;
         };
         auto settle = [&](std::shared_ptr<Track>& t) {
-            if (!t || shared(t)) return;
+            if (!t || !mayHaveTakeJoins(*t) || shared(t)) return;
             if (!restored) {
                 settleTakeJoins(*t);
             } else if (!takeJoinsSettled(*t)) {

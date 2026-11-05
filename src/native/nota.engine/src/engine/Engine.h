@@ -1619,6 +1619,9 @@ class Engine {
     SnapshotHistory<Graph> graphHist_;
     int32_t nextTrackId_ = 1;
     int32_t nextTakeId_ = 0;    // AudioTake::id (specs/067); never reused in a session
+    // A project load restored a join whose takes are gone (restoreJoinedEdges). With it and
+    // nextTakeId_ still 0 no clip can have a take join, so publishRaw skips settling them.
+    bool joinedEdgesRestored_ = false;
     int32_t nextTakeGroup_ = 0; // AudioTake::group
     // The tempo setBpm last asked for. The transport only takes it on the audio thread, so
     // message-thread layout that must agree with the next block reads this instead.
@@ -1640,6 +1643,10 @@ class Engine {
     // on a track no render can see yet (publishRaw decides which).
     bool settleTakeJoins(Track& nt) const;
     bool takeJoinsSettled(const Track& t) const;
+    // False when takeJoinEdges cannot turn an edge off and every edge already fades: no clip
+    // is an unwarped take section and none keeps a join. publishRaw runs on every edit, undo
+    // and redo, so it checks this first and skips the rest (perf-gate edit-warp-split).
+    static bool mayHaveTakeJoins(const Track& t);
 
     // Clip clipboard (copy/cut/paste). Holds a clone of the copied clip; kind -1 empty.
     int32_t clipboardKind_ = -1; // -1 none, 0 audio, 1 midi

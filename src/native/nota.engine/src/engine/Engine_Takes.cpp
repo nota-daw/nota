@@ -111,7 +111,14 @@ std::vector<uint8_t> Engine::takeJoinEdges(const Track& t) const {
     return off;
 }
 
+bool Engine::mayHaveTakeJoins(const Track& t) {
+    for (const auto& c : t.clips)
+        if (!c.fadeHead || !c.fadeTail || (c.takeId != 0 && !c.warpEnabled)) return true;
+    return false;
+}
+
 bool Engine::settleTakeJoins(Track& nt) const {
+    if (!mayHaveTakeJoins(nt)) return false;
     const auto off = takeJoinEdges(nt);
     bool changed = false;
     for (size_t i = 0; i < off.size(); ++i) {
@@ -126,6 +133,7 @@ bool Engine::settleTakeJoins(Track& nt) const {
 }
 
 bool Engine::takeJoinsSettled(const Track& t) const {
+    if (!mayHaveTakeJoins(t)) return true;
     const auto off = takeJoinEdges(t);
     for (size_t i = 0; i < off.size(); ++i)
         if (t.clips[i].fadeHead != !(off[i] & 1) || t.clips[i].fadeTail != !(off[i] & 2)) return false;
@@ -419,6 +427,7 @@ bool Engine::restoreJoinedEdges(int32_t trackId, const int32_t* edges, int32_t c
     auto nt = cloneTrack(*old);
     const size_t n = std::min(nt->clips.size(), static_cast<size_t>(count));
     for (size_t i = 0; i < n; ++i) {
+        if (edges[i] & 3) joinedEdgesRestored_ = true;
         nt->clips[i].fadeHead = !(edges[i] & 1);
         nt->clips[i].fadeTail = !(edges[i] & 2);
     }
