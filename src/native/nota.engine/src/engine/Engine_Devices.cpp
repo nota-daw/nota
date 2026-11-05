@@ -893,7 +893,10 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         std::shared_ptr<Device> dev = keepSource ? cloneDevice(*sd) : sd;
         if (!dev) return -3;
         if (dev->sidechainSourceTrackId() == dstId) {
-            if (dev == sd) dev = cloneDevice(*sd);
+            if (dev == sd) {
+                dev = cloneDevice(*sd);
+                if (dev) dev->inheritLineage(sd->lineage()); // the moved device itself, not a copy
+            }
             if (!dev) return -3;
             dev->setSidechainSourceTrackId(-1);
             dev->setSidechainPart(0);
@@ -909,6 +912,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
                 if (d < index) continue;
                 auto c = cloneMidiDevice(*m);
                 if (!c) continue;
+                c->inheritLineage(m->lineage()); // the same Arp, retargeted (take retry finds it)
                 if (d == index) {
                     c->setCcDest(-1, -1);
                     flags |= kTransferLinksDropped;
@@ -928,7 +932,10 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         std::shared_ptr<MidiDevice> md = keepSource ? cloneMidiDevice(*sm) : sm;
         if (!md) return -3;
         if (md->ccDestDevice() >= 0) { // its CC target is a device on the old track
-            if (md == sm) md = cloneMidiDevice(*sm);
+            if (md == sm) {
+                md = cloneMidiDevice(*sm);
+                if (md) md->inheritLineage(sm->lineage()); // the moved device itself, not a copy
+            }
             if (!md) return -3;
             md->setCcDest(-1, -1);
             flags |= kTransferLinksDropped;

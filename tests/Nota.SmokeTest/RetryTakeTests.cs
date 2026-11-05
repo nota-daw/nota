@@ -36,6 +36,7 @@ internal static class RetryTakeTests
         foreach (var r in RecordingTrackEditedMeanwhile()) yield return r;
         foreach (var r in DeviceMovedMeanwhile()) yield return r;
         foreach (var r in DeviceReplacedMeanwhile()) yield return r;
+        foreach (var r in EffectTransferredMeanwhile()) yield return r;
         foreach (var r in DisarmedTakeIsKept()) yield return r;
         foreach (var r in SessionHeldIntoRelaunch()) yield return r;
         foreach (var r in SessionToggleSlot()) yield return r;
@@ -273,6 +274,35 @@ internal static class RetryTakeTests
             .Where(i => i.Target == AutomationTarget.MidiDeviceParam && i.PointCount == 2).Select(i => i.DeviceIndex).OrderBy(x => x).ToArray();
         yield return (on.SequenceEqual(new[] { arp, rack }) && e.MidiRackMacroName(t, rack, 0) == "Spread",
             $"retry after editing a MIDI rack and loading an effect's state: their automation stays (lanes on {string.Join(",", on)})");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // Moving an effect to another track mid-take retargets the Arp whose CC lane points past
+    // it (a copy of the same Arp): its automation stays through a retry.
+    private static IEnumerable<(bool, string)> EffectTransferredMeanwhile()
+    {
+        const int Arp = 0, Utility = 4;
+        using var e = Armed(out int t);
+        int o = e.AddInstrumentTrack();
+        e.AddBuiltinDevice(t, Utility);
+        e.AddBuiltinDevice(t, Utility);
+        int arp = e.AddMidiEffect(t, Arp);
+        e.SetMidiEffectCcDest(t, arp, 1, 0);            // the second Utility
+        int l = e.AddAutomationLane(t, AutomationTarget.MidiDeviceParam, arp, 0);
+        e.SetAutomationPoints(t, l, new[] { new AutomationPoint(0, 0.2f), new AutomationPoint(4, 0.8f) });
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        int moved = e.TransferDevice(t, DeviceFamily.Audio, 0, o, -1, false, out _);   // the first Utility leaves
+        e.RetryTake();
+        Beats(e, 0.01);
+        bool kept = Enumerable.Range(0, e.AutomationLaneCount(t)).Select(i => e.AutomationLaneInfo(t, i))
+            .Any(i => i.Target == AutomationTarget.MidiDeviceParam && i.DeviceIndex == arp && i.PointCount == 2);
+        yield return (moved >= 0 && kept,
+            $"retry after moving an effect away: the retargeted Arp keeps its automation (moved {moved}, kept {kept})");
         e.SetRecording(false);
         e.StopTransport();
     }
