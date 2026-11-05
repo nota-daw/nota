@@ -58,3 +58,17 @@ keyboard Enter on Scene 1    ["scene 0"]
 ## Recommendation
 
 Close the bug once the PR lands — verified end-to-end on iOS Safari and Chromium.
+
+## Review follow-up (PR #513)
+
+A keyboard activation within 800 ms of a pointer tap on the same button was dropped as if it
+were the tap's own click. The click guard now drops only pointer clicks (`detail > 0`) right
+after a pointer lifted; a keyboard click (`detail === 0`) always acts.
+
+| Check | Command / Action | Result | Notes |
+|-------|------------------|--------|-------|
+| Tap then Enter 100 ms later, Chromium (CDP) | touch tap on Scene 2, focus, Enter | pass | `scene 1` × 2 (before this change: × 1) |
+| Earlier CDP scenarios, Chromium | staggered / simultaneous / single / slide-off / Enter | pass | 7 runs in a row identical to the first report; one cold first run after a mock restart lost one staggered launch and did not recur |
+| Single tap, iOS Safari (Simulator) | one tap on Drums/Scene 2 | pass | exactly one `launch` — WebKit's tap click carries `detail > 0`, so it is still dropped |
+| Two fingers + scene tap, iOS Safari | two clips together, then Scene 1 | pass | `launch` × 2, then `scene 0` |
+| Type-check / build | `npm run check`, `npm run build` | pass | 0 errors |
