@@ -267,7 +267,7 @@ public sealed partial class PianoRollView
                 if (IsSwitch && outp.Count > 0 && outp[^1].Value == p.Value) continue;
                 outp.Add(p);
             }
-            return outp;
+            return IsSwitch ? ControllerStroke.SwitchLeadIn(outp) : outp;
         }
 
         // ---- switch blocks ----

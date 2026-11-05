@@ -2552,13 +2552,15 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
     g->masterVolume = authoring_->masterVolume;
     laneDuplicate(g->masterVolume, a, b);
     // Take lanes: later ones move with the song; one starting in the section gets a copy (a new
-    // id and number) under the copied section, and the copied comp clips point at it so the
+    // id, number and recording group) under the copied section, and the copied comp clips point at it so the
     // copy can be comped on its own (specs/067).
     auto takeStart = [](const AudioTake& k) { return k.originBeat + k.sourceOffsetFrames * k.beatsPerFrame; };
     for (auto& t : g->tracks) {
         if (t->takes.empty()) continue;
         auto nt = cloneTrack(*t);
         std::map<int32_t, int32_t> copied; // old take id -> its copy's
+        std::map<int32_t, int32_t> groups; // old recording group -> its copy's: Flatten reads a
+                                           // group's origin from its first take
         int32_t number = 0;
         for (const auto& k : nt->takes) number = std::max(number, k.number);
         std::vector<AudioTake> copies;
@@ -2570,6 +2572,9 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
                 c.id = ++nextTakeId_;
                 c.number = ++number;
                 c.originBeat += len;
+                auto [git, fresh] = groups.try_emplace(k.group, 0);
+                if (fresh) git->second = ++nextTakeGroup_;
+                c.group = git->second;
                 copied[k.id] = c.id;
                 copies.push_back(std::move(c));
             }

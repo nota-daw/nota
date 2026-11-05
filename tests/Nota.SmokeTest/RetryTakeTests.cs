@@ -33,6 +33,7 @@ internal static class RetryTakeTests
         foreach (var r in SessionCountIn()) yield return r;
         foreach (var r in AutomationOnAnotherTrack()) yield return r;
         foreach (var r in EditsMadeMeanwhile()) yield return r;
+        foreach (var r in RecordingTrackEditedMeanwhile()) yield return r;
         foreach (var r in DisarmedTakeIsKept()) yield return r;
         foreach (var r in SessionHeldIntoRelaunch()) yield return r;
         foreach (var r in SessionToggleSlot()) yield return r;
@@ -177,6 +178,34 @@ internal static class RetryTakeTests
         bool editGone = Clips(e, o).Count == 0 && Notes(e, t).All(n => n.Note.Pitch != 60);
         yield return (kept && takeGone && editGone,
             $"retry: an edit made meanwhile keeps its undo step, without the discarded take in it (kept {kept}, take undone {takeGone}, edit undone {editGone})");
+    }
+
+    // Renaming the recording track mid-take: the retry drops the recording, not the rename,
+    // and the rename keeps its own undo step.
+    private static IEnumerable<(bool, string)> RecordingTrackEditedMeanwhile()
+    {
+        using var e = Armed(out int t);
+        e.SetTrackName(t, "Before");
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.ClearUndoHistory();
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        Tap(e, 60, 0.5);
+        e.SetTrackName(t, "Renamed");            // the user's own edit on the recording track
+        e.RetryTake();
+        Beats(e, 0.01);
+        bool named = e.GetTrackName(t) == "Renamed";
+        bool dropped = Notes(e, t).All(n => n.Note.Pitch != 60);
+        e.SetRecording(false);
+        e.Poll();
+        e.StopTransport();
+        e.Undo();                                // the kept take
+        e.Undo();                                // the rename
+        bool renameUndone = e.GetTrackName(t) == "Before" && Notes(e, t).All(n => n.Note.Pitch != 60);
+        yield return (named && dropped && renameUndone,
+            $"retry keeps a rename of the recording track (name kept {named}, take dropped {dropped}, rename undoes to the old name without the take {renameUndone})");
     }
 
     // Disarming the track ends (and keeps) its take: a retry afterwards has nothing to discard.

@@ -91,5 +91,21 @@ internal static class ControllerStrokeTests
         float at3 = Oracle(early, 3);
         yield return (Math.Abs(at3 - 1f) < 1e-3f,
             $"drawing before the first point leaves the later value (read {at3:0.00} at beat 3)");
+
+        // A sustain block drawn over beats 2–3 of an empty lane must not hold the pedal from
+        // beat 0: the engine reads the first point's value back to the clip start.
+        var block = ControllerStroke.SwitchLeadIn(new List<AutomationPoint> { new(2, 1f), new(3, 0f) });
+        // A switch steps: it holds the earlier point's value (ControllerCurve::valueAt).
+        static float Step(IReadOnlyList<AutomationPoint> p, double beat)
+        {
+            if (p.Count == 0) return 0;
+            float v = p[0].Value;
+            foreach (var q in p) if (q.Beat <= beat) v = q.Value;
+            return v;
+        }
+        yield return (Step(block, 0) < 0.5f && Step(block, 1.9) < 0.5f && Step(block, 2.5) >= 0.5f && Step(block, 3.5) < 0.5f,
+            "a switch block plays only where it is drawn");
+        var atStart = ControllerStroke.SwitchLeadIn(new List<AutomationPoint> { new(0, 1f), new(3, 0f) });
+        yield return (atStart.Count == 2, "a block from the clip start needs no lead-in point");
     }
 }

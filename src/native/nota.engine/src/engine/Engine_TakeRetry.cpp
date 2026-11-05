@@ -103,11 +103,19 @@ void Engine::discardTake() {
             if (b.first == id) return b.second;
         return nullptr;
     };
+    // An Arrangement take restores only what recording writes — the clips, the loop passes and
+    // the automation lanes — so a rename, a fader move or a device added meanwhile stays.
     auto restoreTrack = [&](const std::shared_ptr<Track>& cur) -> std::shared_ptr<Track> {
         auto base = cur ? baseOf(cur->id()) : nullptr;
-        if (!base) return cur;
-        if (!a.session || cur->id() != a.sessionTrackId) return base;
+        if (!base || cur == base) return cur;
         auto nt = cloneTrack(*cur);
+        if (!a.session || cur->id() != a.sessionTrackId) {
+            nt->clips = base->clips;
+            nt->takes = base->takes;
+            nt->midiClips = base->midiClips;
+            nt->automation = base->automation;
+            return nt;
+        }
         const int32_t sc = a.sessionScene;
         if (sc < 0) return nt;
         if (static_cast<int32_t>(nt->sessionSlots.size()) <= sc) nt->sessionSlots.resize(sc + 1);
@@ -151,11 +159,15 @@ void Engine::discardTake() {
     }
     // A checkpoint the take made before part of it was kept (wasTake) may now step between two
     // identical states — its content was the part just discarded: an Undo that changes nothing.
-    // Drop those (track-only edits, so comparing the tracks is enough).
-    auto sameTracks = [](const Graph& x, const Graph& y) {
-        if (x.masterTrack != y.masterTrack || x.tracks.size() != y.tracks.size()) return false;
+    // Drop those (track-only edits, so comparing the tracks is enough). Such a step holds only
+    // the take's writes, so on a track the retry restored both sides count as the same.
+    auto sameTrack = [&](const std::shared_ptr<Track>& x, const std::shared_ptr<Track>& y) {
+        return x == y || (x && y && x->id() == y->id() && baseOf(x->id()));
+    };
+    auto sameTracks = [&](const Graph& x, const Graph& y) {
+        if (!sameTrack(x.masterTrack, y.masterTrack) || x.tracks.size() != y.tracks.size()) return false;
         for (size_t k = 0; k < x.tracks.size(); ++k)
-            if (x.tracks[k] != y.tracks[k]) return false;
+            if (!sameTrack(x.tracks[k], y.tracks[k])) return false;
         return true;
     };
     std::shared_ptr<Graph> next = authoring_;

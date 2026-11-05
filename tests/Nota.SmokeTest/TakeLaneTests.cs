@@ -32,6 +32,7 @@ internal static class TakeLaneTests
         foreach (var r in MoveToTrackFadesExposedEdge()) yield return r;
         foreach (var r in DeactivatedSideFades()) yield return r;
         foreach (var r in UndoKeepsJoins()) yield return r;
+        foreach (var r in DuplicatedCompFlattens()) yield return r;
         foreach (var r in NoTakes()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
@@ -522,6 +523,22 @@ internal static class TakeLaneTests
                      && Math.Abs(after[30200] - before[30200]) < 1e-3;
         yield return (faded,
             $"moving one half of a join onto another track fades the edge that was shared ({after[30000]:G4})");
+    }
+
+    // Duplicating a section with its takes gives the copies their own recording group, so
+    // Flatten merges the copied comp into one clip just as it does the original.
+    private static IEnumerable<(bool, string)> DuplicatedCompFlattens()
+    {
+        using var e = Rig(out int track);
+        Record(e, track, RecFrames, 1.0);
+        e.SetLoop(false, 0.0, 4.0);
+        e.SetSections(new[] { new SectionInfo(0, 4, "A") });
+        bool dup = e.DuplicateSectionWithContent(0);
+        int takes = e.TakeCount(track);
+        bool flat = e.FlattenTakes(track);
+        int clips = ClipCount(e, track);
+        yield return (dup && takes == 6 && flat && e.TakeCount(track) == 0 && clips == 2,
+            $"duplicate a section with takes, then flatten: one clip per comp ({takes} takes before, {clips} clips after)");
     }
 
     private static IEnumerable<(bool, string)> NoTakes()

@@ -41,6 +41,17 @@ public static class ControllerStroke
         return (float)(a.Value + (b.Value - a.Value) * Shape((beat - a.Beat) / span, a.Curve));
     }
 
+    /// <summary>A switch lane (sustain, sostenuto…) as the engine will play it: the engine
+    /// holds the first point's value back to the clip start, while the lane shows the pedal up
+    /// until its first block. When the first point is down and later than the start, an up
+    /// point at beat 0 makes playback match.</summary>
+    public static List<AutomationPoint> SwitchLeadIn(List<AutomationPoint> p)
+    {
+        if (p.Count > 0 && p[0].Value >= 0.5f && p[0].Beat > 1e-9)
+            p.Insert(0, new AutomationPoint(0, 0f));
+        return p;
+    }
+
     /// <summary>The curve after drawing <paramref name="samples"/> over <paramref name="orig"/>.
     /// Samples are in clip-local beats. With nothing after the stroke, the drawn value holds.</summary>
     public static List<AutomationPoint> Apply(
