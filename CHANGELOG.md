@@ -258,6 +258,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Leftovers from the History multi-delete and MIDI CC lane changes** (#496): a failed delete
+  of several versions no longer reports success over its error; drawing a controller curve
+  while recording is no longer cancelled by the recording's refresh, in any lane; the main
+  window's minimum height follows the interface scale again when the clip editor is fitted.
 - **Take one track out of a group** (#488, #489): **Remove from group** in a grouped track's
   menu, and ⌘⇧G (Ctrl+Shift+G) on it, take just that track out — it lands right after the
   group, which keeps its other tracks and its effects. Before, **Ungroup** there dissolved the
