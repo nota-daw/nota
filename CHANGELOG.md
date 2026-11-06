@@ -34,13 +34,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
     time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
     pressure morphs only the pressed note.
-  - **Matrix**: up to 64 routes per part from 29 sources (LFOs, envelopes, velocity, release
-    velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to Morph, pitch, vibrato or any sound control. A route
-    has a depth per side.
+  - **Matrix**: a source × destination grid, as on Nota Consort — drag a cell for the depth,
+    double-click removes the route. Up to 64 routes per part from 29 sources (LFOs, envelopes,
+    velocity, release velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to
+    Morph, pitch, vibrato or any sound control. A route has a depth per side.
   - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
     them morphing. One switch bypasses the section.
   - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
-    velocity, gate or tie), swing, transpose by a held key, latch and step record. Four motion
+    velocity, gate or tie), swing, transpose by a held key, latch and step record. With the
+    transport stopped a held key plays the pattern (or the arpeggio) at the project tempo;
+    with it rolling they keep time with the song. Four motion
     lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
     arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
     Patterns travel with presets and projects; every pattern edit is one undo step.
@@ -48,7 +51,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     (learnable from a played key) or layer on every key. The 12 voices are shared between the
     parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
     or swaps them, or loads a factory or saved sound into one part.
-  - **57 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
+  - **117 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
     L and S sizes.
   - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
     `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.

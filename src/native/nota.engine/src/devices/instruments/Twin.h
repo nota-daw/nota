@@ -420,6 +420,15 @@ class Twin final : public Instrument {
     // transport
     double spb_ = 0.0, beat_ = 0.0, tPos_ = 0.0, tFrames_ = 0.0;
     bool playing_ = false;
+    // Transport stopped, the sequencer on: a held key runs it on its own clock at the host tempo
+    // (Seq from its first step, transposed by the key; Arp over the held keys). freeT_ counts
+    // samples from the key that started it.
+    bool freeRun_ = false;
+    double freeT_ = 0.0;
+    double clockAt(int offset) const { return (playing_ ? tPos_ + tFrames_ : freeT_) + offset; }
+    bool seqLatched() const;
+    void freeStart();
+    void freeStop();
     // decimation, per part
     hiir::Downsampler2xFpu<12> dn_[twin::kParts][2];
     float osL_[twin::kCtl * twin::kMaxOs] = {}, osR_[twin::kCtl * twin::kMaxOs] = {};

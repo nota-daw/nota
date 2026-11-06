@@ -546,7 +546,7 @@ void Twin::noteOn(int32_t pitch, float velocity) {
     if (pitch < 0 || pitch > 127) return;
     wake();
     applyRate();
-    if (!ctlInit_) updateControl(tPos_ + tFrames_);
+    if (!ctlInit_) updateControl(clockAt(0));
     const float vel = std::clamp(velocity, 0.0f, 1.0f);
     tele_[ScLastKey].store(static_cast<float>(pitch), std::memory_order_relaxed);
     if (recArmed_.load(std::memory_order_relaxed)) { // step record: the card turns these into steps
@@ -556,23 +556,27 @@ void Twin::noteOn(int32_t pitch, float velocity) {
             ringHead_.store(h + 1, std::memory_order_release);
         }
     }
+    // Transport stopped: the first key held starts the sequencer (Consort-style); while it rolls,
+    // the sequencer plays on the song's grid and the keys arpeggiate or transpose it.
+    if (get(twin::GSeqOn) >= 0.5f && spb_ > 1.0 && !playing_ && (!freeRun_ || (arpKeys_ == 0 && transKeys_ == 0 && !seqLatched())))
+        freeStart();
     if (seqActive()) {
         if (twin::stepOf(get(twin::GSeqKind), 2) == 1) { // the arpeggiator takes the keys
             if (get(twin::GArpHold) >= 0.5f && arpKeys_ == 0) arpN_ = 0; // a new chord replaces a held one
-            if (arpN_ == 0) arpStartK_ = nextK_;
+            if (arpN_ == 0) arpStartK_ = !playing_ && !seqRunning_ ? 0 : nextK_; // a free start counts from 0
             if (arpN_ < 32) arpList_[arpN_++] = pitch;
             ++arpKeys_;
             arpVel_ = vel;
             return;
         }
-        if (get(twin::GSeqTranspose) >= 0.5f) { // the key transposes the pattern from its first note
+        if (get(twin::GSeqTranspose) >= 0.5f || !playing_) { // the key transposes the pattern from its first note
             int root = 60;
             if (const twin::PatternSet* ps = pats_.live()) {
                 const twin::Pattern& P = ps->pat[curPat_];
                 for (int i = 0; i < P.length; ++i)
                     if (P.step[i].n > 0) { root = P.step[i].note[0]; break; }
             }
-            transpose_ = pitch - root;
+            transpose_ = get(twin::GSeqTranspose) >= 0.5f ? pitch - root : 0;
             ++transKeys_;
             return;
         }
@@ -602,14 +606,21 @@ void Twin::noteOff(int32_t pitch) {
                     if (arpList_[i] != pitch) arpList_[w++] = arpList_[i];
                 arpN_ = w;
             }
+            freeStop();
             return;
         }
         if (transKeys_ > 0) {
             if (--transKeys_ == 0 && get(twin::GSeqLatch) < 0.5f) transpose_ = 0;
+            freeStop();
             return;
         }
     }
     keyOff(pitch);
+}
+
+// The last key up stops a free-running sequence, unless Latch / Hold keeps it.
+void Twin::freeStop() {
+    if (freeRun_ && !playing_ && arpKeys_ == 0 && transKeys_ == 0 && !seqLatched()) freeRun_ = false;
 }
 
 // The release velocity reaches the key's sounding voices before they release (FR-030).
@@ -778,7 +789,23 @@ void Twin::allNotesOff() {
 // sequencer is silent and the keys play the instrument as usual.
 
 bool Twin::seqActive() const {
-    return get(twin::GSeqOn) >= 0.5f && playing_ && spb_ > 1.0;
+    return get(twin::GSeqOn) >= 0.5f && spb_ > 1.0 && (playing_ || freeRun_);
+}
+
+// Latch (Seq) or Hold (Arp): the sequence keeps running after the keys are up.
+bool Twin::seqLatched() const {
+    return twin::stepOf(get(twin::GSeqKind), 2) == 1 ? get(twin::GArpHold) >= 0.5f : get(twin::GSeqLatch) >= 0.5f;
+}
+
+// A key with the transport stopped starts the sequencer on its own clock, from its first step.
+void Twin::freeStart() {
+    releaseSeqNotes();
+    seqRunning_ = false; // seqService re-syncs: pattern, first step, motion
+    seqResync_ = true;
+    freeRun_ = true;
+    freeT_ = 0.0;
+    arpN_ = 0;
+    arpStartK_ = 0;
 }
 
 double Twin::stepBeats() const {
@@ -806,7 +833,7 @@ int Twin::seqService(int offset) {
         }
         return INT32_MAX;
     }
-    const double now = tPos_ + tFrames_ + offset; // absolute sample
+    const double now = clockAt(offset); // absolute sample: the song's, or the free clock's
     const double sb = stepBeats();
     if (seqResync_ || sb != seqStepBeats_ || !seqRunning_) {
         if (seqResync_) releaseSeqNotes();
@@ -956,6 +983,12 @@ void Twin::setTransport(double beatStart, double samplesPerBeat, bool playing) {
     spb_ = samplesPerBeat;
     tPos_ = pos;
     tFrames_ = 0.0;
+    // Stopping with keys still held carries on on the free clock; starting hands over to the song.
+    if (playing_ && !playing) {
+        freeRun_ = arpKeys_ > 0 || transKeys_ > 0;
+        freeT_ = 0.0;
+    } else if (playing)
+        freeRun_ = false;
     playing_ = playing;
 }
 
@@ -1352,7 +1385,7 @@ void Twin::render(float* out, int32_t frames) {
     }
     for (int32_t done = 0; done < frames;) {
         if (ctlLeft_ == 0) {
-            updateControl(tPos_ + tFrames_ + done);
+            updateControl(clockAt(done));
             ctlLeft_ = twin::kCtl;
         }
         const int toEvent = seqService(done); // fires due steps, says when the next one is
@@ -1362,6 +1395,7 @@ void Twin::render(float* out, int32_t frames) {
         done += n;
     }
     tFrames_ += frames;
+    if (!playing_) freeT_ += frames;
     if (activeVoices_.load(std::memory_order_relaxed) == 0 && blockPeak_ <= 1.0e-5f && !seqRunning_) quiet_ += static_cast<uint64_t>(frames);
     else quiet_ = 0;
     // A delay holds its echoes in silence: while one is on, wait out its longest time too.

@@ -266,7 +266,7 @@ internal static class TwinTests
         var cat = new FactoryPresetCatalog();
         var mine = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 18).ToList();
         var folders = mine.Select(p => p.Category).Distinct().ToList();
-        yield return (mine.Count >= 40 && folders.Count >= 9, $"Nota Twin ships ≥ 40 factory presets in ≥ 9 folders ({mine.Count} in {string.Join(", ", folders)})");
+        yield return (mine.Count >= 110 && folders.Count >= 11, $"Nota Twin ships ≥ 110 factory presets in ≥ 11 folders ({mine.Count} in {string.Join(", ", folders)})");
         var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
         yield return (bad.Count == 0, $"every Twin preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
         int tp = e.AddTwinTrack();
@@ -1306,6 +1306,29 @@ internal static class TwinTests
             bool reads = read is not null && read[0].Steps[2].Notes.SequenceEqual(new[] { 64 });
             bool undone = e.Undo() && TwinPatterns.FromState(px.GetPluginState(r, -1))![0].Steps[2].IsRest;
             yield return (reads && undone, "a Twin on a rack chain: its patterns read through the chain, and a pattern edit is an undo step");
+        }
+
+        // Transport stopped: a held key runs the sequencer on its own clock (Seq from step 1, Arp over
+        // the held chord); the last key up stops it, Latch / Hold keeps it going.
+        foreach (bool arp in new[] { false, true })
+        {
+            var (e, t) = SeqRig(120, Enumerable.Repeat("C4:100:25%", 16).ToArray(),
+                (x, y) => { P(x, y, "lo.a.noiselevel", 0f); P(x, y, "lo.a.o1level", 1f); P(x, y, "lo.a.o1wave", 1f); if (arp) P(x, y, "seq.kind", 1f); });
+            using (e)
+            {
+                Render(e, 512);
+                double idle = Rms(Render(e, Sr / 2));
+                foreach (var n in arp ? new[] { 60, 64, 67 } : new[] { 62 }) e.TrackNoteOn(t, n, 0.8f);
+                int steps = Onsets(Render(e, Sr)).Count; // 1 s at 120 BPM: 8 sixteenths
+                foreach (var n in arp ? new[] { 60, 64, 67 } : new[] { 62 }) e.TrackNoteOff(t, n);
+                Render(e, Sr / 4);
+                double after = Rms(Render(e, Sr / 2));
+                P(e, t, arp ? "arp.hold" : "seq.latch", 1f);
+                e.TrackNoteOn(t, 62, 0.8f); Render(e, Sr / 4); e.TrackNoteOff(t, 62);
+                int latched = Onsets(Render(e, Sr)).Count;
+                yield return (idle < 1e-6 && steps >= 7 && after < 1e-5 && latched >= 7,
+                    $"transport stopped: a held key runs the {(arp ? "arpeggiator" : "sequencer")} ({steps} steps in 1 s), letting go stops it, {(arp ? "Hold" : "Latch")} keeps it ({latched})");
+            }
         }
 
         // To clip: refuses what a clip can't play as the sequencer does; keeps automation outside the clip;

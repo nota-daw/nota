@@ -12,6 +12,7 @@
 // a ring that grows with Z. Left button only; double-click centres X / Y.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -772,5 +773,190 @@ internal sealed class TwinNoiseView : TwinParamGraph
         ctx.DrawLine(NotaGraph.SecondaryPen(NotaPalette.VizInk, 1.2), new Point(4, y0), new Point(r.Width - 4, y1));
         NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomLeft, "20");
         NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomRight, "20k");
+    }
+}
+
+// ---- the modulation matrix as a grid (Consort's patch matrix, specs/035 / 055) ------------
+// Rows are sources, columns destinations, a cell is the route between them: its depth on the side
+// being edited, with the other side's depth as a tick when the two differ. Drag a cell for the
+// depth (an empty one gets a route, the same on both sides while that drag lasts); ⌥-click types
+// it (−100…+100 %); double-click or the menu's Clear removes the route. A row or column name opens
+// the list to put another source or destination there.
+internal sealed class TwinPatchMatrix : Control, IValueEntryHost
+{
+    internal readonly record struct Cell(int Slot, int Src, int Dst, float Depth, float Other);
+
+    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Sans = NotaFonts.Sans;
+    private static readonly Typeface SansMedium = NotaFonts.SansMedium;
+    private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();
+    private IReadOnlyList<Cell> _cells = Array.Empty<Cell>();
+    private const double HeadH = 16, RowHdrW = 72;
+    private (int r, int c)? _drag;
+    private double _dragY, _dragV;
+
+    public Func<int, string> SourceName = _ => "";
+    public Func<int, string> DestinationName = _ => "";
+    public string Corner = "";
+    public event Action<int, int, float>? DepthChanged; // (src, dst, depth −1..1) — creates the route when missing
+    public event Action<int, int>? Removed;
+    public event Action<int, int>? GestureBegin;
+    public event Action<int, int>? GestureEnd;
+    public event Action<bool, int>? HeaderClicked;      // (isRow, index)
+
+    public TwinPatchMatrix() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); ValueEntry.AttachHost(this); }
+
+    public void Set(int[] rows, int[] cols, IReadOnlyList<Cell> cells) { _rows = rows; _cols = cols; _cells = cells; InvalidateVisual(); }
+
+    private double RowH => _rows.Length == 0 ? 0 : (Bounds.Height - HeadH) / _rows.Length;
+    private double ColW => _cols.Length == 0 ? 0 : (Bounds.Width - RowHdrW) / _cols.Length;
+    private Cell? Find(int s, int d) { foreach (var c in _cells) if (c.Src == s && c.Dst == d) return c; return null; }
+
+    // ---- typed entry ------------------------------------------------------------
+    private readonly Dictionary<(int s, int d), ValueField> _fields = new();
+    private ValueField FieldOf(int s, int d) => _fields.TryGetValue((s, d), out var f) ? f : _fields[(s, d)] =
+        new ValueField($"{SourceName(s)} → {DestinationName(d)}", () => ((Find(s, d)?.Depth ?? 0) + 1) / 2,
+            n => NotaNum.F($"{(n * 2 - 1) * 100:+0;−0;0}\u2009%"),
+            n => DepthChanged?.Invoke(s, d, (float)Math.Round((Math.Clamp(n, 0, 1) * 2 - 1) * 100) / 100f),
+            () => GestureBegin?.Invoke(s, d), () => GestureEnd?.Invoke(s, d))
+        {
+            Clear = () => { if (Find(s, d) != null) Removed?.Invoke(s, d); },
+            After = InvalidateVisual,
+        };
+
+    private (int r, int c) CellAt(Point p)
+    {
+        if (p.X < RowHdrW || p.Y < HeadH || RowH <= 0 || ColW <= 0) return (-1, -1);
+        int r = (int)((p.Y - HeadH) / RowH), c = (int)((p.X - RowHdrW) / ColW);
+        return r < _rows.Length && c < _cols.Length ? (r, c) : (-1, -1);
+    }
+    public IReadOnlyList<ValueField>? FieldsAt(Point p)
+        => CellAt(p) is var (r, c) && r >= 0 && Find(_rows[r], _cols[c]) != null ? [FieldOf(_rows[r], _cols[c])] : null;
+    public Rect AnchorOf(ValueField field)
+    {
+        for (int r = 0; r < _rows.Length; r++)
+            for (int c = 0; c < _cols.Length; c++)
+                if (_fields.TryGetValue((_rows[r], _cols[c]), out var f) && ReferenceEquals(f, field))
+                    return new Rect(RowHdrW + c * ColW + 2, HeadH + r * RowH + 2, ColW - 4, RowH - 4);
+        return default;
+    }
+    public IReadOnlyList<ValueField> AllFields
+    {
+        get
+        {
+            var list = new List<ValueField>();
+            for (int r = 0; r < _rows.Length; r++)
+                for (int c = 0; c < _cols.Length; c++)
+                    if (Find(_rows[r], _cols[c]) != null) list.Add(FieldOf(_rows[r], _cols[c]));
+            return list;
+        }
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || e.ClickCount > 1) return;
+        var p = e.GetPosition(this);
+        if (p.Y < HeadH && p.X >= RowHdrW)
+        {
+            int c = (int)((p.X - RowHdrW) / ColW);
+            if (c >= 0 && c < _cols.Length) HeaderClicked?.Invoke(false, c);
+            e.Handled = true;
+            return;
+        }
+        if (p.X < RowHdrW && p.Y >= HeadH)
+        {
+            int r = (int)((p.Y - HeadH) / RowH);
+            if (r >= 0 && r < _rows.Length) HeaderClicked?.Invoke(true, r);
+            e.Handled = true;
+            return;
+        }
+        var (ri, ci) = CellAt(p);
+        if (ri < 0) return;
+        int s = _rows[ri], d = _cols[ci];
+        var cur = Find(s, d);
+        _drag = (ri, ci); _dragY = p.Y; _dragV = cur?.Depth ?? 0.5;
+        GestureBegin?.Invoke(s, d);
+        if (cur == null) DepthChanged?.Invoke(s, d, 0.5f);
+        e.Pointer.Capture(this);
+        e.Handled = true;
+    }
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_drag is not { } dg) return;
+        double y = e.GetPosition(this).Y;
+        bool fine = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) != 0;
+        _dragV = Math.Clamp(_dragV + (_dragY - y) / (fine ? 1000.0 : 100.0), -1, 1);
+        _dragY = y;
+        DepthChanged?.Invoke(_rows[dg.r], _cols[dg.c], (float)Math.Round(_dragV * 100) / 100f);
+    }
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_drag is not { } dg) return;
+        GestureEnd?.Invoke(_rows[dg.r], _cols[dg.c]);
+        _drag = null;
+        InvalidateVisual();
+        e.Pointer.Capture(null);
+    }
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag is { } dg) { GestureEnd?.Invoke(_rows[dg.r], _cols[dg.c]); _drag = null; InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
+    public override void Render(DrawingContext ctx)
+    {
+        double w = Bounds.Width, h = Bounds.Height;
+        if (w < 40 || h < 30 || _rows.Length == 0 || _cols.Length == 0) return;
+        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
+        double rh = RowH, cw = ColW;
+        var corner = new FormattedText(Corner, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextFaint);
+        ctx.DrawText(corner, new Point(2, (HeadH - corner.Height) / 2));
+        for (int c = 0; c < _cols.Length; c++)
+        {
+            var t = new FormattedText(DestinationName(_cols[c]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextSecondary)
+                { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+            ctx.DrawText(t, new Point(RowHdrW + c * cw + (cw - t.Width) / 2, (HeadH - t.Height) / 2));
+        }
+        var rule = new Pen(NotaPalette.Rule, 1);
+        var accent = NotaPalette.AccentColor;
+        var fill = new SolidColorBrush(Color.FromArgb(0x30, accent.R, accent.G, accent.B));
+        var edge = new Pen(NotaPalette.Accent, 1);
+        var bar = new SolidColorBrush(Color.FromArgb(0x70, accent.R, accent.G, accent.B));
+        var tick = new Pen(NotaPalette.TextSecondary, 1);
+        for (int r = 0; r < _rows.Length; r++)
+        {
+            double y = HeadH + r * rh;
+            ctx.DrawLine(rule, new Point(0, Math.Round(y) + 0.5), new Point(w, Math.Round(y) + 0.5));
+            var t = new FormattedText(SourceName(_rows[r]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary)
+                { MaxTextWidth = RowHdrW - 6, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+            ctx.DrawText(t, new Point(2, y + (rh - t.Height) / 2));
+            for (int c = 0; c < _cols.Length; c++)
+            {
+                var cell = new Rect(RowHdrW + c * cw + 2, y + 2, cw - 4, rh - 4);
+                if (Find(_rows[r], _cols[c]) is { } cb)
+                {
+                    ctx.DrawRectangle(fill, edge, cell, 2, 2);
+                    double mid = cell.X + cell.Width / 2, half = cell.Width / 2 - 2;
+                    double bw = half * Math.Abs(cb.Depth);
+                    ctx.FillRectangle(bar, new Rect(cb.Depth >= 0 ? mid : mid - bw, cell.Bottom - 3, bw, 2));
+                    if (Math.Abs(cb.Other - cb.Depth) > 1e-3)
+                    {
+                        double ox = Math.Round(mid + half * cb.Other) + 0.5;
+                        ctx.DrawLine(tick, new Point(ox, cell.Bottom - 5), new Point(ox, cell.Bottom - 1));
+                    }
+                    var v = new FormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextPrimary);
+                    ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - 3 - v.Height) / 2));
+                }
+                else
+                {
+                    ctx.DrawRectangle(NotaPalette.BgSunken, null, cell, 2, 2);
+                    var v = new FormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextFaint);
+                    ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
+                }
+            }
+        }
     }
 }

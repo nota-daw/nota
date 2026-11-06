@@ -26,6 +26,18 @@ inspired by the PolyBrute's architecture, not a clone of its sound or its factor
 - Q: Split / Layer built in, or via an Instrument Rack? → A: built in, two parts sharing the
   12 voices, 6 + 6 by default (FR-070 – FR-075, US9).
 
+### Session 2026-11-06 (PR #406 hand test)
+
+- Q: The route list or a grid for the matrix? → A: a grid, as Nota Consort's patch matrix:
+  sources as rows, destinations as columns, a cell is the route; no list view (US4, FR-032).
+- Q: How do the sequencer and the arpeggiator start? → A: as in Nota Consort — with the
+  transport stopped a held key runs them on their own clock at the project tempo (Seq from its
+  first step, transposed by the key; Arp over the held keys); the last key up stops them,
+  Latch / Hold keeps them going. While the transport rolls they lock to the song's grid as
+  before (FR-061).
+- Q: How many factory presets? → A: twice as many — more classic sounds and more creative ones
+  (FR-053).
+
 ## Nota Context *(fill in — drives plan and tasks)*
 
 **Feature area** *(pick the main one)*:
@@ -154,12 +166,13 @@ playback sounds the same.
 
 ### User Story 4 - Route modulation in a matrix (Priority: P2)
 
-A sound designer opens the Matrix tab: a list of routes, each a source (3 LFOs, mod envelope,
-filter and amp envelopes, velocity, key, pressure, slide, per-note bend, mod wheel, expression
-pad X/Y/Z, random-per-note, macros) and a destination (any oscillator, mixer, filter, envelope,
-LFO, morph and effect amount, picked from grouped menus). "+ Route" creates one; a knob sets its
-bipolar depth on the side being edited. (A grid of every source against every destination —
-29 × 77 — does not read on a 260 px card, so the routes are rows.) At
+A sound designer opens the Matrix tab: a grid, as on Nota Consort, with sources as rows (3
+LFOs, mod envelope, filter and amp envelopes, velocity, key, pressure, slide, per-note bend, mod
+wheel, expression pad X/Y/Z, random-per-note, macros) and destinations as columns (any
+oscillator, mixer, filter, envelope, LFO, morph and effect amount). Dragging a cell creates the
+route and sets its bipolar depth on the side being edited; double-click removes it. The grid
+shows the rows and columns the routes use, then the last ones picked; clicking a row or column
+name puts another source or destination (grouped menus) there. At
 least 64 simultaneous routes are possible. A small number of hard-wired routes (LFO → pitch,
 env → cutoff, velocity → amp) remain as panel knobs so common patches need no matrix work.
 
@@ -231,8 +244,10 @@ indicator, live morph position and per-knob A/B markers in both sizes, in all fo
 
 ### User Story 8 - Sequence it from the instrument itself (Priority: P3)
 
-A player enters a 16-step chord pattern by holding chords on the keyboard in step-record, hits
-play on the transport and the pattern runs in time; holding a key transposes it live. They
+A player enters a 16-step chord pattern by holding chords on the keyboard in step-record, then
+holds a key: the pattern runs at the project tempo from its first step, transposed by the key,
+and stops when they let go (Latch keeps it). With the transport playing it runs in time with
+the song; holding a key transposes it live. They
 arm motion recording, sweep Morph and the multimode cutoff over one pass — the moves now
 repeat with the pattern. Switching between the patch's 8 patterns happens at the pattern end.
 When they like it, "To clip" writes the pattern into a MIDI clip on the track. The
@@ -406,7 +421,7 @@ Upper; play across the split; change the share to 4 + 8 and verify each half's p
   saved with the project, kept by clone / copy / paste / freeze, and restored by undo.
 - **FR-052**: Projects saved with an older Twin MUST load in a newer Twin (parameters are only
   ever appended).
-- **FR-053**: A factory library of at least 40 presets (US6) MUST ship; user presets MUST work
+- **FR-053**: A factory library of at least 110 presets (US6) MUST ship; user presets MUST work
   as on other built-in instruments, including the preset name and "modified" mark.
 - **FR-054**: The instrument MUST be reachable from the MCP surface at least as far as other
   built-in instruments are (read / set parameters, load a preset).
@@ -416,9 +431,11 @@ Upper; play across the split; change the share to 4 + 8 and verify each half's p
 - **FR-060**: Twin MUST have its own **polyphonic step sequencer**: patterns of 1–64 steps,
   up to 6 notes per step, per-step velocity, gate length and tie, rest steps, rate (1/4 … 1/32
   with triplets), swing, and a pattern length independent of the bar.
-- **FR-061**: The sequencer MUST follow the Nota transport (start, stop, position, tempo); when
-  the transport stops it stops and its notes release. A held key MUST be able to **transpose**
-  the running pattern (root = the pattern's first note), with a latch option.
+- **FR-061**: The sequencer MUST follow the Nota transport (start, stop, position, tempo) while it
+  plays. With the transport stopped, a held key MUST run the sequencer (from its first step) or
+  the arpeggiator on its own clock at the project tempo, and the last key up MUST stop it and
+  release its notes unless Latch (Seq) / Hold (Arp) is on. A held key MUST be able to
+  **transpose** the running pattern (root = the pattern's first note), with a latch option.
 - **FR-062**: Patterns MUST be enterable by step recording from the keyboard (notes held
   together become one chord step) and by editing steps on the card; one undo step per edit.
 - **FR-063**: **Motion recording**: each pattern MUST hold up to 4 motion lanes; recording

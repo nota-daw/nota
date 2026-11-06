@@ -370,3 +370,9 @@ Task: "Perf scenarios twin-full-12 and pentad-full-16 in tests/perf/nota_perf.cp
 - [X] T097 Motion-lane targets in the card's Seq tab cover Morph and the side params but not the expression pad: add Pad X / Y / Z to the lane target list (the engine already accepts any param index), per FR-063 (partial)
 - [X] T098 Add a smoke check that an idle Twin (no notes, effect tails gone) reports idle and costs no render time, with and without a stopped sequencer, per SC-006 (partial)
 - [X] T099 Review and justify in the PR the engine additions beyond the plan: `Delay::A_Reset` / `Reverb::A_Reset` (fresh-device reset for Twin's silent-start re-seed, SC-008) and `nota_audition_instrument_state` (preset audition plays a Twin preset's pattern); record them in `contracts/c-abi.md`, per plan: C ABI contract (unrequested)
+
+## Phase 14: Hand test of PR #406 (2026-11-06)
+
+- [X] T100 Matrix tab as a grid, as Nota Consort's patch matrix (`TwinPatchMatrix` in `Nota.App/Controls/TwinViews.cs`, the card's Matrix tab): sources × destinations, drag a cell for the edited side's depth (a new route is the same on both sides for that drag), double-click / Clear removes, ⌥-click types; rows and columns from the routes first (6 × 5, up to 8 × 6), then the last picked per track and part; the route list goes, per US4 / FR-032
+- [X] T101 Seq and Arp from a held key with the transport stopped (`Twin::freeStart` / `freeStop`, `clockAt`): the free clock runs at the host tempo from the key, the last key up stops it, Latch / Hold keeps it; the transport starting hands over to the song grid; the Seq / Arp hint says what to do next (On, an empty pattern, a key); smoke check, per FR-061
+- [X] T102 60 more factory presets (117 in all): classic pads, keys, brass, basses, leads, plucks and strings, and creative morph, FX, sequence, arpeggio and split / layer ones; the smoke test requires ≥ 110, per FR-053

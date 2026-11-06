@@ -1315,6 +1315,246 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
                 ("modfxon", 1f), ("revon", 1f)),
             P(("ldcut", 0.72f), ("o1wave", 0.75f)));
 
+        // ---- more Nota Twin presets: classics, then the morph / sequencer side of it ----------
+        Section("Pads");
+        Tw("Soft Analog Pad", P(("lo.vol", 0.6f), ("o2level", 0.75f), ("o2fine", 0.55f), ("ldcut", 0.5f), ("ldres", 0.12f), ("ldenv", 0.56f),
+                ("fenva", 0.7f), ("fenvd", 0.7f), ("fenvs", 0.6f), ("aenva", 0.7f), ("aenvr", 0.72f), ("drift", 0.35f), ("spread", 0.5f), ("modfxon", 1f)),
+            P(("ldcut", 0.62f), ("o1wave", 0.7f), ("o2wave", 0.7f), ("modfxtype", 1f)));
+        Tw("Sweep Pad", Cat(P(("lo.vol", 0.58f), ("o2level", 0.8f), ("o2fine", 0.57f), ("ldcut", 0.32f), ("ldres", 0.45f), ("ldenv", 0.78f),
+                ("fenva", 0.84f), ("fenvd", 0.84f), ("fenvs", 0.35f), ("aenva", 0.62f), ("aenvr", 0.75f), ("spread", 0.7f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("ldres", 0.65f), ("fenva", 0.9f), ("o1wave", 1f), ("o1pw", 0.3f)));
+        Tw("Lush Unison Pad", Cat(P(("lo.vol", 0.5f), ("lo.voicemode", 1f), ("unidetune", 0.45f), ("ldcut", 0.55f), ("ldenv", 0.55f), ("aenva", 0.66f),
+                ("aenvr", 0.74f), ("spread", 1f), ("modfxon", 1f), ("modfxtype", 1f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("unidetune", 0.7f), ("ldcut", 0.68f), ("o1wave", 0.75f)));
+        Tw("Dark Ambient Pad", Cat(P(("lo.vol", 0.62f), ("o1wave", 0.2f), ("o2wave", 0.3f), ("o2coarse", 0.25f), ("o2level", 0.7f), ("noiselevel", 0.08f),
+                ("ldcut", 0.38f), ("ldres", 0.3f), ("aenva", 0.84f), ("aenvr", 0.85f), ("lfo2rate", 0.2f), ("drift", 0.5f),
+                ("revon", 1f), ("revsize", 0.9f), ("revmix", 0.45f)),
+                Rt(7, "LFO 2", "ldcut", 0.1f)),
+            P(("ldcut", 0.5f), ("o1metal", 0.3f), ("noisecolor", 0.2f), ("revdamp", 0.8f)));
+        Tw("Warm Choir Pad", Cat(P(("lo.vol", 0.62f), ("o1wave", 0.3f), ("o2level", 0.6f), ("o2fine", 0.56f), ("o1bal", 0.3f), ("o2bal", 0.6f), ("route", 0.6f),
+                ("mmmode", 0.5f), ("mmcut", 0.6f), ("mmres", 0.5f), ("ldcut", 0.55f), ("aenva", 0.66f), ("aenvr", 0.7f), ("vibamt", 0.12f),
+                ("modfxon", 1f), ("modfxtype", 1f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("mmcut", 0.68f), ("mmres", 0.65f), ("o1wave", 0.45f)));
+        Section("Keys");
+        Tw("Reed Piano", Cat(P(("o1wave", 0.85f), ("o1pw", 0.4f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.3f), ("ldcut", 0.5f), ("ldenv", 0.66f),
+                ("fenvd", 0.5f), ("fenvs", 0.15f), ("fenvvel", 0.7f), ("aenvd", 0.66f), ("aenvs", 0.2f), ("aenvr", 0.45f), ("aenvvel", 0.8f), ("modfxon", 1f), ("modfxtype", 2f / 3f)),
+                Rt(7, "Velocity", "drive", 0.4f)),
+            P(("o1pw", 0.25f), ("ldcut", 0.6f), ("drive", 0.25f)));
+        Tw("Poly Stab Keys", Cat(P(("o2level", 0.8f), ("o2fine", 0.55f), ("ldcut", 0.42f), ("ldres", 0.25f), ("ldenv", 0.75f), ("fenvd", 0.42f), ("fenvs", 0f),
+                ("aenvd", 0.5f), ("aenvs", 0.1f), ("aenvr", 0.35f), ("revon", 1f), ("revmix", 0.2f))),
+            P(("ldres", 0.45f), ("fenvd", 0.36f), ("o1wave", 1f), ("o1pw", 0.35f)));
+        Tw("Bell Piano", Cat(P(("o1wave", 0f), ("o1metal", 0.25f), ("o2wave", 0f), ("o2coarse", 0.896f), ("o2level", 0.2f), ("fm21", 0.2f), ("ldcut", 0.7f),
+                ("aenvd", 0.72f), ("aenvs", 0.05f), ("aenvr", 0.55f), ("aenvvel", 0.75f), ("revon", 1f), ("revmix", 0.2f))),
+            P(("fm21", 0.35f), ("o1metal", 0.4f), ("ldcut", 0.8f)));
+        Tw("Synth Clav", Cat(P(("o1wave", 1f), ("o1pw", 0.08f), ("o2wave", 1f), ("o2pw", 0.2f), ("o2coarse", 0.75f), ("o2level", 0.35f), ("ldcut", 0.55f),
+                ("ldres", 0.3f), ("ldenv", 0.72f), ("fenvd", 0.34f), ("fenvs", 0f), ("aenvd", 0.42f), ("aenvs", 0f), ("aenvr", 0.25f), ("aenvvel", 0.85f))),
+            P(("o1pw", 0.2f), ("ldres", 0.5f), ("fenvd", 0.3f), ("modfxon", 1f), ("modfxtype", 2f / 3f)));
+        Tw("Percussive Organ", Cat(P(("o1wave", 0f), ("o2wave", 0f), ("o2coarse", 0.646f), ("o2level", 0.5f), ("ldcut", 0.8f), ("aenvr", 0.25f), ("aenvvel", 0f),
+                ("menvd", 0.45f), ("modfxon", 1f), ("modfxtype", 1f)),
+                Rt(7, "Mod env", "o2level", 0.4f)),
+            P(("o2coarse", 0.75f), ("drive", 0.35f), ("modfxrate", 0.65f)));
+        Section("Brass");
+        Tw("Synth Brass Swell", Cat(P(("lo.vol", 0.6f), ("o2level", 1f), ("o1fine", 0.46f), ("o2fine", 0.54f), ("ldcut", 0.36f), ("ldenv", 0.74f), ("fenva", 0.62f),
+                ("fenvd", 0.65f), ("fenvs", 0.65f), ("aenva", 0.55f), ("aenvs", 0.9f), ("aenvr", 0.5f), ("spread", 0.6f))),
+            P(("fenva", 0.72f), ("ldcut", 0.48f), ("ldres", 0.25f)));
+        Tw("Bright Brass Stab", Cat(P(("lo.vol", 0.6f), ("o2level", 1f), ("o2fine", 0.55f), ("ldcut", 0.45f), ("ldenv", 0.8f), ("fenva", 0.3f), ("fenvd", 0.45f),
+                ("fenvs", 0.3f), ("aenva", 0.25f), ("aenvd", 0.5f), ("aenvs", 0.5f), ("aenvr", 0.4f), ("drive", 0.2f))),
+            P(("ldenv", 0.85f), ("drive", 0.4f), ("ldres", 0.3f)));
+        Tw("Sync Brass", Cat(P(("lo.vol", 0.55f), ("sync", 1f), ("o2coarse", 0.646f), ("o2level", 1f), ("o1level", 0.4f), ("ldcut", 0.5f), ("ldenv", 0.68f),
+                ("fenva", 0.4f), ("fenvd", 0.55f), ("fenvs", 0.5f), ("aenva", 0.35f), ("aenvr", 0.45f), ("menva", 0.45f), ("menvd", 0.6f)),
+                Rt(7, "Mod env", "Osc 2 pitch", 0.3f)),
+            P(("o2coarse", 0.75f), ("m7amt", 0.75f), ("ldres", 0.3f)));
+        Tw("Mellow Brass", Cat(P(("o1wave", 0.4f), ("o2wave", 0.45f), ("o2level", 0.8f), ("o2fine", 0.55f), ("ldcut", 0.34f), ("ldenv", 0.62f), ("fenva", 0.5f),
+                ("fenvd", 0.62f), ("fenvs", 0.6f), ("aenva", 0.45f), ("aenvr", 0.5f), ("vibamt", 0.15f), ("revon", 1f), ("revmix", 0.2f))),
+            P(("ldcut", 0.44f), ("o1wave", 0.55f), ("o2wave", 0.55f)));
+        Section("Bass");
+        Tw("Fat Ladder Bass", Cat(P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2coarse", 0.25f), ("o2level", 0.9f), ("o2fine", 0.54f), ("ldcut", 0.32f),
+                ("ldres", 0.35f), ("ldenv", 0.7f), ("fenvd", 0.45f), ("fenvs", 0.2f), ("aenvr", 0.3f), ("drive", 0.3f))),
+            P(("ldcut", 0.42f), ("ldres", 0.55f), ("drive", 0.5f)));
+        Tw("Saw Bass", Cat(P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2level", 0.5f), ("o2coarse", 0f), ("o2wave", 0.5f), ("ldcut", 0.42f), ("ldres", 0.2f),
+                ("ldenv", 0.65f), ("fenvd", 0.4f), ("fenvs", 0.3f), ("aenvr", 0.25f))),
+            P(("ldcut", 0.55f), ("brute", 0.35f)));
+        Tw("Square Sub", Cat(P(("lo.voicemode", 1f / 3f), ("o1coarse", 0f), ("o1wave", 1f), ("o2coarse", 0.25f), ("o2wave", 0f), ("o2level", 0.6f), ("ldcut", 0.3f),
+                ("ldenv", 0.56f), ("aenvr", 0.3f))),
+            P(("o1pw", 0.3f), ("ldcut", 0.38f), ("drive", 0.3f)));
+        Tw("Rubber Bass", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.25f), ("o1coarse", 0.25f), ("o1wave", 0.75f), ("o1bal", 0f), ("route", 1f), ("mmcut", 0.36f),
+                ("mmres", 0.6f), ("mmenv", 0.75f), ("fenvd", 0.42f), ("fenvs", 0.05f), ("fenvvel", 0.6f), ("aenvr", 0.25f))),
+            P(("mmres", 0.75f), ("mmenv", 0.82f), ("mmmode", 0.2f)));
+        Tw("Reese Bass", Cat(P(("lo.vol", 0.55f), ("lo.voicemode", 1f), ("unidetune", 0.4f), ("o1coarse", 0.25f), ("ldcut", 0.4f), ("ldres", 0.2f),
+                ("aenvr", 0.3f), ("modfxon", 1f), ("modfxtype", 1f / 3f), ("modfxmix", 0.3f))),
+            P(("unidetune", 0.6f), ("ldcut", 0.5f), ("drive", 0.45f), ("brute", 0.3f)));
+        Tw("Glide Mono Bass", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.45f), ("lo.glidelegato", 1f), ("o1coarse", 0.25f), ("o1wave", 0.6f), ("o2level", 0.5f),
+                ("o2coarse", 0.25f), ("o2fine", 0.56f), ("ldcut", 0.38f), ("ldres", 0.4f), ("ldenv", 0.66f), ("fenvd", 0.5f), ("fenvs", 0.3f))),
+            P(("ldcut", 0.5f), ("ldres", 0.6f), ("o1wave", 1f)));
+        Section("Leads");
+        Tw("Square Lead", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.3f), ("o1wave", 1f), ("o1pw", 0.45f), ("ldcut", 0.65f), ("ldenv", 0.56f), ("vibamt", 0.3f),
+                ("lfo1fade", 0.55f), ("dlyon", 1f), ("dlymix", 0.2f))),
+            P(("o1pw", 0.2f), ("ldcut", 0.75f), ("ldres", 0.3f)));
+        Tw("Unison Saw Lead", Cat(P(("lo.vol", 0.55f), ("lo.voicemode", 1f), ("unidetune", 0.35f), ("lo.glide", 0.2f), ("ldcut", 0.66f), ("ldres", 0.2f),
+                ("ldenv", 0.6f), ("vibamt", 0.2f), ("dlyon", 1f), ("dlymix", 0.2f), ("revon", 1f), ("revmix", 0.15f))),
+            P(("unidetune", 0.55f), ("ldcut", 0.8f), ("drive", 0.3f)));
+        Tw("Whistle Lead", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.35f), ("o1wave", 0f), ("o1coarse", 0.75f), ("noiselevel", 0.05f), ("ldcut", 0.8f),
+                ("aenva", 0.4f), ("aenvr", 0.45f), ("vibamt", 0.35f), ("lfo1rate", 0.7f), ("lfo1fade", 0.6f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("o1metal", 0.25f), ("noiselevel", 0.12f), ("vibamt", 0.5f)));
+        Tw("Screaming Brute", Cat(P(("lo.vol", 0.5f), ("lo.voicemode", 2f / 3f), ("o2level", 0.8f), ("o2fine", 0.56f), ("brute", 0.75f), ("drive", 0.55f),
+                ("ldcut", 0.55f), ("ldres", 0.55f), ("ldenv", 0.62f), ("fenvd", 0.55f))),
+            P(("brute", 0.95f), ("ldres", 0.7f), ("ldcut", 0.68f), ("drive", 0.75f)));
+        Tw("Portamento Lead", Cat(P(("lo.voicemode", 1f / 3f), ("lo.glide", 0.55f), ("o1wave", 0.6f), ("o2wave", 1f), ("o2level", 0.6f), ("o2coarse", 0.75f),
+                ("ldcut", 0.6f), ("ldres", 0.3f), ("vibamt", 0.25f), ("dlyon", 1f), ("dlymix", 0.25f))),
+            P(("ldres", 0.45f), ("ldcut", 0.72f), ("o1wave", 0.9f)));
+        Section("Plucks");
+        Tw("Bright Pluck", Cat(P(("o2level", 0.7f), ("o2fine", 0.55f), ("ldcut", 0.38f), ("ldres", 0.3f), ("ldenv", 0.85f), ("fenvd", 0.36f), ("fenvs", 0f),
+                ("aenvd", 0.48f), ("aenvs", 0f), ("aenvr", 0.42f), ("dlyon", 1f), ("dlymix", 0.25f))),
+            P(("fenvd", 0.42f), ("ldres", 0.5f), ("o1wave", 1f), ("o1pw", 0.3f)));
+        Tw("Marimba", Cat(P(("o1wave", 0f), ("o2wave", 0f), ("o2coarse", 0.896f), ("o2level", 0.15f), ("ldcut", 0.6f), ("ldenv", 0.6f), ("fenvd", 0.34f), ("fenvs", 0f),
+                ("aenvd", 0.5f), ("aenvs", 0f), ("aenvr", 0.42f), ("aenvvel", 0.8f), ("revon", 1f), ("revmix", 0.15f))),
+            P(("o1metal", 0.3f), ("aenvd", 0.58f), ("ldcut", 0.7f)));
+        Tw("Synth Harp", Cat(P(("o1wave", 0.3f), ("o2wave", 0.3f), ("o2coarse", 0.75f), ("o2level", 0.35f), ("ldcut", 0.55f), ("ldenv", 0.66f), ("fenvd", 0.5f),
+                ("fenvs", 0f), ("aenvd", 0.66f), ("aenvs", 0f), ("aenvr", 0.62f), ("spread", 0.7f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("o1wave", 0f), ("o1metal", 0.3f), ("ldcut", 0.68f)));
+        Tw("Short Stab", Cat(P(("lo.vol", 0.62f), ("o2level", 0.8f), ("o2coarse", 0.646f), ("ldcut", 0.5f), ("ldenv", 0.7f), ("fenvd", 0.3f), ("fenvs", 0f),
+                ("aenvd", 0.36f), ("aenvs", 0f), ("aenvr", 0.3f), ("revon", 1f), ("revmix", 0.25f))),
+            P(("o2coarse", 0.75f), ("ldres", 0.4f), ("drive", 0.3f)));
+        Section("Strings");
+        Tw("Ensemble Strings", Cat(P(("lo.vol", 0.6f), ("o1wave", 0.55f), ("o2level", 0.8f), ("o2fine", 0.55f), ("ldcut", 0.6f), ("ldenv", 0.52f), ("aenva", 0.62f),
+                ("aenvr", 0.68f), ("spread", 0.8f), ("modfxon", 1f), ("modfxtype", 1f), ("modfxmix", 0.55f), ("revon", 1f), ("revmix", 0.25f))),
+            P(("ldcut", 0.7f), ("modfxdepth", 0.7f), ("o1pw", 0.3f), ("o1wave", 0.7f)));
+        Tw("Slow Violins", Cat(P(("lo.vol", 0.6f), ("o2level", 0.7f), ("o2fine", 0.56f), ("ldcut", 0.5f), ("ldres", 0.1f), ("aenva", 0.75f), ("aenvr", 0.72f),
+                ("vibamt", 0.2f), ("lfo1fade", 0.7f), ("spread", 0.7f), ("revon", 1f), ("revsize", 0.7f), ("revmix", 0.3f))),
+            P(("ldcut", 0.6f), ("aenva", 0.65f), ("o1metal", 0.15f)));
+        Tw("Solo Viola", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.2f), ("o2level", 0.4f), ("o2fine", 0.53f), ("ldcut", 0.52f), ("ldres", 0.2f),
+                ("aenva", 0.55f), ("aenvr", 0.5f), ("vibamt", 0.3f), ("lfo1rate", 0.66f), ("lfo1fade", 0.6f), ("noiselevel", 0.04f), ("revon", 1f), ("revmix", 0.2f)),
+                Rt(7, "Pressure", "ldcut", 0.2f)),
+            P(("ldcut", 0.6f), ("o1wave", 0.45f), ("vibamt", 0.4f)));
+
+        Section("Morph");
+        Tw("Saw to Bell", Cat(P(("o2level", 0.6f), ("ldcut", 0.55f), ("aenvd", 0.66f), ("aenvs", 0.3f), ("aenvr", 0.55f))),
+            P(("o1wave", 0f), ("o1metal", 0.6f), ("fm21", 0.45f), ("o2coarse", 0.896f), ("o2level", 0f), ("ldcut", 0.9f), ("aenvs", 0f)));
+        Tw("Bass to Pad", Cat(P(("lo.vol", 0.6f), ("o1coarse", 0.25f), ("o2level", 0.6f), ("ldcut", 0.35f), ("ldenv", 0.7f), ("fenvd", 0.42f), ("fenvs", 0.1f),
+                ("aenvr", 0.3f))),
+            P(("o1coarse", 0.5f), ("ldcut", 0.6f), ("ldenv", 0.55f), ("fenvd", 0.7f), ("aenva", 0.66f), ("aenvr", 0.72f), ("revon", 1f), ("revmix", 0.35f)));
+        Tw("Pressure Bloom", Cat(P(("lo.morph", 0f), ("o2level", 0.6f), ("ldcut", 0.4f), ("aenva", 0.4f), ("aenvr", 0.55f)),
+                Rt(7, "Pressure", "Morph", 1f)),
+            P(("o1wave", 1f), ("o1pw", 0.25f), ("ldcut", 0.75f), ("ldres", 0.45f), ("modfxon", 1f), ("revon", 1f)));
+        Tw("Breathing Morph", Cat(P(("lo.vol", 0.6f), ("o2level", 0.7f), ("o2fine", 0.56f), ("ldcut", 0.45f), ("aenva", 0.6f), ("aenvr", 0.66f),
+                ("lfo3shape", 0.2f), ("lfo3rate", 0.2f), ("lfo3sym", 0.85f), ("lfo3curve", 0.7f), ("lfo3mode", 1f)),
+                Rt(7, "LFO 3", "Morph", 0.9f)),
+            P(("o1wave", 0.9f), ("ldcut", 0.7f), ("ldres", 0.4f), ("mmmode", 0.4f)));
+        Tw("Random Morph Keys", Cat(P(("o2level", 0.5f), ("ldcut", 0.5f), ("ldenv", 0.62f), ("fenvd", 0.5f), ("aenvd", 0.6f), ("aenvs", 0.3f)),
+                Rt(7, "Random", "Morph", 1f)),
+            P(("o1wave", 0f), ("o1metal", 0.5f), ("o2coarse", 0.75f), ("ldcut", 0.7f)));
+        Tw("Envelope Morph", Cat(P(("o2level", 0.6f), ("ldcut", 0.5f), ("menva", 0.6f), ("menvd", 0.75f), ("menvs", 0.3f), ("aenva", 0.3f), ("aenvr", 0.6f)),
+                Rt(7, "Mod env", "Morph", 1f)),
+            P(("o1wave", 1f), ("o1pw", 0.15f), ("o2coarse", 0.646f), ("ldcut", 0.8f), ("ldres", 0.5f)));
+        Section("FX");
+        Tw("Laser Zap", Cat(P(("o1wave", 0.5f), ("o2level", 0f), ("ldcut", 0.8f), ("menvd", 0.42f), ("aenvd", 0.45f), ("aenvs", 0f), ("aenvr", 0.4f),
+                ("dlyon", 1f), ("dlymix", 0.3f)),
+                Rt(7, "Mod env", "Pitch", 1f)),
+            P(("o1wave", 1f), ("menvd", 0.5f), ("ldres", 0.5f)));
+        Tw("Metal Rain", Cat(P(("lo.vol", 0.62f), ("o1wave", 0f), ("o1metal", 0.8f), ("noiselevel", 0.3f), ("noisecolor", 0.8f), ("ldcut", 0.75f),
+                ("aenvd", 0.55f), ("aenvs", 0f), ("aenvr", 0.6f), ("dlyon", 1f), ("dlyfb", 0.55f), ("dlymix", 0.35f), ("revon", 1f), ("revmix", 0.35f)),
+                Rt(7, "Random", "o1metal", 0.2f)),
+            P(("fm21", 0.5f), ("o2coarse", 0.896f), ("o1metal", 1f), ("noisecolor", 0.95f)));
+        Tw("Sci-Fi Drone", Cat(P(("lo.vol", 0.55f), ("o2lo", 1f), ("o2level", 0f), ("fm21", 0.5f), ("o1coarse", 0.25f), ("ldcut", 0.45f), ("ldres", 0.55f),
+                ("aenva", 0.7f), ("aenvr", 0.8f), ("lfo2rate", 0.15f), ("revon", 1f), ("revsize", 0.9f), ("revmix", 0.45f)),
+                Rt(7, "LFO 2", "ldcut", 0.15f)),
+            P(("fm21", 0.75f), ("o2coarse", 0.75f), ("ldres", 0.7f), ("brute", 0.3f)));
+        Tw("Noise Riser", Cat(P(("lo.vol", 0.6f), ("o1level", 0.3f), ("noiselevel", 1f), ("noisebal", 0f), ("route", 1f), ("mmmode", 0.66f), ("mmcut", 0.3f),
+                ("mmres", 0.6f), ("mmenv", 0.85f), ("fenva", 0.92f), ("fenvs", 1f), ("aenva", 0.85f), ("aenvr", 0.7f), ("revon", 1f), ("revmix", 0.4f)),
+                Rt(7, "Mod env", "Pitch", 0.3f), P(("menva", 0.92f), ("menvs", 1f))),
+            P(("mmmode", 1f), ("mmres", 0.8f), ("noisecolor", 0.85f)));
+        Tw("Hollow Wind", Cat(P(("o1level", 0f), ("noiselevel", 1f), ("noisecolor", 0.6f), ("noisebal", 0f), ("route", 1f), ("mmmode", 0.4f), ("mmcut", 0.6f),
+                ("mmres", 0.75f), ("mmkey", 1f), ("aenva", 0.66f), ("aenvr", 0.72f), ("lfo2rate", 0.3f), ("revon", 1f), ("revmix", 0.4f)),
+                Rt(7, "LFO 2", "mmcut", 0.1f)),
+            P(("mmres", 0.88f), ("noisecolor", 0.3f), ("mmmode", 0.55f)));
+        Tw("Broken Radio", Cat(P(("lo.vol", 0.6f), ("o1wave", 1f), ("o2level", 0.5f), ("o2coarse", 0.604f), ("fmfilt", 0.35f), ("o1bal", 0f), ("o2bal", 0f),
+                ("route", 1f), ("mmmode", 0.5f), ("mmcut", 0.6f), ("mmres", 0.55f), ("lfo2shape", 0.8f), ("lfo2rate", 0.6f), ("lfo2mode", 1f), ("drive", 0.4f)),
+                Rt(7, "LFO 2", "mmcut", 0.3f)),
+            P(("fmfilt", 0.6f), ("mmres", 0.75f), ("lfo2rate", 0.72f)));
+        Section("Keys");
+        Tw("Glass Harmonica", Cat(P(("o1wave", 0f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2fine", 0.53f), ("o2level", 0.5f), ("ldcut", 0.75f), ("aenva", 0.5f),
+                ("aenvr", 0.66f), ("vibamt", 0.1f), ("revon", 1f), ("revmix", 0.35f)),
+                Rt(7, "Velocity", "o1metal", 0.25f)),
+            P(("o1metal", 0.35f), ("o2metal", 0.3f), ("aenva", 0.4f)));
+        Section("Bass");
+        Tw("FM Growl", Cat(P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("fm21", 0.35f), ("o2coarse", 0.25f), ("o2level", 0.3f), ("ldcut", 0.42f),
+                ("ldres", 0.4f), ("drive", 0.35f), ("lfo1sync", 1f), ("lfo1div", 9f / 13f), ("lfo1mode", 1f), ("vibamt", 0f)),
+                Rt(7, "LFO 1", "fm21", 0.3f)),
+            P(("fm21", 0.6f), ("brute", 0.35f), ("ldcut", 0.5f)));
+
+        Section("Sequences");
+        TwSeq("Techno Stab Seq", P(("o2level", 0.8f), ("o2coarse", 0.646f), ("ldcut", 0.45f), ("ldres", 0.35f), ("ldenv", 0.72f), ("fenvd", 0.36f), ("fenvs", 0f),
+                ("aenvd", 0.42f), ("aenvs", 0f), ("dlyon", 1f), ("dlymix", 0.3f), ("revon", 1f), ("revmix", 0.2f)),
+            P(("ldcut", 0.58f), ("ldres", 0.55f)),
+            new[] { "C3 D#3 G3:110:30%", ".", ".", "C3 D#3 G3:80:30%", ".", ".", "C3 D#3 G3:100:30%", ".", ".", ".", "A#2 D3 F3:100:30%", ".", ".", "C3 D#3 G3:80:30%", ".", "." });
+        TwSeq("Minimal Pluck Seq", P(("o1wave", 0.2f), ("o2level", 0.3f), ("ldcut", 0.5f), ("ldenv", 0.7f), ("fenvd", 0.34f), ("fenvs", 0f), ("aenvd", 0.42f),
+                ("aenvs", 0f), ("dlyon", 1f), ("dlyfb", 0.5f), ("dlymix", 0.35f)),
+            P(("o1wave", 0f), ("o1metal", 0.4f), ("ldcut", 0.62f)),
+            new[] { "C4:100:30%", ".", "G3:80:30%", ".", "D#4:90:30%", ".", "C4:70:30%", "G4:90:30%", ".", "D#4:80:30%", ".", "C4:90:30%", ".", "A#3:80:30%", ".", "G3:70:30%" });
+        TwSeq("Acid Line Seq", P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.22f), ("o1coarse", 0.25f), ("o1wave", 0.5f), ("ldcut", 0.32f), ("ldres", 0.78f),
+                ("ldenv", 0.8f), ("fenvd", 0.38f), ("fenvs", 0f), ("fenvvel", 0.8f), ("drive", 0.45f), ("dlyon", 1f), ("dlymix", 0.15f)),
+            P(("o1wave", 1f), ("ldres", 0.88f), ("drive", 0.6f)),
+            new[] { "C2:110:50%", "C3:80:tie", "C3:80:40%", "D#2:100:50%", "C2:110:50%", "G2:80:40%", "A#2:100:tie", "A#2:100:40%",
+                    "C2:110:50%", "C3:90:40%", "F2:100:50%", "D#2:80:40%", "C2:110:50%", "G1:80:40%", "A#1:100:50%", "C2:120:40%" },
+            (21, true, new[] { 0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1f, 0.85f, 0.7f, 0.5f, 0.3f, 0.1f })); // lane on "lo.morph" (param 21)
+        TwSeq("Trance Gate Pad", P(("lo.vol", 0.55f), ("o2level", 0.9f), ("o2fine", 0.57f), ("ldcut", 0.6f), ("ldenv", 0.5f), ("aenvd", 0.4f), ("aenvs", 0.6f),
+                ("aenvr", 0.3f), ("spread", 0.8f), ("revon", 1f), ("revmix", 0.3f)),
+            P(("ldcut", 0.72f), ("ldres", 0.3f), ("o1wave", 0.75f)),
+            new[] { "C3 G3 D#4:100:40%", "C3 G3 D#4:70:40%", "C3 G3 D#4:100:40%", ".", "C3 G3 D#4:100:40%", "C3 G3 D#4:70:40%", ".", "C3 G3 D#4:90:40%",
+                    "A#2 F3 D4:100:40%", "A#2 F3 D4:70:40%", "A#2 F3 D4:100:40%", ".", "G#2 D#3 C4:100:40%", "G#2 D#3 C4:70:40%", ".", "G#2 D#3 C4:90:40%" });
+        TwSeq("Swung House Chords", P(("seq.swing", 0.6f), ("o1wave", 0.6f), ("o2level", 0.6f), ("o2coarse", 0.75f), ("ldcut", 0.5f), ("ldenv", 0.66f), ("fenvd", 0.42f),
+                ("fenvs", 0.1f), ("aenvd", 0.5f), ("aenvs", 0.2f), ("modfxon", 1f), ("revon", 1f), ("revmix", 0.25f)),
+            P(("ldcut", 0.62f), ("o1metal", 0.2f)),
+            new[] { ".", ".", "D#3 G3 A#3 D4:100:40%", ".", ".", "D#3 G3 A#3 D4:80:30%", ".", ".", ".", ".", "C3 D#3 G3 A#3:100:40%", ".", ".", "C3 D#3 G3 A#3:80:30%", ".", "." });
+        TwSeq("Arp Up Down Saws", P(("seq.kind", 1f), ("arp.mode", 0.4f), ("arp.oct", 1f / 3f), ("arp.gate", 0.45f), ("o2level", 0.7f), ("o2fine", 0.55f),
+                ("ldcut", 0.5f), ("ldres", 0.3f), ("ldenv", 0.66f), ("fenvd", 0.4f), ("fenvs", 0.1f), ("dlyon", 1f), ("dlymix", 0.25f)),
+            P(("ldcut", 0.65f), ("ldres", 0.5f)), new[] { "." });
+        TwSeq("Arp As Played Keys", P(("seq.kind", 1f), ("arp.mode", 0.8f), ("arp.oct", 0f), ("arp.gate", 0.6f), ("seq.rate", 0.2f), ("o1wave", 0f), ("o1metal", 0.25f),
+                ("ldcut", 0.65f), ("aenvd", 0.6f), ("aenvs", 0.2f), ("modfxon", 1f), ("revon", 1f), ("revmix", 0.25f)),
+            P(("o1metal", 0.5f), ("ldcut", 0.75f)), new[] { "." });
+        TwSeq("Arp Octave Bass", P(("seq.kind", 1f), ("arp.mode", 0f), ("arp.oct", 1f / 3f), ("arp.gate", 0.4f), ("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f),
+                ("o1wave", 0.75f), ("ldcut", 0.35f), ("ldres", 0.45f), ("ldenv", 0.7f), ("fenvd", 0.36f), ("fenvs", 0f)),
+            P(("ldcut", 0.48f), ("ldres", 0.6f), ("drive", 0.4f)), new[] { "." });
+
+        Section("Split & Layer");
+        TwParts("Bass + Keys Split", P(("mode", 1f), ("splitkey", 48f / 127f), ("share", 0.25f)),
+            P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2coarse", 0.25f), ("o2level", 0.8f), ("o2fine", 0.54f), ("ldcut", 0.32f), ("ldres", 0.35f),
+                ("ldenv", 0.7f), ("fenvd", 0.45f), ("fenvs", 0.2f), ("aenvr", 0.3f)),
+            P(("ldcut", 0.42f), ("ldres", 0.55f)),
+            P(("lo.vol", 0.55f), ("o1wave", 0f), ("o1metal", 0.2f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.25f), ("ldcut", 0.6f), ("ldenv", 0.6f),
+                ("fenvd", 0.55f), ("fenvs", 0.1f), ("aenvd", 0.72f), ("aenvs", 0.15f), ("aenvr", 0.5f), ("modfxon", 1f)),
+            P(("o1metal", 0.45f), ("ldcut", 0.72f)));
+        TwParts("Organ + Lead Split", P(("mode", 1f), ("splitkey", 60f / 127f), ("share", 0.75f)),
+            P(("lo.vol", 0.55f), ("o1wave", 0f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.6f), ("ldcut", 0.85f), ("aenvr", 0.3f), ("aenvvel", 0f),
+                ("modfxon", 1f), ("modfxtype", 1f)),
+            P(("o2coarse", 0.896f), ("drive", 0.3f)),
+            P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.3f), ("o1wave", 1f), ("o1pw", 0.4f), ("ldcut", 0.65f), ("ldenv", 0.56f), ("vibamt", 0.3f), ("dlyon", 1f)),
+            P(("o1pw", 0.2f), ("ldcut", 0.75f), ("ldres", 0.35f)));
+        TwParts("Pad + Bell Layer", P(("mode", 0.5f), ("share", 0.5f)),
+            P(("lo.vol", 0.5f), ("o2level", 0.75f), ("o2fine", 0.55f), ("ldcut", 0.5f), ("aenva", 0.7f), ("aenvr", 0.72f), ("spread", 0.6f), ("modfxon", 1f)),
+            P(("ldcut", 0.62f), ("o1wave", 0.7f)),
+            P(("lo.vol", 0.42f), ("lo.octave", 0.75f), ("o1wave", 0f), ("fm21", 0.45f), ("o2coarse", 0.896f), ("o2level", 0f), ("ldcut", 0.9f),
+                ("aenvd", 0.7f), ("aenvs", 0f), ("aenvr", 0.7f), ("revon", 1f)),
+            P(("fm21", 0.7f), ("o1metal", 0.3f)));
+        TwParts("Strings + Brass Layer", P(("mode", 0.5f), ("share", 0.5f)),
+            P(("lo.vol", 0.5f), ("o1wave", 0.55f), ("o2level", 0.8f), ("o2fine", 0.55f), ("ldcut", 0.6f), ("aenva", 0.62f), ("aenvr", 0.68f), ("spread", 0.8f),
+                ("modfxon", 1f), ("modfxtype", 1f)),
+            P(("ldcut", 0.7f), ("o1pw", 0.3f)),
+            P(("lo.vol", 0.45f), ("o2level", 1f), ("o1fine", 0.46f), ("o2fine", 0.54f), ("ldcut", 0.38f), ("ldenv", 0.72f), ("fenva", 0.45f), ("fenvd", 0.55f),
+                ("fenvs", 0.55f), ("aenva", 0.35f), ("aenvr", 0.5f)),
+            P(("ldcut", 0.5f), ("drive", 0.3f)));
+        TwParts("Wide Detune Layer", P(("mode", 0.5f), ("share", 0.5f)),
+            P(("lo.pan", 0.2f), ("lo.vol", 0.5f), ("o1fine", 0.42f), ("o2level", 0.7f), ("o2fine", 0.4f), ("ldcut", 0.6f), ("aenva", 0.5f), ("aenvr", 0.6f)),
+            P(("o1wave", 0.8f), ("ldcut", 0.7f)),
+            P(("lo.pan", 0.8f), ("lo.vol", 0.5f), ("o1fine", 0.58f), ("o2level", 0.7f), ("o2fine", 0.6f), ("ldcut", 0.6f), ("aenva", 0.5f), ("aenvr", 0.6f)),
+            P(("o1wave", 0.8f), ("ldcut", 0.7f)));
+        TwParts("Arp Keys + Pad Layer", P(("mode", 0.5f), ("share", 0.5f), ("seq.on", 1f), ("seq.kind", 1f), ("seq.target", 0f), ("arp.mode", 0.4f),
+                ("arp.oct", 1f / 3f), ("arp.gate", 0.35f)),
+            P(("lo.vol", 0.5f), ("o1wave", 0f), ("o1metal", 0.3f), ("ldcut", 0.7f), ("aenvd", 0.55f), ("aenvs", 0.1f), ("dlyon", 1f), ("dlymix", 0.25f)),
+            P(("o1metal", 0.6f), ("fm21", 0.25f), ("o2coarse", 0.75f)),
+            P(("lo.vol", 0.45f), ("o2level", 0.8f), ("o2fine", 0.57f), ("ldcut", 0.5f), ("aenva", 0.7f), ("aenvr", 0.74f), ("spread", 0.7f), ("revon", 1f)),
+            P(("ldcut", 0.66f), ("o1wave", 0.75f)));
+
         // ---- Nota EQ-8 (kind 0) — raw units. Eq8(…) spells out every band it uses with B(band, type,
         //      Hz, dB, Q, slope, channel); a band it does not name is switched off. Type: 0 Low cut,
         //      1 Low shelf, 2 Bell, 3 Notch, 4 High shelf, 5 High cut. Slope (cuts): 0 = 12, 1 = 24,

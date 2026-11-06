@@ -64,6 +64,18 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
     private static readonly Dictionary<int, int> EditSides = new();
     private static readonly Dictionary<int, int> EditParts = new();
     private static readonly Dictionary<int, int> OpenTabs = new();
+    // The matrix grid's rows and columns last picked, per track and part (most recent first).
+    private static readonly Dictionary<(int, string), List<int>> MatrixRowPrefs = new();
+    private static readonly Dictionary<(int, string), List<int>> MatrixColPrefs = new();
+    // LFO 1, LFO 2, Mod env, Velocity, Mod wheel, Pressure, Pad X (TwinMatrix.Sources indices).
+    private static readonly int[] DefaultMatrixRows = { 1, 2, 6, 7, 13, 10, 15 };
+    private static IEnumerable<int> DefaultMatrixCols(IAudioEngine e, int track) => new[]
+    {
+        1, // Morph
+        Nota.Application.Twin.TwinMatrix.DestinationOfSide("ldcut"), Nota.Application.Twin.TwinMatrix.DestinationOfSide("mmcut"),
+        2, // Pitch
+        Nota.Application.Twin.TwinMatrix.DestinationOfSide("o1wave"), 5, // Vibrato
+    };
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Matrix", "FX", "Seq", "Voice" };
     private static readonly string[] SeqRates = { "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32" };
@@ -443,24 +455,11 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         }
 
         // ---- Matrix tab ---------------------------------------------------------
-        // Routes as rows (a 29 × 77 grid would not read at this size): source ▾ → destination ▾,
-        // the depth on the side being edited, and remove. Rows rebuild on any route edit.
-        var routeRows = new StackPanel { Spacing = 0 };
-        var rowReadouts = new List<Action>();
-        readouts.Add(() => { foreach (var r in rowReadouts) r(); });
-        var routeCount = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        var fullNote = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, IsVisible = false, Text = Loc.T("device.twin.matrix_full_64_routes") };
-        string sideKey = sideIx == 0 ? "a" : "b";
-        Control Picker(Func<string> text, string tip, Action<Control> open)
-        {
-            var tb = new TextBlock { FontSize = NotaType.RowLabel, Foreground = TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 120 };
-            var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(3, 0), Child = Glyph.WithChevron(tb, 7), VerticalAlignment = VerticalAlignment.Center };
-            ToolTip.SetTip(host, tip);
-            rowReadouts.Add(() => tb.Text = text());
-            tb.Text = text();
-            host.PointerPressed += (_, e) => { if (e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) { open(host); e.Handled = true; } };
-            return host;
-        }
+        // A source × destination grid, as Consort's patch matrix: drag a cell for the depth on the
+        // side being edited (an empty cell gets a route), double-click removes it, a row or column
+        // name puts another source or destination there. Rows and columns show the routes first,
+        // then the ones last picked (kept per track and part across rebuilds).
+        string sideKey = sideIx == 0 ? "a" : "b", otherKey = sideIx == 0 ? "b" : "a";
         void ShowSources(Control at, Action<int> pick)
         {
             var f = new MenuFlyout();
@@ -490,89 +489,93 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             }
             f.ShowAt(at);
         }
-        // A route's depth on the edited side: a centre-zero teal slider (it is a modulation
-        // amount) with the other side's depth as its mark, and the value beside it.
-        Control DepthCell(string amtId)
+        var prefKey = (track, PartKey);
+        if (!MatrixRowPrefs.TryGetValue(prefKey, out var rowPrefs)) MatrixRowPrefs[prefKey] = rowPrefs = new List<int>(DefaultMatrixRows);
+        if (!MatrixColPrefs.TryGetValue(prefKey, out var colPrefs)) MatrixColPrefs[prefKey] = colPrefs = new List<int>(DefaultMatrixCols(engine, track));
+        // The part's routes, read through the card's own param map (the tick reads them often).
+        List<TwinPatchMatrix.Cell> Cells()
         {
-            if (!idx.TryGetValue(amtId, out var pi)) return new Panel();
-            string oid = Other + amtId[Side.Length..];
-            static string Fmt(float v) => NotaNum.Unit((v - 0.5f) * 200, "+0;−0;0", "%");
-            SliderTrack? bar = null;
-            var row = SliderRow("", () => G(amtId), v => engine.PluginParamSet(track, -1, pi, (float)v), () => Fmt(G(amtId)), out var sync,
-                begin: () => Begin(amtId), end: () => End(amtId), reset: () => { Begin(amtId); SetP(amtId, 0.5f); End(amtId); },
-                bipolar: true, modulation: true, valueWidth: 34, withTrack: t => bar = t);
-            row.ColumnSpacing = 4;
-            MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
-            void Sync()
+            var l = new List<TwinPatchMatrix.Cell>();
+            for (int r = 1; r <= Nota.Application.Twin.TwinMatrix.Slots; r++)
             {
-                sync();
-                if (bar is not null) bar.Marker = Math.Abs(G(oid) - G(amtId)) > 1e-4f ? G(oid) : double.NaN;
-                ToolTip.SetTip(row, $"Depth · A {Fmt(G(Part + "a." + amtId[5..]))} · B {Fmt(G(Part + "b." + amtId[5..]))}");
+                int src = (int)Math.Round(G($"{Part}m{r}.src") * Nota.Application.Twin.TwinMatrix.SrcScale);
+                int dst = (int)Math.Round(G($"{Part}m{r}.dst") * Nota.Application.Twin.TwinMatrix.DstScale);
+                if (src <= 0 || dst <= 0) continue;
+                l.Add(new(r, src, dst, (G($"{Part}{sideKey}.m{r}amt") - 0.5f) * 2f, (G($"{Part}{otherKey}.m{r}amt") - 0.5f) * 2f));
             }
-            rowReadouts.Add(Sync);
-            Sync();
-            return row;
+            return l;
         }
-        const string MatrixCols = "14,104,10,138,*,14";
-        void BuildRoutes()
+        // 6 × 5 at rest; up to 8 × 6 when the routes need it, so a patch's routes stay on the grid.
+        const int GridRows = 6, GridCols = 5, MaxRows = 8, MaxCols = 6;
+        int[] Pick(IEnumerable<int> used, List<int> prefs, int n)
         {
-            routeRows.Children.Clear();
-            rowReadouts.Clear();
-            var routes = Nota.Application.Twin.TwinMatrix.Routes(engine, track, PartKey);
-            routeCount.Text = $"{routes.Count} / {Nota.Application.Twin.TwinMatrix.Slots}";
-            foreach (var rt in routes)
-            {
-                int slot = rt.Slot;
-                string srcId = $"{Part}m{slot}.src", dstId = $"{Part}m{slot}.dst", amtId = $"{Part}{sideKey}.m{slot}amt";
-                Nota.Application.Twin.TwinMatrix.Route Now() => Nota.Application.Twin.TwinMatrix.Routes(engine, track, PartKey).Find(x => x.Slot == slot);
-                void Rewrite(int src, int dst)
-                {
-                    var n = Now();
-                    Nota.Application.Twin.TwinMatrix.Add(engine, track, src, dst, n.DepthA, n.DepthB, PartKey, slot);
-                    BuildRoutes(); Refresh();
-                }
-                var num = new TextBlock { Text = slot.ToString(NotaNum.Culture), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextFaint, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-                var src = Picker(() => Nota.Application.Twin.TwinMatrix.Sources[Math.Clamp((int)Math.Round(G(srcId) * 63), 0, Nota.Application.Twin.TwinMatrix.Sources.Length - 1)],
-                    "Source", h => ShowSources(h, k => Rewrite(k, Now().Destination)));
-                var dst = Picker(() => Nota.Application.Twin.TwinMatrix.DestinationName(engine, track, (int)Math.Round(G(dstId) * 255)),
-                    "Destination", h => ShowDestinations(h, k => Rewrite(Now().Source, k)));
-                var arrow = new Glyph(GlyphKind.ChevronRight, 7) { Foreground = NotaPalette.TextFaint, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var depth = DepthCell(amtId);
-                var remove = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new Glyph(GlyphKind.Close, 8) { Foreground = TextTertiary } };
-                ToolTip.SetTip(remove, Loc.T("device.twin.remove_the_route"));
-                remove.PointerPressed += (_, e) =>
-                {
-                    if (!e.GetCurrentPoint(remove).Properties.IsLeftButtonPressed) return;
-                    Nota.Application.Twin.TwinMatrix.Remove(engine, track, slot, PartKey);
-                    BuildRoutes(); Refresh(); e.Handled = true;
-                };
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions(MatrixCols), ColumnSpacing = 4, Height = 20 };
-                Control[] cols = { num, src, arrow, dst, depth, remove };
-                for (int k = 0; k < cols.Length; k++) { Grid.SetColumn(cols[k], k); row.Children.Add(cols[k]); }
-                routeRows.Children.Add(new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Child = row });
-            }
-            fullNote.IsVisible = false;
+            var l = new List<int>();
+            foreach (var u in used) if (!l.Contains(u) && l.Count < n) l.Add(u);
+            foreach (var p in prefs) if (!l.Contains(p) && l.Count < n) l.Add(p);
+            return l.ToArray();
         }
-        var addRoute = TextButton(Loc.T("device.twin.add_route"));
-        addRoute.Padding = new Thickness(6, 1);
-        ToolTip.SetTip(addRoute, Loc.T("device.twin.add_a_route_in_the_first_free_slot"));
-        addRoute.PointerPressed += (_, e) =>
+        var matrix = new TwinPatchMatrix
         {
-            if (!e.GetCurrentPoint(addRoute).Properties.IsLeftButtonPressed) return;
-            int slot = Nota.Application.Twin.TwinMatrix.Add(engine, track, 1, Nota.Application.Twin.TwinMatrix.DestinationOfSide("ldcut"), 0.25f, 0.25f, PartKey);
-            BuildRoutes();
-            fullNote.IsVisible = slot < 0;
-            Refresh(); e.Handled = true;
+            Height = 150,
+            Corner = Loc.T("device.twin.matrix_corner"),
+            SourceName = k => k >= 0 && k < Nota.Application.Twin.TwinMatrix.Sources.Length ? Nota.Application.Twin.TwinMatrix.Sources[k] : "",
+            DestinationName = k => Nota.Application.Twin.TwinMatrix.DestinationName(engine, track, k),
         };
-        BuildRoutes();
-        var routesHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { fullNote, routeCount, addRoute } };
-        var colHeads = new Grid { ColumnDefinitions = new ColumnDefinitions(MatrixCols), ColumnSpacing = 4, Height = 12 };
-        foreach (var (text, col) in new[] { ("Source", 1), ("Destination", 3), ($"Depth {(sideIx == 0 ? "A" : "B")}", 4) })
+        var routeCount = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var offGrid = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        void SyncMatrix()
         {
-            var h = Cap(text);
-            Grid.SetColumn(h, col); colHeads.Children.Add(h);
+            var cells = Cells();
+            int nr = Math.Clamp(cells.Select(c => c.Src).Distinct().Count(), GridRows, MaxRows);
+            int nc = Math.Clamp(cells.Select(c => c.Dst).Distinct().Count(), GridCols, MaxCols);
+            int[] rows = Pick(cells.Select(c => c.Src), rowPrefs, nr), cols = Pick(cells.Select(c => c.Dst), colPrefs, nc);
+            matrix.Set(rows, cols, cells);
+            routeCount.Text = $"{cells.Count} / {Nota.Application.Twin.TwinMatrix.Slots}";
+            int hidden = cells.Count(c => !rows.Contains(c.Src) || !cols.Contains(c.Dst));
+            offGrid.Text = hidden > 0 ? Loc.Plural("device.twin.routes_off_the_grid", hidden) : "";
         }
-        var routesScroll = new ScrollViewer { Height = 152, Content = routeRows, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        readouts.Add(SyncMatrix);
+        int Slot(int s, int d) => Cells().FirstOrDefault(c => c.Src == s && c.Dst == d).Slot;
+        string? gestId = null;
+        bool creating = false;
+        matrix.GestureBegin += (s, d) =>
+        {
+            int k = Slot(s, d);
+            creating = k <= 0;
+            if (k > 0) { gestId = $"{Part}{sideKey}.m{k}amt"; Begin(gestId); }
+        };
+        matrix.GestureEnd += (s, d) => { if (gestId is not null) End(gestId); gestId = null; creating = false; };
+        matrix.DepthChanged += (s, d, v) =>
+        {
+            int k = Slot(s, d);
+            if (k <= 0)
+            {
+                // A new route: the same depth on both sides, one undo step; the drag goes on from it.
+                k = Nota.Application.Twin.TwinMatrix.Add(engine, track, s, d, v, v, PartKey);
+                if (k <= 0) { ctx.Status(Loc.T("device.twin.matrix_full_64_routes")); return; }
+                gestId = $"{Part}{sideKey}.m{k}amt"; Begin(gestId);
+                SyncMatrix();
+                return;
+            }
+            SetP($"{Part}{sideKey}.m{k}amt", 0.5f + v / 2f);
+            if (creating) SetP($"{Part}{otherKey}.m{k}amt", 0.5f + v / 2f); // still a new route: both sides
+            SyncMatrix();
+        };
+        matrix.Removed += (s, d) =>
+        {
+            int k = Slot(s, d);
+            if (k > 0) Nota.Application.Twin.TwinMatrix.Remove(engine, track, k, PartKey);
+            Refresh();
+        };
+        matrix.HeaderClicked += (isRow, i) =>
+        {
+            var prefs = isRow ? rowPrefs : colPrefs;
+            void Put(int k) { prefs.Remove(k); prefs.Insert(0, k); Refresh(); }
+            if (isRow) ShowSources(matrix, Put); else ShowDestinations(matrix, Put);
+        };
+        SyncMatrix();
+        var matrixHint = Note(Loc.F("device.twin.matrix_hint", sideIx == 0 ? "A" : "B"));
+        var routesHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { offGrid, routeCount } };
         Control Macros()
         {
             var g = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 2, LineSpacing = 4 };
@@ -580,7 +583,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             return g;
         }
         var matrixBody = Chain(
-            Island("Routes", routesHead, 412, colHeads, routesScroll),
+            Island("Matrix", routesHead, 412, matrix, matrixHint),
             Island("Macros", null, 0, Macros(), Note(Loc.T("device.twin.macros_are_sources_in_the_matrix"))));
 
         // ---- FX tab -------------------------------------------------------------
@@ -789,6 +792,10 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             foreach (var c in cs) { c.VerticalAlignment = VerticalAlignment.Center; p.Children.Add(c); }
             return p;
         }
+        // What to do next: switch it on, fill the pattern, or play it (a key, or the transport).
+        var seqHint = Note(Loc.T("device.twin.seq_hint"));
+        readouts.Add(() => seqHint.Text = G("seq.on") < 0.5f ? Loc.T("device.twin.seq_turn_on")
+            : Pat() is { } sp && sp.Steps.Take(sp.Length).All(st => st.IsRest) ? Loc.T("device.twin.seq_empty") : Loc.T("device.twin.seq_hint"));
         var seqPage = new StackPanel
         {
             Spacing = 4,
@@ -797,11 +804,12 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 Bar(Line(patPick, lenPick, ratePick, Cap("Swing"), SeqSwing(), Toggle("Transpose", "seq.transpose"), Toggle("Latch", "seq.latch"))),
                 grid,
                 Bar(Line(Cap("Motion"), lanePick, targetPick, smoothSw, motionRecBtn, clearLane), pageRow),
-                Bar(Line(stepInfo, restBtn), Note(Loc.T("device.twin.click_a_step_to_edit_it"))),
+                Bar(Line(stepInfo, restBtn), seqHint),
             },
         };
-        var arpHint = Note(Loc.T("device.twin.hold_a_chord_to_hear_it"));
-        arpHint.Width = 150;
+        var arpHint = Note(Loc.T("device.twin.arp_hint"));
+        arpHint.Width = 300;
+        readouts.Add(() => arpHint.Text = G("seq.on") < 0.5f ? Loc.T("device.twin.seq_turn_on") : Loc.T("device.twin.arp_hint"));
         var arpKnobs = Row(PKnob("arp.gate", "Gate", Pct, 44, 64), PKnob("seq.swing", "Swing", Pct, 44, 64));
         arpKnobs.HorizontalAlignment = HorizontalAlignment.Left;
         var arpPage = new StackPanel

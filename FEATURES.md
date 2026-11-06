@@ -793,16 +793,17 @@ audio effects after it keep running and keep their settings; saved with the proj
   noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
   feedback and drive; three envelopes, three LFOs (per voice or global); Poly / Mono / Legato /
   Unison, glide, seeded drift. Poly aftertouch and MPE per note (pressure routed to Morph
-  morphs only that note), an X · Y · Z expression pad. A 64-route matrix per part (29 sources
-  incl. 8 macros and Random → Morph, pitch, vibrato or any control), a depth per side. Per
-  part: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb. Own sequencer (8
-  patterns × 64 steps of up to six notes, tie, swing, transpose, latch, step record, four motion
+  morphs only that note), an X · Y · Z expression pad. A 64-route matrix per part as a source ×
+  destination grid (29 sources incl. 8 macros and Random → Morph, pitch, vibrato or any
+  control), a depth per side. Per
+  part: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb. Own sequencer, played from a held key
+  or locked to the transport (8 patterns × 64 steps of up to six notes, tie, swing, transpose, latch, step record, four motion
   lanes, **To clip**) and arpeggiator (six modes, 1–4 octaves, hold). **Split / Layer**: Lower
   and Upper parts sharing the voices (2 + 10 … 10 + 2), a learnable split key, per-part octave,
   volume and pan; **Parts** copies, swaps or loads a factory or saved sound into one part. The A / B
   switch picks the side knobs, automation and MIDI learn write to; **A → B**, **B → A**,
   **Swap**. Card tabs Osc, Filter, Env, LFO, Matrix, FX, Seq, Voice; S size shows Morph, the
-  pad and four knobs. 57 factory presets in 11 folders; MCP `read_twin`, `set_twin_morph_side`,
+  pad and four knobs. 117 factory presets in 11 folders; MCP `read_twin`, `set_twin_morph_side`,
   `copy_twin_side`, `copy_twin_part`, `set_twin_route`, `get_twin_pattern`, `set_twin_pattern`,
   `twin_pattern_to_clip`.
 - **Nota Consort** — paraphonic semi-modular synth: four oscillators (tri / saw / square /
