@@ -59,6 +59,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   playing its pattern.
 
 ### Fixed
+- **Default Projects/Samples folders follow the OS locations** (#522): the browser and
+  save dialogs no longer default to hardcoded `~/Documents/Nota Projects` and
+  `~/Music/Nota Samples`. On Linux they read `user-dirs.dirs` (`XDG_DOCUMENTS_DIR`,
+  `XDG_MUSIC_DIR`), on Windows/macOS the Known Folders, so a relocated or translated
+  Documents folder no longer grows an unwanted `~/Documents`. An explicit folder in
+  Settings still always wins.
 - **Nota Remote on iPhone and iPad launches several clips at once** (#512): touching two or
   more clips on the Scenes screen together launched none of them, or only one — iOS Safari
   only sends a tap for a single finger. Every clip, scene and Stop button now takes its own

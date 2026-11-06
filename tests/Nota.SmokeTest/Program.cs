@@ -433,6 +433,15 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
+// OS user-folder defaults alone: `--user-dirs` (#522). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--user-dirs")
+{
+    Console.WriteLine("-- user dirs --");
+    foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "USER DIRS PASSED" : $"USER DIRS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Sends stay out of undo and automation: `--sends` (specs/069). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--sends")
 {
@@ -15571,6 +15580,9 @@ foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- linux desktop --");
 foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- user dirs --");
+foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- range clipboard --");
 foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);
