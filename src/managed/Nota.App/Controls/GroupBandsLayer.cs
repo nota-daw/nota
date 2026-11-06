@@ -69,19 +69,19 @@ internal sealed class GroupBandsLayer : Control, ICustomHitTest
 
             // Tint behind the strips, then the bar on top of it.
             ctx.DrawRectangle(NotaPalette.Wash(hue, 0x12), null, new RoundedRect(new Rect(x0, y, x1 - x0, bottom - y),
-                new CornerRadius(NotaRadius.ClipValue, NotaRadius.ClipValue, 0, 0)));
+                new CornerRadius(NotaRadius.FieldValue, NotaRadius.FieldValue, 0, 0)));
             var bar = new Rect(x0, y, x1 - x0, BarH - 2);
-            ctx.DrawRectangle(NotaPalette.Wash(hue, 0x52), null, new RoundedRect(bar, NotaRadius.ClipValue));
+            ctx.DrawRectangle(NotaPalette.Wash(hue, 0x52), null, new RoundedRect(bar, NotaRadius.FieldValue));
             _bars.Add((bar, b.Name));
 
             double maxW = bar.Width - 10;
             if (maxW <= 4) continue;
             var count = b.Hidden > 0
-                ? new FormattedText("+" + b.Hidden.ToString(CultureInfo.CurrentCulture), CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, 9, NotaPalette.TextSecondary)
+                ? new NotaFormattedText("+" + b.Hidden.ToString(CultureInfo.CurrentCulture), CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Sans, 9, NotaPalette.TextSecondary)
                 : null;
             double countW = count is null ? 0 : count.Width + 4;
-            var name = new FormattedText(b.Name, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            var name = new NotaFormattedText(b.Name, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                 NotaFonts.SansSemiBold, 9, NotaPalette.TextPrimary)
             {
                 MaxTextWidth = Math.Max(1, maxW - countW), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis,

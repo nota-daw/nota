@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota EQ-3 (device kind 16) card controls:
-//  · Eq3Fader — a band's gain fader: a sunken slot, a fill from 0 dB to the value in the band's
-//    hue, the range's ends and 0 dB marked, a 22 × 9 cap. Vertical drag (relative — a click never
+//  · Eq3Fader — a band's gain fader, drawn as an upright value bar filling from 0 dB to the
+//    value, the range's ends and 0 dB marked beside it. Vertical drag (relative — a click never
 //    jumps), 0.5 dB steps with a 0 dB detent; Shift / Ctrl / ⌘ for fine 0.1 dB steps;
 //    double-click resets (0 dB, and the kill off); ⌥-click types the gain.
 //  · Eq3Graph — the response window: the output spectrum (engine FFT) behind, each band's own
-//    curve thin in its hue, the sum in neutral ink, the two crossovers as dashed lines with handles
+//    curve thin in grey (Low light, Mid darker, High light and dashed), the sum in neutral ink, the two crossovers as dashed lines with handles
 //    along the top that drag left / right (the low/mid one held to at most half the mid/high
 //    one). A drag anywhere else in a band's zone rides that band's gain up / down; double-click
 //    a handle or a zone to reset it, ⌥-click it to type the crossover / the band's gain.
@@ -29,10 +29,16 @@ internal static class Eq3Math
     public static readonly string[] Names = { "LOW", "MID", "HIGH" };
 
     /// <summary>The band hues: rose, neutral ink, teal — the strips, the graph labels and the band curves.</summary>
-    public static SolidColorBrush Hue(int band) => band switch { 0 => NotaPalette.Rose, 1 => NotaPalette.VizInk, _ => NotaPalette.Teal };
+    public static SolidColorBrush Hue(int band) => NotaPalette.TextPrimary;
 
-    /// <summary>The band curve's ink on the graph: the mid curve stays dimmer so the neutral sum reads.</summary>
-    public static SolidColorBrush CurveInk(int band) => band switch { 0 => NotaPalette.Rose, 1 => NotaPalette.TextSecondary, _ => NotaPalette.Teal };
+    /// <summary>The band curve's ink on the graph, told apart by shade and stroke (style guide):
+    /// Low the lighter grey, Mid the darker grey (so the neutral sum reads), High the lighter
+    /// grey dashed.</summary>
+    public static SolidColorBrush CurveInk(int band) => band == 1 ? NotaPalette.TextTertiary : NotaPalette.TextSecondary;
+
+    /// <summary>The band curve's dash: High is dashed, Low and Mid solid.</summary>
+    public static DashStyle? CurveDash(int band) => band == 2 ? HighDash : null;
+    private static readonly DashStyle HighDash = new(new double[] { 3, 2 }, 0);
 
     public static double X(double f) => Math.Log(Math.Clamp(f, FMin, FMax) / FMin) / Math.Log(FMax / FMin);
     public static double F(double x) => FMin * Math.Pow(FMax / FMin, Math.Clamp(x, 0, 1));
@@ -101,7 +107,7 @@ internal sealed class Eq3Fader : Control
         InvalidateVisual();
     }
 
-    private const double Pad = 4;
+    private const double Pad = 0;
     private double Y(double db) => Pad + (_top - Math.Clamp(db, _bottom, _top)) / (_top - _bottom) * Math.Max(1, Bounds.Height - 2 * Pad);
 
     protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
@@ -146,33 +152,42 @@ internal sealed class Eq3Fader : Control
         base.OnPointerCaptureLost(e);
     }
 
+    // An upright value bar (style guide): a 16 px groove, the soft tint from 0 dB to the value and
+    // a 3 px orange line at it; the tint lifts under the pointer and deepens in the hand; killed,
+    // the line drops to ink 4 and the fill goes. The scale (the ends and 0 dB) sits to its left,
+    // ticks at 0 dB and half the cut to its right.
+    private static readonly IBrush FillHover = NotaPalette.Derived(() => SliderTrack.Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.2));
+    private static readonly IBrush FillDrag = NotaPalette.Derived(() => SliderTrack.Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.45));
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        double cx = Math.Round(w / 2);
-        // Slot.
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), new Rect(cx - 2, Pad, 4, h - 2 * Pad), 2, 2);
-        // Scale: the ends and 0 dB on the left, ticks at 0 dB and half the cut on the right.
-        double y0 = Y(0), yHalf = Y(_bottom / 2);
-        void Lbl(string t, double y, IBrush ink, bool centre)
+        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));   // the whole column hit-tests
+        const double bw = SliderTrack.Height0, line = SliderTrack.LineW;
+        double bx = Math.Round(w / 2 - bw / 2);
+        var bar = new RoundedRect(new Rect(bx, 0, bw, h), NotaRadius.ValueBarValue);
+        NotaDepth.Groove(ctx, this, bar);
+        double y0 = Y(0), yv = Y(_db);
+        using (ctx.PushClip(bar))
         {
-            var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 7, ink);
-            ctx.DrawText(ft, new Point(Math.Max(0, cx - 22), Math.Clamp(centre ? y - ft.Height / 2 : y, 0, h - ft.Height)));
+            if (!_killed && Math.Abs(yv - y0) > 0.5)
+                ctx.FillRectangle(_drag ? FillDrag : _hover ? FillHover : NotaPalette.AccentSoft, new Rect(bx, Math.Min(yv, y0), bw, Math.Abs(yv - y0)));
+            double ly = Math.Clamp(yv, line / 2, h - line / 2) - line / 2;
+            ctx.FillRectangle(_killed ? NotaPalette.TextDisabled : NotaPalette.Accent, new Rect(bx, ly, bw, line));
         }
-        Lbl(NotaNum.F($"+{_top:0}"), Pad - 1, NotaPalette.TextAxis, false);
-        Lbl("0", y0, NotaPalette.TextTertiary, true);
-        Lbl(NotaNum.F($"{_bottom:0}"), h - Pad - 8, NotaPalette.TextAxis, false);
-        ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(cx + 9, Math.Round(y0) + 0.5), new Point(cx + 15, Math.Round(y0) + 0.5));
-        ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(cx + 9, Math.Round(yHalf) + 0.5), new Point(cx + 13, Math.Round(yHalf) + 0.5));
-        // Fill from 0 dB to the value (gone while killed).
-        double yv = Y(_db);
-        if (!_killed && Math.Abs(yv - y0) > 0.5)
-            ctx.FillRectangle(_hue, new Rect(cx - 1, Math.Min(yv, y0), 2, Math.Abs(yv - y0)));
-        // Cap.
-        var cap = new Rect(cx - 11, Math.Round(yv - 4.5), 22, 9);
-        ctx.DrawRectangle(NotaPalette.SurfaceHover, new Pen(_drag || _hover ? NotaPalette.BorderStrong : NotaPalette.TextAxis, 1), cap, 2, 2);
-        ctx.FillRectangle(_killed ? NotaPalette.TextDisabled : _hue, new Rect(cx - 6, cap.Y + 3.5, 12, 2));
+        void Lbl(string t, double y, int align)
+        {
+            var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, NotaPalette.TextTertiary, this);
+            double ty = align < 0 ? y : align > 0 ? y - ft.Height : y - ft.Height / 2;
+            ctx.DrawText(ft, new Point(Math.Max(0, bx - 6 - ft.Width), Math.Clamp(ty, 0, h - ft.Height)));
+        }
+        Lbl(NotaNum.F($"+{_top:0}"), 0, -1);
+        Lbl("0", y0, 0);
+        Lbl(NotaNum.F($"{_bottom:0}"), h, 1);
+        // Ticks on the right: 0 dB, and half the cut.
+        double tx0 = bx + bw + 2, yHalf = Y(_bottom / 2);
+        ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(tx0, Math.Round(y0) + 0.5), new Point(tx0 + 6, Math.Round(y0) + 0.5));
+        ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(tx0, Math.Round(yHalf) + 0.5), new Point(tx0 + 4, Math.Round(yHalf) + 0.5));
     }
 }
 
@@ -224,10 +239,10 @@ internal sealed class Eq3Graph : Control, IValueHandles
     private Rect Handle(int which, out FormattedText text)
     {
         double f = which == 0 ? _f1 : _f2;
-        text = new FormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 7, NotaPalette.TextSecondary);
-        double w = text.Width + 10, x = Eq3Math.X(f) * Bounds.Width;
+        text = new NotaFormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextPrimary, this);
+        double w = text.Width + 14, x = Eq3Math.X(f) * Bounds.Width;
         x = Math.Clamp(x - w / 2, 1, Math.Max(1, Bounds.Width - w - 1));
-        return new Rect(Math.Round(x), 16, Math.Round(w), 13);
+        return new Rect(Math.Round(x), 4, Math.Round(w), Math.Round(text.Height + 4));
     }
 
     private int HitHandle(Point p)
@@ -390,7 +405,7 @@ internal sealed class Eq3Graph : Control, IValueHandles
         {
             bc[b].EndFigure(false); bc[b].Dispose();
             if (_kill[b]) continue;
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(Eq3Math.CurveInk(b), b == 1 ? (byte)0x99 : (byte)0xCC), 1.2, lineJoin: PenLineJoin.Round), band[b]);
+            ctx.DrawGeometry(null, new Pen(Eq3Math.CurveInk(b), 1.2, Eq3Math.CurveDash(b), lineJoin: PenLineJoin.Round), band[b]);
         }
         ctx.DrawGeometry(null, NotaGraph.PrimaryPen, sum);
 
@@ -411,9 +426,9 @@ internal sealed class Eq3Graph : Control, IValueHandles
         var lw = new double[3];
         for (int b = 0; b < 3; b++)
         {
-            names[b] = new FormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, Eq3Math.Hue(b));
-            vals[b] = new FormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                NotaFonts.Mono, 7, _kill[b] ? NotaPalette.TextTertiary : NotaPalette.TextPrimary);
+            names[b] = new NotaFormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary, this);
+            vals[b] = new NotaFormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                NotaFonts.Sans, NotaGraph.AxisSize, _kill[b] ? NotaPalette.TextDisabled : NotaPalette.TextPrimary, this);
             lw[b] = names[b].Width + 4 + vals[b].Width;
             lx[b] = centres[b] - lw[b] / 2;
         }
@@ -424,16 +439,16 @@ internal sealed class Eq3Graph : Control, IValueHandles
         for (int b = 1; b >= 0; b--) lx[b] = Math.Min(lx[b], lx[b + 1] - lw[b] - 8);
         for (int b = 0; b < 3; b++)
         {
-            ctx.DrawText(names[b], new Point(lx[b], 4));
-            ctx.DrawText(vals[b], new Point(lx[b] + names[b].Width + 4, 4));
+            ctx.DrawText(names[b], new Point(lx[b], 6));
+            ctx.DrawText(vals[b], new Point(lx[b] + names[b].Width + 4, 6));
         }
         for (int i = 0; i < 2; i++)
         {
             var rect = Handle(i, out var text);
             bool hot = _drag == i || _hover == i;
-            ctx.DrawRectangle(hot ? NotaPalette.Accent : NotaPalette.SurfaceCard, new Pen(hot ? NotaPalette.Accent : NotaPalette.BorderStrong, 1), rect.Deflate(0.5), 3, 3);
+            ctx.DrawRectangle(hot ? NotaPalette.Accent : NotaPalette.SurfaceHover, null, rect, NotaRadius.CellValue, NotaRadius.CellValue);
             if (hot) text.SetForegroundBrush(NotaPalette.TextOnAccent);
-            ctx.DrawText(text, new Point(rect.X + 5, rect.Y + (rect.Height - text.Height) / 2));
+            ctx.DrawText(text, new Point(rect.X + 7, rect.Y + (rect.Height - text.Height) / 2));
         }
 
         // Axis labels: 0 and the fader's floor on the right, the range in the bottom corners.

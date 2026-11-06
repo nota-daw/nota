@@ -189,7 +189,7 @@ public sealed partial class ArrangementView
         var glyph = new Glyph(GlyphKind.ChainLink, 10);
         var chip = new Border
         {
-            Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
+            Width = 18, Height = 16, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1),
             Child = glyph, Cursor = new Cursor(StandardCursorType.Hand),
         };
         ToolTip.SetTip(chip, LinkTip);

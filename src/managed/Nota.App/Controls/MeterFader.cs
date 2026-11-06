@@ -130,8 +130,8 @@ internal sealed class MeterFader : Control
 
         for (int i = 0; i < Marks.Length; i++)
         {
-            var t = new FormattedText(MarkText[i], System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                NotaFonts.Mono, 7, NotaPalette.TextDisabled);
+            var t = new NotaFormattedText(MarkText[i], System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                NotaFonts.Sans, 7, NotaPalette.TextDisabled);
             double y = (1 - MeterScale.NormDb(Marks[i])) * h - t.Height / 2;
             ctx.DrawText(t, new Point(x + ScaleW - 1 - t.Width, Math.Clamp(y, 0, h - t.Height)));
         }

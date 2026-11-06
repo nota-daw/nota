@@ -345,12 +345,9 @@ Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Sqr	# data: device parameter
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Stereo phase	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	TARGET	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	TYPE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Tempo sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Tri	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	plural by hand: == 1 ? "event" : "events"	# data: a device readout or label that spells parameter words (FR-004)
-Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	→ Freq	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	→ Reso	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoGainDeviceBody.cs	$"True-peak limits the gain to the {NotaNum.F($"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoGainDeviceBody.cs	Auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoGainDeviceBody.cs	CORRECTION	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -600,14 +597,11 @@ Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	wet only	# data: device paramete
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Auto gain	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Auto-release	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	CHAR	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Clean	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Curve	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	DETECT	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Dynamics	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	External key	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Glue	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	KEY	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	LEVEL	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Listen	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	MKP	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -621,7 +615,6 @@ Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Post	# data: device paramete
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Pre	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Punch	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Ratio	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	SC GAIN	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	SC HP	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	SC IN	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	SC LP	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -631,7 +624,6 @@ Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Stereo link	# data: device p
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	THR	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Thresh	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Threshold	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	internal key	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	key silent	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	 levels	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	 · fold	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2497,7 +2489,6 @@ Nota.App/MainWindow.Commands.cs	Remote	# data: page id passed to ShowPreferences
 Nota.App/MainWindow.Commands.cs	Shortcuts	# data: page id passed to ShowPreferencesPage
 Nota.App/MainWindow.Commands.cs	Updates	# data: page id passed to ShowPreferencesPage
 Nota.App/MainWindow.Files.cs	$"Nota Export.{ext}"	# data: suggested file name
-Nota.App/MainWindow.Files.cs	Nota	# data: product name
 Nota.App/MainWindow.Freeze.cs	$"Audio {trackId}"	# data: default track name that is stored in the project
 Nota.App/MainWindow.History.cs	$"{Path.GetFileNameWithoutExtension(src)} ({version.CreatedAt.LocalDateTime:yyyy-MM-dd HH.mm}).nota"	# data: file name
 Nota.App/MainWindow.LiveFreeze.cs	$"Track {sourceId}"	# data: default track name that is stored in the project
@@ -2509,7 +2500,6 @@ Nota.App/MainWindow.axaml	BPM	# data: unit
 Nota.App/MainWindow.axaml	DSP 0%	# data: placeholder replaced at startup
 Nota.App/MainWindow.axaml	MIDI	# data: acronym
 Nota.App/MainWindow.axaml	Nota	# data: product name
-Nota.App/MainWindow.axaml	Untitled	# data: placeholder replaced at startup
 Nota.App/MainWindow.axaml.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MainWindow.axaml.cs	Play	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MainWindow.axaml.cs	Record	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
@@ -2556,9 +2546,12 @@ Nota.App/Theme/NotaColourTheme.cs	$"token '{p.Name}' must be opaque"	# data: dia
 Nota.App/Theme/NotaColourTheme.cs	$"unknown token '{p.Name}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: file declares id '{theme.Id}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: no theme file"	# data: diagnostics for people writing a theme file
+Nota.App/Theme/NotaColourTheme.cs	Bevel	# data: theme token name
+Nota.App/Theme/NotaColourTheme.cs	Well	# data: theme token name
 Nota.App/Theme/NotaColourTheme.cs	colors missing	# data: technical validation message for a theme file
 Nota.App/Theme/NotaColourTheme.cs	name must be 1–40 characters	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	the file must hold one JSON object	# data: diagnostics for people writing a theme file
+Nota.App/Theme/NotaTextSize.cs	Fixed	# data: attached property name
 Nota.App/WelcomeWindow.cs	$"  ·  {NotaNum.Unit(p.Fraction * 100, "	# data: numbers and units only
 Nota.App/WelcomeWindow.cs	$"{(p.Fraction * size).ToString("	# data: numbers and units only
 Nota.Application/Accent.cs	$"T3.4 AccentBright/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown

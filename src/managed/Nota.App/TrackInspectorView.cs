@@ -286,7 +286,7 @@ internal sealed class TrackInspectorView : UserControl
     {
         var sw = new Border
         {
-            Height = 18, Margin = new Thickness(2), CornerRadius = NotaRadius.Badge, Background = fill,
+            Height = 18, Margin = new Thickness(2), CornerRadius = NotaRadius.Cell, Background = fill,
             BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
             Cursor = new Cursor(StandardCursorType.Hand),
         };
@@ -331,7 +331,7 @@ internal sealed class TrackInspectorView : UserControl
 
     private static Control Title(IBrush color, string title, string sub)
     {
-        var dot = new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Clip, Background = color, VerticalAlignment = VerticalAlignment.Center };
+        var dot = new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Field, Background = color, VerticalAlignment = VerticalAlignment.Center };
         var name = new TextBlock
         {
             Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
@@ -365,7 +365,7 @@ internal sealed class TrackInspectorView : UserControl
         };
         var chip = new Border
         {
-            Height = 22, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = tb,
+            Height = 22, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = tb,
             Background = on ? fill : NotaPalette.SurfaceRaised, BorderBrush = on ? fill : NotaPalette.Seam,
             Cursor = new Cursor(StandardCursorType.Hand),
         };

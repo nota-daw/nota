@@ -122,7 +122,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -171,7 +171,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             var b = new Border
             {
-                Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
+                Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = content, VerticalAlignment = VerticalAlignment.Center,
             };
             void Paint()
@@ -263,7 +263,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             IBrush restBorder = on ? NotaPalette.BorderBrass : Brushes.Transparent;
             var box = new Border
             {
-                CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                 Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent, BorderBrush = restBorder, Child = row,
             };
             ToolTip.SetTip(box, Loc.F("device.rhythm.midi_click_select_and_play", RM.VoiceNames[v], DeviceCardKit.NoteName(RM.MidiNotes[v])));
@@ -328,7 +328,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             Text = sampleMode ? sampleName : "Load file…", FontSize = 7, FontWeight = FontWeight.SemiBold, MaxWidth = 90,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
-        if (sampleMode) fileText.FontFamily = NotaFonts.MonoFamily;
+        if (sampleMode) fileText.FontFamily = NotaFonts.UiFamily;
         var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { folder, fileText } }, fileText,
             () => LoadSample(kit, sel), () => sampleMode);
         readouts.Add(() => folder.Foreground = sampleMode ? NotaPalette.TextPrimary : NotaPalette.TextStrong);
@@ -614,7 +614,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             int bb = b;
             var tb = new TextBlock { Text = RM.BankNames[b], FontSize = 7, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var cell = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var cell = new Border { CornerRadius = NotaRadius.Cell, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             ToolTip.SetTip(cell, Loc.F("device.rhythm.bank_play_and_edit_this", RM.BankNames[b]));
             cell.PointerPressed += (_, e) =>
             {
@@ -657,7 +657,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var bankBox = new Border
         {
             Background = NotaPalette.BgSunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = bankRow,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = bankRow,
         };
 
         var stepCount = Mono("", TextTertiary);

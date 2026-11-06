@@ -451,7 +451,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             pad.Reset = () => { engine.BeginUndoGroup(); Once("padx", 0.5f); Once("pady", 0.5f); engine.EndUndoGroup(); Refresh(); };
             readouts.Add(() => pad.SetValues(G("padx"), G("pady"), G("padz")));
             if (I("padx") is var pi and >= 0) MidiLearn.Bind(pad, MidiTarget.PluginParam(track, -1, pi), "Pad X");
-            var legendText = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
+            var legendText = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
             readouts.Add(() => legendText.Text = $"X {Bip(G("padx"))} · Y {Bip(G("pady"))} · Z {Pct(G("padz"))}");
             ToolTip.SetTip(pad, Loc.T("device.twin.pad_hint"));
             return legend ? new StackPanel { Spacing = 3, Children = { pad, legendText } } : pad;
@@ -551,7 +551,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             SourceName = k => k >= 0 && k < Nota.Application.Twin.TwinMatrix.Sources.Length ? Nota.Application.Twin.TwinMatrix.Sources[k] : "",
             DestinationName = k => Nota.Application.Twin.TwinMatrix.DestinationName(engine, track, k),
         };
-        var routeCount = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var routeCount = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var offGridText = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var offGrid = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = Glyph.WithChevron(offGridText, 7), VerticalAlignment = VerticalAlignment.Center };
         List<TwinPatchMatrix.Cell> hidden = new();
@@ -713,7 +713,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Nota.Application.Twin.TwinPatterns.Do(engine, track, a, iarg, farg);
             LoadPats(); SyncGrid(); Refresh();
         }
-        var stepInfo = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Width = 130, TextTrimming = TextTrimming.CharacterEllipsis };
+        var stepInfo = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Width = 130, TextTrimming = TextTrimming.CharacterEllipsis };
         void ShowStep()
         {
             var p = Pat();
@@ -844,7 +844,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         Control SeqSwing()
         {
             int si = I("seq.swing");
-            var value = new TextBlock { Width = 30, FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+            var value = new TextBlock { Width = 30, FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             var knob = new Knob(G("seq.swing"), 1.0) { Inline = true, Accent = true, Default = 0, Format = v => Pct((float)v) };
             knob.ValueChanged += v => { SetP("seq.swing", (float)v); value.Text = Pct((float)v); };
             knob.GestureBegin += () => Begin("seq.swing");
@@ -1106,7 +1106,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             ToolTip.SetTip(strip, Loc.T("device.twin.the_morph_as_it_sounds_now"));
             TextBlock End(string t, bool edited) => new()
             {
-                Text = t, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center,
+                Text = t, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center,
                 Foreground = edited ? Brass : NotaPalette.TextFaint,
             };
             var ends = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 2 };
@@ -1139,7 +1139,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Control SideAction(string text, string tip, Nota.Application.Twin.TwinSides.Edit edit)
             {
                 var tb = new TextBlock { Text = text, FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Height = 16, CornerRadius = NotaRadius.Clip, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerEntered += (_, _) => { b.Background = NotaPalette.SurfaceHover; tb.Foreground = TextPrimary; };
                 b.PointerExited += (_, _) => { b.Background = Brushes.Transparent; tb.Foreground = TextSecondary; };
                 ToolTip.SetTip(b, tip);

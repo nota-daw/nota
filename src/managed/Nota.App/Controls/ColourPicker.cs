@@ -130,9 +130,9 @@ internal sealed class ColourPicker : StackPanel
                 }
                 _builtFor = Key;
             }
-            var rr = new RoundedRect(r, NotaRadius.ControlValue);
+            var rr = new RoundedRect(r, NotaRadius.FieldValue);
             using (ctx.PushClip(rr)) ctx.DrawImage(_bmp, new Rect(_bmp.Size), r);
-            ctx.DrawRectangle(null, new Pen(NotaPalette.Rule, 1), new RoundedRect(r.Deflate(0.5), NotaRadius.ControlValue));
+            ctx.DrawRectangle(null, new Pen(NotaPalette.Rule, 1), new RoundedRect(r.Deflate(0.5), NotaRadius.FieldValue));
             DrawHandle(ctx, r);
         }
 
@@ -191,7 +191,7 @@ internal sealed class ColourPicker : StackPanel
         {
             double x = Math.Round(r.Width * Owner._h / 360);
             var bar = new Rect(x - 2, -2, 4, r.Height + 4);
-            ctx.DrawRectangle(NotaPalette.HandleSel, new Pen(NotaPalette.Seam, 1), new RoundedRect(bar, NotaRadius.BarValue));
+            ctx.DrawRectangle(NotaPalette.HandleSel, new Pen(NotaPalette.Seam, 1), new RoundedRect(bar, NotaRadius.FineValue));
         }
     }
 }

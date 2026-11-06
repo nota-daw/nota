@@ -136,12 +136,12 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
 
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 6, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
+        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
         Action applyFilter = () => { };
         Action applyOsc = () => { };
         Action showTab = () => { };
@@ -188,7 +188,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
         static TextBlock Section(string t, IBrush? c = null) => new()
         {
@@ -203,7 +203,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };
@@ -718,7 +718,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 var cell = new Border
                 {
                     Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Badge, Padding = new Thickness(3, 2, 3, 1),
+                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 1),
                     Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = box,
                 };
                 if (I(id) is var pi and >= 0)
@@ -856,7 +856,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var box = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 5), Child = g,
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 5), Child = g,
             };
             readouts.Add(() =>
             {
@@ -1055,7 +1055,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var box = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(3, 2), Child = row,
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(3, 2), Child = row,
             };
             readouts.Add(() =>
             {

@@ -127,9 +127,9 @@ internal sealed class TwinExpressionPad : Control
         ctx.DrawEllipse(live ? NotaPalette.Accent : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), p, 6, 6);
     }
 
-    private static void Label(DrawingContext ctx, string text, double x, double y, bool rightAlign)
+    private void Label(DrawingContext ctx, string text, double x, double y, bool rightAlign)
     {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, NotaPalette.TextTertiary);
+        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, NotaPalette.TextTertiary, this);
         ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
     }
 }
@@ -518,7 +518,7 @@ internal sealed class TwinStepGrid : Control
         NotaGraph.Window(ctx, r);
         if (Pattern is null) return;
         double cw = CellW, top = 18, barH = r.Height - top - 16;
-        var mono = NotaFonts.Mono;
+        var mono = NotaFonts.Sans;
         for (int c = 0; c < 16; c++)
         {
             int st = Page * 16 + c;
@@ -532,7 +532,7 @@ internal sealed class TwinStepGrid : Control
             if (!s.IsRest)
             {
                 string label = Nota.Application.Twin.TwinPatterns.NoteName(s.Notes[0]) + (s.Notes.Count > 1 ? $"+{s.Notes.Count - 1}" : "");
-                var ft = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, 7.5, NotaPalette.TextSecondary);
+                var ft = new NotaFormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, 7.5, NotaPalette.TextSecondary, this);
                 ctx.DrawText(ft, new Point(x + Math.Max(1, (cw - ft.Width) / 2), 5));
                 double vh = barH * vel / 127.0;
                 ctx.FillRectangle(dragging ? NotaPalette.Accent : NotaPalette.VizInk, new Rect(x + cw * 0.3, top + barH - vh, cw * 0.4, vh));
@@ -688,7 +688,7 @@ internal sealed class TwinValueWell : Border
 {
     private readonly TextBlock _text = new()
     {
-        FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = NotaPalette.TextPrimary,
+        FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobValue, Foreground = NotaPalette.TextPrimary,
         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
     };
     private double _value, _lastY;
@@ -706,7 +706,7 @@ internal sealed class TwinValueWell : Border
         Background = NotaPalette.BgSunken;
         BorderBrush = NotaPalette.Rule;
         BorderThickness = new Thickness(1);
-        CornerRadius = NotaRadius.Clip;
+        CornerRadius = NotaRadius.Cell;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
         Child = _text;
         PointerEntered += (_, _) => Paint();
@@ -786,7 +786,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
 {
     internal readonly record struct Cell(int Slot, int Src, int Dst, float Depth, float Other);
 
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface Mono = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;
     private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();
@@ -912,11 +912,11 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
         if (w < 40 || h < 30 || _rows.Length == 0 || _cols.Length == 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
         double rh = RowH, cw = ColW;
-        var corner = new FormattedText(Corner, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextFaint);
+        var corner = new NotaFormattedText(Corner, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextFaint, this);
         ctx.DrawText(corner, new Point(2, (HeadH - corner.Height) / 2));
         for (int c = 0; c < _cols.Length; c++)
         {
-            var t = new FormattedText(DestinationName(_cols[c]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextSecondary)
+            var t = new NotaFormattedText(DestinationName(_cols[c]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextSecondary, this)
                 { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(RowHdrW + c * cw + (cw - t.Width) / 2, (HeadH - t.Height) / 2));
         }
@@ -930,7 +930,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
         {
             double y = HeadH + r * rh;
             ctx.DrawLine(rule, new Point(0, Math.Round(y) + 0.5), new Point(w, Math.Round(y) + 0.5));
-            var t = new FormattedText(SourceName(_rows[r]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary)
+            var t = new NotaFormattedText(SourceName(_rows[r]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary, this)
                 { MaxTextWidth = RowHdrW - 6, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(2, y + (rh - t.Height) / 2));
             for (int c = 0; c < _cols.Length; c++)
@@ -947,13 +947,13 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
                         double ox = Math.Round(mid + half * cb.Other) + 0.5;
                         ctx.DrawLine(tick, new Point(ox, cell.Bottom - 5), new Point(ox, cell.Bottom - 1));
                     }
-                    var v = new FormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextPrimary);
+                    var v = new NotaFormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextPrimary, this);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - 3 - v.Height) / 2));
                 }
                 else
                 {
                     ctx.DrawRectangle(NotaPalette.BgSunken, null, cell, 2, 2);
-                    var v = new FormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextFaint);
+                    var v = new NotaFormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextFaint, this);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }
             }
