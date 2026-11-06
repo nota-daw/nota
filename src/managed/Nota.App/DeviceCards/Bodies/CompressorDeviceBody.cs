@@ -469,7 +469,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // and auto-release), the window the graph and the timings cover, and the GR peak.
         Border MotionBox()
         {
-            var stack = new StackPanel { Spacing = 2, Children = { Caps("LIVE") } };
+            var stack = new StackPanel { Spacing = 2, Children = { Caps(Loc.T("device.compressor.live_caps")) } };
             Control Line(string name, Func<string> v)
             {
                 var val = Mono("", 8, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;

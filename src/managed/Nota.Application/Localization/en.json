@@ -800,6 +800,7 @@
     "device.compressor.key_source_internal_keys_off": "Key source — Internal keys off this track; pick another track, or one pad or chain of it, to duck or pump against it",
     "device.compressor.listen_hear_the_filtered_key": "Listen — hear the filtered key instead of the output, to set HP / LP by ear",
     "device.compressor.listen_only_the_key_is": "Listen: only the key is heard · {0} {1} · HP {2} · LP {3}",
+    "device.compressor.live_caps": "LIVE",
     "device.compressor.make_up_gain_click_types": "Make-up gain. ⌥-click types, double-click resets.",
     "device.compressor.rise_recovery_hits": "90 % rise {0} · recovery {1} · {2}",
     "device.compressor.stereo_link_one_reduction_for": "Stereo link — one reduction for both channels; off, left and right compress on their own",
