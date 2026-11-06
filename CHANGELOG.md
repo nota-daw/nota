@@ -57,6 +57,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
 - **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
   playing its pattern.
+- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
+  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
+  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
+  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
+  applies at once, in every theme, tuned to each so it stays readable; a colour that would
+  be confused with the record red, mute, solo or the meter green, or a grey, is explained
+  and not applied. Nota Remote follows. Orange looks exactly as before.
 
 ### Fixed
 - **Default Projects/Samples folders follow the OS locations** (#522): the browser and

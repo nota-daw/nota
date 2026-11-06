@@ -2561,6 +2561,16 @@ Nota.App/Theme/NotaColourTheme.cs	name must be 1–40 characters	# data: diagnos
 Nota.App/Theme/NotaColourTheme.cs	the file must hold one JSON object	# data: diagnostics for people writing a theme file
 Nota.App/WelcomeWindow.cs	$"  ·  {NotaNum.Unit(p.Fraction * 100, "	# data: numbers and units only
 Nota.App/WelcomeWindow.cs	$"{(p.Fraction * size).ToString("	# data: numbers and units only
+Nota.Application/Accent.cs	$"T3.4 AccentBright/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	$"ΔE Accent/Track{i}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	$"ΔE Accent/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	$"Δab Accent/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	Accent	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Mute	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Panel	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Record	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Solo	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Success	# data: colour token name (theme-file key, spec 084)
 Nota.Application/Editing/SnapGrid.cs	1 bar	# data: note-value names of the snap ladder; the bar steps are shown through Loc in NameOf
 Nota.Application/Editing/SnapGrid.cs	2 bars	# data: note-value names of the snap ladder; the bar steps are shown through Loc in NameOf
 Nota.Application/Editing/SnapGrid.cs	4 bars	# data: note-value names of the snap ladder; the bar steps are shown through Loc in NameOf

@@ -101,6 +101,18 @@ settings carry over: Dark → Studio Dark, Light → Studio Light, System → fo
 the two Studio themes. An unknown or wrong-kind id falls back to the Studio theme of the
 kind needed (`Nota.Application.Appearance`).
 
+**Accent.** Preferences → Appearance → Accent picks the accent colour (specs/084, #311): a
+preset (Orange — the default — Lime, Aqua, Sky, Violet, Magenta, Pink) or a custom colour.
+One choice for the whole app, worn in whichever theme is active. It is not stored in the
+themes: `Nota.Application.AccentColours` re-colours a theme's accent family in OKLCH — each
+token keeps its lightness relation to the theme's own orange and takes the new hue; the
+washes (`AccentDim`, `AccentEdge`, `AccentMute`, `AccentSubtle`, `BorderBrass`) keep the
+theme's lightness — and moves the accent's lightness by the smallest step that passes the
+bar when it would fail. Orange is the theme file itself. A custom colour that no lightness
+within reach makes readable, a grey, or one that sits on a state colour is refused, never
+worn. The accented theme is what the palette, Fluent's ramp, the theme cards and Nota
+Remote get. Where the accent goes does not change.
+
 **Adding a theme.** Add `Theme/Themes/<id>.json` with every token and append its id to
 `NotaThemes.BuiltInOrder`. Nothing else names a theme. The smoke test checks the file
 against the catalogue and the readability bar.
@@ -121,6 +133,19 @@ Studio: WCAG where Studio meets it, Studio's own value where it does not.
 | T3.7 | The nine track colours, pairwise | ΔE ≥ 12 |
 | T3.8 | `Accent`, `Mute`, `Solo`, `Record`, pairwise | ΔE ≥ 15 |
 | T3.9 | `RecordInk` on `Record`, `SuccessInk` on `Success` | 4.5 |
+
+Every accent a theme can wear (the presets, and any custom colour the picker accepts) meets
+T3.4, T3.5 and T3.8, and two rules more (specs/084 research R3):
+
+| | Pairing | Minimum |
+|---|---|---|
+| A1 | `Accent` vs `Success` (the meter green) | ΔE ≥ 15 |
+| A2 | `Accent` vs `Record`, `Mute`, `Solo`, `Success`, colour only (Δa\*b\*, lightness left out) | 15 |
+| A3 | A preset's `Accent` vs the nine track colours | ΔE ≥ 15 |
+
+A2 keeps a lighter or darker copy of a state colour out; a custom colour is judged on itself
+as well as on what it becomes. The shipped orange meets all three (its tightest is A2 vs
+`Mute` in Ember Paper, 16.7).
 
 Track colours are not compared with state colours: solo blue is the Keys track blue by
 design. **Known gap:** in Studio Light the accent line on the ground (2.39) and faint ink
@@ -262,7 +287,10 @@ ground) and `SurfaceInset` `#232427` / `#DCDEE0` (rail, sunken chip) for custom 
 | `Brush.AccentDeep` | pressed | `#C77612` | `#D47800` | Pressed accent |
 | `Brush.AccentDim` | accent-dim | `#C77612` | `#F7C27A` | The soft accent |
 
-Fluent's `SystemAccentColor` ramps are retinted to the orange, so stock controls match.
+The values are the default, Orange. The user's accent choice replaces this family (and the
+ramp, and `TextOnAccent` by the derived ink) — see § Colour themes, **Accent**.
+
+Fluent's `SystemAccentColor` ramps are retinted to the accent, so stock controls match.
 
 ### Semantics
 
@@ -877,6 +905,10 @@ Places where a screen's needs override a general rule, kept on purpose:
 - **Compact mixer meters are 18 px a channel**, 3 apart, against the 11 / 5 meter rule
   (specs/070, #386): the wide meter is what keeps a 72 px compact strip readable, and it is
   also the strip's fader. Zones, the hold mark and the −60…+6 scale are unchanged.
+
+- **The accent picker's spectrum** (Settings → Appearance → Accent → Custom, specs/084) is
+  the one rainbow in the app: a saturation/brightness area and a hue strip, drawn as bitmaps
+  (no gradient brush). It is the thing being chosen, content like a waveform, not chrome.
 
 ## Known drift
 

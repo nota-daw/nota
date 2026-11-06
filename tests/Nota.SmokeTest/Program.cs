@@ -83,6 +83,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: accent --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAccent()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
     Console.WriteLine("-- localization: language --");

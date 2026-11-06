@@ -531,7 +531,7 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
-  Studio look — one orange accent for what is live or chosen, semantic mute / solo / arm
+  Studio look — one accent (Nota's chosen accent) for what is live or chosen, semantic mute / solo / arm
   colours, sentence-case labels — and a returning phone paints in its last theme at once.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
@@ -1335,8 +1335,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   orange accent; the default, and what a DAW wants for long sessions in a dark room),
   **Studio Light** (the same system in light greys, the orange a shade deeper), and
   **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
-  A theme changes colours only — track colours included — never the layout. Panels dock edge
-  to edge on thin seams; orange marks only what is playing, selected or switched on, and a
+  A theme changes colours only — track colours included — never the layout; the accent
+  colour is a separate choice (see [Preferences](#preferences)). Panels dock edge
+  to edge on thin seams; orange (or the chosen accent) marks only what is playing, selected or switched on, and a
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
@@ -1444,7 +1445,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  live and is remembered. **Accent** — the colour of what is live or chosen: seven presets
+  (Orange — the default — Lime, Aqua, Sky, Violet, Magenta, Pink) or **Custom**, a colour
+  picker (saturation/brightness area, hue strip, hex field) that previews the colour in all
+  four themes. One accent for every theme, tuned to each so it stays readable; a grey or a
+  colour too close to the record red, mute, solo or the meter green is refused with the
+  reason. Applied live, Esc in the picker puts the previous one back. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
   remembered; timeline, piano roll and audio editor zoom work on top of it.   **Waveform** —
   **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Fade audio
