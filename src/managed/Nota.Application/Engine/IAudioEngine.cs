@@ -764,6 +764,8 @@ public interface IAudioEngine : IDisposable
     int RackChainInstrumentHeldNotes(int trackId, int chain, int[] outNotes);
     void RackChainInstrumentAction(int trackId, int chain, int id, int iarg, float farg);
     bool RackSetChainInstrumentStateUndoable(int trackId, int chain, byte[] data);
+    /// <summary>After param writes to a chain instrument: one undo step from <paramref name="before"/> (its state read first) to now.</summary>
+    bool RackChainInstrumentRecordStateUndo(int trackId, int chain, byte[] before);
     /// <summary>Built-in Sampler settings for a chain instrument. False if it isn't a Sampler.</summary>
     bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info);
     /// <summary>Sets a chain Sampler's root note (lock-free). False if the chain isn't a Sampler.</summary>
@@ -931,6 +933,7 @@ public interface IAudioEngine : IDisposable
     int RackDevChainInstrumentHeldNotes(int trackId, int deviceIndex, int chain, int[] outNotes);
     void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg);
     bool RackDevSetChainInstrumentStateUndoable(int trackId, int deviceIndex, int chain, byte[] data);
+    bool RackDevChainInstrumentRecordStateUndo(int trackId, int deviceIndex, int chain, byte[] before);
     void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain);
     string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain);
     byte[] RackDevGetChainInstrumentState(int trackId, int deviceIndex, int chain);

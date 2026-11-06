@@ -792,7 +792,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
     private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();
     private IReadOnlyList<Cell> _cells = Array.Empty<Cell>();
     private const double HeadH = 16, RowHdrW = 72;
-    private (int r, int c)? _drag;
+    private (int s, int d)? _drag; // the route being dragged, by source and destination (the grid may re-order under it)
     private double _dragY, _dragV;
 
     public Func<int, string> SourceName = _ => "";
@@ -875,7 +875,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
         if (ri < 0) return;
         int s = _rows[ri], d = _cols[ci];
         var cur = Find(s, d);
-        _drag = (ri, ci); _dragY = p.Y; _dragV = cur?.Depth ?? 0.5;
+        _drag = (s, d); _dragY = p.Y; _dragV = cur?.Depth ?? 0.5;
         GestureBegin?.Invoke(s, d);
         if (cur == null) DepthChanged?.Invoke(s, d, 0.5f);
         e.Pointer.Capture(this);
@@ -889,20 +889,20 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
         bool fine = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) != 0;
         _dragV = Math.Clamp(_dragV + (_dragY - y) / (fine ? 1000.0 : 100.0), -1, 1);
         _dragY = y;
-        DepthChanged?.Invoke(_rows[dg.r], _cols[dg.c], (float)Math.Round(_dragV * 100) / 100f);
+        DepthChanged?.Invoke(dg.s, dg.d, (float)Math.Round(_dragV * 100) / 100f);
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
         if (_drag is not { } dg) return;
-        GestureEnd?.Invoke(_rows[dg.r], _cols[dg.c]);
+        GestureEnd?.Invoke(dg.s, dg.d);
         _drag = null;
         InvalidateVisual();
         e.Pointer.Capture(null);
     }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag is { } dg) { GestureEnd?.Invoke(_rows[dg.r], _cols[dg.c]); _drag = null; InvalidateVisual(); }
+        if (_drag is { } dg) { GestureEnd?.Invoke(dg.s, dg.d); _drag = null; InvalidateVisual(); }
         base.OnPointerCaptureLost(e);
     }
 

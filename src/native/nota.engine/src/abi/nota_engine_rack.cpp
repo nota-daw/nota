@@ -114,6 +114,13 @@ int32_t nota_rack_chain_instrument_held_notes(const NotaEngine* e, int32_t t, in
 void nota_rack_chain_instrument_action(NotaEngine* e, int32_t t, int32_t c, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->rackChainInstrumentAction(t, -1, c, id, iarg, farg);
 }
+int32_t nota_rack_chain_instrument_record_state_undo(NotaEngine* e, int32_t t, int32_t c, const uint8_t* before, int32_t size) {
+    return e && ENG(e)->recordInstrumentState(t, -1, c, before, size) ? 1 : 0;
+}
+int32_t nota_rackdev_chain_instrument_record_state_undo(NotaEngine* e, int32_t t, int32_t di, int32_t c, const uint8_t* before,
+    int32_t size) {
+    return e && ENG(e)->recordInstrumentState(t, di, c, before, size) ? 1 : 0;
+}
 int32_t nota_rack_chain_instrument_set_state_undoable(NotaEngine* e, int32_t t, int32_t c, const uint8_t* data, int32_t size) {
     return e && ENG(e)->instrumentSetStateUndoable(t, -1, c, data, size) ? 1 : 0;
 }

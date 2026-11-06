@@ -30,14 +30,14 @@ internal static class TwinTests
     private const int Sr = 48000;
     private const int Params = 965; // globals 21 + 2 parts × (part 144 + 2 sides × 164)
 
-    private static int Pi(NotaEngine e, int t, string id)
+    private static int Pi(IAudioEngine e, int t, string id)
     {
         int n = e.PluginParamCount(t, -1);
         for (int i = 0; i < n; i++) if (e.PluginParamId(t, -1, i) == id) return i;
         return -1;
     }
-    private static float G(NotaEngine e, int t, string id) => e.PluginParamGet(t, -1, Pi(e, t, id));
-    private static void P(NotaEngine e, int t, string id, float v) => e.PluginParamSet(t, -1, Pi(e, t, id), v);
+    private static float G(IAudioEngine e, int t, string id) => e.PluginParamGet(t, -1, Pi(e, t, id));
+    private static void P(IAudioEngine e, int t, string id, float v) => e.PluginParamSet(t, -1, Pi(e, t, id), v);
 
     private static double Rms(float[] st, int from = 0)
     {
@@ -1306,6 +1306,66 @@ internal static class TwinTests
             bool reads = read is not null && read[0].Steps[2].Notes.SequenceEqual(new[] { 64 });
             bool undone = e.Undo() && TwinPatterns.FromState(px.GetPluginState(r, -1))![0].Steps[2].IsRest;
             yield return (reads && undone, "a Twin on a rack chain: its patterns read through the chain, and a pattern edit is an undo step");
+        }
+
+        // Back to Single: Upper's held notes release instead of stopping dead.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            P(e, t, "mode", 0.5f); P(e, t, "lo.vol", 0f); P(e, t, "up.a.aenvr", 0.75f); P(e, t, "up.b.aenvr", 0.75f);
+            Render(e, 512);
+            e.TrackNoteOn(t, 60, 0.8f);
+            Render(e, Sr / 4);
+            e.TrackNoteOff(t, 60);
+            P(e, t, "mode", 0f);
+            Render(e, 1024);
+            double tail = Rms(Render(e, Sr / 10));
+            yield return (Db(tail) > -50, $"switching Layer to Single lets Upper's notes ring out ({Db(tail):0} dB 25 ms on)");
+        }
+
+        // A whole 64-step pattern written in one go undoes in one step, and the history before it stays.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            e.ClearUndoHistory();
+            TwinPatterns.Do(e, t, TwinPatterns.Act.AddStepNote, 0 << 8 | 60, 0.8f);
+            TwinPatterns.WritePattern(e, t, 0, Enumerable.Range(0, 64).Select(i => i % 2 == 0 ? "C3 E3:100:50%" : "G3:90:40%").ToArray());
+            bool written = TwinPatterns.FromState(e.GetPluginState(t, -1))![0].Length == 64;
+            bool back = e.Undo() && TwinPatterns.FromState(e.GetPluginState(t, -1))![0] is { Length: 16 } p1 && p1.Steps[0].Notes.SequenceEqual(new[] { 60 });
+            bool first = e.Undo() && TwinPatterns.FromState(e.GetPluginState(t, -1))![0].Steps[0].IsRest;
+            yield return (written && back && first, "writing a 64-step pattern is one undo step, and the edit before it still undoes");
+        }
+
+        // On a rack chain: a side copy undoes (the chain's params have no undo target of their own),
+        // and To clip refuses (the clip would play every chain).
+        {
+            using var e = new NotaEngine();
+            int r = e.AddInstrumentRackTrack();
+            e.RackAddChain(r, 18);
+            var px = RackChainEngineProxy.Create(e, 0);
+            P(px, r, "lo.a.ldcut", 0.2f); P(px, r, "lo.b.ldcut", 0.8f);
+            e.ClearUndoHistory();
+            TwinSides.Apply(px, r, TwinSides.Edit.CopyAToB);
+            bool copied = Math.Abs(G(px, r, "lo.b.ldcut") - 0.2f) < 1e-6;
+            bool undone = e.Undo() && Math.Abs(G(px, r, "lo.b.ldcut") - 0.8f) < 1e-6;
+            bool refused = TwinPatterns.ToClipBlock(px, r, 0) == TwinPatterns.ClipBlock.InRack && TwinPatterns.ToClip(px, r, 0, 0) == -1;
+            yield return (copied && undone && refused, "a Twin on a rack chain: A → B undoes, To clip refuses");
+        }
+
+        // To clip: an empty motion step plays the knob, as the sequencer does.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            TwinPatterns.WritePattern(e, t, 0, new[] { "C3", "E3", "G3", "C4" });
+            int pid = Pi(e, t, "lo.a.ldcut");
+            P(e, t, "lo.a.ldcut", 0.6f);
+            TwinPatterns.Do(e, t, TwinPatterns.Act.MotionTarget, pid);
+            TwinPatterns.Do(e, t, TwinPatterns.Act.MotionSet, 0, 0.1f);
+            TwinPatterns.Do(e, t, TwinPatterns.Act.MotionSet, 2, 0.9f);
+            TwinPatterns.ToClip(e, t, 0, 0);
+            var pts = e.GetAutomationPoints(t, e.AddPluginAutomationLane(t, -1, "lo.a.ldcut"));
+            bool knob = pts.Any(p => Math.Abs(p.Beat - 0.25) < 1e-9 && Math.Abs(p.Value - 0.6f) < 1e-4);
+            yield return (knob, $"To clip holds the knob's value on an empty motion step ({pts.Length} points)");
         }
 
         // Transport stopped: a held key runs the sequencer on its own clock (Seq from step 1, Arp over

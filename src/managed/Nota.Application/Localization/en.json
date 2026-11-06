@@ -1721,6 +1721,7 @@
     "device.twin.the_pattern_that_plays_and_you_edit": "The pattern that plays and that you edit (switches at the end of the running one)",
     "device.twin.the_side_the_knobs_edit": "The side the knobs edit",
     "device.twin.to_clip": "To clip",
+    "device.twin.to_clip_in_rack": "To clip: a Twin on a rack chain can't write its pattern to a clip \u2014 the clip would play every chain of the rack.",
     "device.twin.to_clip_layer_one_part": "To clip: in Layer a clip plays both parts — set the sequencer's part to Both, or play the pattern as it is.",
     "device.twin.to_clip_split_both_parts": "To clip: in Split a clip's notes play one part each, by the split key — pick the sequencer's part first.",
     "device.twin.to_clip_split_other_side": "To clip: some of the pattern's notes are on the other side of the split key from the part the sequencer plays.",

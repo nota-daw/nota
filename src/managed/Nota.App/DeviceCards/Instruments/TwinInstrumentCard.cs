@@ -152,6 +152,8 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         void SetP(string id, float v) { if (I(id) is var i and >= 0) engine.PluginParamSet(track, -1, i, Math.Clamp(v, 0f, 1f)); }
         void Begin(string id) { if (I(id) >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); }
         void End(string id) { if (I(id) >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); }
+        // A one-shot change (a switch, a segment, a reset): its own undo step and automation write.
+        void Once(string id, float v) { Begin(id); SetP(id, v); End(id); }
         int Sel(string id, int n) => Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1);
 
         int sideIx = EditSides.TryGetValue(track, out var es) ? es : 0;
@@ -171,6 +173,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             foreach (var r in readouts) r();
             foreach (var d in dims) d();
         }
+        void SetParam(string id, float v) { Once(id, v); Refresh(); }
 
         static TextBlock Cap(string t) => new()
         {
@@ -223,7 +226,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         Control Chips(string id, string[] names, double padX = 6)
         {
             int n = names.Length;
-            var seg = Segments(names, () => Sel(id, n), iv => { SetP(id, iv / (float)(n - 1)); Refresh(); }, out var sync, padX: padX);
+            var seg = Segments(names, () => Sel(id, n), iv => SetParam(id, iv / (float)(n - 1)), out var sync, padX: padX);
             readouts.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(seg, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
             return seg;
@@ -231,7 +234,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
 
         Control Toggle(string label, string id)
         {
-            var host = Switch(label, () => G(id) >= 0.5f, () => { SetP(id, G(id) >= 0.5f ? 0f : 1f); Refresh(); }, out var sync);
+            var host = Switch(label, () => G(id) >= 0.5f, () => SetParam(id, G(id) >= 0.5f ? 0f : 1f), out var sync);
             readouts.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(host, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
             return host;
@@ -295,7 +298,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             readouts.Add(() => { if (!well.Dragging) well.Value = G(id); });
             MidiLearn.Bind(well, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
             ValueEntry.Attach(well, ValueEntry.Probing(label, () => G(id), v => { SetP(id, (float)v); Refresh(); }, () => fmt(G(id)),
-                () => Begin(id), () => End(id), reset: () => { SetP(id, (float)well.Default); Refresh(); }), well.Readout);
+                () => Begin(id), () => End(id), reset: () => SetParam(id, (float)well.Default)), well.Readout);
             var name = new TextBlock
             {
                 Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary,
@@ -403,7 +406,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             var mode = Chips(S(l + "mode"), LfoModes, 5);
             DockPanel.SetDock(sw, Dock.Left); DockPanel.SetDock(mode, Dock.Right);
             switches.Children.Add(sw); switches.Children.Add(mode);
-            var shapes = Segments(LfoShapes, () => Sel(S(l + "shape"), 6), iv => { SetP(S(l + "shape"), iv / 5f); Refresh(); }, out var shapeSync, fill: true, padX: 2);
+            var shapes = Segments(LfoShapes, () => Sel(S(l + "shape"), 6), iv => SetParam(S(l + "shape"), iv / 5f), out var shapeSync, fill: true, padX: 2);
             readouts.Add(shapeSync);
             if (I(S(l + "shape")) is var si and >= 0) MidiLearn.Bind(shapes, MidiTarget.PluginParam(track, -1, si), engine.PluginParamName(track, -1, si));
             var knobs = n == 3
@@ -445,7 +448,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             pad.ZChanged = z => { SetP("padz", (float)z); Refresh(); };
             pad.GestureBegin = () => { Begin("padx"); Begin("pady"); Begin("padz"); };
             pad.GestureEnd = () => { End("padx"); End("pady"); End("padz"); };
-            pad.Reset = () => { SetP("padx", 0.5f); SetP("pady", 0.5f); Refresh(); };
+            pad.Reset = () => { engine.BeginUndoGroup(); Once("padx", 0.5f); Once("pady", 0.5f); engine.EndUndoGroup(); Refresh(); };
             readouts.Add(() => pad.SetValues(G("padx"), G("pady"), G("padz")));
             if (I("padx") is var pi and >= 0) MidiLearn.Bind(pad, MidiTarget.PluginParam(track, -1, pi), "Pad X");
             var legendText = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
@@ -489,9 +492,12 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             }
             f.ShowAt(at);
         }
+        // The rows and columns on show, kept per track and part across rebuilds: the user's picks
+        // stay where they put them; a route whose source or destination isn't shown takes an empty
+        // row / column (never the one just picked), and the grid grows to 8 × 6 before that.
         var prefKey = (track, PartKey);
-        if (!MatrixRowPrefs.TryGetValue(prefKey, out var rowPrefs)) MatrixRowPrefs[prefKey] = rowPrefs = new List<int>(DefaultMatrixRows);
-        if (!MatrixColPrefs.TryGetValue(prefKey, out var colPrefs)) MatrixColPrefs[prefKey] = colPrefs = new List<int>(DefaultMatrixCols(engine, track));
+        if (!MatrixRowPrefs.TryGetValue(prefKey, out var visRows)) MatrixRowPrefs[prefKey] = visRows = new List<int>();
+        if (!MatrixColPrefs.TryGetValue(prefKey, out var visCols)) MatrixColPrefs[prefKey] = visCols = new List<int>();
         // The part's routes, read through the card's own param map (the tick reads them often).
         List<TwinPatchMatrix.Cell> Cells()
         {
@@ -505,14 +511,38 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             }
             return l;
         }
-        // 6 × 5 at rest; up to 8 × 6 when the routes need it, so a patch's routes stay on the grid.
         const int GridRows = 6, GridCols = 5, MaxRows = 8, MaxCols = 6;
-        int[] Pick(IEnumerable<int> used, List<int> prefs, int n)
+        int keepRow = -1, keepCol = -1; // the row / column the user picked last: auto-fill leaves it
+        // Puts `k` on show: at `at` (a pick; swaps if it is shown elsewhere), or in the last row
+        // without routes (never `keep`), or failing that the last row.
+        static void Put(List<int> vis, int k, int at, int keep, ICollection<int> used)
         {
-            var l = new List<int>();
-            foreach (var u in used) if (!l.Contains(u) && l.Count < n) l.Add(u);
-            foreach (var p in prefs) if (!l.Contains(p) && l.Count < n) l.Add(p);
-            return l.ToArray();
+            int was = vis.IndexOf(k);
+            if (at >= 0)
+            {
+                if (was >= 0) (vis[was], vis[at]) = (vis[at], vis[was]);
+                else vis[at] = k;
+                return;
+            }
+            if (was >= 0) return;
+            for (int i = vis.Count - 1; i >= 0; i--)
+                if (i != keep && !used.Contains(vis[i])) { vis[i] = k; return; }
+            if (vis.Count > 0) vis[^1] = k;
+        }
+        static void Fit(List<int> vis, IEnumerable<int> usedSeq, IEnumerable<int> defaults, int min, int max, int keep)
+        {
+            var used = usedSeq.Distinct().ToList();
+            int n = Math.Clamp(used.Count, min, max);
+            foreach (var u in used) if (!vis.Contains(u) && vis.Count < n) vis.Add(u);
+            foreach (var d in defaults) if (!vis.Contains(d) && vis.Count < Math.Max(n, min)) vis.Add(d);
+            foreach (var u in used)
+                if (!vis.Contains(u))
+                {
+                    int free = -1;
+                    for (int i = vis.Count - 1; i >= 0 && free < 0; i--) if (i != keep && !used.Contains(vis[i])) free = i;
+                    if (free < 0) break; // the grid is full of routes: this one is off the grid
+                    vis[free] = u;
+                }
         }
         var matrix = new TwinPatchMatrix
         {
@@ -522,43 +552,79 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             DestinationName = k => Nota.Application.Twin.TwinMatrix.DestinationName(engine, track, k),
         };
         var routeCount = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        var offGrid = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var offGridText = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var offGrid = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = Glyph.WithChevron(offGridText, 7), VerticalAlignment = VerticalAlignment.Center };
+        List<TwinPatchMatrix.Cell> hidden = new();
         void SyncMatrix()
         {
             var cells = Cells();
-            int nr = Math.Clamp(cells.Select(c => c.Src).Distinct().Count(), GridRows, MaxRows);
-            int nc = Math.Clamp(cells.Select(c => c.Dst).Distinct().Count(), GridCols, MaxCols);
-            int[] rows = Pick(cells.Select(c => c.Src), rowPrefs, nr), cols = Pick(cells.Select(c => c.Dst), colPrefs, nc);
-            matrix.Set(rows, cols, cells);
+            Fit(visRows, cells.Select(c => c.Src), DefaultMatrixRows, GridRows, MaxRows, keepRow);
+            Fit(visCols, cells.Select(c => c.Dst), DefaultMatrixCols(engine, track), GridCols, MaxCols, keepCol);
+            matrix.Set(visRows.ToArray(), visCols.ToArray(), cells);
             routeCount.Text = $"{cells.Count} / {Nota.Application.Twin.TwinMatrix.Slots}";
-            int hidden = cells.Count(c => !rows.Contains(c.Src) || !cols.Contains(c.Dst));
-            offGrid.Text = hidden > 0 ? Loc.Plural("device.twin.routes_off_the_grid", hidden) : "";
+            hidden = cells.Where(c => !visRows.Contains(c.Src) || !visCols.Contains(c.Dst)).ToList();
+            offGrid.IsVisible = hidden.Count > 0;
+            offGridText.Text = hidden.Count > 0 ? Loc.Plural("device.twin.routes_off_the_grid", hidden.Count) : "";
         }
         readouts.Add(SyncMatrix);
+        // The routes off the grid, in a menu: picking one brings its source and destination on show.
+        offGrid.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(offGrid).Properties.IsLeftButtonPressed) return;
+            var f = new MenuFlyout();
+            foreach (var c in hidden)
+            {
+                var cv = c;
+                var mi = new MenuItem { Header = $"{matrix.SourceName(c.Src)} → {matrix.DestinationName(c.Dst)}" };
+                mi.Click += (_, _) =>
+                {
+                    var cells = Cells();
+                    Put(visRows, cv.Src, -1, keepRow, cells.Select(x => x.Src).ToHashSet());
+                    Put(visCols, cv.Dst, -1, keepCol, cells.Select(x => x.Dst).ToHashSet());
+                    keepRow = visRows.IndexOf(cv.Src); keepCol = visCols.IndexOf(cv.Dst);
+                    Refresh();
+                };
+                f.Items.Add(mi);
+            }
+            f.ShowAt(offGrid);
+            e.Handled = true;
+        };
         int Slot(int s, int d) => Cells().FirstOrDefault(c => c.Src == s && c.Dst == d).Slot;
-        string? gestId = null;
+        // One drag is one undo step: a new route (Add) and its depth on both sides join one group.
+        string? gestId = null, gestOther = null;
         bool creating = false;
         matrix.GestureBegin += (s, d) =>
         {
             int k = Slot(s, d);
             creating = k <= 0;
-            if (k > 0) { gestId = $"{Part}{sideKey}.m{k}amt"; Begin(gestId); }
+            if (creating) engine.BeginUndoGroup();
+            else { gestId = $"{Part}{sideKey}.m{k}amt"; Begin(gestId); }
         };
-        matrix.GestureEnd += (s, d) => { if (gestId is not null) End(gestId); gestId = null; creating = false; };
+        matrix.GestureEnd += (s, d) =>
+        {
+            if (gestId is not null) End(gestId);
+            if (gestOther is not null) End(gestOther);
+            if (creating) engine.EndUndoGroup();
+            gestId = gestOther = null;
+            creating = false;
+        };
         matrix.DepthChanged += (s, d, v) =>
         {
             int k = Slot(s, d);
             if (k <= 0)
             {
-                // A new route: the same depth on both sides, one undo step; the drag goes on from it.
                 k = Nota.Application.Twin.TwinMatrix.Add(engine, track, s, d, v, v, PartKey);
                 if (k <= 0) { ctx.Status(Loc.T("device.twin.matrix_full_64_routes")); return; }
-                gestId = $"{Part}{sideKey}.m{k}amt"; Begin(gestId);
+                if (creating)
+                {
+                    gestId = $"{Part}{sideKey}.m{k}amt"; Begin(gestId);
+                    gestOther = $"{Part}{otherKey}.m{k}amt"; Begin(gestOther); // a new route: both sides
+                }
                 SyncMatrix();
                 return;
             }
             SetP($"{Part}{sideKey}.m{k}amt", 0.5f + v / 2f);
-            if (creating) SetP($"{Part}{otherKey}.m{k}amt", 0.5f + v / 2f); // still a new route: both sides
+            if (gestOther is not null) SetP(gestOther, 0.5f + v / 2f);
             SyncMatrix();
         };
         matrix.Removed += (s, d) =>
@@ -569,9 +635,14 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         };
         matrix.HeaderClicked += (isRow, i) =>
         {
-            var prefs = isRow ? rowPrefs : colPrefs;
-            void Put(int k) { prefs.Remove(k); prefs.Insert(0, k); Refresh(); }
-            if (isRow) ShowSources(matrix, Put); else ShowDestinations(matrix, Put);
+            var vis = isRow ? visRows : visCols;
+            void Pick(int k)
+            {
+                Put(vis, k, i, -1, Array.Empty<int>());
+                if (isRow) keepRow = i; else keepCol = i;
+                Refresh();
+            }
+            if (isRow) ShowSources(matrix, Pick); else ShowDestinations(matrix, Pick);
         };
         SyncMatrix();
         var matrixHint = Note(Loc.F("device.twin.matrix_hint", sideIx == 0 ? "A" : "B"));
@@ -600,7 +671,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             foreach (var r in rows) p.Children.Add(r);
             return DimWhen(p, () => G(S(onId)) < 0.5f);
         }
-        var modFxType = Segments(ModFxTypes, () => Sel(S("modfxtype"), 4), iv => { SetP(S("modfxtype"), iv / 3f); Refresh(); }, out var modFxTypeSync, fill: true, padX: 1, fontSize: 8);
+        var modFxType = Segments(ModFxTypes, () => Sel(S("modfxtype"), 4), iv => SetParam(S("modfxtype"), iv / 3f), out var modFxTypeSync, fill: true, padX: 1, fontSize: 8);
         readouts.Add(modFxTypeSync);
         if (I(S("modfxtype")) is var mti and >= 0) MidiLearn.Bind(modFxType, MidiTarget.PluginParam(track, -1, mti), engine.PluginParamName(track, -1, mti));
         var fxBody = Chain(
@@ -695,7 +766,6 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             b.Background = on ? Brass : Raised;
             if (b.Child is TextBlock t) t.Foreground = on ? OnAccent : TextPrimary;
         }
-        void SetParam(string id, float v) { Begin(id); SetP(id, v); End(id); Refresh(); }
         var patPick = SeqPicker(() => $"Pattern {EditPat() + 1}", Loc.T("device.twin.the_pattern_that_plays_and_you_edit"),
             () => Enumerable.Range(1, 8).Select(i => $"Pattern {i}").ToArray(), k => { SetParam("seq.pattern", k / 7f); page = 0; LoadPats(); SyncGrid(); });
         var lenPick = SeqPicker(() => $"{Pat()?.Length ?? 16} steps", Loc.T("device.twin.pattern_length"), () => SeqLengths.Select(n => $"{n} steps").ToArray(),
@@ -718,6 +788,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 case Nota.Application.Twin.TwinPatterns.ClipBlock.LayerOnePart: ctx.Status(Loc.T("device.twin.to_clip_layer_one_part")); return;
                 case Nota.Application.Twin.TwinPatterns.ClipBlock.SplitBothParts: ctx.Status(Loc.T("device.twin.to_clip_split_both_parts")); return;
                 case Nota.Application.Twin.TwinPatterns.ClipBlock.SplitOtherSide: ctx.Status(Loc.T("device.twin.to_clip_split_other_side")); return;
+                case Nota.Application.Twin.TwinPatterns.ClipBlock.InRack: ctx.Status(Loc.T("device.twin.to_clip_in_rack")); return;
             }
             Nota.Application.Twin.TwinPatterns.ToClip(engine, track, EditPat(), at);
             ctx.NotifyChanged(); Refresh();
@@ -728,7 +799,13 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         var laneTargets = new List<(string Name, int Index)> { ("None", -1), ("Morph", I(Part + "morph")), ("Pad X", I("padx")), ("Pad Y", I("pady")), ("Pad Z", I("padz")) };
         foreach (var id in Nota.Application.Twin.TwinMatrix.SideDestinationIds)
             if (I(Side + id) is var li and >= 0) laneTargets.Add((Nota.Application.Twin.TwinMatrix.DestinationName(engine, track, Nota.Application.Twin.TwinMatrix.DestinationOfSide(id)) + $" ({(sideIx == 0 ? "A" : "B")})", li));
-        var lanePick = Segments(new[] { "1", "2", "3", "4" }, () => laneSel, k => { laneSel = k; SyncGrid(); Refresh(); }, out var laneSync, padX: 4);
+        var lanePick = Segments(new[] { "1", "2", "3", "4" }, () => laneSel, k =>
+        {
+            laneSel = k;
+            // Recording moves with the lane: the engine pauses the lane being recorded, not the old one.
+            if (motionRec) Nota.Application.Twin.TwinPatterns.Do(engine, track, Nota.Application.Twin.TwinPatterns.Act.MotionRecordArm, laneSel);
+            SyncGrid(); Refresh();
+        }, out var laneSync, padX: 4);
         readouts.Add(laneSync);
         var targetPick = SeqPicker(() =>
             {

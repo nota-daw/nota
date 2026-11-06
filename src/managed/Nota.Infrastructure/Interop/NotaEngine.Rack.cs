@@ -129,6 +129,12 @@ public sealed partial class NotaEngine
     public bool RackSetChainInstrumentStateUndoable(int trackId, int chain, byte[] data)
     { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentSetStateUndoable(_handle, trackId, chain, data, data.Length) != 0; }
 
+    public bool RackChainInstrumentRecordStateUndo(int trackId, int chain, byte[] before)
+    { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentRecordStateUndo(_handle, trackId, chain, before, before.Length) != 0; }
+
+    public bool RackDevChainInstrumentRecordStateUndo(int trackId, int deviceIndex, int chain, byte[] before)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainInstrumentRecordStateUndo(_handle, trackId, deviceIndex, chain, before, before.Length) != 0; }
+
     public bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info)
     { ThrowIfDisposed(); return NativeMethods.RackChainSamplerInfo(_handle, trackId, chain, out info) != 0; }
 

@@ -353,17 +353,53 @@ Instrument* Engine::editStateInstrument(int32_t trackId, int32_t deviceIndex, in
 // A change of an instrument's edit state is one mix-only undo step swapping it (as setEqBandText
 // does); nothing when it didn't change, or the instrument keeps none.
 void Engine::pushInstrumentEdit(int32_t trackId, int32_t deviceIndex, int32_t chain, std::vector<uint8_t> before,
-    std::vector<uint8_t> after) {
+    std::vector<uint8_t> after, MixKind kind) {
     if (before.empty() || after == before) return;
+    redoStack_.clear();
+    // Inside an open undo group (a whole pattern written step by step), the edits of one
+    // instrument fold into the group's entry for it: the first `before`, the latest `after`.
+    // So a long run of actions is one entry and can't push the group's start out of the history.
+    if (undoGroupDepth_ > 0 && undoStack_.size() > undoGroupBase_) {
+        for (auto it = undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_); it != undoStack_.end(); ++it)
+            for (auto& m : it->mix)
+                if (m.kind == kind && m.trackId == trackId && m.deviceIndex == deviceIndex &&
+                    m.paramIndex == chain) {
+                    noteStates_[static_cast<size_t>(m.after)] = std::move(after);
+                    return;
+                }
+    }
     noteStates_.push_back(std::move(before));
     noteStates_.push_back(std::move(after));
     const auto at = static_cast<float>(noteStates_.size() - 2);
-    undoStack_.push_back({nullptr, {MixChange{MixKind::InstrumentEdit, trackId, at, at + 1.0f, deviceIndex, chain}}});
+    undoStack_.push_back({nullptr, {MixChange{kind, trackId, at, at + 1.0f, deviceIndex, chain}}});
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
     }
-    redoStack_.clear();
+    compactNoteStates();
+}
+
+// The saved states (EQ-8 notes, instrument edit states) only the undo and redo history refers to:
+// once the store has grown well past what the history still holds, the rest is dropped and the
+// history's indices are renumbered. Index 0 stays the empty state.
+void Engine::compactNoteStates(bool force) {
+    if (!force && noteStates_.size() < std::max<size_t>(1024, 2 * noteStatesKept_)) return;
+    std::vector<std::vector<uint8_t>> kept(1);
+    std::unordered_map<size_t, size_t> remap;
+    auto keep = [&](float& v) {
+        const auto at = static_cast<size_t>(v);
+        if (at == 0 || at >= noteStates_.size()) return;
+        auto [it, fresh] = remap.try_emplace(at, kept.size());
+        if (fresh) kept.push_back(std::move(noteStates_[at]));
+        v = static_cast<float>(it->second);
+    };
+    for (auto* stack : {&undoStack_, &redoStack_})
+        for (auto& e : *stack)
+            for (auto& m : e.mix)
+                if (m.kind == MixKind::InstrumentEdit || m.kind == MixKind::InstrumentState || m.kind == MixKind::DeviceNotes)
+                    keep(m.before), keep(m.after);
+    noteStates_ = std::move(kept);
+    noteStatesKept_ = noteStates_.size();
 }
 
 void Engine::instrumentActionUndoable(Instrument& inst, int32_t trackId, int32_t deviceIndex, int32_t chain,
@@ -371,6 +407,17 @@ void Engine::instrumentActionUndoable(Instrument& inst, int32_t trackId, int32_t
     auto before = inst.editState();
     inst.action(id, iarg, farg);
     if (!before.empty()) pushInstrumentEdit(trackId, deviceIndex, chain, std::move(before), inst.editState());
+}
+
+// An edit of a rack chain instrument made by plain param writes (a Twin's side or part copy, a
+// preset): its params have no undo target of their own, so the step swaps the whole state the
+// caller read before the edit for the one it has now.
+bool Engine::recordInstrumentState(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* before, int32_t size) {
+    Instrument* inst = chain >= 0 ? editStateInstrument(trackId, deviceIndex, chain) : nullptr;
+    if (!inst || !before || size <= 0) return false;
+    pushInstrumentEdit(trackId, deviceIndex, chain, std::vector<uint8_t>(before, before + size), inst->getState(),
+        MixKind::InstrumentState);
+    return true;
 }
 
 // Loads a state blob into an instrument (a preset's patterns) with what it changes in the edit
@@ -1555,6 +1602,7 @@ bool Engine::setEqBandText(
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
     }
     redoStack_.clear();
+    compactNoteStates();
     return true;
 }
 

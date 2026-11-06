@@ -21,6 +21,9 @@ public class RackChainEngineProxy : DispatchProxy
 {
     public IAudioEngine Inner = null!;
     public int Chain;
+    // Open gestures on the chain instrument's params: their own (negative) handles.
+    private readonly Dictionary<int, (int Track, byte[] Before, int Inner)> _gestures = new();
+    private int _nextGesture;
 
     public static IAudioEngine Create(IAudioEngine inner, int chain)
     {
@@ -53,6 +56,28 @@ public class RackChainEngineProxy : DispatchProxy
                 Inner.RackSetChainInstrumentStateUndoable((int)args[0]!, Chain, (byte[])args[2]!); return null;
             case nameof(IAudioEngine.SetInstrumentStateUndoable):
                 return Inner.RackSetChainInstrumentStateUndoable((int)args![0]!, Chain, (byte[])args[1]!);
+            // A gesture over the instrument's params (a Twin side / part copy, a preset): they have no
+            // undo target in a chain, so the chain instrument's state before it and after it make the
+            // step; any other target (the preset tag) keeps its own gesture.
+            case nameof(IAudioEngine.BeginMixGesture):
+            {
+                var targets = (MixTarget[])args![0]!;
+                var mine = Array.FindAll(targets, t => t.Kind == MixKind.PluginParam && t.DeviceIndex == -1);
+                if (mine.Length == 0) return Inner.BeginMixGesture(targets);
+                var rest = Array.FindAll(targets, t => !(t.Kind == MixKind.PluginParam && t.DeviceIndex == -1));
+                int inner = rest.Length > 0 ? Inner.BeginMixGesture(rest) : -1;
+                int handle = --_nextGesture;
+                _gestures[handle] = (mine[0].TrackId, Inner.RackGetChainInstrumentState(mine[0].TrackId, Chain), inner);
+                return handle;
+            }
+            case nameof(IAudioEngine.EndMixGesture):
+            {
+                int handle = (int)args![0]!;
+                if (!_gestures.Remove(handle, out var g)) { Inner.EndMixGesture(handle); return null; }
+                if (g.Before.Length > 0) Inner.RackChainInstrumentRecordStateUndo(g.Track, Chain, g.Before);
+                if (g.Inner >= 0) Inner.EndMixGesture(g.Inner);
+                return null;
+            }
             // Nota Mosaic in a chain (specs/041). Through Inner's rack address −1, which a
             // NestedRackEngineProxy under it turns into its nested Drum Rack (a Mosaic pad).
             // A factory Nota Grain preset loads its source sample into the chain's Grain.

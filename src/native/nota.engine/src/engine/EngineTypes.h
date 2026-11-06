@@ -108,7 +108,9 @@ enum class MixKind : int32_t {
     PresetTag = 6,  // a device's preset tag (specs/048): deviceIndex as above, paramIndex = the surface
     DeviceNotes = 7, // an EQ-8's band labels and notes (specs/049): the value indexes Engine::noteStates_
     TrackSend = 8,    // rejected (specs/069): a send level is not an undo step. deviceIndex would be the bus.
-    InstrumentEdit = 9 // a track instrument's edit state (Instrument::editState): the value indexes Engine::noteStates_
+    InstrumentEdit = 9, // a track instrument's edit state (Instrument::editState): the value indexes Engine::noteStates_
+    InstrumentState = 10 // a rack chain instrument's whole state (params too, which have no undo target of their
+                         // own there): the value indexes Engine::noteStates_; deviceIndex the rack, paramIndex the chain
 };
 struct MixTarget {
     MixKind kind;

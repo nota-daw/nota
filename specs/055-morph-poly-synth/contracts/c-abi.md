@@ -33,6 +33,13 @@ NOTA_API int32_t nota_audition_instrument_state(NotaAudition* rig, const uint8_t
 NOTA_API int32_t nota_track_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, const uint8_t* data, int32_t size);
 NOTA_API int32_t nota_rack_chain_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, int32_t chain, const uint8_t* data, int32_t size);
 NOTA_API int32_t nota_rackdev_chain_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, const uint8_t* data, int32_t size);
+
+/* A rack chain instrument's params have no undo target: after a batch of param writes (a Twin
+ * side / part copy, a preset), the state read before them becomes one undo step that swaps the
+ * whole state (MixKind::InstrumentState, 10). The rack-chain proxy calls it around each mix
+ * gesture on the chain instrument's params. */
+NOTA_API int32_t nota_rack_chain_instrument_record_state_undo(NotaEngine* engine, int32_t track_id, int32_t chain, const uint8_t* before, int32_t size);
+NOTA_API int32_t nota_rackdev_chain_instrument_record_state_undo(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, const uint8_t* before, int32_t size);
 ```
 
 Inside the engine (no ABI):
@@ -49,6 +56,9 @@ Inside the engine (no ABI):
 - The undo step for an edit-state change (`MixKind::InstrumentEdit`, 9 — develop took 8 for
   `TrackSend`) also covers a Twin in a rack chain: `deviceIndex` is the rack, `paramIndex` the
   chain (−1 = the track's own instrument). `nota_rack_chain_instrument_action` records it too.
+- Inside an open undo group, edit-state changes of one instrument fold into one entry (so a
+  64-step pattern write can't push the group's start out of the 128-step history), and the saved
+  states only the undo / redo history refers to are reclaimed (`Engine::compactNoteStates`).
 - The engine's sustain pedal keeps each held key's release velocity (`Instrument::pedalRelVel`)
   and sends it with the note-off when the pedal comes up.
 

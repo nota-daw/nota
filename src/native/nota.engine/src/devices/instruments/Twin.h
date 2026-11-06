@@ -424,6 +424,8 @@ class Twin final : public Instrument {
     // (Seq from its first step, transposed by the key; Arp over the held keys). freeT_ counts
     // samples from the key that started it.
     bool freeRun_ = false;
+    bool upperTail_ = false;   // Upper still releasing after a switch to Single
+    uint64_t upperQuiet_ = 0;
     double freeT_ = 0.0;
     double clockAt(int offset) const { return (playing_ ? tPos_ + tFrames_ : freeT_) + offset; }
     bool seqLatched() const;

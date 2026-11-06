@@ -771,7 +771,8 @@ class Engine {
         int32_t size); // chain -1: the track's instrument; else that chain of the rack at deviceIndex
     Instrument* editStateInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void pushInstrumentEdit(int32_t trackId, int32_t deviceIndex, int32_t chain, std::vector<uint8_t> before,
-        std::vector<uint8_t> after);
+        std::vector<uint8_t> after, MixKind kind = MixKind::InstrumentEdit);
+    bool recordInstrumentState(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* before, int32_t size);
     bool setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path); // Phase 2
     bool rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;   // sample id per voice
     int32_t rhythmVoiceSource(int32_t trackId, int32_t voice) const;                    // 0 Synth, 1 Sample
@@ -1821,6 +1822,8 @@ class Engine {
     // The EQ-8 annotation states undo steps point at (specs/049): append-only, 0 = none. A step
     // holds the indices of the device's whole state before and after the edit.
     std::vector<std::vector<uint8_t>> noteStates_ = std::vector<std::vector<uint8_t>>(1);
+    size_t noteStatesKept_ = 1; // its size after the last compaction
+    void compactNoteStates(bool force = false);
     bool applyMix(const MixChange& c, bool after); // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;

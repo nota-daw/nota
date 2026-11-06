@@ -233,12 +233,14 @@ public static class TwinPatterns
         LayerOnePart,   // Layer, the sequencer on one part: a clip would play both
         SplitBothParts, // Split, the sequencer on both parts: a clip would play one per key
         SplitOtherSide, // Split, a note on the other side of the split key from the part it plays
+        InRack,         // a Twin on a rack chain: the clip would land on the rack's track and play every chain
     }
 
     /// <summary>Whether <see cref="ToClip"/> can write the pattern (it refuses what it can't reproduce).</summary>
     public static ClipBlock ToClipBlock(IAudioEngine e, int trackId, int pattern)
     {
         if (e.TrackInstrumentKind(trackId) != TwinMatrix.Kind) return ClipBlock.None;
+        if (e is RackChainEngineProxy) return ClipBlock.InRack;
         var set = FromState(e.GetPluginState(trackId, -1));
         if (set is null || pattern < 0 || pattern >= Patterns) return ClipBlock.None;
         return Block(set[pattern], ParamReader(e, trackId).G);
@@ -282,6 +284,7 @@ public static class TwinPatterns
         var set = FromState(e.GetPluginState(trackId, -1));
         if (set is null || pattern < 0 || pattern >= Patterns) return -1;
         var pat = set[pattern];
+        if (e is RackChainEngineProxy) return -1; // ClipBlock.InRack
         var (at, G) = ParamReader(e, trackId);
         if (Block(pat, G) != ClipBlock.None) return -1;
         int pc = at.Count;
@@ -316,7 +319,8 @@ public static class TwinPatterns
                 if (lane.Target < 0 || lane.Target >= pc || lane.Values.Take(pat.Length).All(v => v == MotionUnset)) continue;
                 int li = e.AddPluginAutomationLane(trackId, -1, e.PluginParamId(trackId, -1, lane.Target));
                 if (li < 0) continue;
-                var pts = MotionPoints(pat, lane, sb, On, length).Select(p => new AutomationPoint(startBeat + p.Beat, p.Value)).ToList();
+                float knob = e.PluginParamGet(trackId, -1, lane.Target); // what an empty step plays
+                var pts = MotionPoints(pat, lane, sb, On, length, knob).Select(p => new AutomationPoint(startBeat + p.Beat, p.Value)).ToList();
                 // An existing lane keeps its points before and after the clip.
                 double end = startBeat + length;
                 var kept = e.GetAutomationPoints(trackId, li).Where(p => p.Beat < startBeat || p.Beat > end);
@@ -338,15 +342,21 @@ public static class TwinPatterns
     // onset to the next one's, a stepped lane holds the step's value, and a smooth one glides to the
     // next step's value (the last to the first) over one step length — cut short at the next onset
     // when the swing brings it early, held when it comes late.
+    // An empty step lets the knob play (the lane lets go of it): the points hold `knob` there.
     private static IEnumerable<(double Beat, float Value)> MotionPoints(Pattern pat, Lane lane, double sb,
-        Func<int, double> on, double length)
+        Func<int, double> on, double length, float knob)
     {
         for (int k = 0; k < pat.Length; k++)
         {
-            if (lane.Values[k] == MotionUnset) continue;
-            float v = lane.Values[k] / 65534f;
             double t0 = on(k), next = k + 1 < pat.Length ? on(k + 1) : length;
             double hold = Math.Max(t0, next - MotionEdge);
+            if (lane.Values[k] == MotionUnset)
+            {
+                yield return (t0, knob);
+                yield return (hold, knob);
+                continue;
+            }
+            float v = lane.Values[k] / 65534f;
             yield return (t0, v);
             if (!lane.Smooth)
             {

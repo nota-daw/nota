@@ -371,6 +371,10 @@ void Twin::resetAll() {
     transpose_ = transKeys_ = 0;
     arpN_ = arpKeys_ = 0;
     pendPat_ = -1;
+    freeRun_ = false; // all notes off ends a key-run sequence too
+    freeT_ = 0.0;
+    upperTail_ = false;
+    upperQuiet_ = 0;
     patStartK_ = 0;
     playStep_ = -1;
     seqStepV_ = 0.0f;
@@ -933,7 +937,9 @@ void Twin::fireStep(int64_t k, double onset) {
             sn.off = off;
             sn.tie = tie;
             ++i;
-        } else if (sn.tie || sn.off <= onset) {
+        } else if (sn.tie || sn.off <= onset || again) {
+            // A note still sounding (a long gate swung past this onset) that this step plays again
+            // ends here, so its own note-off can't cut the new one short.
             seqOff(sn.pitch);
             sn = seqNotes_[--seqNoteN_];
         } else
@@ -1227,6 +1233,7 @@ void Twin::updateControl(double now) {
         evalPart(pn_, part, morph, spb_, sr_, c, nullptr, ovr);
         routeN_[part] = liveRoutes(pn_, part, routes_[part]);
         partModulation(part, morph);
+        c.vibExtra = 0.0f; // a route that stopped (the pad let go, the route removed) leaves none
         if (partHasOff_[part]) {
             evalPart(pn_, part, std::clamp(morph + partMorphOff_[part], 0.0f, 1.0f), spb_, sr_, c, partOff_[part], ovr);
             c.semi[0] += partPitch_[part][0];
@@ -1246,14 +1253,16 @@ void Twin::updateControl(double now) {
             if (V.gate) release(V);
         heldN_[0] = heldN_[1] = 0;
     }
-    // Back to Single: the Upper part isn't rendered any more, so its voices end here.
-    if (parts == 1)
+    // Back to Single: the Upper part's voices were released above (never cut); it goes on
+    // rendering — voices and effects — until its tail is quiet (renderSegment), then stops.
+    if (parts == 1) {
         for (auto& V : voices_)
             if (V.active && V.part != 0) {
-                V.active = V.gate = false;
                 V.pendNote = -1;
-                V.part = 0;
+                upperTail_ = true;
             }
+    } else
+        upperTail_ = false;
     for (int part = 0; part < kParts; ++part) {
         const int vm = ctl_[part].voiceMode;
         if (part < parts && lastMode_[part] >= 0 && vm != lastMode_[part]) {
@@ -1293,7 +1302,7 @@ void Twin::renderSegment(float* out, int n) {
     const int os = os_;
     int active = 0;
     float pk = blockPeak_;
-    const int parts = layoutMode() == 0 ? 1 : 2;
+    const int parts = layoutMode() != 0 || upperTail_ ? 2 : 1;
     for (int part = 0; part < parts; ++part) {
         const float* lfo1 = gLfo1_[part] + (twin::kCtl - ctlLeft_);
         std::fill(osL_, osL_ + n * os, 0.0f);
@@ -1339,11 +1348,18 @@ void Twin::renderSegment(float* out, int n) {
             }
             fx_[part][f]->process(fxBuf_, n);
         }
-        (void)sounding;
+        float partPk = 0.0f;
         for (int i = 0; i < n; ++i) {
             out[2 * i] += fxBuf_[2 * i];
             out[2 * i + 1] += fxBuf_[2 * i + 1];
-            pk = std::max(pk, std::max(std::fabs(fxBuf_[2 * i]), std::fabs(fxBuf_[2 * i + 1])));
+            partPk = std::max(partPk, std::max(std::fabs(fxBuf_[2 * i]), std::fabs(fxBuf_[2 * i + 1])));
+        }
+        pk = std::max(pk, partPk);
+        // Upper's tail after a switch to Single: done once no voice of it sounds and it is quiet.
+        if (part == 1 && layoutMode() == 0) {
+            upperQuiet_ = sounding || partPk > 1.0e-5f ? 0 : upperQuiet_ + static_cast<uint64_t>(n);
+            const uint64_t hang = kIdleHangover + (fxWasOn_[1][FxDelay] ? static_cast<uint64_t>(sr_ * kDelayHoldSec) : 0); // echoes rest in silence
+            if (upperQuiet_ > hang) upperTail_ = false, upperQuiet_ = 0;
         }
     }
     blockPeak_ = pk;
