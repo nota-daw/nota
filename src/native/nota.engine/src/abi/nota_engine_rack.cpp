@@ -114,6 +114,16 @@ int32_t nota_rack_chain_instrument_held_notes(const NotaEngine* e, int32_t t, in
 void nota_rack_chain_instrument_action(NotaEngine* e, int32_t t, int32_t c, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->rackChainInstrumentAction(t, -1, c, id, iarg, farg);
 }
+int32_t nota_rack_chain_instrument_record_state_undo(NotaEngine* e, int32_t t, int32_t c, const uint8_t* before, int32_t size) {
+    return e && ENG(e)->recordInstrumentState(t, -1, c, before, size) ? 1 : 0;
+}
+int32_t nota_rackdev_chain_instrument_record_state_undo(NotaEngine* e, int32_t t, int32_t di, int32_t c, const uint8_t* before,
+    int32_t size) {
+    return e && ENG(e)->recordInstrumentState(t, di, c, before, size) ? 1 : 0;
+}
+int32_t nota_rack_chain_instrument_set_state_undoable(NotaEngine* e, int32_t t, int32_t c, const uint8_t* data, int32_t size) {
+    return e && ENG(e)->instrumentSetStateUndoable(t, -1, c, data, size) ? 1 : 0;
+}
 void nota_rack_open_chain_instrument_editor(NotaEngine* e, int32_t t, int32_t c) {
     if (e) ENG(e)->rackOpenChainInstrumentEditor(t, -1, c);
 }
@@ -958,6 +968,10 @@ int32_t nota_rackdev_chain_instrument_held_notes(const NotaEngine* e, int32_t t,
 }
 void nota_rackdev_chain_instrument_action(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->rackChainInstrumentAction(t, di, c, id, iarg, farg);
+}
+int32_t nota_rackdev_chain_instrument_set_state_undoable(NotaEngine* e, int32_t t, int32_t di, int32_t c, const uint8_t* data,
+    int32_t size) {
+    return e && ENG(e)->instrumentSetStateUndoable(t, di, c, data, size) ? 1 : 0;
 }
 void nota_rackdev_open_chain_instrument_editor(NotaEngine* e, int32_t t, int32_t di, int32_t c) {
     if (e) ENG(e)->rackOpenChainInstrumentEditor(t, di, c);

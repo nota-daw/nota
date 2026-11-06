@@ -23,6 +23,7 @@
 #include "devices/instruments/GrainSynth.h"
 #include "devices/instruments/Sampler.h"
 #include "devices/instruments/Mosaic.h"
+#include "devices/instruments/Twin.h"
 #include "DrumRack.h"
 #include "devices/DeviceFactory.h"
 
@@ -967,6 +968,7 @@ std::shared_ptr<Instrument> RackCore::makeInstrument(int32_t kind) {
     case 15: return std::make_shared<Consort>();
     case 16: return std::make_shared<Keys>();
     case 17: return std::make_shared<Mosaic>(); // empty: the program rides its state or the engine
+    case 18: return std::make_shared<Twin>();
     case 4: return std::make_shared<DrumRack>(); // nested Drum Rack (specs/041)
     default: return nullptr; // -1 = no instrument (effect rack); plugins are a follow-up
     }
