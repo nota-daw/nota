@@ -34,6 +34,8 @@ namespace nota {
 namespace twin {
 
 constexpr int kCtl = 32;  // control interval (samples)
+constexpr int kFilterHang = 256; // quiet samples (oversampled) before an unfed filter rests
+constexpr float kFilterRest = 1.0e-4f; // −80 dB: above the −100 dB floor an unfed filter still passes
 constexpr int kMaxOs = 2; // voice oversampling
 
 // lo · (hi/lo)^v through the fast exp2 (≈ 0.03 cent): it runs per voice per control interval.
@@ -289,6 +291,7 @@ struct Voice {
     dsp::SteinerFilter mm;
     dsp::LadderFilter ld;
     float fb = 0; // Brute: the filter section's last output
+    int mmQuiet = 0, ldQuiet = 0; // oversampled samples each filter has been unfed and silent
     pentad::Adaa sat;
     // modulation
     Env fenv, aenv, menv;

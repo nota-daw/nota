@@ -192,8 +192,12 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
         // −100 dB floor (no Brute feedback, resonance below the singing edge).
         const bool o1On = l1 != 0.0f || c.sync, o2On = l2 != 0.0f || c.fm21 != 0.0f || c.fmFilt != 0.0f;
         const bool quietLoop = c.brute == 0.0f;
-        const bool mmOn = a1 != 0.0f || a2 != 0.0f || an != 0.0f || !quietLoop || c.mmRes >= 0.5f;
-        const bool ldOn = b1 != 0.0f || b2 != 0.0f || bn != 0.0f || !quietLoop || c.ldRes >= 0.5f || (mmOn && c.route < 1.0f);
+        // A filter whose feed stopped runs on until what it holds has faded (kFilterHang quiet
+        // samples), then it is reset and rests; fed again, it starts from silence.
+        const bool mmFed = a1 != 0.0f || a2 != 0.0f || an != 0.0f || !quietLoop || c.mmRes >= 0.5f;
+        const bool mmOn = mmFed || V.mmQuiet < kFilterHang;
+        const bool ldFed = b1 != 0.0f || b2 != 0.0f || bn != 0.0f || !quietLoop || c.ldRes >= 0.5f || (mmOn && c.route < 1.0f);
+        const bool ldOn = ldFed || V.ldQuiet < kFilterHang;
 
         for (int s = 0; s < os; ++s) {
             double d1 = dt1;
@@ -223,10 +227,16 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
                 if (c.fmFilt != 0.0f)
                     V.mm.setG(V.mm.prewarp(fast_math::exp2f(std::clamp(mmOct + c.fmFilt * y2, 3.3f, 14.6f))));
                 mo = V.mm.process(mmIn);
+                if (mmFed) V.mmQuiet = 0;
+                else if (std::fabs(mo) > kFilterRest) V.mmQuiet = 0;
+                else if (++V.mmQuiet >= kFilterHang) V.mm.reset();
             }
             if (ldOn) {
                 const float li = ldIn + (1.0f - c.route) * mo;
                 lo = c.ld12 ? V.ld.process12(li) : V.ld.process(li);
+                if (ldFed) V.ldQuiet = 0;
+                else if (std::fabs(lo) > kFilterRest) V.ldQuiet = 0;
+                else if (++V.ldQuiet >= kFilterHang) V.ld.reset();
             }
             float out = lo + c.route * mo;
             V.fb = out;

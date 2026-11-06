@@ -1308,6 +1308,25 @@ internal static class TwinTests
             yield return (reads && undone, "a Twin on a rack chain: its patterns read through the chain, and a pattern edit is an undo step");
         }
 
+        // A filter whose sources move away fades out what it holds instead of stopping dead.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            foreach (var (id, v) in new[] { ("lo.a.drift", 0f), ("lo.a.o1bal", 1f), ("lo.a.route", 1f), ("lo.a.ldcut", 0.33f), ("lo.a.ldres", 0.45f),
+                         ("lo.a.ldenv", 0.5f), ("lo.a.mmcut", 0f), ("lo.a.aenvr", 0.6f) })
+                P(e, t, id, v);
+            Render(e, 512);
+            e.TrackNoteOn(t, 48, 0.8f);
+            Render(e, Sr / 4, 32);
+            double before = Rms(Render(e, 256, 32));
+            P(e, t, "lo.a.o1bal", 0f); // every source to the (closed) multimode: the ladder is unfed
+            Render(e, 32, 32);
+            double just = Rms(Render(e, 96, 32));
+            double later = Rms(Render(e, Sr / 10, 32), Sr / 10 - 512);
+            yield return (Db(just) - Db(before) > -15 && Db(later) < Db(just) - 15, // later: only the closed multimode's leak
+                $"an unfed ladder fades what it holds ({Db(before):0} → {Db(just):0} dB just after, {Db(later):0} dB later)");
+        }
+
         // Back to Single: Upper's held notes release instead of stopping dead.
         {
             using var e = new NotaEngine();
