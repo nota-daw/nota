@@ -100,6 +100,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
 
         var filtGraph = new VoltFilter(engine, track)
         {
+            Spectrum = new FilterSpectrum(engine, track),
             FreqRange = (30.0, 18000.0), VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50,
         };
         var ampEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };

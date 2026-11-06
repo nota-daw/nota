@@ -71,6 +71,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **A new filter graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
+  Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin draw their filter
+  response the same way, over the knobs they already had. The spectrum of what the instrument
+  plays, after its filter, moves behind the curve. Hovering shows a marker with the frequency,
+  the nearest note (with cents) and the gain there. The cutoff is lit on the frequency axis, with
+  a dashed rule up to the curve. The engine taps the instrument's output for this only while a
+  graph is on screen.
+- **Filter tabs give the graph the whole height** (nota-daw/nota#531): on Consort, Pentad,
+  Monolith, Sampler and Mosaic the filter's knobs and switches move into a column at the graph's
+  right, as on Volt. The spectrum behind the curve is drawn as a filled line, as on EQ-3. Operator
+  drops the harmonic spectrum under its filter.
+- **Envelope graphs name their grid** (nota-daw/nota#531): 25 / 50 / 75 % at the level lines, and
+  a line at each time tick named under the segment bar. Nota Twin's envelopes get the A D S R
+  knob row, and their two amounts each become one slider, side by side.
 - **A new envelope graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
   Operator, Bass, Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin draw their
   envelopes the same way. The curve is in the accent colour with a light fill. The sustain stretch is

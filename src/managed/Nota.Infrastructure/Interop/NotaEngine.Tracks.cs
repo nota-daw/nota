@@ -1101,4 +1101,7 @@ public sealed partial class NotaEngine
 
     public int InstrumentScope(int trackId, float[] outv)
     { ThrowIfDisposed(); return NativeMethods.TrackInstrumentScope(_handle, trackId, outv, outv.Length); }
+
+    public int InstrumentOutput(int trackId, float[] outv)
+    { ThrowIfDisposed(); return NativeMethods.TrackInstrumentOutput(_handle, trackId, outv, outv.Length); }
 }

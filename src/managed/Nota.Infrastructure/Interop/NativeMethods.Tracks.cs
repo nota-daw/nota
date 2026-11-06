@@ -589,6 +589,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_scope")]
     internal static partial int TrackInstrumentScope(IntPtr engine, int trackId, [Out] float[] outv, int maxN);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_output")]
+    internal static partial int TrackInstrumentOutput(IntPtr engine, int trackId, [Out] float[] outv, int maxN);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_sampler_track", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int AddSamplerTrack(IntPtr engine, string path, int rootNote, int loop);
 

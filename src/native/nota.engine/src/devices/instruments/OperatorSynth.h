@@ -189,6 +189,7 @@ class OperatorSynth final : public Instrument {
         EnvShapeState shape[4]; // the curve of each operator envelope's current stage
         double fbLast = 0.0;
         double s1 = 0.0, s2 = 0.0; // filter state
+        double fgSm = -1.0, fkSm = 1.0; // the filter's g and k, eased toward the block's (#531)
         VoiceExpr ex;              // MPE bend / pressure / slide
         float exBendAt = 0.0f;
         double exBendMul = 1.0;

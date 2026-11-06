@@ -66,6 +66,7 @@ namespace Nota.App;
         private static string Letters => Loc.T("device.env.stage_letters");   // A D S R
         private const double HoldFrac = 0.18;   // the sustain stretch: held, not timed
         private const double BarH = 11, TickH = 10, BadgeW = 36;   // BadgeW: room for the sustain value
+        private const double LevelGutter = 26;                      // the 25 / 50 / 75 % names
         private readonly IEnvParams _p;
         private (int i, string id) _a, _d, _s, _r;
         private (int i, string id) _dc = (-1, ""), _rc = (-1, ""), _exp = (-1, "");
@@ -199,7 +200,8 @@ namespace Nota.App;
         private (double x0, double x1, double top, double bot) Geo()
         {
             double pad = 7;
-            return (pad, Bounds.Width - pad - BadgeW, ShowTitle ? 22 : pad + 3, Bounds.Height - BarH - TickH - 4);
+            // The level names sit in a gutter at the left, clear of the curve.
+            return (LevelGutter + 3, Bounds.Width - pad - BadgeW, ShowTitle ? 22 : pad + 3, Bounds.Height - BarH - TickH - 4);
         }
 
         private double Sec(int stage, (int i, string id) p) => Seconds is { } f ? Math.Max(0, f(stage, G(p))) : 0;
@@ -373,8 +375,30 @@ namespace Nota.App;
             var ink = Ink;
             int active = _drag switch { 0 => 0, 1 => 1, 2 => 3, 3 => 1, 4 => 3, _ => _hover };
 
-            // Level guides only: the segment bar under the plot says where each stage is.
-            for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(NotaGraph.GridPen, new Point(1, gy), new Point(w - 1, gy)); }
+            // The grid: level lines at 25 / 50 / 75 %, named at the left, and a line at each time
+            // tick of the shared scale (named under the segment bar).
+            for (int i = 1; i <= 3; i++)
+            {
+                double gy = top + (bot - top) * i / 4.0;
+                ctx.DrawLine(NotaGraph.GridPen, new Point(LevelGutter, gy), new Point(w - 1, gy));
+                var lv = Text(NotaNum.Pct(1 - i / 4.0), NotaPalette.TextAxis, 7.5);
+                ctx.DrawText(lv, new Point(LevelGutter - 3 - lv.Width, gy - lv.Height / 2));
+            }
+            if (Seconds is not null)
+            {
+                double pps = Pps(), sec = (x1 - x0) * (1 - HoldFrac) / Math.Max(1e-6, pps), step = NiceStep(sec / 3);
+                void Lines(double from, double to)
+                {
+                    for (double tsec = step; ; tsec += step)
+                    {
+                        double x = from + tsec * pps;
+                        if (x > to + 0.5) break;
+                        ctx.DrawLine(NotaGraph.GridPen, new Point(x, top - 2), new Point(x, bot));
+                    }
+                }
+                Lines(x0, n.xd);
+                Lines(n.xh, n.xr);
+            }
 
             // The sustain stretch: held while the key is down, not a time — tinted and named.
             var hold = new Rect(n.xd, top - 2, Math.Max(0, n.xh - n.xd), bot - top + 2);

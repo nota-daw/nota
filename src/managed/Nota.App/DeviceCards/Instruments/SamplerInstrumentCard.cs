@@ -370,7 +370,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             (velBlock, "Auto"));
 
         // ================= Filter tab =================
-        var filt = new SamplerFilterView();
+        var filt = new SamplerFilterView { Spectrum = acc.Spectrum() };
         ToolTip.SetTip(filt, MenuKit.Keys(Loc.T("device.sampler.drag_left_right_for_the")));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
@@ -389,7 +389,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var typeSeg = ParamChips("filtertype", SamplerModel.FilterNames, padX: 7);
         ToolTip.SetTip(typeSeg, Loc.T("device.sampler.off_low_pass_high_pass"));
-        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobMain, 58, emphasised: true);
+        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobSecondary, 54, emphasised: true);
         var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v));
         var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.sampler.the_cutoff_follows_the_key"));
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1),
@@ -398,15 +398,45 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var filterBody = new[] { cutKnob, resoKnob, ktKnob };
         foreach (var c in filterBody) DimWhen(c, () => Sel("filtertype", 4) == 0);
         DimWhen(envAmt, () => Sel("filtertype", 4) == 0 || G("envcutoff") < 0.5f);
-        var filterRow = Row(14, (Labeled("TYPE", typeSeg), "Auto"), (cutKnob, "Auto"), (resoKnob, "Auto"), (ktKnob, "Auto"),
-            (new Panel(), "*"), (envBtn, "Auto"), (envAmt, "Auto"));
+        // The filter's controls in a column at the graph's right (#531), as on Nota Volt: the type
+        // over a grid of knobs, the envelope switch under them.
+        static Control SideGrid(params Control[] cells)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowSpacing = 4 };
+            for (int k = 0; k < cells.Length; k++)
+            {
+                if (k % 2 == 0) g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                cells[k].HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(cells[k], k % 2); Grid.SetRow(cells[k], k / 2); g.Children.Add(cells[k]);
+            }
+            return g;
+        }
+        static Control SidePage(Control view, Control side)
+        {
+            var host = new Border
+            {
+                Width = 150, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),
+                Padding = new Thickness(8, 0, 0, 0), Child = side,
+            };
+            var page = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(7, 5, 7, 5) };
+            page.Children.Add(view);
+            Grid.SetColumn(host, 1); page.Children.Add(host);
+            return page;
+        }
+        envBtn.HorizontalAlignment = HorizontalAlignment.Center;
+        var filterSide = new StackPanel
+        {
+            Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Labeled("TYPE", typeSeg), SideGrid(cutKnob, resoKnob, ktKnob, envAmt), envBtn },
+        };
 
         // ---- the tab panel ------------------------------------------------------------
         var views = new Control[] { wave, keys, env, filt };
-        var rows = new Control[] { sampleRow, pitchRow, envRow, filterRow };
+        var rows = new Control?[] { sampleRow, pitchRow, envRow, null };
         var pages = new Control[views.Length];
         for (int i = 0; i < views.Length; i++)
         {
+            if (rows[i] is null) { pages[i] = SidePage(views[i], filterSide); continue; }
             var rowHost = new Border
             {
                 Height = RowH, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),

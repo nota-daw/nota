@@ -732,7 +732,9 @@ class Engine {
         int32_t maxN) const;                                 // held chord pitches (Nota Pendulum)
     int32_t liveHeldNotes(int32_t* out, int32_t maxN) const; // currently-pressed live-input pitches (keyboard + MIDI)
     int32_t instrumentScope(int32_t trackId, float* out,
-        int32_t maxN) const; // live viz telemetry (Nota Operator spectrum)
+        int32_t maxN) const;
+    // The newest instrument output samples (mono), for the card's filter graph (#531).
+    int32_t instrumentOutput(int32_t trackId, float* out, int32_t maxN) const; // live viz telemetry (Nota Operator spectrum)
     // Captured session audio take (false if the slot has no audio).
     bool sessionAudioSlotInfo(int32_t trackId, int32_t scene, NotaSessionAudioSlot* out) const;
     // Load a file into a session audio slot (looped over lengthBeats). Returns false on failure.

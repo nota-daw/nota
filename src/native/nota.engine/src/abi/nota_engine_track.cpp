@@ -380,6 +380,9 @@ int32_t nota_track_held_notes(const NotaEngine* e, int32_t track_id, int32_t* ou
 int32_t nota_track_instrument_scope(const NotaEngine* e, int32_t track_id, float* out, int32_t max_n) {
     return e ? CENG(e)->instrumentScope(track_id, out, max_n) : 0;
 }
+int32_t nota_track_instrument_output(const NotaEngine* e, int32_t track_id, float* out, int32_t max_n) {
+    return e ? CENG(e)->instrumentOutput(track_id, out, max_n) : 0;
+}
 int32_t nota_engine_add_sampler_track(NotaEngine* e, const char* path, int32_t root, int32_t loop) {
     if (!e || !path) return 0;
     return ENG(e)->addSamplerTrack(std::string(path), root, loop != 0);

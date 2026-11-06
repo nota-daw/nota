@@ -277,7 +277,7 @@ internal sealed class SamplerKeysView : Control
 }
 
 // ---- the filter -------------------------------------------------------------------------
-internal sealed class SamplerFilterView : Control
+internal sealed class SamplerFilterView : FilterGraphBase
 {
     private int _type;
     private double _cut = 1, _reso, _liveHz = -1;
@@ -288,7 +288,7 @@ internal sealed class SamplerFilterView : Control
     public event Action<string, double>? Changed;
     public event Action? DragBegin, DragEnd, Reset;
 
-    private const double FLo = 30, FHi = 18000, DbTop = 18, DbBot = -42;
+    private const double FLo = 30, FHi = 18000;
 
     public SamplerFilterView() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.SizeAll); }
 
@@ -298,7 +298,11 @@ internal sealed class SamplerFilterView : Control
         InvalidateVisual();
     }
 
-    private static double XOf(double hz, double w) => Math.Log(Math.Clamp(hz, FLo, FHi) / FLo) / Math.Log(FHi / FLo) * w;
+    // The shared filter graph (#531) over 30 Hz … 18 kHz; an Off filter lights no cutoff.
+    protected override (double Lo, double Hi) Span => (FLo, FHi);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -42.0);
+    protected override double CutoffHz => _type > 0 ? SamplerModel.CutoffHz((float)_cut) : double.NaN;
+    protected override double ResponseDb(double hz) => MagDb(_type, hz, SamplerModel.CutoffHz((float)_cut), _reso);
 
     // The engine's TPT SVF magnitude at f for cutoff fc (k = 2 − 1.9·reso).
     private static double MagDb(int type, double f, double fc, double reso)
@@ -313,20 +317,21 @@ internal sealed class SamplerFilterView : Control
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(); e.Handled = true; return; }
-        _drag = true; _last = e.GetPosition(this);
+        _drag = Dragging = true; _last = e.GetPosition(this);
         DragBegin?.Invoke();
         e.Pointer.Capture(this);
         e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e)
     {
+        base.OnPointerMoved(e);
         if (!_drag) return;
         var p = e.GetPosition(this);
         double k = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 0.2 : 1;
         // x across the window spans 30 Hz … 18 kHz; the cutoff param spans 20 Hz … 20 kHz.
-        double octPerPx = Math.Log2(FHi / FLo) / Math.Max(1, Bounds.Width);
+        double octPerPx = Math.Log2(FHi / FLo) / Math.Max(1, PlotRect.Width);
         _cut = Math.Clamp(_cut + (p.X - _last.X) * octPerPx / Math.Log2(1000) * k, 0, 1);
-        _reso = Math.Clamp(_reso - (p.Y - _last.Y) / Math.Max(1, Bounds.Height) * k, 0, 1);
+        _reso = Math.Clamp(_reso - (p.Y - _last.Y) / Math.Max(1, PlotRect.Height) * k, 0, 1);
         Changed?.Invoke("cutoff", _cut);
         Changed?.Invoke("resonance", _reso);
         _last = p;
@@ -335,76 +340,38 @@ internal sealed class SamplerFilterView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false; InvalidateVisual();
+        _drag = Dragging = false; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke();
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag) { _drag = false; InvalidateVisual(); DragEnd?.Invoke(); }
+        if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnd?.Invoke(); }
         base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var r = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, r);
-        double top = 12, bot = h - 12;
-        double Y(double db) => top + (DbTop - Math.Clamp(db, DbBot, DbTop)) / (DbTop - DbBot) * (bot - top);
-        var grid = NotaGraph.GridPen;
-        foreach (var hz in new[] { 100.0, 1000, 10000 }) { double x = XOf(hz, w); ctx.DrawLine(grid, new Point(x, 0), new Point(x, h)); }
-        ctx.DrawLine(grid, new Point(0, Y(0)), new Point(w, Y(0)));
-        ctx.DrawLine(grid, new Point(0, Y(-24)), new Point(w, Y(-24)));
-
+        double w = Bounds.Width;
+        if (w <= 0 || Bounds.Height <= 0) return;
+        DrawBack(ctx);
+        if (_type > 0) DrawCurve(ctx, ResponseDb);
+        else DrawCurve(ctx, ResponseDb, NotaPalette.TextTertiary, fill: false, width: 1.2);
+        var r = PlotRect;
+        if (_type > 0 && _liveHz > 0 && Math.Abs(Math.Log2(_liveHz / CutoffHz)) > 0.05)
+        {
+            double lx = XOf(_liveHz);
+            // The cutoff the loudest voice hears now: a solid line in the lighter grey, named
+            // "live" at its top, against the set cutoff's dashed line.
+            ctx.DrawLine(new Pen(DeviceCardKit.ModInkBright, 1.2), new Point(lx, r.Y + 1), new Point(lx, r.Bottom - 1));
+            var lt = SamplerInk.Mono("live", DeviceCardKit.ModInkBright);
+            ctx.DrawText(lt, new Point(lx + 3 + lt.Width <= w - 2 ? lx + 3 : lx - 3 - lt.Width, 3 + lt.Height));
+        }
+        if (_tl.Length > 0) SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, _tl, NotaPalette.TextTertiary);
         double fc = SamplerModel.CutoffHz((float)_cut);
-        var pts = new List<Point>();
-        for (int i = 0; i <= 120; i++)
-        {
-            double x = i / 120.0 * w;
-            double f = FLo * Math.Pow(FHi / FLo, i / 120.0);
-            pts.Add(new Point(x, Y(MagDb(_type, f, fc, _reso))));
-        }
-        var fill = new StreamGeometry();
-        using (var g = fill.Open())
-        {
-            g.BeginFigure(new Point(0, bot), true);
-            foreach (var p in pts) g.LineTo(p);
-            g.LineTo(new Point(w, bot));
-            g.EndFigure(true);
-        }
-        var line = new StreamGeometry();
-        using (var g = line.Open())
-        {
-            g.BeginFigure(pts[0], false);
-            for (int i = 1; i < pts.Count; i++) g.LineTo(pts[i]);
-            g.EndFigure(false);
-        }
-        if (_type > 0) ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x14), null, fill);
-        ctx.DrawGeometry(null, _type > 0 ? NotaGraph.PrimaryPen : new Pen(NotaPalette.TextTertiary, 1.2), line);
-
-        if (_type > 0)
-        {
-            double cx = XOf(fc, w);
-            ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(cx, 0), new Point(cx, h));
-            NotaGraph.Node(ctx, new Point(cx, Y(MagDb(_type, fc, fc, _reso))), _drag);
-            if (_liveHz > 0 && Math.Abs(Math.Log2(_liveHz / fc)) > 0.05)
-            {
-                double lx = XOf(_liveHz, w);
-                // The cutoff the loudest voice hears now: a solid line in the lighter grey, named
-                // "live" at its top, against the set cutoff's darker dashed line.
-                ctx.DrawLine(new Pen(DeviceCardKit.ModInkBright, 1.2), new Point(lx, 0), new Point(lx, h));
-                var lt = SamplerInk.Mono("live", DeviceCardKit.ModInkBright);
-                ctx.DrawText(lt, new Point(lx + 3 + lt.Width <= w - 2 ? lx + 3 : lx - 3 - lt.Width, 3 + lt.Height));
-            }
-        }
-
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "30\u2009Hz", NotaPalette.TextAxis);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, "18\u2009k", NotaPalette.TextAxis);
-        var k1 = SamplerInk.Mono("1\u2009k", NotaPalette.TextAxis);
-        ctx.DrawText(k1, new Point(XOf(1000, w) + 3, h - 3 - k1.Height + 1));
+        var at = new Point(XOf(fc), YOf(MagDb(_type, fc, fc, _reso)));
+        DrawFront(ctx, _type > 0 ? at.Y : double.NaN);
+        if (_type > 0) DrawHandle(ctx, at);
     }
 }

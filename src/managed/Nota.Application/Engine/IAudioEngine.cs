@@ -505,6 +505,10 @@ public interface IAudioEngine : IDisposable
     int LiveHeldNotes(int[] outNotes);
     /// <summary>Live viz telemetry (Nota Operator harmonic spectrum) into outv; returns the count written.</summary>
     int InstrumentScope(int trackId, float[] outv);
+    /// <summary>The newest output samples of the track's instrument (mono, oldest first, up to
+    /// 4096) into outv; returns the count. Reading keeps the engine's tap on for about a
+    /// second (#531, the filter graph's spectrum).</summary>
+    int InstrumentOutput(int trackId, float[] outv);
     int AddSamplerTrack(string path, int rootNote = 60, bool loop = false);
     /// <summary>Adds an empty Sampler instrument track (a sample is loaded later).</summary>
     int AddSamplerInstrumentTrack();

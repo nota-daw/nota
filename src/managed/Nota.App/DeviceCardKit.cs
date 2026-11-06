@@ -378,12 +378,12 @@ internal static class DeviceCardKit
     // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
         Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null,
-        Func<bool>? modified = null, Action<Action>? addLive = null)
+        Func<bool>? modified = null, Action<Action>? addLive = null, double fontSize = NotaType.DeviceValue)
     {
-        double H = height;   // 22: a card header and the device window's title bar
+        double H = height;   // 22: the device window's title bar; 18 in a card header (#531)
         var label = new TextBlock
         {
-            Text = string.IsNullOrEmpty(current) ? Loc.T("device.card.init") : current, FontSize = NotaType.DeviceValue,
+            Text = string.IsNullOrEmpty(current) ? Loc.T("device.card.init") : current, FontSize = fontSize,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var chevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };

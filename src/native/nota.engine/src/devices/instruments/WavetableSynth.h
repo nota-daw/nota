@@ -369,6 +369,9 @@ class WavetableSynth final : public Instrument {
     Comb revC_[kRevCombs];
     Allp revA_[kRevAll];
     std::atomic<int32_t> activeVoices_{0};
+    // The filters' base cutoffs (log2 Hz) and resonances, eased toward the knobs per sample
+    // (#531): the control-rate update then steps a little at a time, not a whole turn at once.
+    double f1Sm_ = -1e9, f2Sm_ = -1e9, r1Sm_ = 0.0, r2Sm_ = 0.0;
     int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
     std::atomic<float> envTele_[4]; // Env 1 stage, progress, Env 2 stage, progress
     std::atomic<float> pn_[kNumParams];

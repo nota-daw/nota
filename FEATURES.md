@@ -701,6 +701,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin: drag the breakpoints, bend the
   decay and release by their diamonds, Lin / Exp per envelope, a held sustain zone with its level,
   a segment bar, one time scale per card and a dot on the sounding voice.
+- **Filter graph (built-in instruments)** — one filter response view across Volt, Aurora,
+  Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin: the post-filter spectrum
+  behind the curve, a hover marker with frequency, note and gain, and the cutoff lit on the axis.
 - **Nota Synth** — *no longer offered for new tracks: Nota Volt covers it and carries its
   presets (specs/026); saved tracks still load and play.* Subtractive synthesizer (the basic one): one oscillator
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison

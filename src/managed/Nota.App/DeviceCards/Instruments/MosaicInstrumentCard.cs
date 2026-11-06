@@ -747,7 +747,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             (PKnob("mpepressure", "Pressure", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_pressure_aftertouch_level")), "Auto"));
 
         // ======================= Filter tab ======================================================
-        var filt = new SamplerFilterView();
+        var filt = new SamplerFilterView { Spectrum = new FilterSpectrum(engine, track) };
         ToolTip.SetTip(filt, MenuKit.Keys(Loc.T("device.mosaic.drag_left_right_for_the")));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
@@ -765,14 +765,47 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1), Loc.T("device.mosaic.let_the_amp_envelope_open"), on: () => G("envcutoff") >= 0.5f);
-        var filterRow = Row(10,
-            (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)), "Auto"),
-            (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.KnobMain, 56), "Auto"),
-            (PKnob("resonance", "Reso", v => NotaNum.Pct(v)), "Auto"),
-            (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.the_cutoff_follows_the_key")), "Auto"),
-            (new Panel(), "*"), (envBtn, "Auto"),
-            (PKnob("envamount", "Env", v => NotaNum.Unit(MosaicModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct"), arc: Teal), "Auto"),
-            (PKnob("mpeslide", "Slide", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_slide_cc74_cutoff")), "Auto"));
+        // The filter's controls in a column at the graph's right (#531), as on Nota Volt: the type
+        // over a grid of knobs, the envelope switch under them.
+        static Control SideGrid(params Control[] cells)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowSpacing = 4 };
+            for (int k = 0; k < cells.Length; k++)
+            {
+                if (k % 2 == 0) g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                cells[k].HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(cells[k], k % 2); Grid.SetRow(cells[k], k / 2); g.Children.Add(cells[k]);
+            }
+            return g;
+        }
+        static Control SidePage(Control view, Control side)
+        {
+            var host = new Border
+            {
+                Width = 150, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),
+                Padding = new Thickness(8, 0, 0, 0), Child = side,
+            };
+            var page = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(7, 5, 7, 5) };
+            page.Children.Add(view);
+            Grid.SetColumn(host, 1); page.Children.Add(host);
+            return page;
+        }
+        envBtn.HorizontalAlignment = HorizontalAlignment.Center;
+        var filterSide = new StackPanel
+        {
+            Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)),
+                SideGrid(
+                    PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.KnobSecondary, 54),
+                    PKnob("resonance", "Reso", v => NotaNum.Pct(v)),
+                    PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.the_cutoff_follows_the_key")),
+                    PKnob("envamount", "Env", v => NotaNum.Unit(MosaicModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct"), arc: Teal),
+                    PKnob("mpeslide", "Slide", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_slide_cc74_cutoff")),
+                    envBtn),
+            },
+        };
 
         // ======================= the tab panel ===================================================
         const double RowH = 62;
@@ -791,7 +824,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Page(groupTable, groupBottom, 66),
             Page(keysView, pitchRow),
             Page(env, envRow),
-            Page(filt, filterRow),
+            SidePage(filt, filterSide),
         };
         var tabCells = new Border[TabNames.Length];
         var tabTexts = new TextBlock[TabNames.Length];

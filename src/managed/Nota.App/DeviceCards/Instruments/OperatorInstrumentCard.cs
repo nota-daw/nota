@@ -12,7 +12,7 @@
 //               Algorithm   — the 11 topologies as sketches, feedback, and the routing
 //                             diagram (drag one operator onto another to re-route).
 //               Filter · Amp— the subtractive filter's response and the live harmonic
-//                             spectrum, with type / freq / reso / key track / volume.
+//                             spectrum behind the curve, with type / freq / reso / key track / volume.
 //   Rail 186    Global (FM depth, feedback, tone, glide, bend range, voice mode, volume
 //               and the track's meter) or Env (one operator's ADSR, drawn and draggable,
 //               with key and velocity tracking).
@@ -91,22 +91,18 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
 
         var readouts = new List<Action>();
         int tab = 0, railTab = 0, envOp = 3;   // Operators · Global · the D carrier
-        var held = new int[8];
         var specBins = new float[32 + 8];   // the harmonic bars, then the four operator envelopes (#531)
 
-        var spectrum = new OperatorSpectrumViz { VerticalAlignment = VerticalAlignment.Stretch };
         var routing = new OperatorRoutingViz { VerticalAlignment = VerticalAlignment.Stretch };
         var minis = new OperatorAlgoMini[OperatorTopo.Count];
         var filtCurve = new VoltFilter(engine, track)
-        { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, FreqRange = (60, 18000) };
+        { Spectrum = new FilterSpectrum(engine, track), VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, FreqRange = (60, 18000) };
         var env = new VoltEnv(engine, track) { MinHeight = 60, VerticalAlignment = VerticalAlignment.Stretch };
         Action applyEnv = () => { };
 
         void SyncSpectrum()
         {
             int n = engine.InstrumentScope(track, specBins);
-            int hn = engine.InstrumentHeldNotes(track, held);
-            spectrum.Set(specBins, Math.Min(n, 32), hn > 0 ? NoteName(held[0]) : "—");
             if (n >= 40) env.SetPlay((int)specBins[32 + envOp * 2], specBins[32 + envOp * 2 + 1]);
         }
         void Refresh()
@@ -372,16 +368,10 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         Grid.SetColumn(respVal, 1); respHead.Children.Add(respVal);
         readouts.Add(() => respVal.Text = $"{Hz(G("filfreq"))} · Q {NotaNum.Str(1.0 / Math.Max(0.05, 2.0 - 1.9 * G("filreso")), "0.0")}");
 
-        var specHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 11 };
-        var specNote = Mono("f · 10f · 20f · 30f", NotaPalette.TextAxis, NotaType.Axis); specNote.HorizontalAlignment = HorizontalAlignment.Right;
-        specHead.Children.Add(Cap("SPECTRUM"));
-        Grid.SetColumn(specNote, 1); specHead.Children.Add(specNote);
 
-        var filtRight = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,66"), RowSpacing = 3 };
+        var filtRight = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 3 };
         filtRight.Children.Add(respHead);
         Grid.SetRow(filtCurve, 1); filtRight.Children.Add(filtCurve);
-        Grid.SetRow(specHead, 2); filtRight.Children.Add(specHead);
-        Grid.SetRow(spectrum, 3); filtRight.Children.Add(spectrum);
 
         var filtGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("160,*"), ColumnSpacing = 9 };
         filtGrid.Children.Add(filtLeft);

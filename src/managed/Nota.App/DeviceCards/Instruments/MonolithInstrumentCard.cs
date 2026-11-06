@@ -56,7 +56,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         int Sel(string id, int n) => Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1);
 
         var readouts = new List<Action>();
-        var filtCurve = new MonolithFilterCurve();
+        var filtCurve = new MonolithFilterCurve { Spectrum = new FilterSpectrum(engine, track) };
         var fEnv = new VoltEnv(engine, track) { MinHeight = 50 };
         var aEnv = new VoltEnv(engine, track) { MinHeight = 50 };
         var envScale = new EnvTimeScale();
@@ -261,17 +261,21 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             };
             filtCurve.DragStarted += () => { engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); };
             filtCurve.DragEnded += () => { engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); };
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = filtCurve, Margin = new Thickness(0, 3, 0, 4) };
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto"), ColumnSpacing = 2, VerticalAlignment = VerticalAlignment.Bottom };
-            void C(Control c, int col) { Grid.SetColumn(c, col); knobs.Children.Add(c); }
-            C(K("cutoff", "CUTOFF", HzFmt, false, Knob.SizeSecondary, 44), 0);
-            C(K("emph", "EMPHASIS", EmphFmt, false, Knob.SizeSecondary, 48), 1);
-            C(K("contour", "CONTOUR", v => $"{v * 100:0}\u2009%", true, Knob.SizeSecondary, 44), 2);
-            var kbd = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = {
+            var graph = new Border { Margin = new Thickness(0, 3, 0, 0), Child = filtCurve };
+            // The graph takes the whole height; the knobs and switches sit in a column to its
+            // right, as on Nota Volt (#531).
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), RowSpacing = 4, ColumnSpacing = 2 };
+            void C(Control c, int col, int row) { Grid.SetColumn(c, col); Grid.SetRow(c, row); knobs.Children.Add(c); }
+            C(K("cutoff", "CUTOFF", HzFmt, false, Knob.SizeSecondary, 48), 0, 0);
+            C(K("emph", "EMPHASIS", EmphFmt, false, Knob.SizeSecondary, 52), 1, 0);
+            C(K("contour", "CONTOUR", v => $"{v * 100:0}\u2009%", true, Knob.SizeSecondary, 48), 0, 1);
+            var kbd = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = {
                 new TextBlock { Text = "Kbd ctrl", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC },
-                Row(3, Toggle("kbd1", "1/3"), Toggle("kbd2", "2/3")) } };
-            C(kbd, 3);
-            var body = new DockPanel { LastChildFill = true, Children = { WithDock(Lbl("FILTER", 7, MutedC), Dock.Top), WithDock(knobs, Dock.Bottom), graph } };
+                Toggle("kbd1", "1/3"), Toggle("kbd2", "2/3") } };
+            C(kbd, 1, 1);
+            var left = new DockPanel { LastChildFill = true, Children = { WithDock(Lbl("FILTER", 7, MutedC), Dock.Top), graph } };
+            var side = new Border { Width = 116, VerticalAlignment = VerticalAlignment.Center, Child = knobs };
+            var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Children = { left, WithCol(side, 1) } };
             return new Border { Width = 226, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(6, 4), Child = body };
         }
         // -- Env tab --

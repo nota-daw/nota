@@ -388,8 +388,10 @@ void WavetableSynth::render(float* out, int32_t frames) {
 
     const int t1type = filtType(Fil1Type), t2type = filtType(Fil2Type);
     const bool slope1 = get(Fil1Slope) > 0.5f, slope2 = get(Fil2Slope) > 0.5f;
-    const double f1base = expMap(get(Cutoff), 20.0, 18000.0), f2base = expMap(get(Fil2Freq), 20.0, 18000.0);
-    const double reso1 = get(Resonance), reso2 = get(Fil2Reso);
+    const double f1tgt = std::log2(expMap(get(Cutoff), 20.0, 18000.0)), f2tgt = std::log2(expMap(get(Fil2Freq), 20.0, 18000.0));
+    const double r1tgt = get(Resonance), r2tgt = get(Fil2Reso);
+    if (f1Sm_ < -1e8) { f1Sm_ = f1tgt; f2Sm_ = f2tgt; r1Sm_ = r1tgt; r2Sm_ = r2tgt; }
+    const double fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
     const double f1Env = bip(Fil1Env), f1Lfo = bip(Fil1Lfo), f1Key = get(Fil1Key);
     const double f2Env = bip(Fil2Env), f2Lfo = bip(Fil2Lfo), f2Key = get(Fil2Key);
     const int r1 = routeOf(RouteOsc1), r2 = routeOf(RouteOsc2), rs = routeOf(RouteSub);
@@ -458,6 +460,11 @@ void WavetableSynth::render(float* out, int32_t frames) {
 
     float peak = 0.0f;
     for (int32_t i = 0; i < frames; ++i) {
+        f1Sm_ += (f1tgt - f1Sm_) * fSm;
+        f2Sm_ += (f2tgt - f2Sm_) * fSm;
+        r1Sm_ += (r1tgt - r1Sm_) * fSm;
+        r2Sm_ += (r2tgt - r2Sm_) * fSm;
+        const double f1base = std::exp2(f1Sm_), f2base = std::exp2(f2Sm_), reso1 = r1Sm_, reso2 = r2Sm_;
         if (lfoPhase1_ >= 1.0) {
             lfoPhase1_ -= 1.0;
             lfoSh1_ = frand() * 2.0f - 1.0f;

@@ -447,7 +447,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         // ======================================================================
         Control FilterPanel()
         {
-            var curve = new ConsortFilterCurve();
+            var curve = new ConsortFilterCurve { Spectrum = new FilterSpectrum(engine, track) };
             curve.Changed = (c, r) => { Raw("cutoff", (float)c); Raw("reso", (float)r); Refresh(); };
             curve.DragStarted += () => { Begin("cutoff"); Begin("reso"); };
             curve.DragEnded += () => { End("cutoff"); End("reso"); };
@@ -455,21 +455,23 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 ValueEntry.AttachAll(curve, ValueEntry.InstrumentParam(engine, track, ci, "cutoff", "Cutoff", v => Cut((float)v), Refresh),
                     ValueEntry.InstrumentParam(engine, track, ri, "reso", "Reso", v => Tenths((float)v), Refresh));
             cur.Add(() => curve.Set(G("cutoff"), G("reso"), (G("spacing") - 0.5) * 6, Sel("filtmode", 3), On("basscomp")));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 3, 0, 2), Child = curve };
+            var graph = new Border { Margin = new Thickness(0, 3, 0, 0), Child = curve };
             var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24\u2009dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
+            // The graph takes the whole height; the knobs and switches sit in a column to its
+            // right, as on Nota Volt (#531).
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), RowSpacing = 4 };
             knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 50));
             knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.SizeSecondary, 46), 1));
-            knobs.Children.Add(Col(K("spacing", "SPACING", Space, false, Knob.SizeSecondary, 50), 2));
-            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", EnvAmt, true, Knob.SizeSecondary, 46), 3));
+            var spc = K("spacing", "SPACING", Space, false, Knob.SizeSecondary, 50); Grid.SetRow(spc, 1); knobs.Children.Add(spc);
+            var env = Col(K("fenvamt", "ENVELOPE", EnvAmt, true, Knob.SizeSecondary, 46), 1); Grid.SetRow(env, 1); knobs.Children.Add(env);
             var j1 = new ConsortJackDot(11); var j2 = new ConsortJackDot(11);
             ToolTip.SetTip(j1, Loc.T("device.consort.filt_1_cutoff_input")); ToolTip.SetTip(j2, Loc.T("device.consort.filt_2_cutoff_input"));
             cur.Add(() => { j1.Set(PatchedAt(false, 10)); j2.Set(PatchedAt(false, 11)); });
-            var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 8, Height = 18 };
-            bottom.Children.Add(Row(5, Caps("KEYTRACK"), Chips("kbdtrk", new[] { "0", "½", "1" })));
-            bottom.Children.Add(Col(Toggle("basscomp", "Bass comp"), 1));
-            bottom.Children.Add(Col(Row(4, j1, j2), 3));
-            var body = new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(bottom, Avalonia.Controls.Dock.Bottom), Docked(knobs, Avalonia.Controls.Dock.Bottom), graph } };
+            var key = Row(5, Caps("KEYTRACK"), Chips("kbdtrk", new[] { "0", "½", "1" }));
+            var bottom = new DockPanel { LastChildFill = false, Children = { Docked(Toggle("basscomp", "Bass comp"), Avalonia.Controls.Dock.Left), Docked(Row(4, j1, j2), Avalonia.Controls.Dock.Right) } };
+            var side = new StackPanel { Spacing = 6, Width = 150, VerticalAlignment = VerticalAlignment.Center, Children = { knobs, key, bottom } };
+            var left = new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), graph } };
+            var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Children = { left, Col(side, 1) } };
             return new Border { Width = 222, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(7, 4), Child = body };
         }
         // The filter on its own tab: the dual ladder across the whole panel.

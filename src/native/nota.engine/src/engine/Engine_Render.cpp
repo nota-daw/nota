@@ -253,6 +253,7 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         releaseHeldControllers(inst);
         inst.offSettled.store(true, std::memory_order_relaxed);
     }
+    inst.tapOutput(dst, frames); // the card's filter graph spectrum (#531), while one is open
 }
 
 // Something on the track that holds sound after its input stops: a device that runs, or a

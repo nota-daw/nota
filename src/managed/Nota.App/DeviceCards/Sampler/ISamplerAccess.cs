@@ -32,6 +32,8 @@ internal interface ISamplerAccess
     bool TryMeter(out NotaMeter meter);
     /// <summary>MIDI Learn / CV for a control bound to param i (track only).</summary>
     void Learn(Avalonia.Controls.Control c, int i);
+    /// <summary>The output spectrum for the filter graph (#531); none in a chain.</summary>
+    FilterSpectrum? Spectrum() => null;
 }
 
 internal sealed class TrackSamplerAccess(IAudioEngine engine, int trackId) : ISamplerAccess
@@ -56,6 +58,7 @@ internal sealed class TrackSamplerAccess(IAudioEngine engine, int trackId) : ISa
     public int Scope(float[] buf) => engine.InstrumentScope(trackId, buf);
     public bool TryMeter(out NotaMeter meter) => engine.TryGetTrackMeter(trackId, out meter);
     public void Learn(Avalonia.Controls.Control c, int i) => MidiLearn.Bind(c, MidiTarget.PluginParam(trackId, -1, i), ParamName(i));
+    public FilterSpectrum? Spectrum() => new(engine, trackId);
 }
 
 internal sealed class ChainSamplerAccess(IAudioEngine engine, int trackId, int chain) : ISamplerAccess

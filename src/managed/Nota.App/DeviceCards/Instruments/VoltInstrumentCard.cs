@@ -141,7 +141,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         var readouts = new List<Action>();
         int tab = 0, railTab = 0, fsel = 0;   // Osc · Global · Filter 1
 
-        var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
+        var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, Spectrum = new FilterSpectrum(engine, track) };
         var ampEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var filtEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var hint = new TextBlock

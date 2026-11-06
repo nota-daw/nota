@@ -82,7 +82,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
 
         var readouts = new List<Action>();
         var scope = new float[32];
-        var filtCurve = new PentadFilterCurve();
+        var filtCurve = new PentadFilterCurve { Spectrum = new FilterSpectrum(engine, track) };
         var fEnvView = new VoltEnv(engine, track) { MinHeight = 50 };
         var aEnvView = new VoltEnv(engine, track) { MinHeight = 50 };
         var envScale = new EnvTimeScale();
@@ -317,17 +317,21 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             };
             filtCurve.DragStarted += () => { engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "reso"); };
             filtCurve.DragEnded += () => { engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "reso"); };
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
+            var graph = new Border { Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
             var keyPct = MonoText("", 7, Txt2);
             readouts.Add(() => keyPct.Text = Pct(G("keytrk")));
             keyPct.HorizontalAlignment = HorizontalAlignment.Center;
-            var key = new StackPanel { Spacing = 3, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { Caps("KEYTRACK"), Chips("keytrk", new[] { "0", "½", "1" }), keyPct } };
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto") };
-            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 44));
-            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.SizeSecondary, 44), 1));
-            knobs.Children.Add(Col(K("fenvamt", "ENVELOPE", v => Tenths(v), true, Knob.SizeSecondary, 44), 2));
-            knobs.Children.Add(Col(key, 3));
-            var body = new DockPanel { LastChildFill = true, Children = { Docked(Caps("FILTER"), Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Bottom), graph } };
+            var key = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { Caps("KEYTRACK"), Chips("keytrk", new[] { "0", "½", "1" }), keyPct } };
+            // The graph takes the whole height; the knobs sit in a column to its right, as on
+            // Nota Volt (#531).
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), RowSpacing = 4 };
+            knobs.Children.Add(K("cutoff", "CUTOFF", Cut, false, Knob.SizeSecondary, 48));
+            knobs.Children.Add(Col(K("reso", "RESO", v => Tenths(v), false, Knob.SizeSecondary, 48), 1));
+            var envK = K("fenvamt", "ENVELOPE", v => Tenths(v), true, Knob.SizeSecondary, 48); Grid.SetRow(envK, 1); knobs.Children.Add(envK);
+            Grid.SetRow(key, 1); knobs.Children.Add(Col(key, 1));
+            var left = new DockPanel { LastChildFill = true, Children = { Docked(Caps("FILTER"), Avalonia.Controls.Dock.Top), graph } };
+            var side = new Border { Width = 112, VerticalAlignment = VerticalAlignment.Center, Child = knobs };
+            var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Children = { left, Col(side, 1) } };
             return new Border { Width = 196, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(7, 4), Child = body };
         }
         // The two envelopes side by side on one time scale (#531): drag the curve, bend decay and

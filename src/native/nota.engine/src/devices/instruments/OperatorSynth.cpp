@@ -236,12 +236,15 @@ void OperatorSynth::render(float* out, int32_t frames) {
 
     // Filter coeffs, recomputed per block. With key tracking the cutoff follows the
     // note, so each voice gets its own pair; without it they all land on the same one.
-    double fgV[kVoices], fa1V[kVoices];
+    // They are targets: each voice eases its g and k toward them per sample (~5 ms), so a
+    // cutoff turned quickly sweeps instead of stepping at each block (an audible click).
+    double fgV[kVoices];
     for (int vi = 0; vi < kVoices; ++vi) {
         const double cut = keyTrk > 0.0 ? fbase * std::exp2(keyTrk * (voices_[vi].pitch - 60) / 12.0) : fbase;
         fgV[vi] = std::tan(kPi * std::clamp(cut, 20.0, sampleRate_ * 0.49) * invSr);
-        fa1V[vi] = 1.0 / (1.0 + fgV[vi] * (fgV[vi] + fk));
+        if (voices_[vi].fgSm < 0.0) { voices_[vi].fgSm = fgV[vi]; voices_[vi].fkSm = fk; }
     }
+    const double fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
 
     double f0 = 0.0; // frequency of the freshest active voice → spectrum base + label
     float peak = 0.0f;
@@ -250,7 +253,9 @@ void OperatorSynth::render(float* out, int32_t frames) {
         for (int vi = 0; vi < kVoices; ++vi) {
             Voice& v = voices_[vi];
             if (!v.active) continue;
-            const double fg = fgV[vi], fa1 = fa1V[vi];
+            v.fgSm += (fgV[vi] - v.fgSm) * fSm;
+            v.fkSm += (fk - v.fkSm) * fSm;
+            const double fg = v.fgSm, fa1 = 1.0 / (1.0 + fg * (fg + v.fkSm));
             // Advance glide toward the target pitch.
             v.curFreq += (v.freq - v.curFreq) * gCoef;
             v.ex.tick(exAdd, exprCoef_);
@@ -298,7 +303,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
             const double v2 = v.s2 + fg * v1;
             v.s1 = 2.0 * v1 - v.s1;
             v.s2 = 2.0 * v2 - v.s2;
-            double fout = ftype == 1 ? (y - fk * v1 - v2) : ftype == 2 ? v1 : v2; // HP / BP / LP
+            double fout = ftype == 1 ? (y - v.fkSm * v1 - v2) : ftype == 2 ? v1 : v2; // HP / BP / LP
             mono += (float)(fout * (1.0 - velToLevel * (1.0 - (double)v.vel)) * (1.0 + 0.5 * v.ex.pressure()));
         }
         // Spectrum-analysis tap (pre-master timbre signal), block-decimated: the ring

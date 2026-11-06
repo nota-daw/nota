@@ -1230,6 +1230,10 @@ NOTA_API int32_t nota_track_held_notes(const NotaEngine* engine, int32_t track_i
 /* Live viz telemetry (e.g. the Nota Operator harmonic spectrum) into `out`; returns the
    count of floats written (0 if the instrument exposes no scope). */
 NOTA_API int32_t nota_track_instrument_scope(const NotaEngine* engine, int32_t track_id, float* out, int32_t max_n);
+/* The newest output samples of a track's instrument (mono, oldest first, up to 4096) into
+   `out`; returns the count written. Reading keeps the tap on for about a second — the
+   instrument writes nothing while no one reads (#531, the filter graph's spectrum). */
+NOTA_API int32_t nota_track_instrument_output(const NotaEngine* engine, int32_t track_id, float* out, int32_t max_n);
 /* Captured session audio take; returns 1 if the slot holds audio, else 0. */
 NOTA_API int32_t nota_session_get_audio_slot(const NotaEngine* engine, int32_t track_id,
                                              int32_t scene, NotaSessionAudioSlot* out);

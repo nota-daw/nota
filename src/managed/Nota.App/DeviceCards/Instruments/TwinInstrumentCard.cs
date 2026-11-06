@@ -79,6 +79,9 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Matrix", "FX", "Seq", "Voice" };
     private const int EnvTabIx = 2;
+    // The Env tab's sizes (#531): the A D S R knobs and their cells, and the graph above them —
+    // set together so the three sections keep a margin at the card's bottom.
+    private const double EnvKnob = 20, EnvCell = 36, EnvGraphH = 92;
     private static readonly string[] SeqRates = { "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32" };
     private static readonly string[] ArpModes = { "Up", "Down", "Up/down", "Random", "As played", "Chord" };
     private static readonly int[] SeqLengths = { 4, 8, 12, 16, 24, 32, 48, 64 };
@@ -288,25 +291,6 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         }
 
         // A value well on a param (the ADSR times under an envelope graph), named under it.
-        Control PWell(string id, string label, Func<float, string> fmt)
-        {
-            if (!idx.TryGetValue(id, out var pi)) return new Panel();
-            var well = new TwinValueWell { Format = v => fmt((float)v), Default = engine.InstrumentParamDefault(track, pi) };
-            well.Value = G(id);
-            well.ValueChanged += v => { SetP(id, (float)v); Refresh(); };
-            well.GestureBegin += () => Begin(id);
-            well.GestureEnd += () => End(id);
-            readouts.Add(() => { if (!well.Dragging) well.Value = G(id); });
-            MidiLearn.Bind(well, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
-            ValueEntry.Attach(well, ValueEntry.Probing(label, () => G(id), v => { SetP(id, (float)v); Refresh(); }, () => fmt(G(id)),
-                () => Begin(id), () => End(id), reset: () => SetParam(id, (float)well.Default)), well.Readout);
-            var name = new TextBlock
-            {
-                Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary,
-                HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 10,
-            };
-            return new StackPanel { Spacing = 1, Children = { well, name } };
-        }
 
         // A hint line inside a section (Ink 3, 8 px).
         static TextBlock Note(string t) => new()
@@ -328,6 +312,16 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         T Graph<T>(T g, double w, double h) where T : TwinParamGraph
         {
             g.Width = w; g.Height = h;
+            g.Get = G; g.Set = (id, v) => { SetP(id, v); Refresh(); }; g.Begin = Begin; g.End = End;
+            g.Bind(Side);
+            readouts.Add(g.Refresh);
+            return g;
+        }
+        // The response on the shared filter graph (#531), bound to the side being edited, with the
+        // instrument's output spectrum behind it.
+        TwinFilterView FilterGraph(double w, double h)
+        {
+            var g = new TwinFilterView { Width = w, Height = h, Spectrum = new FilterSpectrum(engine, track) };
             g.Get = G; g.Set = (id, v) => { SetP(id, v); Refresh(); }; g.Begin = Begin; g.End = End;
             g.Bind(Side);
             readouts.Add(g.Refresh);
@@ -373,7 +367,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 Fixed(24, Note(Loc.T("device.twin.slope_in_db_per_octave"))),
                 Row(PKnob(S("ldcut"), "Cutoff", Cutoff, 44, CutW), PKnob(S("ldres"), "Resonance", Pct, 44, CutW)),
                 Row(PKnob(S("ldkey"), "Key", Pct, cellW: CutW, arc: Teal), PKnob(S("ldenv"), "Env", EnvOct, cellW: CutW, arc: Teal))),
-            Island("Response", null, 0, Graph(new TwinFilterView(), 172, 172)));
+            Island("Response", null, 0, FilterGraph(172, 172)));
 
         // ---- Env tab ------------------------------------------------------------
         // An envelope (#531): the shared graph on the side being edited — drag its breakpoints, bend
@@ -384,13 +378,19 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         var envViews = new VoltEnv[3];
         Control Env(string title, string e, bool mod, double w, int slot)
         {
-            var times = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
-            var cells = new[] { PWell(S(e + "a"), "Attack", Attack), PWell(S(e + "d"), "Decay", Decay), PWell(S(e + "s"), "Sustain", Pct), PWell(S(e + "r"), "Release", Decay) };
-            for (int k = 0; k < 4; k++) { Grid.SetColumn(cells[k], k); times.Children.Add(cells[k]); }
-            var knobs = mod
-                ? Row(PKnob(S(e + "dly"), "Delay", Delay, cellW: 58), PKnob(S(e + "vel"), "Velocity", Pct, cellW: 58, arc: Teal))
-                : Row(PKnob(S(e + "vel"), "Velocity", Pct, cellW: 58, arc: Teal), PKnob(S(e + "curve"), "Curve", Pct, cellW: 58));
-            var view = new VoltEnv(engine, track) { Height = 70, MinHeight = 60 };
+            // A D S R as one row of knobs under a rule (as on every other envelope, #531), then the
+            // section's two extra amounts as sliders side by side.
+            var times = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
+            var cells = new[] { PKnob(S(e + "a"), "A", Attack, EnvKnob, EnvCell), PKnob(S(e + "d"), "D", Decay, EnvKnob, EnvCell), PKnob(S(e + "s"), "S", Pct, EnvKnob, EnvCell), PKnob(S(e + "r"), "R", Decay, EnvKnob, EnvCell) };
+            for (int k = 0; k < 4; k++) { cells[k].HorizontalAlignment = HorizontalAlignment.Center; Grid.SetColumn(cells[k], k); times.Children.Add(cells[k]); }
+            var timesHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 3, 0, 0), Child = times };
+            Control Sl(string id, string label, Func<float, string> fmt) => PSlider(id, label, fmt, Array.Empty<string>(), labelW: 42, valueW: 28);
+            var pair = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
+            var sa = mod ? Sl(S(e + "dly"), "Delay", Delay) : Sl(S(e + "vel"), "Velocity", Pct);
+            var sb = mod ? Sl(S(e + "vel"), "Velocity", Pct) : Sl(S(e + "curve"), "Curve", Pct);
+            pair.Children.Add(sa); Grid.SetColumn(sb, 1); pair.Children.Add(sb);
+            var knobs = pair;
+            var view = new VoltEnv(engine, track) { Height = EnvGraphH, MinHeight = 60 };
             (int, string) Q(string id) => (I(S(id)), S(id));
             view.Target(title, Q(e + "a"), Q(e + "d"), Q(e + "s"), Q(e + "r"));
             view.Shape(Q(e + "dcurve"), Q(e + "rcurve"), Q(e + "exp"));
@@ -401,7 +401,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             envViews[slot] = view;
             var curve = Chips(S(e + "exp"), new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") }, 4);
             Control head = mod ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Toggle("Loop", S("menvloop")), curve } } : curve;
-            return Island(title, head, w, view, times, knobs);
+            return Island(title, head, w, view, timesHost, knobs);
         }
         var envBody = Chain(Env("Filter env", "fenv", false, 204, 0), Env("Amp env", "aenv", false, 204, 1), Env("Mod env", "menv", true, 0, 2));
         {

@@ -129,7 +129,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         int tab = 0, railTab = 0, fsel = 0, osel = 0;   // Osc · Global · Filter 1 · Osc 1
 
         var stack = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
-        var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
+        var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, Spectrum = new FilterSpectrum(engine, track) };
         var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var lfoStrip = new AuroraLfoStrip { VerticalAlignment = VerticalAlignment.Stretch };
