@@ -957,6 +957,12 @@ int32_t Engine::instrumentScope(int32_t trackId, float* out, int32_t maxN) const
     return (t && t->instrument) ? t->instrument->scopeRead(out, maxN) : 0;
 }
 
+int32_t Engine::instrumentOutput(int32_t trackId, float* out, int32_t maxN) const {
+    if (!out || maxN <= 0) return 0;
+    auto t = findTrackAuthoring(trackId);
+    return (t && t->instrument) ? t->instrument->readOutput(out, maxN) : 0;
+}
+
 // --- structural edits: audio (M1) ------------------------------------------
 int32_t Engine::addAudioTrack() {
     auto g = std::make_shared<Graph>(*authoring_);

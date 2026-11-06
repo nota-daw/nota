@@ -42,6 +42,11 @@ OperatorSynth::OperatorSynth() {
     set(ModWheel, 0.0f);
     set(FilKeyTrk, 0.0f);
     set(VelToLevel, 1.0f); // velocity scales the voice, as it always did
+    for (int o = 0; o < 4; ++o) { // straight, Lin: old projects keep their envelopes
+        set((Param)(ShapeBase + o * 3), 0.5f);
+        set((Param)(ShapeBase + o * 3 + 1), 0.5f);
+        set((Param)(ShapeBase + o * 3 + 2), 0.0f);
+    }
 }
 
 // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
@@ -82,6 +87,11 @@ std::string OperatorSynth::pluginParamId(int32_t i) const {
         "cwave", "catk", "cdec", "csus", "crel", "dcoarse", "dfine", "dlevel", "dwave", "datk", "ddec", "dsus", "drel",
         "filtype", "filfreq", "filreso", "volume", "fmdepth", "glide", "veltofm", "keylevel", "mono", "bend",
         "bendrange", "modwheel", "filkeytrk", "veltolevel"};
+    if (i >= ShapeBase && i < kNumParams) {
+        static const char* sh[] = {"dcurve", "rcurve", "envexp"};
+        const int j = i - ShapeBase;
+        return std::string(1, static_cast<char>('a' + j / 3)) + sh[j % 3];
+    }
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
 }
 
@@ -92,6 +102,11 @@ std::string OperatorSynth::pluginParamName(int32_t i) const {
         "C Release", "D Coarse", "D Fine", "D Level", "D Wave", "D Attack", "D Decay", "D Sustain", "D Release",
         "Filter Type", "Filter Freq", "Filter Reso", "Volume", "FM Depth", "Glide", "Vel to FM", "Key to Level", "Mono",
         "Pitch Bend", "Bend Range", "Mod Wheel", "Filter Key Track", "Vel to Level"};
+    if (i >= ShapeBase && i < kNumParams) {
+        static const char* sh[] = {" Decay Curve", " Release Curve", " Env Exp"};
+        const int j = i - ShapeBase;
+        return std::string(1, static_cast<char>('A' + j / 3)) + sh[j % 3];
+    }
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
 }
 
@@ -152,6 +167,7 @@ void OperatorSynth::noteOn(int32_t pitch, float velocity) {
     }
     v->curFreq = legato ? v->curFreq : (glideOn && lastFreq_ > 0.0) ? lastFreq_ : v->freq;
     lastFreq_ = v->freq;
+    lastVoice_ = static_cast<int>(v - voices_);
     if (!legato) {
         v->fbLast = 0.0;
         v->s1 = v->s2 = 0.0;
@@ -159,6 +175,7 @@ void OperatorSynth::noteOn(int32_t pitch, float velocity) {
             v->phase[o] = 0.0;
             v->env[o] = 0.0f;
             v->stage[o] = Stage::Attack;
+            v->shape[o] = {};
         }
     }
     wake();
@@ -193,6 +210,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
     const double bendMul = std::exp2(bendSemis / 12.0);
     const double keyTrk = get(FilKeyTrk);
     double ratio[4], fineMul[4], level[4], atk[4], dec[4], sus[4], rel[4];
+    EnvBends bend[4];
     int wave[4];
     for (int o = 0; o < 4; ++o) {
         const int base = ACoarse + o * 8;
@@ -204,6 +222,8 @@ void OperatorSynth::render(float* out, int32_t frames) {
         dec[o] = rateOf((Param)(base + F_D), 0.002, 6.0);
         sus[o] = get((Param)(base + F_S));
         rel[o] = rateOf((Param)(base + F_R), 0.002, 8.0);
+        const int sb = ShapeBase + o * 3;
+        bend[o] = envBends({get((Param)sb), get((Param)(sb + 1)), get((Param)(sb + 2))});
     }
     const int ftype = std::clamp((int)std::lround(get(FilterType) * 2.0f), 0, 2);
     const double fbase = expMap(get(FilterFreq), 60.0, 18000.0);
@@ -216,12 +236,15 @@ void OperatorSynth::render(float* out, int32_t frames) {
 
     // Filter coeffs, recomputed per block. With key tracking the cutoff follows the
     // note, so each voice gets its own pair; without it they all land on the same one.
-    double fgV[kVoices], fa1V[kVoices];
+    // They are targets: each voice eases its g and k toward them per sample (~5 ms), so a
+    // cutoff turned quickly sweeps instead of stepping at each block (an audible click).
+    double fgV[kVoices];
     for (int vi = 0; vi < kVoices; ++vi) {
         const double cut = keyTrk > 0.0 ? fbase * std::exp2(keyTrk * (voices_[vi].pitch - 60) / 12.0) : fbase;
         fgV[vi] = std::tan(kPi * std::clamp(cut, 20.0, sampleRate_ * 0.49) * invSr);
-        fa1V[vi] = 1.0 / (1.0 + fgV[vi] * (fgV[vi] + fk));
+        if (voices_[vi].fgSm < 0.0) { voices_[vi].fgSm = fgV[vi]; voices_[vi].fkSm = fk; }
     }
+    const double fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
 
     double f0 = 0.0; // frequency of the freshest active voice → spectrum base + label
     float peak = 0.0f;
@@ -230,7 +253,9 @@ void OperatorSynth::render(float* out, int32_t frames) {
         for (int vi = 0; vi < kVoices; ++vi) {
             Voice& v = voices_[vi];
             if (!v.active) continue;
-            const double fg = fgV[vi], fa1 = fa1V[vi];
+            v.fgSm += (fgV[vi] - v.fgSm) * fSm;
+            v.fkSm += (fk - v.fkSm) * fSm;
+            const double fg = v.fgSm, fa1 = 1.0 / (1.0 + fg * (fg + v.fkSm));
             // Advance glide toward the target pitch.
             v.curFreq += (v.freq - v.curFreq) * gCoef;
             v.ex.tick(exAdd, exprCoef_);
@@ -250,7 +275,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
             int nc = 0;
             bool anyOn = false;
             for (int o = 0; o < 4; ++o) {
-                advanceEnv(v.env[o], v.stage[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o]);
+                advanceShapedEnv(v.env[o], v.stage[o], v.shape[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o], bend[o]);
                 if (v.stage[o] != Stage::Off) anyOn = true;
                 double pmod = modIn[o];
                 if (o == 0 && fb > 0.0) pmod += fb * v.fbLast;
@@ -278,7 +303,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
             const double v2 = v.s2 + fg * v1;
             v.s1 = 2.0 * v1 - v.s1;
             v.s2 = 2.0 * v2 - v.s2;
-            double fout = ftype == 1 ? (y - fk * v1 - v2) : ftype == 2 ? v1 : v2; // HP / BP / LP
+            double fout = ftype == 1 ? (y - v.fkSm * v1 - v2) : ftype == 2 ? v1 : v2; // HP / BP / LP
             mono += (float)(fout * (1.0 - velToLevel * (1.0 - (double)v.vel)) * (1.0 + 0.5 * v.ex.pressure()));
         }
         // Spectrum-analysis tap (pre-master timbre signal), block-decimated: the ring
@@ -300,6 +325,13 @@ void OperatorSynth::render(float* out, int32_t frames) {
     int live = 0;
     for (auto& v : voices_)
         if (v.active) ++live;
+    {
+        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        const bool on = lv && lv->active;
+        for (int o = 0; o < 4; ++o)
+            publishEnvTele(envTele_ + o * kEnvTeleFloats, on, on ? lv->stage[o] : Stage::Off,
+                on ? lv->shape[o] : EnvShapeState{});
+    }
     if (live == 0 && peak <= 1.0e-5f) {
         quietSamples_ += (uint64_t)frames;
         if (quietSamples_ > kIdleSamples) idle_ = true;
@@ -309,8 +341,16 @@ void OperatorSynth::render(float* out, int32_t frames) {
     }
 }
 
+// The harmonic bars (kSpecBins), then — for a caller that asks for more — the four operator
+// envelopes' stage and progress (EnvShape.h), for the envelope graphs.
 int32_t OperatorSynth::scopeRead(float* outv, int32_t maxN) const {
     if (!outv || maxN <= 0) return 0;
+    const int32_t n = spectrumRead(outv, maxN);
+    if (n < kSpecBins || maxN <= kSpecBins) return n;
+    return kSpecBins + readEnvTele(envTele_, 4 * kEnvTeleFloats, outv + kSpecBins, maxN - kSpecBins);
+}
+
+int32_t OperatorSynth::spectrumRead(float* outv, int32_t maxN) const {
     const double f0 = specF0_.load(std::memory_order_relaxed);
     const int N = std::min(maxN, kSpecBins);
     if (f0 <= 0.0) {
@@ -363,33 +403,6 @@ double OperatorSynth::waveform(int w, double ph) {
     }
 }
 
-void OperatorSynth::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
-    switch (st) {
-    case Stage::Attack:
-        env += atk;
-        if (env >= 1.0f) {
-            env = 1.0f;
-            st = Stage::Decay;
-        }
-        break;
-    case Stage::Decay:
-        env -= dec;
-        if (env <= sus) {
-            env = sus;
-            st = Stage::Sustain;
-        }
-        break;
-    case Stage::Sustain: break;
-    case Stage::Release:
-        env -= rel;
-        if (env <= 0.0f) {
-            env = 0.0f;
-            st = Stage::Off;
-        }
-        break;
-    case Stage::Off: break;
-    }
-}
 
 OperatorSynth::Voice* OperatorSynth::findFreeVoice() {
     for (auto& v : voices_)

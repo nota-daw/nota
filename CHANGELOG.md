@@ -23,6 +23,47 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
+  Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
+  them, including the effects and the depth of each modulation route. The voice has two
+  oscillators that run triangle → saw → square continuously, with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes and three LFOs. The card's A / B switch picks the side the
+  knobs, automation and MIDI learn write to. Each knob marks the other side and where the sound
+  is now. **A → B**, **B → A** and **Swap** are one undo step each.
+  - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
+    time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
+    pressure morphs only the pressed note.
+  - **Matrix**: a source × destination grid, as on Nota Consort — drag a cell for the depth,
+    double-click removes the route. Up to 64 routes per part from 29 sources (LFOs, envelopes,
+    velocity, release velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to
+    Morph, pitch, vibrato or any sound control. A route has a depth per side.
+  - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
+    them morphing. One switch bypasses the section.
+  - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
+    velocity, gate or tie), swing, transpose by a held key, latch and step record. With the
+    transport stopped a held key plays the pattern (or the arpeggio) at the project tempo;
+    with it rolling they keep time with the song. Four motion
+    lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
+    arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
+    Patterns travel with presets and projects; every pattern edit is one undo step.
+  - **Split and Layer**: two parts, Lower and Upper, each a full Twin sound. They split at a key
+    (learnable from a played key) or layer on every key. The 12 voices are shared between the
+    parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
+    or swaps them, or loads a factory or saved sound into one part.
+  - **117 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
+    L and S sizes.
+  - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
+    `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
+- **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
+  playing its pattern.
+- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
+  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
+  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
+  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
+  applies at once, in every theme, tuned to each so it stays readable; a colour that would
+  be confused with the record red, mute, solo or the meter green, or a grey, is explained
+  and not applied. Nota Remote follows. Orange looks exactly as before.
 - **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
   text in the app a point smaller or up to two points larger, live, without changing the
   layout (Interface scale still scales everything). Device cards keep their text size.
@@ -30,6 +71,74 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **A new filter graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
+  Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin draw their filter
+  response the same way, over the knobs they already had. The spectrum of what the instrument
+  plays, after its filter, moves behind the curve. Hovering shows a marker with the frequency,
+  the nearest note (with cents) and the gain there. The cutoff is lit on the frequency axis, with
+  a dashed rule up to the curve. The engine taps the instrument's output for this only while a
+  graph is on screen.
+- **Filter tabs give the graph the whole height** (nota-daw/nota#531): on Consort, Pentad,
+  Monolith, Sampler and Mosaic the filter's knobs and switches move into a column at the graph's
+  right, as on Volt. The spectrum behind the curve is drawn as a filled line, as on EQ-3. Operator
+  drops the harmonic spectrum under its filter.
+- **Envelope graphs name their grid** (nota-daw/nota#531): 25 / 50 / 75 % at the level lines, and
+  a line at each time tick named under the segment bar. Nota Twin's envelopes get the A D S R
+  knob row, and their two amounts each become one slider, side by side.
+- **A new envelope graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
+  Operator, Bass, Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin draw their
+  envelopes the same way. The curve is in the accent colour with a light fill. The sustain stretch is
+  marked as held, with its level as a dashed line and a badge. The breakpoints are hollow, and the one
+  you drag shows its value. A segment bar A · D · S · R lights the stage being edited. The envelopes
+  of a card share one time scale, and a dot follows the newest voice. Every envelope also gains a
+  **decay and a release curve** (drag the diamond in the middle of the stage) and a **Lin / Exp**
+  switch, as new parameters that automate and save with presets. They default to the old sound:
+  straight and Lin on the subtractive and sample instruments, and Exp (the analog RC curve) on
+  Consort, Pentad and Twin. Twin projects saved before this load into the new parameter layout.
+- **Envelopes get their own tab** (nota-daw/nota#531): Nota Operator's operator envelope moves
+  from the right rail to an Env tab among the centre tabs, with the operator picker A–D beside it.
+  Consort splits Filters · Env into Filters and Env. Pentad splits Filter · Amp into Filter and Env,
+  with the Release switch in the tab bar. Monolith's contours leave Modifiers for an Env tab.
+- **Built-in instrument cards without the status line** (nota-daw/nota#531): the 18 px text strip
+  along the bottom of every built-in instrument card is gone, and the controls use the height.
+  Nota Pentad's Voice setup (polyphony, allocation, glide, release, oversampling, bass comp,
+  noise floor, vintage seed, master tune, aftertouch) moves from the strip's flyout into a third
+  tab, **Voices**, next to Mixer and Output.
+- **Nota Volt comes in two sizes** (nota-daw/nota#531): an S / L toggle in the card header. L is
+  the full editor, now in the standard 700 × 260 card (it was 790), with the Wheels column
+  still on screen. S is a 260 × 260 mini card, as on Nota Synth: Filter 1's response to drag,
+  over Cutoff, Reso, Attack and Release. Both sizes edit the same sound, and the size saves
+  with the project but not with presets. Volt opens as L.
+- **One Volume knob, no rail meters, in the built-in instruments** (nota-daw/nota#531): the
+  output meters in the rails and output tabs of Nota Aurora, Bass, Grain, Keys, Mosaic, Operator,
+  Physical, Rhythm, Sampler, Synth, Consort and Pentad are gone (the track meter shows the level).
+  The output knob is called **Volume** everywhere (it was Gain on Volt and Aurora, Output on
+  Sampler and Mosaic, Master on Rhythm), sits a size above its neighbours and is centred with
+  them. Synth's Volume moves from a slider to that knob, and Flux's Gain row reads Volume. On
+  Sampler and Mosaic the voice-level slider becomes **Level**, so only one control says Volume.
+  The parameters themselves are unchanged, so projects, presets and automation are unaffected.
+- **More instrument-card tidying** (nota-daw/nota#531): the Instrument Rack drops its bottom
+  status line too (the Zones tab already says what a note plays; the effect racks keep theirs).
+  Nota Keys' pedal (lit by CC64 or the Pedal param) moves from the Damper column into the Play
+  rail, and the voice count sits right under the voice grid. Nota Monolith's contours have no
+  release of their own, so the release point on their graphs is drawn but no longer drags or
+  types. Nota Pentad's Output tab drops the voice strip that the Oscillators tab already shows.
+- **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
+  stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
+  under it and the A / D / S / R letter in the box's corner. The box still drags and types
+  its value. The Noise row drops its Color knob, which doubled the dark / pink / white
+  switch. The Global rail drops its output meter (the track meter shows the level), and
+  Gain, Drive and Pan sit centred.
+- **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
+  nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
+  tall as before. The knobs under the graphs move to the right panel as sliders: its first tab
+  follows the centre tab, and its Output tab (and Auto Filter's Mod tab) stay. Compressor: Curve shows
+  Dynamics (character, detector, ratio, knee, mix, range, auto gain), Motion shows Timing
+  (attack, release, hold, lookahead, auto-release) and Sidechain shows Key (source, tap,
+  external, listen, HP, LP, Q, stereo link). Auto Filter: Filter, Envelope and LFO each show
+  their own controls, with Mod → Freq / Reso / Both on the Filter panel. The live read-outs
+  (in / out and crest, measured transient and recovery, the cutoff and its note) moved to the
+  right of the tab bar.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
@@ -64,6 +173,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
+- **Tabs at the top of a card section keep its rounded corner** (nota-daw/nota#531): a selected
+  tab such as Global on a built-in instrument's rail painted over the section's corner. A
+  section now clips what it holds to its rounded edge.
+- **Performance wheels follow their value** (nota-daw/nota#531): on Nota Volt, Aurora, Operator
+  and Bass, the ribbed grip of the Pitch and Mod wheels now moves with the wheel instead of
+  staying put while only the value line moved.
+- **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
+  (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
+  other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and
+  release the detector really runs, the window length and the GR peak; the measured attack is
+  labelled "90 % rise", since it is timed to 90 % of the peak so a Hold plateau does not count.
+  Auto Filter: the LFO and Envelope tabs show the resonance swing ("reso X ±Y") when Mod is Reso
+  or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
+  The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
+  under the Auto gain switch.
 - **Default Projects/Samples folders follow the OS locations** (#522): the browser and
   save dialogs no longer default to hardcoded `~/Documents/Nota Projects` and
   `~/Music/Nota Samples`. On Linux they read `user-dirs.dirs` (`XDG_DOCUMENTS_DIR`,

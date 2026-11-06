@@ -167,9 +167,8 @@ internal sealed class ConsortJackDot : Control
 }
 
 // ---- dual transistor-ladder response: L (slate) / R (neutral ink) or the series HP→LP curve ----
-internal sealed class ConsortFilterCurve : Control
+internal sealed class ConsortFilterCurve : FilterGraphBase
 {
-    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _cut = 0.5, _reso, _space, _comp;
     private int _mode = 1;
     private bool _drag;
@@ -181,22 +180,39 @@ internal sealed class ConsortFilterCurve : Control
     public void Set(double cutNorm, double resoNorm, double spacingOct, int mode, bool bassComp)
     { _cut = cutNorm; _reso = resoNorm; _space = spacingOct; _mode = mode; _comp = bassComp ? 1 : 0; InvalidateVisual(); }
 
+    // The shared filter graph (#531) over 20 Hz … 20 kHz. The two ladders: the curve is what
+    // comes out (HP into LP in series, else the right / second ladder), the first ladder a
+    // thin line under it; the axis lights the first ladder's cutoff, the one the handle sets.
+    protected override (double Lo, double Hi) Span => (20.0, 20000.0);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -42.0);
+    protected override double CutoffHz => 20 * Math.Pow(1000, _cut);
+    private double CutB => Math.Clamp(_cut + _space / 10.0, -0.5, 1.5);   // spacing in decades of the 3-decade axis
+    private static double Xn(double hz) => Math.Log(hz / 20) / Math.Log(1000);
+    private static double Wr(double xn, double cn) => Math.Pow(1000, xn - cn);
+    protected override double ResponseDb(double hz)
+    {
+        double x = Xn(hz);
+        return _mode == 0 ? Db(Mag(Wr(x, _cut), true) * Mag(Wr(x, CutB), false)) : Db(Mag(Wr(x, CutB), false));
+    }
+    private double FirstDb(double hz) => Db(Mag(Wr(Xn(hz), _cut), _mode != 1));
+
     private void Apply(PointerEventArgs e)
     {
-        double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
+        var r = PlotRect; if (r.Width <= 0 || r.Height <= 0) return;
         var p = e.GetPosition(this);
-        _cut = Math.Clamp(p.X / w, 0, 1); _reso = Math.Clamp(1 - p.Y / h, 0, 1);
+        _cut = Math.Clamp((p.X - r.X) / r.Width, 0, 1);
+        _reso = Math.Clamp(1 - (p.Y - r.Y) / r.Height, 0, 1);
         Changed?.Invoke(_cut, _reso); InvalidateVisual();
     }
     protected override void OnPointerPressed(PointerPressedEventArgs e)
-    { base.OnPointerPressed(e); if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; _drag = true; DragStarted?.Invoke(); Apply(e); e.Pointer.Capture(this); e.Handled = true; }
+    { base.OnPointerPressed(e); if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; _drag = Dragging = true; DragStarted?.Invoke(); Apply(e); e.Pointer.Capture(this); e.Handled = true; }
     protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
+    { base.OnPointerReleased(e); if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
 
     // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
+    { if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
 
     // |H| of a 4-pole ladder at ω/ωc = wr (resonance k), low-pass or high-pass tap.
     private double Mag(double wr, bool hp)
@@ -213,44 +229,19 @@ internal sealed class ConsortFilterCurve : Control
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var gp = new Pen(NotaPalette.SurfaceCard, 1);
-        foreach (double hz in new[] { 100.0, 1000.0, 10000.0 }) { double gx = Math.Log10(hz / 20) / 3 * w; ctx.DrawLine(gp, new Point(gx, 0), new Point(gx, h)); }
-        double y0 = h * 0.42;
-        ctx.DrawLine(gp, new Point(0, y0), new Point(w, y0));
-        double Y(double db) => Math.Clamp(y0 - db * (h * 0.02), 1, h - 1);
-        double cutB = Math.Clamp(_cut + _space / 10.0, -0.5, 1.5);   // spacing in decades of the 3-decade axis
-
-        StreamGeometry Curve(Func<double, double> db)
-        {
-            var g = new StreamGeometry();
-            using var c = g.Open();
-            c.BeginFigure(new Point(0, Y(db(0))), false);
-            for (double x = 1.5; x <= w; x += 1.5) c.LineTo(new Point(x, Y(db(x / w))));
-            return g;
-        }
-        double Wr(double xn, double cn) => Math.Pow(1000, xn - cn);
-        var ink = NotaPalette.VizInk;
-        if (_mode == 0)
-        {
-            var faint = NotaPalette.Wash(NotaPalette.Ink("#6D8FB5"), 0x55);
-            ctx.DrawGeometry(null, new Pen(faint, 1), Curve(x => Db(Mag(Wr(x, _cut), true))));
-            ctx.DrawGeometry(null, new Pen(ink, 1.5), Curve(x => Db(Mag(Wr(x, _cut), true) * Mag(Wr(x, cutB), false))));
-        }
-        else
-        {
-            ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.5), Curve(x => Db(Mag(Wr(x, _cut), _mode == 2))));
-            ctx.DrawGeometry(null, new Pen(ink, 1.5), Curve(x => Db(Mag(Wr(x, cutB), false))));
-        }
-        string Hz(double n) { double hz = 20 * Math.Pow(1000, n); return hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz"; }
-        var lt = new NotaFormattedText((_mode == 0 ? "HP " : "L ") + Hz(_cut), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, _mode == 0 ? NotaPalette.TextSecondary : NotaPalette.TextTertiary, this);
-        var rt = new NotaFormattedText((_mode == 0 ? "LP " : "R ") + Hz(cutB), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextPrimary, this);
-        ctx.DrawText(lt, new Point(4, 3));
+        double w = Bounds.Width;
+        if (w < 2 || Bounds.Height < 2) return;
+        DrawBack(ctx);
+        DrawCurve(ctx, FirstDb, NotaPalette.TextTertiary, fill: false, width: 1.2);
+        DrawCurve(ctx, ResponseDb);
+        string Hz(double n) => NotaNum.Hz(20 * Math.Pow(1000, n));
+        var lt = NotaGraph.AxisText((_mode == 0 ? "HP " : "L ") + Hz(_cut), NotaPalette.TextTertiary);
+        var rt = NotaGraph.AxisText((_mode == 0 ? "LP " : "R ") + Hz(CutB), NotaPalette.TextPrimary);
+        ctx.DrawText(lt, new Point(40, 3));
         ctx.DrawText(rt, new Point(w - rt.Width - 4, 3));
-        double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(Mag(1, _mode == 2 || _mode == 0))), 4, h - 4);
-        ctx.DrawEllipse(_drag ? NotaPalette.Accent : _mode == 1 ? NotaPalette.TextTertiary : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
+        var at = new Point(XOf(CutoffHz), YOf(FirstDb(CutoffHz)));
+        DrawFront(ctx, at.Y);
+        DrawHandle(ctx, at);
     }
 }
 

@@ -31,6 +31,13 @@ public sealed class Settings
     public string SystemDarkTheme { get; set; } = Appearance.StudioDark;
     /// <summary>Theme worn while following the OS and it is in light mode (a light theme).</summary>
     public string SystemLightTheme { get; set; } = Appearance.StudioLight;
+    /// <summary>The accent colour (spec 084, Settings → Appearance): empty for Orange, a preset
+    /// id, or "custom" for <see cref="CustomAccent"/>. One choice, worn in every theme. An
+    /// unknown value reads as Orange (<see cref="Nota.Application.Accent.Resolve"/>).</summary>
+    public string Accent { get; set; } = "";
+    /// <summary>The last custom accent, #RRGGBB — kept while a preset is worn, so Custom
+    /// offers it again.</summary>
+    public string CustomAccent { get; set; } = "";
     /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
     /// folding it gives the clip grid its width back on small windows.</summary>
     public bool SessionInspectorOpen { get; set; } = true;

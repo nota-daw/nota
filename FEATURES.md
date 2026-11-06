@@ -534,7 +534,7 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
-  Studio look — one orange accent for what is live or chosen, semantic mute / solo / arm
+  Studio look — one accent (Nota's chosen accent) for what is live or chosen, semantic mute / solo / arm
   colours, sentence-case labels — and a returning phone paints in its last theme at once.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
@@ -697,6 +697,13 @@ and hosted plug-ins) have the same on/off switch as effects: off silences the in
 audio effects after it keep running and keep their settings; saved with the project.
 
 ### Instruments
+- **Envelopes (built-in instruments)** — one envelope graph across Volt, Aurora, Operator, Bass,
+  Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin: drag the breakpoints, bend the
+  decay and release by their diamonds, Lin / Exp per envelope, a held sustain zone with its level,
+  a segment bar, one time scale per card and a dot on the sounding voice.
+- **Filter graph (built-in instruments)** — one filter response view across Volt, Aurora,
+  Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin: the post-filter spectrum
+  behind the curve, a hover marker with frequency, note and gain, and the cutoff lit on the axis.
 - **Nota Synth** — *no longer offered for new tracks: Nota Volt covers it and carries its
   presets (specs/026); saved tracks still load and play.* Subtractive synthesizer (the basic one): one oscillator
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
@@ -731,6 +738,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   8 macros over 12 destinations, unison (one detuned partner, or a 2/4/7-voice stack with
   stereo spread), output drive, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
   modulation wheels, VEL→AMP, VEL→FILTER, Poly/Mono/Legato (Mono falls back to a held key).
+  The card comes in two sizes, switched in its header: L, the full 700 × 260 editor, and S, a
+  260 × 260 mini card (Filter 1's response, Cutoff · Reso · Attack · Release).
   74 factory presets: its own 25 plus the Nota Synth and Nota Bass libraries.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
@@ -761,18 +770,18 @@ audio effects after it keep running and keep their settings; saved with the proj
   decay, material, brightness, inharmonicity, ratio, hit position and tune), in series
   (1→2) or parallel (1+2) with a Res 1 / Res 2 mix; the partials drawn as the engine tunes
   them (drag for ratio and brightness), Poly (8 voices) / Mono, tune, fine, note-off
-  damping, volume, pan and a meter. 32 factory presets. MCP: `read_physical`.
+  damping, volume and pan. 32 factory presets. MCP: `read_physical`.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
   (WARM/GLASS/MOOG/GRAIN) whose resonance, drive and unison the vector blends, **React**
   (sidechain modulation from another track: Filter/Pitch/Space/Vector, with a live scope of
   its envelope, transients and tilt, and transients per bar), 5 macro knobs
-  (Age/Motion/Filter/Env/Space), glide, tune and gain. 25 factory presets.
+  (Age/Motion/Filter/Env/Space), glide, tune and volume. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
   banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
   **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
   Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
-  contour or sample region, Perform rail with an output meter, a full-width step strip with
+  contour or sample region, Perform rail (Swing, Humanize, Accent, Volume, Glue), a full-width step strip with
   a velocity lane. Each voice has its own **FX** chain of built-in effects (the voice's FX
   tab). Its kits are the 25 factory drum kits it shares with the Drum Rack — samples and
   per-voice effects — from the card's kit picker or the browser. Eight **macros** (the
@@ -790,6 +799,25 @@ audio effects after it keep running and keep their settings; saved with the proj
   Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
   (seeded per-voice spread — a render is identical for the same seed, so freezing is
   exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
+- **Nota Twin** — morphing analog poly, 4–12 voices: every sound control has a **side A and a
+  side B**, and **Morph** sweeps the whole sound between them, effects and modulation depths
+  included. Two oscillators running triangle → saw → square with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes, three LFOs (per voice or global); Poly / Mono / Legato /
+  Unison, glide, seeded drift. Poly aftertouch and MPE per note (pressure routed to Morph
+  morphs only that note), an X · Y · Z expression pad. A 64-route matrix per part as a source ×
+  destination grid (29 sources incl. 8 macros and Random → Morph, pitch, vibrato or any
+  control), a depth per side. Per
+  part: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb. Own sequencer, played from a held key
+  or locked to the transport (8 patterns × 64 steps of up to six notes, tie, swing, transpose, latch, step record, four motion
+  lanes, **To clip**) and arpeggiator (six modes, 1–4 octaves, hold). **Split / Layer**: Lower
+  and Upper parts sharing the voices (2 + 10 … 10 + 2), a learnable split key, per-part octave,
+  volume and pan; **Parts** copies, swaps or loads a factory or saved sound into one part. The A / B
+  switch picks the side knobs, automation and MIDI learn write to; **A → B**, **B → A**,
+  **Swap**. Card tabs Osc, Filter, Env, LFO, Matrix, FX, Seq, Voice; S size shows Morph, the
+  pad and four knobs. 117 factory presets in 11 folders; MCP `read_twin`, `set_twin_morph_side`,
+  `copy_twin_side`, `copy_twin_part`, `set_twin_route`, `get_twin_pattern`, `set_twin_pattern`,
+  `twin_pattern_to_clip`.
 - **Nota Consort** — paraphonic semi-modular synth: four oscillators (tri / saw / square /
   pulse, sync 2→1 and 4→3), a mixer with noise, drive and a feedback-normalled EXT input, dual
   ladder filters (HP→LP series, LP/LP or HP/LP parallel stereo with spacing), two ADSRs,
@@ -1079,7 +1107,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   **Select** (drag zone edges; hover the keyboard strip to see which chains a note plays) and
   **Macros** tabs (rename, curve Lin/Exp/Log/S — "Mixed" when targets differ — and each
   target's range, min above max inverts); a **Chain** panel (Volume, Pan or Transpose, zones,
-  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line. **Map** works in
+  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line on the effect racks. **Map** works in
   place: click parameters on the chain's devices to add or remove them; Esc ends it. A chain's
   devices drag by their header to a new place in their section (a drop bar shows where) or
   onto another chain's row to move there with their macro mappings; click one to select it
@@ -1322,8 +1350,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   orange accent; the default, and what a DAW wants for long sessions in a dark room),
   **Studio Light** (the same system in light greys, the orange a shade deeper), and
   **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
-  A theme changes colours only — track colours included — never the layout. Panels dock edge
-  to edge on thin seams; orange marks only what is playing, selected or switched on, and a
+  A theme changes colours only — track colours included — never the layout; the accent
+  colour is a separate choice (see [Preferences](#preferences)). Panels dock edge
+  to edge on thin seams; orange (or the chosen accent) marks only what is playing, selected or switched on, and a
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
@@ -1431,7 +1460,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  live and is remembered. **Accent** — the colour of what is live or chosen: seven presets
+  (Orange — the default — Lime, Aqua, Sky, Violet, Magenta, Pink) or **Custom**, a colour
+  picker (saturation/brightness area, hue strip, hex field) that previews the colour in all
+  four themes. One accent for every theme, tuned to each so it stays readable; a grey or a
+  colour too close to the record red, mute, solo or the meter green is refused with the
+  reason. Applied live, Esc in the picker puts the previous one back. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
@@ -1487,7 +1521,9 @@ Coverage:
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in
-  musical terms (`read_keys`, `set_keys`).
+  musical terms (`read_keys`, `set_keys`); Nota Twin's sides, parts, matrix and patterns
+  (`read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`, `set_twin_route`,
+  `get_twin_pattern`, `set_twin_pattern`, `twin_pattern_to_clip`).
 - **Moving devices**: `move_device_to_track` moves or copies an audio effect, a MIDI effect or
   the instrument to another track, with its automation.
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a

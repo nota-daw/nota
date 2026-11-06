@@ -83,6 +83,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: accent --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAccent()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
     Console.WriteLine("-- localization: language --");
@@ -733,6 +735,14 @@ if (args.Length >= 1 && args[0] == "--keys")
     Console.WriteLine("-- nota keys --");
     foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Nota Twin alone (fast iteration): `--twin`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--twin")
+{
+    Console.WriteLine("-- nota twin --");
+    foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
@@ -2000,7 +2010,7 @@ Console.WriteLine("-- Nota Physical --");
     Check(pe.DeviceName(t, -1) == "Nota Physical", $"instrument is Nota Physical (got '{pe.DeviceName(t, -1)}')");
 
     int pc = pe.PluginParamCount(t, -1);
-    Check(pc == 38, $"Nota Physical exposes 38 params (got {pc})");
+    Check(pc == 41, $"Nota Physical exposes 41 params (got {pc})");
     int dec = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2211,7 +2221,7 @@ Console.WriteLine("-- Nota Aurora --");
     Check(ae.DeviceName(t, -1) == "Nota Aurora", $"instrument is Nota Aurora (got '{ae.DeviceName(t, -1)}')");
 
     int pc = ae.PluginParamCount(t, -1);
-    Check(pc == 156, $"Nota Aurora exposes 156 params (got {pc})");
+    Check(pc == 162, $"Nota Aurora exposes 162 params (got {pc})");
     int pos = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2432,7 +2442,7 @@ Console.WriteLine("-- Nota Volt --");
     Check(ve.DeviceName(t, -1) == "Nota Volt", $"instrument is Nota Volt (got '{ve.DeviceName(t, -1)}')");
 
     int pc = ve.PluginParamCount(t, -1);
-    Check(pc == 143, $"Nota Volt exposes 143 params (got {pc})");
+    Check(pc == 150, $"Nota Volt exposes 150 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2447,7 +2457,7 @@ Console.WriteLine("-- Nota Volt --");
     // State round-trips to another track (project save/load path).
     ve.PluginParamSet(t, -1, cut, 0.88f);
     var state = ve.GetPluginState(t, -1);
-    Check(state.Length >= 143 * 4, $"volt state serialized ({state.Length} bytes)");
+    Check(state.Length >= 150 * 4, $"volt state serialized ({state.Length} bytes)");
     int t2 = ve.AddVoltSynthTrack();
     ve.SetPluginState(t2, -1, state);
     Check(Math.Abs(ve.PluginParamGet(t2, -1, cut) - 0.88f) < 1e-4, "volt state restores params on another track");
@@ -2690,7 +2700,7 @@ Console.WriteLine("-- Nota Bass --");
     Check(be.DeviceName(t, -1) == "Nota Bass", $"instrument is Nota Bass (got '{be.DeviceName(t, -1)}')");
 
     int pc = be.PluginParamCount(t, -1);
-    Check(pc == 39, $"Nota Bass exposes 39 params (got {pc})");
+    Check(pc == 45, $"Nota Bass exposes 45 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2878,7 +2888,7 @@ Console.WriteLine("-- Nota Monolith --");
     Check(me.DeviceName(t, -1) == "Nota Monolith", $"instrument is Nota Monolith (got '{me.DeviceName(t, -1)}')");
 
     int pc = me.PluginParamCount(t, -1);
-    Check(pc == 52, $"Nota Monolith exposes 52 params (got {pc})");
+    Check(pc == 58, $"Nota Monolith exposes 58 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2941,7 +2951,7 @@ Console.WriteLine("-- Nota Pentad --");
     Check(pe.DeviceName(t, -1) == "Nota Pentad", $"instrument is Nota Pentad (got '{pe.DeviceName(t, -1)}')");
 
     int pc = pe.PluginParamCount(t, -1);
-    Check(pc == 76, $"Nota Pentad exposes 76 params (got {pc})");
+    Check(pc == 82, $"Nota Pentad exposes 82 params (got {pc})");
     var ids = new HashSet<string>();
     bool namesOk = true;
     for (int i = 0; i < pc; i++) { ids.Add(pe.PluginParamId(t, -1, i)); if (pe.PluginParamName(t, -1, i).Length == 0) namesOk = false; }
@@ -3220,7 +3230,7 @@ Console.WriteLine("-- Nota Consort --");
     Check(ce.TrackInstrumentKind(t) == 15, $"instrument kind is 15 (got {ce.TrackInstrumentKind(t)})");
     Check(ce.DeviceName(t, -1) == "Nota Consort", $"instrument is Nota Consort (got '{ce.DeviceName(t, -1)}')");
     int pc = ce.PluginParamCount(t, -1);
-    Check(pc == 145, $"Nota Consort exposes 145 params (got {pc})");
+    Check(pc == 151, $"Nota Consort exposes 151 params (got {pc})");
     var cids = new HashSet<string>();
     bool cnames = true;
     for (int i = 0; i < pc; i++) { cids.Add(ce.PluginParamId(t, -1, i)); if (ce.PluginParamName(t, -1, i).Length == 0) cnames = false; }
@@ -3583,7 +3593,7 @@ Console.WriteLine("-- Nota Operator --");
     Check(oe.DeviceName(t, -1) == "Nota Operator", $"instrument is Nota Operator (got '{oe.DeviceName(t, -1)}')");
 
     int pc = oe.PluginParamCount(t, -1);
-    Check(pc == 48, $"Nota Operator exposes 48 params (got {pc})");
+    Check(pc == 60, $"Nota Operator exposes 60 params (got {pc})");
     int algoI = -1; bool idsOk = true;
     var opIds = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++)
@@ -4088,7 +4098,7 @@ Console.WriteLine("-- Sampler --");
     Check(t > 0 && se.TrackInstrumentKind(t) == 1, "AddSamplerInstrumentTrack → kind 1");
     Check(se.DeviceName(t, -1) == "Nota Sampler", $"instrument is Nota Sampler (got '{se.DeviceName(t, -1)}')");
     int pc = se.PluginParamCount(t, -1);
-    Check(pc == 27, $"Nota Sampler exposes 27 params (got {pc})");
+    Check(pc == 30, $"Nota Sampler exposes 30 params (got {pc})");
     se.AddMidiClip(t, 0.0, 4.0);
     se.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });
 
@@ -10216,7 +10226,7 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
 
     // Rich Sampler editing per pad: chain param id/count/default + Sampler info/root all
     // reachable so the full editor works inside a Drum Rack pad (not just the track).
-    Check(re.RackChainInstrumentParamCount(t, p2) == 27, "sampler pad exposes 27 chain params");
+    Check(re.RackChainInstrumentParamCount(t, p2) == 30, "sampler pad exposes 30 chain params");
     Check(re.RackChainInstrumentParamId(t, p2, 4) == "start", $"chain param id maps (got '{re.RackChainInstrumentParamId(t, p2, 4)}')");
     Check(re.RackChainSamplerInfo(t, p2, out var cinfo) && cinfo.SampleId != 0 && cinfo.RootNote == 40, "chain sampler info (sample + root) readable");
     // Load a (new) sample into an existing chain Sampler (the pop-out drop path).
@@ -15500,6 +15510,8 @@ Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota twin --");
+foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");

@@ -57,6 +57,9 @@ class Instrument {
     // eventOffset — see takesTimedEvents).
     virtual void noteOn(int32_t pitch, float velocity) = 0;
     virtual void noteOff(int32_t pitch) = 0;
+    // A note-off that carries its release velocity (0..1, from a MIDI note-off message); one
+    // that doesn't use it gets a plain noteOff. Clip notes and keys without one send noteOff.
+    virtual void noteOffVelocity(int32_t pitch, float /*velocity*/) { noteOff(pitch); }
     virtual void allNotesOff() = 0;
 
     // Per-note expression (MPE, see NoteExpression.h): dim is an ExprDim — ExprBend in
@@ -112,6 +115,7 @@ class Instrument {
     // atomics because a rack edit forks the rack on the message thread and carries them over.
     std::atomic<bool> pedalDown{false};
     std::atomic<uint64_t> pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
+    std::atomic<uint8_t> pedalRelVel[128] = {}; // their release velocities (×127, 0 = none sent)
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
@@ -124,6 +128,32 @@ class Instrument {
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
     std::atomic<bool> offSettled{false}; // relaxed, like pedalDown
+
+    // ---- output tap (#531) ------------------------------------------------------
+    // The card's filter graph draws the spectrum of what the instrument plays. The audio
+    // thread writes its mono sum into a ring only while a reader has asked recently
+    // (tapBlocks_ counts blocks down from each read), so with no graph on screen it costs a
+    // relaxed load per block. Relaxed atomics: the picture tolerates a torn block.
+    static constexpr int kTapLen = 4096; // a power of two
+    void tapOutput(const float* stereo, int32_t frames) {
+        if (tapBlocks_.load(std::memory_order_relaxed) <= 0) return;
+        tapBlocks_.fetch_sub(1, std::memory_order_relaxed);
+        const uint32_t w = tapW_.load(std::memory_order_relaxed);
+        for (int32_t i = 0; i < frames; ++i)
+            tap_[(w + static_cast<uint32_t>(i)) & (kTapLen - 1)].store(0.5f * (stereo[i * 2] + stereo[i * 2 + 1]),
+                std::memory_order_relaxed);
+        tapW_.store(w + static_cast<uint32_t>(frames), std::memory_order_release);
+    }
+    // The newest `maxN` output samples, oldest first (message thread); keeps the tap on.
+    int32_t readOutput(float* out, int32_t maxN) const {
+        if (!out || maxN <= 0) return 0;
+        tapBlocks_.store(kTapHoldBlocks, std::memory_order_relaxed);
+        const int32_t n = std::min<int32_t>(maxN, kTapLen);
+        const uint32_t w = tapW_.load(std::memory_order_acquire);
+        for (int32_t i = 0; i < n; ++i)
+            out[i] = tap_[(w - static_cast<uint32_t>(n) + static_cast<uint32_t>(i)) & (kTapLen - 1)].load(std::memory_order_relaxed);
+        return n;
+    }
 
     // Musical transport for generative instruments (e.g. Nota Pendulum): the engine
     // calls this once per block before render() with the block's start beat,
@@ -259,6 +289,12 @@ class Instrument {
     // e.g. a drum machine's step patterns / voice selection. id/iarg/farg are
     // instrument-specific. Default no-op. Message thread.
     virtual void action(int32_t /*id*/, int32_t /*iarg*/, float /*farg*/) {}
+    // The structural state those actions edit (Nota Twin's sequencer patterns), as bytes. When an
+    // instrument has one, the engine records every action that changes it as an undo step and
+    // undo hands the old bytes back through setEditState — no new instrument is published, so
+    // sounding notes go on. Empty = the actions aren't undoable. Message thread.
+    virtual std::vector<uint8_t> editState() const { return {}; }
+    virtual void setEditState(const uint8_t* /*data*/, int32_t /*size*/) {}
 
     // Hosted-plugin parameter automation (M9-B). Values are normalized 0..1 and
     // identified by a stable string paramID (the index is version-unstable).
@@ -324,6 +360,12 @@ class Instrument {
     std::atomic<bool> bypassed_{false};
     uint64_t uid_ = nextUid();
     std::atomic<uint64_t> scPart_{0};
+
+  private:
+    static constexpr int kTapHoldBlocks = 400; // ≈ 1 s at 128-frame blocks after the last read
+    std::atomic<float> tap_[kTapLen] = {};
+    std::atomic<uint32_t> tapW_{0};
+    mutable std::atomic<int32_t> tapBlocks_{0};
 };
 
 } // namespace nota

@@ -67,13 +67,8 @@ internal sealed class MonolithWaveIcon : Control
 
 // Ladder low-pass magnitude response: flat passband, resonance peak at cutoff, 24 dB/oct
 // roll-off. Draggable — X sets cutoff, Y sets emphasis (via the Changed callback).
-internal sealed class MonolithFilterCurve : Control
+internal sealed class MonolithFilterCurve : FilterGraphBase
 {
-    private static readonly IBrush Ink = NotaPalette.VizInk;   // the curve at rest: neutral ink
-    private static readonly IBrush Inset = NotaPalette.BgSunken;
-    private static readonly IBrush Grid = NotaGraph.Grid;
-    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
-    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _cut = 0.5, _reso;
     private bool _drag;
 
@@ -86,97 +81,45 @@ internal sealed class MonolithFilterCurve : Control
 
     public void Set(double cutoffNorm, double resoNorm) { _cut = cutoffNorm; _reso = resoNorm; }
 
+    // The shared filter graph (#531) over the cutoff's own map, 16 Hz … 20 kHz.
+    protected override (double Lo, double Hi) Span => (16.0, 20000.0);
+    protected override (double Top, double Bottom) DbSpan => (24.0, -36.0);
+    protected override double CutoffHz => 16 * Math.Pow(1250, _cut);
+    protected override double ResponseDb(double hz)
+    {
+        double d = Math.Log(hz / 16) / Math.Log(1250) - _cut;   // fraction of width past cutoff
+        double oct = d * 10.0;                                  // ~10 octaves across the view
+        double atten = oct > 0 ? 24.0 * oct : 0.0;              // 24 dB/oct roll-off
+        double peak = _reso * 22.0 * Math.Exp(-(d * d) / 0.0022);
+        return peak - atten;
+    }
+
     private void Apply(PointerEventArgs e)
     {
-        double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
+        var r = PlotRect; if (r.Width <= 0 || r.Height <= 0) return;
         var p = e.GetPosition(this);
-        _cut = Math.Clamp(p.X / w, 0, 1);
-        _reso = Math.Clamp(1 - p.Y / h, 0, 1);
+        _cut = Math.Clamp((p.X - r.X) / r.Width, 0, 1);
+        _reso = Math.Clamp(1 - (p.Y - r.Y) / r.Height, 0, 1);
         Changed?.Invoke(_cut, _reso); InvalidateVisual();
     }
     protected override void OnPointerPressed(PointerPressedEventArgs e)
-    { base.OnPointerPressed(e); _drag = true; DragStarted?.Invoke(); Apply(e); e.Pointer.Capture(this); }
-    protected override void OnPointerMoved(PointerEventArgs e)
-    { base.OnPointerMoved(e); if (_drag) Apply(e); }
+    { base.OnPointerPressed(e); if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; _drag = Dragging = true; DragStarted?.Invoke(); Apply(e); e.Pointer.Capture(this); e.Handled = true; }
+    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
+    { base.OnPointerReleased(e); if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
 
     // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
-
-    private double Y(double x, double w, double h)
-    {
-        double d = x / w - _cut;                     // fraction of width past cutoff
-        double oct = d * 10.0;                        // ~10 octaves across the view
-        double atten = oct > 0 ? 24.0 * oct : 0.0;    // 24 dB/oct roll-off
-        double peak = _reso * 22.0 * Math.Exp(-(d * d) / 0.0022);
-        double db = peak - atten;
-        double y = h * 0.34 - db * (h * 0.016);
-        return Math.Clamp(y, 2, h - 2);
-    }
+    { if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));   // ensure hit-testing
-        var gp = new Pen(Grid, 1);
-        for (int i = 1; i < 3; i++) ctx.DrawLine(gp, new Point(w * i / 3, 0), new Point(w * i / 3, h));
-        ctx.DrawLine(gp, new Point(0, h / 2), new Point(w, h / 2));
-
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        using (var lc = line.Open())
-        using (var fc = fill.Open())
-        {
-            lc.BeginFigure(new Point(0, Y(0, w, h)), false);
-            fc.BeginFigure(new Point(0, h), true);
-            fc.LineTo(new Point(0, Y(0, w, h)));
-            for (double x = 0; x <= w; x += 2) { var p = new Point(x, Y(x, w, h)); lc.LineTo(p); fc.LineTo(p); }
-            fc.LineTo(new Point(w, h));
-        }
-        ctx.DrawGeometry(null, new Pen(Ink, NotaGraph.PrimaryWidth), line);
-
-        // freq · Q readout (top-right)
-        double hz = 16 * Math.Pow(1250, _cut), q = _reso * 10;
-        string txt = (hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz") + $" · Q {q:0.0}";
-        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 8, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary, this);
-        ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
-
-        // cutoff handle (filled, dark ring) at the resonance peak
-        double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(_cut * w, w, h), 4, h - 4);
-        ctx.DrawEllipse(_drag ? NotaPalette.Accent : Ink, new Pen(Inset, 2), new Point(hx, hy), 4, 4);
+        if (Bounds.Width < 2 || Bounds.Height < 2) return;
+        DrawBack(ctx);
+        DrawCurve(ctx, ResponseDb);
+        var at = new Point(XOf(CutoffHz), YOf(ResponseDb(CutoffHz)));
+        DrawFront(ctx, at.Y);
+        DrawHandle(ctx, at);
     }
 }
 
-// ADS contour (Decay doubles as release): attack ramp → decay to sustain → hold → release.
-internal sealed class MonolithEnvCurve : Control
-{
-    private double _a, _d, _s = 0.8;
-    public IBrush Accent { get; set; } = NotaPalette.VizInk;   // the curve's ink (neutral at rest)
-
-    public void Set(double a, double d, double s) { _a = a; _d = d; _s = s; }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        double top = 2, bot = h - 2;
-        double xa = w * (0.04 + _a * 0.30);
-        double xd = xa + w * (0.04 + _d * 0.34);
-        double xs = w * 0.72;
-        double ys = bot - (bot - top) * _s;
-        if (xd > xs) xd = xs;
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        using (var lc = line.Open())
-        using (var fc = fill.Open())
-        {
-            lc.BeginFigure(new Point(0, bot), false);
-            lc.LineTo(new Point(xa, top)); lc.LineTo(new Point(xd, ys)); lc.LineTo(new Point(xs, ys)); lc.LineTo(new Point(w, bot));
-            fc.BeginFigure(new Point(0, bot), true);
-            fc.LineTo(new Point(xa, top)); fc.LineTo(new Point(xd, ys)); fc.LineTo(new Point(xs, ys)); fc.LineTo(new Point(w, bot));
-        }
-        var col = ((SolidColorBrush)Accent).Color;
-        ctx.DrawGeometry(null, new Pen(Accent, 1.5), line);
-    }
-}

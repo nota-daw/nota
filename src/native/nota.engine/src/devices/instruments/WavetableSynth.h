@@ -31,6 +31,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 #include "engine/NoteExpression.h"
 
 #include <algorithm>
@@ -140,7 +141,14 @@ class WavetableSynth final : public Instrument {
         FxReverbOn,
         FxReverbMode,
         FxReverbSize, // 153..155
-        kNumParams    // 156
+        // ---- appended (v4, #531): the envelope shapes — 0.5 = straight, Exp off ----
+        DCurve,
+        RCurve,
+        EnvExp, // 156..158 Env 1
+        E2DCurve,
+        E2RCurve,
+        E2EnvExp,   // 159..161 Env 2
+        kNumParams  // 162
     };
     static int matrixIdx(int s, int d) { return MatrixBase + s * kDests + d; }
     static int macroIdx(int m, int f) { return MacroBase + m * 3 + f; }
@@ -165,6 +173,11 @@ class WavetableSynth final : public Instrument {
     // tail). Settles after the hangover; noteOn/noteOff/setParam wake.
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
+    // Envelope telemetry for the editor's graphs: the newest sounding voice's Env 1 stage and
+    // progress, then Env 2's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
+    int32_t scopeRead(float* out, int32_t maxN) const override {
+        return out && maxN > 0 ? readEnvTele(envTele_, 2 * kEnvTeleFloats, out, maxN) : 0;
+    }
     void wake() override;
 
     // ---- parameters --------------------------------------------------------
@@ -206,6 +219,7 @@ class WavetableSynth final : public Instrument {
         double ph1[kUnison] = {}, ph2[kUnison] = {}, subPh = 0;
         float velocity = 0, env = 0, env2 = 0;
         Stage stage = Stage::Attack, stage2 = Stage::Attack;
+        EnvShapeState shape, shape2; // the curve of each envelope's current stage
         SvfCoef f[2];
         double ic1L[2] = {}, ic2L[2] = {}, ic1R[2] = {},
                ic2R[2] = {}; // L = 1st stage, R = 2nd slope stage; [i] = filter i
@@ -248,7 +262,6 @@ class WavetableSynth final : public Instrument {
         default: dry += s;
         }
     }
-    static void advEnv(float& e, Stage& st, float a, float d, float s, float r);
 
     void setSvf(SvfCoef& c, double fc, double k) const;
     static double svf(const SvfCoef& c, double& ic1, double& ic2, double in, int type);
@@ -356,6 +369,11 @@ class WavetableSynth final : public Instrument {
     Comb revC_[kRevCombs];
     Allp revA_[kRevAll];
     std::atomic<int32_t> activeVoices_{0};
+    // The filters' base cutoffs (log2 Hz) and resonances, eased toward the knobs per sample
+    // (#531): the control-rate update then steps a little at a time, not a whole turn at once.
+    double f1Sm_ = -1e9, f2Sm_ = -1e9, r1Sm_ = 0.0, r2Sm_ = 0.0;
+    int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
+    std::atomic<float> envTele_[4]; // Env 1 stage, progress, Env 2 stage, progress
     std::atomic<float> pn_[kNumParams];
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).

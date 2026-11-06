@@ -382,7 +382,8 @@ public sealed partial class DeviceChainView
         if (presets.Count > 0 || ownTagged)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-                nameWidth: s.Compact ? 74 : 132, height: 20, init: resetToInit != null ? ApplyInit : null,
+                // A step smaller than the window's picker, so it sits inside the header with an inset (#531).
+                nameWidth: s.Compact ? 70 : 120, height: 18, fontSize: NotaType.Caption, init: resetToInit != null ? ApplyInit : null,
                 modified: tagged || ownTagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
                 addLive: _deviceLiveRefreshers.Add);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);

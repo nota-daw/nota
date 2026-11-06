@@ -1,0 +1,389 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// Nota Twin's sequencer patterns from the app's side (specs/055 US8): the pattern block of the
+// instrument's state (a mirror of TwinSeq.cpp's layout), a text form of a pattern's steps for
+// presets and MCP, and "To clip" — a pattern written out as an ordinary MIDI clip, its motion
+// lanes as automation.
+//
+// Text form, one row per step: notes separated by spaces, then optional ":velocity" (1..127) and
+// ":gate" ("50%" or "tie"); "." is a rest. E.g. "C3 E3 G3:100:50%", ".", "A2:90:tie".
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+
+namespace Nota.Application.Twin;
+
+public static class TwinPatterns
+{
+    public const int Patterns = 8, Steps = 64, StepNotes = 6, Lanes = 4;
+    public const int GateTie = 101;
+    public const ushort MotionUnset = 0xFFFF;
+    private const uint Magic = 0x31505754; // "TWP1"
+    private const uint StateMagic = 0x314E5754; // "TWN1"
+
+    public sealed class Step
+    {
+        public List<int> Notes = new();
+        public int Velocity = 100;
+        public int Gate = 50; // 1..100 %, GateTie
+        public bool IsRest => Notes.Count == 0;
+    }
+    public sealed class Lane
+    {
+        public int Target = -1; // param index
+        public bool Smooth;
+        public ushort[] Values = Enumerable.Repeat(MotionUnset, Steps).ToArray();
+    }
+    public sealed class Pattern
+    {
+        public int Length = 16;
+        public Step[] Steps = Enumerable.Range(0, TwinPatterns.Steps).Select(_ => new Step()).ToArray();
+        public Lane[] Lanes = Enumerable.Range(0, TwinPatterns.Lanes).Select(_ => new Lane()).ToArray();
+    }
+
+    // ---- the pattern block ------------------------------------------------------------------
+
+    /// <summary>The patterns inside a Twin state blob ("TWN1"), or null when it carries none.</summary>
+    public static Pattern[]? FromState(byte[] state)
+    {
+        if (state.Length < 8 || BitConverter.ToUInt32(state, 0) != StateMagic) return null;
+        int at = 8 + 4 * (int)BitConverter.ToUInt32(state, 4);
+        if (state.Length < at + 4) return null;
+        int bytes = (int)BitConverter.ToUInt32(state, at);
+        return state.Length >= at + 4 + bytes ? Decode(state[(at + 4)..(at + 4 + bytes)]) : null;
+    }
+
+    public static Pattern[]? Decode(byte[] b)
+    {
+        if (b.Length < 4 || BitConverter.ToUInt32(b, 0) != Magic) return null;
+        int p = 4;
+        int U8() => p < b.Length ? b[p++] : 0;
+        ushort U16() { int lo = U8(), hi = U8(); return (ushort)(lo | hi << 8); }
+        var set = new Pattern[Patterns];
+        for (int i = 0; i < Patterns; i++)
+        {
+            var pat = new Pattern { Length = Math.Clamp(U8(), 1, Steps) };
+            foreach (var s in pat.Steps)
+            {
+                int n = Math.Min((int)U8(), StepNotes);
+                var notes = new int[StepNotes];
+                for (int k = 0; k < StepNotes; k++) notes[k] = U8();
+                s.Notes = notes.Take(n).ToList();
+                s.Velocity = U8();
+                s.Gate = U8();
+            }
+            foreach (var l in pat.Lanes)
+            {
+                l.Target = (short)U16();
+                l.Smooth = U8() != 0;
+                for (int k = 0; k < Steps; k++) l.Values[k] = U16();
+            }
+            set[i] = pat;
+        }
+        return p <= b.Length ? set : null;
+    }
+
+    public static byte[] Encode(IReadOnlyList<Pattern> set)
+    {
+        var b = new List<byte>();
+        void U8(int v) => b.Add((byte)v);
+        void U16(int v) { b.Add((byte)v); b.Add((byte)(v >> 8)); }
+        b.AddRange(BitConverter.GetBytes(Magic));
+        for (int i = 0; i < Patterns; i++)
+        {
+            var pat = i < set.Count ? set[i] : new Pattern();
+            U8(pat.Length);
+            foreach (var s in pat.Steps)
+            {
+                U8(s.Notes.Count);
+                for (int k = 0; k < StepNotes; k++) U8(k < s.Notes.Count ? s.Notes[k] : 0);
+                U8(Math.Clamp(s.Velocity, 1, 127));
+                U8(Math.Clamp(s.Gate, 1, GateTie));
+            }
+            foreach (var l in pat.Lanes)
+            {
+                U16(l.Target);
+                U8(l.Smooth ? 1 : 0);
+                foreach (var v in l.Values) U16(v);
+            }
+        }
+        return b.ToArray();
+    }
+
+    /// <summary>A Twin state blob that carries only patterns (no params): what a preset stores.</summary>
+    public static byte[] StateWithPatterns(IReadOnlyList<Pattern> set)
+    {
+        var block = Encode(set);
+        var b = new List<byte>();
+        b.AddRange(BitConverter.GetBytes(StateMagic));
+        b.AddRange(BitConverter.GetBytes(0u));
+        b.AddRange(BitConverter.GetBytes((uint)block.Length));
+        b.AddRange(block);
+        return b.ToArray();
+    }
+
+    // ---- text ----------------------------------------------------------------------------------
+
+    private static readonly string[] Names = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    public static string NoteName(int n) => $"{Names[n % 12]}{n / 12 - 1}";
+    public static int ParseNote(string s)
+    {
+        s = s.Trim();
+        int i = 1;
+        if (s.Length > 1 && (s[1] == '#' || s[1] == 'b')) i = 2;
+        int pc = Array.FindIndex(Names, x => string.Equals(x, s[..1], StringComparison.OrdinalIgnoreCase));
+        if (pc < 0 || !int.TryParse(s[i..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int oct)) return -1;
+        if (i == 2) pc += s[1] == '#' ? 1 : -1;
+        int n = (oct + 1) * 12 + pc;
+        return n is >= 0 and <= 127 ? n : -1;
+    }
+
+    public static string StepText(Step s)
+    {
+        if (s.IsRest) return ".";
+        string gate = s.Gate >= GateTie ? "tie" : $"{s.Gate}%";
+        return $"{string.Join(' ', s.Notes.Select(NoteName))}:{s.Velocity}:{gate}";
+    }
+
+    /// <summary>Parses one row; null and an error message when it can't.</summary>
+    public static Step? ParseStep(string row, out string error)
+    {
+        error = "";
+        row = row.Trim();
+        var s = new Step();
+        if (row == "." || row.Length == 0) return s;
+        var parts = row.Split(':');
+        foreach (var t in parts[0].Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int n = ParseNote(t);
+            if (n < 0) { error = $"note '{t}'"; return null; }
+            if (s.Notes.Count < StepNotes && !s.Notes.Contains(n)) s.Notes.Add(n);
+        }
+        if (parts.Length > 1 && parts[1].Length > 0)
+        {
+            if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)) { error = $"velocity '{parts[1]}'"; return null; }
+            s.Velocity = Math.Clamp(v, 1, 127);
+        }
+        if (parts.Length > 2 && parts[2].Length > 0)
+        {
+            string g = parts[2].Trim().TrimEnd('%');
+            if (g.Equals("tie", StringComparison.OrdinalIgnoreCase)) s.Gate = GateTie;
+            else if (int.TryParse(g, NumberStyles.Integer, CultureInfo.InvariantCulture, out int gv)) s.Gate = Math.Clamp(gv, 1, 100);
+            else { error = $"gate '{parts[2]}'"; return null; }
+        }
+        return s;
+    }
+
+    // ---- editing (Twin::Act, contracts/c-abi.md) -------------------------------------------------
+
+    public enum Act
+    {
+        SelectPattern = 0, SetLength, ClearStep, AddStepNote, RemoveStepNote, SetStepVelocity, SetStepGate,
+        StepRecordArm, StepRecordAdvance, ClearPattern, CopyPattern, MotionTarget, MotionMode, MotionSet,
+        MotionRecordArm, ClearMotion, StepRecordPoll,
+    }
+
+    public static void Do(IAudioEngine e, int trackId, Act a, int iarg = 0, float farg = 0f) => e.InstrumentAction(trackId, (int)a, iarg, farg);
+
+    /// <summary>Replaces a pattern's steps with `rows` (the text form; the length becomes the row
+    /// count) — one undo step. Returns "" or what it could not read.</summary>
+    public static string WritePattern(IAudioEngine e, int trackId, int pattern, IReadOnlyList<string> rows)
+    {
+        if (rows.Count is < 1 or > Steps) return $"{rows.Count} rows — a pattern has 1..{Steps}";
+        var steps = new List<Step>();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var st = ParseStep(rows[i], out var err);
+            if (st is null) return $"row {i + 1}: {err}";
+            steps.Add(st);
+        }
+        e.BeginUndoGroup();
+        try
+        {
+            Do(e, trackId, Act.SelectPattern, pattern);
+            Do(e, trackId, Act.SetLength, steps.Count);
+            for (int i = 0; i < steps.Count; i++)
+            {
+                Do(e, trackId, Act.ClearStep, i);
+                foreach (var n in steps[i].Notes) Do(e, trackId, Act.AddStepNote, i << 8 | n, steps[i].Velocity / 127f);
+                Do(e, trackId, Act.SetStepVelocity, i, steps[i].Velocity / 127f);
+                Do(e, trackId, Act.SetStepGate, i, steps[i].Gate >= GateTie ? 1.01f : steps[i].Gate / 100f);
+            }
+        }
+        finally
+        {
+            e.EndUndoGroup();
+        }
+        return "";
+    }
+
+    // ---- To clip -------------------------------------------------------------------------------
+
+    private static readonly double[] RateBeats = { 1.0, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0, 0.125 };
+
+    /// <summary>Why a pattern can't become a clip that sounds like the sequencer playing it: a clip's
+    /// notes reach the parts by the keyboard's rule (Layer: both; Split: by the split key), while the
+    /// sequencer plays the parts Sequencer Target names.</summary>
+    public enum ClipBlock
+    {
+        None,
+        LayerOnePart,   // Layer, the sequencer on one part: a clip would play both
+        SplitBothParts, // Split, the sequencer on both parts: a clip would play one per key
+        SplitOtherSide, // Split, a note on the other side of the split key from the part it plays
+        InRack,         // a Twin on a rack chain: the clip would land on the rack's track and play every chain
+    }
+
+    /// <summary>Whether <see cref="ToClip"/> can write the pattern (it refuses what it can't reproduce).</summary>
+    public static ClipBlock ToClipBlock(IAudioEngine e, int trackId, int pattern)
+    {
+        if (e.TrackInstrumentKind(trackId) != TwinMatrix.Kind) return ClipBlock.None;
+        if (e is RackChainEngineProxy) return ClipBlock.InRack;
+        var set = FromState(e.GetPluginState(trackId, -1));
+        if (set is null || pattern < 0 || pattern >= Patterns) return ClipBlock.None;
+        return Block(set[pattern], ParamReader(e, trackId).G);
+    }
+
+    private static (Dictionary<string, int> At, Func<string, float> G) ParamReader(IAudioEngine e, int trackId)
+    {
+        var at = new Dictionary<string, int>();
+        int pc = e.PluginParamCount(trackId, -1);
+        for (int i = 0; i < pc; i++) at[e.PluginParamId(trackId, -1, i)] = i;
+        return (at, id => e.PluginParamGet(trackId, -1, at[id]));
+    }
+
+    private static int StepOf(float v, int n) => Math.Clamp((int)Math.Round(v * (n - 1), MidpointRounding.AwayFromZero), 0, n - 1);
+
+    private static ClipBlock Block(Pattern pat, Func<string, float> G)
+    {
+        int mode = StepOf(G("mode"), 3);         // Single / Layer / Split
+        int target = StepOf(G("seq.target"), 3); // Lower / Upper / Both
+        if (mode == 1) return target == 2 ? ClipBlock.None : ClipBlock.LayerOnePart;
+        if (mode != 2) return ClipBlock.None;
+        if (target == 2) return ClipBlock.SplitBothParts;
+        int split = (int)Math.Round(G("splitkey") * 127f, MidpointRounding.AwayFromZero);
+        for (int k = 0; k < pat.Length; k++)
+            foreach (var n in pat.Steps[k].Notes)
+                if ((n < split) != (target == 0)) return ClipBlock.SplitOtherSide;
+        return ClipBlock.None;
+    }
+
+    // Motion points end this far before the next step's onset, so a held value steps there.
+    private const double MotionEdge = 1e-4;
+
+    /// <summary>Writes a pattern of the track's Twin as a MIDI clip at `startBeat` (notes, velocities,
+    /// gates, ties and the swing) and its motion lanes as automation over the clip, then turns the
+    /// sequencer off — one undo step. Automation already on those parameters outside the clip stays.
+    /// Returns the clip index, or -1 (also when <see cref="ToClipBlock"/> says the clip couldn't
+    /// sound as the sequencer does).</summary>
+    public static int ToClip(IAudioEngine e, int trackId, int pattern, double startBeat)
+    {
+        if (e.TrackInstrumentKind(trackId) != TwinMatrix.Kind) return -1;
+        var set = FromState(e.GetPluginState(trackId, -1));
+        if (set is null || pattern < 0 || pattern >= Patterns) return -1;
+        var pat = set[pattern];
+        if (e is RackChainEngineProxy) return -1; // ClipBlock.InRack
+        var (at, G) = ParamReader(e, trackId);
+        if (Block(pat, G) != ClipBlock.None) return -1;
+        int pc = at.Count;
+        double sb = RateBeats[StepOf(G("seq.rate"), 6)];
+        double swing = G("seq.swing") * 0.5 * sb;
+        double On(int k) => k * sb + ((k & 1) == 1 ? swing : 0);
+
+        var notes = new List<NotaNote>();
+        for (int k = 0; k < pat.Length; k++)
+        {
+            var s = pat.Steps[k];
+            foreach (var n in s.Notes)
+            {
+                // A tie runs on through the following steps that hold the same note.
+                if (k > 0 && pat.Steps[k - 1].Gate >= GateTie && pat.Steps[k - 1].Notes.Contains(n)) continue;
+                int last = k;
+                while (pat.Steps[last].Gate >= GateTie && last + 1 < pat.Length && pat.Steps[last + 1].Notes.Contains(n)) last++;
+                var end = pat.Steps[last];
+                double off = On(last) + (end.Gate >= GateTie ? sb : end.Gate * 0.01 * sb);
+                notes.Add(new NotaNote(n, On(k), off - On(k), s.Velocity / 127f));
+            }
+        }
+        // The clip runs to the pattern's end, or on to its last note-off when a swung long note (or a
+        // tie on the last step) rings past it, so every note keeps its live length.
+        double length = Math.Max(sb, pat.Length * sb);
+        foreach (var n in notes) length = Math.Max(length, n.StartBeat + n.LengthBeats);
+        e.BeginUndoGroup();
+        try
+        {
+            int clip = e.AddMidiClip(trackId, startBeat, length);
+            if (clip < 0) return -1;
+            e.SetClipNotes(trackId, clip, notes.ToArray());
+            foreach (var lane in pat.Lanes)
+            {
+                if (lane.Target < 0 || lane.Target >= pc || lane.Values.Take(pat.Length).All(v => v == MotionUnset)) continue;
+                int li = e.AddPluginAutomationLane(trackId, -1, e.PluginParamId(trackId, -1, lane.Target));
+                if (li < 0) continue;
+                float knob = e.PluginParamGet(trackId, -1, lane.Target); // what an empty step plays
+                var pts = MotionPoints(pat, lane, sb, On, On(pat.Length), length, knob).Select(p => new AutomationPoint(startBeat + p.Beat, p.Value)).ToList();
+                // An existing lane keeps its points before and after the clip.
+                double end = startBeat + length;
+                var kept = e.GetAutomationPoints(trackId, li).Where(p => p.Beat < startBeat || p.Beat > end);
+                e.SetAutomationPoints(trackId, li, kept.Concat(pts).OrderBy(p => p.Beat).ToArray());
+            }
+            int seqOn = at["seq.on"];
+            int g = e.BeginMixGesture(MixTarget.PluginParam(trackId, -1, seqOn)); // undoes with the clip
+            e.PluginParamSet(trackId, -1, seqOn, 0f);
+            e.EndMixGesture(g);
+            return clip;
+        }
+        finally
+        {
+            e.EndUndoGroup();
+        }
+    }
+
+    // A motion lane as the sequencer plays it (Twin::fireStep / updateControl): from each step's
+    // onset to the next one's, a stepped lane holds the step's value, and a smooth one glides to the
+    // next step's value (the last to the first) over one step length — cut short at the next onset
+    // when the swing brings it early, held when it comes late.
+    // An empty step lets the knob play (the lane lets go of it): the points hold `knob` there.
+    // Past the pattern's end (a last note ringing on), the lane plays what the next pass's first
+    // step does: its value, or the knob.
+    private static IEnumerable<(double Beat, float Value)> MotionPoints(Pattern pat, Lane lane, double sb,
+        Func<int, double> on, double patternEnd, double length, float knob)
+    {
+        for (int k = 0; k < pat.Length; k++)
+        {
+            double t0 = on(k), next = k + 1 < pat.Length ? on(k + 1) : Math.Min(patternEnd, length);
+            double hold = Math.Max(t0, next - MotionEdge);
+            if (lane.Values[k] == MotionUnset)
+            {
+                yield return (t0, knob);
+                yield return (hold, knob);
+                continue;
+            }
+            float v = lane.Values[k] / 65534f;
+            yield return (t0, v);
+            if (!lane.Smooth)
+            {
+                yield return (hold, v);
+                continue;
+            }
+            ushort nx = lane.Values[(k + 1) % pat.Length];
+            float to = nx == MotionUnset ? v : nx / 65534f;
+            double glideEnd = t0 + sb;
+            if (glideEnd < hold)
+            {
+                yield return (glideEnd, to);
+                yield return (hold, to);
+            }
+            else
+                yield return (hold, v + (to - v) * (float)((hold - t0) / sb));
+        }
+        if (length > patternEnd + MotionEdge)
+        {
+            float first = lane.Values[0] == MotionUnset ? knob : lane.Values[0] / 65534f;
+            yield return (patternEnd, first);
+            yield return (length, first);
+        }
+    }
+}
