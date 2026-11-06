@@ -149,34 +149,3 @@ internal sealed class MonolithFilterCurve : Control
     }
 }
 
-// ADS contour (Decay doubles as release): attack ramp → decay to sustain → hold → release.
-internal sealed class MonolithEnvCurve : Control
-{
-    private double _a, _d, _s = 0.8;
-    public IBrush Accent { get; set; } = NotaPalette.VizInk;   // the curve's ink (neutral at rest)
-
-    public void Set(double a, double d, double s) { _a = a; _d = d; _s = s; }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        double top = 2, bot = h - 2;
-        double xa = w * (0.04 + _a * 0.30);
-        double xd = xa + w * (0.04 + _d * 0.34);
-        double xs = w * 0.72;
-        double ys = bot - (bot - top) * _s;
-        if (xd > xs) xd = xs;
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        using (var lc = line.Open())
-        using (var fc = fill.Open())
-        {
-            lc.BeginFigure(new Point(0, bot), false);
-            lc.LineTo(new Point(xa, top)); lc.LineTo(new Point(xd, ys)); lc.LineTo(new Point(xs, ys)); lc.LineTo(new Point(w, bot));
-            fc.BeginFigure(new Point(0, bot), true);
-            fc.LineTo(new Point(xa, top)); fc.LineTo(new Point(xd, ys)); fc.LineTo(new Point(xs, ys)); fc.LineTo(new Point(w, bot));
-        }
-        var col = ((SolidColorBrush)Accent).Color;
-        ctx.DrawGeometry(null, new Pen(Accent, 1.5), line);
-    }
-}

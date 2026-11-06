@@ -78,6 +78,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
     };
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Matrix", "FX", "Seq", "Voice" };
+    private const int EnvTabIx = 2;
     private static readonly string[] SeqRates = { "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32" };
     private static readonly string[] ArpModes = { "Up", "Down", "Up/down", "Random", "As played", "Chord" };
     private static readonly int[] SeqLengths = { 4, 8, 12, 16, 24, 32, 48, 64 };
@@ -375,9 +376,13 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Island("Response", null, 0, Graph(new TwinFilterView(), 172, 172)));
 
         // ---- Env tab ------------------------------------------------------------
-        // An envelope: drag its handles on the graph (attack · decay and sustain · release), or the
-        // four named times under it; the knobs keep velocity and the curve (delay for the mod env).
-        Control Env(string title, string e, bool mod, double w)
+        // An envelope (#531): the shared graph on the side being edited — drag its breakpoints, bend
+        // decay and release by their diamonds, Lin / Exp in the header — over the four named times;
+        // the knobs keep velocity and the attack curve (delay for the mod env). The three share
+        // one time scale; the dot is the part's newest voice.
+        var envScale = new EnvTimeScale();
+        var envViews = new VoltEnv[3];
+        Control Env(string title, string e, bool mod, double w, int slot)
         {
             var times = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
             var cells = new[] { PWell(S(e + "a"), "Attack", Attack), PWell(S(e + "d"), "Decay", Decay), PWell(S(e + "s"), "Sustain", Pct), PWell(S(e + "r"), "Release", Decay) };
@@ -385,9 +390,30 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             var knobs = mod
                 ? Row(PKnob(S(e + "dly"), "Delay", Delay, cellW: 58), PKnob(S(e + "vel"), "Velocity", Pct, cellW: 58, arc: Teal))
                 : Row(PKnob(S(e + "vel"), "Velocity", Pct, cellW: 58, arc: Teal), PKnob(S(e + "curve"), "Curve", Pct, cellW: 58));
-            return Island(title, mod ? Toggle("Loop", S("menvloop")) : null, w, Graph(new TwinEnvView(e, mod), 186, 70), times, knobs);
+            var view = new VoltEnv(engine, track) { Height = 70, MinHeight = 60 };
+            (int, string) Q(string id) => (I(S(id)), S(id));
+            view.Target(title, Q(e + "a"), Q(e + "d"), Q(e + "s"), Q(e + "r"));
+            view.Shape(Q(e + "dcurve"), Q(e + "rcurve"), Q(e + "exp"));
+            view.Format = (k, n) => k switch { 0 => Attack((float)n), 2 => Pct((float)n), _ => Decay((float)n) };
+            view.Seconds = (k, n) => k == 0 ? ExpMap((float)n, 0.0005, 10) : ExpMap((float)n, 0.003, 15);
+            view.Scale = envScale;
+            readouts.Add(view.Refresh);
+            envViews[slot] = view;
+            var curve = Chips(S(e + "exp"), new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") }, 4);
+            Control head = mod ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Toggle("Loop", S("menvloop")), curve } } : curve;
+            return Island(title, head, w, view, times, knobs);
         }
-        var envBody = Chain(Env("Filter env", "fenv", false, 204), Env("Amp env", "aenv", false, 204), Env("Mod env", "menv", true, 0));
+        var envBody = Chain(Env("Filter env", "fenv", false, 204, 0), Env("Amp env", "aenv", false, 204, 1), Env("Mod env", "menv", true, 0, 2));
+        {
+            const int ScEnvLo = 26, ScEnvUp = 32;   // Twin::ScEnvLo / ScEnvUp (#531)
+            var envScope = new float[ScEnvUp + 6];
+            ctx.AddDeviceRefresher(() =>
+            {
+                if (tab != EnvTabIx || engine.InstrumentScope(track, envScope) < envScope.Length) return;
+                int b = partIx == 0 ? ScEnvLo : ScEnvUp;
+                for (int k = 0; k < 3; k++) envViews[k].SetPlay((int)envScope[b + k * 2], envScope[b + k * 2 + 1]);
+            });
+        }
 
         // ---- LFO tab ------------------------------------------------------------
         // One LFO at a time (the picker in the header): shape, switches, then rate, fade and amount

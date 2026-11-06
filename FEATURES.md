@@ -697,6 +697,10 @@ and hosted plug-ins) have the same on/off switch as effects: off silences the in
 audio effects after it keep running and keep their settings; saved with the project.
 
 ### Instruments
+- **Envelopes (built-in instruments)** — one envelope graph across Volt, Aurora, Operator, Bass,
+  Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin: drag the breakpoints, bend the
+  decay and release by their diamonds, Lin / Exp per envelope, a held sustain zone with its level,
+  a segment bar, one time scale per card and a dot on the sounding voice.
 - **Nota Synth** — *no longer offered for new tracks: Nota Volt covers it and carries its
   presets (specs/026); saved tracks still load and play.* Subtractive synthesizer (the basic one): one oscillator
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison

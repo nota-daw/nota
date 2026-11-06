@@ -332,15 +332,20 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             (detectBtn, "Auto"));
 
         // ================= Env tab =================
-        var env = new SamplerEnvView();
+        // The shared envelope graph (#531): drag the breakpoints, bend decay and release by their
+        // diamonds, ⌥-click to type; the dot is the loudest voice.
+        var env = new VoltEnv(new SamplerEnvParams(acc)) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         ToolTip.SetTip(env, MenuKit.Keys(Loc.T("device.sampler.drag_the_nodes_attack_decay")));
-        env.DragBegin += Begin;
-        env.DragEnd += End;
-        env.Changed += (id, v) => { SetP(id, v); Refresh(); };
-        env.Reset += id => { Write(id, Def(id)); Refresh(); };
-        string EnvTl() => $"{NotaNum.Time(SamplerModel.AttackSec(G("attack")))} · {NotaNum.Time(SamplerModel.DecaySec(G("decay")))} · {DbLin(G("sustain"))} · {NotaNum.Time(SamplerModel.ReleaseSec(G("release")))}";
-        readouts.Add(() => env.Set(G("attack"), G("decay"), G("sustain"), G("release"), snap, EnvTl(),
-            hasSample ? NotaNum.Unit((G("end") - G("start")) * durSec, "0.00", "s") : ""));
+        (int, string) EP(string id) => (I(id), id);
+        env.Target("ENV", EP("attack"), EP("decay"), EP("sustain"), EP("release"));
+        env.Shape(EP("dcurve"), EP("rcurve"), EP("envexp"));
+        env.Format = (k, n) => k switch
+        {
+            0 => NotaNum.Time(SamplerModel.AttackSec((float)n)), 1 => NotaNum.Time(SamplerModel.DecaySec((float)n)),
+            2 => DbLin((float)n), _ => NotaNum.Time(SamplerModel.ReleaseSec((float)n)),
+        };
+        env.Seconds = (k, n) => k switch { 0 => SamplerModel.AttackSec((float)n), 1 => SamplerModel.DecaySec((float)n), _ => SamplerModel.ReleaseSec((float)n) };
+        readouts.Add(() => { env.SetPlay(snap.Live ? snap.EnvStage : 4, snap.EnvProgress); env.Refresh(); });
         float lastVel = G("velamount") > 0.005f ? G("velamount") : 1f;
         var velSwitch = Switch("", () => G("velamount") > 0.005f, () =>
         {
@@ -354,12 +359,14 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         readouts.Add(() => velWord.Text = G("velamount") > 0.005f ? NotaNum.Pct(G("velamount")) : "off");
         var velBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Cap("VEL → VOL"), velSwitch, velWord } };
         ToolTip.SetTip(velBlock, Loc.T("device.sampler.velocity_sets_the_level_the"));
+        var curveSeg = ParamChips("envexp", new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") });
         var envRow = Row(16,
             (PKnob("attack", "ATTACK", v => NotaNum.Time(SamplerModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "DECAY", v => NotaNum.Time(SamplerModel.DecaySec(v))), "Auto"),
             (PKnob("sustain", "SUSTAIN", DbLin, NotaSize.KnobMain, 58), "Auto"),
             (PKnob("release", "RELEASE", v => NotaNum.Time(SamplerModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
+            (Labeled("CURVE", curveSeg), "Auto"),
             (velBlock, "Auto"));
 
         // ================= Filter tab =================
@@ -372,10 +379,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         // ⌥-click a node / the filter window to type it (specs/035).
         ValueField PF(string id, string name, Func<float, string> fmt) => new(name, () => G(id), v => fmt((float)v), v => SetP(id, v),
             () => Begin(id), () => End(id), I(id) >= 0 ? Def(id) : null) { After = Refresh };
-        ValueEntry.AttachHandles(env,
-            [PF("attack", "Attack", v => NotaNum.Time(SamplerModel.AttackSec(v)))],
-            [PF("decay", "Decay", v => NotaNum.Time(SamplerModel.DecaySec(v))), PF("sustain", "Sustain", DbLin)],
-            [PF("release", "Release", v => NotaNum.Time(SamplerModel.ReleaseSec(v)))]);
         ValueEntry.AttachAll(filt, PF("cutoff", "Cutoff", v => NotaNum.Hz(SamplerModel.CutoffHz(v))), PF("resonance", "Resonance", v => NotaNum.Pct(v)));
         string FiltTl()
         {

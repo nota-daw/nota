@@ -71,6 +71,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **A new envelope graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
+  Operator, Bass, Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin draw their
+  envelopes the same way. The curve is in the accent colour with a light fill. The sustain stretch is
+  marked as held, with its level as a dashed line and a badge. The breakpoints are hollow, and the one
+  you drag shows its value. A segment bar A · D · S · R lights the stage being edited. The envelopes
+  of a card share one time scale, and a dot follows the newest voice. Every envelope also gains a
+  **decay and a release curve** (drag the diamond in the middle of the stage) and a **Lin / Exp**
+  switch, as new parameters that automate and save with presets. They default to the old sound:
+  straight and Lin on the subtractive and sample instruments, and Exp (the analog RC curve) on
+  Consort, Pentad and Twin. Twin projects saved before this load into the new parameter layout.
+- **Envelopes get their own tab** (nota-daw/nota#531): Nota Operator's operator envelope moves
+  from the right rail to an Env tab among the centre tabs, with the operator picker A–D beside it.
+  Consort splits Filters · Env into Filters and Env. Pentad splits Filter · Amp into Filter and Env,
+  with the Release switch in the tab bar. Monolith's contours leave Modifiers for an Env tab.
 - **Built-in instrument cards without the status line** (nota-daw/nota#531): the 18 px text strip
   along the bottom of every built-in instrument card is gone, and the controls use the height.
   Nota Pentad's Voice setup (polyphony, allocation, glide, release, oversampling, bass comp,

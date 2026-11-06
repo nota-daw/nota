@@ -51,19 +51,20 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         for (int i = 0; i < pc; i++) idx[engine.PluginParamId(track, -1, i)] = i;
         float G(string id) => idx.TryGetValue(id, out var i) ? engine.PluginParamGet(track, -1, i) : 0f;
         int I(string id) => idx.TryGetValue(id, out var i) ? i : -1;
+        (int, string) P(string id) => (I(id), id);
         void SetP(string id, float v) { if (I(id) is var i and >= 0) engine.PluginParamSet(track, -1, i, Math.Clamp(v, 0f, 1f)); }
         int Sel(string id, int n) => Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1);
 
         var readouts = new List<Action>();
         var filtCurve = new MonolithFilterCurve();
-        var fEnvCurve = new MonolithEnvCurve { Accent = NotaPalette.VizInk };
-        var aEnvCurve = new MonolithEnvCurve { Accent = TealC };
+        var fEnv = new VoltEnv(engine, track) { MinHeight = 50 };
+        var aEnv = new VoltEnv(engine, track) { MinHeight = 50 };
+        var envScale = new EnvTimeScale();
 
         void Refresh()
         {
             filtCurve.Set(G("cutoff"), G("emph")); filtCurve.InvalidateVisual();
-            fEnvCurve.Set(G("fattack"), G("fdecay"), G("fsustain")); fEnvCurve.InvalidateVisual();
-            aEnvCurve.Set(G("aattack"), G("adecay"), G("asustain")); aEnvCurve.InvalidateVisual();
+            fEnv.Refresh();
             foreach (var a in readouts) a();
         }
 
@@ -186,7 +187,6 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         string DetFmt(float v) => $"{(v - 0.5f) * 14f:+0.00;−0.00;0.00}";
         string HzFmt(float v) { double hz = 16 * Math.Pow(1250, v); return hz >= 1000 ? $"{hz / 1000:0.0}k" : $"{hz:0}"; }
         string EmphFmt(float v) => $"{v * 10f:0.0}";
-        string TimeFmt(double lo, double hi, float v) { double s = Sec(lo, hi, v); return s >= 1 ? $"{s:0.0}\u2009s" : $"{s * 1000:0}\u2009ms"; }
         string VolFmt(float v) => v <= 0.001f ? "−∞" : $"{20 * Math.Log10(v):0.0}\u2009dB";
         static double Sec(double lo, double hi, double v) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
 
@@ -274,29 +274,35 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             var body = new DockPanel { LastChildFill = true, Children = { WithDock(Lbl("FILTER", 7, MutedC), Dock.Top), WithDock(knobs, Dock.Bottom), graph } };
             return new Border { Width = 226, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(6, 4), Child = body };
         }
-        Control ContourPanel(string title, string route, MonolithEnvCurve curve, string pre, IBrush col)
+        // -- Env tab --
+        // The filter and loudness contours side by side on one time scale (#531). A contour has
+        // no release of its own: with Decay on, letting go runs the decay time, else ~4 ms.
+        double RelSec(float v) => G("decayon") > 0.5f ? EnvPanel.ExpMap(v, 0.004, 20) : 0.004;
+        Control Contour(VoltEnv view, string title, string route, string pre)
         {
-            curve.VerticalAlignment = VerticalAlignment.Stretch;
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = curve };
-            var knobs = Row(1, K($"{pre}attack", "A", v => TimeFmt(0.001, 10, v), false, Knob.SizeInline, 34, true), K($"{pre}decay", "D", v => TimeFmt(0.004, 20, v), false, Knob.SizeInline, 34, true), K($"{pre}sustain", "S", v => $"{v * 100:0}\u2009%", false, Knob.SizeInline, 34, true));
-            DockPanel.SetDock((Control)knobs, Dock.Right);
-            ((Control)knobs).Margin = new Thickness(6, 0, 0, 0);
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 11, Margin = new Thickness(0, 0, 0, 3), Children = { Lbl(title, 7, MutedC), new TextBlock { Text = route, FontSize = 7, Foreground = col, VerticalAlignment = VerticalAlignment.Center } } };
-            DockPanel.SetDock(head, Dock.Top);
-            var inner = new DockPanel { LastChildFill = true, Children = { (Control)knobs, graph } };
-            return new DockPanel { LastChildFill = true, Children = { head, inner } };
+            Control Cell(string id, string label, string learn, Func<float, string> fmt) => K(id, label, fmt, false, Knob.SizeInline, 40);
+            var dest = new TextBlock { Text = route, FontSize = 7, Foreground = TealC, VerticalAlignment = VerticalAlignment.Center };
+            return EnvPanel.Build(view, new EnvPanel.Spec(title, new[] { pre + "attack", pre + "decay", pre + "sustain", pre + "decay" },
+                    new[] { pre + "dcurve", pre + "rcurve", pre + "envexp" }, (0.001, 10.0), (0.004, 20.0), (0.004, 20.0),
+                    ReleaseFromDecay: RelSec),
+                P, Cell, (id, names) => Chips(id, names), dest, envScale);
         }
-        Control ModifiersTab()
+        Control EnvTab()
         {
-            var contours = new Grid { RowDefinitions = new RowDefinitions("*,*"), RowSpacing = 4, Margin = new Thickness(6, 2) };
-            var c1 = ContourPanel("FILTER CONTOUR", "→ cutoff", fEnvCurve, "f", TextSecondary);
-            var c2 = ContourPanel("LOUDNESS CONTOUR", "→ amp", aEnvCurve, "a", TealC);
-            Grid.SetRow((Control)c2, 1); contours.Children.Add((Control)c1); contours.Children.Add((Control)c2);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-            var fp = FilterPanel(); Grid.SetColumn(fp, 0); Grid.SetColumn(contours, 1);
-            g.Children.Add(fp); g.Children.Add(contours);
+            var c1 = Contour(fEnv, "FILTER CONTOUR", "→ cutoff", "f");
+            var c2 = new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(7, 0, 0, 0), Child = Contour(aEnv, "LOUDNESS CONTOUR", "→ amp", "a") };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 7, Margin = new Thickness(6, 3) };
+            g.Children.Add(c1); g.Children.Add(WithCol(c2, 1));
             return g;
         }
+        // Modifiers: the filter across the whole panel.
+        Control ModifiersTab()
+        {
+            var f = (Border)FilterPanel();
+            f.Width = double.NaN; f.BorderThickness = new Thickness(0);
+            return f;
+        }
+        EnvPanel.FollowVoice(ctx, 0, null, fEnv, aEnv);
 
         // ======================================================================
         // RIGHT — Mixer / Output tabs
@@ -345,13 +351,13 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         // ---- tab shells -------------------------------------------------------
         var centreHost = new ContentControl { VerticalAlignment = VerticalAlignment.Stretch };
         var rightHost = new ContentControl { VerticalAlignment = VerticalAlignment.Stretch };
-        Control? oscTabC = null, modTabC = null, mixTabC = null, outTabC = null;
-        Control CentreBody(int t) => t == 1 ? (modTabC ??= ModifiersTab()) : (oscTabC ??= OscTab());
+        Control? oscTabC = null, modTabC = null, envTabC = null, mixTabC = null, outTabC = null;
+        Control CentreBody(int t) => t switch { 1 => modTabC ??= ModifiersTab(), 2 => envTabC ??= EnvTab(), _ => oscTabC ??= OscTab() };
         Control RightBody(int t) => t == 1 ? (outTabC ??= OutputTab()) : (mixTabC ??= MixerTab());
 
         var drift = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Width = 96, Children = { new TextBlock { Text = "Drift", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, WithStretch(HSlider("drift", "", v => $"{v * 100:0}\u2009%", 0, 22)) } };
 
-        var centre = TabPanel(new[] { Loc.T("device.monolith.controllers_osc_bank"), "Modifiers" }, drift, centreHost, CentreBody);
+        var centre = TabPanel(new[] { Loc.T("device.monolith.controllers_osc_bank"), "Modifiers", Loc.T("device.monolith.env_tab") }, drift, centreHost, CentreBody);
         var right = new RuleSection { Width = 186, Child = TabInner(new[] { "Mixer", "Output" }, null, rightHost, RightBody, true) };
         DockPanel.SetDock(right, Dock.Right);
 

@@ -178,6 +178,21 @@ ParamInfo make(const std::string& idPrefix, const std::string& namePrefix, const
     return {idPrefix + d.id, namePrefix + d.name, d.def, d.steps, d.domain};
 }
 
+// The envelope shapes per side (#531), after the routing depths: straight curves and Exp on —
+// the RC generator every Twin envelope has always been.
+constexpr Desc kShapeDesc[] = {
+    {"fenvdcurve", "FilterEnv Decay Curve", 0.5f, 0, D::Linear},
+    {"fenvrcurve", "FilterEnv Release Curve", 0.5f, 0, D::Linear},
+    {"fenvexp", "FilterEnv Exp", 1.0f, 2, D::Linear},
+    {"aenvdcurve", "AmpEnv Decay Curve", 0.5f, 0, D::Linear},
+    {"aenvrcurve", "AmpEnv Release Curve", 0.5f, 0, D::Linear},
+    {"aenvexp", "AmpEnv Exp", 1.0f, 2, D::Linear},
+    {"menvdcurve", "ModEnv Decay Curve", 0.5f, 0, D::Linear},
+    {"menvrcurve", "ModEnv Release Curve", 0.5f, 0, D::Linear},
+    {"menvexp", "ModEnv Exp", 1.0f, 2, D::Linear},
+};
+static_assert(sizeof(kShapeDesc) / sizeof(kShapeDesc[0]) == kSideN - kSideNv1, "shape table out of step with Twin.h");
+
 std::vector<ParamInfo> buildTable() {
     std::vector<ParamInfo> t;
     t.reserve(kNumParams);
@@ -215,6 +230,7 @@ std::vector<ParamInfo> buildTable() {
                 std::snprintf(buf, sizeof buf, "Routing Depth%d", r + 1);
                 t.push_back({id, sname + buf, 0.5f, 0, Domain::Linear});
             }
+            for (const Desc& d : kShapeDesc) t.push_back(make(sid, sname, d));
         }
     }
     // Init's routes (FR-033), removable like any other: pressure opens both cutoffs, slide and
@@ -1530,6 +1546,18 @@ void Twin::publishTelemetry(float peak) {
         set(ScLfoPhase0 + l, static_cast<float>(ph));
     }
     set(ScPeakDb, peak > 1e-9f ? 20.0f * std::log10(peak) : -180.0f);
+    // Each part's newest voice on its three envelopes, for the Env tab's graphs (#531).
+    for (int p = 0; p < twin::kParts; ++p) {
+        const twin::Voice* nv = nullptr;
+        for (int v = 0; v < kMaxVoices; ++v)
+            if (voices_[v].active && voices_[v].part == p && (!nv || voices_[v].order > nv->order)) nv = &voices_[v];
+        const int base = p == 0 ? ScEnvLo : ScEnvUp;
+        const twin::Env* envs[3] = {nv ? &nv->fenv : nullptr, nv ? &nv->aenv : nullptr, nv ? &nv->menv : nullptr};
+        for (int e = 0; e < 3; ++e) {
+            set(base + e * kEnvTeleFloats, envs[e] ? static_cast<float>(envs[e]->teleStage()) : 4.0f);
+            set(base + e * kEnvTeleFloats + 1, envs[e] ? envs[e]->sh.p : 0.0f);
+        }
+    }
 }
 
 int32_t Twin::scopeRead(float* out, int32_t maxN) const {
@@ -1572,11 +1600,25 @@ void Twin::setState(const uint8_t* data, int32_t size) {
     const uint32_t count = getU32(data + 4);
     const size_t avail = (static_cast<size_t>(size) - 8) / sizeof(float);
     const int n = static_cast<int>(std::min<size_t>({count, avail, static_cast<size_t>(kNumParams)}));
+    // A state from before the envelope shapes (#531) has shorter side blocks: each value goes
+    // to its place in today's layout, and the shapes keep their defaults.
+    const bool v1 = count == static_cast<uint32_t>(twin::kNumParamsV1);
+    auto slotOf = [v1](int i) {
+        if (!v1 || i < twin::kGlobalN) return i;
+        constexpr int oldBlock = twin::kPartN + twin::kSides * twin::kSideNv1;
+        const int part = (i - twin::kGlobalN) / oldBlock, r = (i - twin::kGlobalN) % oldBlock;
+        if (r < twin::kPartN) return twin::partIdx(part, r);
+        return twin::sideIdx(part, (r - twin::kPartN) / twin::kSideNv1, (r - twin::kPartN) % twin::kSideNv1);
+    };
+    if (v1) {
+        const auto& t = twin::paramTable();
+        for (int i = 0; i < kNumParams; ++i) pn_[i].store(t[static_cast<size_t>(i)].def, std::memory_order_relaxed);
+    }
     for (int i = 0; i < n; ++i) {
         const uint32_t u = getU32(data + 8 + i * sizeof(float));
         float v;
         std::memcpy(&v, &u, sizeof v);
-        if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
+        if (std::isfinite(v)) pn_[slotOf(i)].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
     // The pattern block after the params (a preset may carry only it: paramCount 0).
     const size_t at = 8 + static_cast<size_t>(count) * sizeof(float);

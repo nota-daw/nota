@@ -131,7 +131,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var stack = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
         var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
         var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
-        var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, Accent = Teal };
+        var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var lfoStrip = new AuroraLfoStrip { VerticalAlignment = VerticalAlignment.Stretch };
 
         var hint = new TextBlock
@@ -642,114 +642,23 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var filtBody = new Border { Padding = new Thickness(7, 5), Child = filtGrid };
 
         // ---- Env tab --------------------------------------------------------------
-        // Each stage box under a graph carries a small knob and a read-out. The knob turns
-        // and double-click resets like any knob; the rest of the box is a drag value too
-        // (vertical drag, Shift for fine), and a double-click anywhere on it types the value.
-        Knob EnvKnob(string id, int pi, string name, Func<float, string> fmt, IBrush? arc)
+        // Env 1 (amp) and Env 2 (free) side by side on one time scale (#531): drag the curve,
+        // bend decay and release by their diamonds, Lin / Exp in each header.
+        var envScale = new EnvTimeScale();
+        Control EnvKnobCell(string id, string label, string learn, Func<float, string> fmt) => PKnob(id, label, learn, fmt, 24, 40);
+        Control EnvRoute(Func<string> route)
         {
-            var knob = new Knob(G(id), 1.0)
-            {
-                Accent = true, Inline = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
-                VerticalAlignment = VerticalAlignment.Center, Format = v => fmt((float)v),
-            };
-            knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); Touch(); };
-            knob.GestureBegin += () => Begin(id);
-            knob.GestureEnd += () => End(id);
-            readouts.Add(() => { if (!knob.Dragging) knob.Value = G(id); ToolTip.SetTip(knob, name + " · " + fmt(G(id))); });
-            return knob;
-        }
-        void EnvBox(Border cell, string id, TextBlock readout, ValueField stageField)
-        {
-            // The box keeps its double-click for typing: no reset there (the knob and the
-            // right-click menu still reset).
-            var field = stageField with { ResetOnDoubleClick = false };
-            ValueEntry.Attach(cell, field, readout);
-            // The automation gesture opens on the first real change, not on the press: a
-            // press alone (the first click of a double-click) must not override automation.
-            bool drag = false, began = false; double lastY = 0, at = 0;
-            cell.PointerPressed += (_, e) =>
-            {
-                if (e.Handled || !e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
-                e.Handled = true;
-                if (e.ClickCount == 2) { ValueEntry.Open(cell, field); return; }
-                drag = true; began = false; lastY = e.GetPosition(cell).Y; at = G(id);
-                e.Pointer.Capture(cell);
-            };
-            cell.PointerMoved += (_, e) =>
-            {
-                if (!drag) return;
-                // Step by step, so Shift (fine) can come and go mid-drag without a jump.
-                double y = e.GetPosition(cell).Y;
-                at = Math.Clamp(at + (lastY - y) / ((e.KeyModifiers & KeyModifiers.Shift) != 0 ? 600.0 : 120.0), 0, 1);
-                lastY = y;
-                if ((float)at == G(id)) return;
-                if (!began) { began = true; Begin(id); }
-                SetP(id, (float)at); Touch();
-            };
-            void Stop() { drag = false; if (began) { began = false; End(id); } }
-            cell.PointerReleased += (_, e) => { if (!drag) return; Stop(); e.Pointer.Capture(null); };
-            cell.PointerCaptureLost += (_, _) => { if (drag) Stop(); };
-            ToolTip.SetTip(cell, Loc.F("device.aurora.drag_or_turn_to_change", field.Name));
-        }
-
-        Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids, Func<string> summary)
-        {
-            view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
-            string[] stage = { "A", "D", "S", "R" };
-            Func<float, string>[] fmt = { v => Secs(v, 0.001, 2.0), v => Secs(v, 0.002, 3.0), Pct, v => Secs(v, 0.002, 4.0) };
-            view.Format = (k, n) => fmt[k]((float)n);   // ⌥-click a breakpoint to type it
-            var cells = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
-            for (int k = 0; k < 4; k++)
-            {
-                string id = ids[k];
-                var fk = fmt[k];
-                string name = title + " · " + stage[k];
-                var v = Mono(fk(G(id)), TextPrimary, NotaType.RowLabel);
-                readouts.Add(() => v.Text = fk(G(id)));
-                // The knob on top, the stage letter and its value on one line under it: a box
-                // is too narrow to hold a knob beside a full value like "180 ms".
-                v.HorizontalAlignment = HorizontalAlignment.Right;
-                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Left;
-                var box = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 2 };
-                var cell = new Border
-                {
-                    Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 1),
-                    Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = box,
-                };
-                if (I(id) is var pi and >= 0)
-                {
-                    var knob = EnvKnob(id, pi, name, fk, ReferenceEquals(view, env2) ? Teal : null);
-                    knob.HorizontalAlignment = HorizontalAlignment.Center;
-                    Grid.SetColumnSpan(knob, 2); box.Children.Add(knob);
-                    MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), name);
-                }
-                Grid.SetRow(cap, 1); box.Children.Add(cap);
-                Grid.SetRow(v, 1); Grid.SetColumn(v, 1); box.Children.Add(v);
-                if (view.Field(k) is { } vf) EnvBox(cell, id, v, vf);
-                Grid.SetColumn(cell, k); cells.Children.Add(cell);
-            }
-            var sum = Mono("", TextSecondary, NotaType.Axis);
-            sum.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => sum.Text = summary());
             var dest = Mono("", Teal, NotaType.Axis);
             readouts.Add(() => dest.Text = route());
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5, Height = 11 };
-            head.Children.Add(Cap(title));
-            Grid.SetColumn(dest, 1); head.Children.Add(dest);
-            Grid.SetColumn(sum, 2); head.Children.Add(sum);
-            var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 4 };
-            g.Children.Add(head);
-            Grid.SetRow(view, 1); g.Children.Add(view);
-            Grid.SetRow(cells, 2); g.Children.Add(cells);
-            return g;
+            return dest;
         }
-        string AdsrSum(string a, string d, string s, string r)
-            => $"{Secs(G(a), 0.001, 2.0)} · {Secs(G(d), 0.002, 3.0)} · {Pct(G(s))} · {Secs(G(r), 0.002, 4.0)}";
-        var envPanel1 = EnvPanel("ENV 1", () => "→ Amp", env1, new[] { "attack", "decay", "sustain", "release" },
-            () => AdsrSum("attack", "decay", "sustain", "release"));
-        var envPanel2 = EnvPanel("ENV 2", () => EnvDest(1), env2, new[] { "env2attack", "env2decay", "env2sustain", "env2release" },
-            () => AdsrSum("env2attack", "env2decay", "env2sustain", "env2release"));
+        var envPanel1 = EnvPanel.Build(env1, new EnvPanel.Spec("ENV 1", new[] { "attack", "decay", "sustain", "release" },
+                new[] { "dcurve", "rcurve", "envexp" }, (0.001, 2.0), (0.002, 3.0), (0.002, 4.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), EnvRoute(() => "→ Amp"), envScale);
+        var envPanel2 = EnvPanel.Build(env2, new EnvPanel.Spec("ENV 2", new[] { "env2attack", "env2decay", "env2sustain", "env2release" },
+                new[] { "env2dcurve", "env2rcurve", "env2exp" }, (0.001, 2.0), (0.002, 3.0), (0.002, 4.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), EnvRoute(() => EnvDest(1)), envScale);
+        EnvPanel.FollowVoice(ctx, 0, () => tab == 2, env1, env2);
         var env2Host = new Border
         {
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),

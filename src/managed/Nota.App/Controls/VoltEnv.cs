@@ -14,6 +14,31 @@ using Nota.Application.Localization;
 
 namespace Nota.App;
 
+    /// <summary>Where an envelope graph reads and writes its params: a track's instrument by
+    /// default, or any other holder (a Sampler in a rack chain, a pad) through its own access.</summary>
+    internal interface IEnvParams
+    {
+        float Get(int i);
+        void Set(int i, float v);
+        float Default(int i);
+        string Text(int i);
+        void Begin(string id);
+        void End(string id);
+        /// <summary>The MIDI-learn target of param i, or null where the holder can't learn.</summary>
+        MidiTarget? LearnTarget(int i);
+    }
+
+    internal sealed class TrackEnvParams(IAudioEngine e, int t) : IEnvParams
+    {
+        public float Get(int i) => e.PluginParamGet(t, -1, i);
+        public void Set(int i, float v) => e.PluginParamSet(t, -1, i, v);
+        public float Default(int i) => e.PluginParamDefault(t, -1, i);
+        public string Text(int i) => e.PluginParamText(t, -1, i);
+        public void Begin(string id) => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, id);
+        public void End(string id) => e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, id);
+        public MidiTarget? LearnTarget(int i) => MidiTarget.PluginParam(t, -1, i);
+    }
+
     /// <summary>One time axis for the envelope graphs of a card (#531): each graph lays its
     /// stages out in seconds against the longest envelope of the set, so two envelopes compare
     /// at a glance. Graphs join a scale by being given the same instance.</summary>
@@ -40,9 +65,8 @@ namespace Nota.App;
         private static readonly Typeface Face = NotaFonts.Sans;
         private static string Letters => Loc.T("device.env.stage_letters");   // A D S R
         private const double HoldFrac = 0.18;   // the sustain stretch: held, not timed
-        private const double BarH = 11, TickH = 10;
-        private readonly IAudioEngine _e;
-        private readonly int _t;
+        private const double BarH = 11, TickH = 10, BadgeW = 36;   // BadgeW: room for the sustain value
+        private readonly IEnvParams _p;
         private (int i, string id) _a, _d, _s, _r;
         private (int i, string id) _dc = (-1, ""), _rc = (-1, ""), _exp = (-1, "");
         private string _title = "AMP ENV";
@@ -78,7 +102,8 @@ namespace Nota.App;
         public EnvTimeScale? Scale { get => _scale; set { _scale = value; value?.Join(this); } }
         private EnvTimeScale? _scale;
 
-        public VoltEnv(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; ValueEntry.AttachHost(this); }
+        public VoltEnv(IAudioEngine e, int t) : this(new TrackEnvParams(e, t)) { }
+        public VoltEnv(IEnvParams p) { _p = p; MinWidth = 150; MinHeight = 96; ValueEntry.AttachHost(this); }
         public void Target(string title, (int, string) a, (int, string) d, (int, string) s, (int, string) r)
         {
             if (title != _title || a != _a || d != _d || s != _s || r != _r) _stages = null;   // re-targeted every tick by some cards
@@ -120,13 +145,13 @@ namespace Nota.App;
         {
             var p = stage switch { 0 => _a, 1 => _d, 2 => _s, _ => _r };
             if (p.i < 0) return null;
-            void Begin() => _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id);
-            void End() => _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id);
+            void Begin() => _p.Begin(p.id);
+            void End() => _p.End(p.id);
             string name = $"{NotaText.Label(_title)} · {new[] { "Attack", "Decay", "Sustain", "Release" }[stage]}";
-            double def = _e.PluginParamDefault(_t, -1, p.i);
+            double def = _p.Default(p.i);
             return Format is { } fmt
                 ? new ValueField(name, () => G(p), n => fmt(stage, n), n => Set(p, n), Begin, End, def) { After = Refresh }
-                : ValueEntry.Probing(name, () => G(p), n => Set(p, n), () => _e.PluginParamText(_t, -1, p.i), Begin, End, Refresh) with { Default = def };
+                : ValueEntry.Probing(name, () => G(p), n => Set(p, n), () => _p.Text(p.i), Begin, End, Refresh) with { Default = def };
         }
 
         /// <summary>The typeable value of stage <paramref name="stage"/> (0 A · 1 D · 2 S · 3 R), for a read-out row.</summary>
@@ -162,19 +187,19 @@ namespace Nota.App;
             var list = new List<(Rect, MidiTarget, string)>(4);
             var (x0, x1, top, bot) = Geo(); double w = (x1 - x0) / 4.0;
             void Add(int k, (int i, string id) p, string suffix)
-            { if (p.i >= 0) list.Add((new Rect(x0 + k * w, top, w, bot - top), MidiTarget.PluginParam(_t, -1, p.i), $"{_title} · {suffix}")); }
+            { if (p.i >= 0 && _p.LearnTarget(p.i) is { } tgt) list.Add((new Rect(x0 + k * w, top, w, bot - top), tgt, $"{_title} · {suffix}")); }
             Add(0, _a, "Attack"); Add(1, _d, "Decay"); Add(2, _s, "Sustain"); Add(3, _r, "Release");
             return list;
         }
 
         // ---- geometry ---------------------------------------------------------------
-        private float G((int i, string id) p) => p.i >= 0 ? _e.PluginParamGet(_t, -1, p.i) : 0f;
+        private float G((int i, string id) p) => p.i >= 0 ? _p.Get(p.i) : 0f;
 
         // The plot: the curve between top and bot, the segment bar and the time ticks under it.
         private (double x0, double x1, double top, double bot) Geo()
         {
             double pad = 7;
-            return (pad, Bounds.Width - pad - 30, ShowTitle ? 22 : pad + 3, Bounds.Height - BarH - TickH - 4);   // 30: the sustain badge
+            return (pad, Bounds.Width - pad - BadgeW, ShowTitle ? 22 : pad + 3, Bounds.Height - BarH - TickH - 4);
         }
 
         private double Sec(int stage, (int i, string id) p) => Seconds is { } f ? Math.Max(0, f(stage, G(p))) : 0;
@@ -259,7 +284,7 @@ namespace Nota.App;
             if (e.ClickCount == 2 && _drag >= 3)
             {
                 var c = _drag == 3 ? _dc : _rc;
-                Gest(true); Set(c, _e.PluginParamDefault(_t, -1, c.i)); Gest(false); _drag = -1; Refresh(); e.Handled = true; return;
+                Gest(true); Set(c, _p.Default(c.i)); Gest(false); _drag = -1; Refresh(); e.Handled = true; return;
             }
             Gest(true); e.Pointer.Capture(this); Apply(p); e.Handled = true;
         }
@@ -281,14 +306,14 @@ namespace Nota.App;
 
         private void Gest(bool begin)
         {
-            void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); else _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); }
+            void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _p.Begin(p.id); else _p.End(p.id); }
             if (_drag == 0) G1(_a);
             else if (_drag == 1) { G1(_d); G1(_s); }
             else if (_drag == 2) G1(_r);
             else if (_drag == 3) G1(_dc);
             else if (_drag == 4) G1(_rc);
         }
-        private void Set((int i, string id) p, double v) { if (p.i >= 0) _e.PluginParamSet(_t, -1, p.i, (float)Math.Clamp(v, 0, 1)); }
+        private void Set((int i, string id) p, double v) { if (p.i >= 0) _p.Set(p.i, (float)Math.Clamp(v, 0, 1)); }
 
         // The position whose seconds are `sec` (the maps are monotonic): a bisection.
         private double NormFor(int stage, double sec)
@@ -332,7 +357,7 @@ namespace Nota.App;
         {
             var p = stage switch { 0 => _a, 1 => _d, 2 => _s, _ => _r };
             if (p.i < 0) return "";
-            return Format is { } f ? f(stage, G(p)) : _e.PluginParamText(_t, -1, p.i);
+            return Format is { } f ? f(stage, G(p)) : _p.Text(p.i);
         }
 
         private static IBrush Wash(IBrush b, byte alpha)
@@ -373,9 +398,10 @@ namespace Nota.App;
 
             // The sustain level: a dashed line to the edge and its value in a badge.
             var dash = new Pen(Wash(ink, 0x90), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
-            ctx.DrawLine(dash, new Point(n.xh, n.sy), new Point(w - 30, n.sy));
             var sv = Text(StageText(2), ink, NotaGraph.AxisSize, FontWeight.SemiBold);
-            var badge = new Rect(w - 29, Math.Clamp(n.sy - sv.Height / 2 - 1, 1, plot.Height - sv.Height - 3), 27, sv.Height + 2);
+            double bw = Math.Max(24, sv.Width + 6);
+            var badge = new Rect(w - bw - 2, Math.Clamp(n.sy - sv.Height / 2 - 1, 1, plot.Height - sv.Height - 3), bw, sv.Height + 2);
+            ctx.DrawLine(dash, new Point(n.xh, n.sy), new Point(badge.X - 1, n.sy));
             ctx.DrawRectangle(Wash(ink, 0x26), null, badge, 3, 3);
             ctx.DrawText(sv, new Point(badge.X + (badge.Width - sv.Width) / 2, badge.Y + 1));
 

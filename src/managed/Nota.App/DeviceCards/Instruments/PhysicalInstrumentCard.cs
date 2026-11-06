@@ -92,6 +92,11 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             0 => Secs(PhysicalModel.NoiseAttack((float)n)), 1 => Secs(PhysicalModel.NoiseDecay((float)n)),
             2 => Pct((float)n), _ => Secs(PhysicalModel.NoiseRelease((float)n)),
         };
+        noiseEnv.Shape(P("noisedcurve"), P("noisercurve"), P("noiseenvexp"));
+        noiseEnv.Seconds = (k, n) => k switch
+        {
+            0 => PhysicalModel.NoiseAttack((float)n), 1 => PhysicalModel.NoiseDecay((float)n), _ => PhysicalModel.NoiseRelease((float)n),
+        };
         var partials = new PhysPartialsView { VerticalAlignment = VerticalAlignment.Stretch };
         ToolTip.SetTip(partials, Loc.T("device.physical.partials_as_the_engine_tunes"));
 
@@ -120,6 +125,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             var s = scope.AsSpan(0, Math.Max(0, n));
             var mine = PhysicalModel.Bank(s, bank);
             var other = PhysicalModel.Bank(s, 1 - bank);
+            if (n >= PhysicalModel.ScopeLength) noiseEnv.SetPlay((int)scope[PhysicalModel.ScopeEnv], scope[PhysicalModel.ScopeEnv + 1]);
             bool r2 = R2On();
             double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
             double f0 = n > 2 && scope[2] > 0 ? scope[2] : 261.63;
@@ -223,29 +229,17 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
                 double oct = PhysicalModel.NoiseEnvOct(G("noiseenv"));
                 envCap.Text = Math.Abs(oct) < 0.05 ? Loc.T("device.physical.env_freq_off") : "env → freq " + NotaNum.Unit(oct, "+0.0;−0.0;0", "oct");
             });
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5 };
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5 };
             var typeChips = Chips("noisetype", PhysicalModel.NoiseTypes);
+            var curveChips = Chips("noiseenvexp", new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") });
             head.Children.Add(Cap("NOISE"));
             Grid.SetColumn(typeChips, 1); head.Children.Add(typeChips);
             Grid.SetColumn(envCap, 2); head.Children.Add(envCap);
+            Grid.SetColumn(curveChips, 3); head.Children.Add(curveChips);
 
-            // The ADSR editor with its stage times along the bottom edge — each one typeable
-            // (double-click it, specs/035), since no A/D/S/R knobs sit beside the graph.
-            var envTimes = new StackPanel
-            {
-                Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 1),
-            };
-            for (int k = 0; k < 4; k++)
-            {
-                int stage = k;
-                if (k > 0) envTimes.Children.Add(Mono(" · ", NotaPalette.TextAxis, NotaType.Axis));
-                var tv = Mono("", NotaPalette.TextAxis, NotaType.Axis);
-                readouts.Add(() => tv.Text = noiseEnv.Field(stage) is { } f ? f.TextAt(f.Get()) : "");
-                if (noiseEnv.Field(stage) is { } vf) ValueEntry.Attach(tv, vf);
-                envTimes.Children.Add(tv);
-            }
-            var envHost = new Panel { Children = { noiseEnv, envTimes } };
+            // The ADSR editor (#531): drag a breakpoint for its value, ⌥-click to type it, bend
+            // decay and release by their diamonds; Lin / Exp sits in the header.
+            var envHost = new Panel { Children = { noiseEnv } };
 
             var knobs = KnobGrid(2,
                 PKnob("noisevol", "VOLUME", Pct, cellW: 46),

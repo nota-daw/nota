@@ -81,3 +81,15 @@ internal sealed class ChainSamplerAccess(IAudioEngine engine, int trackId, int c
     public bool TryMeter(out NotaMeter meter) { meter = default; return false; }
     public void Learn(Avalonia.Controls.Control c, int i) { }
 }
+
+/// <summary>The envelope graph's view of a Sampler's params, wherever the Sampler lives (#531).</summary>
+internal sealed class SamplerEnvParams(ISamplerAccess acc) : IEnvParams
+{
+    public float Get(int i) => acc.ParamGet(i);
+    public void Set(int i, float v) => acc.ParamSet(i, v);
+    public float Default(int i) => acc.ParamDefault(i);
+    public string Text(int i) => NotaNum.Pct(acc.ParamGet(i));
+    public void Begin(string id) => acc.BeginGesture(id);
+    public void End(string id) => acc.EndGesture(id);
+    public MidiTarget? LearnTarget(int i) => null;   // the knobs under the graph learn
+}

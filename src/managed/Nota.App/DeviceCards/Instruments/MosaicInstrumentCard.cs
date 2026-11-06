@@ -722,20 +722,27 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             (new Panel(), "*"), (detectBtn, "Auto"));
 
         // ======================= Env tab =========================================================
-        var env = new SamplerEnvView();
+        // The shared envelope graph (#531): drag the breakpoints, bend decay and release by their
+        // diamonds, ⌥-click to type; the dot is the loudest voice.
+        var env = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         ToolTip.SetTip(env, MenuKit.Keys(Loc.T("device.mosaic.drag_the_nodes_attack_decay")));
-        env.DragBegin += Begin;
-        env.DragEnd += End;
-        env.Changed += (id, v) => { SetP(id, v); Refresh(); };
-        env.Reset += id => { Write(id, Def(id)); Refresh(); };
-        string EnvTl() => $"{NotaNum.Time(MosaicModel.AttackSec(G("attack")))} · {NotaNum.Time(MosaicModel.DecaySec(G("decay")))} · {DbLin(G("sustain"))} · {NotaNum.Time(MosaicModel.ReleaseSec(G("release")))}";
-        readouts.Add(() => env.Set(G("attack"), G("decay"), G("sustain"), G("release"), samSnap, EnvTl(), ""));
+        (int, string) EP(string id) => (I(id), id);
+        env.Target("ENV", EP("attack"), EP("decay"), EP("sustain"), EP("release"));
+        env.Shape(EP("dcurve"), EP("rcurve"), EP("envexp"));
+        env.Format = (k, n) => k switch
+        {
+            0 => NotaNum.Time(MosaicModel.AttackSec((float)n)), 1 => NotaNum.Time(MosaicModel.DecaySec((float)n)),
+            2 => DbLin((float)n), _ => NotaNum.Time(MosaicModel.ReleaseSec((float)n)),
+        };
+        env.Seconds = (k, n) => k switch { 0 => MosaicModel.AttackSec((float)n), 1 => MosaicModel.DecaySec((float)n), _ => MosaicModel.ReleaseSec((float)n) };
+        readouts.Add(() => { env.SetPlay(snap.EnvStage, snap.EnvProgress); env.Refresh(); });
         var envRow = Row(12,
             (PKnob("attack", "Attack", v => NotaNum.Time(MosaicModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "Decay", v => NotaNum.Time(MosaicModel.DecaySec(v))), "Auto"),
             (PKnob("sustain", "Sustain", DbLin, NotaSize.KnobMain, 56), "Auto"),
             (PKnob("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
+            (Field(Loc.T("device.env.curve_caps"), Chips("envexp", new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") }, padX: 6)), "Auto"),
             (PKnob("velcurve", "Vel curve", v => { int c = MosaicModel.VelCurve(v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }, arc: Teal, tip: Loc.T("device.mosaic.velocity_level_curve")), "Auto"),
             (PKnob("mpepressure", "Pressure", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_pressure_aftertouch_level")), "Auto"));
 
@@ -749,10 +756,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         // ⌥-click a node / the filter window to type it (specs/035).
         ValueField PF(string id, string name, Func<float, string> fmt) => new(name, () => G(id), v => fmt((float)v), v => SetP(id, v),
             () => Begin(id), () => End(id), I(id) >= 0 ? Def(id) : null) { After = Refresh };
-        ValueEntry.AttachHandles(env,
-            [PF("attack", "Attack", v => NotaNum.Time(MosaicModel.AttackSec(v)))],
-            [PF("decay", "Decay", v => NotaNum.Time(MosaicModel.DecaySec(v))), PF("sustain", "Sustain", DbLin)],
-            [PF("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v)))]);
         ValueEntry.AttachAll(filt, PF("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v))), PF("resonance", "Resonance", v => NotaNum.Pct(v)));
         string FiltTl()
         {

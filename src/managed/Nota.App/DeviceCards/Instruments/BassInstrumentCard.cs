@@ -103,7 +103,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             FreqRange = (30.0, 18000.0), VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50,
         };
         var ampEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };
-        var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50, Accent = DeviceCardKit.ModInkBright };
+        var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };
         var hint = new TextBlock
         {
             FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
@@ -419,43 +419,16 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         var signalBody = new Border { Padding = new Thickness(7, 0, 7, 4), Child = signalGrid };
 
         // ---- Mod tab ----------------------------------------------------------
-        Control EnvPanel(string title, string route, VoltEnv view, string[] ids)
-        {
-            view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
-            string[] stage = { "A", "D", "S", "R" };
-            Func<float, string>[] fmt =
-            {
-                v => Secs(v, 0.001, 2.0), v => Secs(v, 0.002, 4.0), Pct, v => Secs(v, 0.002, 5.0),
-            };
-            view.Format = (k, n) => fmt[k]((float)n);   // ⌥-click a breakpoint to type it
-            var cells = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
-            for (int k = 0; k < 4; k++)
-            {
-                string id = ids[k];
-                var fk = fmt[k];
-                var v = Mono(fk(G(id)), TextPrimary, NotaType.KnobValue);
-                v.HorizontalAlignment = HorizontalAlignment.Center;
-                readouts.Add(() => v.Text = fk(G(id)));
-                if (view.Field(k) is { } vf) ValueEntry.Attach(v, vf);   // double-click the read-out to type
-                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Center;
-                var cell = new Border
-                {
-                    Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(1, 1),
-                    Child = new StackPanel { Children = { cap, v } },
-                };
-                if (I(id) is var pi and >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), title + " · " + stage[k]);
-                Grid.SetColumn(cell, k); cells.Children.Add(cell);
-            }
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Height = 11, Children = { Cap(title), Mono(route, Teal, NotaType.Axis) } };
-            var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 4 };
-            g.Children.Add(head);
-            Grid.SetRow(view, 1); g.Children.Add(view);
-            Grid.SetRow(cells, 2); g.Children.Add(cells);
-            return g;
-        }
-        var ampPanel = EnvPanel("AMP ENV", "→ level", ampEnv, new[] { "attack", "decay", "sustain", "release" });
-        var filtEnvPanel = EnvPanel("FILTER ENV", "→ cutoff", filtEnv, new[] { "fattack", "fdecay", "fsustain", "frelease" });
+        // The amp and filter envelopes on one time scale (#531), then the LFO.
+        var envScale = new EnvTimeScale();
+        Control EnvKnobCell(string id, string label, string learn, Func<float, string> fmt) => PKnob(id, label, learn, fmt, 22, 34);
+        var ampPanel = EnvPanel.Build(ampEnv, new EnvPanel.Spec("AMP ENV", new[] { "attack", "decay", "sustain", "release" },
+                new[] { "dcurve", "rcurve", "envexp" }, (0.001, 2.0), (0.002, 4.0), (0.002, 5.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), Mono(Loc.T("device.bass.to_level"), Teal, NotaType.Axis), envScale);
+        var filtEnvPanel = EnvPanel.Build(filtEnv, new EnvPanel.Spec("FILTER ENV", new[] { "fattack", "fdecay", "fsustain", "frelease" },
+                new[] { "fdcurve", "frcurve", "fenvexp" }, (0.001, 2.0), (0.002, 4.0), (0.002, 5.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), Mono(Loc.T("device.bass.to_cutoff"), Teal, NotaType.Axis), envScale);
+        EnvPanel.FollowVoice(ctx, 0, () => tab == 1, ampEnv, filtEnv);
 
         // LFO: shape, rate and where it lands — cutoff and pitch — then the velocity amounts.
         var lfoDest = Mono("", Teal, NotaType.Axis);

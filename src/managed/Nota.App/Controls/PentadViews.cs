@@ -137,42 +137,6 @@ internal sealed class PentadFilterCurve : Control
     }
 }
 
-// ADSR with RC curves: attack charges toward an overshoot (concave), decay/release discharge.
-internal sealed class PentadEnvCurve : Control
-{
-    private double _a, _d, _s = 0.8, _r = 0.4;
-    public IBrush Accent { get; set; } = NotaPalette.VizInk;   // the curve's ink (neutral at rest)
-    public PentadEnvCurve() { ClipToBounds = true; }
-
-    public void Set(double a, double d, double s, double r) { _a = a; _d = d; _s = s; _r = r; }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        double top = 3, bot = h - 2, span = bot - top;
-        double wa = w * (0.03 + 0.24 * _a), wd = w * (0.04 + 0.24 * _d), wr = w * (0.04 + 0.24 * _r);
-        double ws = Math.Max(w * 0.08, w - wa - wd - wr);
-        double xa = wa, xd = xa + wd, xs = xd + ws;
-        double Lv(double v) => bot - span * v;
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        void Path(StreamGeometryContext c, bool closed)
-        {
-            c.BeginFigure(new Point(0, bot), closed);
-            const int n = 14;
-            for (int i = 1; i <= n; i++) { double t = i / (double)n; double v = (1 - Math.Exp(-t * 1.47)) / (1 - Math.Exp(-1.47)); c.LineTo(new Point(xa * t, Lv(v))); }
-            for (int i = 1; i <= n; i++) { double t = i / (double)n; double v = _s + (1 - _s) * Math.Exp(-t * 4); c.LineTo(new Point(xa + wd * t, Lv(v))); }
-            c.LineTo(new Point(xs, Lv(_s)));
-            for (int i = 1; i <= n; i++) { double t = i / (double)n; double v = _s * Math.Exp(-t * 4); c.LineTo(new Point(xs + wr * t, Lv(v))); }
-            c.LineTo(new Point(w, bot));
-        }
-        using (var lc = line.Open()) Path(lc, false);
-        using (var fc = fill.Open()) Path(fc, true);
-        var col = ((ISolidColorBrush)Accent).Color;
-        ctx.DrawGeometry(null, new Pen(Accent, 1.4), line);
-    }
-}
-
 // N voice cells, lit (accent) while a voice sounds, brightness following its level.
 internal sealed class PentadVoiceStrip : Control
 {

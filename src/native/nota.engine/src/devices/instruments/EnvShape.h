@@ -160,4 +160,67 @@ inline int32_t readEnvTele(const std::atomic<float>* in, int n, float* out, int3
     return k < 0 ? 0 : k;
 }
 
+// ---- RC envelopes (Consort, Twin) ---------------------------------------------------
+// An analog-style generator: the attack charges toward a target above 1, decay and release
+// fall exponentially. With Exp on and both curves straight (their defaults on these
+// instruments) the step is that generator, unchanged; any other shape runs the shaped step
+// above at the segments' nominal lengths. `st` is the instrument's own code:
+// 0 idle · 1 attack · 2 decay / sustain · 3 release.
+struct RcEnvCoefs {
+    float aC = 1, aTgt = 1.3f, dC = 1, rC = 1, offFloor = 3e-5f; // the RC generator
+    float atkRate = 1, decRate = 1, relRate = 1;                 // per-sample rates of the shaped step
+};
+
+inline bool rcEnvNative(const EnvShapeParams& p) {
+    return p.exp >= 0.5f && p.decayCurve == 0.5f && p.releaseCurve == 0.5f;
+}
+
+inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, const RcEnvCoefs& c, const EnvShapeParams& p) {
+    enum class S { Attack, Decay, Sustain, Release, Off };
+    if (rcEnvNative(p)) {
+        const int code = st == 1 ? 0 : st == 2 ? (sh.last == 2 ? 2 : 1) : st == 3 ? 3 : 4;
+        if (code != sh.last) {
+            sh.last = code;
+            sh.p = 0.0f;
+            sh.from = env;
+        }
+        switch (st) {
+        case 1:
+            env += (c.aTgt - env) * c.aC;
+            if (env >= 1.0f) {
+                env = 1.0f;
+                st = 2;
+            }
+            sh.p = sh.from < 1.0f ? std::clamp((env - sh.from) / (1.0f - sh.from), 0.0f, 1.0f) : 1.0f;
+            break;
+        case 2:
+            env += (sus - env) * c.dC;
+            sh.p = sh.from - sus > 1e-6f ? std::clamp((sh.from - env) / (sh.from - sus), 0.0f, 1.0f) : 1.0f;
+            if (sh.last == 1 && std::fabs(env - sus) < 1e-3f) sh.last = 2; // the graph's sustain
+            break;
+        case 3:
+            env -= env * c.rC;
+            if (env < c.offFloor) {
+                env = 0.0f;
+                st = 0;
+            }
+            sh.p = sh.from > 1e-6f ? std::clamp((sh.from - env) / sh.from, 0.0f, 1.0f) : 1.0f;
+            break;
+        default: break;
+        }
+        return;
+    }
+    S s = st == 1 ? S::Attack : st == 2 ? (sh.last == 2 ? S::Sustain : S::Decay) : st == 3 ? S::Release : S::Off;
+    advanceShapedEnv(env, s, sh, c.atkRate, c.decRate, sus, c.relRate, envBends(p));
+    if (s == S::Sustain) sh.last = 2;
+    st = s == S::Attack ? 1 : (s == S::Decay || s == S::Sustain) ? 2 : s == S::Release ? 3 : 0;
+}
+
+// The telemetry stage of an RC envelope (EnvShape.h's code: 0 A · 1 D · 2 S · 3 R · 4 none).
+inline void publishRcEnvTele(std::atomic<float>* out, bool sounding, int st, const EnvShapeState& sh) {
+    const int code = !sounding || st == 0 ? 4 : st == 1 ? 0 : st == 2 ? (sh.last == 2 ? 2 : 1) : 3;
+    out[0].store(static_cast<float>(code), std::memory_order_relaxed);
+    out[1].store(code == 4 ? 0.0f : sh.p, std::memory_order_relaxed);
+}
+
 } // namespace nota
