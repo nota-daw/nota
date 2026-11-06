@@ -1128,10 +1128,10 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
         Section("Pads");
         Tw("Slow Bloom", Cat(P(("o2level", 0.7f), ("o2fine", 0.56f), ("ldcut", 0.42f), ("ldres", 0.25f), ("ldenv", 0.62f), ("fenva", 0.84f), ("fenvd", 0.8f),
-                ("fenvs", 0.6f), ("aenva", 0.84f), ("aenvr", 0.8f), ("spread", 0.7f), ("drift", 0.45f), ("revon", 1f), ("revsize", 0.75f), ("revmix", 0.35f)),
+                ("fenvs", 0.6f), ("aenva", 0.84f), ("aenvr", 0.74f), ("spread", 0.7f), ("drift", 0.45f), ("revon", 1f), ("revsize", 0.75f), ("revmix", 0.35f)),
                 Rt(7, "LFO 2", "ldcut", 0.08f), P(("lfo2rate", 0.25f))),
             P(("ldcut", 0.7f), ("o1metal", 0.4f), ("o1wave", 0.2f), ("mmcut", 0.75f), ("o1bal", 0.5f), ("route", 0.5f), ("revsize", 0.95f)));
-        Tw("Dream Morph Pad", Cat(P(("lo.vol", 0.62f), ("o2level", 0.8f), ("o2coarse", 0.646f), ("o2wave", 0f), ("ldcut", 0.5f), ("aenva", 0.77f), ("aenvr", 0.8f),
+        Tw("Dream Morph Pad", Cat(P(("lo.vol", 0.62f), ("o2level", 0.8f), ("o2coarse", 0.646f), ("o2wave", 0f), ("ldcut", 0.5f), ("aenva", 0.77f), ("aenvr", 0.74f),
                 ("modfxon", 1f), ("modfxtype", 1f), ("revon", 1f), ("revsize", 0.8f), ("revmix", 0.4f), ("lfo3rate", 0.15f), ("lfo3mode", 1f)),
                 Rt(7, "LFO 3", "Morph", 0.9f)),
             P(("o1wave", 1f), ("o1pw", 0.2f), ("ldcut", 0.75f), ("ldres", 0.45f), ("mmmode", 0.5f), ("mmcut", 0.6f), ("o1bal", 0.3f)));
@@ -1323,11 +1323,11 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Tw("Sweep Pad", Cat(P(("lo.vol", 0.58f), ("o2level", 0.8f), ("o2fine", 0.57f), ("ldcut", 0.32f), ("ldres", 0.45f), ("ldenv", 0.78f),
                 ("fenva", 0.84f), ("fenvd", 0.84f), ("fenvs", 0.35f), ("aenva", 0.62f), ("aenvr", 0.75f), ("spread", 0.7f), ("revon", 1f), ("revmix", 0.3f))),
             P(("ldres", 0.65f), ("fenva", 0.9f), ("o1wave", 1f), ("o1pw", 0.3f)));
-        Tw("Lush Unison Pad", Cat(P(("lo.vol", 0.5f), ("lo.voicemode", 1f), ("unidetune", 0.45f), ("ldcut", 0.55f), ("ldenv", 0.55f), ("aenva", 0.66f),
-                ("aenvr", 0.74f), ("spread", 1f), ("modfxon", 1f), ("modfxtype", 1f), ("revon", 1f), ("revmix", 0.3f))),
+        Tw("Lush Unison Pad", Cat(P(("lo.vol", 0.5f), ("voices", 0.5f), ("lo.voicemode", 1f), ("unidetune", 0.45f), ("ldcut", 0.55f), ("ldenv", 0.55f), ("aenva", 0.66f),
+                ("aenvr", 0.7f), ("spread", 1f), ("modfxon", 1f), ("modfxtype", 1f), ("revon", 1f), ("revmix", 0.3f))),
             P(("unidetune", 0.7f), ("ldcut", 0.68f), ("o1wave", 0.75f)));
         Tw("Dark Ambient Pad", Cat(P(("lo.vol", 0.62f), ("o1wave", 0.2f), ("o2wave", 0.3f), ("o2coarse", 0.25f), ("o2level", 0.7f), ("noiselevel", 0.08f),
-                ("ldcut", 0.38f), ("ldres", 0.3f), ("aenva", 0.84f), ("aenvr", 0.85f), ("lfo2rate", 0.2f), ("drift", 0.5f),
+                ("ldcut", 0.38f), ("ldres", 0.3f), ("aenva", 0.84f), ("aenvr", 0.76f), ("lfo2rate", 0.2f), ("drift", 0.5f),
                 ("revon", 1f), ("revsize", 0.9f), ("revmix", 0.45f)),
                 Rt(7, "LFO 2", "ldcut", 0.1f)),
             P(("ldcut", 0.5f), ("o1metal", 0.3f), ("noisecolor", 0.2f), ("revdamp", 0.8f)));

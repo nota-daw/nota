@@ -187,13 +187,20 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
         const float panL = V.rPanL.next(), panR = V.rPanR.next();
         float* L = osL + i * os;
         float* R = osR + i * os;
+        // What this sample doesn't need: an oscillator nothing hears or uses (FM, sync, filter
+        // FM), a filter nothing feeds that can't ring on its own — it would only shape the
+        // −100 dB floor (no Brute feedback, resonance below the singing edge).
+        const bool o1On = l1 != 0.0f || c.sync, o2On = l2 != 0.0f || c.fm21 != 0.0f || c.fmFilt != 0.0f;
+        const bool quietLoop = c.brute == 0.0f;
+        const bool mmOn = a1 != 0.0f || a2 != 0.0f || an != 0.0f || !quietLoop || c.mmRes >= 0.5f;
+        const bool ldOn = b1 != 0.0f || b2 != 0.0f || bn != 0.0f || !quietLoop || c.ldRes >= 0.5f || (mmOn && c.route < 1.0f);
 
         for (int s = 0; s < os; ++s) {
             double d1 = dt1;
             if (c.fm21 != 0.0f) d1 = std::min(d1 * fast_math::exp2f(c.fm21 * V.o2Out), 0.45);
-            float y1, y2;
-            const float wrap1 = oscStep(V.osc[0], d1, du1, w1, -1.0f, y1);
-            oscStep(V.osc[1], dt2, du2, w2, c.sync ? wrap1 : -1.0f, y2);
+            float y1 = 0.0f, y2 = 0.0f;
+            const float wrap1 = o1On ? oscStep(V.osc[0], d1, du1, w1, -1.0f, y1) : -1.0f;
+            if (o2On) oscStep(V.osc[1], dt2, du2, w2, c.sync ? wrap1 : -1.0f, y2);
             if (m1 > 0.0f) y1 += m1 * (fold(y1, 1.0f + 3.0f * m1, V.fx1[0], V.fy1[0]) - y1);
             else V.fx1[0] = y1;
             if (m2 > 0.0f) y2 += m2 * (fold(y2, 1.0f + 3.0f * m2, V.fx1[1], V.fy1[1]) - y2);
@@ -211,11 +218,16 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
             const float fbS = c.brute * 0.9f * softBound(1.5f * V.fb) + 1e-5f * white;
             const float mmIn = a1 * y1 + a2 * y2 + an * nz + fbS;
             const float ldIn = b1 * y1 + b2 * y2 + bn * nz + fbS;
-            if (c.fmFilt != 0.0f)
-                V.mm.setG(V.mm.prewarp(fast_math::exp2f(std::clamp(mmOct + c.fmFilt * y2, 3.3f, 14.6f))));
-            const float mo = V.mm.process(mmIn);
-            const float li = ldIn + (1.0f - c.route) * mo;
-            const float lo = c.ld12 ? V.ld.process12(li) : V.ld.process(li);
+            float mo = 0.0f, lo = 0.0f;
+            if (mmOn) {
+                if (c.fmFilt != 0.0f)
+                    V.mm.setG(V.mm.prewarp(fast_math::exp2f(std::clamp(mmOct + c.fmFilt * y2, 3.3f, 14.6f))));
+                mo = V.mm.process(mmIn);
+            }
+            if (ldOn) {
+                const float li = ldIn + (1.0f - c.route) * mo;
+                lo = c.ld12 ? V.ld.process12(li) : V.ld.process(li);
+            }
             float out = lo + c.route * mo;
             V.fb = out;
             if (c.drive > 0.0f)

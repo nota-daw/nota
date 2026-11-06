@@ -323,7 +323,7 @@ public static class TwinPatterns
                 int li = e.AddPluginAutomationLane(trackId, -1, e.PluginParamId(trackId, -1, lane.Target));
                 if (li < 0) continue;
                 float knob = e.PluginParamGet(trackId, -1, lane.Target); // what an empty step plays
-                var pts = MotionPoints(pat, lane, sb, On, length, knob).Select(p => new AutomationPoint(startBeat + p.Beat, p.Value)).ToList();
+                var pts = MotionPoints(pat, lane, sb, On, On(pat.Length), length, knob).Select(p => new AutomationPoint(startBeat + p.Beat, p.Value)).ToList();
                 // An existing lane keeps its points before and after the clip.
                 double end = startBeat + length;
                 var kept = e.GetAutomationPoints(trackId, li).Where(p => p.Beat < startBeat || p.Beat > end);
@@ -346,12 +346,14 @@ public static class TwinPatterns
     // next step's value (the last to the first) over one step length — cut short at the next onset
     // when the swing brings it early, held when it comes late.
     // An empty step lets the knob play (the lane lets go of it): the points hold `knob` there.
+    // Past the pattern's end (a last note ringing on), the lane plays what the next pass's first
+    // step does: its value, or the knob.
     private static IEnumerable<(double Beat, float Value)> MotionPoints(Pattern pat, Lane lane, double sb,
-        Func<int, double> on, double length, float knob)
+        Func<int, double> on, double patternEnd, double length, float knob)
     {
         for (int k = 0; k < pat.Length; k++)
         {
-            double t0 = on(k), next = k + 1 < pat.Length ? on(k + 1) : length;
+            double t0 = on(k), next = k + 1 < pat.Length ? on(k + 1) : Math.Min(patternEnd, length);
             double hold = Math.Max(t0, next - MotionEdge);
             if (lane.Values[k] == MotionUnset)
             {
@@ -376,6 +378,12 @@ public static class TwinPatterns
             }
             else
                 yield return (hold, v + (to - v) * (float)((hold - t0) / sb));
+        }
+        if (length > patternEnd + MotionEdge)
+        {
+            float first = lane.Values[0] == MotionUnset ? knob : lane.Values[0] / 65534f;
+            yield return (patternEnd, first);
+            yield return (length, first);
         }
     }
 }
