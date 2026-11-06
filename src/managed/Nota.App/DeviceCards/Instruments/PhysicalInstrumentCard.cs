@@ -13,8 +13,7 @@
 //                           (1→2 serial, 1+2 parallel); the bank's partials as the engine
 //                           tunes them (drag: ↔ ratio, ↕ bright) beside its seven knobs
 //                           and the 1+2 mix.
-//   Rail 186    Output: Poly / Mono, tune, fine and note-off rows, volume, pan and the
-//               track's meter.
+//   Rail 186    Output: Poly / Mono, tune, fine and note-off rows, volume and pan.
 //
 // Neutral ink is the parameter itself; teal is modulation. Everything is a plugin param →
 // automation / persist / clone, and the card follows automation live.
@@ -417,28 +416,13 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             },
         };
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid { VerticalAlignment = VerticalAlignment.Stretch, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
-        for (int i = 0; i < 3; i++)
+        // Volume · Pan centred in the rail — the track meter already shows the level.
+        var outBottom = new StackPanel
         {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children = { PKnob("volume", "VOLUME", Pct, NotaSize.KnobMain, 48), PKnob("pan", "PAN", PanText, NotaSize.KnobRegular, 42) },
         };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var outBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", Pct, NotaSize.KnobMain, 48);
-        var panCell = PKnob("pan", "PAN", PanText, NotaSize.KnobSecondary, 42);
-        outBottom.Children.Add(volCell);
-        Grid.SetColumn(panCell, 1); outBottom.Children.Add(panCell);
-        Grid.SetColumn(meterBlock, 2); outBottom.Children.Add(meterBlock);
 
         var outGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         outGrid.Children.Add(outTop);
@@ -501,18 +485,4 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

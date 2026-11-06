@@ -309,7 +309,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
                 PKnob("attack", "ATTACK", v => Secs(PendulumModel.AttackSeconds(v))),
                 PKnob("decay", "DECAY", v => Secs(PendulumModel.DecaySeconds(v))),
                 PKnob("release", "RELEASE", v => Secs(PendulumModel.ReleaseSeconds(v))),
-                PKnob("volume", "VOLUME", DbOf),
+                PKnob("volume", "VOLUME", DbOf, NotaSize.KnobMain),
             },
         };
         var toneHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = toneRow };

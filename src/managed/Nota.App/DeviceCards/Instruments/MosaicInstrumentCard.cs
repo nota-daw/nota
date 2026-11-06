@@ -21,7 +21,7 @@
 //               MPE slide.
 //     Rail: VOICES — Poly N (its popover: polyphony, what the voices are doing, the stealing
 //     order, strikes per key, old-voice fade) / Mono / Choke, volume, pan, glide, the pedal,
-//     output, Vel → Vol and the meter. States take the rail over: the SFZ import report, the
+//     volume (the output), Vel → Vol. States take the rail over: the SFZ import report, the
 //     memory while samples load, the source of a missing pack.
 //   • S 260 × 260 — the name, the mini map, zones · layers and the RAM; a loading bar.
 //
@@ -1054,7 +1054,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Spacing = 6,
                 Children =
                 {
-                    Slider("Volume", "volume", () => DbLin(G("volume"))),
+                    Slider("Level", "volume", () => DbLin(G("volume"))),
                     Slider("Pan", "pan", () => PanS(G("pan") * 2 - 1), bipolar: true),
                     Slider("Glide", "glide", () => GlideText(G("glide")), tip: Loc.T("device.mosaic.slide_from_the_last_note")),
                 },
@@ -1087,15 +1087,14 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Grid.SetColumn(voicesTxt, 2); pedalRow.Children.Add(voicesTxt);
             sliders.Children.Add(pedalRow);
 
-            var outKnob = PKnob("output", "Output", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.mosaic.the_level_after_everything"));
-            var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: Loc.T("device.mosaic.how_much_velocity_sets_the"));
-            var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-            ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-            var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
-            outRow.Children.Add(outKnob);
-            Grid.SetColumn(velKnob, 1); outRow.Children.Add(velKnob);
-            meter.HorizontalAlignment = HorizontalAlignment.Right; meter.Margin = new Thickness(0, 2, 0, 2);
-            Grid.SetColumn(meter, 2); outRow.Children.Add(meter);
+            // Volume · Vel → Vol centred — the track meter already shows the level.
+            var outKnob = PKnob("output", "Volume", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.mosaic.the_level_after_everything"));
+            var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), NotaSize.KnobRegular, 50, arc: Teal, tip: Loc.T("device.mosaic.how_much_velocity_sets_the"));
+            var outRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
+                Children = { outKnob, velKnob },
+            };
             var outHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = outRow };
             var body = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 6 };
             body.Children.Add(sliders);

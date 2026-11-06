@@ -109,6 +109,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   still on screen. S is a 260 × 260 mini card, as on Nota Synth: Filter 1's response to drag,
   over Cutoff, Reso, Attack and Release. Both sizes edit the same sound, and the size saves
   with the project but not with presets. Volt opens as L.
+- **One Volume knob, no rail meters, in the built-in instruments** (nota-daw/nota#531): the
+  output meters in the rails and output tabs of Nota Aurora, Bass, Grain, Keys, Mosaic, Operator,
+  Physical, Rhythm, Sampler, Synth, Consort and Pentad are gone (the track meter shows the level).
+  The output knob is called **Volume** everywhere (it was Gain on Volt and Aurora, Output on
+  Sampler and Mosaic, Master on Rhythm), sits a size above its neighbours and is centred with
+  them. Synth's Volume moves from a slider to that knob, and Flux's Gain row reads Volume. On
+  Sampler and Mosaic the voice-level slider becomes **Level**, so only one control says Volume.
+  The parameters themselves are unchanged, so projects, presets and automation are unaffected.
+- **More instrument-card tidying** (nota-daw/nota#531): the Instrument Rack drops its bottom
+  status line too (the Zones tab already says what a note plays; the effect racks keep theirs).
+  Nota Keys' pedal (lit by CC64 or the Pedal param) moves from the Damper column into the Play
+  rail, and the voice count sits right under the voice grid. Nota Monolith's contours have no
+  release of their own, so the release point on their graphs is drawn but no longer drags or
+  types. Nota Pentad's Output tab drops the voice strip that the Oscillators tab already shows.
 - **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
   stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
   under it and the A / D / S / R letter in the box's corner. The box still drags and types
@@ -159,6 +173,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
+- **Tabs at the top of a card section keep its rounded corner** (nota-daw/nota#531): a selected
+  tab such as Global on a built-in instrument's rail painted over the section's corner. A
+  section now clips what it holds to its rounded edge.
 - **Performance wheels follow their value** (nota-daw/nota#531): on Nota Volt, Aurora, Operator
   and Bass, the ribbed grip of the Pitch and Mod wheels now moves with the wheel instead of
   staying put while only the value line moved.

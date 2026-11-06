@@ -22,7 +22,7 @@
 //               LFO    — LFO 1 / LFO 2 / Vibrato as a table, each naming where it lands.
 //               Mod    — the 7 × 6 matrix: drag a cell up for +, down for −.
 //               Macro  — eight macros, each a value, an amount and one of twelve targets.
-//   Rail 170    Global (Poly / Mono / Legato, bend range, cutoff, resonance, glide, gain,
+//   Rail 170    Global (Poly / Mono / Legato, bend range, cutoff, resonance, glide, volume,
 //               output drive and pan) or Voice (both output amps, the
 //               unison stack — voices, detune, spread — and the two velocity amounts).
 //
@@ -835,14 +835,14 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         bendRow.Children.Add(Cap("BEND"));
         Grid.SetColumn(bendChips, 1); bendRow.Children.Add(bendChips);
 
-        // Gain · Drive · Pan as one group centred in the rail — the track meter already shows the level.
+        // Volume · Drive · Pan as one group centred in the rail — the track meter already shows the level.
         var globalBottom = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 4,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                PKnob("volume", "GAIN", "Gain", Pct, NotaSize.KnobMain, 44),
+                PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 44),
                 PKnob("drive", "DRIVE", "Drive", Pct, NotaSize.KnobRegular, 40),
                 PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 40),
             },

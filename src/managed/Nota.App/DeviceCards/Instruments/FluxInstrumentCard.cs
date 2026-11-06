@@ -371,7 +371,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             {
                 Slider("GLIDE", "glide", () => GlideT(G("glide"))),
                 Slider("TUNE", "tune", () => Cents(G("tune"))),
-                Slider("GAIN", "gain", () => Pct(G("gain"))),
+                Slider("VOLUME", "gain", () => Pct(G("gain"))),
             },
         };
         var macroFoot = Mono("adaptive: reso · a/r · unison", TextDisabled);

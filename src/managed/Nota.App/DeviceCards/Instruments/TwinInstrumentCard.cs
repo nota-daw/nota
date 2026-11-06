@@ -1013,7 +1013,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         {
             if (layout == 0)
                 return Island("Output", partsMenu, 140,
-                    Row(PKnob(Part + "vol", "Volume", Pct, 44, 58), PKnob(Part + "pan", "Pan", PanText, 44, 58)), BendRange());
+                    Row(PKnob(Part + "vol", "Volume", Pct, NotaSize.KnobMain, 58), PKnob(Part + "pan", "Pan", PanText, NotaSize.KnobRegular, 58)), BendRange());
             bool learn = false;
             int lastKey = int.MinValue;
             var learnBtn = TextAction(Loc.T("device.twin.learn"), Loc.T("device.twin.play_a_key_it_becomes_the_split"), () => { learn = !learn; lastKey = int.MinValue; Refresh(); });
@@ -1035,7 +1035,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 ? Row(PKnob("splitkey", "Split", SplitKey, cellW: 46), PKnob("share", "Voices", ShareText, cellW: 46), new Border { Padding = new Thickness(2, 10, 0, 0), Child = learnBtn })
                 : Row(PKnob("share", "Voices", ShareText, cellW: 46));
             second.HorizontalAlignment = HorizontalAlignment.Left;
-            var first = Row(PKnob(Part + "vol", "Volume", Pct, cellW: 46), PKnob(Part + "pan", "Pan", PanText, cellW: 46), PKnob(Part + "octave", "Octave", Octave, cellW: 46));
+            var first = Row(PKnob(Part + "vol", "Volume", Pct, 40, 50), PKnob(Part + "pan", "Pan", PanText, cellW: 46), PKnob(Part + "octave", "Octave", Octave, cellW: 46));
             first.HorizontalAlignment = HorizontalAlignment.Left;
             return Island($"{PartNames[partIx]} part", partsMenu, 160, first, second, BendRange());
         }

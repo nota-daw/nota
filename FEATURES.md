@@ -770,18 +770,18 @@ audio effects after it keep running and keep their settings; saved with the proj
   decay, material, brightness, inharmonicity, ratio, hit position and tune), in series
   (1→2) or parallel (1+2) with a Res 1 / Res 2 mix; the partials drawn as the engine tunes
   them (drag for ratio and brightness), Poly (8 voices) / Mono, tune, fine, note-off
-  damping, volume, pan and a meter. 32 factory presets. MCP: `read_physical`.
+  damping, volume and pan. 32 factory presets. MCP: `read_physical`.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
   (WARM/GLASS/MOOG/GRAIN) whose resonance, drive and unison the vector blends, **React**
   (sidechain modulation from another track: Filter/Pitch/Space/Vector, with a live scope of
   its envelope, transients and tilt, and transients per bar), 5 macro knobs
-  (Age/Motion/Filter/Env/Space), glide, tune and gain. 25 factory presets.
+  (Age/Motion/Filter/Env/Space), glide, tune and volume. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
   banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
   **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
   Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
-  contour or sample region, Perform rail with an output meter, a full-width step strip with
+  contour or sample region, Perform rail (Swing, Humanize, Accent, Volume, Glue), a full-width step strip with
   a velocity lane. Each voice has its own **FX** chain of built-in effects (the voice's FX
   tab). Its kits are the 25 factory drum kits it shares with the Drum Rack — samples and
   per-voice effects — from the card's kit picker or the browser. Eight **macros** (the
@@ -1107,7 +1107,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   **Select** (drag zone edges; hover the keyboard strip to see which chains a note plays) and
   **Macros** tabs (rename, curve Lin/Exp/Log/S — "Mixed" when targets differ — and each
   target's range, min above max inverts); a **Chain** panel (Volume, Pan or Transpose, zones,
-  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line. **Map** works in
+  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line on the effect racks. **Map** works in
   place: click parameters on the chain's devices to add or remove them; Esc ends it. A chain's
   devices drag by their header to a new place in their section (a drop bar shows where) or
   onto another chain's row to move there with their macro mappings; click one to select it

@@ -18,8 +18,8 @@
 //                        that draws the selected LFO's own shape.
 //               Mod    — the 8 × 7 matrix: drag a cell up for +, down for −.
 //               FX     — drive · chorus · reverb, each on its own switch.
-//   Rail 186    Global (voice mode, bend range, position, cutoff, unison, gain, pan and
-//               the track's meter) or Macros (eight, three to a page, each a value, an
+//   Rail 186    Global (voice mode, bend range, position, cutoff, unison, volume and
+//               pan) or Macros (eight, three to a page, each a value, an
 //               amount and one of twelve targets). Picking Mod brings the macros up, as
 //               the almanac draws that state.
 //
@@ -860,32 +860,17 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         bendRow.Children.Add(Cap("BEND"));
         Grid.SetColumn(bendChips, 1); bendRow.Children.Add(bendChips);
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid
+        // Volume · Pan centred in the rail — the track meter already shows the level.
+        var globalBottom = new StackPanel
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                PKnob("gain", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 46),
+                PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 42),
+            },
         };
-        for (int i = 0; i < 3; i++)
-        {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 7),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var gainCell = PKnob("gain", "GAIN", "Gain", Pct, 38, 46);
-        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, 30, 42);
-        globalBottom.Children.Add(gainCell);
-        Grid.SetColumn(panCell, 1); globalBottom.Children.Add(panCell);
-        Grid.SetColumn(meterBlock, 2); globalBottom.Children.Add(meterBlock);
 
         var globalTop = new StackPanel
         {
@@ -1114,18 +1099,4 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

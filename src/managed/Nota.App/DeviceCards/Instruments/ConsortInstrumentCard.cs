@@ -128,7 +128,6 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         static Control RowAt(Control c, int r) { Grid.SetRow(c, r); return c; }
         static Border Divider(Control child, double top = 5) => new() { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
         static Control Right(Control c) { c.HorizontalAlignment = HorizontalAlignment.Right; return c; }
-        static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
 
         Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 44, bool inline = false)
             => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
@@ -849,15 +848,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         }
         Control OutputTab()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            rightReadouts[1].Add(() => { if (scN > 3) { meterL.SetLinear(scope[2]); meterR.SetLinear(scope[3]); } });
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = {
-                MonoText("0", 7, DimC), RowAt(MonoText("−12", 7, DimC), 1), RowAt(MonoText("−48", 7, DimC), 2) } };
-            var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Lbl("L", 7, MutedC, FontWeight.Normal)) } },
-                                new StackPanel { Spacing = 2, Children = { meterR, Center(Lbl("R", 7, MutedC, FontWeight.Normal)) } }, scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(12, K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 56), meters);
+            // Volume alone, centred — the track meter already shows the level.
+            var top = K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 56);
+            top.HorizontalAlignment = HorizontalAlignment.Center;
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Avalonia.Controls.Dock.Top),
                 Docked(Divider(new StackPanel { Spacing = 4, Children = {

@@ -15,8 +15,8 @@
 //               Env    — the amp envelope (drag its nodes), A / D / S / R and Vel → Vol.
 //               Filter — the SVF's real response (drag: cutoff × resonance); Type,
 //                        Cutoff, Reso, Keytrack and Env → Cutoff with its depth.
-//   Rail 186    always there: the voice mode (Poly 16 / Mono / Choke), Volume, Pan,
-//               Glide, the Output level, Vel → Vol and the output meter.
+//   Rail 186    always there: the voice mode (Poly 16 / Mono / Choke), Level, Pan,
+//               Glide, Volume (the output), Vel → Vol.
 //
 // Neutral ink is the parameter itself; teal is detune and modulation (keytrack, velocity, the
 // envelope's reach) and what the engine is doing now (the voice on the envelope, the
@@ -489,35 +489,19 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Spacing = 6,
             Children =
             {
-                Slider("VOLUME", "volume", () => DbLin(G("volume")), tip: Loc.T("device.sampler.the_voices_level")),
+                Slider("LEVEL", "volume", () => DbLin(G("volume")), tip: Loc.T("device.sampler.the_voices_level")),
                 Slider("PAN", "pan", () => PanText(G("pan")), bipolar: true),
                 Slider("GLIDE", "glide", () => GlideText(G("glide")), tip: Loc.T("device.sampler.slide_from_the_last_note")),
             },
         };
-        var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.sampler.the_level_after_everything"));
-        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: Loc.T("device.sampler.how_much_velocity_sets_the"));
-
-        Control meterBlock;
-        if (acc.TryMeter(out _))
+        // Volume · Vel → Vol centred — the track meter already shows the level.
+        var outKnob = PKnob("output", "VOLUME", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.sampler.the_level_after_everything"));
+        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), NotaSize.KnobRegular, 50, arc: Teal, tip: Loc.T("device.sampler.how_much_velocity_sets_the"));
+        var outRow = new StackPanel
         {
-            var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-            registerTick(() => { if (acc.TryMeter(out var m)) meter.Push(m); });
-            var meterScale = new Grid { VerticalAlignment = VerticalAlignment.Stretch, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
-            for (int i = 0; i < 3; i++)
-            {
-                var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-                Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-            }
-            var mg = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 2) };
-            mg.Children.Add(meter);
-            Grid.SetColumn(meterScale, 1); mg.Children.Add(meterScale);
-            meterBlock = mg;
-        }
-        else meterBlock = new Panel();
-        var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
-        outRow.Children.Add(outKnob);
-        Grid.SetColumn(velKnob, 1); outRow.Children.Add(velKnob);
-        Grid.SetColumn(meterBlock, 2); outRow.Children.Add(meterBlock);
+            Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
+            Children = { outKnob, velKnob },
+        };
         var outHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = outRow };
 
         var railBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 6, Margin = new Thickness(8, 6, 8, 5) };
@@ -577,16 +561,4 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

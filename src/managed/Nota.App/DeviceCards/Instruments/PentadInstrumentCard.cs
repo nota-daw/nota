@@ -5,8 +5,8 @@
 // "Nota Pentad" mockup (700×260) on the same frame as Monolith: an always-visible WHEELS
 // column (pitch / mod), a centre tabbed panel (Oscillators / Filter · Amp / Poly Mod), a
 // right tabbed panel (Mixer / Output / Voices — the voice setup: polyphony, allocation,
-// oversampling, vintage seed …). The five-voice activity strip and
-// the output meters read the instrument's scope telemetry. Every control is a plugin-param,
+// oversampling, vintage seed …). The five-voice activity strip
+// and the mixer's sum read the instrument's scope telemetry. Every control is a plugin-param,
 // so automation / MIDI learn / presets / persistence come for free. BodyOnly — the shared
 // shell draws the header (name / preset / A-B / meter).
 
@@ -87,11 +87,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         var aEnvView = new VoltEnv(engine, track) { MinHeight = 50 };
         var envScale = new EnvTimeScale();
         var voiceStrips = new List<PentadVoiceStrip>();
-        var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-        var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
         var sumBar = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
         var sumTxt = MonoText("", 8, TxtC);
-        var voiceCountTxt = MonoText("", 7, Txt2);
         int scN = 0;
 
         void Refresh()
@@ -108,10 +105,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             {
                 int poly = (int)scope[0];
                 foreach (var vs in voiceStrips) vs.Set(poly, scope.AsSpan(8, 16));
-                meterL.SetLinear(scope[2]); meterR.SetLinear(scope[3]);
                 sumBar.SetLinear(scope[4] * 0.6);
                 sumTxt.Text = scope[4] > 1e-4 ? $"{20 * Math.Log10(scope[4] * 0.6):0.0}" : "−∞";
-                voiceCountTxt.Text = $"{(int)scope[1]} / {poly}";
             }
             foreach (var a in readouts) a();
         }
@@ -452,23 +447,17 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         }
         Control OutputTab()
         {
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = {
-                MonoText("0", 7, DimC), WithRow(MonoText("−12", 7, DimC), 1), WithRow(MonoText("−48", 7, DimC), 2) } };
-            var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Lbl("L", 7, MutedC, FontWeight.Normal)) } },
-                                new StackPanel { Spacing = 2, Children = { meterR, Center(Lbl("R", 7, MutedC, FontWeight.Normal)) } }, scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(10, K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 54), meters);
+            // Volume alone, centred — the track meter already shows the level.
+            var top = K("volume", "VOLUME", VolDb, false, Knob.SizeMain, 54);
+            top.HorizontalAlignment = HorizontalAlignment.Center;
             var bend = Row(6, new TextBlock { Text = "Bend", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC, Width = 38, VerticalAlignment = VerticalAlignment.Center },
                 Chips("bendrange", new[] { "2", "5", "7", "12" }, new[] { 1 / 11f, 4 / 11f, 6 / 11f, 1f }), Lbl("st", 7, MutedC, FontWeight.Normal));
             // Velocity → filter: a quick switch over the Velocity Filter amount (0 ↔ 50 %).
             var velF = Switch("Vel → filter", () => G("velfilt") > 0.001f, () => { SetP("velfilt", G("velfilt") > 0.001f ? 0f : 0.5f); Refresh(); }, out var velSync);
             readouts.Add(velSync);
-            var strip = new PentadVoiceStrip { Width = 90, Height = 14 }; voiceStrips.Add(strip);
-            var voices = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6, Children = { Caps("VOICES"), Col(strip, 1), Col(Right(voiceCountTxt), 2) } };
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Avalonia.Controls.Dock.Top),
-                Docked(Divider(new StackPanel { Spacing = 6, Children = { SliderRow("SPREAD", "spread", v => Pct(v), 38, 30), bend, velF } }), Avalonia.Controls.Dock.Top),
-                Docked(Divider(voices), Avalonia.Controls.Dock.Bottom) } };
+                Docked(Divider(new StackPanel { Spacing = 6, Children = { SliderRow("SPREAD", "spread", v => Pct(v), 38, 30), bend, velF } }), Avalonia.Controls.Dock.Top) } };
             ((Control)body.Children[1]).Margin = new Thickness(0, 6, 0, 0);
             return new Border { Padding = new Thickness(6, 4), Child = body };
         }
@@ -508,9 +497,6 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             }
             return new Border { Padding = new Thickness(6, 3), Child = g };
         }
-        static Control WithRow(Control c, int r) { Grid.SetRow(c, r); return c; }
-        static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-        static Control Right(Control c) { c.HorizontalAlignment = HorizontalAlignment.Right; return c; }
 
         // ======================================================================
         // Tab frames + extras

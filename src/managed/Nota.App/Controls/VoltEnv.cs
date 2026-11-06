@@ -100,6 +100,10 @@ namespace Nota.App;
         /// without it, as fractions of the width.</summary>
         public Func<int, double, double>? Seconds { get; set; }
 
+        /// <summary>The release follows another stage (Monolith's contours run the decay time on
+        /// key-up): it is drawn, but its breakpoint neither drags nor types, and it learns nothing.</summary>
+        public bool ReleaseLocked { get; set; }
+
         public EnvTimeScale? Scale { get => _scale; set { _scale = value; value?.Join(this); } }
         private EnvTimeScale? _scale;
 
@@ -145,7 +149,7 @@ namespace Nota.App;
         private ValueField? BuildField(int stage)
         {
             var p = stage switch { 0 => _a, 1 => _d, 2 => _s, _ => _r };
-            if (p.i < 0) return null;
+            if (p.i < 0 || (stage == 3 && ReleaseLocked)) return null;
             void Begin() => _p.Begin(p.id);
             void End() => _p.End(p.id);
             string name = $"{NotaText.Label(_title)} · {new[] { "Attack", "Decay", "Sustain", "Release" }[stage]}";
@@ -189,7 +193,7 @@ namespace Nota.App;
             var (x0, x1, top, bot) = Geo(); double w = (x1 - x0) / 4.0;
             void Add(int k, (int i, string id) p, string suffix)
             { if (p.i >= 0 && _p.LearnTarget(p.i) is { } tgt) list.Add((new Rect(x0 + k * w, top, w, bot - top), tgt, $"{_title} · {suffix}")); }
-            Add(0, _a, "Attack"); Add(1, _d, "Decay"); Add(2, _s, "Sustain"); Add(3, _r, "Release");
+            Add(0, _a, "Attack"); Add(1, _d, "Decay"); Add(2, _s, "Sustain"); if (!ReleaseLocked) Add(3, _r, "Release");
             return list;
         }
 
@@ -274,8 +278,8 @@ namespace Nota.App;
             {
                 (0, Math.Abs(p.X - n.xa) + Math.Abs(p.Y - top)),
                 (1, Math.Abs(p.X - n.xd) + Math.Abs(p.Y - n.sy)),
-                (2, Math.Abs(p.X - n.xr) + Math.Abs(p.Y - bot)),
             };
+            if (!ReleaseLocked) cands.Add((2, Math.Abs(p.X - n.xr) + Math.Abs(p.Y - bot)));
             if (_dc.i >= 0) { var q = Diamond(3); cands.Add((3, Math.Abs(p.X - q.X) + Math.Abs(p.Y - q.Y))); }
             if (_rc.i >= 0) { var q = Diamond(4); cands.Add((4, Math.Abs(p.X - q.X) + Math.Abs(p.Y - q.Y))); }
             var best = cands.MinBy(c => c.d);
@@ -448,6 +452,7 @@ namespace Nota.App;
             for (int k = 0; k < nodes.Length; k++)
             {
                 bool on = _drag == k;
+                if (k == 2 && ReleaseLocked) { ctx.DrawEllipse(ink, null, nodes[k], 2, 2); continue; }   // follows, not a handle
                 if (on) ctx.DrawEllipse(Wash(ink, 0x40), null, nodes[k], 8, 8);
                 ctx.DrawEllipse(on ? ink : NotaGraph.Ground, new Pen(ink, 1.6), nodes[k], 3.6, 3.6);
             }

@@ -54,6 +54,7 @@ internal static class EnvPanel
             1 => ExpMap(n, spec.D.Lo, spec.D.Hi),
             _ => spec.ReleaseFromDecay is { } rel ? rel((float)n) : ExpMap(n, spec.R.Lo, spec.R.Hi),
         };
+        view.ReleaseLocked = spec.ReleaseFromDecay is not null;
         if (scale is not null) view.Scale = scale;
         view.VerticalAlignment = VerticalAlignment.Stretch;
 

@@ -8,9 +8,8 @@
 //   • L 700 × 260, two tabs:
 //       Sound  HAMMER ▸ RESONATOR ▸ PICKUP (the curve — drag X = symmetry, Y = distance,
 //              H1–H8 of what it does to a sine; Clav shows its string and two pickups) ▸
-//              DAMPER (+ the pedal, lit by the Pedal param or a keyboard's CC64), with the
-//              model chips in the tab strip and a PLAY rail (tune / age / stretch, the voice
-//              pool and the meter) on the right.
+//              DAMPER, with the model chips in the tab strip and a PLAY rail (tune / age / stretch, the pedal —
+//              lit by the Pedal param or a keyboard's CC64 — and the voice pool) on the right.
 //       FX     PREAMP ▸ TREMOLO (its L / R gains scrolling with the engine's LFO) ▸ PHASER
 //              ▸ CHORUS ▸ CABINET ▸ OUTPUT — each with its power dot; the chain in words
 //              sits in the tab strip.
@@ -246,8 +245,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { pedalDot, pedalTxt } },
         };
-        var pedalLbl = Caps("Pedal");
-        pedalLbl.HorizontalAlignment = HorizontalAlignment.Center;
+        var pedalLbl = new TextBlock { Text = "Pedal", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
         pedalPill.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(pedalPill).Properties.IsLeftButtonPressed) return;
@@ -266,8 +264,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         });
         var damper = Col("Damper", VStack(
             Knob("damper", "Damper", v => NotaNum.Pct(v), size: 26),
-            Knob("relnoise", "Rel N", NoiseText, size: 24),
-            new StackPanel { Spacing = 3, Children = { pedalPill, pedalLbl } }), 52);
+            Knob("relnoise", "Rel N", NoiseText, size: 24)), 52);
 
         var soundRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,*,Auto,Auto"), Margin = new Thickness(7, 5, 7, 6) };
         Control[] soundCells = { hammer, Arrow(), reso, Arrow(), pickupCol, Arrow(), damper };
@@ -359,13 +356,10 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         });
         var cabinet = Island("Cabinet", cabList, width: 72);
 
-        var outMeter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) outMeter.Push(m); });
+        // Volume over Pan — the track meter already shows the level.
         var outKnobs = VStack(Knob("volume", "Volume", VolText, size: 30), Knob("pan", "Pan", PanText, size: 24));
-        var outBody = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6 };
-        outBody.Children.Add(outKnobs);
-        Grid.SetColumn(outMeter, 1); outBody.Children.Add(outMeter);
-        var output = Island("Output", outBody, width: 92);
+        outKnobs.HorizontalAlignment = HorizontalAlignment.Center;
+        var output = Island("Output", outKnobs, width: 92);
 
         var fxRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"), Margin = new Thickness(6, 5, 6, 6) };
         Control[] fxCells = { preamp, Arrow(), trem, Arrow(), phaser, Arrow(), chorus, Arrow(), cabinet, Arrow(), output };
@@ -385,12 +379,11 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             voicesLine.Text = Loc.F("device.keys.voices", act, limit);
             pedalLine.Text = sus > 0 ? Loc.F("device.keys.held_by_the_pedal", sus) : act > held ? Loc.F("device.keys.ringing_out", act - held) : "";
         });
-        var railMeter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) railMeter.Push(m); });
-        var voiceInfo = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Bottom, Children = { voicesLine, pedalLine } };
-        var railBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6 };
-        railBottom.Children.Add(voiceInfo);
-        Grid.SetColumn(railMeter, 1); railBottom.Children.Add(railMeter);
+        // The pedal (lit by CC64 or the Pedal param) sits in the rail with the voices it holds.
+        var pedalRow = new DockPanel();
+        DockPanel.SetDock(pedalLbl, Dock.Left); pedalRow.Children.Add(pedalLbl);
+        pedalPill.HorizontalAlignment = HorizontalAlignment.Right; pedalRow.Children.Add(pedalPill);
+        var voiceInfo = new StackPanel { Spacing = 2, Children = { voicesLine, pedalLine } };
         var voicesRow = new DockPanel();
         var vLbl = new TextBlock { Text = "Voices", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(vLbl, Dock.Left); voicesRow.Children.Add(vLbl);
@@ -403,12 +396,10 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
                 Slider("Tune", "tune", () => $"{Math.Round(KeysModel.TuneCents(G("tune"))):+0;−0;0}\u2009c", bipolar: true),
                 Slider("Age", "age", () => NotaNum.Pct(G("age"))),
                 Slider("Stretch", "stretch", () => NotaNum.Pct(G("stretch"))),
-                voicesRow, grid,
+                pedalRow, voicesRow, grid, voiceInfo,
             },
         };
-        var railBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 4, Margin = new Thickness(7, 5, 7, 6) };
-        railBody.Children.Add(railTop);
-        Grid.SetRow(railBottom, 1); railBody.Children.Add(railBottom);
+        var railBody = new Border { Margin = new Thickness(7, 5, 7, 6), Child = railTop };
         var railHead = new DockPanel { Height = TabH, Margin = new Thickness(8, 0) };
         var railHeadTxt = Caps("Play");
         railHead.Children.Add(railHeadTxt);

@@ -20,7 +20,7 @@
 //                 (KitMacros). Map adds a receiver to the selected macro; right-click a macro
 //                 for its receivers and ranges, rename or clear.
 //   PERFORM 186   Swing · Human · Accent (teal — they shape the playing, not the sound),
-//                 Master and Glue (the bus compressor), the output meter.
+//                 Volume and Glue (the bus compressor).
 //   STEP          a full-width strip: the selected voice's sixteen steps in bank A–D, a
 //                 velocity lane under them. An on step is accent (a toggle that is on), a
 //                 brighter one the accent step, an outline a quiet step; teal is the playhead
@@ -505,28 +505,15 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             },
         };
 
-        var meter = new MeterBar { Height = 48, Width = MeterScale.StereoWidth, VerticalAlignment = VerticalAlignment.Center };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid { Height = 48, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
-        for (int i = 0; i < 3; i++)
+        // Volume · Glue centred — the track meter already shows the level.
+        var master = PKnob("volume", "VOLUME", v => RM.Pct(v), NotaSize.KnobMain, 50, Loc.T("device.rhythm.the_kits_output_level"));
+        var glue = PKnob("glue", "GLUE", v => RM.Pct(v), NotaSize.KnobRegular, 46, Loc.T("device.rhythm.glue_a_bus_compressor_on"));
+        var perfFoot = new StackPanel
         {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children = { master, glue },
         };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var master = PKnob("volume", "MASTER", v => RM.Pct(v), 40, 46, Loc.T("device.rhythm.the_kits_output_level"));
-        var glue = PKnob("glue", "GLUE", v => RM.Pct(v), 30, 40, Loc.T("device.rhythm.glue_a_bus_compressor_on"));
-        var perfFoot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
-        perfFoot.Children.Add(master);
-        Grid.SetColumn(glue, 1); perfFoot.Children.Add(glue);
-        Grid.SetColumn(meterBlock, 2); perfFoot.Children.Add(meterBlock);
         var perfFootHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = perfFoot };
 
         var perfBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 6, Margin = new Thickness(8, 6) };
@@ -858,17 +845,4 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
     private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the meter.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

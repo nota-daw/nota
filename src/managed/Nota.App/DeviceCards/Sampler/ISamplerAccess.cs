@@ -28,8 +28,6 @@ internal interface ISamplerAccess
     string ParamName(int i);
     /// <summary>The engine's telemetry (SamplerModel scope); 0 floats when there is none (a rack chain).</summary>
     int Scope(float[] buf);
-    /// <summary>The output meter under the rail — the track's own meter; false in a chain.</summary>
-    bool TryMeter(out NotaMeter meter);
     /// <summary>MIDI Learn / CV for a control bound to param i (track only).</summary>
     void Learn(Avalonia.Controls.Control c, int i);
     /// <summary>The output spectrum for the filter graph (#531); none in a chain.</summary>
@@ -56,7 +54,6 @@ internal sealed class TrackSamplerAccess(IAudioEngine engine, int trackId) : ISa
     public bool Automatable => true;
     public string ParamName(int i) => engine.PluginParamName(trackId, -1, i);
     public int Scope(float[] buf) => engine.InstrumentScope(trackId, buf);
-    public bool TryMeter(out NotaMeter meter) => engine.TryGetTrackMeter(trackId, out meter);
     public void Learn(Avalonia.Controls.Control c, int i) => MidiLearn.Bind(c, MidiTarget.PluginParam(trackId, -1, i), ParamName(i));
     public FilterSpectrum? Spectrum() => new(engine, trackId);
 }
@@ -81,7 +78,6 @@ internal sealed class ChainSamplerAccess(IAudioEngine engine, int trackId, int c
     public bool Automatable => false;
     public string ParamName(int i) => engine.RackChainInstrumentParamName(trackId, chain, i);
     public int Scope(float[] buf) => 0;
-    public bool TryMeter(out NotaMeter meter) { meter = default; return false; }
     public void Learn(Avalonia.Controls.Control c, int i) { }
 }
 

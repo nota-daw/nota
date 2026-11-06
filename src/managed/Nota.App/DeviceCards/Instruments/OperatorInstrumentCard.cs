@@ -13,8 +13,8 @@
 //                             diagram (drag one operator onto another to re-route).
 //               Filter · Amp— the subtractive filter's response and the live harmonic
 //                             spectrum behind the curve, with type / freq / reso / key track / volume.
-//   Rail 186    Global (FM depth, feedback, tone, glide, bend range, voice mode, volume
-//               and the track's meter) or Env (one operator's ADSR, drawn and draggable,
+//   Rail 186    Global (FM depth, feedback, tone, glide, bend range, voice mode and
+//               volume) or Env (one operator's ADSR, drawn and draggable,
 //               with key and velocity tracking).
 //
 // Neutral ink is a carrier — what reaches the output; teal is a modulator. Everything is a
@@ -568,28 +568,10 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             Children = { Toggle("Mono", "mono"), Toggle("Vel → FM", "veltofm", () => G("veltofm") >= 0.5f ? $"Vel → FM  {NotaNum.Pct(G("veltofm"))}" : Loc.T("device.operator.vel_fm_off")) },
         };
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid
-        {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
-        };
-        for (int i = 0; i < 3; i++)
-        {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-        var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        globalBottom.Children.Add(Knob("volume", "Volume", v => NotaNum.Pct(v), size: NotaSize.KnobMain, cellW: 52));
-        Grid.SetColumn(meterBlock, 1); globalBottom.Children.Add(meterBlock);
+        // Volume alone, centred in the rail — the track meter already shows the level.
+        var globalBottom = Knob("volume", "Volume", v => NotaNum.Pct(v), size: NotaSize.KnobMain, cellW: 52);
+        globalBottom.HorizontalAlignment = HorizontalAlignment.Center;
+        globalBottom.VerticalAlignment = VerticalAlignment.Center;
 
         var globalTop = new StackPanel
         {
@@ -696,18 +678,4 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

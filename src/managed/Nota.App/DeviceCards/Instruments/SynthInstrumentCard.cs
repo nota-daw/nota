@@ -9,8 +9,8 @@
 //   Env     the amplitude ADSR (drag its breakpoints) · A / D / S / R · VEL → VOL
 //   Filter  the response curve (drag for cutoff / reso) · TYPE · CUTOFF · RESO · ENV
 //
-// A 186px rail stays put on every tab — voice mode, volume, pan, glide, unison spread,
-// velocity tracking and the track's meter. Neutral ink is the parameter itself; teal is modulation (detune, env → cutoff).
+// A 186px rail stays put on every tab — voice mode, pan, glide, then volume, unison
+// spread and velocity tracking as knobs. Neutral ink is the parameter itself; teal is modulation (detune, env → cutoff).
 //
 // Two sizes share every value; the S / L toggle in the shell header flips the card (the
 // choice is the synth's "view" param — see InstrumentView — so it persists with the
@@ -291,47 +291,24 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         voiceChips.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(voiceChips, 1); railHeader.Children.Add(voiceChips);
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        // The three captions sit at their real height on the meter's scale (−60 … +6 dB),
-        // not spread evenly — a scale that lies is worse than no scale.
-        var meterScale = new Grid
+        // Volume first and a size up, then Spread and Vel → Vol — the track meter already shows the level.
+        var railBottomHost = new StackPanel
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
-        };
-        for (int i = 0; i < 3; i++)
-        {
-            var cap = Axis(i == 0 ? "0" : i == 1 ? "−12" : "−48");
-            Grid.SetRow(cap, i * 2 + 1); meterScale.Children.Add(cap);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var railBottom = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                Knob("spread", "Spread", v => NotaNum.Pct(v), size: 44, cellW: 50),
-                Knob("velamp", "Vel → Vol", v => NotaNum.Pct(v), cellW: 46, arc: Teal),
+                Knob("gain", "Volume", v => Db(v), size: NotaSize.KnobMain, cellW: 50),
+                Knob("spread", "Spread", v => NotaNum.Pct(v), size: NotaSize.KnobRegular, cellW: 46),
+                Knob("velamp", "Vel → Vol", v => NotaNum.Pct(v), size: NotaSize.KnobRegular, cellW: 46, arc: Teal),
             },
         };
-        var railBottomHost = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        railBottomHost.Children.Add(railBottom);
-        Grid.SetColumn(meterBlock, 1); railBottomHost.Children.Add(meterBlock);
 
         var railBody = new StackPanel
         {
             Spacing = 6, Margin = new Thickness(8, 6),
             Children =
             {
-                Slider("Volume", "gain", () => Db(G("gain"))),
                 Slider("Pan", "pan", () => PanText(G("pan")), bipolar: true),
                 Slider("Glide", "glide", () => Glide(G("glide"))),
             },
@@ -422,20 +399,6 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 
     private static TextBlock Axis(string text)
     {
