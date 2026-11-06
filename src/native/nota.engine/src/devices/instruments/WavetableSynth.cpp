@@ -727,8 +727,6 @@ void WavetableSynth::render(float* out, int32_t frames) {
                 else
                     o2 = oscStack(v.ph2, inc2, b2, pos2, wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
             }
-            v.lastPos[0] = pos1;
-            v.lastPos[1] = pos2;
             float sub = 0.0f;
             if (subLvl > 1e-5f) {
                 sub = subOsc(subWave, v.subPh);
@@ -814,9 +812,27 @@ void WavetableSynth::render(float* out, int32_t frames) {
             ++live;
             if (!newest || v.seq > newest->seq) newest = &v;
         }
-    // Live follow telemetry, once per block (relaxed: the UI only draws it).
-    scope_[0].store(newest ? newest->lastPos[0] : -1.0f, std::memory_order_relaxed);
-    scope_[1].store(newest ? newest->lastPos[1] : -1.0f, std::memory_order_relaxed);
+    // Live follow telemetry, once per block (relaxed: the UI only draws it). The newest
+    // voice's positions are worked out here from its end-of-block state rather than kept
+    // per sample, so a block with no card watching costs nothing extra in the voice loop.
+    float follow[2] = {-1.0f, -1.0f};
+    if (newest) {
+        double d = macroDst[2];
+        if (amN) {
+            auto wrap = [](double ph) { return ph >= 1.0 ? ph - 1.0 : ph; };
+            const double lfo1 = lfoValue(ls1, wrap(lfoPhase1_), lfoSh1_) * lfo1Depth;
+            const double lfo2 = lfoValue(ls2, wrap(lfoPhase2_), lfoSh2_) * lfo2Depth;
+            const double src[kSources] = {newest->env, newest->env2, lfo1, lfo2, newest->velocity,
+                std::clamp(newest->ktOct / 4.0, -1.0, 1.0), modWheel, newest->rand};
+            for (int k = 0; k < amN; ++k)
+                if (amD[k] == 2) d += src[amS[k]] * amA[k];
+        }
+        const float off = (float)d + newest->ex.slide() * 0.5f;
+        follow[0] = std::clamp(basePos1 + off, 0.0f, 1.0f);
+        follow[1] = std::clamp(basePos2 + off, 0.0f, 1.0f);
+    }
+    scope_[0].store(follow[0], std::memory_order_relaxed);
+    scope_[1].store(follow[1], std::memory_order_relaxed);
     scope_[4].store((float)live, std::memory_order_relaxed);
     if (live == 0 && peak <= 1.0e-5f) {
         quietSamples_ += (uint64_t)frames;

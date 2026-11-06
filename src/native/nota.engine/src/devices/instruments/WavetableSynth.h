@@ -244,7 +244,6 @@ class WavetableSynth final : public Instrument {
         }
         int32_t modCount = 0;
         uint64_t seq = 0;            // note-on order, for the scope's newest voice
-        float lastPos[2] = {0, 0};   // the positions this voice read last
         VoiceExpr ex; // MPE bend / pressure / slide
         float exBendAt = 0.0f;
         double exBendMul = 1.0;
