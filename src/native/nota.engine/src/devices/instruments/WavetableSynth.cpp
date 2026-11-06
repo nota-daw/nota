@@ -99,6 +99,12 @@ WavetableSynth::WavetableSynth() {
     set(FxReverbOn, 1.0f);
     set(FxReverbMode, 0.0f);
     set(FxReverbSize, 0.5f);
+    set(DCurve, 0.5f);
+    set(RCurve, 0.5f);
+    set(EnvExp, 0.0f);
+    set(E2DCurve, 0.5f);
+    set(E2RCurve, 0.5f);
+    set(E2EnvExp, 0.0f); // straight, Lin: old projects keep their envelopes
     tables_ = sharedTables();
     chorusBuf_.assign(4096, 0.0f);
     for (auto& c : revC_) c.buf.assign(1, 0.0f);
@@ -171,7 +177,8 @@ std::string WavetableSynth::pluginParamId(int32_t i) const {
     }
     if (i >= ExtraBase) {
         static const char* ex[] = {"bend", "bendrange", "outpan", "lfo2sync", "fxdriveon", "fxdrivemode", "fxtone",
-            "fxchoruson", "fxchorusvoices", "fxreverbon", "fxreverbmode", "fxreverbsize"};
+            "fxchoruson", "fxchorusvoices", "fxreverbon", "fxreverbmode", "fxreverbsize", "dcurve", "rcurve", "envexp",
+            "env2dcurve", "env2rcurve", "env2exp"};
         return std::string(ex[i - ExtraBase]);
     }
     int j = i - MacroBase, m = j / 3, f = j % 3;
@@ -201,7 +208,8 @@ std::string WavetableSynth::pluginParamName(int32_t i) const {
     }
     if (i >= ExtraBase) {
         static const char* exNm[] = {"Pitch Bend", "Bend Range", "Out Pan", "LFO2 Sync", "Drive On", "Drive Mode",
-            "Drive Tone", "Chorus On", "Chorus Voices", "Reverb On", "Reverb Mode", "Reverb Size"};
+            "Drive Tone", "Chorus On", "Chorus Voices", "Reverb On", "Reverb Mode", "Reverb Size", "Decay Curve",
+            "Release Curve", "Env Exp", "Env2 Decay Curve", "Env2 Release Curve", "Env2 Exp"};
         return std::string(exNm[i - ExtraBase]);
     }
     int j = i - MacroBase, m = j / 3, f = j % 3;
@@ -267,6 +275,7 @@ void WavetableSynth::noteOn(int32_t pitch, float velocity) {
     }
     v->velocity = std::clamp(velocity, 0.0f, 1.0f);
     v->ktOct = (pitch - 60) / 12.0;
+    lastVoice_ = static_cast<int>(v - voices_);
     rng_ = rng_ * 1664525u + 1013904223u;
     v->rand = ((rng_ >> 8) / 16777216.0) * 2.0 - 1.0;
     if (!legato) {
@@ -274,6 +283,8 @@ void WavetableSynth::noteOn(int32_t pitch, float velocity) {
         v->stage = Stage::Attack;
         v->env2 = 0.0f;
         v->stage2 = Stage::Attack;
+        v->shape = {};
+        v->shape2 = {};
         v->ic1L[0] = v->ic2L[0] = v->ic1R[0] = v->ic2R[0] = 0.0;
         v->ic1L[1] = v->ic2L[1] = v->ic1R[1] = v->ic2R[1] = 0.0;
         v->clearSide();
@@ -372,6 +383,8 @@ void WavetableSynth::render(float* out, int32_t frames) {
                 sus = get(Sustain);
     const float atk2 = rateOf(Env2Attack, 0.001, 2.0), dec2 = rateOf(Env2Decay, 0.002, 3.0),
                 rel2 = rateOf(Env2Release, 0.002, 4.0), sus2 = get(Env2Sustain);
+    const EnvBends bend1 = envBends({get(DCurve), get(RCurve), get(EnvExp)});
+    const EnvBends bend2 = envBends({get(E2DCurve), get(E2RCurve), get(E2EnvExp)});
 
     const int t1type = filtType(Fil1Type), t2type = filtType(Fil2Type);
     const bool slope1 = get(Fil1Slope) > 0.5f, slope2 = get(Fil2Slope) > 0.5f;
@@ -462,12 +475,12 @@ void WavetableSynth::render(float* out, int32_t frames) {
         int live = 0;
         for (auto& v : voices_) {
             if (!v.active) continue;
-            advEnv(v.env, v.stage, atk, dec, sus, rel);
+            advanceShapedEnv(v.env, v.stage, v.shape, atk, dec, sus, rel, bend1);
             if (v.stage == Stage::Off) {
                 v.active = false;
                 continue;
             }
-            advEnv(v.env2, v.stage2, atk2, dec2, sus2, rel2);
+            advanceShapedEnv(v.env2, v.stage2, v.shape2, atk2, dec2, sus2, rel2, bend2);
             ++live;
 
             double dst[kDests] = {
@@ -580,6 +593,12 @@ void WavetableSynth::render(float* out, int32_t frames) {
     int live = 0;
     for (auto& v : voices_)
         if (v.active) ++live;
+    {
+        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        const bool on = lv && lv->active;
+        publishEnvTele(envTele_, on, on ? lv->stage : Stage::Off, on ? lv->shape : EnvShapeState{});
+        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->stage2 : Stage::Off, on ? lv->shape2 : EnvShapeState{});
+    }
     if (live == 0 && peak <= 1.0e-5f) {
         quietSamples_ += (uint64_t)frames;
         if (quietSamples_ > kIdleSamples) idle_ = true;
@@ -589,33 +608,6 @@ void WavetableSynth::render(float* out, int32_t frames) {
     }
 }
 
-void WavetableSynth::advEnv(float& e, Stage& st, float a, float d, float s, float r) {
-    switch (st) {
-    case Stage::Attack:
-        e += a;
-        if (e >= 1) {
-            e = 1;
-            st = Stage::Decay;
-        }
-        break;
-    case Stage::Decay:
-        e -= d;
-        if (e <= s) {
-            e = s;
-            st = Stage::Sustain;
-        }
-        break;
-    case Stage::Sustain: break;
-    case Stage::Release:
-        e -= r;
-        if (e <= 0) {
-            e = 0;
-            st = Stage::Off;
-        }
-        break;
-    case Stage::Off: break;
-    }
-}
 
 void WavetableSynth::setSvf(SvfCoef& c, double fc, double k) const {
     double g = std::tan(kPi * fc / sampleRate_);

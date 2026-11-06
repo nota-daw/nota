@@ -47,6 +47,7 @@
 
 #pragma once
 
+#include "EnvShape.h"
 #include "devices/Instrument.h"
 #include "engine/NoteExpression.h"
 
@@ -161,7 +162,16 @@ class VoltSynth final : public Instrument {
         UniSpread,
         Legato,
         WheelLfo,  // 137..142
-        kNumParams // 143
+        // ---- appended (v7): editor state — the card size, 0 = L, 1 = S (InstrumentView) ----
+        View,      // 143
+        // ---- appended (v8, #531): the envelope shapes — 0.5 = straight, Exp off ----
+        DCurve,
+        RCurve,
+        EnvExp, // 144..146 amp env
+        FDCurve,
+        FRCurve,
+        FEnvExp,   // 147..149 filter env
+        kNumParams // 150
     };
     static constexpr int kV6Base = Osc1Shape;
 
@@ -190,6 +200,9 @@ class VoltSynth final : public Instrument {
     // Active (sounding) voice count, for the editor's voice meter. Message thread read
     // of an audio-thread-updated snapshot; approximate is fine.
     int32_t activeVoiceCount() const override { return activeVoices_.load(std::memory_order_relaxed); }
+    // Envelope telemetry for the editor's graphs: the newest sounding voice's amp-env stage
+    // and progress, then the filter env's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
+    int32_t scopeRead(float* out, int32_t maxN) const override;
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -242,6 +255,7 @@ class VoltSynth final : public Instrument {
         double ph1 = 0.0, ph1u = 0.0, ph2 = 0.0, ph2u = 0.0;
         float vel = 0.0f, aEnv = 0.0f, fEnv = 0.0f, fade1 = 1.0f, fade2 = 1.0f;
         Stage aStage = Stage::Attack, fStage = Stage::Attack;
+        EnvShapeState aShape, fShape; // the curve of each envelope's current stage
         double s1[2] = {0, 0}, s2[2] = {0, 0};   // SVF integrator state (ic1, ic2)
         double s1b[2] = {0, 0}, s2b[2] = {0, 0}; // 2nd stage for 24 dB slope
         double s1R[2] = {0, 0}, s2R[2] = {0, 0}; // right-channel filters, for a spread stack
@@ -290,7 +304,6 @@ class VoltSynth final : public Instrument {
     }
     static double wrap(double x) { return x >= 1.0 ? x - 1.0 : x; }
 
-    static inline void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
 
     void setSvf(double& a1, double& a2, double& a3, double fc, double k) const;
     // TPT SVF (Cytomic). type: 0 LP, 1 HP, 2 BP, 3 Notch. state[0]=ic1, state[1]=ic2.
@@ -340,6 +353,8 @@ class VoltSynth final : public Instrument {
     float nlp_ = 0.0f; // noise color one-pole state
     uint32_t rng_ = 0x9E3779B9u;
     std::atomic<int32_t> activeVoices_{0};
+    int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
+    std::atomic<float> envTele_[4]; // amp stage, amp progress, filter stage, filter progress
     std::atomic<float> pn_[kNumParams];
     bool idle_ = false; // sleep flag: set when no voice sounds
 };

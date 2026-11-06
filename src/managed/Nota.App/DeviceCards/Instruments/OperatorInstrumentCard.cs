@@ -98,9 +98,6 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var filtCurve = new VoltFilter(engine, track)
         { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, FreqRange = (60, 18000) };
         var env = new VoltEnv(engine, track) { MinHeight = 60, VerticalAlignment = VerticalAlignment.Stretch };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        meta.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         Action applyEnv = () => { };
 
         void SyncSpectrum()
@@ -118,8 +115,6 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             env.Refresh();
             SyncSpectrum();
             foreach (var r in readouts) r();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
         routing.AlgoPicked += a => { SetP("algo", a / (float)(OperatorTopo.Count - 1)); applyEnv(); Refresh(); };
         ctx.AddDeviceRefresher(SyncSpectrum);
@@ -639,33 +634,6 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
-        string Chain()
-        {
-            var tgt = OperatorTopo.Algo[AlgoIdx()];
-            var parts = new List<string>();
-            for (int o = 0; o < 4; o++) parts.Add(tgt[o] == 4 ? $"{OperatorTopo.Names[o]}→out" : $"{OperatorTopo.Names[o]}→{OperatorTopo.Names[tgt[o]]}");
-            return string.Join(" · ", parts);
-        }
-        string Summary() => tab switch
-        {
-            0 => Chain(),
-            1 => $"Algo {AlgoIdx() + 1} of {OperatorTopo.Count} · {OperatorTopo.Desc[AlgoIdx()]} · feedback {NotaNum.Pct(G("feedback"))}",
-            _ => $"Filter {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))} · reso {NotaNum.Pct(G("filreso"))} · key track {NotaNum.Pct(G("filkeytrk"))}",
-        };
-        string Meta()
-        {
-            string mode = G("mono") >= 0.5f ? "MONO" : "POLY 12";
-            return $"ALGO {AlgoIdx() + 1} · FM {NotaNum.Pct(G("fmdepth") * 2)} · {mode} · {NotaNum.Pct(G("volume"))}";
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly ---------------------------------------------------------
         var body = new Grid
@@ -677,12 +645,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         Grid.SetColumn(tabPanel, 1); body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(Refresh);
         applyEnv();

@@ -59,7 +59,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         return null;
     }
 
-    private const double TabH = 20, StatusH = 18, RailW = 142;
+    private const double TabH = 20, RailW = 142;
     private static readonly string[] TabNames = { "Sound", "FX" };
     private static readonly Dictionary<int, int> OpenTab = new();   // per track, survives a rebuild
 
@@ -92,9 +92,6 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         void ReadScope() { Array.Clear(scope); engine.InstrumentScope(track, scope); }
 
         var pickup = new KeysPickupView(engine, track, idx) { Mini = mini };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        meta.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         int tab = OpenTab.TryGetValue(track, out var ot) ? ot : 0;
 
         void Refresh()
@@ -175,42 +172,9 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             return row;
         }
 
-        // ---- status strip ------------------------------------------------------
-        string PedalWord() => Sc(KeysModel.ScPedal) > 0 ? "pedal ↓" : "pedal —";
-        string SoundLine()
-        {
-            int m = Sel("model", 4);
-            string pu = m == 3 ? KeysModel.PickupPositions[Sel("pupos", 3)]
-                : $"pickup {NotaNum.Pct(G("dist"))} / {Signed(KeysModel.Bipolar(G("sym")) * 100, "%")}";
-            return $"{KeysModel.ModelNames[m]} · hard {NotaNum.Pct(G("hard"))} · {pu} · damper {NotaNum.Pct(G("damper"))} · {PedalWord()}";
-        }
-        string FxLine()
-        {
-            string pre = On("preon") ? $"preamp {NotaNum.Pct(G("drive"))}" : "preamp off";
-            string trem = On("tremon") ? $"trem {KeysModel.TremModes[Sel("tremmode", 2)].ToLowerInvariant()} {KeysModel.TremRateText(G)} {NotaNum.Pct(G("tremdepth"))}" : "trem off";
-            string ph = On("phaseron") ? $"phaser {KeysModel.PhaserHz(G("phaserrate")):0.0#}\u2009Hz" : "phaser off";
-            string ch = On("choruson") ? $"chorus {NotaNum.Pct(G("chorusmix"))}" : "chorus off";
-            return $"{pre} · {trem} · {ph} · {ch} · cab {KeysModel.CabNames[Sel("cab", 4)]}";
-        }
-        string VoicesText() => $"{Sc(KeysModel.ScActive)} / {KeysModel.VoiceCounts[Sel("voices", 4)]}";
-        double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-        string Rate() => $"{sr / 1000:0.#}\u2009kHz";
+        ctx.AddDeviceRefresher(ReadScope);
 
-        var meterOut = new TextBlock { FontSize = 8, Foreground = TextSecondary };
-        ctx.AddDeviceRefresher(() =>
-        {
-            ReadScope();
-            status.Text = mini ? $"{KeysModel.ModelNames[Sel("model", 4)]} · {VoicesText()} · {PedalWord()}"
-                        : tab == 0 ? SoundLine() : FxLine();
-            if (engine.TryGetTrackMeter(track, out var mt))
-            {
-                double pk = Math.Max(mt.PeakL, mt.PeakR);
-                meterOut.Text = pk > 1e-6 ? $"out {NotaNum.Db(AudioMath.LinToDb((float)pk))}" : "out −∞\u2009dB";
-            }
-            meta.Text = mini ? meterOut.Text : Loc.F("device.keys.voices_n", Rate(), VoicesText());
-        });
-
-        if (mini) return BuildMini(ctx, pickup, ModelChips(true), Knob, status, meta, Refresh);
+        if (mini) return BuildMini(ctx, pickup, ModelChips(true), Knob, Refresh);
 
         // ======================= SOUND tab ======================================
         Control Col(string title, Control body, double width, Control? accessory = null)
@@ -508,9 +472,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        var statusHost = StatusStrip(status, meta);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
         ShowTab();
         return root;
     }
@@ -520,7 +482,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
     // ---- S: the mini card -------------------------------------------------------
     private static Control BuildMini(DeviceCardContext ctx, KeysPickupView pickup, Border modelChips,
         Func<string, string, Func<float, string>, double, double, IBrush?, Control> knob,
-        TextBlock status, TextBlock meta, Action refresh)
+        Action refresh)
     {
         var cells = new[]
         {
@@ -543,23 +505,9 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         var island = SectionBox(inner);
         island.Margin = new Thickness(NotaSpace.DeviceGap);
 
-        var statusHost = StatusStrip(status, meta);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, island } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = island };
         refresh();
         return root;
-    }
-
-    private static Border StatusStrip(TextBlock status, TextBlock meta)
-    {
-        var bar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10, Background = NotaPalette.SurfaceAbyss };
-        bar.Children.Add(status);
-        Grid.SetColumn(meta, 1); bar.Children.Add(meta);
-        return new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = bar,
-        };
     }
 
     private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);

@@ -208,7 +208,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         string PanText(float v) { double p = SamplerModel.PanSigned(v); return Math.Abs(p) < 0.015 ? "C" : (p < 0 ? "L" : "R") + NotaNum.Str(Math.Abs(p) * 100, "0"); }
         string GlideText(float v) { double s = SamplerModel.GlideSec(v); return s <= 0 ? NotaNum.Unit(0, "0", "ms") : NotaNum.Time(s); }
         string Oct(float v) => NotaNum.Unit(SamplerModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct");
-        string WindowText() => $"{NotaNum.Str(G("start") * durSec, "0.00")} → {NotaNum.Unit(G("end") * durSec, "0.00", "s")}";
         string LoopWord()
         {
             int l = LoopSel();
@@ -497,70 +496,11 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- the status line ----------------------------------------------------------
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
-        string EnvWord()
-        {
-            double a = SamplerModel.AttackSec(G("attack")), s = G("sustain"), rel = SamplerModel.ReleaseSec(G("release"));
-            if (s < 0.05) return Loc.T("device.sampler.a_pluck_it_decays_to");
-            if (a < 0.01 && s > 0.89 && rel < 0.05) return Loc.T("device.sampler.almost_a_gate_the_sample");
-            if (a > 0.3) return Loc.T("device.sampler.a_slow_swell");
-            if (rel > 1.0) return Loc.T("device.sampler.a_long_tail_after_release");
-            return Loc.T("device.sampler.held_at_the_sustain_level");
-        }
-        string Summary()
-        {
-            if (!hasSample) return Loc.T("device.sampler.no_sample_drop_one_from");
-            switch (tab)
-            {
-                case 0:
-                {
-                    string name = sampleName.Length > 0 ? sampleName + " · " : "";
-                    int l = LoopSel();
-                    string loop = l == 0 ? Loc.T("device.sampler.loop_off_crossfade_not_applied")
-                        : l == 1 ? $"{LoopWord()} · crossfade {NotaNum.Time(SamplerModel.CrossfadeSec(G("loopxfade")))}"
-                        : Loc.F("device.sampler.no_crossfade", LoopWord());
-                    string gain = Math.Abs(SamplerModel.GainDb(G("gain"))) > 0.05 ? $" · gain {NotaNum.Db(SamplerModel.GainDb(G("gain")), signed: true)}" : "";
-                    return $"{name}{WindowText()} · {loop}{gain}";
-                }
-                case 1:
-                {
-                    int nat = NaturalKey();
-                    string tail = nat == rootv ? Loc.T("device.sampler.the_sample_plays_at_its")
-                        : nat < 0 ? Loc.T("device.sampler.every_key_plays_the_same")
-                        : Loc.F("device.sampler.plays_the_sample_at_its", SamplerModel.NoteName(nat));
-                    return $"Root {SamplerModel.NoteName(rootv)} · transpose {St(G("transpose"))} · detune {Cents(G("detune"))} · keytrack {NotaNum.Pct(G("pitchtrack"))} — {tail}";
-                }
-                case 2:
-                    return Loc.F("device.sampler.env", EnvTl(), EnvWord())
-                        + (G("velamount") > 0.005f ? $" · velocity {NotaNum.Pct(G("velamount"))}" : " · velocity off");
-                default:
-                {
-                    int t = Sel("filtertype", 4);
-                    if (t == 0) return Loc.T("device.sampler.filter_off_the_sample_passes");
-                    string kt = G("keytrack") > 0.005f ? $"keytrack {NotaNum.Pct(G("keytrack"))}" : "keytrack off";
-                    string ev = G("envcutoff") >= 0.5f ? $" · env {Oct(G("envamount"))}" : "";
-                    string live = snap.Live && snap.CutoffHz > 0 ? $" · now {NotaNum.Hz(snap.CutoffHz)}" : "";
-                    return $"Filter {SamplerModel.FilterNames[t]} · cutoff {NotaNum.Hz(SamplerModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))} · {kt}{ev}{live}";
-                }
-            }
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
-
         // ---- assembly -----------------------------------------------------------------
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap, Margin = new Thickness(NotaSpace.DeviceGap) };
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         showTab = () =>
         {
@@ -579,7 +519,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         refresh = () =>
         {
             foreach (var r in readouts) r();
-            status.Text = Summary();
         };
         void Live()
         {
@@ -587,11 +526,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             SamplerModel.Parse(scope.AsSpan(0, Math.Max(0, n)), snap);
             if (acc.Info(out long sid, out int r) && sid == sampleId) rootv = r;   // the root may move from MCP / undo
             wave.SetPlayhead(snap.Live ? snap.PlayPos : acc.PlayPosition());
-            int voices = snap.Live ? snap.Voices : 0;
-            double esr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = hasSample
-                ? $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · {NotaNum.Unit(durSec, "0.00", "s")} sample · {voices}/{SamplerModel.Voices} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}"
-                : $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             Refresh();
         }
         registerTick(Live);

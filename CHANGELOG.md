@@ -71,6 +71,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Built-in instrument cards without the status line** (nota-daw/nota#531): the 18 px text strip
+  along the bottom of every built-in instrument card is gone, and the controls use the height.
+  Nota Pentad's Voice setup (polyphony, allocation, glide, release, oversampling, bass comp,
+  noise floor, vintage seed, master tune, aftertouch) moves from the strip's flyout into a third
+  tab, **Voices**, next to Mixer and Output.
+- **Nota Volt comes in two sizes** (nota-daw/nota#531): an S / L toggle in the card header. L is
+  the full editor, now in the standard 700 × 260 card (it was 790), with the Wheels column
+  still on screen. S is a 260 × 260 mini card, as on Nota Synth: Filter 1's response to drag,
+  over Cutoff, Reso, Attack and Release. Both sizes edit the same sound, and the size saves
+  with the project but not with presets. Volt opens as L.
+- **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
+  stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
+  under it and the A / D / S / R letter in the box's corner. The box still drags and types
+  its value. The Noise row drops its Color knob, which doubled the dark / pink / white
+  switch. The Global rail drops its output meter (the track meter shows the level), and
+  Gain, Drive and Pan sit centred.
 - **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
   nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
   tall as before. The knobs under the graphs move to the right panel as sliders: its first tab
@@ -115,6 +131,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
+- **Performance wheels follow their value** (nota-daw/nota#531): on Nota Volt, Aurora, Operator
+  and Bass, the ribbed grip of the Pitch and Mod wheels now moves with the wheel instead of
+  staying put while only the value line moved.
 - **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
   (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
   other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and

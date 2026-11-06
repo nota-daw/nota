@@ -143,8 +143,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
 
         void Refresh()
         {
@@ -153,8 +151,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             wave.SetGrains(cloud, grains);
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
 
         wave.ValueChanged += v => { SetP("position", (float)v); Refresh(); };
@@ -469,15 +465,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string ModeWord() => ModeNames[Mode()].ToLowerInvariant();
-        string Read() => Mode() switch
-        {
-            0 => $"scan {ScanSpeed(G("scan"))} from {Pct(G("position"))}",
-            1 => $"freeze at {Pct(G("position"))}",
-            _ => $"key from {Pct(G("position"))} at C4",
-        };
-        string Mix() => G("drywet") >= 0.9995f ? "" : $" · dry/wet {Pct(G("drywet"))}";
 
         // The line at the right of the tab strip: what this tab holds, in a few words.
         string Hint() => tab switch
@@ -487,30 +475,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             2 => Loc.F("device.grain.position_pitch_pan", ModeWord()),
             3 => $"{ModeWord()} · {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))}",
             _ => $"{ModeWord()} · a · d · s · r",
-        };
-        string Summary() => tab switch
-        {
-            0 => $"Window {ShapeWords[Sel("grainshape", 4)]} · size {Size(G("grainsize"))} · density {Density(G("density"))} · spread {Pct(G("spread"))} · {Read()}{Mix()}",
-            1 => Math.Abs(G("coarse") - 0.5f) < 0.001f && Math.Abs(G("fine") - 0.5f) < 0.0026f
-                ? Loc.F("device.grain.root_plays_the_sample_as", SamplerModel.NoteName(rootNote))
-                : $"Root {SamplerModel.NoteName(rootNote)} · coarse {Coarse(G("coarse"))} · fine {Fine(G("fine"))} — every grain transposed by it",
-            2 => $"Variation: position {Pct(G("posrand"))} · pitch {PitchJitter(G("pitchrand"))} · pan {Pct(G("panrand"))} — per grain",
-            3 => $"Filter {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))} · reso {Pct(G("filreso"))} — after the grain cloud",
-            _ => $"Amp {Attack(G("attack"))} · {Decay(G("decay"))} · {Pct(G("sustain"))} · {Release(G("release"))} — the envelope shapes the cloud, not the grain",
-        };
-        string Meta()
-        {
-            string sample = sampleId == 0 ? "DEFAULT" : "SAMPLE";
-            string rate = sampleKHz > 0 ? " · " + NotaNum.Unit(sampleKHz, "0.#", "kHz") : "";
-            return Loc.F("device.grain.voices_grains_caps", sample, NotaNum.Time(sampleSec), rate, voices, grains);
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
         };
 
         // ---- assembly ---------------------------------------------------------
@@ -522,12 +486,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         // Live tick: the read heads and the grain cloud, then every readout.
         void Tick()

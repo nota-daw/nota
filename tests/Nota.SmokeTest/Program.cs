@@ -2442,7 +2442,7 @@ Console.WriteLine("-- Nota Volt --");
     Check(ve.DeviceName(t, -1) == "Nota Volt", $"instrument is Nota Volt (got '{ve.DeviceName(t, -1)}')");
 
     int pc = ve.PluginParamCount(t, -1);
-    Check(pc == 143, $"Nota Volt exposes 143 params (got {pc})");
+    Check(pc == 144, $"Nota Volt exposes 144 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2457,7 +2457,7 @@ Console.WriteLine("-- Nota Volt --");
     // State round-trips to another track (project save/load path).
     ve.PluginParamSet(t, -1, cut, 0.88f);
     var state = ve.GetPluginState(t, -1);
-    Check(state.Length >= 143 * 4, $"volt state serialized ({state.Length} bytes)");
+    Check(state.Length >= 144 * 4, $"volt state serialized ({state.Length} bytes)");
     int t2 = ve.AddVoltSynthTrack();
     ve.SetPluginState(t2, -1, state);
     Check(Math.Abs(ve.PluginParamGet(t2, -1, cut) - 0.88f) < 1e-4, "volt state restores params on another track");

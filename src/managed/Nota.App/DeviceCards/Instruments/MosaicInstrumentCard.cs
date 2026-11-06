@@ -99,7 +99,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
     /// <summary>Raised when the card asks to install a registry sample pack (Settings → Downloads).</summary>
     internal static event Action<string>? InstallPackRequested;
 
-    private const double RailW = 186, TabH = 20, StatusH = 18;
+    private const double RailW = 186, TabH = 20;
     private static readonly string[] TabNames = { "Zones", "Sample", "Groups", "Pitch", "Env", "Filter" };
 
     private static string SourceTagOf(MosaicProgram p) => p.SourceKind switch
@@ -371,11 +371,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         map.KeyDown += k => engine.TrackNoteOn(track, k, 0.75f);
         map.KeyUp += k => engine.TrackNoteOff(track, k);
 
-        // ---- status / meta ------------------------------------------------------------------------
-        var statusText = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
-        double esr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-        string Rate() => NotaNum.Unit(esr / 1000, "0.#", "kHz");
         int Poly() => MosaicModel.Poly(G("polyphony"));
 
         if (mini) return BuildMini();
@@ -1176,59 +1171,11 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Refresh();
         };
 
-        // ======================= status ==========================================================
-        string Summary()
-        {
-            if (AllMissing() && prog.Zones.Count > 0) return Loc.T("device.mosaic.samples_unavailable_notes_muted");
-            if (Loading()) return Loc.F("device.mosaic.loading_notes_muted", NotaNum.Bytes(status.RamBytes), NotaNum.Bytes(RamEstimate()));
-            if (prog.IsEmpty) return Loc.T("device.mosaic.empty_drop_samples_a_folder_or_sfz");
-            string name = prog.Name.Length > 0 ? prog.Name + " · " : "";
-            switch (tab)
-            {
-                case 0 when ui.ReleaseView:
-                {
-                    int sounding = snap.Zones.Count(z => z.Zone >= 0 && z.Zone < prog.Zones.Count && prog.Zones[z.Zone].Release);
-                    return $"Release · {sounding} sounding · {NotaNum.Db(MosaicModel.RelVolDb(G("relvol")), signed: true)} · {NotaNum.Db(MosaicModel.RelLenDb(G("rellen")), signed: true)} after 2 s hold";
-                }
-                case 0:
-                case 1:
-                case 3:
-                {
-                    string pedal = snap.Pedal ? " · pedal down" : "";
-                    string missing = status.Missing > 0 ? Loc.F("device.mosaic.missing", status.Missing) : "";
-                    return $"{name}{prog.Summary()}{pedal}{missing}";
-                }
-                case 2:
-                {
-                    string rel = G("relon") >= 0.5f ? $"release {NotaNum.Db(MosaicModel.RelVolDb(G("relvol")), signed: true)}" : "release off";
-                    var rrg = prog.Groups.FirstOrDefault(g => g.SeqLen > 1);
-                    string rr = rrg is null ? Loc.T("device.mosaic.no_round_robin") : $"rr {rrg.SeqLen} {MosaicProgram.RrNames[rrg.RrMode].ToLowerInvariant()}";
-                    return Loc.F("device.mosaic.groups", prog.Groups.Count, rr, rel);
-                }
-                case 4: return $"Env {EnvTl()} · vel {NotaNum.Pct(G("velamount"))} · curve {VelCurveWord()}";
-                default:
-                {
-                    int t = Sel("filtertype", 4);
-                    if (t == 0) return Loc.T("device.mosaic.filter_off_the_samples_pass");
-                    return $"Filter {MosaicModel.FilterNames[t]} · cutoff {NotaNum.Hz(MosaicModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
-                }
-            }
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(statusText);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Background = NotaPalette.SurfaceAbyss,
-            Padding = new Thickness(8, 0), Child = statusBar,
-        };
-
         // ======================= assembly ========================================================
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap, Margin = new Thickness(NotaSpace.DeviceGap) };
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
         HookDrop(root, dropLayer);
 
         bool lastLoading = Loading(), lastMissing = AllMissing();
@@ -1251,8 +1198,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         refresh = () =>
         {
             foreach (var r in readouts) r();
-            statusText.Text = Summary();
-            statusText.Foreground = AllMissing() && prog.Zones.Count > 0 ? NotaPalette.DangerBright : Loading() ? AccentBright : TextSecondary;
             bool ld = Loading();
             loadLayer.IsVisible = ld;
             zoneRow.IsVisible = !ld; loadRow.IsVisible = ld;
@@ -1275,7 +1220,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             samSnap.Note = snap.Note; samSnap.CutoffHz = snap.CutoffHz; samSnap.PlayPos = snap.Pos;
             map.SetSounding(snap.Zones, snap.Keys);
             if (tab == 1) wave.SetPlayhead(snap.Live && snap.Zone == ui.Zone ? snap.Pos : -1);
-            meta.Text = $"{Rate()} · {snap.Voices}/{Poly()} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             bool ld = Loading(), miss = AllMissing();
             if (ld != lastLoading || miss != lastMissing)
             {

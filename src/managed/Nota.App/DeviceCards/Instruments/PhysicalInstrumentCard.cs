@@ -110,8 +110,6 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var hint = Mono("", TextTertiary, NotaType.Axis);
         hint.HorizontalAlignment = HorizontalAlignment.Right; hint.Margin = new Thickness(0, 0, 8, 0);
         hint.TextTrimming = TextTrimming.CharacterEllipsis;
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary);
         Action showTab = () => { };
 
         // The partial window: the selected bank's modes from the engine's scope, the other
@@ -137,7 +135,6 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             foreach (var r in readouts) r();
             RefreshPartials();
             hint.Text = Hint();
-            status.Text = Summary();
         }
 
         // ---- shared builders --------------------------------------------------
@@ -464,7 +461,6 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string Exciters()
         {
             var parts = new List<string>();
@@ -481,45 +477,10 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             0 => $"{Exciters()} → {TypeWord("r1")}",
             _ => $"{StructWord()} · {TypeWord(BankOf())} · decay {Secs(PhysicalModel.DecaySeconds(G(BankOf() + "decay")))}",
         };
-        string Summary()
-        {
-            if (tab == 0)
-            {
-                var s = G("malletvol") > 0.001f
-                    ? $"Mallet {Pct(G("malletvol"))} · stiff {Pct(G("malletstiff"))} ({NotaNum.Unit(PhysicalModel.ContactMs(G("malletstiff")), "0.0", "ms")})"
-                    : "Mallet off";
-                s += G("noisevol") > 0.001f
-                    ? $" · noise {Pct(G("noisevol"))} {PhysicalModel.NoiseTypes[Sel("noisetype", 3)]} {NotaNum.Hz(PhysicalModel.NoiseFreqHz(G("noisefreq")))} · env → freq {NotaNum.Unit(PhysicalModel.NoiseEnvOct(G("noiseenv")), "+0.0;−0.0;0", "oct")}"
-                    : " · noise off";
-                return s + $" → resonator {TypeWord("r1")}";
-            }
-            string pre = BankOf();
-            bool on = bank == 0 || R2On();
-            var line = $"Resonator {bank + 1} {TypeWord(pre)} {(on ? "on" : "off")} · decay {Secs(PhysicalModel.DecaySeconds(G(pre + "decay")))} · "
-                + $"bright {Pct(G(pre + "bright"))} · inharm {Pct(G(pre + "inharm"))} · structure {StructWord()}";
-            if (R2On())
-            {
-                var (g1, g2) = PhysicalModel.MixGains(G("resmix"));
-                line += $" · mix {NotaNum.Str(g1 * 100, "0")} / {NotaNum.Str(g2 * 100, "0")}";
-            }
-            return line;
-        }
         ctx.AddDeviceRefresher(() =>
         {
-            int v = Math.Max(0, engine.InstrumentVoiceCount(track));
-            string mode = IsMono() ? "MONO" : $"POLY {v}/{PhysicalModel.Voices}";
-            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{mode} · NOTE OFF {Secs(PhysicalModel.NoteOffSeconds(G("noteoff")))} · {NotaNum.Unit(sr / 1000, "0.#", "kHz")}";
             RefreshPartials();   // follows the struck note (the partials' reach under Nyquist)
         });
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly ---------------------------------------------------------
         var body = new Grid
@@ -530,8 +491,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(Refresh);
         showTab();

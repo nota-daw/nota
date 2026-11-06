@@ -140,8 +140,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 6, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
         Action applyFilter = () => { };
         Action applyOsc = () => { };
         Action showTab = () => { };
@@ -173,8 +171,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             lfoStrip.Set(Sel("lfo1shape", 4), LfoCycles(0), G("lfo1depth"));
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
         void Touch() => Refresh(true);
 
@@ -1167,12 +1163,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip ---------------------------------------------------------
-        string RouteWord(string id) => Routes[Sel(id, 4)];
         string OscWord(int o) => BankWords[Sel(o == 0 ? "table" : "osc2table", 4)];
         string FiltPre() => fsel == 0 ? "fil1" : "fil2";
-        string FiltFreqId() => fsel == 0 ? "cutoff" : "fil2freq";
-        string FiltResoId() => fsel == 0 ? "resonance" : "fil2reso";
 
         string Hint() => tab switch
         {
@@ -1185,37 +1177,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                + $"{(G("fxchoruson") >= 0.5f && G("fxchorus") > 1e-3f ? "chorus" : "—")} → "
                + $"{(G("fxreverbon") >= 0.5f && G("fxreverb") > 1e-3f ? "reverb" : "—")}",
         };
-        string Summary() => tab switch
-        {
-            0 => $"Osc 1 {OscWord(0)} {FrameText(G("position"))} {Pct(G("osc1level"))} → {RouteWord("routeosc1")} · "
-               + $"Osc 2 {OscWord(1)} {FrameText(G("osc2position"))} {Pct(G("osc2level"))} → {RouteWord("routeosc2")} · "
-               + $"sub {SubWaves[Sel("subwave", 3)]} {SubOct(G("suboct"))} oct {Pct(G("sublevel"))} · "
-               + $"unison ×{Voices(G("unison"))} {Detune(G("unidetune"))} spread {Pct(G("unispread"))}",
-            1 => $"Filter {fsel + 1} · {FiltTypes[Sel(FiltPre() + "type", 5)]} "
-               + $"{(G(FiltPre() + "slope") >= 0.5f ? "24" : "12")} dB/oct · {Hz(G(FiltFreqId()))} · "
-               + $"reso {Pct(G(FiltResoId()))} · env {Bip(G(FiltPre() + "env"))} · lfo {Bip(G(FiltPre() + "lfo"))} · "
-               + (G("filseries") >= 0.5f ? "series" : "parallel"),
-            2 => $"Env 1 → amp {AdsrSum("attack", "decay", "sustain", "release")} · Env 2 {EnvDest(1)}",
-            3 => $"LFO 1 {ShapeNames[Sel("lfo1shape", 4)]} {(SyncDiv(G("lfo1sync")) > 0 ? SyncText(G("lfo1sync")) : SlowHz(ExpMap(G("lfo1rate"), 0.05, 20)))} {LfoDest(2)} · "
-               + $"LFO 2 {ShapeNames[Sel("lfo2shape", 4)]} {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : SlowHz(ExpMap(G("lfo2rate"), 0.05, 20)))} {LfoDest(3)}",
-            4 => RouteCount() == 0 ? Loc.T("device.aurora.no_routes_drag_a_cell") : Loc.Plural("device.aurora.routes_in_the_matrix", RouteCount()),
-            _ => $"Drive {(G("fxdriveon") >= 0.5f ? DriveModes[Sel("fxdrivemode", 3)].ToLowerInvariant() + " " + Pct(G("fxdrive")) : "off")} · "
-               + $"chorus {(G("fxchoruson") >= 0.5f ? ChorusVoices[Sel("fxchorusvoices", 3)] + " " + Pct(G("fxchorus")) : "off")} · "
-               + $"reverb {(G("fxreverbon") >= 0.5f ? ReverbModes[Sel("fxreverbmode", 3)].ToLowerInvariant() + " " + Pct(G("fxreverb")) : "off")}",
-        };
-        string Meta()
-        {
-            string mode = G("mono") >= 0.5f ? "MONO" : "POLY 16";
-            return $"{mode} · ±{BendRange(G("bendrange"))} ST · GAIN {Pct(G("gain"))}";
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly -------------------------------------------------------------
         var body = new Grid
@@ -1227,12 +1188,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         Grid.SetColumn(tabPanel, 1); body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(() => Refresh(false));
         showRailTab();

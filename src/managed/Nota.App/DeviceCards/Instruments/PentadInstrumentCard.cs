@@ -4,8 +4,8 @@
 // Detail · Devices — built-in Nota Pentad editor (instrument kind 14), a build of the
 // "Nota Pentad" mockup (700×260) on the same frame as Monolith: an always-visible WHEELS
 // column (pitch / mod), a centre tabbed panel (Oscillators / Filter · Amp / Poly Mod), a
-// right tabbed panel (Mixer / Output) and a status strip with the Voice setup flyout
-// (polyphony, allocation, oversampling, vintage seed …). The five-voice activity strip and
+// right tabbed panel (Mixer / Output / Voices — the voice setup: polyphony, allocation,
+// oversampling, vintage seed …). The five-voice activity strip and
 // the output meters read the instrument's scope telemetry. Every control is a plugin-param,
 // so automation / MIDI learn / presets / persistence come for free. BodyOnly — the shared
 // shell draws the header (name / preset / A-B / meter).
@@ -69,7 +69,6 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         float G(string id) => idx.TryGetValue(id, out var i) ? engine.PluginParamGet(track, -1, i) : 0f;
         int I(string id) => idx.TryGetValue(id, out var i) ? i : -1;
         bool On(string id) => G(id) > 0.5f;
-        int Sel(string id, int n) => Math.Clamp((int)Math.Round(G(id) * (n - 1)), 0, n - 1);
         // A discrete edit (click) is one automation gesture, so it records while the transport does.
         void SetP(string id, float v)
         {
@@ -462,6 +461,42 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             ((Control)body.Children[1]).Margin = new Thickness(0, 6, 0, 0);
             return new Border { Padding = new Thickness(6, 4), Child = body };
         }
+        // The voice setup (what the status strip's Voice flyout held): one compact row per
+        // setting, label left, control right, spread over the panel's height.
+        Control VoicesTab()
+        {
+            var seedTxt = MonoText("", 8, TxtC);
+            readouts.Add(() => seedTxt.Text = $"#{(int)Math.Round(G("seed") * 16777215):X6}");
+            var rr = new Border { Padding = new Thickness(5, 1), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 8, Foreground = TxtC } };
+            ToolTip.SetTip(rr, Loc.T("device.pentad.re_roll_the_vintage_seed"));
+            rr.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); e.Handled = true; };
+            var tune = HSlider("tune", v => { double c = (v - 0.5) * 200; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, 30);
+            var at = HSlider("aftertouch", v => Pct(v), 30);
+            (string Label, Control C, bool Fill)[] rows =
+            {
+                ("VOICES", Chips("polyphony", new[] { "5", "10", "16" }), false),
+                ("ALLOCATION", Chips("alloc", new[] { "Rotate", "Oldest" }), false),
+                ("GLIDE", Chips("glidemode", new[] { "Off", "On", "Legato" }), false),
+                ("RELEASE", Toggle("releaseon", "Release switch"), false),
+                ("OVERSAMPLE", Chips("oversample", new[] { "×2", "×4" }), false),
+                ("BASS COMP", Toggle("lowcomp", Loc.T("device.pentad.restore_lows_at_high_q")), false),
+                ("NOISE FLOOR", Toggle("noisefloor", "−100\u2009dBFS hiss"), false),
+                ("SEED", Row(6, seedTxt, rr), false),
+                ("TUNE", tune, true),
+                ("AFTERTOUCH", at, true),
+            };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*"), ColumnSpacing = 4 };
+            for (int r = 0; r < rows.Length; r++)
+            {
+                g.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+                var cap = Caps(rows[r].Label); Grid.SetRow(cap, r); g.Children.Add(cap);
+                var c = rows[r].C;
+                c.HorizontalAlignment = rows[r].Fill ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+                c.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetRow(c, r); Grid.SetColumn(c, 1); g.Children.Add(c);
+            }
+            return new Border { Padding = new Thickness(6, 3), Child = g };
+        }
         static Control WithRow(Control c, int r) { Grid.SetRow(c, r); return c; }
         static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
         static Control Right(Control c) { c.HorizontalAlignment = HorizontalAlignment.Right; return c; }
@@ -472,7 +507,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         var centreHost = new ContentControl();
         var rightHost = new ContentControl();
         var extrasHost = new ContentControl { VerticalAlignment = VerticalAlignment.Center };
-        var tabBodies = new Control?[3]; var rightBodies = new Control?[2];
+        var tabBodies = new Control?[3]; var rightBodies = new Control?[3];
         int centreTab = 0;
 
         // Drift slider + seed re-roll (Oscillators tab bar)
@@ -488,90 +523,17 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         readouts.Add(() => { if (extras[2] is TextBlock t) { int n = ActiveRoutes(); t.Text = Loc.Plural("device.pentad.per_voice_active_routes", n); } });
 
         Control CentreBody(int t) => tabBodies[t] ??= t switch { 1 => FilterAmpTab(), 2 => PolyModTab(), _ => OscTab() };
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : MixerTab();
+        Control RightBody(int t) => rightBodies[t] ??= t switch { 1 => OutputTab(), 2 => VoicesTab(), _ => MixerTab() };
 
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var centre = TabFrame(new[] { "Oscillators", "Filter · Amp", "Poly Mod" }, centreHost, CentreBody, false, t => { centreTab = t; extrasHost.Content = extras[t]; Refresh(); }, extrasHost);
-        var rightFrame = TabFrame(new[] { "Mixer", "Output" }, rightHost, RightBody, true, null, null);
+        var rightFrame = TabFrame(new[] { "Mixer", "Output", Loc.T("device.pentad.voices_tab") }, rightHost, RightBody, true, null, null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
         var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
-        // ======================================================================
-        // Status strip + Voice setup flyout
-        // ======================================================================
-        string StatusText()
-        {
-            int poly = Poly(G("polyphony"));
-            string modeS = Sel("voicemode", 3) switch { 1 => $"Unison ×{poly}", 2 => "Mono", _ => $"Poly {poly}" };
-            int busy = scN >= 2 ? (int)scope[1] : 0;
-            return centreTab switch
-            {
-                1 => $"Filter env → cutoff {G("fenvamt") * 10:0.0} · key tracking {KeyName(G("keytrk"))}{(G("velfilt") > 0.001f ? " · velocity → filter" : "")}{(On("lowcomp") ? " · bass comp" : "")}",
-                2 => $"Poly Mod: {ActiveRoutes()} route{(ActiveRoutes() == 1 ? "" : "s")} · LFO {LfoRate(G("lforate"))} {LfoShape()} · unison {(G("unison") < 0.25f ? "off" : G("unison") < 0.75f ? "×2" : "×5")}, detune {G("unidetune") * 50:0}\u2009c",
-                _ => $"{modeS} · {busy} voice{(busy == 1 ? "" : "s")} busy · glide {Glide(G("glide"))} · drift {G("drift") * 100:0}\u2009%",
-            };
-        }
-        static string KeyName(float v) => Math.Abs(v - 0.5f) < 0.02f ? "½" : Math.Abs(v - 1f) < 0.02f ? "full" : v < 0.02f ? "off" : $"{v * 100:0}\u2009%";
-        string LfoShape()
-        {
-            var s = new List<string>();
-            if (On("lfotri")) s.Add("tri"); if (On("lfosaw")) s.Add("saw"); if (On("lfosquare")) s.Add("square");
-            return s.Count == 0 ? "(no wave)" : string.Join("+", s);
-        }
-        var statusRight = MonoText("", 8, Txt2);
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            if (scN >= 8) statusRight.Text = Loc.F("device.pentad.khz_os_cpu", scope[7] / 1000, (int)scope[6], scope[5] * 100);
-        });
-
-        var flyReadouts = new List<Action>();
-        Flyout? setupFly = null;
-        Control SetupPanel()
-        {
-            var seedTxt = MonoText("", 8, TxtC);
-            flyReadouts.Add(() => seedTxt.Text = $"#{(int)Math.Round(G("seed") * 16777215):X6}");
-            var rr = new Border { Padding = new Thickness(6, 1), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 8, Foreground = TxtC } };
-            rr.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); foreach (var a in flyReadouts) a(); e.Handled = true; };
-            Control R(string label, Control c) { var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Height = 20 }; g.Children.Add(Caps(label)); c.HorizontalAlignment = HorizontalAlignment.Left; g.Children.Add(Col(c, 1)); return g; }
-            var tune = HSlider("tune", v => { double c = (v - 0.5) * 200; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, 30, null, flyReadouts); tune.Width = 130;
-            var at = HSlider("aftertouch", v => Pct(v), 30, null, flyReadouts); at.Width = 130;
-            var p = new StackPanel { Spacing = 2, Width = 250, Children = {
-                Lbl("VOICE SETUP", 9, TxtC),
-                new Border { Height = 4 },
-                R("VOICES", Chips("polyphony", new[] { "5", "10", "16" }, null, flyReadouts, 8)),
-                R("ALLOCATION", Chips("alloc", new[] { "Rotate", "Oldest" }, null, flyReadouts, 8)),
-                R("GLIDE", Chips("glidemode", new[] { "Off", "On", "Legato" }, null, flyReadouts, 8)),
-                R("RELEASE", Toggle("releaseon", "Release switch", flyReadouts)),
-                R("OVERSAMPLING", Chips("oversample", new[] { "×2", "×4" }, null, flyReadouts, 8)),
-                R("BASS COMP", Toggle("lowcomp", Loc.T("device.pentad.restore_lows_at_high_q"), flyReadouts)),
-                R("NOISE FLOOR", Toggle("noisefloor", "−100\u2009dBFS hiss", flyReadouts)),
-                R("VINTAGE SEED", Row(8, seedTxt, rr)),
-                R("MASTER TUNE", tune),
-                R("AFTERTOUCH", at) } };
-            return new Border { Padding = new Thickness(4, 2), Child = p };
-        }
-        var voiceBtn = new Border { Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = Glyph.WithChevron(new TextBlock { Text = "Voice", FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, 7) };
-        ToolTip.SetTip(voiceBtn, Loc.T("device.pentad.voice_setup_polyphony_allocation_glide"));
-        voiceBtn.PointerPressed += (_, e) =>
-        {
-            setupFly ??= new Flyout { Content = SetupPanel(), Placement = PlacementMode.TopEdgeAlignedRight };
-            foreach (var a in flyReadouts) a();
-            setupFly.ShowAt(voiceBtn);
-            e.Handled = true;
-        };
-        readouts.Add(() => { if (setupFly?.IsOpen == true) foreach (var a in flyReadouts) a(); });
-
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(voiceBtn, 1)); statusGrid.Children.Add(Col(statusRight, 2));
-        var status = new Border { Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Avalonia.Controls.Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { wheels, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { bodyRow } };
 
         ctx.SetInstLiveViz(Refresh);
         Refresh();

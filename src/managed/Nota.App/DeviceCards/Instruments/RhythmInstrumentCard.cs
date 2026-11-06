@@ -25,7 +25,6 @@
 //                 velocity lane under them. An on step is accent (a toggle that is on), a
 //                 brighter one the accent step, an outline a quiet step; teal is the playhead
 //                 and the velocity.
-//   status        what the voice is and where its steps are · voices · rate · tempo · CPU.
 //
 // Every knob is a plugin param → automation / persist / clone, followed live. The steps are
 // structural state, edited via engine.InstrumentAction and read from the state blob; the
@@ -56,7 +55,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active) => $"{Math.Max(0, active)}/{RM.Voices}";
 
-    private const double KitW = 104, RailW = 186, StepH = 46, HeadH = 18, StatusH = 18, GraphW = 112;
+    private const double KitW = 104, RailW = 186, StepH = 46, HeadH = 18, GraphW = 112;
 
     private static int _voiceTab;   // 0 Sound, 1 FX — kept across rebuilds (a voice click, a kit load)
     private static bool _macroMode; // the centre shows the macros instead of the voice
@@ -125,8 +124,6 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
 
         void Refresh() { foreach (var r in readouts) r(); }
 
@@ -683,17 +680,6 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             LoadStrip(); PaintBanks(); Refresh();
         }
 
-        // ---- status ----------------------------------------------------------------------------
-        readouts.Add(() => status.Text = _macroMode ? MacroPanel.Status(engine, macros, _macro) : RM.Summary(G, pat, sel, sampleMode, sampleName));
-        var statusBar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
-
         // ---- live ------------------------------------------------------------------------------
         void Live()
         {
@@ -710,9 +696,6 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 float f = scope[RM.S_Flash0 + sel], p = scope[RM.S_Pos0 + sel];
                 if (Math.Abs(f - flashSel) > 0.05f || Math.Abs(p - posSel) > 0.002f) { flashSel = f; posSel = p; Refresh(); }
             }
-            int voices = Math.Max(0, engine.InstrumentVoiceCount(track));
-            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{voices}/{RM.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
         }
 
         // ---- assembly --------------------------------------------------------------------------
@@ -724,8 +707,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         body.Children.Add(top);
         Grid.SetRow(steps, 1); body.Children.Add(steps);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         LoadStrip(); PaintBanks();
         ctx.AddDeviceRefresher(Live);

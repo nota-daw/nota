@@ -5,7 +5,7 @@
 // "Nota Consort" mockup (700 × 260) on the Monolith / Pentad frame: an always-visible
 // WHEELS column, a centre tabbed panel (Osc · Mix / Filters · Env / LFO · Delay / Seq /
 // Patch), a right tabbed panel (Voices / Output), the collapsed PATCH BAY row (active
-// cables + the entry to the full-card patch overlay) and a status strip. The patch bay has
+// cables + the entry to the full-card patch overlay). The patch bay has
 // three views of the same twelve cables: the source × destination matrix and the jack strip
 // inside the Patch tab, and the overlay with all 42 points. Every control is a plugin-param
 // (cables included), so automation / MIDI learn / presets / persistence come for free.
@@ -1032,68 +1032,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         overlay.Child = OverlayBody();
         overlay.KeyDown += (_, e) => { if (e.Key == Key.Escape) { OpenOverlay(false); e.Handled = true; } };
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        string ModeName() => Poly() ? "True poly" : Sel("voicemode", 3) switch { 0 => "Mono", 1 => "Duo", _ => "Para" };
-        string FiltModeName() => Sel("filtmode", 3) switch { 0 => "HP/LP series", 1 => "LP/LP parallel stereo", _ => "HP/LP stereo" };
-        string StatusText()
-        {
-            int busy = scN > 1 ? (int)scope[1] : 0;
-            switch (vs.Centre)
-            {
-                case 1: return $"{FiltModeName()} · spacing {Space(G("spacing"))} · env amount {EnvAmt(G("fenvamt"))}{(On("basscomp") ? " · bass comp" : "")}";
-                case 2:
-                {
-                    string rate = On("lfosync") ? $"sync {LfoRate(G("lforate"))}" : LfoRate(G("lforate"));
-                    string dest = On("lfodest") ? "osc 2 + 4" : "all osc";
-                    return $"LFO {LfoNames[Sel("lfowave", 6)]} {rate} → {dest} · {(On("dlydigital") ? "digital delay" : "BBD")} {(On("dlyping") ? "ping-pong" : "stereo")}, mix {G("dlymix") * 100:0}\u2009%";
-                }
-                case 3:
-                {
-                    int m = Sel("seqmode", 3);
-                    if (m == 0) return Loc.T("device.consort.sequencer_off_pick_seq_or");
-                    var types = StepTypes(); int len = SeqLen();
-                    int rat = types.Take(len).Count(t => t == 1), ties = types.Take(len).Count(t => t == 2);
-                    string swing = $"swing {50 + G("seqswing") * 25:0}\u2009%";
-                    return m == 1
-                        ? $"{len} steps · {rat} ratchet{(rat == 1 ? "" : "s")} ×{Ratchet()} · {ties} tie{(ties == 1 ? "" : "s")} · {swing} · transposed from the keyboard"
-                        : $"Arp {new[] { "up", "down", "random" }[Sel("seqorder", 3)]} over {1 + Sel("arpoct", 3)}\u2009oct · {SeqRates[Sel("seqrate", 6)]} · {swing}{(On("seqlatch") ? " · latched" : "")}";
-                }
-                case 4:
-                {
-                    var broken = CableList().Where(c => ConsortJacks.Normalled.Contains(c.Dst)).Select(c => ConsortJacks.Dst(c.Dst).Name).Distinct().ToList();
-                    string nb = broken.Count == 0 ? Loc.T("device.consort.all_normals_intact") : "normals broken at " + string.Join(" and ", broken);
-                    return (vs.PatchView == 0 ? MenuKit.Keys(Loc.T("device.consort.matrix_view_drag_a_cell")) : Loc.F("device.consort.jack_strip_points", ConsortJacks.Points)) + nb;
-                }
-                default:
-                {
-                    var sync = new List<string>();
-                    if (On("o2sync")) sync.Add("osc 2 sync → 1"); if (On("o4sync")) sync.Add("osc 4 sync → 3");
-                    return $"{ModeName()} · {busy} {(Poly() ? "voice" : "note")}{(busy == 1 ? "" : "s")}{(sync.Count > 0 ? " · " + string.Join(", ", sync) : "")} · drift {G("drift") * 100:0}\u2009%";
-                }
-            }
-        }
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = MonoText("", 8, Txt2);
-        common.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            if (scN > 8)
-            {
-                string rate = $"{scope[6] / 1000:0.#}\u2009kHz";
-                statusRight.Text = vs.Centre == 3 ? Loc.F("device.consort.sync_to_host_bpm_cpu", rate, scope[8], scope[4] * 100)
-                                                  : Loc.F("device.consort.os_0_smp_cpu", rate, (int)scope[5], scope[4] * 100);
-            }
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Avalonia.Controls.Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5, 5, 5, 4), Children = { wheels, right, centreBox } };
-        var main = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, strip, bodyRow } };
+        var main = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { strip, bodyRow } };
         var root = new Panel { Children = { main, overlay } };
 
         refreshAll = () =>

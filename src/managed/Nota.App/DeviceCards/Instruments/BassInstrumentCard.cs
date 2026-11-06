@@ -110,8 +110,6 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
         Action showTab = () => { };
 
         void Refresh()
@@ -120,8 +118,6 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             filtGraph.Refresh(); ampEnv.Refresh(); filtEnv.Refresh();
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
 
         // ---- shared builders --------------------------------------------------
@@ -629,39 +625,15 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string Shape() => ShapeWords[ShapeBand(G("oscshape"))];
         string SubOct() => G("suboctave") >= 0.5f ? "−2" : "−1";
         string FilterWord() => $"{FilterNames[Sel("filtype", 4)]} {(G("filslope") >= 0.5f ? "24" : "12")}";
-        string AdsrSum(string a, string d, string s, string r)
-            => $"{Secs(G(a), 0.001, 2.0)} · {Secs(G(d), 0.002, 4.0)} · {Pct(G(s))} · {Secs(G(r), 0.002, 5.0)}";
 
         // The line at the right of the tab strip: what this tab holds, in three words.
         string Hint() => tab switch
         {
             0 => $"{Shape()} · {SubWords[Sel("subwave", 3)]} {SubOct()} · {FilterWord()}",
             _ => $"amp · flt · lfo {LfoNames[Sel("lfowave", 5)].ToLowerInvariant()}",
-        };
-        string Summary() => tab switch
-        {
-            0 => $"Osc {Shape()} {Pct(G("osclevel"))} · sub {SubWords[Sel("subwave", 3)]} {SubOct()} oct {Pct(G("sublevel"))} → "
-               + $"{FilterWord()} dB/oct {Hz(G("filfreq"))} · env {Bip(G("filenv"))} · drive {Pct(G("fildrive"))}",
-            _ => $"Amp env {AdsrSum("attack", "decay", "sustain", "release")} → level · "
-               + $"filter env {AdsrSum("fattack", "fdecay", "fsustain", "frelease")} → cutoff · "
-               + $"LFO {LfoNames[Sel("lfowave", 5)].ToLowerInvariant()} {SlowHz(ExpMap(G("lforate"), 0.05, 30))} → flt {Bip(G("fillfo"))} · pit {LfoPitch(G("lfopitch"))}",
-        };
-        string Meta()
-        {
-            string mode = IsMono() ? (G("legato") >= 0.5f ? "MONO LEGATO" : "MONO") : "POLY 16";
-            return $"{mode} · ±{BendRange(G("bendrange"))} ST · VOL {Pct(G("volume"))}";
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
         };
 
         // ---- assembly ---------------------------------------------------------
@@ -674,12 +646,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         Grid.SetColumn(tabPanel, 1); body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(Refresh);
         showTab();

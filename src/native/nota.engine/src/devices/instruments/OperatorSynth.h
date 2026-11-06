@@ -29,6 +29,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 #include "engine/NoteExpression.h"
 
 #include <algorithm>
@@ -97,7 +98,10 @@ class OperatorSynth final : public Instrument {
         ModWheel,   // mod wheel 0..1 — the classic FM hand control: more modulation index
         FilKeyTrk,  // filter cutoff keyboard tracking: 0 / ½ / 1 octave per octave
         VelToLevel, // velocity → output level (1 = the classic behaviour, 0 = flat)
-        kNumParams
+        // --- appended (#531): each operator's envelope shape — 0.5 = straight, Exp off ---
+        // Per op: Decay Curve, Release Curve, Env Exp (A, B, C, D).
+        ShapeBase,
+        kNumParams = ShapeBase + 4 * 3
     };
     static constexpr int kNumAlgos = 11;
     // Field offsets within an op block (op base = ACoarse + op*8).
@@ -182,6 +186,7 @@ class OperatorSynth final : public Instrument {
         double phase[4] = {0, 0, 0, 0};
         float env[4] = {0, 0, 0, 0};
         Stage stage[4] = {Stage::Off, Stage::Off, Stage::Off, Stage::Off};
+        EnvShapeState shape[4]; // the curve of each operator envelope's current stage
         double fbLast = 0.0;
         double s1 = 0.0, s2 = 0.0; // filter state
         VoiceExpr ex;              // MPE bend / pressure / slide
@@ -199,7 +204,7 @@ class OperatorSynth final : public Instrument {
     }
 
     static double waveform(int w, double ph);
-    static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
+    int32_t spectrumRead(float* outv, int32_t maxN) const;
     Voice* findFreeVoice();
 
     double sampleRate_ = 44100.0;
@@ -207,6 +212,8 @@ class OperatorSynth final : public Instrument {
     GlobalExpr gexpr_;      // pitch wheel / channel pressure (pitch −1)
     double lastFreq_ = 0.0; // last note-on target, for glide
     std::atomic<float> pn_[kNumParams];
+    int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
+    std::atomic<float> envTele_[8]; // per operator A..D: stage, progress
 
     // Spectrum analysis (lock-free best-effort, viz only).
     static constexpr int kRing = 2048;   // power of two

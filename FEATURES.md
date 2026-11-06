@@ -731,6 +731,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   8 macros over 12 destinations, unison (one detuned partner, or a 2/4/7-voice stack with
   stereo spread), output drive, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
   modulation wheels, VEL→AMP, VEL→FILTER, Poly/Mono/Legato (Mono falls back to a held key).
+  The card comes in two sizes, switched in its header: L, the full 700 × 260 editor, and S, a
+  260 × 260 mini card (Filter 1's response, Cutoff · Reso · Attack · Release).
   74 factory presets: its own 25 plus the Nota Synth and Nota Bass libraries.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
