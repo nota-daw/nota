@@ -109,6 +109,9 @@ public partial class MainWindow : IRemoteHost
             var key = (NotaPalette.Theme ?? NotaThemes.Default, NotaThemeService.Choice, NotaThemeService.Accent);
             if (_remoteLook is null || !key.Equals(_remoteLookFor))
             {
+                // A new accent makes every cached theme stale; drop them rather than keep a
+                // copy per colour a picker drag went through.
+                if (_remoteLookFor is { } was && was.Item3 != key.Item3) _remoteThemes.Clear();
                 // The phone's own dark/light picks wear the accent too.
                 RemoteTheme Of(NotaColourTheme? t) => RemoteThemeOf(NotaThemeService.Worn(t ?? NotaThemes.Default));
                 _remoteLook = new RemoteAppearance(Of(key.Item1), Of(NotaThemes.Find(key.Item2.Dark)), Of(NotaThemes.Find(key.Item2.Light)),

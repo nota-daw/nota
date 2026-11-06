@@ -20,6 +20,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Automation;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
@@ -56,11 +57,27 @@ public sealed partial class PreferencesWindow
             var fill = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Clip };
             var ring = Ring(fill, SwatchSize);
             ToolTip.SetTip(ring, AccentName(preset.Id));
+            // Reachable from the keyboard too: Tab to a swatch, Return or Space picks it, the
+            // arrows move along the row. Screen readers read its name.
+            ring.Focusable = true;
+            ring.IsTabStop = true;
+            AutomationProperties.SetName(ring, AccentName(preset.Id));
             ring.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(ring).Properties.IsLeftButtonPressed) return;
+                ring.Focus(NavigationMethod.Pointer);
                 Choose(choice);
                 e.Handled = true;
+            };
+            int index = rings.Count;
+            ring.KeyDown += (_, e) =>
+            {
+                if (e.Key is Key.Enter or Key.Space) { Choose(choice); e.Handled = true; }
+                else if (e.Key is Key.Left or Key.Right)
+                {
+                    int next = index + (e.Key == Key.Left ? -1 : 1);
+                    if (next >= 0 && next < rings.Count) { rings[next].Ring.Focus(NavigationMethod.Directional); e.Handled = true; }
+                }
             };
             rings.Add((preset.Id, ring, fill));
             row.Children.Add(ring);
@@ -96,7 +113,9 @@ public sealed partial class PreferencesWindow
             foreach (var (id, ring, fill) in rings)
             {
                 fill.Background = Worn(new AccentChoice(id));
-                ring.BorderBrush = id == now.Preset ? NotaPalette.TextPrimary : Brushes.Transparent;
+                // Chosen: the primary ink. Hovered or focused: the rule. Colour only, never size.
+                ring.BorderBrush = id == now.Preset ? NotaPalette.TextPrimary
+                    : ring.IsPointerOver || ring.IsFocused ? NotaPalette.Rule : Brushes.Transparent;
             }
             var remembered = now.Custom ?? Accent.RememberedCustom(settings.Current);
             customChip.Background = remembered is { } rgb ? Worn(new AccentChoice(Accent.Custom, rgb)) : NotaPalette.SurfaceHover;
@@ -106,11 +125,13 @@ public sealed partial class PreferencesWindow
             readoutHex.Text = isCustom ? Accent.Hex(now.Custom!.Value) : "";
         }
 
-        // Hover shows the ring slot in the rule colour (state is colour only, never size).
-        foreach (var (id, ring, _) in rings)
+        // Hover and keyboard focus show the ring slot in the rule colour.
+        foreach (var (_, ring, _) in rings)
         {
-            ring.PointerEntered += (_, _) => { if (id != NotaThemeService.Accent.Preset) ring.BorderBrush = NotaPalette.Rule; };
+            ring.PointerEntered += (_, _) => Show();
             ring.PointerExited += (_, _) => Show();
+            ring.GotFocus += (_, _) => Show();
+            ring.LostFocus += (_, _) => Show();
         }
 
         custom.Click += (_, _) => OpenCustomPicker(custom, settings);
@@ -235,7 +256,21 @@ public sealed partial class PreferencesWindow
             Try(rgb);
             typing = false;
         };
-        hex.KeyDown += (_, e) => { if (e.Key == Key.Enter) { flyout.Hide(); e.Handled = true; } };
+        // Return keeps the colour in the field — also the remembered one the picker opened on,
+        // which nothing has applied yet. A refused colour is not worn; closing keeps the last
+        // colour that was accepted, or puts back the accent from before.
+        hex.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            if (Accent.TryParseHex(hex.Text, out var rgb) && accepted != rgb)
+            {
+                typing = true;
+                Try(rgb);
+                typing = false;
+            }
+            flyout.Hide();
+            e.Handled = true;
+        };
         // Esc: back to what was worn before, and close. Caught on the way down so the
         // flyout's own Esc handling cannot close it first.
         body.AddHandler(InputElement.KeyDownEvent, (_, e) =>

@@ -36,6 +36,12 @@ internal static class NotaAccent
             foreach (var (k, v) in result.Tokens) colors[k] = Color.FromUInt32(0xFF000000 | v);
             worn = theme with { Colors = colors };
         }
+        // Presets are a fixed set; custom colours are not — a drag in the picker wears a new
+        // one every step. Keep only the latest custom colour, so the cache stays at the
+        // presets × themes plus one colour × themes.
+        if (choice.Preset == Accent.Custom)
+            foreach (var stale in Cache.Keys.Where(k => k.Choice.Preset == Accent.Custom && k.Choice != choice).ToList())
+                Cache.Remove(stale);
         Cache[(theme.Id, choice)] = worn;
         return worn;
     }
