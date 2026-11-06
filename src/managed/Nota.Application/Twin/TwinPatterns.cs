@@ -307,7 +307,10 @@ public static class TwinPatterns
                 notes.Add(new NotaNote(n, On(k), off - On(k), s.Velocity / 127f));
             }
         }
+        // The clip runs to the pattern's end, or on to its last note-off when a swung long note (or a
+        // tie on the last step) rings past it, so every note keeps its live length.
         double length = Math.Max(sb, pat.Length * sb);
+        foreach (var n in notes) length = Math.Max(length, n.StartBeat + n.LengthBeats);
         e.BeginUndoGroup();
         try
         {

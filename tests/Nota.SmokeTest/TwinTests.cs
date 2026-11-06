@@ -1391,6 +1391,51 @@ internal static class TwinTests
             }
         }
 
+        // Latch switched off with no key down stops a key-run pattern; a key the sequencer didn't
+        // take releases normally even while a transpose key is still held.
+        {
+            var (e, t) = SeqRig(120, Enumerable.Repeat("C4:100:25%", 16).ToArray(),
+                (x, y) => { P(x, y, "lo.a.noiselevel", 0f); P(x, y, "lo.a.o1level", 1f); P(x, y, "seq.latch", 1f); });
+            using (e)
+            {
+                Render(e, 512);
+                e.TrackNoteOn(t, 62, 0.8f); Render(e, Sr / 4); e.TrackNoteOff(t, 62);
+                int latched = Onsets(Render(e, Sr / 2)).Count;
+                P(e, t, "seq.latch", 0f);
+                Render(e, Sr / 4);
+                double stopped = Rms(Render(e, Sr / 2));
+                P(e, t, "seq.latch", 1f);
+                e.TrackNoteOn(t, 62, 0.8f); Render(e, Sr / 8);   // a transpose key held…
+                P(e, t, "seq.on", 0f); Render(e, Sr / 8);
+                e.TrackNoteOn(t, 60, 0.8f); Render(e, Sr / 8);  // …then another key, the sequencer off
+                e.TrackNoteOff(t, 60);
+                Render(e, Sr / 2);
+                double after = Rms(Render(e, Sr / 4));
+                yield return (latched >= 3 && stopped < 1e-5 && after < 1e-5,
+                    $"Latch off stops a key-run pattern ({Db(stopped):0} dB), and a key the sequencer didn't take releases ({Db(after):0} dB)");
+            }
+        }
+
+        // A per-note route to a part's effect follows the newest note: Velocity → Reverb Mix.
+        {
+            double Tail(float vel)
+            {
+                using var e = new NotaEngine();
+                int t = e.AddTwinTrack();
+                foreach (var (id, v) in new[] { ("lo.a.revon", 1f), ("lo.a.revmix", 0f), ("lo.a.revsize", 0.9f), ("lo.a.aenvr", 0.1f) })
+                    P(e, t, id, v);
+                TwinMatrix.Add(e, t, Src("Velocity"), TwinMatrix.DestinationOfSide("revmix"), 1f, 1f);
+                Render(e, 512);
+                e.TrackNoteOn(t, 60, vel);
+                Render(e, Sr / 2);
+                e.TrackNoteOff(t, 60);
+                Render(e, Sr / 4);
+                return Rms(Render(e, Sr / 2));
+            }
+            double soft = Tail(0.05f), hard = Tail(1f);
+            yield return (Db(hard) - Db(soft) > 6, $"a per-note route reaches the part's effect: Velocity → Reverb Mix ({Db(soft):0} / {Db(hard):0} dB tail)");
+        }
+
         // To clip: refuses what a clip can't play as the sequencer does; keeps automation outside the clip;
         // a stepped lane holds each value up to the next (swung) step, a smooth one glides on to the first.
         {

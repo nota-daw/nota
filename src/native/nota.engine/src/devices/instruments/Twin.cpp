@@ -364,12 +364,16 @@ void Twin::resetAll() {
         }
     heldN_[0] = heldN_[1] = 0;
     heldBits_[0] = heldBits_[1] = 0;
+    for (auto& part : gLfoFade_)
+        for (auto& f : part) f = 1.0f;
+    fxHeld_[0] = fxHeld_[1] = false;
     orderCtr_ = 0;
     ctlLeft_ = 0;
     gexpr_.reset();
     seqNoteN_ = 0;
     transpose_ = transKeys_ = 0;
     arpN_ = arpKeys_ = 0;
+    arpTook_[0] = arpTook_[1] = transTook_[0] = transTook_[1] = 0;
     pendPat_ = -1;
     freeRun_ = false; // all notes off ends a key-run sequence too
     freeT_ = 0.0;
@@ -513,7 +517,16 @@ void Twin::startVoice(int v, int note, float vel, int s, int S, bool glide) {
     else
         pos = static_cast<float>((v * 7) % kMaxVoices) / static_cast<float>(kMaxVoices - 1) * 2.0f - 1.0f;
     V.panPos = pos; // voiceControl() turns it into the pan gains, and keeps them current
+    // A global LFO restarts (Retrig) and fades in (Fade) from the first key of a phrase: no other
+    // key of the part is down.
+    bool first = true;
+    for (const auto& W : voices_)
+        if (&W != &V && W.gate && W.part == V.part) first = false;
     for (int l = 0; l < 3; ++l) {
+        if (first && c.lfoGlobal[l]) {
+            if (c.lfoRetrig[l]) glfo_[V.part][l].ph = 0.0;
+            if (c.lfoFade[l] > 0.0f) gLfoFade_[V.part][l] = 0.0f;
+        }
         if (c.lfoRetrig[l] && !c.lfoGlobal[l]) V.lfo[l].ph = 0.0;
         V.lfoFadeLvl[l] = c.lfoFade[l] > 0.0f ? 0.0f : 1.0f;
         V.lfoFadeInc[l] = c.lfoFade[l] > 0.0f ? static_cast<float>(1.0 / (c.lfoFade[l] * sr_)) : 0.0f;
@@ -569,7 +582,8 @@ void Twin::noteOn(int32_t pitch, float velocity) {
             if (get(twin::GArpHold) >= 0.5f && arpKeys_ == 0) arpN_ = 0; // a new chord replaces a held one
             if (arpN_ == 0) arpStartK_ = !playing_ && !seqRunning_ ? 0 : nextK_; // a free start counts from 0
             if (arpN_ < 32) arpList_[arpN_++] = pitch;
-            ++arpKeys_;
+            if (!(arpTook_[pitch >> 6] & (uint64_t{1} << (pitch & 63)))) ++arpKeys_;
+            arpTook_[pitch >> 6] |= uint64_t{1} << (pitch & 63);
             arpVel_ = vel;
             return;
         }
@@ -581,7 +595,8 @@ void Twin::noteOn(int32_t pitch, float velocity) {
                     if (P.step[i].n > 0) { root = P.step[i].note[0]; break; }
             }
             transpose_ = get(twin::GSeqTranspose) >= 0.5f ? pitch - root : 0;
-            ++transKeys_;
+            if (!(transTook_[pitch >> 6] & (uint64_t{1} << (pitch & 63)))) ++transKeys_;
+            transTook_[pitch >> 6] |= uint64_t{1} << (pitch & 63);
             return;
         }
     }
@@ -598,11 +613,11 @@ void Twin::noteOff(int32_t pitch) {
             ringHead_.store(h + 1, std::memory_order_release);
         }
     }
-    if (arpKeys_ > 0 || transKeys_ > 0) {
-        bool wasArp = false;
-        for (int i = 0; i < arpN_; ++i)
-            if (arpList_[i] == pitch) wasArp = true;
-        if (wasArp && arpKeys_ > 0) {
+    // Only the keys the sequencer took are its releases; any other key plays the voices as usual.
+    const uint64_t bit = uint64_t{1} << (pitch & 63);
+    if (arpTook_[pitch >> 6] & bit) {
+        arpTook_[pitch >> 6] &= ~bit;
+        if (arpKeys_ > 0) {
             --arpKeys_;
             if (get(twin::GArpHold) < 0.5f) { // without Hold the arpeggio follows the keys
                 int w = 0;
@@ -610,14 +625,15 @@ void Twin::noteOff(int32_t pitch) {
                     if (arpList_[i] != pitch) arpList_[w++] = arpList_[i];
                 arpN_ = w;
             }
-            freeStop();
-            return;
         }
-        if (transKeys_ > 0) {
-            if (--transKeys_ == 0 && get(twin::GSeqLatch) < 0.5f) transpose_ = 0;
-            freeStop();
-            return;
-        }
+        freeStop();
+        return;
+    }
+    if (transTook_[pitch >> 6] & bit) {
+        transTook_[pitch >> 6] &= ~bit;
+        if (transKeys_ > 0 && --transKeys_ == 0 && get(twin::GSeqLatch) < 0.5f) transpose_ = 0;
+        freeStop();
+        return;
     }
     keyOff(pitch);
 }
@@ -828,6 +844,7 @@ void Twin::releaseSeqNotes() {
 }
 
 int Twin::seqService(int offset) {
+    freeStop(); // Latch / Hold switched off with no key down ends a key-run sequence
     if (!seqActive()) {
         if (seqRunning_) {
             releaseSeqNotes();
@@ -1007,9 +1024,9 @@ float Twin::globalValue(int part, const twin::PartCtl& c, int src) const {
     auto pad = [&](int g) { const float o = motionOvr_[part].pad[g - GPadX]; return o >= 0.0f ? o : get(g); };
     auto bip = [&](int g) { return (pad(g) - 0.5f) * 2.0f; };
     switch (src) {
-    case SrcLfo1: return glfo_[part][0].val * c.lfoAmt[0];
-    case SrcLfo2: return glfo_[part][1].val * c.lfoAmt[1];
-    case SrcLfo3: return glfo_[part][2].val * c.lfoAmt[2];
+    case SrcLfo1: return glfo_[part][0].val * gLfoFade_[part][0] * c.lfoAmt[0];
+    case SrcLfo2: return glfo_[part][1].val * gLfoFade_[part][1] * c.lfoAmt[1];
+    case SrcLfo3: return glfo_[part][2].val * gLfoFade_[part][2] * c.lfoAmt[2];
     case SrcModWheel: return modWheel_;
     case SrcPitchWheel: return gexpr_.wheel;
     case SrcPadX: return bip(GPadX);
@@ -1062,6 +1079,27 @@ bool globalSource(int src, const twin::PartCtl& c) {
     case SrcSeqGate:
     case SrcSeqStep: return true;
     default: return src >= SrcMacro1 && src < SrcMacro1 + kMacros;
+    }
+}
+
+// The effect controls a route can reach, as bits (per-note routes onto the part's effects).
+enum FxField : uint32_t {
+    FxModRate = 1, FxModDepth = 2, FxModMix = 4, FxDlyTime = 8, FxDlyFb = 16, FxDlyMix = 32,
+    FxRevSize = 64, FxRevDamp = 128, FxRevMix = 256
+};
+uint32_t fxFieldOf(int side) {
+    using namespace twin;
+    switch (side) {
+    case ModFxRate: return FxModRate;
+    case ModFxDepth: return FxModDepth;
+    case ModFxMix: return FxModMix;
+    case DlyTime: return FxDlyTime;
+    case DlyFb: return FxDlyFb;
+    case DlyMix: return FxDlyMix;
+    case RevSize: return FxRevSize;
+    case RevDamp: return FxRevDamp;
+    case RevMix: return FxRevMix;
+    default: return 0;
     }
 }
 
@@ -1242,7 +1280,6 @@ void Twin::updateControl(double now) {
         }
         gexpr_.offsets(bendRange, c.exAdd);
         c.exCoef = exprSmoothCoef(sr_);
-        if (c.fxOn) pushFx(part);
     }
     // Structural changes release (never cut) what no longer fits: a new layout, voice share or
     // cap releases everything; a part's new voice mode releases that part.
@@ -1274,6 +1311,13 @@ void Twin::updateControl(double now) {
     }
     lastLayout_ = shape;
     lastCap_ = cap;
+    // A global LFO's fade-in (all three: LFO 1 feeds the matrix too).
+    for (int part = 0; part < parts; ++part)
+        for (int l = 0; l < 3; ++l) {
+            const PartCtl& pc = ctl_[part];
+            float& f = gLfoFade_[part][l];
+            f = pc.lfoGlobal[l] && pc.lfoFade[l] > 0.0f ? std::min(1.0f, f + static_cast<float>(kCtl / (pc.lfoFade[l] * sr_))) : 1.0f;
+        }
     // The LFOs that only feed the matrix move once per interval (LFO 1 runs per sample, for vibrato).
     for (int part = 0; part < parts; ++part)
         for (int l = 1; l < 3; ++l)
@@ -1288,6 +1332,39 @@ void Twin::updateControl(double now) {
         }
         modulateVoice(V, morphNow_[V.part], routes_[V.part], routeN_[V.part]);
         voiceControl(V, V.hasOwn ? V.own : ctl_[V.part], sr_);
+    }
+    // The effects are one per part: a route from a per-note source (velocity, an envelope…) to an
+    // effect control follows the newest note of the part, as on a poly synth's global destinations.
+    for (int part = 0; part < parts; ++part) {
+        PartCtl& c = ctl_[part];
+        if (!c.fxOn) continue;
+        uint32_t mask = 0;
+        for (int i = 0; i < routeN_[part]; ++i) {
+            const LiveRoute& r = routes_[part][i];
+            const Dst d = dstAt(r.dst);
+            if (d.kind == DstSide && !globalSource(r.src, c)) mask |= fxFieldOf(d.side);
+        }
+        // The newest sounding note sets them, and they stay where it left them once every note is
+        // gone (an effect's tail keeps the last note's mix).
+        const Voice* newest = nullptr;
+        if (mask != 0)
+            for (const auto& V : voices_)
+                if (V.active && V.part == part && V.hasOwn && (!newest || V.order > newest->order)) newest = &V;
+        if (newest) fxHold_[part] = newest->own, fxHeld_[part] = true;
+        if (mask == 0) fxHeld_[part] = false;
+        if (fxHeld_[part]) {
+            const PartCtl& o = fxHold_[part];
+            if (mask & FxModRate) c.modRate = o.modRate;
+            if (mask & FxModDepth) c.modDepth = o.modDepth;
+            if (mask & FxModMix) c.modMix = o.modMix;
+            if (mask & FxDlyTime) c.dlyTime = o.dlyTime;
+            if (mask & FxDlyFb) c.dlyFb = o.dlyFb;
+            if (mask & FxDlyMix) c.dlyMix = o.dlyMix;
+            if (mask & FxRevSize) c.revSize = o.revSize;
+            if (mask & FxRevDamp) c.revDamp = o.revDamp;
+            if (mask & FxRevMix) c.revMix = o.revMix;
+        }
+        pushFx(part);
     }
     // LFO 1 in global mode: this interval's values, per part.
     for (int part = 0; part < parts; ++part)
@@ -1537,7 +1614,10 @@ void Twin::action(int32_t id, int32_t iarg, float farg) {
         if (iarg >= 0 && iarg < kPatterns) editPat_ = iarg;
         changed = false;
         break;
-    case A_SetLength: P.length = static_cast<uint8_t>(std::clamp(iarg, 1, kSteps)); break;
+    case A_SetLength:
+        P.length = static_cast<uint8_t>(std::clamp(iarg, 1, kSteps));
+        if (recStep_ >= P.length) recStep_ = 0; // the record cursor stays on the pattern
+        break;
     case A_ClearStep:
         if (stepOk(iarg)) P.step[iarg].n = 0;
         break;

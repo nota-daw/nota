@@ -424,6 +424,9 @@ class Twin final : public Instrument {
     // (Seq from its first step, transposed by the key; Arp over the held keys). freeT_ counts
     // samples from the key that started it.
     bool freeRun_ = false;
+    twin::PartCtl fxHold_[twin::kParts]; // the note that last set a part's effects (per-note routes)
+    bool fxHeld_[twin::kParts] = {false, false};
+    float gLfoFade_[twin::kParts][3] = {{1, 1, 1}, {1, 1, 1}}; // the global LFOs' fade-in, from a phrase's first key
     bool upperTail_ = false;   // Upper still releasing after a switch to Single
     uint64_t upperQuiet_ = 0;
     double freeT_ = 0.0;
@@ -470,6 +473,7 @@ class Twin final : public Instrument {
     SeqNote seqNotes_[32] = {};
     int seqNoteN_ = 0;
     int transpose_ = 0, transKeys_ = 0;
+    uint64_t arpTook_[2] = {0, 0}, transTook_[2] = {0, 0}; // the keys the arpeggiator / transpose took, one bit per pitch
     int arpList_[32] = {};
     int arpN_ = 0, arpKeys_ = 0;
     float arpVel_ = 0.8f;
