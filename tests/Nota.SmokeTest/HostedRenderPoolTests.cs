@@ -34,10 +34,21 @@ internal static class HostedRenderPoolTests
         start.ArgumentList.Add(typeof(HostedRenderPoolTests).Assembly.Location);
         start.ArgumentList.Add("--hosted-render-pool");
         using var child = Process.Start(start)!;
+        // A native hang in the child must fail this module, not stall the whole
+        // smoke suite: drain both streams while a timeout runs (ReadToEnd blocks,
+        // so a timeout after it would never fire), then kill the child's tree.
+        var stdout = child.StandardOutput.ReadToEndAsync();
         var stderr = child.StandardError.ReadToEndAsync();
-        string stdout = child.StandardOutput.ReadToEnd();
-        child.WaitForExit();
-        Console.Write(stdout);
+        if (!child.WaitForExit(TimeSpan.FromMinutes(10)))
+        {
+            try { child.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { } // already exited between the timeout and the kill
+            stdout.GetAwaiter().GetResult();
+            stderr.GetAwaiter().GetResult();
+            yield return (false, "isolated real VST3 render-pool regressions (did not finish within 10 minutes, killed)");
+            yield break;
+        }
+        Console.Write(stdout.GetAwaiter().GetResult());
         if (child.ExitCode != 0) Console.Write(stderr.GetAwaiter().GetResult());
         yield return (child.ExitCode == 0, "isolated real VST3 render-pool regressions");
     }
@@ -193,8 +204,19 @@ internal static class HostedRenderPoolTests
                 yield return (many.WorkerMs > 1, $"VST3 overloaded device helpers participate ({many.WorkerMs:0.0} ms worker CPU)");
                 yield return TimingBudget.Check(true, many.MedianMs < serial.MedianMs * 0.9,
                     $"four VST3 tracks: device median {many.MedianMs:0.000} ms vs serial {serial.MedianMs:0.000} ms");
-                yield return TimingBudget.Check(true, many.Late <= 1,
-                    $"four indivisible VST3 jobs: {many.Late}/{many.Blocks} device deadlines missed after warm-up (<= 1)");
+                // The Work=2048 probe is fixed, not machine-scaled: a single instance
+                // may cost more than the callback period on a slower machine, where no
+                // helper count can save the deadline. Calibrate like RenderPoolTests'
+                // overload check and enforce the late-block gate only when one instance
+                // could meet the period at all.
+                double devicePeriodMs = Block * 1000.0 / Rate;
+                bool oneInstanceFits;
+                using (var cal = Session(catalog, 0, 2048, tracks: 1))
+                    oneInstanceFits = Measure(cal, true, 40).MedianMs <= devicePeriodMs;
+                yield return TimingBudget.Check(true, !oneInstanceFits || many.Late <= 1,
+                    !oneInstanceFits
+                        ? $"one VST3 probe render does not fit a {devicePeriodMs:0.00} ms period on this machine; the late-block gate is skipped ({many.Late}/{many.Blocks} late with helpers)"
+                        : $"four indivisible VST3 jobs: {many.Late}/{many.Blocks} device deadlines missed after warm-up (<= 1)");
                 Console.WriteLine("HOSTED_DEVICE " + JsonSerializer.Serialize(new { serial, parallel = many }));
                 if (Environment.GetEnvironmentVariable("NOTA_RENDER_REPORT") is { Length: > 0 } report)
                     File.WriteAllText(report, JsonSerializer.Serialize(new { serial, parallel = many }, new JsonSerializerOptions { WriteIndented = true }));

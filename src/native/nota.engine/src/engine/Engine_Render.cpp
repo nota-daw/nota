@@ -2544,10 +2544,20 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     // work / threads + (1 - 1 / threads) * largestJob. Use it to
                     // size helpers without sorting jobs or allocating in the callback.
                     const double peak = std::min(work, (double)leafPeakNs_);
-                    if (peak > 0 && peak < target) {
+                    if (peak > 0) {
                         const int available = std::min(m, pool_->workerCount() + 1);
-                        const double needed = std::ceil((work - peak) / (target - peak));
-                        threads = std::max(threads, (int)std::min((double)available, needed));
+                        if (peak < target) {
+                            // T >= (work - peak) / (target - peak): the smallest count
+                            // whose list-scheduling bound still fits the target.
+                            const double needed = std::ceil((work - peak) / (target - peak));
+                            threads = std::max(threads, (int)std::min((double)available, needed));
+                        } else {
+                            // The largest job alone overflows the target: no count meets
+                            // the bound. Every extra worker still lowers it (the small
+                            // jobs run beside the heavy one instead of queueing in front),
+                            // so take the whole pool rather than park on the average.
+                            threads = std::max(threads, available);
+                        }
                     }
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }

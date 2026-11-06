@@ -170,4 +170,10 @@ reported overloading shape, and the machine is the same model as the reporter's 
 - Real Kontakt/SWAM were not installed on the bench machine; measured with the deterministic
   probe through the same mechanism the guards use.
 - macOS `os_workgroup` join of pool workers landed in #436 (round 2) and is unchanged here.
+- Review fixes (Greptile, PR #534): pool sizing uses every available worker when the largest
+  indivisible job alone overflows the target (no bound is reachable there; extra workers still
+  lower the list-scheduling bound); `HostedRenderPoolTests.RunIsolated()` times the child out
+  at 10 minutes and kills its tree instead of stalling the smoke suite on a native hang; the
+  four-instance deadline gate calibrates one probe instance's cost first and skips the
+  late-block comparison on machines where a single instance cannot meet the period.
 
