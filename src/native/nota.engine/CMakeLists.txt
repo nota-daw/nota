@@ -449,6 +449,27 @@ if(APPLE)
     target_link_libraries(nota-scanworker PRIVATE "-framework CoreAudioKit")
 endif()
 
+# A real, deterministic VST3 for hosted render-pool regression tests. It stays in
+# the build tree: never copied into a user's plugin directory or app package.
+option(NOTA_BUILD_RENDER_PROBE "Build the hosted render-pool test VST3" ON)
+if(NOTA_BUILD_RENDER_PROBE)
+    juce_add_plugin(nota-render-probe
+        COMPANY_NAME Nota
+        PLUGIN_MANUFACTURER_CODE Nota
+        PLUGIN_CODE Nrpr
+        PRODUCT_NAME "Nota Render Probe"
+        FORMATS VST3
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        COPY_PLUGIN_AFTER_BUILD FALSE
+        VST3_AUTO_MANIFEST FALSE)
+    target_sources(nota-render-probe PRIVATE pluginhost/tests/RenderProbe.cpp)
+    target_link_libraries(nota-render-probe PRIVATE juce::juce_audio_processors
+        juce::juce_recommended_config_flags)
+    target_compile_definitions(nota-render-probe PRIVATE JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+endif()
+
 # --- Scanner self-test (bug plugin-scan-hang-windows) -------------------------
 # OutOfProcessScanner against stub workers that hang, die or spam stdout; the
 # binary is its own stub. Run by scripts/build*.sh: `nota-scanner-selftest`.

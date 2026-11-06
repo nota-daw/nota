@@ -66,6 +66,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and not applied. Nota Remote follows. Orange looks exactly as before.
 
 ### Fixed
+- **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
+  Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
+  audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
+  adapter keeps all its state inside the instance, so independent hosted instrument/effect
+  tracks may now render their work exclusively on a render-pool worker per block; the engine
+  joins the pool before the next block, and lifecycle/editor work stays on the message thread.
+  Unknown hosted formats, rack-nested chains and record-armed/capture-routed tracks keep the
+  serial fallback, and a light load leaves helpers parked. Measured with a deterministic VST3
+  probe: four heavy instances went from 5.82 ms median (218 % of a 2.67 ms callback period,
+  every block late) to 1.58–1.69 ms with zero late blocks on the same machine.
+- **The render pool reserves playback headroom** (#532): when the pool joins the callback, its
+  helper count now keeps half the buffer free for voice attacks and scheduler jitter (the
+  previous boundary left only 15 %), and the sizing accounts for the largest indivisible track
+  job (list scheduling's bound) — heavy plug-in jobs no longer schedule into serial waves while
+  cores idle. Pools under a 512-frame four-instance load keep the per-callback cost at ~93 % of
+  one such instance instead of four.
 - **Default Projects/Samples folders follow the OS locations** (#522): the browser and
   save dialogs no longer default to hardcoded `~/Documents/Nota Projects` and
   `~/Music/Nota Samples`. On Linux they read `user-dirs.dirs` (`XDG_DOCUMENTS_DIR`,
