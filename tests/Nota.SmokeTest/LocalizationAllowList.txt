@@ -356,8 +356,6 @@ Nota.App/DeviceCards/Bodies/AutoGainDeviceBody.cs	fader	# data: device parameter
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Amount	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Glide	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	LFO	# data: acronym
-Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	MOTION	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	OUT L	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	OUT R	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Panner	# data: device parameter, port and value names and live readouts of their values (FR-004)

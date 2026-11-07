@@ -11417,7 +11417,8 @@ Console.WriteLine("-- Nota Orbit (effect kind 9) --");
     Check(apeng.DeviceName(apt, apdi) == "Nota Orbit", $"device is Nota Orbit (got '{apeng.DeviceName(apt, apdi)}')");
     Check(apeng.TrackDeviceBuiltinKind(apt, apdi) == 9, "device reports builtin kind 9");
     int appc = apeng.DeviceParamCount(apt, apdi);
-    Check(appc == 8, $"Nota Orbit exposes 8 params ({appc})");
+    Check(appc == 9, $"Nota Orbit exposes 9 params ({appc})");
+    Check(apeng.DeviceParamName(apt, apdi, 8) == "View" && !Nota.Application.DeviceView.IsMini(apeng, apt, apdi), "Orbit's appended View param (card size, #531) defaults to L");
     Check(apeng.DeviceParamName(apt, apdi, 0) == "Rate" && apeng.DeviceParamName(apt, apdi, 5) == "Mix"
           && apeng.DeviceParamName(apt, apdi, 6) == "Sync" && apeng.DeviceParamName(apt, apdi, 7) == "Division",
           "original params keep their places; Sync and Division are appended");

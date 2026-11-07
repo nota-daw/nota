@@ -943,11 +943,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   Slices / Filter graphs (drag the offset, the gate and the filter) with their knobs beside
   them, a right panel that follows them (Repeat · Capture · Filter) over Decay, Dry/wet and
   Volume knobs; 31 factory presets; MCP `read_beat_repeat`.
-- **Nota Orbit** (9, formerly Auto Pan) — auto-pan and tremolo on one LFO: L/R phase (0° =
+- **Nota Orbit** (9, formerly Auto Pan) — in two sizes (L 700 / S 260, S·L toggle) — auto-pan and tremolo on one LFO: L/R phase (0° =
   tremolo … 180° = pan, with 0° / 90° / 180° buttons), Sine / Tri / Saw / Sqr / S&H, Shape
   (Glide on S&H), Amount, Mix; rate free (0.01–40 Hz) or synced (4/1 … 1/32 with dotted and
-  triplet values, locked to the bar). A gain graph over two cycles (drag Amount and Phase),
-  the pan line with its swing, OUT L / R meters; 31 factory presets; MCP
+  triplet values, locked to the bar). A gain graph over two cycles (drag Amount and Phase)
+  with the pan line, Amount and Phase beside it; the LFO panel (rate, Shape, OUT L / R meters)
+  over Mix; 31 factory presets; MCP
   `read_orbit`.
 - **Nota Crush** (12) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
   Wet; Digital / Analog / Fold modes; Anti-alias (4th order); GRIT (Dither / Jitter / Noise);
