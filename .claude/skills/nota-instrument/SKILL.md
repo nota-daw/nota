@@ -175,7 +175,8 @@ Follow the mockup language:
     panel (186) has **no tab row**: it follows the centre tab (`ShowPanel(t)` swaps a
     `(head, body)` pair). Its 20 title bar (`Head(left, right)`) holds the section's on
     switch left, its mode right (Up / Down, Free / Sync); the body is `Rows(...)` of value
-    bars, a `Rule()`, then routing (sidechain key). On the main tab the right panel is the
+    bars stacked from the top (an even gap, not spread over the height), a `Rule()`, then
+    routing (sidechain key). On the main tab the right panel is the
     cross-cutting summary (modulation target, amounts, smoothing, key). A shared setting
     shown in several views goes in the graph title with a chevron
     (`AfWindowBase.TitleClicked` → a small `Flyout` picker).

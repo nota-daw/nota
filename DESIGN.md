@@ -1296,7 +1296,7 @@ amount, click the title to pick the target) is the graph doing its job, not a co
 **Knobs next to the graph** are only the parameters the graph draws or drags.
 
 - One column of up to three knobs (34, secondary), on the graph's **right** side only, never
-  split left and right. Order: what the graph's X and Y move first (Freq, Res), then what
+  split left and right, stacked with a 10 px gap and centred on the graph's height. Order: what the graph's X and Y move first (Freq, Res), then what
   reshapes the curve (Morph).
 - Discrete choices for the same thing (type, slope, circuit) go in one centred row under
   the graph: text chips for a type, segments for 2–3 options.
@@ -1313,8 +1313,9 @@ amount, click the title to pick the target) is the graph doing its job, not a co
 - Its 20 high title bar lines up with the centre's tab bar and holds the section's on switch
   on the left (its word is the section's name: "Envelope", "LFO") and the section's mode on
   the right (Up / Down, Free / Sync). A section with no switch shows its name there, ink 2.
-- Under the bar, rows of value bars spread evenly down the panel (40 label column, 34 value
-  column); a 1 px rule sets off a routing control (the sidechain key) at the bottom.
+- Under the bar, rows of value bars stack from the top with an even 7 px gap (40 label
+  column, 34 value column) — never spread over the panel's height, where a few rows drift apart
+  and stop reading as a group; a 1 px rule sets off a routing control (the sidechain key).
 - On the main tab, whose own controls sit around the graph, the right panel gathers what
   cuts across the views: the modulation (target, each source's amount, smoothing, the key).
 - **Read-outs stay.** What the device measures — a meter box (peaks, LUFS, gain reduction), a

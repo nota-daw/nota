@@ -29,7 +29,6 @@ internal static class CardLayout
 
     static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
     static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-    static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
     // ---- S / L -----------------------------------------------------------------------------
     public static double WidthFor(IAudioEngine engine, int trackId, int deviceIndex, double large)
@@ -43,17 +42,13 @@ internal static class CardLayout
     public static bool IsMini(DeviceCardContext ctx, int deviceIndex) => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex);
 
     // ---- centre views ----------------------------------------------------------------------
-    /// <summary>A column of knob cells spread down the graph's right side.</summary>
+    /// <summary>A column of knob cells beside the graph, stacked with an even gap and centred
+    /// on its height (spread over a tall graph they read as unrelated).</summary>
     public static Control KnobColumn(params Control[] cells)
     {
-        var g = new Grid { Width = 52 };
-        for (int i = 0; i < cells.Length; i++)
-        {
-            g.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-            cells[i].VerticalAlignment = VerticalAlignment.Center;
-            g.Children.Add(GRow(cells[i], i));
-        }
-        return g;
+        var sp = new StackPanel { Width = 52, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var c in cells) sp.Children.Add(c);
+        return sp;
     }
 
     /// <summary>A centre view: the graph fills it, its knobs on the right, a selector row under it.</summary>
@@ -92,17 +87,13 @@ internal static class CardLayout
     public static TextBlock Title(string t) => new()
     { Text = t, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
 
-    /// <summary>Rows spread evenly down the panel; rules and read-out boxes keep their height.</summary>
+    /// <summary>Rows stacked from the top with an even gap (spread over the panel's height they
+    /// drifted apart when a panel had few of them); rules get a little more air.</summary>
     public static Control Rows(params Control[] rows)
     {
-        var grid = new Grid { RowSpacing = 2 };
-        for (int r = 0; r < rows.Length; r++)
-        {
-            bool fixedH = rows[r] is Border { Height: 1 } || rows[r] is Border { Background: not null };
-            grid.RowDefinitions.Add(new RowDefinition(fixedH ? GridLength.Auto : GridLength.Star));
-            grid.Children.Add(GRow(rows[r], r));
-        }
-        return new Border { Padding = new Thickness(8, 5, 8, 5), Child = grid };
+        var sp = new StackPanel { Spacing = 7, VerticalAlignment = VerticalAlignment.Top };
+        foreach (var r in rows) sp.Children.Add(r);
+        return new Border { Padding = new Thickness(8, 7, 8, 5), Child = sp };
     }
 
     public static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
