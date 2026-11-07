@@ -54,6 +54,11 @@ internal sealed class CeilingDeviceBody : IDeviceBody
     };
 
     public double Width => 700;
+    // S / L (#531): the size is the device's View param (DeviceView); S is a 260 card.
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => DeviceView.IsMini(engine, trackId, deviceIndex) ? 260 : Width;
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex)
+        => DeviceView.Index(ctx.Engine, ctx.TrackId, deviceIndex) < 0 ? null
+            : MidiCardHeader.SizeToggle(ctx, () => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex), m => DeviceView.SetMini(ctx.Engine, ctx.TrackId, deviceIndex, m));
     public bool FullBleed => true;
     public string? Subtitle => "Limiter";
 
@@ -524,17 +529,42 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             RefreshAll();
         }
 
-        var centre = TabFrame(new[] { "Level", "Reduction", "Loudness" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
-        ShowPanel(centreTab);
-        var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
-        var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
-        var right = new RuleSection { Width = 186, Child = rightCol };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
+        // ======================================================================
+        // L: tab frame + the panel that follows it
+        // ======================================================================
+        Control LargeBody()
+        {
+            var centre = TabFrame(new[] { "Level", "Reduction", "Loudness" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
+            ShowPanel(centreTab);
+            var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
+            var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
+            var right = new RuleSection { Width = 186, Child = rightCol };
+            DockPanel.SetDock(right, Dock.Right);
+            var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+            // ---- assemble ---------------------------------------------------------------
+            var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        }
+        // ======================================================================
+        // S: the Level graph over the character and the reduction, and Gain · Ceiling · Release
+        // ======================================================================
+        Control MiniBody()
+        {
+            centreTab = 0;
+            level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
+            WireDrag(level, Ceil, "Ceiling", CeilF);
+            ToolTip.SetTip(level, MenuKit.Keys(Loc.T("device.ceiling.the_last_4_s_the")));
+            var gr = Info(() => NotaNum.F($"GR {GrF(Sc(S_MaxGrHold))} · LUFS-S {Lufs(ScDb(S_LufsS))}"));
+            var sel = new DockPanel { Margin = new Thickness(0, 5, 0, 0), Children = { Docked(CharSeg(), Dock.Left), Docked(new Border { Margin = new Thickness(6, 0, 0, 0), Child = gr }, Dock.Right) } };
+            var knobs = new UniformGrid { Rows = 1, Margin = new Thickness(0, 6, 0, 0), Children = {
+                K(Gain, "GAIN", GainF, Loc.T("device.ceiling.gain_how_hard_the_signal"), cellW: 56),
+                K(Ceil, "CEILING", v => NotaNum.F($"{v:0.0}\u2009dB"), Loc.T("device.ceiling.ceiling_the_output_never_goes"), cellW: 56, size: 44),
+                K(Release, "RELEASE", RelF, Loc.T("device.ceiling.release_how_fast_the_gain"), teal: () => On(AutoRelease), cellW: 56) } };
+            var body = new DockPanel { Margin = new Thickness(6), Children = { Docked(knobs, Dock.Bottom), Docked(sel, Dock.Bottom), level } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = body } };
+        }
+        Control root = DeviceView.IsMini(engine, track, di) ? MiniBody() : LargeBody();
 
         void Refresh()
         {

@@ -52,6 +52,11 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
     private static readonly string[] FilterNames = { "Off", "LP", "BP", "HP" };
 
     public double Width => 700;
+    // S / L (#531): the size is the device's View param (DeviceView); S is a 260 card.
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => DeviceView.IsMini(engine, trackId, deviceIndex) ? 260 : Width;
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex)
+        => DeviceView.Index(ctx.Engine, ctx.TrackId, deviceIndex) < 0 ? null
+            : MidiCardHeader.SizeToggle(ctx, () => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex), m => DeviceView.SetMini(ctx.Engine, ctx.TrackId, deviceIndex, m));
     public bool FullBleed => true;
     public string? Subtitle => "Repeat";
 
@@ -525,17 +530,42 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             RefreshAll();
         }
 
-        var centre = TabFrame(new[] { "Timeline", "Slices", "Filter" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
-        ShowPanel(centreTab);
-        var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
-        var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
-        var right = new RuleSection { Width = 186, Child = rightCol };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
+        // ======================================================================
+        // L: tab frame + the panel that follows it
+        // ======================================================================
+        Control LargeBody()
+        {
+            var centre = TabFrame(new[] { "Timeline", "Slices", "Filter" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
+            ShowPanel(centreTab);
+            var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
+            var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
+            var right = new RuleSection { Width = 186, Child = rightCol };
+            DockPanel.SetDock(right, Dock.Right);
+            var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+            // ---- assemble ---------------------------------------------------------------
+            var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        }
+        // ======================================================================
+        // S: the Timeline over Interval · Repeat and Chance · Gate · Decay · Dry/wet
+        // ======================================================================
+        Control MiniBody()
+        {
+            centreTab = 0;
+            timeline = new BrTimelineView();
+            ToolTip.SetTip(timeline, Loc.T("device.beat_repeat.two_intervals_on_the_grid"));
+            var sel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0),
+                Children = { IntervalSegC(), RepeatButton(fill: false) } };
+            var knobs = new UniformGrid { Rows = 1, Margin = new Thickness(0, 6, 0, 0), Children = {
+                K(Chance, "CHANCE", ChanceF, tip: Loc.T("device.beat_repeat.chance_how_likely_each_interval"), cellW: 56),
+                K(Gate, "GATE", GateF, steps: 17, tip: Loc.T("device.beat_repeat.gate_how_long_the_burst"), cellW: 56),
+                K(Decay, "DECAY", DecayF, tip: Loc.T("device.beat_repeat.decay_each_repeat_quieter"), cellW: 56),
+                K(MixP, "DRY/WET", PctF, cellW: 56) } };
+            var body = new DockPanel { Margin = new Thickness(6), Children = { Docked(knobs, Dock.Bottom), Docked(sel, Dock.Bottom), timeline } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = body } };
+        }
+        Control root = DeviceView.IsMini(engine, track, di) ? MiniBody() : LargeBody();
 
         void Refresh()
         {

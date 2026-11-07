@@ -5433,8 +5433,10 @@ Console.WriteLine("-- Nota Ceiling --");
     Check(le.DeviceName(lt, ld) == "Nota Ceiling", $"name is Nota Ceiling (got '{le.DeviceName(lt, ld)}')");
     Check(le.TrackDeviceBuiltinKind(lt, ld) == 14, $"builtin kind is 14 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
     int lpc = le.DeviceParamCount(lt, ld);
-    Check(lpc == 11, $"Nota Ceiling exposes 11 params (got {lpc})");
-    string[] lnames = { "Ceiling", "Gain", "Release", "AutoRelease", "Character", "Lookahead", "StereoLink", "True Peak", "Delta", "SC HP", "Target" };
+    Check(lpc == 12, $"Nota Ceiling exposes 12 params (got {lpc})");
+    Check(le.DeviceParamDefault(lt, ld, 11) == 0f && Nota.Application.DeviceView.Index(le, lt, ld) == 11 && !Nota.Application.DeviceView.IsMini(le, lt, ld),
+        "appended View param (card size, #531) defaults to L");
+    string[] lnames = { "Ceiling", "Gain", "Release", "AutoRelease", "Character", "Lookahead", "StereoLink", "True Peak", "Delta", "SC HP", "Target", "View" };
     bool lnamesOk = lpc == lnames.Length;
     for (int p = 0; p < Math.Min(lpc, lnames.Length); p++) lnamesOk &= le.DeviceParamName(lt, ld, p) == lnames[p];
     Check(lnamesOk, "the original seven params keep their order; True Peak, Delta, SC HP, Target are appended");
@@ -5479,7 +5481,7 @@ Console.WriteLine("-- Nota Ceiling --");
         Check(mfin && Rms(mb, 8192) > 0.001f, $"Ceiling character {c} renders finite + audible (rms {Rms(mb, 8192):F3})");
     }
     le.DeviceSetParam(lt, ld, 4, 0f);
-    Check(le.DeviceParamCount(lt, ld) == 11, "param count stable after render");
+    Check(le.DeviceParamCount(lt, ld) == 12, "param count stable after render");
 
     // Reset peaks (action 0) clears the holds.
     le.DeviceAction(lt, ld, 0, 0, 0);
@@ -12220,7 +12222,10 @@ Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
     Check(aseng.DeviceName(ast, asdi) == "Nota Auto Shift", $"device is Nota Auto Shift (got '{aseng.DeviceName(ast, asdi)}')");
     Check(aseng.TrackDeviceBuiltinKind(ast, asdi) == 10, "device reports builtin kind 10");
     int aspc = aseng.DeviceParamCount(ast, asdi);
-    Check(aspc == 36, $"Nota Auto Shift exposes 36 params ({aspc})");
+    Check(aspc == 37, $"Nota Auto Shift exposes 37 params ({aspc})");
+    Check(aseng.DeviceParamName(ast, asdi, 36) == "View" && aseng.DeviceParamDefault(ast, asdi, 36) == 0f
+          && Nota.Application.DeviceView.Index(aseng, ast, asdi) == 36 && !Nota.Application.DeviceView.IsMini(aseng, ast, asdi),
+        "appended View param (card size, #531) defaults to L");
     Check(aseng.DeviceParamName(ast, asdi, 6) == "Range" && aseng.DeviceParamName(ast, asdi, 7) == "Formant"
           && aseng.DeviceParamName(ast, asdi, 9) == "Follow Scale", "original params keep their names and places");
     Check(aseng.DeviceParamName(ast, asdi, 10) == "Human" && aseng.DeviceParamName(ast, asdi, 12) == "Formant Shift"
@@ -12486,7 +12491,10 @@ Console.WriteLine("-- Nota Beat Repeat (effect kind 11) --");
     Check(breng.DeviceName(brt, brdi) == "Nota Beat Repeat", $"device is Nota Beat Repeat (got '{breng.DeviceName(brt, brdi)}')");
     Check(breng.TrackDeviceBuiltinKind(brt, brdi) == 11, "device reports builtin kind 11");
     int brpc = breng.DeviceParamCount(brt, brdi);
-    Check(brpc == 20, $"Nota Beat Repeat exposes 20 params ({brpc})");
+    Check(brpc == 21, $"Nota Beat Repeat exposes 21 params ({brpc})");
+    Check(breng.DeviceParamName(brt, brdi, 20) == "View" && breng.DeviceParamDefault(brt, brdi, 20) == 0f
+          && Nota.Application.DeviceView.Index(breng, brt, brdi) == 20 && !Nota.Application.DeviceView.IsMini(breng, brt, brdi),
+        "appended View param (card size, #531) defaults to L");
     Check(breng.DeviceParamName(brt, brdi, 15) == "Repeat" && breng.DeviceParamName(brt, brdi, 16) == "Latch" && breng.DeviceParamName(brt, brdi, 17) == "Triplet"
           && breng.DeviceParamName(brt, brdi, 18) == "Filter Type" && breng.DeviceParamName(brt, brdi, 19) == "Filter Narrow",
           "appended params: Repeat (was Latch), Latch, Triplet, Filter Type, Filter Narrow");

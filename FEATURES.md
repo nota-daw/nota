@@ -918,7 +918,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   bars), whose titles pick the modulation target; the right panel follows the centre tab
   (modulation on Filter, the Envelope or LFO controls on theirs) over Drive, Dry/wet and Gain
   knobs. 30 factory presets. MCP: `read_filter_motion`.
-- **Nota Auto Shift** (10) — real-time vocal pitch correction: an FFT NSDF pitch tracker
+- **Nota Auto Shift** (10) — in two sizes (L 700 / S 260, S·L toggle; S is the trace over Key, Scale, Amount, Speed, Human and Dry/wet) — real-time vocal pitch correction: an FFT NSDF pitch tracker
   with a detection range (voice-type presets), sensitivity and sibilant detection; Key +
   Scale (5 scales, 8 modes, a Custom 12-note set), Auto key and one-shot Learn (Krumhansl
   key profiles over the sung-note histogram), Follow scale device, or a MIDI target from
@@ -935,7 +935,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   mix, output, oversampling. Tabs: Curve (the transfer curve, the input on it) / Wear (pitch
   drift over 4 s in cents) / Output (harmonics against the hiss floor) and Tone / Output.
   30 factory presets. MCP: `read_vintage`.
-- **Nota Beat Repeat** (11) — tempo-synced repeater: Interval (1/8 … 4 bars, bars follow the
+- **Nota Beat Repeat** (11) — in two sizes (L 700 / S 260, S·L toggle; S is the timeline over Interval, Repeat, Chance, Gate, Decay and Dry/wet) — tempo-synced repeater: Interval (1/8 … 4 bars, bars follow the
   time signature), Offset, Grid with Triplet, Variation, Chance, Gate; Mix / Insert / Gate
   modes; Pitch and Pitch Decay, Decay, Volume; a repeat filter (LP / BP / HP, width in
   octaves, optionally narrowing with each repeat); Repeat (hold or Latch) and Mix. Timeline /
@@ -954,7 +954,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   signal, added content, images above the Nyquist) / Transfer graphs (drag Bits and Rate, the
   Nyquist and the filter, Drive), Grit / Output panels; 33 factory
   presets; MCP `read_crush`.
-- **Nota Ceiling** (14) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
+- **Nota Ceiling** (14) — in two sizes (L 700 / S 260, S·L toggle; S is the level graph over the character, Gain, Ceiling and Release) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
   program-dependent auto stage), Clean / Punch / Glue characters, look-ahead, stereo link,
   True Peak (4× inter-sample detection), Delta (hear what it removes), a key high-pass and an
   external key; a BS.1770 / R128 loudness meter (LUFS M / S / I, LRA, PLR, true peak) against

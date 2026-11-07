@@ -61,6 +61,11 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
     };
 
     public double Width => 700;
+    // S / L (#531): the size is the device's View param (DeviceView); S is a 260 card.
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => DeviceView.IsMini(engine, trackId, deviceIndex) ? 260 : Width;
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex)
+        => DeviceView.Index(ctx.Engine, ctx.TrackId, deviceIndex) < 0 ? null
+            : MidiCardHeader.SizeToggle(ctx, () => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex), m => DeviceView.SetMini(ctx.Engine, ctx.TrackId, deviceIndex, m));
     public bool FullBleed => true;
     public string? Subtitle => "Pitch";
 
@@ -614,17 +619,42 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             RefreshAll();
         }
 
-        var centre = TabFrame(new[] { "Trace", "Scale", "MIDI" }, centreHost, CentreBody, false, centreTab, t => { centreTab = t; ShowPanel(t); Refresh(); }, extrasHost);
-        ShowPanel(centreTab);
-        var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
-        var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
-        var right = new RuleSection { Width = 186, Child = rightCol };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
+        // ======================================================================
+        // L: tab frame + the panel that follows it
+        // ======================================================================
+        Control LargeBody()
+        {
+            var centre = TabFrame(new[] { "Trace", "Scale", "MIDI" }, centreHost, CentreBody, false, centreTab, t => { centreTab = t; ShowPanel(t); Refresh(); }, extrasHost);
+            ShowPanel(centreTab);
+            var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
+            var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
+            var right = new RuleSection { Width = 186, Child = rightCol };
+            DockPanel.SetDock(right, Dock.Right);
+            var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+            // ---- assemble ---------------------------------------------------------------
+            var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        }
+        // ======================================================================
+        // S: the Trace over Key · Scale and Amount · Speed · Human · Dry/wet
+        // ======================================================================
+        Control MiniBody()
+        {
+            centreTab = 0;
+            trace = new AsTraceView();
+            ToolTip.SetTip(trace, Loc.T("device.auto_shift.the_detected_pitch_teal_dots"));
+            var sel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0),
+                Children = { KeyDrop(true), ScaleDrop() } };
+            var knobs = new UniformGrid { Rows = 1, Margin = new Thickness(0, 6, 0, 0), Children = {
+                K(Amount, "AMOUNT", PctF, tip: Loc.T("device.auto_shift.amount_how_far_the_voice_2"), cellW: 56),
+                K(Speed, "SPEED", v => MsF(Exp(v, 2, 300)), tip: Loc.T("device.auto_shift.speed_how_fast_the_retune"), cellW: 56),
+                K(Human, "HUMAN", PctF, Teal, Loc.T("device.auto_shift.human_keeps_vibrato_and_slow"), cellW: 56),
+                K(Mix, "DRY/WET", PctF, cellW: 56) } };
+            var body = new DockPanel { Margin = new Thickness(6), Children = { Docked(knobs, Dock.Bottom), Docked(sel, Dock.Bottom), trace } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = body } };
+        }
+        Control root = DeviceView.IsMini(engine, track, di) ? MiniBody() : LargeBody();
 
         void Refresh()
         {

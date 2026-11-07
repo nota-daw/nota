@@ -185,6 +185,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   handle, the incoming signal's spectrum as a filled line, the cutoff lit on a frequency axis
   under the plot, and a hover marker with the frequency, note and gain. The Mod tab drops its
   Cutoff box and the Output tab its in / out / cutoff box.
+- **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
+  S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
+  graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale
+  and Amount, Speed, Human and Dry/wet; Beat Repeat's timeline over Interval and the Repeat
+  button and Chance, Gate, Decay and Dry/wet; Ceiling's level graph (drag the ceiling) over
+  the character and the reduction and loudness now, and Gain, Ceiling and Release. Each
+  device gets an appended View parameter, saved with the project and left alone by presets,
+  A/B and the automation menu; old projects open in L.
 - **Nota Auto Filter comes in two sizes** (nota-daw/nota#531): an S / L toggle in the card
   header, the first audio effect with one. L is the full editor; S is a 260 × 260 card with
   the response to drag over Freq, Res, Drive and Dry/wet knobs. The size is a new View

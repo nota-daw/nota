@@ -74,6 +74,7 @@ class BeatRepeat : public Device {
         Triplet,      // >=0.5 the grid is in triplets (×2/3)
         FilterType,   // 0 LP · 0.5 BP (the old filter) · 1 HP
         FilterNarrow, // >=0.5 each repeat narrows the band and follows the pitch down
+        View,        // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 
