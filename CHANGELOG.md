@@ -214,7 +214,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the quantiser (Anti-alias under it), Drive by the transfer (the mode under it); Grit (Dither,
   Jitter, Noise, the result box) and Output (Auto gain, the measurements box, DC filter, the
   images and THD+N) panels over Filter, Dry/wet and Gain; S is the quantiser over the mode and
-  Bits, Rate, Drive, Dry/wet.
+  Bits, Rate, Drive, Dry/wet. **Nota Valve:** Middle and Mid freq by the tone stack (the model
+  and OS under it), Distance and Axis by the cabinet (cab, mic and position under it), the
+  harmonics alone (drag for Gain, Even only under it); Tone (Bass, Treble, Presence, Bright,
+  Deep, the model box), Cabinet (on, the cuts, the cabinet box) and Output (auto-comp, the
+  measurements box, the gate) panels over Gain, Dry/wet and Output; S is the tone stack over the
+  model and Gain, Bass, Treble, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

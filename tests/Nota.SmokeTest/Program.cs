@@ -4570,7 +4570,7 @@ Check(engine.DeviceParamName(fxT, utilDev, 17) == "View" && !Nota.Application.De
 engine.DeviceSetParam(fxT, delDev, 12, 0.5f); // Delay Dry/Wet (index 12)
 Check(Math.Abs(engine.DeviceGetParam(fxT, delDev, 12) - 0.5f) < 0.001f, "Delay param round-trips");
 int ampDev = engine.AddBuiltinDevice(fxT, 6);
-Check(ampDev >= 0 && engine.DeviceName(fxT, ampDev) == "Nota Valve" && engine.DeviceParamCount(fxT, ampDev) == 23, "add built-in Nota Valve (23 params)");
+Check(ampDev >= 0 && engine.DeviceName(fxT, ampDev) == "Nota Valve" && engine.DeviceParamCount(fxT, ampDev) == 24, "add built-in Nota Valve (24 params, View appended)");
 Check(Math.Abs(engine.DeviceGetParam(fxT, ampDev, 0) - 2f) < 0.001f, $"Nota Valve defaults to Blues model (Model={engine.DeviceGetParam(fxT, ampDev, 0)})");
 Check(engine.DeviceParamName(fxT, ampDev, 8) == "Cab On" && engine.DeviceParamName(fxT, ampDev, 9) == "Cabinet"
       && engine.DeviceParamName(fxT, ampDev, 11) == "Axis" && engine.DeviceParamName(fxT, ampDev, 12) == "Gate", "mockup-2m params present (Cab On/Cabinet/Axis/Gate)");
@@ -10844,7 +10844,7 @@ Console.WriteLine("-- Nota Valve (effect kind 6) --");
     int avd = aveng.AddBuiltinDevice(avt, 6);
     Check(avd >= 0 && aveng.DeviceName(avt, avd) == "Nota Valve" && aveng.TrackDeviceBuiltinKind(avt, avd) == 6, "add Nota Valve (kind 6)");
     int avpc = aveng.DeviceParamCount(avt, avd);
-    Check(avpc == 23, $"Nota Valve exposes 23 params ({avpc})");
+    Check(avpc == 24, $"Nota Valve exposes 24 params, View appended ({avpc})");
     const int AModel = 0, AGain = 1, AMiddle = 3, AOutput = 6, AMix = 7, ACabOn = 8, ACab = 9, AMic = 10, AAxis = 11, AGate = 12, AOs = 13,
         AMidFreq = 14, ADist = 15, APos = 16, ALowCut = 17, AHighCut = 18, AEven = 19, AComp = 20, ABright = 21, ADeep = 22;
     Check(aveng.DeviceParamName(avt, avd, AMidFreq) == "Mid Freq" && aveng.DeviceParamName(avt, avd, ADist) == "Mic Distance"
