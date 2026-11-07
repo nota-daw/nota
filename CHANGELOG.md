@@ -137,11 +137,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   set in L. The parameters themselves are unchanged, so projects, presets and automation are
   unaffected. The effect racks keep their status line.
 - **Nota Auto Filter: the filter's controls around its graph** (nota-daw/nota#531): on the
-  Filter tab, Freq, Res and Drive are knobs in a column right of the response, Morph and
-  Dry/wet are knobs on its left, and LP / BP / HP / Notch, 12 / 24 and Clean / Analog sit in
-  one row under it. The right panel's Filter tab and its Mod → switch are gone (the Mod tab
-  keeps Target), so on Filter the panel shows Mod and Output, and on Envelope or LFO their
-  controls come back as its first tab. The parameters are unchanged. The response is drawn
+  Filter tab, Freq, Res and Morph are knobs in a column right of the response, and
+  LP / BP / HP / Notch, 12 / 24 and Clean / Analog sit in one row under it. Each control has
+  one place now: the right panel has no tabs of its own and follows the centre tab — on
+  Filter it shows the modulation (Target, the envelope and LFO amounts, Smooth, the sidechain
+  key), on Envelope and LFO their controls, with the on switch and Up / Down or Free / Sync
+  in its title bar — over Drive, Dry/wet (the larger knob) and Gain, which stay. The Mod and
+  Output tabs and their copies of Retrig, Analog, Tempo sync and Stereo phase are gone; the
+  Envelope and LFO graph titles name the modulation target and pick it on a click. The
+  parameters are unchanged. The response is drawn
   on the instruments' filter graph: the curve in the accent with a light fill and a hollow
   handle, the incoming signal's spectrum as a filled line, the cutoff lit on a frequency axis
   under the plot, and a hover marker with the frequency, note and gain. The Mod tab drops its

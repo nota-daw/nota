@@ -5,9 +5,11 @@
 // Filter" mockup (700 × 260) on the Lens / Compressor / Delay frame: a centre panel with
 // Filter / Envelope / LFO tabs — each one window, filling the panel, where the cutoff's
 // movement is seen (the response, the cutoff over time, the LFO over two bars). The Filter
-// tab holds its own controls: Morph and Dry/wet knobs left of the response, Freq, Res and
-// Drive right of it, the type, slope and circuit in a row under it. The right panel holds
-// the Envelope or LFO controls (following the centre tab; hidden on Filter), Mod and Output. Every
+// tab holds its own controls: Freq, Res and Morph right of the response, the type, slope and
+// circuit in a row under it. The right column follows the centre tab — the modulation on
+// Filter (target, amounts, smoothing, key), the Envelope or LFO controls on theirs — over the
+// output knobs (Drive · Dry/wet · Gain), which stay. Each param has one home; the Envelope and
+// LFO graph titles name the modulation target and pick it. Every
 // control is a device param, so automation / MIDI learn / presets / A-B / persistence come
 // for free; the sidechain source is routing.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -223,10 +225,10 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         }
 
         // Gauge knob over a normalized param (automation gesture, MIDI learn, live follow).
-        Control K(int p, string name, Func<double, string> fmt, double cellW = 50)
+        Control K(int p, string name, Func<double, string> fmt, double cellW = 50, double size = 34, bool bipolar = false)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(P(p), 1.0) { Accent = true, Default = engine.DeviceParamDefault(track, di, p), Width = 34, Height = 34 };
+            var knob = new Knob(P(p), 1.0) { Accent = true, Bipolar = bipolar, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
             knob.Format = fmt;
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(P(p)); };
             knob.GestureBegin += () => Begin(p);
@@ -249,8 +251,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // CENTRE — Filter: Morph · Dry/wet left of the response, Freq · Res · Drive right of
-        // it, the type, slope and circuit in one row under it.
+        // CENTRE — Filter: Freq · Res · Morph right of the response (Morph blends the type
+        // toward the next one), the type, slope and circuit in one row under it.
         // ======================================================================
         int centreTab = 0;
         AutoFilterCurve? curve = null;
@@ -271,8 +273,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         {
             curve = NewCurve();
 
-            var left = KnobColumn(K(Morph, "MORPH", Pct), K(DryWet, "DRY/WET", Pct));
-            var right = KnobColumn(K(Freq, "FREQ", v => Hz(HzOf(v))), K(Res, "RES", Pct), K(Drive, "DRIVE", v => v <= 0.001 ? "off" : Pct(v)));
+            var right = KnobColumn(K(Freq, "FREQ", v => Hz(HzOf(v))), K(Res, "RES", Pct), K(Morph, "MORPH", Pct));
 
             var types = Chips(TypeNames, i => Sel(Type, 4) == i, i => SetP(Type, i / 3f), Type, padX: 6);
             var slope = Seg(Slope, new[] { "12", "24" });
@@ -288,7 +289,6 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 Children =
                 {
                     Docked(switches, Dock.Bottom),
-                    Docked(new Border { Margin = new Thickness(0, 0, 6, 0), Child = left }, Dock.Left),
                     Docked(new Border { Margin = new Thickness(6, 0, 0, 0), Child = right }, Dock.Right),
                     curve,
                 },
@@ -312,6 +312,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             ToolTip.SetTip(envView, Loc.T("device.auto_filter.the_inputs_envelope_teal_and"));
             Learn(envView, EnvAmt);
             ValueEntry.AttachAll(envView, F(EnvAmt, "Env amount", Bip));
+            envView.TitleClicked += _ => PickTarget(envView);
             return new Border { Margin = new Thickness(8, 6), Child = envView };
         }
         void SyncEnvView()
@@ -334,6 +335,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 peak = Math.Max(peak, cutHist[i]);
             }
             envPeakHz = scN >= kTele + 2 * kHist ? HzOf(peak) : BaseHz();
+            if (envView is not null) envView.Title = "Envelope → " + TargetName();
             envView?.Set(envHist, cutHist, n, P(Freq), NotaNum.F($"base {Hz(BaseHz())}"), envWindowMs, envPeakHz);
         }
 
@@ -354,6 +356,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             ToolTip.SetTip(lfoView, Loc.T("device.auto_filter.the_lfos_movement_over_the"));
             Learn(lfoView, LfoAmt);
             ValueEntry.AttachAll(lfoView, F(LfoAmt, "LFO amount", Pct), F(LfoOffset, "LFO phase", v => Deg(v, 360)));
+            lfoView.TitleClicked += _ => PickTarget(lfoView);
             return new Border { Margin = new Thickness(8, 6), Child = lfoView };
         }
         void SyncLfoView()
@@ -365,7 +368,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             string mid, end;
             if (Synced()) { mid = "2"; end = "bar"; }
             else { double sec = cycles / hz; mid = NotaNum.Time(sec / 2); end = NotaNum.Time(sec); }
-            string title = "LFO → " + (Target() switch { 0 => "Freq", 1 => "Reso", _ => "Freq + Reso" });
+            string title = "LFO → " + TargetName();
             double phase = scN > S_LfoPhase && On(LfoOn) && Sc(S_Cpu) > 0 ? Sc(S_LfoPhase) : double.NaN;
             lfoView.Set(On(LfoOn), Sel(LfoWave, 5), P(LfoMorph), P(LfoAmt), P(LfoOffset), P(LfoPhase) * 0.5, smoothCycles, cycles, phase,
                 title, NotaNum.F($"±{Pct(P(LfoAmt))}"), P(LfoMorph) > 0.004 ? NotaNum.F($"morph {Pct(P(LfoMorph))}") : "", mid, end);
@@ -442,75 +445,57 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return g;
         }
 
-        Control ModTab()
+        // The panel's head: the bar over it (the height of the centre's tab bar) holds its
+        // on-switch on the left and its mode on the right.
+        static Control Head(Control left, Control? right = null)
         {
+            var d = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center };
+            if (right != null) d.Children.Add(Docked(right, Dock.Right));
+            d.Children.Add(Docked(left, Dock.Left));
+            return d;
+        }
+
+        // The modulation target (Freq · Reso · Freq + Reso), shared by the envelope and the LFO;
+        // the Envelope and LFO graphs name it in their title, a click there picks it.
+        string TargetName() => Target() switch { 0 => "Freq", 1 => "Reso", _ => "Freq + Reso" };
+        void PickTarget(Control anchor)
+        {
+            var fly = new Flyout();
+            var list = new StackPanel { Spacing = 1 };
+            string[] names = { "Freq", "Reso", "Freq + Reso" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                int iv = i;
+                bool cur = Target() == i;
+                var tb = new TextBlock { Text = names[i], FontSize = 10, Foreground = cur ? AccentBright : TextPrimary, FontWeight = cur ? FontWeight.SemiBold : FontWeight.Normal };
+                var b = new Border { Padding = new Thickness(8, 3), CornerRadius = NotaRadius.Cell, Background = cur ? NotaPalette.AccentSubtle : Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                b.PointerPressed += (_, e) => { SetP(ModTarget, iv / 2f); fly.Hide(); Refresh(); e.Handled = true; };
+                list.Children.Add(b);
+            }
+            fly.Content = new StackPanel { Width = 120, Spacing = 6, Children = { Caps(Loc.T("device.auto_filter.modulation_target_caps"), null, 8), list } };
+            fly.ShowAt(anchor, true);
+        }
+
+        // Filter tab: what moves the filter, in one place — the target, the two sources'
+        // amounts, the smoothing on their sum and the envelope's key.
+        (Control, Control) ModPanel()
+        {
+            var title = new TextBlock { Text = Loc.T("device.auto_filter.modulation"), FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
             var target = Chips(new[] { "Freq", "Reso", "Both" }, i => Target() == i, i => SetP(ModTarget, i / 2f), ModTarget, h: 15, padX: 6);
             var tRow = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*") };
             tRow.Children.Add(Caps("TARGET")); tRow.Children.Add(Col(target, 1));
-
-            var env = SliderRow("ENV", EnvAmt, Bip, bipolar: true, dim: () => !On(EnvOn));
-            var lfo = SliderRow("LFO", LfoAmt, Pct, modulation: true, dim: () => !On(LfoOn));
-            var gain = SliderRow("GAIN", Gain, GainF, bipolar: true);
             var smooth = SliderRow("SMOOTH", ModSmooth, SmoothF);
-            var ctxHost = new ContentControl();
-            readouts.Add(() => { Control want = centreTab == 0 ? gain : smooth; if (!ReferenceEquals(ctxHost.Content, want)) ctxHost.Content = want; });
-            var ctxRow = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = ctxHost };
-
-            // Two switches that follow the centre tab.
-            var sc = SidechainSwitch();
-            var analog = Toggle(Circuit, "Analog model");
-            var envIn = Toggle(EnvOn, "Envelope on input", live: () => engine.DeviceSidechainSource(track, di) >= 0 ? "Envelope on key" : "Envelope on input");
-            var lfoOnSw = Toggle(LfoOn, "LFO on");
-            var retrig = Toggle(LfoRetrig, "Retrig on onsets");
-            var sw1 = new ContentControl();
-            var sw2 = new ContentControl();
-            readouts.Add(() =>
-            {
-                (Control a, Control b) = centreTab switch { 1 => (envIn, sc), 2 => (lfoOnSw, retrig), _ => (sc, analog) };
-                if (!ReferenceEquals(sw1.Content, a)) { sw1.Content = null; sw2.Content = null; sw1.Content = a; sw2.Content = b; }
-            });
-
-            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,5,Auto") };
-            grid.Children.Add(GRow(tRow, 0));
-            grid.Children.Add(GRow(env, 2));
-            grid.Children.Add(GRow(lfo, 4));
-            grid.Children.Add(GRow(ctxRow, 6));
-            grid.Children.Add(GRow(sw1, 8));
-            grid.Children.Add(GRow(sw2, 10));
-            return new Border { Padding = new Thickness(8, 6), Child = grid };
+            ToolTip.SetTip(smooth, Loc.T("device.auto_filter.smooth_a_slew_on_the"));
+            return (Head(title), Rows(
+                tRow,
+                SliderRow("ENV", EnvAmt, Bip, bipolar: true, dim: () => !On(EnvOn)),
+                SliderRow("LFO", LfoAmt, Pct, modulation: true, dim: () => !On(LfoOn)),
+                smooth,
+                Rule(),
+                SidechainSwitch()));
         }
 
-        Control OutputTab()
-        {
-            var sliders = new StackPanel { Spacing = 6, Children = {
-                SliderRow("DRIVE", Drive, v => v <= 0.001 ? "off" : Pct(v)),
-                SliderRow("DRY/WET", DryWet, Pct),
-                SliderRow("GAIN", Gain, GainF, bipolar: true) } };
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-            btns.Children.Add(Latch(LfoRetrig, () => "Retrig", Loc.T("device.auto_filter.retrig_restart_the_lfo_on"), fill: true));
-            btns.Children.Add(Col(Latch(Circuit, () => "Analog", Loc.T("device.auto_filter.analog_a_gentle_saturation_after"), fill: true), 1));
-            var tempo = Toggle(LfoSync, "Tempo sync");
-            // Stereo phase: on sets 90°, a click on the value steps 45° → 180°.
-            var stereo = Switch("", () => P(LfoPhase) > 0.001f, () => SetP(LfoPhase, P(LfoPhase) > 0.001f ? 0f : 0.5f), out var stSync,
-                liveLabel: () => P(LfoPhase) > 0.001f ? NotaNum.F($"Stereo phase {P(LfoPhase) * 180:0}°") : "Stereo phase");
-            readouts.Add(stSync);
-            Learn(stereo, LfoPhase);
-            stereo.PointerReleased += (_, e) =>
-            {
-                if (e.InitialPressMouseButton != MouseButton.Right || P(LfoPhase) <= 0.001f) return;
-                float nx = P(LfoPhase) + 0.25f; if (nx > 1.001f) nx = 0.25f;
-                SetP(LfoPhase, nx); RefreshAll(); e.Handled = true;
-            };
-            ToolTip.SetTip(stereo, Loc.T("device.auto_filter.stereo_phase_the_right_channels"));
-
-            var body = new DockPanel { LastChildFill = false, Children = {
-                Docked(new Border { Margin = new Thickness(0, 2, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 5, Children = { tempo, stereo } }, Dock.Bottom),
-                Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(8, 6), Child = body };
-        }
-
-        Control EnvelopePanel()
+        (Control, Control) EnvelopePanel()
         {
             // Up / Down: the sign of the bipolar amount.
             var dir = Segments(new[] { "Up", "Down" }, () => P(EnvAmt) >= 0.5f ? 0 : 1, iv =>
@@ -519,7 +504,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 if (mag < 0.004) mag = 0.19;
                 SetP(EnvAmt, (float)(iv == 0 ? 0.5 + mag : 0.5 - mag));
                 RefreshAll();
-            }, out var dirSync, fill: true, padX: 6);
+            }, out var dirSync, padX: 6);
             readouts.Add(dirSync);
             Learn(dir, EnvAmt);
             var envSw = Toggle(EnvOn, "Envelope", live: () => engine.DeviceSidechainSource(track, di) >= 0 ? "Envelope on key" : "Envelope");
@@ -533,21 +518,20 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             hold.Margin = new Thickness(0, 0, 6, 0);
             holdRow.Children.Add(hold);
             holdRow.Children.Add(Col(holdTime, 1));
-            return Rows(
-                Pair(envSw, dir),
+            return (Head(envSw, dir), Rows(
                 SliderRow("AMOUNT", EnvAmt, Bip, bipolar: true, dim: () => !On(EnvOn)),
                 SliderRow("ATTACK", EnvAtt, v => Ms(AttMs(v))),
                 SliderRow("RELEASE", EnvRel, v => Ms(RelMs(v))),
                 holdRow,
                 Rule(),
-                SidechainSwitch());
+                SidechainSwitch()));
         }
 
-        Control LfoPanel()
+        (Control, Control) LfoPanel()
         {
             var lfoSw = Toggle(LfoOn, "LFO");
             ToolTip.SetTip(lfoSw, Loc.T("device.auto_filter.lfo_on_off"));
-            var sync = Seg(LfoSync, new[] { "Free", "Sync" }, fill: true);
+            var sync = Seg(LfoSync, new[] { "Free", "Sync" });
             var waves = Chips(WaveNames, i => Sel(LfoWave, 5) == i, i => SetP(LfoWave, i / 4f), LfoWave, padX: 4);
             // Stereo phase: on sets 90°, a right-click on it steps 45° → 180°.
             var stereo = Switch("", () => P(LfoPhase) > 0.001f, () => SetP(LfoPhase, P(LfoPhase) > 0.001f ? 0f : 0.5f), out var stSync,
@@ -563,15 +547,24 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             ToolTip.SetTip(stereo, Loc.T("device.auto_filter.stereo_phase_the_right_channels"));
             var retrig = Toggle(LfoRetrig, "Retrig");
             ToolTip.SetTip(retrig, Loc.T("device.auto_filter.retrig_restart_the_lfo_on"));
-            return Rows(
-                Pair(lfoSw, sync),
+            return (Head(lfoSw, sync), Rows(
                 waves,
                 SliderRow("RATE", LfoRate, RateF),
                 SliderRow("AMOUNT", LfoAmt, Pct, modulation: true, dim: () => !On(LfoOn)),
                 SliderRow("MORPH", LfoMorph, Pct),
                 SliderRow("PHASE", LfoOffset, v => Deg(v, 360)),
-                SliderRow("SMOOTH", ModSmooth, SmoothF),
-                Pair(retrig, stereo));
+                Pair(retrig, stereo)));
+        }
+
+        // Under every panel: the output — Drive · Dry/wet (the main knob) · Gain.
+        Control OutputStrip()
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), Margin = new Thickness(4, 5, 4, 4) };
+            Control Cell(Control c, int col) { c.HorizontalAlignment = HorizontalAlignment.Center; c.VerticalAlignment = VerticalAlignment.Bottom; return Col(c, col); }
+            g.Children.Add(Cell(K(Drive, "DRIVE", v => v <= 0.001 ? "off" : Pct(v), 54), 0));
+            g.Children.Add(Cell(K(DryWet, "DRY/WET", Pct, 58, size: 44), 1));
+            g.Children.Add(Cell(K(Gain, "GAIN", GainF, 54, bipolar: true), 2));
+            return new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(8, 0), Child = g };
         }
 
         // ======================================================================
@@ -597,7 +590,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             var centreHost = new ContentControl();
             var centreBodies = new Control?[3];
             var panelHost = new ContentControl();
-            var panelBodies = new Control?[3];
+            var headHost = new ContentControl();
+            var panels = new (Control Head, Control Body)?[3];
             var extras = Mono("", 7, TextTertiary);
             readouts.Add(() =>
             {
@@ -632,32 +626,21 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 };
             });
             Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => EnvelopeTab(), 2 => LfoTab(), _ => FilterTab() };
-            Control PanelBody(int t) => panelBodies[t] ??= t == 2 ? LfoPanel() : EnvelopePanel();
-            string[] panelTitles = { "", "Envelope", "LFO" };
-            // The right panel's first tab follows the Envelope and LFO centre tabs; on Filter (whose
-            // controls sit in the centre) it hides, and Mod and Output stay.
-            int rightTab = 0;
-            bool leftForMod = false;   // the Filter tab moved the panel off its first tab
-            TextBlock[] rightLabels = System.Array.Empty<TextBlock>();
-            Border[] rightBtns = System.Array.Empty<Border>();
-            Action<int>? rightSelect = null;
-            var rightBodies = new Control?[3];
-            Control RightBody(int t) => t == 0 ? PanelBody(Math.Max(centreTab, 1)) : rightBodies[t] ??= t == 1 ? ModTab() : OutputTab();
+            // The right column follows the centre tab — Filter: the modulation, Envelope / LFO:
+            // its controls — over the output, which stays.
             void ShowPanel(int t)
             {
-                if (rightLabels.Length > 0) rightLabels[0].Text = panelTitles[Math.Max(t, 1)];
-                if (rightBtns.Length > 0) rightBtns[0].IsVisible = t != 0;
-                if (t == 0) { if (rightTab == 0) { leftForMod = true; rightSelect?.Invoke(1); } }
-                else if (leftForMod && rightTab == 1) { leftForMod = false; rightSelect?.Invoke(0); }
-                else if (rightTab == 0) panelHost.Content = PanelBody(t);
+                var (head, body) = panels[t] ??= t switch { 1 => EnvelopePanel(), 2 => LfoPanel(), _ => ModPanel() };
+                headHost.Content = head;
+                panelHost.Content = body;
                 RefreshAll();
             }
 
             var centre = TabFrame(new[] { "Filter", "Envelope", "LFO" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
-            var rightFrame = TabFrame(new[] { panelTitles[1], "Mod", "Output" }, panelHost, RightBody, true, t => { rightTab = t; if (t != 1) leftForMod = false; RefreshAll(); }, null,
-                l => rightLabels = l, (b, sel) => { rightBtns = b; rightSelect = sel; });
             ShowPanel(centreTab);
-            var right = new RuleSection { Width = 186, Child = rightFrame };
+            var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
+            var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
+            var right = new RuleSection { Width = 186, Child = rightCol };
             DockPanel.SetDock(right, Dock.Right);
             var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
@@ -686,8 +669,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         return root;
 
         // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl,
-                         Action<TextBlock[]>? labels = null, Action<Border[], Action<int>>? hooks = null)
+        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
         {
             int sel = 0;
             var btns = new Border[tabs.Length];
@@ -724,8 +706,6 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             DockPanel.SetDock(barBorder, Dock.Top);
             Hi();
             host.Content = body(sel);
-            labels?.Invoke(btns.Select(b => (TextBlock)b.Child!).ToArray());
-            hooks?.Invoke(btns, i => { sel = i; Hi(); host.Content = body(i); changed?.Invoke(i); });
             return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
         }
     }

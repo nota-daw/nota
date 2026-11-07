@@ -913,10 +913,11 @@ audio effects after it keep running and keep their settings; saved with the proj
   key) and an LFO (5 waves, morph, free or tempo-synced, start phase, stereo phase, Retrig on
   onsets) driving the cutoff, the resonance or both, with Smooth. Tabs: Filter (draggable
   response over the incoming spectrum with the modulation range, the cutoff on the axis and a
-  hover marker, Morph and Dry/wet knobs on its left,
-  Freq, Res and Drive on its right, the type, slope and circuit under it) / Envelope (cutoff
-  over time) / LFO (motion over two bars); the right panel holds Envelope or LFO (following
-  the centre tab), Mod and Output. 30 factory presets. MCP: `read_filter_motion`.
+  hover marker, Freq, Res and Morph knobs on its right,
+  the type, slope and circuit under it) / Envelope (cutoff over time) / LFO (motion over two
+  bars), whose titles pick the modulation target; the right panel follows the centre tab
+  (modulation on Filter, the Envelope or LFO controls on theirs) over Drive, Dry/wet and Gain
+  knobs. 30 factory presets. MCP: `read_filter_motion`.
 - **Nota Auto Shift** (10) — real-time vocal pitch correction: an FFT NSDF pitch tracker
   with a detection range (voice-type presets), sensitivity and sibilant detection; Key +
   Scale (5 scales, 8 modes, a Custom 12-note set), Auto key and one-shot Learn (Krumhansl

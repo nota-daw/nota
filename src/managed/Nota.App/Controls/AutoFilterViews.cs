@@ -37,18 +37,30 @@ internal abstract class AfWindowBase : Control
     public Func<double>? StartH { get; set; }
     public bool Dragging => _drag;
 
+    /// <summary>A title that is also a control (the modulation target): drawn with a chevron,
+    /// a click on it raises this with its bounds instead of starting a drag.</summary>
+    public event Action<Rect>? TitleClicked;
+    protected Rect TitleRect;
+    private bool _titleHover;
+
     protected AfWindowBase() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.SizeAll); MinHeight = 36; }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (TitleClicked is not null && TitleRect.Contains(e.GetPosition(this))) { TitleClicked(TitleRect); e.Handled = true; return; }
         _drag = true; _start = e.GetPosition(this);
         _v0 = StartV?.Invoke() ?? 0; _h0 = StartH?.Invoke() ?? 0;
         GestureBegin?.Invoke(); e.Pointer.Capture(this); e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e)
     {
-        if (!_drag) return;
+        if (!_drag)
+        {
+            bool hover = TitleClicked is not null && TitleRect.Contains(e.GetPosition(this));
+            if (hover != _titleHover) { _titleHover = hover; Cursor = new Cursor(hover ? StandardCursorType.Hand : StandardCursorType.SizeAll); InvalidateVisual(); }
+            return;
+        }
         var p = e.GetPosition(this);
         double dy = (_start.Y - p.Y) / Math.Max(40, Bounds.Height), dx = (p.X - _start.X) / Math.Max(40, Bounds.Width);
         DragV?.Invoke(Math.Clamp(_v0 + dy * 0.5, 0, 1));
@@ -58,6 +70,37 @@ internal abstract class AfWindowBase : Control
     {
         if (!_drag) return;
         _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        if (_titleHover) { _titleHover = false; Cursor = new Cursor(StandardCursorType.SizeAll); InvalidateVisual(); }
+        base.OnPointerExited(e);
+    }
+
+    /// <summary>The window's title; with a TitleClicked listener, a chevron follows it and it
+    /// lifts to ink 2 under the pointer. Returns its bounds.</summary>
+    protected Rect DrawTitle(DrawingContext ctx, Rect frame, string title)
+    {
+        bool live = TitleClicked is not null;
+        var ink = live && _titleHover ? NotaPalette.TextSecondary : NotaGraph.TitleInk;
+        var r = NotaGraph.Title(ctx, frame, title, ink);
+        if (live)
+        {
+            double cx = r.Right + 6, cy = r.Center.Y + 0.5;
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                c.BeginFigure(new Point(cx - 2.5, cy - 1.2), false);
+                c.LineTo(new Point(cx, cy + 1.3));
+                c.LineTo(new Point(cx + 2.5, cy - 1.2));
+                c.EndFigure(false);
+            }
+            ctx.DrawGeometry(null, new Pen(ink, 1.1), g);
+            r = new Rect(r.X - 3, r.Y - 2, r.Width + 15, r.Height + 4);
+        }
+        TitleRect = live ? r : default;
+        return r;
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
@@ -79,6 +122,8 @@ internal sealed class AfEnvView : AfWindowBase
     private int _n;
     private double _base = 0.5, _peakHz, _windowMs = 600;
     private string _baseText = "", _winText = "";
+    /// <summary>The window's title (the card names the modulation target in it).</summary>
+    public string Title { get; set; } = "";
 
     /// <summary>The last <paramref name="n"/> history points (1 ms each), oldest first.</summary>
     public void Set(float[] env, float[] cut, int n, double baseNorm, string baseText, double windowMs, double peakHz)
@@ -126,7 +171,7 @@ internal sealed class AfEnvView : AfWindowBase
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(_cut, v => YCut(v)));
         }
 
-        NotaGraph.Title(ctx, frame, Loc.T("device.auto_filter.cutoff_over_time"));
+        DrawTitle(ctx, frame, Title.Length > 0 ? Title : Loc.T("device.auto_filter.cutoff_over_time"));
         string pk = NotaNum.Hz(_peakHz);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, pk, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         // The legend shares the title row, left of the peak read-out, above the plot.
@@ -225,12 +270,12 @@ internal sealed class AfLfoView : AfWindowBase
             }
         }
 
-        NotaGraph.Title(ctx, frame, _title);
+        var tr = DrawTitle(ctx, frame, _title);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _amt, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         if (_morphText.Length > 0)
         {
             var t = NotaGraph.AxisText(_morphText, NotaPalette.TextSecondary);
-            ctx.DrawText(t, new Point(Math.Min(86, w / 2), 3));
+            ctx.DrawText(t, new Point(tr.Right + 12, 3));
         }
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "1");
         var m = NotaGraph.AxisText(_mid);
