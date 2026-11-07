@@ -132,7 +132,8 @@ public sealed partial class DeviceChainView
     private void ApplyParams(ChainKind k, int di, float[] p)
     {
         int n = Math.Min(p.Length, ParamCount(k, di));
-        int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId) : -1;   // A/B keeps the card size
+        int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId)
+            : k == ChainKind.Effect ? Nota.Application.DeviceView.Index(_engine, _trackId, di) : -1;   // A/B keeps the card size
         // One undo step for the whole switch (specs/016).
         var targets = new List<MixTarget>(n);
         for (int i = 0; i < n; i++)

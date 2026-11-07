@@ -92,7 +92,6 @@ Nota.App/Controls/ArpGrid.cs	Length	# data: device parameter, port and value nam
 Nota.App/Controls/ArpGrid.cs	Ratchet	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ArpGrid.cs	Transpose	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ArpGrid.cs	Velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/Controls/AutoFilterCurve.cs	Response	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/AutoFilterViews.cs	LFO → Freq	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/AutoShiftViews.cs	Sung notes	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/AutoShiftViews.cs	in scale	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -310,7 +309,6 @@ Nota.App/Controls/VoltFilter.cs	Reso	# data: device parameter, port and value na
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Analog	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Analog model	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Both	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	CUTOFF	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Clean	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Cutoff	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Down	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -330,7 +328,6 @@ Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	LFO phase	# data: device par
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	LFO → 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Mod	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Notch	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	OUTPUT	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Output	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Reso	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Resonance	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2301,6 +2298,7 @@ Nota.Application/Engine/EngineContracts.cs	Pressure	# data: device parameter and
 Nota.Application/Engine/EngineContracts.cs	Tune	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/EngineContracts.cs	Volume	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/SectionNames.cs	Section 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/DeviceView.cs	View	# data: the engine's param name for an effect's card size, never shown
 Nota.Application/Instruments/KeysModel.cs	 pickup	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/KeysModel.cs	 voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/KeysModel.cs	 · pedal down	# data: device parameter, port and value names and live readouts of their values (FR-004)

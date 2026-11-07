@@ -28,5 +28,12 @@ internal interface IDeviceBody
     /// (e.g. "HYBRID", "DYNAMICS"); null shows no badge.</summary>
     string? Subtitle => null;
 
+    /// <summary>The card width for this device as it is set now — a body with an S / L size
+    /// (DeviceView) answers per device; the rest keep <see cref="Width"/>.</summary>
+    double WidthFor(Nota.Application.IAudioEngine engine, int trackId, int deviceIndex) => Width;
+
+    /// <summary>Extra controls for the card header (the S / L toggle), or null.</summary>
+    Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => null;
+
     Control Build(DeviceCardContext ctx, int deviceIndex);
 }

@@ -52,6 +52,7 @@ class AutoFilter : public Device {
         ModSmooth,   // slew on the modulation: 120·v² ms (0 = none)
         LfoOffset,   // LFO start phase (0..360°)
         LfoRetrig,   // restart the LFO on each input onset and at play (>=0.5)
+        View,        // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     // Scope telemetry layout (read by the card and MCP).

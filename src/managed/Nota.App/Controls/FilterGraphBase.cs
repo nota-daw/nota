@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The shared filter graph of the built-in instruments (#531). A subclass draws its own
+// The shared filter graph of the built-in instruments and Auto Filter (#531). A subclass draws its own
 // response (each instrument's filter model) and keeps its own drag; the base draws the rest
 // the same way everywhere:
 //   · the window, decade grid and the 0 / −24 dB lines;
 //   · the spectrum of what the instrument plays — after its filter — behind the curve
-//     (FilterSpectrum, from the engine's output tap while the graph is on screen);
+//     (FilterSpectrum, from the engine's output tap while the graph is on screen), or of what
+//     an audio effect gets (Auto Filter feeds it from its own scope ring);
 //   · the frequency axis under the plot, with the current cutoff lit on it (the labels it
 //     would cover step aside) and a dashed rule up to the curve;
 //   · a hover marker: a line, a dot on the curve and the frequency, note and gain there.
@@ -87,7 +88,7 @@ internal abstract class FilterGraphBase : Control
 
     private void SyncTimer()
     {
-        if (_spectrum is null || VisualRoot is null) { _timer?.Stop(); _timer = null; return; }
+        if (_spectrum is not { Tapped: true } || VisualRoot is null) { _timer?.Stop(); _timer = null; return; }
         if (_timer is not null) return;
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Render, (_, _) =>
         {
@@ -253,17 +254,27 @@ internal abstract class FilterGraphBase : Control
     }
 }
 
-/// <summary>The spectrum of an instrument's output in log bands, for a filter graph (#531):
-/// read from the engine's output tap (which runs only while someone reads), Hann-windowed,
-/// FFT'd and smoothed — quick to rise, slow to fall.</summary>
-internal sealed class FilterSpectrum(IAudioEngine engine, int trackId)
+/// <summary>The spectrum behind a filter graph in log bands (#531): either read from an
+/// instrument's output tap (which runs only while someone reads) or fed by its owner (an audio
+/// effect's own scope ring), Hann-windowed, FFT'd and smoothed — quick to rise, slow to fall.</summary>
+internal sealed class FilterSpectrum
 {
-    private const int N = 2048, BandCount = 128;
+    public const int N = 2048;
+    private const int BandCount = 128;
+    private readonly IAudioEngine? _engine;
+    private readonly int _trackId;
     private readonly float[] _buf = new float[N];
     private readonly double[] _re = new double[N], _im = new double[N];
     private static readonly double[] Hann = BuildHann();
     public double[] Bands { get; } = Fill(new double[BandCount], -120);
     public bool Live { get; private set; }
+    /// <summary>True when the graph reads the instrument's output tap on its own timer.</summary>
+    public bool Tapped => _engine is not null;
+
+    /// <summary>Reads an instrument's output tap.</summary>
+    public FilterSpectrum(IAudioEngine engine, int trackId) { _engine = engine; _trackId = trackId; }
+    /// <summary>Fed by its owner through <see cref="Feed"/>.</summary>
+    public FilterSpectrum() { }
 
     private static double[] BuildHann() { var w = new double[N]; for (int i = 0; i < N; i++) w[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (N - 1)); return w; }
     private static double[] Fill(double[] a, double v) { Array.Fill(a, v); return a; }
@@ -271,9 +282,22 @@ internal sealed class FilterSpectrum(IAudioEngine engine, int trackId)
     /// <summary>Read and analyse; false when nothing changed worth a redraw.</summary>
     public bool Update(double lo, double hi)
     {
-        int n = engine.InstrumentOutput(trackId, _buf);
+        if (_engine is null) return false;
+        int n = _engine.InstrumentOutput(_trackId, _buf);
         if (n < N) { if (!Live) return false; Live = false; return true; }
-        double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
+        return Analyse(lo, hi, _engine.SampleRate > 0 ? _engine.SampleRate : 48000);
+    }
+
+    /// <summary>Analyse N samples of the owner's ring from <paramref name="offset"/>; fewer goes quiet.</summary>
+    public bool Feed(float[] src, int offset, int n, double sampleRate, double lo, double hi)
+    {
+        if (n < N || offset < 0 || offset + N > src.Length) { bool was = Live; Live = false; return was; }
+        Array.Copy(src, offset, _buf, 0, N);
+        return Analyse(lo, hi, sampleRate > 0 ? sampleRate : 48000);
+    }
+
+    private bool Analyse(double lo, double hi, double sr)
+    {
         double peak = 0;
         for (int i = 0; i < N; i++) { _re[i] = _buf[i] * Hann[i]; _im[i] = 0; peak = Math.Max(peak, Math.Abs(_buf[i])); }
         bool sounding = peak > 1e-5;

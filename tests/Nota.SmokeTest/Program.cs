@@ -10702,7 +10702,10 @@ Console.WriteLine("-- Auto Filter (effect kind 7) --");
     Check(afdi >= 0, "add Auto Filter device");
     Check(afeng.TrackDeviceBuiltinKind(aft, afdi) == 7, "device reports builtin kind 7");
     int afpc = afeng.DeviceParamCount(aft, afdi);
-    Check(afpc == 26, $"Auto Filter exposes 26 params ({afpc})");
+    Check(afpc == 27, $"Auto Filter exposes 27 params ({afpc})");
+    Check(afeng.DeviceParamName(aft, afdi, 26) == "View" && afeng.DeviceParamDefault(aft, afdi, 26) == 0f
+          && Nota.Application.DeviceView.Index(afeng, aft, afdi) == 26 && !Nota.Application.DeviceView.IsMini(afeng, aft, afdi),
+        "appended View param (card size, #531) defaults to L");
     const int AfFreq = 0, AfRes = 1, AfType = 2, AfSlope = 3, AfEnvAmt = 5, AfEnvOn = 15, AfLfoAmt = 9, AfLfoRate = 10,
         AfLfoWave = 11, AfLfoSync = 19, AfTarget = 21, AfHoldTime = 22, AfSmooth = 23, AfOffset = 24, AfRetrig = 25;
     Check(afeng.DeviceParamName(aft, afdi, AfTarget) == "Mod Target" && afeng.DeviceParamName(aft, afdi, AfHoldTime) == "Env Hold Time"

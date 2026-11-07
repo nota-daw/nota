@@ -47,6 +47,7 @@ AutoFilter::AutoFilter() {
     p_[ModSmooth].store(0.0f);
     p_[LfoOffset].store(0.0f);
     p_[LfoRetrig].store(0.0f);
+    p_[View].store(0.0f); // L
 }
 
 void AutoFilter::setSampleRate(double sr, int32_t /*maxBlock*/) {
@@ -469,7 +470,7 @@ const char* AutoFilter::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Freq", "Res", "Type", "Slope", "Morph", "Env Amt", "Env Attack",
         "Env Release", "Env Hold", "LFO Amt", "LFO Rate", "LFO Wave", "LFO Morph", "Drive", "Dry/Wet", "Env On",
         "LFO On", "Gain", "Circuit", "LFO Sync", "LFO Stereo", "Mod Target", "Env Hold Time", "Mod Smooth",
-        "LFO Offset", "LFO Retrig"};
+        "LFO Offset", "LFO Retrig", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

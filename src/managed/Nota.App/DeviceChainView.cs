@@ -237,6 +237,7 @@ public sealed partial class DeviceChainView : UserControl
         Control body;
         double width;
         bool fullBleed = false;
+        Control? headerExtra = null;
         string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
         if (kind == -1) return PluginCardFor(ChainKind.Effect, index, count);   // hosted VST3 / AU
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
@@ -248,8 +249,10 @@ public sealed partial class DeviceChainView : UserControl
         else
         {
             var strategy = _cardFactory.Resolve(kind);
-            body = strategy.Build(NewCardContext(), index);
-            width = strategy.AutoWidth ? double.NaN : strategy.Width;   // NaN → card sizes to content
+            var bodyCtx = NewCardContext();
+            body = strategy.Build(bodyCtx, index);
+            width = strategy.AutoWidth ? double.NaN : strategy.WidthFor(_engine, _trackId, index);   // NaN → card sizes to content
+            headerExtra = strategy.HeaderAccessory(bodyCtx, index);
             fullBleed = strategy.FullBleed;
             if (strategy.Subtitle is { } sub) tag = sub;
         }
@@ -257,7 +260,8 @@ public sealed partial class DeviceChainView : UserControl
         // almanac body inset (6).
         var spec = new ShellSpec(
             Name: name, Subtitle: tag, DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
-            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect);
+            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect,
+            HeaderExtra: headerExtra, Compact: width < 300);
         return BuildCardShell(spec, fullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
     }
 

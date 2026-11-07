@@ -136,6 +136,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   size, Length's Start from, Velocity's random direction and Random's seed and Lock are now
   set in L. The parameters themselves are unchanged, so projects, presets and automation are
   unaffected. The effect racks keep their status line.
+- **Nota Auto Filter: the filter's controls around its graph** (nota-daw/nota#531): on the
+  Filter tab, Freq, Res and Drive are knobs in a column right of the response, Morph and
+  Dry/wet are knobs on its left, and LP / BP / HP / Notch, 12 / 24 and Clean / Analog sit in
+  one row under it. The right panel's Filter tab and its Mod → switch are gone (the Mod tab
+  keeps Target), so on Filter the panel shows Mod and Output, and on Envelope or LFO their
+  controls come back as its first tab. The parameters are unchanged. The response is drawn
+  on the instruments' filter graph: the curve in the accent with a light fill and a hollow
+  handle, the incoming signal's spectrum as a filled line, the cutoff lit on a frequency axis
+  under the plot, and a hover marker with the frequency, note and gain. The Mod tab drops its
+  Cutoff box and the Output tab its in / out / cutoff box.
+- **Nota Auto Filter comes in two sizes** (nota-daw/nota#531): an S / L toggle in the card
+  header, the first audio effect with one. L is the full editor; S is a 260 × 260 card with
+  the response to drag over Freq, Res, Drive and Dry/wet knobs. The size is a new View
+  parameter appended to the device, so it saves with the project; presets, A/B and the
+  automation menu leave it alone, and old projects open in L.
 - **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
   stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
   under it and the A / D / S / R letter in the box's corner. The box still drags and types
