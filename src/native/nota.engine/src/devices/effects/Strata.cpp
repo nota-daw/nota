@@ -3,8 +3,8 @@
 //
 // Nota Strata implementation. Control-path math untouched. Silent stretches auto-sleep via isIdle():
 // only once no layer can still sound (stopped / empty / no layers) and nothing is
-// being recorded. The loop clock still advances through the sleep so the wake-up
-// downbeat has no phase jump.
+// being recorded. A stopped loop holds its position at the top, so Play starts it
+// from the downbeat.
 
 #include "Strata.h"
 
@@ -76,6 +76,7 @@ void Strata::deviceAction(int32_t id, int32_t iarg, float farg) {
 int32_t Strata::layerWave(int32_t layer, float* out, int32_t maxSamples) const {
     if (!out || maxSamples <= 0 || layer < 0 || layer >= layerCount_.load()) return 0;
     int64_t len = loopLen_.load();
+    if (len <= 0 && layer == recLayer_.load()) len = std::min((int64_t)recCount_, maxLoop_); // the first pass so far
     if (len <= 0) return 0;
     const float* b = buf_[layer].data();
     int32_t n = maxSamples;
@@ -97,25 +98,32 @@ void Strata::process(float* buf, int32_t frames) {
     const int quant = std::clamp((int)std::lround(p_[Quantize].load()), 0, 2);
     const bool reverse = p_[Reverse].load() > 0.5f;
 
-    const int64_t len = loopLen_.load();
-    const int lc = layerCount_.load();
+    int64_t len = 0;
+    int lc = 0;
     const double barSampT = bpm_ > 1.0 ? (60.0 / bpm_) * sr * tsNum_ : 0.0; // transport bar
-    const double barLen = (len > 0 && loopBars_ > 0) ? (double)len / loopBars_ : barSampT;
-    const double beatLen = barLen > 0 ? barLen / std::max(1, tsNum_) : 0.0;
-
-    // Per-block feedback-decayed playback gains (older layers sink under newer).
+    const double beatSampT = barSampT / std::max(1, tsNum_);
+    double barLen = 0.0, beatLen = 0.0;
     float eg[kMaxLayers];
-    for (int k = 0; k < kMaxLayers; ++k)
-        eg[k] = std::pow(10.0f, gainDb_[k].load() / 20.0f) * std::pow(fb, (float)std::max(0, lc - 1 - k));
+    // Loop geometry and the per-block feedback-decayed playback gains (older layers sink
+    // under newer). Re-read when a command closes the first loop or stacks a layer.
+    auto loadLoop = [&] {
+        len = loopLen_.load();
+        lc = layerCount_.load();
+        barLen = (len > 0 && loopBars_ > 0) ? (double)len / loopBars_ : barSampT;
+        beatLen = barLen > 0 ? barLen / std::max(1, tsNum_) : 0.0;
+        for (int k = 0; k < kMaxLayers; ++k)
+            eg[k] = std::pow(10.0f, gainDb_[k].load() / 20.0f) * std::pow(fb, (float)std::max(0, lc - 1 - k));
+    };
+    loadLoop();
 
     int mode = mode_.load();
     int recL = recLayer_.load();
 
     // Idle skip: silent input with nothing sounding, nothing recording and no queued
     // command leaves the buffer untouched (silent input in, silent input out — no wet
-    // is summed in these states). The loop clock still advances exactly as the full
-    // path would, so the wake-up downbeat has no phase jump. Anything that could make
-    // sound — recording/playing layers, a queued command — wakes into the full path.
+    // is summed in these states). Only a stopped or empty loop sleeps, and neither
+    // moves its clock. Anything that could make sound — recording/playing layers, a
+    // queued command, a count-in — wakes into the full path.
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     if (inSilent && idle_) {
         const int m = mode_.load();
@@ -124,53 +132,53 @@ void Strata::process(float* buf, int32_t frames) {
         if (sounding || pending_.load(std::memory_order_acquire) >= 0) {
             wake();
         } else {
-            if (len > 0) {
-                const double step = (reverse ? -speed : speed);
-                for (int32_t i = 0; i < frames; ++i) {
-                    pos_ += step;
-                    if (pos_ >= len) pos_ -= len;
-                    if (pos_ < 0) pos_ += len;
-                }
-            }
             return;
         }
     }
 
     for (int32_t i = 0; i < frames; ++i) {
         const float inL = buf[i * 2] * inGain, inR = buf[i * 2 + 1] * inGain;
-        const bool recording = (mode == M_Rec || mode == M_Over) && recL >= 0;
-        const double prevPos = pos_;
+        const bool firstPass = mode == M_Rec && len <= 0;
 
         // Apply a queued command at the right boundary.
         int cmd = pending_.load(std::memory_order_acquire);
         if (cmd >= 0) {
             bool atLoopStart = false, atBar = false, atBeat = false;
             if (len > 0) {
-                // Boundaries derived from the loop's own grid (computed after advance below);
-                // approximate here using prevPos vs a one-sample lookahead.
-                double np = prevPos + (recording ? 1.0 : (reverse ? -speed : speed));
-                double nn = np;
+                // Boundaries on the loop's own grid: the position now vs one sample on.
+                const bool rec = (mode == M_Rec || mode == M_Over) && recL >= 0;
+                double nn = pos_ + (rec ? 1.0 : (reverse ? -speed : speed));
                 if (nn >= len) nn -= len;
                 if (nn < 0) nn += len;
-                atLoopStart = (nn < prevPos) || (nn == 0.0);
-                if (barLen > 0) atBar = atLoopStart || std::floor(prevPos / barLen) != std::floor(nn / barLen);
-                if (beatLen > 0) atBeat = atLoopStart || std::floor(prevPos / beatLen) != std::floor(nn / beatLen);
-            } else if (mode == M_Rec && barSampT > 0) {
+                const bool back = reverse && !rec;   // a reversed loop's top is where it wraps from 0 to the end
+                atLoopStart = (back ? nn > pos_ : nn < pos_) || (nn == 0.0);
+                if (barLen > 0) atBar = atLoopStart || std::floor(pos_ / barLen) != std::floor(nn / barLen);
+                if (beatLen > 0) atBeat = atLoopStart || std::floor(pos_ / beatLen) != std::floor(nn / beatLen);
+            } else if (firstPass && countLeft_ <= 0.0) {
+                // The first pass closes on the transport's grid, so the loop is whole bars (beats).
                 double nr = recCount_ + 1.0;
-                atBar = std::floor(recCount_ / barSampT) != std::floor(nr / barSampT);
+                if (barSampT > 0) atBar = std::floor(recCount_ / barSampT) != std::floor(nr / barSampT);
+                if (beatSampT > 0) atBeat = std::floor(recCount_ / beatSampT) != std::floor(nr / beatSampT);
             }
-            bool immediate = (cmd == C_Undo || cmd == C_Clear) || (mode == M_Empty) || (len <= 0 && mode != M_Rec);
-            bool go = immediate || quant == 0 || (cmd == C_Record ? atLoopStart : (quant == 1 ? atBar : atBeat));
+            // Editing is immediate; so is anything on an empty or stopped loop (no running
+            // grid to wait for). Record waits for the loop's top, except while it closes the first pass.
+            // A count-in takes commands at once (Stop / Undo / Clear cancel it, the rest are dropped).
+            bool immediate = (cmd == C_Undo || cmd == C_Clear) || mode == M_Empty || mode == M_Stop || (len <= 0 && !firstPass)
+                || (firstPass && countLeft_ > 0.0);
+            bool onGrid = quant == 1 ? atBar : atBeat;
+            bool go = immediate || quant == 0 || (cmd == C_Record && !firstPass ? atLoopStart : onGrid);
             if (go) {
                 applyCommand(cmd, len);
                 pending_.store(-1, std::memory_order_release);
                 mode = mode_.load();
                 recL = recLayer_.load();
+                loadLoop();
             }
         }
+        const bool recording = (mode == M_Rec || mode == M_Over) && recL >= 0 && countLeft_ <= 0.0;
 
         // Record the (gained) input into the active layer at the integer position.
-        if ((mode == M_Rec || mode == M_Over) && recL >= 0) {
+        if (recording) {
             int64_t w = (int64_t)pos_;
             if (mode == M_Rec && loopLen_.load() <= 0) w = (int64_t)recCount_; // first pass grows
             if (w >= 0 && w < maxLoop_) {
@@ -181,7 +189,7 @@ void Strata::process(float* buf, int32_t frames) {
 
         // Sum the playing layers (skip the one being recorded — it's monitored live).
         float wetL = 0.0f, wetR = 0.0f;
-        if (mode != M_Stop && len > 0) {
+        if (mode != M_Stop && mode != M_Empty && len > 0) {
             int64_t p0 = (int64_t)pos_;
             double fr = pos_ - p0;
             int64_t p1 = p0 + 1;
@@ -199,18 +207,22 @@ void Strata::process(float* buf, int32_t frames) {
         buf[i * 2] = inL + wetL;
         buf[i * 2 + 1] = inR + wetR;
 
-        // Advance the loop / recording clock.
-        if (mode == M_Rec && loopLen_.load() <= 0) {
+        // Advance the loop / recording clock. A count-in runs down before the first pass;
+        // a stopped loop holds its place.
+        if (mode == M_Rec && len <= 0 && countLeft_ > 0.0) {
+            countLeft_ -= 1.0;
+        } else if (mode == M_Rec && len <= 0) {
             recCount_ += 1.0;
             pos_ = recCount_;
             if (recCount_ >= maxLoop_ - 1) {
                 finalizeFirstLoop();
+                stopRecording();
                 mode = M_Play;
                 mode_.store(M_Play);
                 recL = -1;
-                recLayer_.store(-1);
+                loadLoop();
             }
-        } else if (len > 0) {
+        } else if (len > 0 && mode != M_Stop && mode != M_Empty) {
             pos_ += recording ? 1.0 : (reverse ? -speed : speed);
             if (pos_ >= len) pos_ -= len;
             if (pos_ < 0) pos_ += len;
@@ -281,7 +293,8 @@ void Strata::setParam(int32_t i, float v) {
 }
 
 // Scope pack: [mode, loopBars, posPhase, layerCount, recLayer, recProgress,
-// then per layer k: state, gainDb, muted]. Read lock-free by the UI.
+// then per layer k: state, gainDb, muted, then countInBeats, loopBpm, beatsPerBar, pendingCmd].
+// Read lock-free by the UI.
 int32_t Strata::scopeRead(float* out, int32_t maxSamples) const {
     if (!out || maxSamples < 6) return 0;
     int lc = layerCount_.load();
@@ -297,6 +310,17 @@ int32_t Strata::scopeRead(float* out, int32_t maxSamples) const {
         out[n++] = (float)state_[k].load();
         out[n++] = gainDb_[k].load();
         out[n++] = muted_[k].load() ? 1.0f : 0.0f;
+    }
+    // Tail (after the full layer table): count-in beats left, the tempo at which the
+    // loop is exactly loopBars bars, the beats per bar, and the command waiting for its
+    // boundary (-1 = none).
+    if (n == 6 + kMaxLayers * 3 && n + 4 <= maxSamples) {
+        const double beatT = bpm_ > 1.0 ? (60.0 / bpm_) * sr_ : 0.0;
+        const double left = countLeft_;
+        out[n++] = (left > 0.0 && beatT > 0.0) ? (float)std::ceil(left / beatT) : 0.0f;
+        out[n++] = len > 0 ? (float)(60.0 * tsNum_ * loopBars_ * sr_ / (double)len) : 0.0f;
+        out[n++] = (float)tsNum_;
+        out[n++] = (float)pending_.load(std::memory_order_acquire);
     }
     return n;
 }
@@ -376,6 +400,7 @@ void Strata::setState(const uint8_t* data, int32_t size) {
     layerCount_.store(lc);
     recLayer_.store(-1);
     recCount_ = 0;
+    countLeft_ = 0;
     pos_ = 0;
     mode_.store(lc > 0 ? M_Stop : M_Empty);
     wake();
@@ -388,11 +413,19 @@ void Strata::finalizeFirstLoop() {
     loopBars_ = std::max(1, (int)std::llround(len / std::max(1.0, barSamp)));
     loopLen_.store(std::min(len, maxLoop_));
     state_[0].store(LS_Play);
+    pos_ = 0;
+    recCount_ = 0;
 }
 
 // Runs on the audio thread only.
 void Strata::applyCommand(int cmd, int64_t len) {
     int mode = mode_.load(), lc = layerCount_.load();
+    const bool firstPass = mode == M_Rec && loopLen_.load() <= 0;
+    if (firstPass && countLeft_ > 0.0) { // still counting in: nothing recorded yet
+        countLeft_ = 0;
+        if (cmd == C_Stop || cmd == C_Undo || cmd == C_Clear) cmd = C_Clear;
+        else return;
+    }
     switch (cmd) {
     case C_Record:
     case C_Overdub:
@@ -404,7 +437,20 @@ void Strata::applyCommand(int cmd, int64_t len) {
             state_[0].store(LS_Rec);
             recCount_ = 0;
             pos_ = 0;
-        } else if (lc < kMaxLayers && recLayer_.load() < 0) { // stack a new layer
+            // Count-in: one bar of the transport's tempo before the first sample lands.
+            countLeft_ = p_[CountIn].load() > 0.5f && bpm_ > 1.0 ? (60.0 / bpm_) * sr_ * tsNum_ : 0.0;
+            break;
+        }
+        if (firstPass) { // Record closes the first pass and plays it; Overdub closes it and stacks layer 2
+            finalizeFirstLoop();
+            stopRecording();
+            mode_.store(M_Play);
+            len = loopLen_.load();
+            if (cmd == C_Record) break;
+            mode = M_Play;
+        }
+        if (mode == M_Stop) pos_ = 0;
+        if (lc < kMaxLayers && recLayer_.load() < 0) { // stack a new layer
             int k = lc;
             clearLayer(k, len);
             recLayer_.store(k);
