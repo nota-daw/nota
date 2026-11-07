@@ -1066,7 +1066,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   delay or detune over two cycles (drag for Amount) over the voices' stereo field, with Amount, Rate
   and Offset beside it; a Voice panel (Feedback, Width, Warmth, HPF, the detune and delay ranges)
   over Mix; 34 factory presets; MCP `read_chorus` / `set_chorus`.
-- **Nota Vocoder** (26) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
+- **Nota Vocoder** (26) — in two sizes (L 700 / S 260, S·L toggle; S is the band graph over Bands, Formant, Dry/wet, Gain) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
   key meter); the carrier is an internal Saw (at a Pitch, C0–C7 — a robot voice by default), Noise,
   or another track picked on the card with its colour (Pre / Post tap; keeps feeding while muted),
   with a Tilt. 8–32 bands between Low and High, Q, Formant ±12 st, Attack, Release; Unvoiced noise
