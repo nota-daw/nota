@@ -924,8 +924,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   key profiles over the sung-note histogram), Follow scale device, or a MIDI target from
   another track's notes (Note / Scale, Latch, Oct lock, Glide within a bend range); Amount,
   Speed, Range, Human (keeps vibrato); a PSOLA shifter with Shift, Fine, Preserve formants
-  and Formant shift, Skip sibilants, Mix, latency compensated. Trace / Scale / MIDI graphs, a
-  Shift / Detect panel; 34 factory presets; MCP `read_auto_shift`.
+  and Formant shift, Skip sibilants, Mix, latency compensated. Trace / Scale / MIDI graphs with
+  their knobs beside them, a right panel that follows them (Detect · Key · MIDI) over Shift,
+  Dry/wet and Formant knobs; 34 factory presets; MCP `read_auto_shift`.
 - **Nota Vintage** (8) — degradation and saturation: 6 era characters
   (Vinyl/Cassette/Reel/VHS/Tube/Analog, with the voicing switchable off), drive, tone with a
   Warm / Flat / Dark model and low / high shelves, wow (free or tempo-synced) and flutter with

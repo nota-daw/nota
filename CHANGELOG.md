@@ -136,6 +136,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   size, Length's Start from, Velocity's random direction and Random's seed and Lock are now
   set in L. The parameters themselves are unchanged, so projects, presets and automation are
   unaffected. The effect racks keep their status line.
+- **Nota Auto Shift: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
+  each graph fills its tab with its own knobs in a column on the right — Amount, Speed and
+  Human by the Trace, Glide and Bend by the MIDI target — and the scale's notes under the
+  Scale histogram. The right panel loses its Shift / Detect tabs and follows the centre tab:
+  Detect on Trace (voice preset in its title bar, Low, High, Sens, Skip sibilants), Key on
+  Scale (Auto / Manual / MIDI in its title bar, key and scale, Fine, Range, Learn with what it
+  heard, Follow Scale device), MIDI on MIDI (the source track in its title bar, Note / Scale,
+  Latch, Oct lock, Pitch bend). Under it on every tab: Preserve formants and the Shift,
+  Dry/wet (the larger knob) and Formant knobs. Amount, Speed, Key, Learn and Follow lose their
+  second copies, the scale its row of segments next to the menu, and the Note and Learn
+  reading boxes give way to the tab bar's read-out. The parameters are unchanged.
 - **Nota Auto Filter: the filter's controls around its graph** (nota-daw/nota#531): on the
   Filter tab, Freq, Res and Morph are knobs in a column right of the response, and
   LP / BP / HP / Notch, 12 / 24 and Clean / Analog sit in one row under it. Each control has
