@@ -884,13 +884,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   tail; output stage with dry level, bass mono, wet only and latency compensation for the
   diffuser. Tabs: Space / Tone · Mod and Levels / Output, over a live decay-tail window
   (drag the pre-delay marker or the tail). 30 factory presets.
-- **Nota Delay** (3) — independent L/R times (ms or tempo-synced 1/16…1/2 with triplets
+- **Nota Delay** (3) — in two sizes (L 700 / S 260, S·L toggle) — independent L/R times (ms or tempo-synced 1/16…1/2 with triplets
   and dotted values), Link, feedback, spread, ping-pong; a tone stage in the loop (low cut,
   high cut, allpass diffusion, tape saturation) with tape WOW modulation; Freeze (loop held,
   input muted) and Clear loop; a time change either crossfades (Fade on change) or glides,
   bending the pitch tape-style; output stage with dry level, width, bass mono, wet only and
-  latency compensation for the diffuser. Tabs: Time / Loop · Wow and Levels / Output, over a
-  live repeat window that lights the repeat sounding now. Tap tempo. 29 factory presets.
+  latency compensation for the diffuser. Tabs: Time / Loop · Wow over a live repeat window that
+  lights the repeat sounding now, with their knobs beside it, and a right panel that follows them
+  (Stereo · Loop) over Dry, Mix and Out. Tap tempo. 29 factory presets.
 - **Nota Utility** (4) — in two sizes (L 700 / S 260, S·L toggle) — gain, L/R balance, stereo width 0–400 % with an L/R or M/S law, channel
   mode (Stereo / Left / Right / Swap), mono below a cutoff at 6 / 12 / 24 dB/oct, mute, phase
   invert per side; Gain match and continuous Level match to the input or a Target (LUFS-S / peak /

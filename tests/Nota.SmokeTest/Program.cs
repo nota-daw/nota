@@ -4563,7 +4563,7 @@ Check(Rms(buf, frames) > 1e-4f, $"audio flows through EQ + Compressor chain (rms
 int revDev = engine.AddBuiltinDevice(fxT, 2);
 Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 21, "add built-in Reverb (21 params)");
 int delDev = engine.AddBuiltinDevice(fxT, 3);
-Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 24, "add built-in Delay (24 params)");
+Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 25, "add built-in Delay (25 params, View appended)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
 Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 18, "add built-in Utility (18 params, View appended)");
 Check(engine.DeviceParamName(fxT, utilDev, 17) == "View" && !Nota.Application.DeviceView.IsMini(engine, fxT, utilDev), "Utility's View param (card size, #531) defaults to L");

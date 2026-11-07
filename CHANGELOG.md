@@ -224,7 +224,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   it), the harmonics alone (Even only under it); Character (on, the tone model, the shelves, the
   character box), Wear (sync, the rates, Wear, follow, stereo drift) and Output (auto-comp, the
   measurements box, noise, hiss HP, Tube / Analog) panels over Dry/wet and Output; S is the curve
-  over the character and Drive, Tone, Wow, Dry/wet.
+  over the character and Drive, Tone, Wow, Dry/wet. **Nota Delay:** L and R time (ms or a note
+  division in the same place) and Feedback by the repeat window on Time (the mode and Link, Ping,
+  Fade under it), Diffuse and the wow on Loop · Wow (Tape mode and Clear loop under it); Stereo
+  (Tap tempo, Spread, Width, Mono f, Wet only, latency comp) and Loop (Freeze, the repeats'
+  filter, the wet meter) panels over Dry, Dry/wet and Out; S is the window over the mode and L,
+  R, Feedback, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

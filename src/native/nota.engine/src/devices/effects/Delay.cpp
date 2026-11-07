@@ -38,6 +38,7 @@ Delay::Delay() {
     set(BassMono, 0.0f);
     set(WetOnly, 0.0f);
     set(LatencyComp, 1.0f);
+    set(View, 0.0f); // L
 }
 
 void Delay::setSampleRate(double sr, int32_t /*maxBlock*/) {
@@ -291,7 +292,7 @@ void Delay::process(float* buf, int32_t frames) {
 const char* Delay::paramName(int32_t i) const {
     static const char* nm[] = {"Sync", "Time L", "Time R", "Div L", "Div R", "Link L/R", "Feedback", "Spread",
         "Ping-Pong", "Wow Rate", "Wow Depth", "Freeze", "Dry/Wet", "Output", "Dry Level", "Diffuse", "Low Cut",
-        "High Cut", "Tape Mode", "Fade on Change", "Width", "Bass Mono", "Wet Only", "Latency Comp"};
+        "High Cut", "Tape Mode", "Fade on Change", "Width", "Bass Mono", "Wet Only", "Latency Comp", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 
