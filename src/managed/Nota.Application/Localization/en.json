@@ -1414,6 +1414,7 @@
     "device.reverb.bass_mono_below_this_frequency": "Bass mono — below this frequency the tail is mono, so a wide reverb does not smear the low end (off at the far left)",
     "device.reverb.early_reflections_the_first_discrete": "Early reflections — the first discrete echoes off the walls, spaced by the algorithm and the size",
     "device.reverb.freeze_hold_the_tail_forever": "Freeze — hold the tail forever; the input is muted and nothing decays",
+    "device.reverb.highs_8_khz": "highs (8 kHz)",
     "device.reverb.input_muted_tail_held": "input muted · tail held",
     "device.reverb.kill_tail_empty_the_reverb": "Kill tail — empty the reverb at once; whatever is still ringing (or frozen) stops",
     "device.reverb.latency_comp": "Latency comp.",

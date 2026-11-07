@@ -79,6 +79,15 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         static double OutDb(double v) => v <= 0.0005 ? -100 : 20 * Math.Log10(v * 2);
         static double DryDb(double v) { double g = 2 * v * v; return g <= 1e-5 ? -100 : 20 * Math.Log10(g); }
         static double Rt60(double v) => Exp(v, 0.2, 12);
+        // The highs' decay (8 kHz) under HF damp: the combs' one-pole damping (coefficient
+        // damp × 0.4, Reverb.cpp) takes a little more off them on every ~30 ms loop.
+        double RtHigh(double rt)
+        {
+            double d = P(HFDamp) * 0.4, wv = 2 * Math.PI * 8000 / 48000;
+            double g = (1 - d) / Math.Sqrt(1 - 2 * d * Math.Cos(wv) + d * d);
+            double perLoop = -6.9 * 0.03 / rt;   // ln of the loop gain that gives this RT60
+            return rt * perLoop / (perLoop + Math.Log(Math.Max(g, 1e-6)));
+        }
         static string Secs(double s) => s >= 10 ? NotaNum.F($"{s:0.0} s") : NotaNum.F($"{s:0.00} s");
         static double LowHz(double v) => Exp(v, 20, 1000);
         static double HighHz(double v) => Exp(v, 1000, 20000);
@@ -160,7 +169,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         var start = DateTime.UtcNow;
         ReverbTailView NewTail()
         {
-            var t = new ReverbTailView { DecayValue = () => P(Decay) };
+            var t = new ReverbTailView();
             t.Changed += (target, v) => { Raw(target == 0 ? Decay : PreDelay, (float)v); SyncTail(); };
             t.GestureBegin += target => Begin(target == 0 ? Decay : PreDelay);
             t.GestureEnd += target => End(target == 0 ? Decay : PreDelay);
@@ -183,7 +192,8 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             double scale = ErScale[Sel(Algorithm, 4)] * (0.5 + P(Size) * 0.8);
             for (int k = 0; k < ErMs.Length; k++) erBuf[k] = ErMs[k] * scale;
             double[] er = early ? erBuf : Array.Empty<double>();
-            foreach (var t in tails) t.Set(freeze ? -1 : Rt60(P(Decay)), freeze, P(PreDelay), P(PreDelay) * 200, er, ErGain);
+            double rt = Rt60(P(Decay));
+            foreach (var t in tails) t.Set(rt, RtHigh(rt), freeze, P(PreDelay) * 200, er, ErGain);
         }
         readouts.Add(() =>
         {

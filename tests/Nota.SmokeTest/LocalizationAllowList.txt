@@ -249,8 +249,6 @@ Nota.App/Controls/PrismViews.cs	High	# data: device parameter, port and value na
 Nota.App/Controls/PrismViews.cs	Low	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/PrismViews.cs	Mid	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/PrismViews.cs	below off	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/Controls/ReverbViews.cs	Decay tail	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/Controls/ReverbViews.cs	RT60 ∞	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/RhythmViews.cs	Hit	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/RhythmViews.cs	Kick	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/RhythmViews.cs	Sample	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2695,3 +2693,6 @@ Nota.Presentation/ViewModels/BrowserViewModel.cs	Audio Effects	# data: identifie
 Nota.Presentation/ViewModels/BrowserViewModel.cs	Instruments	# data: identifier compared in code
 Nota.Presentation/ViewModels/BrowserViewModel.cs	MIDI Effects	# data: identifier compared in code
 Nota.Presentation/ViewModels/BrowserViewModel.cs	Nota	# data: identifier compared in code
+
+Nota.App/Controls/ReverbViews.cs	Decay 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/ReverbViews.cs	Decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
