@@ -72,6 +72,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and not applied. Nota Remote follows. Orange looks exactly as before.
 
 ### Changed
+- **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
+  nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
+  tall as before. The knobs under the graphs move to the right panel as sliders: its first tab
+  follows the centre tab, and its Output tab (and Auto Filter's Mod tab) stay. Compressor: Curve shows
+  Dynamics (character, detector, ratio, knee, mix, range, auto gain), Motion shows Timing
+  (attack, release, hold, lookahead, auto-release) and Sidechain shows Key (source, tap,
+  external, listen, HP, LP, Q, stereo link). Auto Filter: Filter, Envelope and LFO each show
+  their own controls, with Mod → Freq / Reso / Both on the Filter panel. The live read-outs
+  (in / out and crest, measured transient and recovery, the cutoff and its note) moved to the
+  right of the tab bar.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
@@ -106,6 +116,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
+- **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
+  (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
+  other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and
+  release the detector really runs, the window length and the GR peak; the measured attack is
+  labelled "90 % rise", since it is timed to 90 % of the peak so a Hold plateau does not count.
+  Auto Filter: the LFO and Envelope tabs show the resonance swing ("reso X ±Y") when Mod is Reso
+  or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
+  The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
+  under the Auto gain switch.
 - **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
   Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
   audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
