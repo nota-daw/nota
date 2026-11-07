@@ -1317,6 +1317,11 @@ amount, click the title to pick the target) is the graph doing its job, not a co
   column); a 1 px rule sets off a routing control (the sidechain key) at the bottom.
 - On the main tab, whose own controls sit around the graph, the right panel gathers what
   cuts across the views: the modulation (target, each source's amount, smoothing, the key).
+- **Read-outs stay.** What the device measures — a meter box (peaks, LUFS, gain reduction), a
+  detector or state box, the key it learned — is information, not a parameter, so "one home"
+  doesn't apply to it: keep it, as a sunken box in the right panel of the view it explains (a
+  reading may appear in two panels). Short live lines (in → out, the release now) go in the
+  centre tab bar.
 - A setting shared by several views (the modulation target) lives once, in that summary;
   the views name it in their graph title ("LFO → Freq", with a chevron, ink 2 under the
   pointer) and a click there opens a small picker for it.
@@ -1330,7 +1335,9 @@ tab of its own.
 - Values and names line up along the bottom (cells bottom-aligned), so the larger Dry/wet
   knob rises above its neighbours rather than pushing their labels down.
 - A device with only a mix control shows Dry/wet alone, centred. A device with no dry/wet
-  (an instrument) keeps its single Volume knob as its output.
+  (an instrument) keeps its single Volume knob as its output. A device with no dry/wet whose
+  few main knobs every view needs (a limiter: Gain · Ceiling · Release) puts them there, its
+  main knob 44 in the middle (Nota Ceiling).
 
 **Don't:** give the right panel its own tab row · put the same switch on two tabs · put
 output controls in a tab · place knobs on both sides of a graph · shrink the graph for knobs

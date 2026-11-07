@@ -179,6 +179,9 @@ Follow the mockup language:
     cross-cutting summary (modulation target, amounts, smoothing, key). A shared setting
     shown in several views goes in the graph title with a chevron
     (`AfWindowBase.TitleClicked` → a small `Flyout` picker).
+  - **Read-outs stay:** meter / detector / state boxes (sunken, `MeterGrid`, `InfoBox`) are
+    information, not params — keep them in the right panel of the view they explain; short
+    live lines go in the centre tab bar's extras.
   - **Output:** `OutputStrip()` docked at the bottom of the right panel on every tab, a
     1 px rule above: knobs, not value bars — **Dry/wet 44 in the middle**, Drive (pre)
     34 left, Gain (post, `bipolar`) 34 right, cells bottom-aligned. Never a tab of its own.
