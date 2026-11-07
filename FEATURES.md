@@ -1035,12 +1035,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   trace or **Stacked** under it, with its own gain; Lens also opens in its own resizable window.
   Freeze, a note grid, a linear or log frequency axis, an L+R / L / R source that can read
   Mid/Side, and peak, crest and momentary LUFS read-outs under the spectrum. Readable from MCP with `read_analyzer`.
-- **Nota Flanger** (23) — a comb filter on a short LFO-swept delay: Delay 0.1–8 ms, Depth,
+- **Nota Flanger** (23) — in two sizes (L 700 / S 260, S·L toggle) — a comb filter on a short LFO-swept delay: Delay 0.1–8 ms, Depth,
   bipolar Feedback ±95 % (positive = jet; negative flips the wet polarity so the comb mirrors
   into a hollow tone; − / 0 / + snaps), Mix; Sine / Tri / Saw LFO, free (0.02–8 Hz) or synced
   (2/1 … 1/16 with dotted and triplet values, locked to the bar), Stereo offset 0–180°. A live
   comb-response graph of L and R (drag the notch for Delay, up / down for Feedback), the delay
-  of both channels over two cycles, and the first notch's sweep and null depth;
+  of both channels over two cycles, with Delay, Feedback and Depth beside it; an LFO panel (the
+  rate, Stereo, the first notch's sweep and null depth) over Mix;
   31 factory presets; MCP `read_flanger` / `set_flanger`.
 - **Nota Phaser** (24) — 2 / 4 / 6 / 8 / 12 LFO-swept all-pass stages (half as many notches) with
   delay-free feedback: Center 50 Hz – 5 kHz, Depth ±3 oct, bipolar Feedback ±95 % (negative flips

@@ -610,12 +610,9 @@ Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	Labels	# data: device parameter, por
 Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	Note	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	Peak	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	Reso	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	COMB RESPONSE	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	DELAY LINE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Delay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	LFO	# data: acronym
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Modulation	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	period 	# data: device parameter, port and value names and live readouts of their values (FR-004)

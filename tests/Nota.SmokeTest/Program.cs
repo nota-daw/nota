@@ -11581,7 +11581,7 @@ Console.WriteLine("-- Nota Flanger (effect kind 23) --");
     Check(fe.DeviceName(ft, fdi) == "Nota Flanger", $"device is Nota Flanger (got '{fe.DeviceName(ft, fdi)}')");
     Check(fe.TrackDeviceBuiltinKind(ft, fdi) == 23, "device reports builtin kind 23");
     int fpc = fe.DeviceParamCount(ft, fdi);
-    Check(fpc == 9, $"Nota Flanger exposes 9 params ({fpc})");
+    Check(fpc == 10, $"Nota Flanger exposes 10 params, View appended ({fpc})");
     var fnames = Enumerable.Range(0, fpc).Select(i => fe.DeviceParamName(ft, fdi, i)).ToArray();
     Check(string.Join(",", fnames) == "Rate,Delay,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo", $"param layout ({string.Join(",", fnames)})");
     Check(Math.Abs(fe.DeviceParamDefault(ft, fdi, 1) - 0.735f) < 1e-3f && Math.Abs(fe.DeviceParamDefault(ft, fdi, 3) - (0.5f + 0.7f / 1.9f)) < 1e-3f

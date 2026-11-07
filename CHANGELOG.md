@@ -205,7 +205,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Nota Chorus:** the voices over their stereo field, Amount, Rate and Offset beside them, the
   mode, Hz / Sync and τ / ct under them; the Voice panel (Feedback, Width, Warmth, HPF, the
   detune and delay ranges) over Dry/wet; S is the voices over the mode and Rate, Amount, Width,
-  Dry/wet.
+  Dry/wet. **Nota Flanger:** the comb over the delay sweep, Delay, Feedback and Depth beside it,
+  the waveform and the feedback snaps under it; the LFO panel (Hz / Sync, the rate, Rate, Stereo,
+  the notch and null read-outs) over Dry/wet; S is the comb over the waveform and Rate, Delay,
+  Feedback, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

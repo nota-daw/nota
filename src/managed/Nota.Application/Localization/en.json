@@ -902,6 +902,7 @@
     "device.flanger.mix_50_gives_the_deepest": "Mix — 50 % gives the deepest notches; 100 % is the delayed signal alone, a vibrato",
     "device.flanger.rate_the_note_value_of": "Rate — the note value of one LFO cycle, 2/1 … 1/16 with dotted (D) and triplet (T) values",
     "device.flanger.stereo_the_right_lfo_against": "Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite",
+    "device.flanger.tab_comb": "Comb",
     "device.flanger.the_comb_the_delay_carves": "The comb the delay carves into the spectrum, L in the bright line and R in the darker grey, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; ⌥-click types, double-click resets both.",
     "device.flanger.the_delay_of_both_channels": "The delay τ of both channels over two LFO cycles, and where each is now",
     "device.flanger.the_first_notch_now_over": "The first notch now, over the range the sweep moves it (20 Hz … 20 kHz)",
