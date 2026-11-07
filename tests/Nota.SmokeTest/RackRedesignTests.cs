@@ -210,7 +210,9 @@ internal static class RackRedesignTests
             for (int k = 0; k < e.RackDevChainDeviceCount(t, d, c); k++)
             {
                 s.Append($"  dev {k} kind={e.RackDevChainDeviceBuiltinKind(t, d, c, k)}");
-                for (int p = 0; p < e.RackDevChainDeviceParamCount(t, d, c, k); p++) s.Append(' ').Append(F(e.RackDevChainDeviceParamGet(t, d, c, k, p)));
+                for (int p = 0; p < e.RackDevChainDeviceParamCount(t, d, c, k); p++)
+                    if (e.RackDevChainDeviceParamName(t, d, c, k, p) != "View")   // the card size (#531) is editor state, not a setting
+                        s.Append(' ').Append(F(e.RackDevChainDeviceParamGet(t, d, c, k, p)));
                 s.Append('\n');
             }
         }

@@ -11030,7 +11030,7 @@ Console.WriteLine("-- Nota Utility (effect kind 4) --");
     int ud = ueng.AddBuiltinDevice(ut, 4);
     Check(ud >= 0 && ueng.DeviceName(ut, ud) == "Nota Utility" && ueng.TrackDeviceBuiltinKind(ut, ud) == 4, "add Nota Utility (kind 4)");
     int upc = ueng.DeviceParamCount(ut, ud);
-    Check(upc == 17, $"Nota Utility exposes 17 params ({upc})");
+    Check(upc == 18, $"Nota Utility exposes 18 params, View appended ({upc})");
     const int UGain = 0, UBal = 1, UWidth = 2, UMode = 3, UMonoF = 4, UMono = 5, UMute = 6, UInvL = 7, UWMode = 9, USlope = 10,
         UAuto = 11, UMatchTo = 12, UTarget = 13, UMeter = 14, UTp = 15, UCeil = 16;
     string[] uNames = { "Gain", "Balance", "Width", "Channel Mode", "Mono Freq", "Mono Below", "Mute", "Invert L", "Invert R",
