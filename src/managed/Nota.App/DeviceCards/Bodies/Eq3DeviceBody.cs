@@ -2,12 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota EQ-3 body (three-band isolator, device kind 16), a build of
-// the "Nota EQ-3" mockup (700 × 260) on the Crush / Dynamic EQ-8 frame: three band strips on the
-// left (LOW / MID / HIGH, each its span, a fader −24 … +6 dB — ±15 dB in the Classic range — its
-// value and a KILL), and the response window on the right — the crossover readouts, Output, Range
+// the "Nota EQ-3" mockup (700 × 260) on the Crush / Dynamic EQ-8 frame: three band strips in the
+// right column (#531; LOW / MID / HIGH, each its span, a fader −24 … +6 dB — ±15 dB in the Classic range — its
+// value and a KILL), and the response window on the left — the crossover readouts, Output, Range
 // and Slope over it; inside, each band's curve in its hue, the brass sum, the output spectrum
 // behind, and the two crossovers as handles along the top that drag left / right (a drag
-// elsewhere rides the band under the pointer). Every control is
+// elsewhere rides the band under the pointer). S (260) is the response over the range and
+// Low, Mid, High and Output knobs. Every control is
 // a device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free. FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
@@ -34,6 +35,8 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         kTele = 16, kSpec = 256, kScope = kTele + kSpec;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "EQ";
 
@@ -171,7 +174,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             var bar = new Border { Height = 2, Background = hue };   // square: the section under it has no corners
             return new RuleSection
             {
-                Width = 62, Margin = new Thickness(0, 0, 5, 0),
+                Width = 62, Margin = new Thickness(5, 0, 0, 0),
                 Child = new DockPanel { Children = { Docked(bar, Dock.Top), col } },
             };
         }
@@ -273,16 +276,51 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         var headRight = Row(8, OutControl(), RangeSeg(), SlopeSeg());
         Grid.SetColumn(headRight, 1); head.Children.Add(headRight);
         var headBar = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
-        var graphBox = new RuleSection
+        // ---- L: the response window on the left, the three band faders on the right (the
+        // card's right column, #531) ------------------------------------------------------------
+        Control LargeBody()
         {
-            Child = new DockPanel { Children = { Docked(headBar, Dock.Top), new Border { Padding = new Thickness(5), Child = graph } } },
-        };
+            var graphBox = new RuleSection
+            {
+                Child = new DockPanel { Children = { Docked(headBar, Dock.Top), new Border { Padding = new Thickness(5), Child = graph } } },
+            };
+            var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5) };
+            for (int b = 2; b >= 0; b--) bodyRow.Children.Add(Docked(Strip(b), Dock.Right));
+            bodyRow.Children.Add(graphBox);
+            return new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        }
 
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5) };
-        for (int b = 0; b < 3; b++) bodyRow.Children.Add(Docked(Strip(b), Dock.Left));
-        bodyRow.Children.Add(graphBox);
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        // ---- S: the response over the range and Low · Mid · High · Output -----------------------
+        Control BandKnob(int b)
+        {
+            var val = Mono("", 7, TextPrimary);
+            var knob = new Knob(P(Low + b), 1.0) { Accent = true, Default = Eq3Math.GainNorm(0, Iso()), Width = 34, Height = 34 };
+            knob.ValueChanged += v => { Raw(Low + b, v); RefreshAll(); };
+            knob.GestureBegin += () => Begin(Low + b);
+            knob.GestureEnd += () => End(Low + b);
+            Learn(knob, Low + b);
+            readouts.Add(() =>
+            {
+                if (!knob.Dragging) { double c = P(Low + b); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
+                knob.IsDim = Killed(b);
+                val.Text = Killed(b) ? "−∞" : Eq3Math.Db(BandDb(b)) + "\u2009dB";
+            });
+            return KnobCell(Eq3Math.Names[b], knob, val, 56);
+        }
+        Control OutKnob()
+        {
+            var val = Mono("", 7, TextPrimary);
+            var knob = new Knob(P(Gain), 1.0) { Accent = true, Bipolar = true, Default = 0.5, Width = 34, Height = 34 };
+            knob.ValueChanged += v => { Raw(Gain, v); RefreshAll(); };
+            knob.GestureBegin += () => Begin(Gain);
+            knob.GestureEnd += () => End(Gain);
+            Learn(knob, Gain);
+            readouts.Add(() => { if (!knob.Dragging) { double c = P(Gain); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = Eq3Math.Db(OutDb(P(Gain))) + "\u2009dB"; });
+            return KnobCell(Loc.T("common.output"), knob, val, 56);
+        }
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(graph, RangeSeg(), BandKnob(0), BandKnob(1), BandKnob(2), OutKnob())
+            : LargeBody();
 
         void Refresh()
         {

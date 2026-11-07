@@ -5727,7 +5727,7 @@ Console.WriteLine("-- Nota EQ-3 --");
     Check(q3 >= 0, "add built-in Nota EQ-3");
     Check(engine.DeviceName(qt, q3) == "Nota EQ-3", $"name is Nota EQ-3 (got '{engine.DeviceName(qt, q3)}')");
     Check(engine.TrackDeviceBuiltinKind(qt, q3) == 16, $"builtin kind is 16 (got {engine.TrackDeviceBuiltinKind(qt, q3)})");
-    Check(engine.DeviceParamCount(qt, q3) == 11 && engine.DeviceParamName(qt, q3, 10) == "Range", $"Nota EQ-3 exposes 11 params, Range appended (got {engine.DeviceParamCount(qt, q3)})");
+    Check(engine.DeviceParamCount(qt, q3) == 12 && engine.DeviceParamName(qt, q3, 10) == "Range" && engine.DeviceParamName(qt, q3, 11) == "View", $"Nota EQ-3 exposes 12 params, Range and View appended (got {engine.DeviceParamCount(qt, q3)})");
     Check(engine.DeviceGetParam(qt, q3, 10) > 0.5f && Math.Abs(engine.DeviceGetParam(qt, q3, 0) - 0.8f) < 1e-4, "a new EQ-3 is in the Isolator range at 0 dB (0.8)");
 
     // Param round-trip.

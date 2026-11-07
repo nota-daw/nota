@@ -23,6 +23,7 @@ Eq3::Eq3() {
     p_[Slope].store(0.0f);     // 24 dB/oct
     p_[Gain].store(0.5f);      // 0 dB
     p_[Range].store(1.0f);     // Isolator
+    p_[View].store(0.0f); // L
     for (auto& a : lvlA_) a.store(-120.0f);
     for (auto& a : gA_) a.store(1.0f);
     setSampleRate(44100.0, 0);
@@ -220,6 +221,7 @@ const char* Eq3::paramName(int32_t i) const {
     case Slope: return "Slope";
     case Gain: return "Gain";
     case Range: return "Range";
+    case View: return "View";
     default: return "";
     }
 }

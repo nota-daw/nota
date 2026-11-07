@@ -988,7 +988,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   selected stage, each stage faint, the modulated curve, the live input) and harmonics 2–9
   with THD from the engine; **OVERSAMPLE** (Off/2×/4×/8×) with an aliasing warning; 32 factory
   presets; MCP `read_forge`, `set_forge`, `set_forge_stage`.
-- **Nota EQ-3** (16) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
+- **Nota EQ-3** (16) — in two sizes (L 700 / S 260, S·L toggle; S is the response over Low, Mid, High and Output knobs) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
   Classic ±15 dB range) with a 0 dB detent and KILL buttons, two crossovers, 24 / 48 dB/oct
   Linkwitz-Riley slopes (phase-aligned, flat at unity), output gain. A response graph with each
   band's curve, the brass sum and the output spectrum (the same filled analyzer as EQ-8) — drag the crossover handles,
