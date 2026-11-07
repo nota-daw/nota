@@ -1043,12 +1043,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   of both channels over two cycles, with Delay, Feedback and Depth beside it; an LFO panel (the
   rate, Stereo, the first notch's sweep and null depth) over Mix;
   31 factory presets; MCP `read_flanger` / `set_flanger`.
-- **Nota Phaser** (24) — 2 / 4 / 6 / 8 / 12 LFO-swept all-pass stages (half as many notches) with
+- **Nota Phaser** (24) — in two sizes (L 700 / S 260, S·L toggle) — 2 / 4 / 6 / 8 / 12 LFO-swept all-pass stages (half as many notches) with
   delay-free feedback: Center 50 Hz – 5 kHz, Depth ±3 oct, bipolar Feedback ±95 % (negative flips
   the wet polarity: the notches move and widen), Mix; Sine / Tri / Saw LFO, free (0.02–8 Hz) or
   synced (4/1 … 1/16 with dotted and triplet values, locked to the bar), Stereo offset 0–180°. A
   live all-pass response of L and R with the notches ticked (drag for Center, up / down for
-  Feedback), the corner of both channels over two cycles, and the sweep and null depth;
+  Feedback), the corner of both channels over two cycles, with Center, Feedback and Depth beside
+  it; an LFO panel (the rate, Stereo, the sweep and null depth) over Mix;
   35 factory presets; MCP `read_phaser` / `set_phaser`.
 - **Nota Chorus** (25) — in two sizes (L 700 / S 260, S·L toggle) — modulated delay voices: Classic (2 voices L / R, 8 ± 5 ms), Ensemble
   (3 voices 120° apart, 12 ± 6 ms) and Vibrato (3 ± 2.5 ms, wet only); sine LFO free (0.02–8 Hz) or

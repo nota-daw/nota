@@ -681,13 +681,10 @@ Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	Trig Lvl	# data: device parameter,
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	WAV audio	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	WINDOW	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	Waterfall	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	ALL-PASS RESPONSE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Center	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	LFO	# data: acronym
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Modulation	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	STAGES	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	period 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	$"−0.3\u2009dBFS · {c:0.0}"	# data: device parameter, port and value names and live readouts of their values (FR-004)

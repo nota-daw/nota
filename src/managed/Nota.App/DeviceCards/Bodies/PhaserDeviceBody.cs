@@ -35,6 +35,8 @@ internal sealed class PhaserDeviceBody : IDeviceBody
     private const int S_FcL = 3, S_FcR = 4, S_WinPhase = 5, S_SampleRate = 10, kTele = 32;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 
@@ -93,7 +95,6 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
         // Slider row: caps label · track · mono value.
         Grid Slider(string label, int p, Func<double, string> fmt, string tip, double labelW = 44, double valueW = 44,
@@ -110,29 +111,21 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             return g;
         }
 
-        RuleSection Island(Control head, Control body, double width = double.NaN)
+        // Gauge knob over a normalized param (automation gesture, MIDI learn, live follow).
+        Control K(int p, string name, Func<double, string> fmt, string tip, double cellW = 50, double size = 34, Func<double, double>? snap = null, bool bipolar = false)
         {
-            var headBar = new Border
-            {
-                Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
-            };
-            return new RuleSection
-            {
-                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
-            };
-        }
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
+            var val = Mono(fmt(P(p)), 7, TextPrimary);
+            var knob = new Knob(P(p), 1.0) { Accent = true, Bipolar = bipolar, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            knob.Format = fmt;
+            knob.ValueChanged += v => { Raw(p, snap is null ? v : snap(v)); RefreshAll(); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => End(p);
+            Learn(knob, p);
+            ToolTip.SetTip(knob, tip);
+            readouts.Add(() => { if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+            return KnobCell(name, knob, val, cellW);
         }
         // A legend sample: a drawn 8px stroke and its word (never a typed dash).
-        static Control LegendItem(string word, IBrush ink) => new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new Border { Width = 8, Height = 1.5, Background = ink, VerticalAlignment = VerticalAlignment.Center }, Mono(word, 7, ink) },
-        };
 
         // ======================================================================
         // LEFT — LFO: waveform · Hz / Sync · the rate · Rate · Stereo
@@ -143,7 +136,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         Learn(syncSeg, Sync);
         ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
-        var waveSeg = Segments(PhaserMath.Waves, WaveI, i => { SetP(Waveform, i / 2.0); RefreshAll(); }, out var waveSync, fill: true, padX: 0);
+        var waveSeg = Segments(PhaserMath.Waves, WaveI, i => { SetP(Waveform, i / 2.0); RefreshAll(); }, out var waveSync, padX: 5);
         readouts.Add(waveSync);
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, Loc.T("device.phaser.the_lfo_shape_that_sweeps"));
@@ -168,7 +161,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             }
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
-        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
+        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub } };   // the period is in the tab bar
         ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
 
         var rateRow = Slider("RATE", Rate, v => HzF(PhaserMath.FreeHz(v)) + " Hz", Loc.T("common.rate_the_free_lfo_rate"), 38, 46);
@@ -180,23 +173,10 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             Loc.T("device.phaser.stereo_the_right_lfo_against"), 38, 46,
             modulation: true, snap: v => Math.Round(v * 180) / 180);
 
-        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
-        leftBody.Children.Add(waveSeg);
-        leftBody.Children.Add(GRow(bigBlock, 1));
-        leftBody.Children.Add(GRow(new Panel { Children = { rateRow, divRow } }, 2));
-        leftBody.Children.Add(GRow(stereoRow, 3));
-        var left = Island(HeadRow(Caps("LFO"), syncSeg), leftBody, 176);
-        DockPanel.SetDock(left, Dock.Left);
-
         // ======================================================================
         // CENTRE — ALL-PASS RESPONSE, and fc over two cycles
         // ======================================================================
         var fcWord = Mono("", 7, TextTertiary);
-        var legend = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), fcWord },
-        };
         var response = new PhaserResponseView { Value = () => (P(Center), P(Feedback)) };
         response.GestureBegin += () => { Begin(Center); Begin(Feedback); };
         response.GestureEnd += () => { End(Center); End(Feedback); };
@@ -208,16 +188,14 @@ internal sealed class PhaserDeviceBody : IDeviceBody
 
         var sweep = new PhaserSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, Loc.T("device.phaser.the_corner_frequency_of_both"));
-        var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(sweep, Dock.Bottom), response } };
-        var centre = Island(HeadRow(Caps("ALL-PASS RESPONSE"), legend), centreBody);
-        centre.Margin = new Thickness(5, 0);
+        // The response with fc over two cycles under it: one view.
+        var responseView = new DockPanel { LastChildFill = true, Children = { Docked(sweep, Dock.Bottom), response } };
 
         // ======================================================================
         // RIGHT — STAGES: 2…12 · Center · Depth · Feedback · Mix · sweep / null readouts
         // ======================================================================
         var modeWord = Mono("", 7, TextSecondary);
-        modeWord.Margin = new Thickness(0, 0, 5, 0);
-        readouts.Add(() =>
+                readouts.Add(() =>
         {
             string m = Mode();
             modeWord.Text = m;
@@ -226,20 +204,11 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         ToolTip.SetTip(modeWord, Loc.T("device.phaser.what_the_feedback_makes_positive"));
 
         var stageSeg = Segments(PhaserMath.StageCounts.Select(n => n.ToString()).ToArray(), () => PhaserMath.StageIndex(P(Stages)),
-            i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, fill: true, padX: 0);
+            i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, padX: 5);
         foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         readouts.Add(stageSync);
         Learn(stageSeg, Stages);
         ToolTip.SetTip(stageSeg, Loc.T("device.phaser.all_pass_stages_every_two"));
-
-        var centerRow = Slider("CENTER", Center, v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + " Hz",
-            Loc.T("device.phaser.center_the_middle_of_the"));
-        var depthRow = Slider("DEPTH", Depth, v => NotaNum.F($"±{v * PhaserMath.DepthOct:0.0} oct"),
-            Loc.T("device.phaser.depth_how_far_the_lfo"));
-        var fbRow = Slider("FEEDBACK", Feedback, v => FbF(PhaserMath.Fb(v)),
-            Loc.T("device.phaser.feedback_the_chains_output_fed"), modulation: true, bipolar: true,
-            snap: v => PhaserMath.FbNorm(Math.Round(PhaserMath.Fb(v) * 100) / 100));
-        var mixRow = Slider("MIX", Mix, v => PctF(v), Loc.T("device.phaser.mix_50_gives_the_deepest"));
 
         double PctAxis(double f) => Math.Clamp(Math.Log(Math.Max(f, 1e-3) / 20) / Math.Log(1000), 0, 1);
         Control ReadRow(string label, FlangerBar bar, TextBlock value, string tip)
@@ -258,6 +227,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         var nullVal = Mono("", 8, TextPrimary);
         var reads = new Border
         {
+            Background = Brushes.Transparent,   // a fixed-height row in the panel
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
             Child = new StackPanel
             {
@@ -269,19 +239,39 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             },
         };
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        rightBody.Children.Add(stageSeg);
-        rightBody.Children.Add(GRow(centerRow, 2));
-        rightBody.Children.Add(GRow(depthRow, 4));
-        rightBody.Children.Add(GRow(fbRow, 6));
-        rightBody.Children.Add(GRow(mixRow, 8));
-        rightBody.Children.Add(GRow(reads, 10));
-        var right = Island(HeadRow(Caps("STAGES"), modeWord), rightBody, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        // ======================================================================
+        // Frames: L (the response with Center · Feedback · Depth beside it and the waveform and
+        // the stages under it; the LFO panel; Dry/wet under it) · S (the response over the stages
+        // and Rate · Center · Feedback · Dry/wet)
+        // ======================================================================
+        var extras = Mono("", 7, TextTertiary);
+        readouts.Add(() => { extras.Text = modeWord.Text + " · " + fcWord.Text + " · period " + PeriodF(PeriodMs()); });
+        Control RateKnob(double cellW)
+        {
+            var free = K(Rate, "RATE", v => HzF(PhaserMath.FreeHz(v)) + "\u2009Hz", Loc.T("common.rate_the_free_lfo_rate"), cellW);
+            var div = K(Division, "RATE", v => PhaserMath.DivNames[PhaserMath.DivIndex(v)], Loc.T("device.phaser.rate_the_note_value_of"), cellW,
+                snap: v => PhaserMath.DivNorm(PhaserMath.DivIndex(v)));
+            readouts.Add(() => { free.IsVisible = !Synced(); div.IsVisible = Synced(); });
+            return new Panel { Children = { free, div } };
+        }
+        Control CenterKnob(double cellW) => K(Center, "CENTER", v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + "\u2009Hz", Loc.T("device.phaser.center_the_middle_of_the"), cellW);
+        Control FbKnob(double cellW) => K(Feedback, "FEEDBACK", v => FbF(PhaserMath.Fb(v)), Loc.T("device.phaser.feedback_the_chains_output_fed"), cellW,
+            snap: v => PhaserMath.FbNorm(Math.Round(PhaserMath.Fb(v) * 100) / 100), bipolar: true);
+        Control MixKnob(double cellW, double size) => K(Mix, "DRY/WET", v => PctF(v), Loc.T("device.phaser.mix_50_gives_the_deepest"), cellW, size);
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(responseView, stageSeg, RateKnob(56), CenterKnob(56), FbKnob(56), MixKnob(56, 34))
+            : CardLayout.Large(new[] { Loc.T("device.phaser.tab_response") }, 0,
+                _ => CardLayout.View(responseView, CardLayout.KnobColumn(CenterKnob(50), FbKnob(50),
+                        K(Depth, "DEPTH", v => NotaNum.F($"±{v * PhaserMath.DepthOct:0.0}\u2009oct"), Loc.T("device.phaser.depth_how_far_the_lfo"), 50)),
+                    CardLayout.Line(8, waveSeg, stageSeg)),
+                _ => (CardLayout.Head(CardLayout.Title("LFO"), syncSeg), CardLayout.Rows(
+                        new Border { Background = Brushes.Transparent, Margin = new Thickness(0, 0, 0, 3), Child = bigBlock },
+                        new Panel { Children = { rateRow, divRow } },
+                        stereoRow,
+                        reads)),
+                extras,
+                CardLayout.Output(null, MixKnob(58, 44), null),
+                _ => RefreshAll());
 
         void Refresh()
         {

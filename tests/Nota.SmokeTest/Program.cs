@@ -11777,7 +11777,7 @@ Console.WriteLine("-- Nota Phaser (effect kind 24) --");
     Check(pe.DeviceName(pt, pdi) == "Nota Phaser", $"device is Nota Phaser (got '{pe.DeviceName(pt, pdi)}')");
     Check(pe.TrackDeviceBuiltinKind(pt, pdi) == 24, "device reports builtin kind 24");
     int ppc = pe.DeviceParamCount(pt, pdi);
-    Check(ppc == 10, $"Nota Phaser exposes 10 params ({ppc})");
+    Check(ppc == 11, $"Nota Phaser exposes 11 params, View appended ({ppc})");
     var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pdi, i)).ToArray();
     Check(string.Join(",", pnames) == "Rate,Center,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,Stages", $"param layout ({string.Join(",", pnames)})");
     Check(Math.Abs(pe.DeviceParamDefault(pt, pdi, 1) - 0.602f) < 1e-3f && Math.Abs(pe.DeviceParamDefault(pt, pdi, 3) - (0.5f + 0.4f / 1.9f)) < 1e-3f

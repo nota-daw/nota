@@ -1136,6 +1136,7 @@
     "device.phaser.mix_50_gives_the_deepest": "Mix — 50 % gives the deepest notches; 100 % is the phase-shifted signal alone",
     "device.phaser.rate_the_note_value_of": "Rate — the note value of one LFO cycle, 4/1 … 1/16 with dotted (D) and triplet (T) values",
     "device.phaser.stereo_the_right_lfo_against": "Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite",
+    "device.phaser.tab_response": "Response",
     "device.phaser.the_corner_frequency_of_both": "The corner frequency of both channels over two LFO cycles (20 Hz … 20 kHz), and where each is now",
     "device.phaser.the_lfo_shape_that_sweeps": "The LFO shape that sweeps the stages: Sine glides, Tri sweeps evenly, Saw rises and drops back",
     "device.phaser.the_notches_the_stages_cut": "The notches the stages cut into the spectrum, L in the bright line and R in the darker grey, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; ⌥-click types, double-click resets both.",
