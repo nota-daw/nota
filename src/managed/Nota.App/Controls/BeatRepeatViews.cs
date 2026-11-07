@@ -209,10 +209,12 @@ internal sealed class BrSlicesView : ShDragView
         NotaGraph.Title(ctx, frame, _repeating ? Loc.T("device.beat_repeat.captured_sound_repeating") : "Captured sound");
         NotaGraph.Legend(ctx, w - 6, 3, ("slice", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         int off = (int)Math.Round(_offset * 16), gate = (int)Math.Round(_gate * 16);
-        double ox = Math.Clamp(Xf(_offset) + 3, 4, w - 110);
+        // Math.Clamp throws when min > max: an offset near the end (or a narrow window) leaves no
+        // room between the two labels, so the bounds are clamped with Min / Max instead.
+        double ox = Math.Max(4, Math.Min(Xf(_offset) + 3, w - 110));
         Text(ctx, NotaNum.F($"offset {off}/16"), ox, h - 11, hotO ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        double gx = Math.Clamp(Xf(GateEnd) + 3, ox + 62, w - 70);
-        if (gx < w - 60) Text(ctx, NotaNum.F($"gate {gate}/16"), gx, h - 11, hotG ? NotaPalette.AccentBright : NotaPalette.TextTertiary);
+        double gx = Math.Min(Math.Max(Xf(GateEnd) + 3, ox + 62), w - 70);
+        if (ox + 62 <= w - 70 && gx < w - 60) Text(ctx, NotaNum.F($"gate {gate}/16"), gx, h - 11, hotG ? NotaPalette.AccentBright : NotaPalette.TextTertiary);
         TextR(ctx, "16/16", w - 4, h - 11);
     }
 }
