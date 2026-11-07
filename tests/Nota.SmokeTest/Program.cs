@@ -6423,7 +6423,7 @@ Console.WriteLine("-- Nota Prism --");
         Check(pe.DeviceName(pt, pd) == "Nota Prism", $"name is Nota Prism (got '{pe.DeviceName(pt, pd)}')");
         Check(pe.TrackDeviceBuiltinKind(pt, pd) == 21, $"builtin kind is 21 (got {pe.TrackDeviceBuiltinKind(pt, pd)})");
         int ppc = pe.DeviceParamCount(pt, pd);
-        Check(ppc == 52, $"Nota Prism exposes 52 params (got {ppc})");
+        Check(ppc == 53, $"Nota Prism exposes 53 params (got {ppc})");
         var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pd, i)).ToList();
         Check(pnames.Distinct().Count() == ppc && pnames.All(n => n.Length > 0), "Prism param names are unique and non-empty");
         Check(pe.DeviceAcceptsSidechain(pt, pd), "Prism accepts a sidechain");

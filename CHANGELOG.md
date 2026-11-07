@@ -259,7 +259,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the source, its level and band) and Rhythm (Sync / Free, Rate, Depth, Copy / Paste / Clear,
   the MIDI and gate options) panels over the Gate / Duck switch and Floor, Threshold and Return
   (Shutter has no dry/wet, so Threshold takes the middle); S is the Signal graph over Gate / Duck
-  and Threshold, Attack, Release and Floor.
+  and Threshold, Attack, Release and Floor. **Nota Prism** keeps its Bands, Band detail and
+  Time tabs (a multiband editor, like the EQ cards); the Meters / Output tabs give way to one
+  panel that follows the tab — Gain reduction (the band count, the meters, Solo, Peak hold), the
+  output stage (Auto makeup, the selected band's GR, boost and level, Soft clip) and Detector
+  (Peak / RMS, Lookahead, the sidechain, Listen) — over Amount, Dry/wet and Output; S is the
+  spectrum over the band count and Amount, Dry/wet and Output.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

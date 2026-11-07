@@ -1023,7 +1023,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   morph the tail without clicks; user IRs persist in the project. Convolution / Algorithm /
   EQ · Mod / Output views with their knobs beside them and a right panel that follows them
   over Dry, Dry/Wet and Output.
-- **Nota Prism** (21) — three-band dynamics (multiband compressor / expander): Linkwitz-Riley
+- **Nota Prism** (21) — in two sizes (L 700 / S 260, S·L toggle; S is the spectrum over Amount, Dry/wet, Output) — three-band dynamics (multiband compressor / expander): Linkwitz-Riley
   crossovers dragged on a live input/output spectrum, 3 / 2 / 1-band modes; per band a
   compressor above one threshold (ratio to ∞:1, knee) and an expander or upward compressor
   below another (limited by Floor), each with its own attack/release (auto release above), plus
