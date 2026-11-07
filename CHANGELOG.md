@@ -249,6 +249,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the three band faders to the right column; S is the response over the range and Low, Mid,
   High and Output knobs. **Nota EQ-8** keeps its band editor and globals on the right and gains
   S: the band chips over the graph and the selected band's Freq, Gain, Q and the output.
+  **Nota Strata** keeps its layer stack and loop rail and gains S: the bar counter and the cycle
+  ticks over the four transport buttons and Feedback, Input and Speed.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

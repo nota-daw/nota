@@ -5652,7 +5652,7 @@ Console.WriteLine("-- Nota Strata --");
     Check(sd >= 0, "add built-in Nota Strata");
     Check(se.DeviceName(st, sd) == "Nota Strata", $"name is Nota Strata (got '{se.DeviceName(st, sd)}')");
     Check(se.TrackDeviceBuiltinKind(st, sd) == 15, $"builtin kind is 15 (got {se.TrackDeviceBuiltinKind(st, sd)})");
-    Check(se.DeviceParamCount(st, sd) == 7, $"Nota Strata exposes 7 params (got {se.DeviceParamCount(st, sd)})");
+    Check(se.DeviceParamCount(st, sd) == 8, $"Nota Strata exposes 8 params, View appended (got {se.DeviceParamCount(st, sd)})");
 
     // Param round-trip (Feedback = 0).
     se.DeviceSetParam(st, sd, 0, 72f);
