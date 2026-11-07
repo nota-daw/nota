@@ -382,6 +382,9 @@ internal static partial class ValueEntry
             Margin = new Thickness(x, y, 0, 0),
         };
         if (font is null) box.Classes.Add("solid");
+        // The read-out's size already carries the Text size step (or a card's fixed size):
+        // copied as it is, the editor must not add the step a second time.
+        if (font is not null) NotaTextSize.SetFixed(box, true);
         IBrush? ink = font?.Foreground;
         if (font is not null) font.Foreground = Brushes.Transparent;   // the box draws the value now
         bool done = false;

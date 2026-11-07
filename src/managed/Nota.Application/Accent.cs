@@ -102,7 +102,7 @@ public static class AccentColours
 
     /// <summary>Tokens that are the accent washed over the theme's surfaces: they keep the
     /// theme's lightness, or a dark custom colour would sink the "picked" tint into the ground.</summary>
-    public static readonly string[] BlendTokens = { "AccentDim", "AccentEdge", "AccentMute", "AccentSubtle", "BorderBrass" };
+    public static readonly string[] BlendTokens = { "AccentDim", "AccentEdge", "AccentMute", "AccentSoft", "AccentSubtle", "BorderBrass" };
 
     /// <summary>Every token a choice replaces.</summary>
     public static IEnumerable<string> Tokens => SolidTokens.Concat(BlendTokens).Append("TextOnAccent");
