@@ -1015,13 +1015,15 @@ audio effects after it keep running and keep their settings; saved with the proj
   step automatable; 45 factory presets (15 pattern); MCP `read_shutter`.
 - **Nota Chamber** (20) — in two sizes (L 700 / S 260, S·L toggle) — hybrid reverb: a zero-latency convolution engine (16 synthesised
   IRs — halls, rooms, plates, spring, spaces, FX — or your own WAV/FLAC/MP3, mono / stereo /
-  4-ch true stereo, dropped on the IR view) with Start/Decay trims, Attack, Size, Reverse,
+  4-ch true stereo, dropped on the IR view) with Start/End trims, Attack, Size, Reverse,
   True Stereo, and an algorithmic engine (Dark Hall / Plate / Quartz / Shimmer) with
   per-band decay, diffusion, damping, modulation, Freeze + Hold in, Vintage and a pitch
   shifter; Blend (parallel or serial), separate free/synced pre-delays, a 4-band EQ at the
   input / tail / output, ducking, width + bass mono, Dry/Wet, wet-only send mode. IR edits
-  morph the tail without clicks; user IRs persist in the project. Convolution / Algorithm /
-  EQ · Mod / Output views with their knobs beside them and a right panel that follows them
+  morph the tail without clicks; user IRs persist in the project. Convolution (the IR as a clip,
+  faded and trimmed as heard) / Algorithm (decay time by frequency, a handle per band and the
+  Damping line) / EQ · Mod (the tail EQ on the shared filter graph) / Mix (a clickable
+  signal-flow diagram) views with their knobs beside them and a right panel that follows them
   over Dry, Dry/Wet and Output.
 - **Nota Prism** (21) — in two sizes (L 700 / S 260, S·L toggle; S is the spectrum over Amount, Dry/wet, Output) — three-band dynamics (multiband compressor / expander): Linkwitz-Riley
   crossovers dragged on a live input/output spectrum, 3 / 2 / 1-band modes; per band a

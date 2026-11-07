@@ -280,6 +280,26 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track and tap, Tilt, Pitch, Mod gain and the Key and Out meters) sits over Unvoiced, Dry/wet
   (Mix) and Gain; S is the graph over the carrier choice and Bands, Formant, Dry/wet and Gain. A preset no longer saves or
   applies the View param of a built-in audio effect: loading one keeps the card's S / L size.
+- **Nota Delay, Reverb and Chamber: graphs you can read, controls that sit together**
+  (nota-daw/nota#531): Delay's Time tab draws the repeats as two lanes in dB — L over R — on a
+  grid in beats or ms, the dry hit at 0 and each echo as tall as it is loud (ping-pong hops
+  between the lanes); drag a lane's first echo sideways for its time, up or down for Feedback.
+  Its feedback filter moves from a strip in the Loop panel to a Filter tab of its own, on the
+  full filter graph with Low cut and High cut beside it and a Repeats panel (the band, repeats
+  to −48 dB, ring time). Reverb draws its decay in dB, where the tail is a straight line from
+  the pre-delay to −60 dB at the decay time, with labelled Pre and Decay handles, the early
+  reflections and a dashed line for the highs dying sooner under HF damp. Chamber's Convolution
+  tab draws the IR as one clip — Start and End brackets, and the waveform as heard inside them
+  (the Attack fade-in, the fade-out at a trimmed end, reversed), where it used to stack the
+  source over the result; Algorithm draws the decay time by frequency — Lows, Mids and Highs
+  plateaus with a handle each and the Damping line you drag sideways — instead of three RT60
+  lines over the echogram; the tail EQ moves onto the shared filter graph; and the Output tab
+  with its meters gives way to Mix, a signal-flow diagram (input, the engines side by side or in
+  series, EQ where it sits, Width / bass mono, ducking, the dry path, out) with Blend, Width and
+  Mono f beside it and the routing under it; click an engine to turn it on or off, or the EQ to
+  move it. Quality moves to the Convolution panel. In every built-in
+  effect card the right panel's rows now stack from the top with an even gap, and the knobs
+  beside a graph sit together in its middle, instead of spreading over the whole height.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale
