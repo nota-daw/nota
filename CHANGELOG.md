@@ -29,6 +29,48 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Send levels in the Large track header**: a track at the Large height shows a value bar for
   its send to each return, two per row, as far as the height allows.
 
+- **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
+  Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
+  them, including the effects and the depth of each modulation route. The voice has two
+  oscillators that run triangle → saw → square continuously, with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes and three LFOs. The card's A / B switch picks the side the
+  knobs, automation and MIDI learn write to. Each knob marks the other side and where the sound
+  is now. **A → B**, **B → A** and **Swap** are one undo step each.
+  - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
+    time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
+    pressure morphs only the pressed note.
+  - **Matrix**: a source × destination grid, as on Nota Consort — drag a cell for the depth,
+    double-click removes the route. Up to 64 routes per part from 29 sources (LFOs, envelopes,
+    velocity, release velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to
+    Morph, pitch, vibrato or any sound control. A route has a depth per side.
+  - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
+    them morphing. One switch bypasses the section.
+  - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
+    velocity, gate or tie), swing, transpose by a held key, latch and step record. With the
+    transport stopped a held key plays the pattern (or the arpeggio) at the project tempo;
+    with it rolling they keep time with the song. Four motion
+    lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
+    arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
+    Patterns travel with presets and projects; every pattern edit is one undo step.
+  - **Split and Layer**: two parts, Lower and Upper, each a full Twin sound. They split at a key
+    (learnable from a played key) or layer on every key. The 12 voices are shared between the
+    parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
+    or swaps them, or loads a factory or saved sound into one part.
+  - **117 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
+    L and S sizes.
+  - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
+    `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
+- **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
+  playing its pattern.
+- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
+  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
+  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
+  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
+  applies at once, in every theme, tuned to each so it stays readable; a colour that would
+  be confused with the record red, mute, solo or the meter green, or a grey, is explained
+  and not applied. Nota Remote follows. Orange looks exactly as before.
+
 ### Changed
 - **Lens: the graph fills the panel, controls on the right** (review of nota-daw/nota#296):
   each view's graph takes the whole centre panel. The right panel's first tab is named after
@@ -76,6 +118,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its RMS next to the period; the spectrum cursor gives the FFT bin, and the scope cursors the
   note of 1/Δt. The waterfall picture (and the spectrum and scope) no longer pokes out past the
   graph's rounded corners.
+- **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
+  Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
+  audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
+  adapter keeps all its state inside the instance, so independent hosted instrument/effect
+  tracks may now render their work exclusively on a render-pool worker per block; the engine
+  joins the pool before the next block, and lifecycle/editor work stays on the message thread.
+  Unknown hosted formats, rack-nested chains and record-armed/capture-routed tracks keep the
+  serial fallback, and a light load leaves helpers parked. Measured with a deterministic VST3
+  probe: four heavy instances went from 5.82 ms median (218 % of a 2.67 ms callback period,
+  every block late) to 1.58–1.69 ms with zero late blocks on the same machine.
+- **The render pool reserves playback headroom** (#532): when the pool joins the callback, its
+  helper count now keeps half the buffer free for voice attacks and scheduler jitter (the
+  previous boundary left only 15 %), and the sizing accounts for the largest indivisible track
+  job (list scheduling's bound) — heavy plug-in jobs no longer schedule into serial waves while
+  cores idle. Pools under a 512-frame four-instance load keep the per-callback cost at ~93 % of
+  one such instance instead of four.
 - **Default Projects/Samples folders follow the OS locations** (#522): the browser and
   save dialogs no longer default to hardcoded `~/Documents/Nota Projects` and
   `~/Music/Nota Samples`. On Linux they read `user-dirs.dirs` (`XDG_DOCUMENTS_DIR`,

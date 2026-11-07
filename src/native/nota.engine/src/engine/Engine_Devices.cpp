@@ -47,6 +47,7 @@
 #include "devices/instruments/Consort.h"
 #include "devices/instruments/Keys.h"
 #include "devices/instruments/Mosaic.h"
+#include "devices/instruments/Twin.h"
 #include "devices/instruments/GrainSynth.h"
 #include "bridge/PluginHostBridge.h"
 #include "devices/racks/RackDevice.h"
@@ -257,6 +258,18 @@ int32_t Engine::addKeysTrack() {
     return id;
 }
 
+int32_t Engine::addTwinTrack() {
+    auto g = std::make_shared<Graph>(*authoring_);
+    const int32_t id = nextTrackId_++;
+    auto track = std::make_shared<Track>(id, TrackType::Instrument);
+    auto inst = std::make_shared<Twin>();
+    inst->setSampleRate(transport_.sampleRate());
+    track->instrument = inst;
+    g->tracks.push_back(track);
+    publish(g);
+    return id;
+}
+
 int32_t Engine::addMosaicTrack() {
     auto g = std::make_shared<Graph>(*authoring_);
     const int32_t id = nextTrackId_++;
@@ -322,7 +335,101 @@ int64_t Engine::mosaicZoneSampleId(int32_t trackId, int32_t zone) const {
 // instrument object is stable across snapshots, so this mutates it in place (message thread).
 void Engine::instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg) {
     auto t = findTrackAuthoring(trackId);
-    if (t && t->instrument) t->instrument->action(id, iarg, farg);
+    if (!t || !t->instrument) return;
+    instrumentActionUndoable(*t->instrument, trackId, -1, -1, id, iarg, farg);
+}
+
+// The instrument an edit-state undo step addresses: chain >= 0 is chain `chain` of the rack at
+// deviceIndex (MixChange's deviceIndex / paramIndex), -1 the track's own instrument.
+Instrument* Engine::editStateInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain) const {
+    if (chain >= 0) {
+        auto* r = rackCoreAt(trackId, deviceIndex);
+        return r ? r->chainInstrument(chain) : nullptr;
+    }
+    auto t = findTrackAuthoring(trackId);
+    return t ? t->instrument.get() : nullptr;
+}
+
+// A change of an instrument's edit state is one mix-only undo step swapping it (as setEqBandText
+// does); nothing when it didn't change, or the instrument keeps none.
+void Engine::pushInstrumentEdit(int32_t trackId, int32_t deviceIndex, int32_t chain, std::vector<uint8_t> before,
+    std::vector<uint8_t> after, MixKind kind) {
+    if (before.empty() || after == before) return;
+    redoStack_.clear();
+    // Inside an open undo group (a whole pattern written step by step), the edits of one
+    // instrument fold into the group's entry for it: the first `before`, the latest `after`.
+    // So a long run of actions is one entry and can't push the group's start out of the history.
+    if (undoGroupDepth_ > 0 && undoStack_.size() > undoGroupBase_) {
+        for (auto it = undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_); it != undoStack_.end(); ++it)
+            for (auto& m : it->mix)
+                if (m.kind == kind && m.trackId == trackId && m.deviceIndex == deviceIndex &&
+                    m.paramIndex == chain) {
+                    noteStates_[static_cast<size_t>(m.after)] = std::move(after);
+                    return;
+                }
+    }
+    noteStates_.push_back(std::move(before));
+    noteStates_.push_back(std::move(after));
+    const auto at = static_cast<float>(noteStates_.size() - 2);
+    undoStack_.push_back({nullptr, {MixChange{kind, trackId, at, at + 1.0f, deviceIndex, chain}}});
+    if (undoStack_.size() > kMaxUndoDepth) {
+        undoStack_.erase(undoStack_.begin());
+        if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
+    }
+    compactNoteStates();
+}
+
+// The saved states (EQ-8 notes, instrument edit states) only the undo and redo history refers to:
+// once the store has grown well past what the history still holds, the rest is dropped and the
+// history's indices are renumbered. Index 0 stays the empty state.
+void Engine::compactNoteStates(bool force) {
+    if (!force && noteStates_.size() < std::max<size_t>(1024, 2 * noteStatesKept_)) return;
+    std::vector<std::vector<uint8_t>> kept(1);
+    std::unordered_map<size_t, size_t> remap;
+    auto keep = [&](float& v) {
+        const auto at = static_cast<size_t>(v);
+        if (at == 0 || at >= noteStates_.size()) return;
+        auto [it, fresh] = remap.try_emplace(at, kept.size());
+        if (fresh) kept.push_back(std::move(noteStates_[at]));
+        v = static_cast<float>(it->second);
+    };
+    for (auto* stack : {&undoStack_, &redoStack_})
+        for (auto& e : *stack)
+            for (auto& m : e.mix)
+                if (m.kind == MixKind::InstrumentEdit || m.kind == MixKind::InstrumentState || m.kind == MixKind::DeviceNotes)
+                    keep(m.before), keep(m.after);
+    noteStates_ = std::move(kept);
+    noteStatesKept_ = noteStates_.size();
+}
+
+void Engine::instrumentActionUndoable(Instrument& inst, int32_t trackId, int32_t deviceIndex, int32_t chain,
+    int32_t id, int32_t iarg, float farg) {
+    auto before = inst.editState();
+    inst.action(id, iarg, farg);
+    if (!before.empty()) pushInstrumentEdit(trackId, deviceIndex, chain, std::move(before), inst.editState());
+}
+
+// An edit of a rack chain instrument made by plain param writes (a Twin's side or part copy, a
+// preset): its params have no undo target of their own, so the step swaps the whole state the
+// caller read before the edit for the one it has now.
+bool Engine::recordInstrumentState(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* before, int32_t size) {
+    Instrument* inst = chain >= 0 ? editStateInstrument(trackId, deviceIndex, chain) : nullptr;
+    if (!inst || !before || size <= 0) return false;
+    pushInstrumentEdit(trackId, deviceIndex, chain, std::vector<uint8_t>(before, before + size), inst->getState(),
+        MixKind::InstrumentState);
+    return true;
+}
+
+// Loads a state blob into an instrument (a preset's patterns) with what it changes in the edit
+// state as an undo step, so undoing the preset brings the old sequence back with the old sound.
+bool Engine::instrumentSetStateUndoable(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* data,
+    int32_t size) {
+    Instrument* inst = editStateInstrument(trackId, deviceIndex, chain);
+    if (!inst || !data || size <= 0) return false;
+    auto before = inst->editState();
+    inst->setState(data, size);
+    pushInstrumentEdit(trackId, deviceIndex, chain, std::move(before), inst->editState());
+    return true;
 }
 
 // Nota Rhythm Phase 2: load a one-shot into one drum voice. Clones the instrument (so the
@@ -1383,9 +1490,20 @@ float Engine::builtinDeviceParamDefault(int32_t kind, int32_t p) const {
 float Engine::instrumentParamDefault(int32_t t, int32_t p) const {
     auto tr = findTrackAuthoring(t);
     if (!tr || !tr->instrument) return 0.0f;
-    if (tr->instrument->kind() < 0) return tr->instrument->pluginParamGet(p); // plugin
-    auto fresh = makeBuiltinInstrument(tr->instrument->kind());
-    return fresh ? fresh->pluginParamGet(p) : tr->instrument->pluginParamGet(p);
+    const int32_t kind = tr->instrument->kind();
+    if (kind < 0) return tr->instrument->pluginParamGet(p); // plugin
+    // A fresh instance's values, read once per kind: a preset asks for every param it doesn't
+    // name, and building an instrument per question (Nota Twin: ~900, each with its effect
+    // devices) made applying a preset take tens of milliseconds. Message thread only.
+    auto it = instrumentDefaults_.find(kind);
+    if (it == instrumentDefaults_.end()) {
+        auto fresh = makeBuiltinInstrument(kind);
+        if (!fresh) return tr->instrument->pluginParamGet(p);
+        std::vector<float> d(static_cast<size_t>(fresh->pluginParamCount()));
+        for (size_t i = 0; i < d.size(); ++i) d[i] = fresh->pluginParamGet(static_cast<int32_t>(i));
+        it = instrumentDefaults_.emplace(kind, std::move(d)).first;
+    }
+    return p >= 0 && static_cast<size_t>(p) < it->second.size() ? it->second[static_cast<size_t>(p)] : tr->instrument->pluginParamGet(p);
 }
 float Engine::midiEffectParamDefault(int32_t t, int32_t i, int32_t p) const {
     auto* m = midiDeviceAt(t, i);
@@ -1484,6 +1602,7 @@ bool Engine::setEqBandText(
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
     }
     redoStack_.clear();
+    compactNoteStates();
     return true;
 }
 

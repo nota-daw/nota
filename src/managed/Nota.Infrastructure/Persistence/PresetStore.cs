@@ -52,6 +52,16 @@ public sealed class PresetStore : IPresetStore
         catch { return null; }
     }
 
+    public IReadOnlyDictionary<string, float>? InstrumentParams(string path)
+    {
+        try
+        {
+            var doc = PresetService.Load(path);
+            return doc.Type == "builtin-instrument" && doc.NamedParams is { Count: > 0 } named ? named : null;
+        }
+        catch { return null; }
+    }
+
     public string ApplyFileInPlace(IAudioEngine engine, string path, int trackId, int deviceIndex)
     {
         try { return PresetService.ApplyInPlace(PresetService.Load(path), engine, trackId, deviceIndex); }
