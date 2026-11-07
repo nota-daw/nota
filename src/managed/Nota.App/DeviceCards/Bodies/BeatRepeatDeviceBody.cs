@@ -405,7 +405,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // CENTRE — Filter: the repeat filter with a later repeat's band (drag it).
+        // CENTRE — Filter: the repeat filter with a later repeat's band, on the shared filter graph
+        // (drag sideways for the frequency, up / down for the width).
         // ======================================================================
         BrFilterView? filter = null;
         int LaterRepeat() => Math.Clamp(Passes() - 1, 1, 4);
@@ -413,8 +414,12 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         Control FilterTab()
         {
             filter = new BrFilterView();
-            WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth,
-                F(FilterFreq, "Freq", FreqF), F(FilterWidth, "Width", WidthF), F(FilterWidth, "Width", WidthF));
+            filter.GestureBegin += () => { Begin(FilterFreq); Begin(FilterWidth); };
+            filter.GestureEnd += () => { End(FilterFreq); End(FilterWidth); };
+            filter.FreqChanged += v => Raw(FilterFreq, v);
+            filter.WidthChanged += v => Raw(FilterWidth, v);
+            filter.ResetRequested += () => { Reset(FilterFreq); Reset(FilterWidth); RefreshAll(); };
+            ValueEntry.AttachAll(filter, F(FilterFreq, "Freq", FreqF), F(FilterWidth, "Width", WidthF));
             ToolTip.SetTip(filter, MenuKit.Keys(Loc.T("device.beat_repeat.the_repeat_filter_only_the")));
             Learn(filter, FilterFreq);
             return View(filter, KnobColumn(

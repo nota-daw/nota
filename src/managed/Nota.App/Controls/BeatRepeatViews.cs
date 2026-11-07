@@ -9,10 +9,10 @@
 //  · BrSlicesView — the Slices tab: the last interval's input (grey) on the grid, the gate
 //    window from the offset shaded, the captured slice in neutral ink. Drag the offset line or the
 //    gate's end sideways (16ths of the interval); double-click resets.
-//  · BrFilterView — the Filter tab: the repeat filter (LP / BP / HP) for the first repeat in
-//    neutral ink and a later one (lighter grey, dashed) when the band narrows and follows the pitch. Drag
-//    the node for the frequency, a band edge for the width.
-// Drag contract from ShDragView: left button only, a gesture per drag, double-click resets
+//  · BrFilterView — the Filter tab, on the shared filter graph (FilterGraphBase): the repeat
+//    filter (LP / BP / HP) for the first repeat and a later one (dashed grey) when the band
+//    narrows and follows the pitch. Drag sideways for the frequency, up / down for the width.
+// Drag contract from ShDragView (the Slices tab): left button only, a gesture per drag, double-click resets
 // the handle, right-click bubbles to the MIDI-learn menu.
 
 using System;
@@ -219,27 +219,52 @@ internal sealed class BrSlicesView : ShDragView
     }
 }
 
-internal sealed class BrFilterView : ShDragView
+/// <summary>The Filter tab on the shared filter graph (FilterGraphBase, #531), as Auto Filter
+/// draws its own: the repeat filter (LP / BP / HP) for the first repeat in the accent with a light
+/// fill and a hollow handle, the cutoff lit on the frequency axis, the hover marker; a later
+/// repeat's response dashed grey when the band narrows and follows the pitch. Drag anywhere:
+/// sideways for the frequency, up / down for the width (up is narrower); double-click resets both.
+/// Off, the response is a grey line with no handle. Frequency axis == the Freq param range
+/// (50..18000 Hz), so the handle's x is linear in it.</summary>
+internal sealed class BrFilterView : FilterGraphBase
 {
-    public const int HFreq = 0, HWidthLo = 1, HWidthHi = 2;
-    private const double FMin = 50, FMax = 18000, DbTop = 12, DbBot = -36;
+    private static readonly IPen LaterPen = new Pen(NotaPalette.TextSecondary, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
+    private const double FMin = 50, FMax = 18000, OctMin = 0.5, OctSpan = 3;
     private double _hz = 949, _oct = 2, _laterHz = 949, _laterOct = 2;
     private int _type = 1, _laterRepeat;
     private bool _on;
+    private Point _grab;
+    private double _f0, _w0;   // freq / width (normalized) when the drag began
+
+    public event Action<double>? FreqChanged;
+    public event Action<double>? WidthChanged;
+    public event Action? GestureBegin;
+    public event Action? GestureEnd;
+    public event Action? ResetRequested;
+
+    public BrFilterView()
+    {
+        MinHeight = 60; MinWidth = 120; ClipToBounds = true;
+        Cursor = new Cursor(StandardCursorType.Cross);
+    }
+
+    public new bool Dragging => base.Dragging;
+    protected override (double Lo, double Hi) Span => (FMin, FMax);
+    protected override (double Top, double Bottom) DbSpan => (12.0, -36.0);
+    protected override double CutoffHz => _on ? _hz : double.NaN;
+    protected override double ResponseDb(double hz) => Mag(hz, _hz, _oct, _type);
 
     /// <summary>The filter for the first repeat (Hz, octaves), the type 0 LP / 1 BP / 2 HP,
     /// and a later repeat's band (<paramref name="laterRepeat"/> = 0 hides it).</summary>
     public void Set(bool on, int type, double hz, double oct, int laterRepeat, double laterHz, double laterOct)
     {
         _on = on; _type = type; _hz = hz; _oct = oct; _laterRepeat = laterRepeat; _laterHz = laterHz; _laterOct = laterOct;
+        Cursor = new Cursor(on ? StandardCursorType.Cross : StandardCursorType.Arrow);
         InvalidateVisual();
     }
 
-    private double X(double f) => Math.Log(Math.Clamp(f, FMin, FMax) / FMin) / Math.Log(FMax / FMin) * Bounds.Width;
-    private double FAt(double x) => FMin * Math.Pow(FMax / FMin, Math.Clamp(x / Math.Max(1, Bounds.Width), 0, 1));
-    private double Top => 16;
-    private double Bot => Bounds.Height - 13;
-    private double Yd(double db) => Top + Math.Clamp((DbTop - db) / (DbTop - DbBot), 0, 1) * (Bot - Top);
+    private static double Norm(double hz) => Math.Log(hz / FMin) / Math.Log(FMax / FMin);
+    private static double HzOf(double n) => FMin * Math.Pow(FMax / FMin, Math.Clamp(n, 0, 1));
 
     private static double Q(double oct, int type)
     {
@@ -253,74 +278,77 @@ internal sealed class BrFilterView : ShDragView
         double m = type switch { 0 => 1 / den, 2 => x * x / den, _ => x / q / den };
         return 20 * Math.Log10(Math.Max(1e-6, m));
     }
-    private (double lo, double hi) Band(double hz, double oct) => (hz / Math.Pow(2, oct / 2), hz * Math.Pow(2, oct / 2));
 
-    protected override int Hit(Point p)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        if (!_on) return -1;
-        var (lo, hi) = Band(_hz, _oct);
-        double dF = Math.Abs(p.X - X(_hz)), dL = Math.Abs(p.X - X(lo)), dH = Math.Abs(p.X - X(hi));
-        if (_type == 1 && dL < dF && dL <= 8) return HWidthLo;
-        if (_type == 1 && dH < dF && dH <= 8) return HWidthHi;
-        return HFreq;
+        if (!_on || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        e.Handled = true;
+        if (e.ClickCount == 2) { ResetRequested?.Invoke(); InvalidateVisual(); return; }
+        base.Dragging = true;
+        _grab = e.GetPosition(this); _f0 = Norm(_hz); _w0 = (_oct - OctMin) / OctSpan;
+        GestureBegin?.Invoke();
+        e.Pointer.Capture(this);
+        InvalidateVisual();
     }
-    protected override StandardCursorType CursorFor(int handle) => StandardCursorType.SizeWestEast;
-    protected override double DragTo(int handle, Point start, Point p, double v0)
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
-        double f = FAt(p.X);
-        if (handle == HFreq) return Math.Log(f / FMin) / Math.Log(FMax / FMin);
-        double oct = 2 * Math.Abs(Math.Log2(f / _hz));
-        return (oct - 0.5) / 3;
+        base.OnPointerMoved(e);
+        if (!base.Dragging) return;
+        var r = PlotRect; var p = e.GetPosition(this);
+        if (r.Width <= 0 || r.Height <= 0) return;
+        // From where it was grabbed, so a click changes nothing: sideways the frequency, down wider.
+        double f = Math.Clamp(_f0 + (p.X - _grab.X) / r.Width, 0, 1);
+        double wv = Math.Clamp(_w0 + (p.Y - _grab.Y) / (r.Height * 0.8), 0, 1);
+        _hz = HzOf(f); _oct = OctMin + wv * OctSpan;
+        FreqChanged?.Invoke(f); WidthChanged?.Invoke(wv);
+        InvalidateVisual();
+    }
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        if (!base.Dragging) return;
+        base.Dragging = false; InvalidateVisual();
+        GestureEnd?.Invoke();
+        e.Pointer.Capture(null);
+    }
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (base.Dragging) { base.Dragging = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var frame = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, frame);
-        Grid(ctx, w, h, 5);
-        ctx.DrawLine(new Pen(NotaPalette.GraphBorder, 1), new Point(0, Yd(0)), new Point(w, Yd(0)));
-
-        StreamGeometry Curve(double hz, double oct)
+        var r = PlotRect;
+        if (r.Width <= 0 || r.Height <= 0) return;
+        DrawBack(ctx);
+        if (!_on)
         {
-            var g = new StreamGeometry();
-            int px = Math.Max(24, (int)(w / 2));
-            using var c = g.Open();
-            for (int i = 0; i <= px; i++)
-            {
-                double x = (double)i / px * w;
-                var pt = new Point(x, Yd(Mag(FAt(x), hz, oct, _type)));
-                if (i == 0) c.BeginFigure(pt, false); else c.LineTo(pt);
-            }
-            return g;
+            DrawCurve(ctx, f => Mag(f, _hz, _oct, _type), NotaPalette.BorderStrong, fill: false);
+            DrawFront(ctx);
+            return;
         }
-
-        if (_on && _laterRepeat > 1)
-            ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.2, new DashStyle(new double[] { 3, 3 }, 0)), Curve(_laterHz, _laterOct));
-        ctx.DrawGeometry(null, _on ? NotaGraph.PrimaryPen : NotaGraph.SecondaryPen(NotaPalette.BorderStrong, 1.6), Curve(_hz, _oct));
-
-        if (_on)
+        bool later = _laterRepeat > 1;
+        if (later)
         {
-            var node = new Point(X(_hz), Yd(Mag(_hz, _hz, _oct, _type)));
-            if (_type == 1)
+            int n = (int)Math.Clamp(r.Width / 1.5, 24, 420);
+            var geo = new StreamGeometry();
+            using (var g = geo.Open())
             {
-                var (lo, hi) = Band(_hz, _oct);
-                double y = Yd(-3);
-                var edgePen = new Pen(Active is HWidthLo or HWidthHi ? NotaPalette.Accent : NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 2, 3 }, 0));
-                ctx.DrawLine(edgePen, new Point(X(lo), y), new Point(X(hi), y));
-                Text(ctx, NotaNum.F($"{_oct:0.0}\u2009oct"), Math.Clamp(X(lo) + 2, 4, w - 50), y + 2, NotaPalette.TextTertiary);
+                for (int i = 0; i < n; i++)
+                {
+                    double x = r.X + r.Width * i / (n - 1);
+                    var pt = new Point(x, YOf(Mag(HzAt(x), _laterHz, _laterOct, _type)));
+                    if (i == 0) g.BeginFigure(pt, false); else g.LineTo(pt);
+                }
+                g.EndFigure(false);
             }
-            NotaGraph.Node(ctx, node, Active == HFreq);
+            ctx.DrawGeometry(null, LaterPen, geo);
         }
-
-        NotaGraph.Title(ctx, frame, _on ? "Repeat filter" : Loc.T("device.beat_repeat.repeat_filter_off"));
-        if (_on && _laterRepeat > 1)
-            NotaGraph.Legend(ctx, w - 6, 3, ("repeat 1", NotaPalette.VizInk, NotaGraph.Mark.Line),
-                (NotaNum.F($"repeat {_laterRepeat}"), NotaPalette.TextTertiary, NotaGraph.Mark.Dashed));
-        static string Hz(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.0}\u2009k") : NotaNum.F($"{f:0}\u2009Hz");
-        Text(ctx, "50", 4, h - 11);
-        TextR(ctx, "18\u2009k", w - 4, h - 11);
-        if (_on) Text(ctx, Hz(_hz), Math.Clamp(X(_hz) - 14, 22, w - 60), h - 11, Active == HFreq ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        DrawCurve(ctx, f => Mag(f, _hz, _oct, _type));
+        double cx = XOf(_hz), cy = YOf(Mag(_hz, _hz, _oct, _type));
+        DrawFront(ctx, cy);
+        DrawHandle(ctx, new Point(cx, cy));
+        if (later)
+            NotaGraph.Legend(ctx, r.Right - 5, r.Y + 3, (NotaNum.F($"repeat {_laterRepeat}"), NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
     }
 }

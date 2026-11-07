@@ -145,8 +145,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Filter on Filter (its switch and LP / BP / HP in the title bar, Narrow with repeats, Pitch,
   Pitch decay). Under it on every tab: Decay, Dry/wet (the larger knob) and Volume knobs. Chance,
   Gate, Offset, Variation, Volume, Pitch and the switches lose their second copies; the state
-  box and the in / repeat / out measurements give way to read-out lines. The parameters are
-  unchanged.
+  box and the in / repeat / out measurements give way to read-out lines. The Filter tab moves to
+  the shared filter graph of Auto Filter and the instruments: the response in the accent with a
+  light fill and a hollow handle, the cutoff lit on a frequency axis, a hover marker with the
+  frequency, note and gain, and a later repeat's response dashed; drag sideways for the
+  frequency, up or down for the width. The parameters are unchanged.
 - **Nota Auto Shift: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
   each graph fills its tab with its own knobs in a column on the right — Amount, Speed and
   Human by the Trace, Glide and Bend by the MIDI target — and the scale's notes under the

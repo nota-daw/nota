@@ -96,7 +96,6 @@ Nota.App/Controls/AutoFilterViews.cs	LFO → Freq	# data: device parameter, port
 Nota.App/Controls/AutoShiftViews.cs	Sung notes	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/AutoShiftViews.cs	in scale	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/BeatRepeatViews.cs	Captured sound	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/Controls/BeatRepeatViews.cs	Repeat filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CeilingViews.cs	Loudness	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CeilingViews.cs	Reduction	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CeilingViews.cs	to the clip	# data: device parameter, port and value names and live readouts of their values (FR-004)
