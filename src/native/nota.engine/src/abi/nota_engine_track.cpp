@@ -193,6 +193,9 @@ int32_t nota_engine_add_keys_track(NotaEngine* e) {
 int32_t nota_engine_add_mosaic_track(NotaEngine* e) {
     return e ? ENG(e)->addMosaicTrack() : 0;
 }
+int32_t nota_engine_add_twin_track(NotaEngine* e) {
+    return e ? ENG(e)->addTwinTrack() : 0;
+}
 int32_t nota_track_mosaic_set_program(NotaEngine* e, int32_t track_id, const char* text, int32_t checkpoint) {
     return e && text && ENG(e)->mosaicSetProgram(track_id, std::string(text), checkpoint != 0) ? 1 : 0;
 }
@@ -213,6 +216,9 @@ void nota_path_root_set(const char* name, const char* path) {
 }
 void nota_track_instrument_action(NotaEngine* e, int32_t track_id, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->instrumentAction(track_id, id, iarg, farg);
+}
+int32_t nota_track_instrument_set_state_undoable(NotaEngine* e, int32_t track_id, const uint8_t* data, int32_t size) {
+    return e && ENG(e)->instrumentSetStateUndoable(track_id, -1, -1, data, size) ? 1 : 0;
 }
 int32_t nota_track_rhythm_set_voice_sample(NotaEngine* e, int32_t track_id, int32_t voice, const char* path) {
     if (!e || !path) return 0;

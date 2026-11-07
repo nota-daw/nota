@@ -1,0 +1,291 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>specs/084 · Accent colour — mockup</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("../../../assets/fonts/Geist-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Geist"; src: url("../../../assets/fonts/Geist-SemiBold.ttf"); font-weight: 600; }
+  @font-face { font-family: "Geist Mono"; src: url("../../../assets/fonts/GeistMono-Regular.ttf"); font-weight: 400; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 28px 40px; background: #101113; color: #E8E9EB; font: 11px "Geist", system-ui, sans-serif; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 12px; font-weight: 600; margin: 28px 0 8px; color: #C0C4C9; }
+  p.note { color: #92969D; margin: 0 0 14px; max-width: 900px; line-height: 1.5; }
+  .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+  .bar { display: flex; gap: 2px; margin: 10px 0 0; }
+  .bar button { font: 11px "Geist"; color: #C0C4C9; background: #2B2D31; border: 1px solid #141517; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+  .bar button.on { background: #E8E9EB; color: #17181A; }
+  .row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .cap { color: #92969D; font-size: 10px; margin-top: 6px; max-width: 520px; line-height: 1.45; }
+
+  /* ---- a scope wears one theme + accent through CSS variables ---- */
+  .scope { background: var(--BgApp); color: var(--TextPrimary); border: 1px solid var(--Seam); }
+
+  /* Settings pane excerpt */
+  .pane { width: 640px; padding: 18px 22px 20px; background: var(--Panel); }
+  .sect { font-size: 11px; font-weight: 600; color: var(--TextSecondary); margin-bottom: 12px; }
+  .prow { display: grid; grid-template-columns: 128px 1fr; column-gap: 16px; align-items: start; margin-bottom: 8px; }
+  .plabel { font-size: 12px; color: var(--TextSecondary); padding-top: 3px; }
+  .pcap { font-size: 11px; color: var(--TextMuted); line-height: 1.45; }
+  .seg { display: inline-flex; gap: 1px; background: var(--Seam); border: 1px solid var(--Seam); border-radius: 3px; overflow: hidden; }
+  .seg span { font-size: 12px; padding: 3px 10px; background: var(--SurfaceRaised); color: var(--TextSecondary); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+  .seg span.on { background: var(--Accent); color: var(--TextOnAccent); }
+  .cards { display: flex; gap: 12px; margin: 10px 0 4px; }
+  .tcard { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--TextPrimary); }
+  .tframe { padding: 2px; border-radius: 4px; border: 2px solid transparent; }
+  .tframe.on { border-color: var(--Accent); }
+  .mini { width: 120px; height: 72px; border-radius: 2px; position: relative; overflow: hidden; border: 1px solid #0006; }
+  .mini i { position: absolute; display: block; }
+  .mlabel { font-size: 11px; color: var(--TextMuted); margin: 6px 0 0; }
+
+  /* the accent row */
+  .accents { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sw { width: 22px; height: 22px; border-radius: 4px; padding: 2px; border: 2px solid transparent; cursor: pointer; }
+  .sw i { display: block; width: 100%; height: 100%; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+  .sw.on { border-color: var(--TextPrimary); }
+  .sw:hover:not(.on) { border-color: var(--Rule); }
+  .gap { width: 6px; }
+  .btn { height: 22px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; border-radius: 3px; font-size: 12px;
+         background: var(--SurfaceRaised); color: var(--TextSecondary); border: 1px solid var(--Seam); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); cursor: pointer; }
+  .btn.on { outline: 2px solid var(--TextPrimary); outline-offset: 1px; }
+  .btn b { width: 14px; height: 14px; border-radius: 2px; display: block; }
+  .btn svg { width: 10px; height: 10px; }
+  .readout { font-size: 12px; color: var(--TextMuted); margin-left: 6px; }
+
+  /* the picker popover */
+  .pop { width: 240px; padding: 10px; border-radius: 3px; background: var(--SurfaceRaised); border: 1px solid var(--Seam);
+         box-shadow: 0 10px 28px rgba(0,0,0,.42); display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .sv { height: 132px; border-radius: 3px; position: relative; border: 1px solid var(--Rule); }
+  .sv .h { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #0008; transform: translate(-6px,-6px); }
+  .hue { height: 10px; border-radius: 3px; position: relative; border: 1px solid var(--Rule);
+         background: linear-gradient(90deg, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00); }
+  .hue .h { position: absolute; top: -3px; width: 4px; height: 14px; background: #fff; border-radius: 1px; box-shadow: 0 0 0 1px #0008; transform: translateX(-2px); }
+  .prow2 { display: flex; align-items: center; gap: 6px; }
+  .chips2 { display: flex; height: 22px; border: 1px solid var(--Rule); border-radius: 3px; overflow: hidden; }
+  .chips2 i { width: 18px; display: block; }
+  .field { flex: 1; height: 22px; display: flex; align-items: center; padding: 0 6px; border-radius: 3px; background: var(--BgSunken);
+           border: 1px solid var(--Rule); color: var(--TextPrimary); font: 12px "Geist Mono"; }
+  .field.focus { border-color: var(--AccentBright); }
+  .inthemes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .inthemes div { display: flex; flex-direction: column; gap: 3px; align-items: center; font-size: 9px; color: var(--TextMuted); }
+  .inthemes i { display: block; width: 100%; height: 14px; border-radius: 2px; border: 1px solid #0005; position: relative; }
+  .inthemes i.adj::after { content: ""; position: absolute; right: 2px; top: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--TextPrimary); box-shadow: 0 0 0 1px #0008; }
+  .pnote { font-size: 11px; color: var(--TextMuted); line-height: 1.4; min-height: 30px; }
+  .pnote.bad { color: var(--Danger); }
+
+  /* specimens — accent in use */
+  .spec { padding: 12px; display: grid; grid-template-columns: auto auto; gap: 10px 16px; align-items: center; width: 640px; background: var(--BgApp); }
+  .lbl { color: var(--TextTertiary); font-size: 10px; }
+  .tp { display: flex; gap: 2px; }
+  .key { width: 26px; height: 20px; border-radius: 3px; background: var(--SurfaceRaised); border: 1px solid var(--Seam); display: grid; place-items: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+  .key.on { background: var(--Accent); }
+  .key svg { width: 10px; height: 10px; }
+  .lane { position: relative; height: 40px; width: 300px; background: var(--LaneB); border: 1px solid var(--Seam); }
+  .clip { position: absolute; top: 4px; height: 30px; border-radius: 2px; }
+  .clip.sel { box-shadow: 0 0 0 1px var(--Accent); }
+  .ph { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--Accent); }
+  .loop { position: absolute; top: -1px; height: 4px; background: var(--Accent); }
+  .list { width: 220px; background: var(--Panel); border: 1px solid var(--Seam); padding: 3px; }
+  .li { height: 20px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; color: var(--TextSecondary); border-radius: 2px; }
+  .li.pick { background: var(--AccentSubtle); color: var(--TextPrimary); }
+  .li.hov { background: var(--Accent); color: var(--TextOnAccent); }
+  .knobs { display: flex; gap: 14px; align-items: center; }
+  .knob { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 9px; color: var(--TextMuted); }
+  .sw2 { width: 18px; height: 10px; border-radius: 5px; background: var(--BgSunken); border: 1px solid var(--Rule); position: relative; }
+  .sw2.on { background: var(--Accent); border-color: var(--Accent); }
+  .sw2 i { position: absolute; top: 1px; width: 6px; height: 6px; border-radius: 50%; background: var(--TextPrimary); }
+  .sw2.on i { right: 1px; background: var(--TextOnAccent); }
+  .brass { width: 140px; height: 40px; border-radius: 3px; background: var(--BgSunken); border: 1px solid var(--BorderBrass); display: flex; align-items: flex-end; padding: 4px; gap: 2px; }
+  .brass u { flex: 1; background: var(--VizInk); border-radius: 1px; }
+  .brass u.hot { background: var(--AccentBright); }
+  .txt { font-size: 11px; color: var(--AccentBright); }
+
+  /* matrix */
+  table.m { border-collapse: separate; border-spacing: 6px; }
+  table.m th { font-weight: 600; font-size: 10px; color: #92969D; text-align: left; padding: 0 2px; }
+  .cell { padding: 8px; display: flex; gap: 6px; align-items: center; width: 220px; }
+  .cell .lane { width: 92px; height: 26px; }
+  .cell .clip { height: 18px; }
+  .cell .li { height: 18px; width: 46px; padding: 0 4px; font-size: 10px; }
+  .hexes { font: 9px "Geist Mono"; color: var(--TextMuted); line-height: 1.3; }
+</style>
+</head>
+<body>
+<h1>Choose the accent colour — specs/084 · nota-daw/nota#311</h1>
+<p class="note">Every colour on this page is computed from the theme files by the derivation in research.md: Orange is the theme files
+verbatim; another accent keeps each accent token's lightness relation to the theme's own orange and swaps hue and saturation,
+then — only if the readability bar would fail — moves the lightness by the smallest step that passes. Click a swatch or a theme
+to try it. The swatches, the Custom button and the picker are the new controls; everything else is the existing UI wearing the accent.</p>
+<div class="bar" id="themeBar"></div>
+
+<h2>1 · Settings → Appearance (excerpt, true size)</h2>
+<div class="row">
+  <div class="scope pane" id="pane">
+    <div class="sect">UI</div>
+    <div class="prow"><div class="plabel">Colour theme</div>
+      <div>
+        <div class="seg"><span class="on">Dark</span><span>Light</span><span>Follow system</span></div>
+        <div class="mlabel">Dark</div>
+        <div class="cards" id="cardsDark"></div>
+        <div class="mlabel">Light</div>
+        <div class="cards" id="cardsLight"></div>
+      </div>
+    </div>
+    <div class="prow"><div></div><div class="pcap">Themes change colours only. Follow system wears a dark theme in dark mode and a light one in light mode.</div></div>
+    <div class="prow" style="margin-top:10px"><div class="plabel">Accent</div>
+      <div class="accents" id="accents"></div>
+    </div>
+    <div class="prow"><div></div><div class="pcap">The colour of what is live or chosen — the playhead, the loop, selection, toggles that are on. Tuned to each theme so it stays readable.</div></div>
+    <div class="prow" style="margin-top:10px"><div class="plabel">Waveform</div><div><div class="seg"><span class="on">Smooth</span><span>Solid</span><span>Bars</span></div></div></div>
+  </div>
+  <div class="cap" style="max-width:300px">
+    <b>Accent</b> sits directly under the theme picker. Seven presets, then <b>Custom</b>; the chosen one carries a 2&nbsp;px ring in
+    <span class="mono">TextPrimary</span> (colour only — the ring slot is always there, so nothing moves). A swatch's name is its
+    tooltip; the chosen name is the readout at the end of the row. The theme cards preview each theme <i>with</i> the chosen accent.
+    <br><br>Presets: Orange (default) · Lime · Aqua · Sky · Violet · Magenta · Pink — no yellow (mute), red (record), green (meter) or
+    mid blue (solo). Each passes T3.4, T3.5, T3.8, the meter green and every track colour (ΔE ≥ 15) in all four themes — the smoke test enforces it.
+  </div>
+</div>
+
+<h2>2 · Custom — the picker (a popover under the Custom button)</h2>
+<div class="row" id="pickers"></div>
+<p class="cap" style="max-width:900px">Saturation/brightness area, hue strip, the old/new chip and a hex field (Geist Mono; typing a valid value applies at once).
+The <b>In themes</b> strip shows the colour as each theme will wear it; a dot marks a theme where its lightness was moved to stay readable.
+Everything applies live while dragging; clicking outside keeps it and saves; Esc puts back the accent worn before the picker opened.
+A colour no lightness can rescue (a grey, or one that sits on the record red / mute / solo / meter green in some theme) is not applied:
+the note says why in Danger ink and the accent stays as it was. The spectrum is the one gradient in the app — content, like a waveform — listed in DESIGN.md's accepted exceptions.</p>
+
+<h2>3 · The accent in use (current theme · current accent)</h2>
+<div class="scope spec" id="spec"></div>
+
+<h2>4 · Every preset in every theme</h2>
+<table class="m" id="matrix"></table>
+
+<script>
+const THEMES = {"studio-dark": {"SurfaceAbyss": "#17181A", "BgApp": "#1E1F22", "Gutter": "#141517", "BgSunken": "#17181A", "CanvasBg": "#1E1F22", "SurfaceDeep": "#1B1C1F", "LaneB": "#222326", "Panel": "#2B2D31", "SurfaceCard": "#2B2D31", "SurfaceInset": "#232427", "SurfaceRaised": "#34363B", "SurfaceHover": "#393C41", "TrackOff": "#17181A", "SurfaceActive": "#17181A", "GridSubBeat": "#242528", "GridBeat": "#2A2C30", "GridRow": "#1B1C1F", "GridBar": "#3A3C41", "GraphBorder": "#45484E", "WellGrid": "#2E2F32", "PadGrid": "#2A2C30", "TextHeading": "#F4F5F6", "TextPrimary": "#E8E9EB", "TextStrong": "#D4D6DA", "TextSecondary": "#C0C4C9", "TextMuted": "#A4A9B0", "TextTertiary": "#92969D", "TextDisabled": "#82868C", "TextAxis": "#82868C", "TextOnAccent": "#17181A", "TextFaint": "#82868C", "VizInk": "#D7D8DA", "VizGrid": "#2E2F32", "BorderDefault": "#141517", "BorderStrong": "#45484E", "BorderBrass": "#BF7D22", "Seam": "#141517", "Rule": "#45484E", "Accent": "#FF9F1C", "AccentBright": "#FFB547", "AccentHover": "#FFB547", "AccentDeep": "#C77612", "AccentDim": "#C77612", "AccentEdge": "#BF7D22", "AccentMute": "#7A5F3D", "AccentPale": "#FFD08A", "AccentSubtle": "#4D3F2E", "Record": "#F06A6E", "RecordInk": "#17181A", "Success": "#6CC673", "SuccessInk": "#17181A", "SuccessDim": "#3F8A45", "Warning": "#F2B53C", "Mute": "#F2B53C", "Solo": "#6A9FD8", "Danger": "#F06A6E", "DangerHover": "#F48386", "DangerBright": "#F58F92", "DangerDeep": "#C4474B", "DangerPale": "#F7A5A7", "Teal": "#5FB3A8", "TealBright": "#86C9C0", "Rose": "#D77A8F", "RoseBright": "#E49EAE", "Steel": "#6A9FD8", "Sage": "#7FB08A", "Threshold": "#E0A84A", "Marker": "#7FC4E0", "MarkerHot": "#CDEEF8", "Frozen": "#7FC7EC", "SignalIn": "#5A6170", "SignalInFill": "#3A3E46", "HandleSel": "#FFFFFF", "SelHeaderBg": "#393C41", "FrozenHeaderBg": "#24323B", "MuteTint": "#3B3426", "Veil": "#1E1F22", "TooltipBg": "#34363B", "TooltipText": "#E8E9EB", "KeyWhite": "#2B2D31", "KeyBlack": "#17181A", "MiniKeyWhite": "#3A3C41", "MiniKeyBlack": "#17181A", "ShadeUp": "#FFFFFF", "ShadeDown": "#17181A", "Master": "#A4A9B0", "Track1": "#7FB87A", "Track2": "#5FB3A8", "Track3": "#5AA6C4", "Track4": "#6A9FD8", "Track5": "#E0A84A", "Track6": "#9D90C9", "Track7": "#D77A8F", "Track8": "#B3B45E", "Track9": "#8E9DB0", "ReturnA": "#8E9DB0", "ReturnB": "#7A889A", "SystemAccent": "#FF9F1C", "SystemAccentLight1": "#FFAB37", "SystemAccentLight2": "#FFB652", "SystemAccentLight3": "#FFC26E", "SystemAccentDark1": "#E68F19", "SystemAccentDark2": "#CC7F16", "SystemAccentDark3": "#B26F14"}, "studio-light": {"SurfaceAbyss": "#D6D8DB", "BgApp": "#C9CBCF", "Gutter": "#9DA0A6", "BgSunken": "#D6D8DB", "CanvasBg": "#C9CBCF", "SurfaceDeep": "#CFD1D4", "LaneB": "#C4C6CA", "Panel": "#E4E5E7", "SurfaceCard": "#E4E5E7", "SurfaceInset": "#DCDEE0", "SurfaceRaised": "#EEEFF1", "SurfaceHover": "#F7F8F9", "TrackOff": "#D6D8DB", "SurfaceActive": "#D6D8DB", "GridSubBeat": "#C3C5C9", "GridBeat": "#BDC0C4", "GridRow": "#C5C7CB", "GridBar": "#ADB0B5", "GraphBorder": "#B3B6BB", "WellGrid": "#C0C3C6", "PadGrid": "#C8CACD", "TextHeading": "#0E0F11", "TextPrimary": "#16171A", "TextStrong": "#282A2E", "TextSecondary": "#3A3D42", "TextMuted": "#4F535A", "TextTertiary": "#65696F", "TextDisabled": "#797C81", "TextAxis": "#797C81", "TextOnAccent": "#17181A", "TextFaint": "#797C81", "VizInk": "#252629", "VizGrid": "#C0C3C6", "BorderDefault": "#9DA0A6", "BorderStrong": "#B3B6BB", "BorderBrass": "#ECA54E", "Seam": "#9DA0A6", "Rule": "#B3B6BB", "Accent": "#EF8A0C", "AccentBright": "#C46A00", "AccentHover": "#C46A00", "AccentDeep": "#D47800", "AccentDim": "#F7C27A", "AccentEdge": "#ECA54E", "AccentMute": "#C9A77A", "AccentPale": "#8A4A00", "AccentSubtle": "#E6D6C4", "Record": "#B3262C", "RecordInk": "#FFFFFF", "Success": "#22692B", "SuccessInk": "#FFFFFF", "SuccessDim": "#79B880", "Warning": "#7A4F00", "Mute": "#7A4F00", "Solo": "#3F78B8", "Danger": "#B3262C", "DangerHover": "#C2343A", "DangerBright": "#9C1F24", "DangerDeep": "#8E1C21", "DangerPale": "#7F161B", "Teal": "#3A8A7F", "TealBright": "#2E7067", "Rose": "#B4566B", "RoseBright": "#93404F", "Steel": "#3F78B8", "Sage": "#4A7F56", "Threshold": "#8A5F14", "Marker": "#1B6E8C", "MarkerHot": "#0E5470", "Frozen": "#1C6E96", "SignalIn": "#7A818C", "SignalInFill": "#C9CDD3", "HandleSel": "#16171A", "SelHeaderBg": "#F7F8F9", "FrozenHeaderBg": "#D3E2EA", "MuteTint": "#BDB49F", "Veil": "#E4E5E7", "TooltipBg": "#EEEFF1", "TooltipText": "#16171A", "KeyWhite": "#EEEFF1", "KeyBlack": "#C9CBCF", "MiniKeyWhite": "#F7F8F9", "MiniKeyBlack": "#3A3D42", "ShadeUp": "#FFFFFF", "ShadeDown": "#16171A", "Master": "#4F535A", "Track1": "#4A7F46", "Track2": "#3A8A7F", "Track3": "#357C99", "Track4": "#3F78B8", "Track5": "#B8862F", "Track6": "#7363A8", "Track7": "#B4566B", "Track8": "#7E7F2F", "Track9": "#5D6C80", "ReturnA": "#5D6C80", "ReturnB": "#4E5B6D", "SystemAccent": "#EF8A0C", "SystemAccentLight1": "#F19829", "SystemAccentLight2": "#F3A646", "SystemAccentLight3": "#F5B463", "SystemAccentDark1": "#D77C0B", "SystemAccentDark2": "#BF6E0A", "SystemAccentDark3": "#A76108"}, "ember-graphite": {"SurfaceAbyss": "#0A0908", "BgApp": "#0B0A09", "Gutter": "#0C0B09", "BgSunken": "#100F0D", "CanvasBg": "#121110", "SurfaceDeep": "#131210", "LaneB": "#131210", "Panel": "#141310", "SurfaceCard": "#171613", "SurfaceInset": "#1A1815", "SurfaceRaised": "#1C1A16", "SurfaceHover": "#252219", "TrackOff": "#26231E", "SurfaceActive": "#100F0D", "GridSubBeat": "#191712", "GridBeat": "#1E1C18", "GridRow": "#141311", "GridBar": "#2A2721", "GraphBorder": "#221F1A", "WellGrid": "#232019", "PadGrid": "#1C1A16", "TextHeading": "#F2EDE1", "TextPrimary": "#E9E4D8", "TextStrong": "#C7C0B0", "TextSecondary": "#A39D8F", "TextMuted": "#8F897C", "TextTertiary": "#716D60", "TextDisabled": "#646054", "TextAxis": "#65614F", "TextOnAccent": "#171613", "TextFaint": "#646054", "VizInk": "#D8D3C8", "VizGrid": "#232019", "BorderDefault": "#2C2923", "BorderStrong": "#3A362D", "BorderBrass": "#6B5326", "Seam": "#0C0B09", "Rule": "#3A362D", "Accent": "#D8A03D", "AccentBright": "#F0C060", "AccentHover": "#E9BE6A", "AccentDeep": "#B08536", "AccentDim": "#8A6B2E", "AccentEdge": "#5E4A22", "AccentMute": "#7A6130", "AccentPale": "#FCE5B8", "AccentSubtle": "#241F17", "Record": "#BE563E", "RecordInk": "#FFFFFF", "Success": "#58B368", "SuccessInk": "#171613", "SuccessDim": "#7FB069", "Warning": "#D9C34C", "Mute": "#D9C34C", "Solo": "#6D8FB5", "Danger": "#C2554A", "DangerHover": "#D0685C", "DangerBright": "#E08A72", "DangerDeep": "#A8453B", "DangerPale": "#F0928A", "Teal": "#5B9E9C", "TealBright": "#7FC0BE", "Rose": "#B57286", "RoseBright": "#D79BAB", "Steel": "#6D8FB5", "Sage": "#6FA383", "Threshold": "#C9884F", "Marker": "#7FCCE1", "MarkerHot": "#CDEEF8", "Frozen": "#7FC7EC", "SignalIn": "#52604F", "SignalInFill": "#3E4A3C", "HandleSel": "#FFFFFF", "SelHeaderBg": "#241F17", "FrozenHeaderBg": "#1B2A33", "MuteTint": "#3A2320", "Veil": "#121418", "TooltipBg": "#18181E", "TooltipText": "#F0E4C8", "KeyWhite": "#1C1A16", "KeyBlack": "#0E0D0B", "MiniKeyWhite": "#2A2721", "MiniKeyBlack": "#151310", "ShadeUp": "#FFFFFF", "ShadeDown": "#141210", "Master": "#8D8779", "Track1": "#58B368", "Track2": "#4E9E7A", "Track3": "#3E8E8E", "Track4": "#5AA0B8", "Track5": "#C77F55", "Track6": "#7A6FB0", "Track7": "#B05A7A", "Track8": "#9AA64A", "Track9": "#7FA88E", "ReturnA": "#7FA88E", "ReturnB": "#6B907B", "SystemAccent": "#D8A03D", "SystemAccentLight1": "#DDAB54", "SystemAccentLight2": "#E1B76C", "SystemAccentLight3": "#E6C283", "SystemAccentDark1": "#C29037", "SystemAccentDark2": "#AD8031", "SystemAccentDark3": "#97702B"}, "ember-paper": {"SurfaceAbyss": "#D8D1BE", "BgApp": "#DCD6C5", "Gutter": "#E0DAC9", "BgSunken": "#E4DFD1", "CanvasBg": "#E6E1D3", "SurfaceDeep": "#E7E2D4", "LaneB": "#E7E2D4", "Panel": "#EAE5D7", "SurfaceCard": "#EFEADE", "SurfaceInset": "#E9E4D6", "SurfaceRaised": "#F8F5EC", "SurfaceHover": "#E7E1D0", "TrackOff": "#DBD4C0", "SurfaceActive": "#D5CEBB", "GridSubBeat": "#E5DFCE", "GridBeat": "#DED8C8", "GridRow": "#E6E1D2", "GridBar": "#CFC8B4", "GraphBorder": "#D5CFBE", "WellGrid": "#DDD7C6", "PadGrid": "#DED8C7", "TextHeading": "#1A150E", "TextPrimary": "#241F17", "TextStrong": "#3E382C", "TextSecondary": "#5E5849", "TextMuted": "#625B50", "TextTertiary": "#7E786C", "TextDisabled": "#8D866F", "TextAxis": "#8D8669", "TextOnAccent": "#FFFBF2", "TextFaint": "#8D866F", "VizInk": "#332E26", "VizGrid": "#DDD7C6", "BorderDefault": "#D5CEBB", "BorderStrong": "#BDB5A0", "BorderBrass": "#C9A254", "Seam": "#E0DAC9", "Rule": "#BDB5A0", "Accent": "#AD7716", "AccentBright": "#744D07", "AccentHover": "#8F6110", "AccentDeep": "#7A5008", "AccentDim": "#9C8034", "AccentEdge": "#D3B173", "AccentMute": "#C39B4F", "AccentPale": "#5C3C04", "AccentSubtle": "#F2E4C4", "Record": "#B54A32", "RecordInk": "#FFF4EE", "Success": "#2C7A3E", "SuccessInk": "#FFFBF2", "SuccessDim": "#609548", "Warning": "#837010", "Mute": "#837010", "Solo": "#3E6288", "Danger": "#B13E33", "DangerHover": "#C64A36", "DangerBright": "#A3391B", "DangerDeep": "#9C3221", "DangerPale": "#8E2416", "Teal": "#2F7472", "TealBright": "#3E8A88", "Rose": "#86465B", "RoseBright": "#7F2D43", "Steel": "#3E6288", "Sage": "#42765A", "Threshold": "#8A5218", "Marker": "#1B6E8C", "MarkerHot": "#0E5470", "Frozen": "#1C6E96", "SignalIn": "#6E7C68", "SignalInFill": "#D3DCCF", "HandleSel": "#1E1A14", "SelHeaderBg": "#F2E4C4", "FrozenHeaderBg": "#D8E8F0", "MuteTint": "#F0D9D3", "Veil": "#F2EFE6", "TooltipBg": "#2A251C", "TooltipText": "#F5EEDC", "KeyWhite": "#F3EFE4", "KeyBlack": "#DAD3C2", "MiniKeyWhite": "#F5F1E4", "MiniKeyBlack": "#38332A", "ShadeUp": "#FFFCF2", "ShadeDown": "#3A3227", "Master": "#746D5C", "Track1": "#328140", "Track2": "#306F53", "Track3": "#256464", "Track4": "#317187", "Track5": "#985127", "Track6": "#4B4082", "Track7": "#7F3450", "Track8": "#6C752C", "Track9": "#598C69", "ReturnA": "#598C69", "ReturnB": "#3E6A4D", "SystemAccent": "#AD7716", "SystemAccentLight1": "#B78732", "SystemAccentLight2": "#C1984E", "SystemAccentLight3": "#CBA86A", "SystemAccentDark1": "#9C6B14", "SystemAccentDark2": "#8A5F12", "SystemAccentDark3": "#79530F"}};
+const ACCENTS = {"studio-dark": {"orange": {"Accent": "#FF9F1C", "AccentBright": "#FFB547", "AccentHover": "#FFB547", "AccentDeep": "#C77612", "AccentPale": "#FFD08A", "SystemAccent": "#FF9F1C", "SystemAccentLight1": "#FFAB37", "SystemAccentLight2": "#FFB652", "SystemAccentLight3": "#FFC26E", "SystemAccentDark1": "#E68F19", "SystemAccentDark2": "#CC7F16", "SystemAccentDark3": "#B26F14", "AccentDim": "#C77612", "AccentEdge": "#BF7D22", "AccentMute": "#7A5F3D", "AccentSubtle": "#4D3F2E", "BorderBrass": "#BF7D22", "TextOnAccent": "#17181A"}, "lime": {"Accent": "#A2C854", "AccentBright": "#A5D87B", "AccentHover": "#A5D87B", "AccentDeep": "#809837", "AccentPale": "#BEE7AA", "SystemAccent": "#A2C854", "SystemAccentLight1": "#A4D16A", "SystemAccentLight2": "#AAD77E", "SystemAccentLight3": "#B3DE93", "SystemAccentDark1": "#92B54C", "SystemAccentDark2": "#81A043", "SystemAccentDark3": "#708C3B", "AccentDim": "#809837", "AccentEdge": "#799A4A", "AccentMute": "#5A6B4B", "AccentSubtle": "#3C4535", "BorderBrass": "#799A4A", "TextOnAccent": "#17181A"}, "aqua": {"Accent": "#45D1C2", "AccentBright": "#66DBD7", "AccentHover": "#66DBD7", "AccentDeep": "#31A091", "AccentPale": "#9EE8E8", "SystemAccent": "#45D1C2", "SystemAccentLight1": "#58D7CE", "SystemAccentLight2": "#6EDCD6", "SystemAccentLight3": "#86E1DE", "SystemAccentDark1": "#3EBCAF", "SystemAccentDark2": "#36A79C", "SystemAccentDark3": "#309288", "AccentDim": "#31A091", "AccentEdge": "#3C9F98", "AccentMute": "#476D6A", "AccentSubtle": "#334645", "BorderBrass": "#3C9F98", "TextOnAccent": "#17181A"}, "sky": {"Accent": "#40C9F6", "AccentBright": "#7AD2FD", "AccentHover": "#7AD2FD", "AccentDeep": "#239BBB", "AccentPale": "#B0E0FD", "SystemAccent": "#40C9F6", "SystemAccentLight1": "#5CCFFC", "SystemAccentLight2": "#79D3FD", "SystemAccentLight3": "#93D9FD", "SystemAccentDark1": "#39B5DD", "SystemAccentDark2": "#33A1C5", "SystemAccentDark3": "#2E8CAC", "AccentDim": "#239BBB", "AccentEdge": "#3E99BC", "AccentMute": "#486A7A", "AccentSubtle": "#34454D", "BorderBrass": "#3E99BC", "TextOnAccent": "#17181A"}, "violet": {"Accent": "#BEA8FE", "AccentBright": "#D2B6FD", "AccentHover": "#D2B6FD", "AccentDeep": "#8E7DD2", "AccentPale": "#E4CDFE", "SystemAccent": "#BEA8FE", "SystemAccentLight1": "#C8B0FC", "SystemAccentLight2": "#D1B8FD", "SystemAccentLight3": "#D9C2FD", "SystemAccentDark1": "#AD93F3", "SystemAccentDark2": "#9A82D8", "SystemAccentDark3": "#8671BC", "AccentDim": "#8E7DD2", "AccentEdge": "#967DCA", "AccentMute": "#6A5E7F", "AccentSubtle": "#443E4F", "BorderBrass": "#967DCA", "TextOnAccent": "#17181A"}, "magenta": {"Accent": "#F190E9", "AccentBright": "#FDA3E5", "AccentHover": "#FDA3E5", "AccentDeep": "#B66DB7", "AccentPale": "#FEC5E9", "SystemAccent": "#F190E9", "SystemAccentLight1": "#F999E8", "SystemAccentLight2": "#FDA4E8", "SystemAccentLight3": "#FEB2E9", "SystemAccentDark1": "#D981D2", "SystemAccentDark2": "#C173BA", "SystemAccentDark3": "#A964A2", "AccentDim": "#B66DB7", "AccentEdge": "#B970AD", "AccentMute": "#7A5871", "AccentSubtle": "#4D3B48", "BorderBrass": "#B970AD", "TextOnAccent": "#17181A"}, "pink": {"Accent": "#FE90BD", "AccentBright": "#FEA9C0", "AccentHover": "#FEA9C0", "AccentDeep": "#C56A94", "AccentPale": "#FFC8D2", "SystemAccent": "#FE90BD", "SystemAccentLight1": "#FE9EBE", "SystemAccentLight2": "#FFAAC3", "SystemAccentLight3": "#FFB8CA", "SystemAccentDark1": "#E87FAA", "SystemAccentDark2": "#CF7097", "SystemAccentDark3": "#B56283", "AccentDim": "#C56A94", "AccentEdge": "#C56E8D", "AccentMute": "#7F5863", "AccentSubtle": "#503B41", "BorderBrass": "#C56E8D", "TextOnAccent": "#17181A"}, "custom": {"Accent": "#5276FE", "AccentBright": "#7582FE", "AccentHover": "#7582FE", "AccentDeep": "#284FC0", "AccentPale": "#9299F4", "SystemAccent": "#5276FE", "SystemAccentLight1": "#657CFE", "SystemAccentLight2": "#7385FB", "SystemAccentLight3": "#808EFA", "SystemAccentDark1": "#4464E6", "SystemAccentDark2": "#3953C7", "SystemAccentDark3": "#2E43A9", "AccentDim": "#5684FA", "AccentEdge": "#6A83F1", "AccentMute": "#576191", "AccentSubtle": "#3B4059", "BorderBrass": "#6A83F1", "TextOnAccent": "#17181A"}, "custom-adjusted": true}, "studio-light": {"orange": {"Accent": "#EF8A0C", "AccentBright": "#C46A00", "AccentHover": "#C46A00", "AccentDeep": "#D47800", "AccentPale": "#8A4A00", "SystemAccent": "#EF8A0C", "SystemAccentLight1": "#F19829", "SystemAccentLight2": "#F3A646", "SystemAccentLight3": "#F5B463", "SystemAccentDark1": "#D77C0B", "SystemAccentDark2": "#BF6E0A", "SystemAccentDark3": "#A76108", "AccentDim": "#F7C27A", "AccentEdge": "#ECA54E", "AccentMute": "#C9A77A", "AccentSubtle": "#E6D6C4", "BorderBrass": "#ECA54E", "TextOnAccent": "#17181A"}, "lime": {"Accent": "#8EB33D", "AccentBright": "#758D21", "AccentHover": "#758D21", "AccentDeep": "#7D9D31", "AccentPale": "#506316", "SystemAccent": "#8EB33D", "SystemAccentLight1": "#8FBD57", "SystemAccentLight2": "#96C76E", "SystemAccentLight3": "#A1CF85", "SystemAccentDark1": "#7FA137", "SystemAccentDark2": "#708F30", "SystemAccentDark3": "#607D2C", "AccentDim": "#AEDC9D", "AccentEdge": "#98C675", "AccentMute": "#9AB88F", "AccentSubtle": "#D2DDCB", "BorderBrass": "#98C675", "TextOnAccent": "#17181A"}, "aqua": {"Accent": "#1DB8AA", "AccentBright": "#039383", "AccentHover": "#039383", "AccentDeep": "#0EA295", "AccentPale": "#0E655B", "SystemAccent": "#1DB8AA", "SystemAccentLight1": "#3AC0B8", "SystemAccentLight2": "#55C7C3", "SystemAccentLight3": "#71CECD", "SystemAccentDark1": "#19A599", "SystemAccentDark2": "#159287", "SystemAccentDark3": "#127F77", "AccentDim": "#8DDDDF", "AccentEdge": "#63C9C6", "AccentMute": "#86B8B9", "AccentSubtle": "#C9DEDD", "BorderBrass": "#63C9C6", "TextOnAccent": "#17181A"}, "sky": {"Accent": "#18B2DE", "AccentBright": "#038EAE", "AccentHover": "#038EAE", "AccentDeep": "#039DC3", "AccentPale": "#04637A", "SystemAccent": "#18B2DE", "SystemAccentLight1": "#44B9E7", "SystemAccentLight2": "#61C0EE", "SystemAccentLight3": "#7BC9F2", "SystemAccentDark1": "#16A0C7", "SystemAccentDark2": "#138DB1", "SystemAccentDark3": "#157B9B", "AccentDim": "#96D6FD", "AccentEdge": "#6BC2EC", "AccentMute": "#8CB3CD", "AccentSubtle": "#CADCE6", "BorderBrass": "#6BC2EC", "TextOnAccent": "#17181A"}, "violet": {"Accent": "#AE92FA", "AccentBright": "#8774CD", "AccentHover": "#8774CD", "AccentDeep": "#997FDE", "AccentPale": "#5F5091", "SystemAccent": "#AE92FA", "SystemAccentLight1": "#BC9AFB", "SystemAccentLight2": "#C8A4FD", "SystemAccentLight3": "#D2B0FD", "SystemAccentDark1": "#9D83E1", "SystemAccentDark2": "#8B74C8", "SystemAccentDark3": "#7B65AF", "AccentDim": "#DEBCFF", "AccentEdge": "#C5A3F5", "AccentMute": "#B9A3CE", "AccentSubtle": "#DDD5E8", "BorderBrass": "#C5A3F5", "TextOnAccent": "#17181A"}, "magenta": {"Accent": "#DD7ED6", "AccentBright": "#B063B1", "AccentHover": "#B063B1", "AccentDeep": "#C36EBE", "AccentPale": "#7D447C", "SystemAccent": "#DD7ED6", "SystemAccentLight1": "#E888D6", "SystemAccentLight2": "#F095D8", "SystemAccentLight3": "#F6A4DC", "SystemAccentDark1": "#C771C0", "SystemAccentDark2": "#B164AB", "SystemAccentDark3": "#9C5894", "AccentDim": "#FDB1DF", "AccentEdge": "#EA95D2", "AccentMute": "#CD9CB9", "AccentSubtle": "#E7D2DF", "BorderBrass": "#EA95D2", "TextOnAccent": "#17181A"}, "pink": {"Accent": "#EE7BAB", "AccentBright": "#BF608D", "AccentHover": "#BF608D", "AccentDeep": "#D26B97", "AccentPale": "#874262", "SystemAccent": "#EE7BAB", "SystemAccentLight1": "#F687AD", "SystemAccentLight2": "#FC94B1", "SystemAccentLight3": "#FDA5BA", "SystemAccentDark1": "#D66F9A", "SystemAccentDark2": "#BF6288", "SystemAccentDark3": "#A85676", "AccentDim": "#FDB6C2", "AccentEdge": "#F594AF", "AccentMute": "#D39DA5", "AccentSubtle": "#EAD2D6", "BorderBrass": "#F594AF", "TextOnAccent": "#17181A"}, "custom": {"Accent": "#5276FE", "AccentBright": "#2E57D0", "AccentHover": "#2E57D0", "AccentDeep": "#4162E4", "AccentPale": "#1A348A", "SystemAccent": "#5276FE", "SystemAccentLight1": "#6A7FFB", "SystemAccentLight2": "#7B89FA", "SystemAccentLight3": "#8A93FD", "SystemAccentDark1": "#4665E7", "SystemAccentDark2": "#3B56CA", "SystemAccentDark3": "#3448AE", "AccentDim": "#C3C7FE", "AccentEdge": "#A2AFFF", "AccentMute": "#A3A6E8", "AccentSubtle": "#D2D7F3", "BorderBrass": "#A2AFFF", "TextOnAccent": "#17181A"}, "custom-adjusted": true}, "ember-graphite": {"orange": {"Accent": "#D8A03D", "AccentBright": "#F0C060", "AccentHover": "#E9BE6A", "AccentDeep": "#B08536", "AccentPale": "#FCE5B8", "SystemAccent": "#D8A03D", "SystemAccentLight1": "#DDAB54", "SystemAccentLight2": "#E1B76C", "SystemAccentLight3": "#E6C283", "SystemAccentDark1": "#C29037", "SystemAccentDark2": "#AD8031", "SystemAccentDark3": "#97702B", "AccentDim": "#8A6B2E", "AccentEdge": "#5E4A22", "AccentMute": "#7A6130", "AccentSubtle": "#241F17", "BorderBrass": "#6B5326", "TextOnAccent": "#171613"}, "lime": {"Accent": "#96BB46", "AccentBright": "#A9DA71", "AccentHover": "#A9D678", "AccentDeep": "#799B40", "AccentPale": "#D7F2C0", "SystemAccent": "#96BB46", "SystemAccentLight1": "#9EC45D", "SystemAccentLight2": "#A8CD76", "SystemAccentLight3": "#B4D58B", "SystemAccentDark1": "#86A840", "SystemAccentDark2": "#789638", "SystemAccentDark3": "#688332", "AccentDim": "#5E7C38", "AccentEdge": "#405529", "AccentMute": "#566F38", "AccentSubtle": "#1D2218", "BorderBrass": "#4A602D", "TextOnAccent": "#17181A"}, "aqua": {"Accent": "#32C4B5", "AccentBright": "#5CE0D8", "AccentHover": "#69DBD3", "AccentDeep": "#2FA197", "AccentPale": "#BBF5F1", "SystemAccent": "#32C4B5", "SystemAccentLight1": "#50CBBF", "SystemAccentLight2": "#6CD2C9", "SystemAccentLight3": "#85DAD1", "SystemAccentDark1": "#2DB0A3", "SystemAccentDark2": "#299D91", "SystemAccentDark3": "#24897F", "AccentDim": "#2A7F7A", "AccentEdge": "#205754", "AccentMute": "#2E726D", "AccentSubtle": "#182221", "BorderBrass": "#24635E", "TextOnAccent": "#17181A"}, "sky": {"Accent": "#2BBCE8", "AccentBright": "#7CD5FD", "AccentHover": "#73D3FC", "AccentDeep": "#2F9ABF", "AccentPale": "#CCEEFF", "SystemAccent": "#2BBCE8", "SystemAccentLight1": "#4FC4ED", "SystemAccentLight2": "#6DCCF2", "SystemAccentLight3": "#86D4F5", "SystemAccentDark1": "#29A9D1", "SystemAccentDark2": "#2497BA", "SystemAccentDark3": "#2183A3", "AccentDim": "#2D7A98", "AccentEdge": "#235468", "AccentMute": "#316D86", "AccentSubtle": "#172226", "BorderBrass": "#255F75", "TextOnAccent": "#17181A"}, "violet": {"Accent": "#B298FB", "AccentBright": "#D1BAFE", "AccentHover": "#CEB6FD", "AccentDeep": "#957CD0", "AccentPale": "#ECE2FF", "SystemAccent": "#B298FB", "SystemAccentLight1": "#BCA2FE", "SystemAccentLight2": "#C6AEFF", "SystemAccentLight3": "#CEBBFD", "SystemAccentDark1": "#A187E5", "SystemAccentDark2": "#8F78CD", "SystemAccentDark3": "#7D69B3", "AccentDim": "#7862A3", "AccentEdge": "#53446F", "AccentMute": "#6C5A8F", "AccentSubtle": "#201E28", "BorderBrass": "#5D4D7E", "TextOnAccent": "#17181A"}, "magenta": {"Accent": "#E283DB", "AccentBright": "#FDA6EB", "AccentHover": "#FCA1E9", "AccentDeep": "#BB6DB2", "AccentPale": "#FFDBF5", "SystemAccent": "#E283DB", "SystemAccentLight1": "#E990DF", "SystemAccentLight2": "#EF9EE2", "SystemAccentLight3": "#F3ADE7", "SystemAccentDark1": "#CC76C4", "SystemAccentDark2": "#B669AF", "SystemAccentDark3": "#9F5B99", "AccentDim": "#96578A", "AccentEdge": "#673C5E", "AccentMute": "#85507A", "AccentSubtle": "#261C24", "BorderBrass": "#73446C", "TextOnAccent": "#17181A"}, "pink": {"Accent": "#F380B0", "AccentBright": "#FFACC6", "AccentHover": "#FEA8C2", "AccentDeep": "#C86B8F", "AccentPale": "#FEDEE6", "SystemAccent": "#F380B0", "SystemAccentLight1": "#F98DB7", "SystemAccentLight2": "#FD9CBE", "SystemAccentLight3": "#FDADC8", "SystemAccentDark1": "#DB739E", "SystemAccentDark2": "#C3668D", "SystemAccentDark3": "#AB597B", "AccentDim": "#9F566F", "AccentEdge": "#6D3C4C", "AccentMute": "#8C5064", "AccentSubtle": "#271C20", "BorderBrass": "#7B4357", "TextOnAccent": "#17181A"}, "custom": {"Accent": "#5276FE", "AccentBright": "#8197FF", "AccentHover": "#7E93FC", "AccentDeep": "#425ACE", "AccentPale": "#ACBAFC", "SystemAccent": "#5276FE", "SystemAccentLight1": "#6181FE", "SystemAccentLight2": "#728DFC", "SystemAccentLight3": "#7E98FC", "SystemAccentDark1": "#4665E7", "SystemAccentDark2": "#3A56CA", "SystemAccentDark3": "#3047AC", "AccentDim": "#5567C4", "AccentEdge": "#3C4786", "AccentMute": "#4F5EAB", "AccentSubtle": "#1B1F2D", "BorderBrass": "#415197", "TextOnAccent": "#17181A"}, "custom-adjusted": true}, "ember-paper": {"orange": {"Accent": "#AD7716", "AccentBright": "#744D07", "AccentHover": "#8F6110", "AccentDeep": "#7A5008", "AccentPale": "#5C3C04", "SystemAccent": "#AD7716", "SystemAccentLight1": "#B78732", "SystemAccentLight2": "#C1984E", "SystemAccentLight3": "#CBA86A", "SystemAccentDark1": "#9C6B14", "SystemAccentDark2": "#8A5F12", "SystemAccentDark3": "#79530F", "AccentDim": "#9C8034", "AccentEdge": "#D3B173", "AccentMute": "#C39B4F", "AccentSubtle": "#F2E4C4", "BorderBrass": "#C9A254", "TextOnAccent": "#FFFBF2"}, "lime": {"Accent": "#6F920C", "AccentBright": "#4A5F08", "AccentHover": "#5B7704", "AccentDeep": "#4F6304", "AccentPale": "#3A4B04", "SystemAccent": "#6F920C", "SystemAccentLight1": "#77A036", "SystemAccentLight2": "#84AF55", "SystemAccentLight3": "#95BC70", "SystemAccentDark1": "#64830B", "SystemAccentDark2": "#57740D", "SystemAccentDark3": "#4C660B", "AccentDim": "#5C9549", "AccentEdge": "#9DC57A", "AccentMute": "#84B258", "AccentSubtle": "#D5EECA", "BorderBrass": "#88BA60", "TextOnAccent": "#17181A"}, "aqua": {"Accent": "#18978B", "AccentBright": "#07645B", "AccentHover": "#127C72", "AccentDeep": "#09685E", "AccentPale": "#044F47", "SystemAccent": "#18978B", "SystemAccentLight1": "#03A79D", "SystemAccentLight2": "#40B4AE", "SystemAccentLight3": "#64C0BB", "SystemAccentDark1": "#16887D", "SystemAccentDark2": "#027970", "SystemAccentDark3": "#026A62", "AccentDim": "#1C9599", "AccentEdge": "#6DC8C4", "AccentMute": "#40B6B2", "AccentSubtle": "#C4EFEF", "BorderBrass": "#45BDBA", "TextOnAccent": "#17181A"}, "sky": {"Accent": "#1191B4", "AccentBright": "#0D5F76", "AccentHover": "#087794", "AccentDeep": "#0A647B", "AccentPale": "#074B5E", "SystemAccent": "#1191B4", "SystemAccentLight1": "#139FCA", "SystemAccentLight2": "#47ACD6", "SystemAccentLight3": "#68B9DF", "SystemAccentDark1": "#1082A3", "SystemAccentDark2": "#117390", "SystemAccentDark3": "#0E657F", "AccentDim": "#3A8CBC", "AccentEdge": "#73C2E8", "AccentMute": "#4AAEDB", "AccentSubtle": "#CBEAFF", "BorderBrass": "#52B5E3", "TextOnAccent": "#17181A"}, "violet": {"Accent": "#8C6FD4", "AccentBright": "#5C4890", "AccentHover": "#735BB0", "AccentDeep": "#5F4C97", "AccentPale": "#483873", "SystemAccent": "#8C6FD4", "SystemAccentLight1": "#9D7DDD", "SystemAccentLight2": "#AE8DE5", "SystemAccentLight3": "#BB9FEB", "SystemAccentDark1": "#7E64C0", "SystemAccentDark2": "#7158AA", "SystemAccentDark3": "#634D95", "AccentDim": "#986EBC", "AccentEdge": "#C3A6F1", "AccentMute": "#B08DE6", "AccentSubtle": "#EDDEFF", "BorderBrass": "#B993EC", "TextOnAccent": "#17181A"}, "magenta": {"Accent": "#BB5FB5", "AccentBright": "#7E3D7B", "AccentHover": "#9B4E97", "AccentDeep": "#834182", "AccentPale": "#653062", "SystemAccent": "#BB5FB5", "SystemAccentLight1": "#CB6EBD", "SystemAccentLight2": "#D881C6", "SystemAccentLight3": "#E195CF", "SystemAccentDark1": "#A956A4", "SystemAccentDark2": "#974C91", "SystemAccentDark3": "#85437F", "AccentDim": "#B96198", "AccentEdge": "#E699D2", "AccentMute": "#D77EC2", "AccentSubtle": "#FED9EF", "BorderBrass": "#E084C7", "TextOnAccent": "#17181A"}, "pink": {"Accent": "#CB5C8C", "AccentBright": "#893B5E", "AccentHover": "#A84B74", "AccentDeep": "#8F3E64", "AccentPale": "#6E2E4B", "SystemAccent": "#CB5C8C", "SystemAccentLight1": "#D96C95", "SystemAccentLight2": "#E480A0", "SystemAccentLight3": "#EC94AF", "SystemAccentDark1": "#B7537F", "SystemAccentDark2": "#A34A70", "SystemAccentDark3": "#904062", "AccentDim": "#C06175", "AccentEdge": "#F098B1", "AccentMute": "#E37D9C", "AccentSubtle": "#FEDBE0", "BorderBrass": "#EC83A1", "TextOnAccent": "#17181A"}, "custom": {"Accent": "#5276FE", "AccentBright": "#304CB1", "AccentHover": "#3F5FD8", "AccentDeep": "#2E50B9", "AccentPale": "#243B8E", "SystemAccent": "#5276FE", "SystemAccentLight1": "#6D87FC", "SystemAccentLight2": "#8497FE", "SystemAccentLight3": "#97A8FD", "SystemAccentDark1": "#4769EB", "SystemAccentDark2": "#415CD1", "SystemAccentDark3": "#3851B8", "AccentDim": "#7670EA", "AccentEdge": "#A2B1FD", "AccentMute": "#8899FC", "AccentSubtle": "#E0E3FE", "BorderBrass": "#92A0FB", "TextOnAccent": "#17181A"}, "custom-adjusted": true}};
+const PRESETS = [["orange", "Orange"], ["lime", "Lime"], ["aqua", "Aqua"], ["sky", "Sky"], ["violet", "Violet"], ["magenta", "Magenta"], ["pink", "Pink"]];
+const NAMES = {"studio-dark": "Studio Dark", "studio-light": "Studio Light", "ember-graphite": "Ember Graphite", "ember-paper": "Ember Paper"};
+const CUSTOM = "#4C6FFF";
+const EXAMPLES = {"#00B5D8": {"rows": {"studio-dark": {"Accent": "#00B5D8", "adjusted": false}, "studio-light": {"Accent": "#00B5D8", "adjusted": false}, "ember-graphite": {"Accent": "#00B5D8", "adjusted": false}, "ember-paper": {"Accent": "#00B5D8", "adjusted": false}}, "why": [], "hsv": [190, 100, 85]}, "#4C6FFF": {"rows": {"studio-dark": {"Accent": "#5276FE", "adjusted": true}, "studio-light": {"Accent": "#5276FE", "adjusted": true}, "ember-graphite": {"Accent": "#5276FE", "adjusted": true}, "ember-paper": {"Accent": "#5276FE", "adjusted": true}}, "why": [], "hsv": [228, 70, 100]}, "#3FA7FF": {"rows": {"studio-dark": {"Accent": "#3FA7FF", "adjusted": false}, "studio-light": null, "ember-graphite": {"Accent": "#3FA7FF", "adjusted": false}, "ember-paper": {"Accent": "#3FA7FF", "adjusted": false}}, "why": [["Studio Light", "solo"]], "hsv": [207, 75, 100]}, "#8C8C8C": {"rows": {"studio-dark": null, "studio-light": null, "ember-graphite": null, "ember-paper": null}, "why": [["Studio Dark", "grey"], ["Studio Light", "grey"], ["Ember Graphite", "grey"], ["Ember Paper", "grey"]], "hsv": [0, 0, 55]}};
+const PICK = ["Accent","AccentBright","AccentHover","AccentDeep","AccentPale","AccentDim","AccentEdge","AccentMute","AccentSubtle","BorderBrass","TextOnAccent"];
+let theme = "studio-dark", accent = "violet";
+const TRACK = i => `var(--Track${i})`;
+function vars(tid, aid) {
+  const t = THEMES[tid], a = ACCENTS[tid][aid];
+  return Object.entries(t).map(([k, v]) => `--${k}:${(PICK.includes(k) && a[k]) || v}`).join(";")
+       + ";--TextOnAccent:" + a.TextOnAccent;
+}
+const svgPlay = c => `<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z" fill="${c}"/></svg>`;
+const svgLoop = c => `<svg viewBox="0 0 16 16" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round"><path d="M3 9V7a3 3 0 0 1 3-3h7M11 2l2 2-2 2M13 7v2a3 3 0 0 1-3 3H3M5 14l-2-2 2-2"/></svg>`;
+const svgMet = c => `<svg viewBox="0 0 16 16" fill="none" stroke="${c}" stroke-width="1.5" stroke-linejoin="round"><path d="M5 14h6L9 2H7zM8 10l4-6"/></svg>`;
+const svgPen = c => `<svg viewBox="0 0 16 16" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round"><path d="M3 13l1-3 7-7 2 2-7 7z"/></svg>`;
+function knob(val, hot, label) {
+  const a0 = 135, a1 = 135 + 270 * val, r = 14, cx = 18, cy = 18;
+  const p = d => [cx + r * Math.cos(d * Math.PI / 180), cy + r * Math.sin(d * Math.PI / 180)];
+  const [x0, y0] = p(a0), [x1, y1] = p(a1), [xe, ye] = p(45);
+  const large = (a1 - a0) > 180 ? 1 : 0;
+  return `<div class="knob"><svg width="36" height="36"><path d="M${x0} ${y0}A${r} ${r} 0 1 1 ${xe} ${ye}" stroke="var(--BgSunken)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M${x0} ${y0}A${r} ${r} 0 ${large} 1 ${x1} ${y1}" stroke="${hot ? "var(--Accent)" : "var(--VizInk)"}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="18" cy="18" r="9" fill="var(--SurfaceRaised)"/></svg><span>${label}</span></div>`;
+}
+function mini(tid, aid) {
+  const t = THEMES[tid], a = ACCENTS[tid][aid];
+  return `<div class="mini" style="background:${t.BgApp}">
+    <i style="left:0;right:0;top:0;height:11px;background:${t.Panel}"></i>
+    <i style="left:3px;top:3px;width:8px;height:5px;border-radius:1px;background:${a.Accent}"></i>
+    <i style="left:13px;top:3px;width:8px;height:5px;border-radius:1px;background:${t.SurfaceRaised}"></i>
+    <i style="left:0;top:12px;width:28px;bottom:18px;background:${t.Panel}"></i>
+    <i style="left:4px;top:18px;width:16px;height:2px;background:${t.TextMuted}"></i>
+    <i style="left:2px;top:23px;width:24px;height:6px;border-radius:1px;background:${a.AccentSubtle}"></i>
+    <i style="left:34px;top:16px;width:40px;height:10px;border-radius:1px;background:${t.Track1}"></i>
+    <i style="left:52px;top:29px;width:50px;height:10px;border-radius:1px;background:${t.Track2};box-shadow:0 0 0 1px ${a.Accent}"></i>
+    <i style="left:38px;top:42px;width:30px;height:10px;border-radius:1px;background:${t.Track3}"></i>
+    <i style="left:78px;top:12px;width:1px;bottom:18px;background:${a.Accent}"></i>
+    <i style="left:0;right:0;bottom:0;height:17px;background:${t.Panel}"></i>
+    <i style="left:4px;bottom:3px;width:50px;height:11px;border-radius:1px;background:${t.SurfaceCard}"></i>
+    <i style="left:48px;bottom:9px;width:4px;height:2px;border-radius:1px;background:${a.Accent}"></i></div>`;
+}
+function render() {
+  document.querySelectorAll("#themeBar button").forEach(b => b.classList.toggle("on", b.dataset.t === theme));
+  const pane = document.getElementById("pane"); pane.setAttribute("style", vars(theme, accent));
+  const card = tid => `<div class="tcard"><div class="tframe ${tid === theme ? "on" : ""}">${mini(tid, accent)}</div>${NAMES[tid]}</div>`;
+  document.getElementById("cardsDark").innerHTML = card("studio-dark") + card("ember-graphite");
+  document.getElementById("cardsLight").innerHTML = card("studio-light") + card("ember-paper");
+  const acc = ACCENTS[theme];
+  document.getElementById("accents").innerHTML =
+    PRESETS.map(([id, name]) => `<div class="sw ${id === accent ? "on" : ""}" title="${name}" data-a="${id}"><i style="background:${acc[id].Accent}"></i></div>`).join("")
+    + `<span class="gap"></span><span class="btn ${accent === "custom" ? "on" : ""}" data-a="custom"><b style="background:${acc.custom.Accent}"></b>Custom${svgPen("var(--TextMuted)")}</span>`
+    + `<span class="readout">${accent === "custom" ? "Custom · " + CUSTOM : PRESETS.find(p => p[0] === accent)[1]}</span>`;
+  document.querySelectorAll("[data-a]").forEach(e => e.onclick = () => { accent = e.dataset.a; render(); });
+
+  // pickers: three states, worn in the current theme
+  const picker = (title, hex, sv, hue, inT, note, bad) => `<div><div class="cap" style="margin:0 0 6px">${title}</div>
+    <div class="scope" style="${vars(theme, accent)};padding:14px;background:var(--Panel)"><div class="pop">
+      <div class="sv" style="background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,hsl(${hue},100%,50%))"><span class="h" style="left:${sv[0]}%;top:${sv[1]}%"></span></div>
+      <div class="hue"><span class="h" style="left:${hue / 3.6}%"></span></div>
+      <div class="prow2"><div class="chips2"><i style="background:${ACCENTS[theme].violet.Accent}" title="Before"></i><i style="background:${hex}" title="New"></i></div>
+        <div class="field focus">${hex}</div></div>
+      <div class="lbl">In themes</div>
+      <div class="inthemes">${inT}</div>
+      <div class="pnote ${bad ? "bad" : ""}">${note}</div>
+    </div></div></div>`;
+  const short = n => n.replace("Studio ", "S. ").replace("Ember ", "E. ");
+  const reason = w => w === "grey" ? "Pick a colour, not a grey — the accent has to read as a colour."
+    : w === "unreadable" ? "No lightness keeps this readable"
+    : `Too close to ${w}`;
+  const ex = (hexv, title) => {
+    const e = EXAMPLES[hexv], rows = e.rows;
+    const strip = Object.keys(NAMES).map(tid => `<div><i class="${rows[tid] && rows[tid].adjusted ? "adj" : ""}" style="background:${rows[tid] ? rows[tid].Accent : "var(--BgSunken)"}"></i>${short(NAMES[tid])}</div>`).join("");
+    let note, bad = false;
+    if (e.why.length) {
+      bad = true;
+      note = e.why[0][1] === "grey" ? reason("grey")
+        : `${reason(e.why[0][1])} in ${e.why.map(w => w[0]).join(", ")} — pick another colour. The accent stays as it was.`;
+    } else {
+      const adj = Object.keys(NAMES).filter(t => rows[t].adjusted).map(t => NAMES[t]);
+      note = adj.length === 4 ? "Lightness adjusted slightly in every theme so the ink on it stays readable."
+        : adj.length ? `Lightness adjusted in ${adj.join(", ")} to stay readable.` : "Worn as is in every theme.";
+    }
+    const [hh, ss, vv] = e.hsv;
+    return picker(title, hexv, [ss, 100 - vv], hh, strip, note, bad);
+  };
+  document.getElementById("pickers").innerHTML =
+    ex("#00B5D8", "Fits as is") + ex("#4C6FFF", "Adjusted") + ex("#3FA7FF", "Refused: clashes in one theme") + ex("#8C8C8C", "Refused: a grey");
+
+  // specimens
+  const spec = document.getElementById("spec"); spec.setAttribute("style", vars(theme, accent));
+  spec.innerHTML = `
+    <div class="lbl">Transport: play, loop, metronome on</div>
+    <div class="tp"><span class="key on">${svgPlay("var(--TextOnAccent)")}</span><span class="key on">${svgLoop("var(--TextOnAccent)")}</span><span class="key">${svgMet("var(--TextSecondary)")}</span>
+      <span style="width:10px"></span><div class="seg"><span class="on">Arrangement</span><span>Session</span></div></div>
+    <div class="lbl">Lane: loop brace, selected clip, playhead</div>
+    <div class="lane"><span class="loop" style="left:40px;width:150px"></span><span class="clip" style="left:10px;width:90px;background:${TRACK(1)}"></span>
+      <span class="clip sel" style="left:120px;width:110px;background:${TRACK(5)}"></span><span class="ph" style="left:170px"></span></div>
+    <div class="lbl">List: picked row (soft tint), menu hover (solid)</div>
+    <div class="row" style="gap:10px"><div class="list"><div class="li">Drums</div><div class="li pick">Bass · picked</div><div class="li">Keys</div></div>
+      <div class="list" style="width:150px"><div class="li">Rename</div><div class="li hov">Duplicate</div><div class="li">Delete</div></div></div>
+    <div class="lbl">Device values: at rest neutral, dragged accent · power on</div>
+    <div class="knobs">${knob(0.62, false, "Cutoff")}${knob(0.4, true, "Reso · drag")}<span class="sw2 on"><i></i></span><span class="sw2"><i></i></span></div>
+    <div class="lbl">Accent line (graph frame on listen) · accent text</div>
+    <div class="row" style="gap:16px;align-items:center"><div class="brass">${[3,6,9,7,12,15,11,8,5,9].map((h,i)=>`<u class="${i==5?"hot":""}" style="height:${h*2}px"></u>`).join("")}</div>
+      <span class="txt">Link · 4 bars</span><span class="mono" style="color:var(--TextMuted)">${ACCENTS[theme][accent].Accent}</span></div>`;
+
+  // matrix
+  const m = document.getElementById("matrix");
+  m.innerHTML = `<tr><th></th>${Object.values(NAMES).map(n => `<th>${n}</th>`).join("")}</tr>` +
+    PRESETS.concat([["custom", "Custom " + CUSTOM]]).map(([id, name]) => `<tr><th>${name}</th>${Object.keys(NAMES).map(tid =>
+      `<td><div class="scope cell" style="${vars(tid, id)}"><span class="key on">${svgPlay("var(--TextOnAccent)")}</span>
+        <div class="lane"><span class="clip sel" style="left:8px;width:60px;background:${TRACK(5)}"></span><span class="ph" style="left:40px"></span></div>
+        <div class="li pick" style="color:var(--AccentBright)">Bass</div>
+        <div class="hexes">${ACCENTS[tid][id].Accent}<br>${ACCENTS[tid][id].AccentSubtle}</div></div></td>`).join("")}</tr>`).join("");
+}
+document.getElementById("themeBar").innerHTML = Object.entries(NAMES).map(([id, n]) => `<button data-t="${id}">${n}</button>`).join("");
+document.querySelectorAll("#themeBar button").forEach(b => b.onclick = () => { theme = b.dataset.t; render(); });
+render();
+</script>
+</body>
+</html>
