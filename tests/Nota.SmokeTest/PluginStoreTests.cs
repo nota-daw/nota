@@ -259,7 +259,14 @@ internal static class PluginStoreTests
 
         sw.Restart();
         NotaEngine.ScanPlugins(worker, dir, retryFailed: false);
-        yield return (Probed() == 0 && sw.Elapsed < first / 2, $"the next scan skips them ({Probed()} probed, {sw.Elapsed.TotalSeconds:0.0} s vs {first.TotalSeconds:0.0} s)");
+        var probed = Probed();
+        // The skip-scan must probe nothing (functional) and run fast (budget).
+        // The timing half is wall-clock, like every other budget: a shared runner
+        // can run the first scan unusually fast and the second slowly, failing a
+        // check that skipped all its work. Under CI the budget prints and does
+        // not fail (TimingBudget).
+        yield return TimingBudget.Check(probed == 0, probed == 0 && sw.Elapsed < first / 2,
+            $"the next scan skips them ({probed} probed, {sw.Elapsed.TotalSeconds:0.0} s vs {first.TotalSeconds:0.0} s)");
 
         Directory.SetLastWriteTimeUtc(Path.Combine(dir, "Fake 07.vst3"), DateTime.UtcNow.AddMinutes(1));
         NotaEngine.ScanPlugins(worker, dir, retryFailed: false);

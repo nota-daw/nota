@@ -186,6 +186,10 @@ set(NOTA_ENGINE_SOURCES
     src/devices/instruments/RhythmMachine.cpp
     src/devices/instruments/MosaicProgram.cpp  # program model
     src/devices/instruments/Mosaic.cpp
+    src/devices/instruments/Twin.cpp
+    src/devices/instruments/TwinMod.cpp
+    src/devices/instruments/TwinSeq.cpp
+    src/devices/instruments/TwinVoice.cpp
     src/dsp/core/SilenceDetector.cpp  # hysteresis silence detection
     src/dsp/core/Parameter.cpp  # param mappings + smoothing
     src/dsp/primitives/SvfFilter.cpp  # TPT SVF + LR4
@@ -444,6 +448,27 @@ target_link_libraries(nota-scanworker
 target_compile_definitions(nota-scanworker PRIVATE ${NOTA_JUCE_DEFS})
 if(APPLE)
     target_link_libraries(nota-scanworker PRIVATE "-framework CoreAudioKit")
+endif()
+
+# A real, deterministic VST3 for hosted render-pool regression tests. It stays in
+# the build tree: never copied into a user's plugin directory or app package.
+option(NOTA_BUILD_RENDER_PROBE "Build the hosted render-pool test VST3" ON)
+if(NOTA_BUILD_RENDER_PROBE)
+    juce_add_plugin(nota-render-probe
+        COMPANY_NAME Nota
+        PLUGIN_MANUFACTURER_CODE Nota
+        PLUGIN_CODE Nrpr
+        PRODUCT_NAME "Nota Render Probe"
+        FORMATS VST3
+        IS_SYNTH TRUE
+        NEEDS_MIDI_INPUT TRUE
+        COPY_PLUGIN_AFTER_BUILD FALSE
+        VST3_AUTO_MANIFEST FALSE)
+    target_sources(nota-render-probe PRIVATE pluginhost/tests/RenderProbe.cpp)
+    target_link_libraries(nota-render-probe PRIVATE juce::juce_audio_processors
+        juce::juce_recommended_config_flags)
+    target_compile_definitions(nota-render-probe PRIVATE JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 endif()
 
 # --- Scanner self-test (bug plugin-scan-hang-windows) -------------------------

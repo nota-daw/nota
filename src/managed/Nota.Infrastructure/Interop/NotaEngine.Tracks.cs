@@ -945,6 +945,15 @@ public sealed partial class NotaEngine
         return id;
     }
 
+    /// <summary>Adds an instrument track with the built-in Nota Twin morphing poly. Returns its id.</summary>
+    public int AddTwinTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddTwinTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Twin track.");
+        return id;
+    }
+
     public bool MosaicSetProgram(int trackId, string text, bool undoable = true)
     { ThrowIfDisposed(); return NativeMethods.MosaicSetProgram(_handle, trackId, text ?? "", undoable ? 1 : 0) != 0; }
 
@@ -1091,6 +1100,9 @@ public sealed partial class NotaEngine
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }
+
+    public bool SetInstrumentStateUndoable(int trackId, byte[] data)
+    { ThrowIfDisposed(); return NativeMethods.InstrumentSetStateUndoable(_handle, trackId, data, data.Length) != 0; }
 
     public bool SetTrackGrainSample(int trackId, string path, int rootNote = 60)
     { ThrowIfDisposed(); return NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0; }

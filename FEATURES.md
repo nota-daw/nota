@@ -534,7 +534,7 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
-  Studio look — one orange accent for what is live or chosen, semantic mute / solo / arm
+  Studio look — one accent (Nota's chosen accent) for what is live or chosen, semantic mute / solo / arm
   colours, sentence-case labels — and a returning phone paints in its last theme at once.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
@@ -795,6 +795,25 @@ audio effects after it keep running and keep their settings; saved with the proj
   Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
   (seeded per-voice spread — a render is identical for the same seed, so freezing is
   exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
+- **Nota Twin** — morphing analog poly, 4–12 voices: every sound control has a **side A and a
+  side B**, and **Morph** sweeps the whole sound between them, effects and modulation depths
+  included. Two oscillators running triangle → saw → square with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes, three LFOs (per voice or global); Poly / Mono / Legato /
+  Unison, glide, seeded drift. Poly aftertouch and MPE per note (pressure routed to Morph
+  morphs only that note), an X · Y · Z expression pad. A 64-route matrix per part as a source ×
+  destination grid (29 sources incl. 8 macros and Random → Morph, pitch, vibrato or any
+  control), a depth per side. Per
+  part: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb. Own sequencer, played from a held key
+  or locked to the transport (8 patterns × 64 steps of up to six notes, tie, swing, transpose, latch, step record, four motion
+  lanes, **To clip**) and arpeggiator (six modes, 1–4 octaves, hold). **Split / Layer**: Lower
+  and Upper parts sharing the voices (2 + 10 … 10 + 2), a learnable split key, per-part octave,
+  volume and pan; **Parts** copies, swaps or loads a factory or saved sound into one part. The A / B
+  switch picks the side knobs, automation and MIDI learn write to; **A → B**, **B → A**,
+  **Swap**. Card tabs Osc, Filter, Env, LFO, Matrix, FX, Seq, Voice; S size shows Morph, the
+  pad and four knobs. 117 factory presets in 11 folders; MCP `read_twin`, `set_twin_morph_side`,
+  `copy_twin_side`, `copy_twin_part`, `set_twin_route`, `get_twin_pattern`, `set_twin_pattern`,
+  `twin_pattern_to_clip`.
 - **Nota Consort** — paraphonic semi-modular synth: four oscillators (tri / saw / square /
   pulse, sync 2→1 and 4→3), a mixer with noise, drive and a feedback-normalled EXT input, dual
   ladder filters (HP→LP series, LP/LP or HP/LP parallel stereo with spacing), two ADSRs,
@@ -1327,8 +1346,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   orange accent; the default, and what a DAW wants for long sessions in a dark room),
   **Studio Light** (the same system in light greys, the orange a shade deeper), and
   **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
-  A theme changes colours only — track colours included — never the layout. Panels dock edge
-  to edge on thin seams; orange marks only what is playing, selected or switched on, and a
+  A theme changes colours only — track colours included — never the layout; the accent
+  colour is a separate choice (see [Preferences](#preferences)). Panels dock edge
+  to edge on thin seams; orange (or the chosen accent) marks only what is playing, selected or switched on, and a
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
@@ -1436,7 +1456,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  live and is remembered. **Accent** — the colour of what is live or chosen: seven presets
+  (Orange — the default — Lime, Aqua, Sky, Violet, Magenta, Pink) or **Custom**, a colour
+  picker (saturation/brightness area, hue strip, hex field) that previews the colour in all
+  four themes. One accent for every theme, tuned to each so it stays readable; a grey or a
+  colour too close to the record red, mute, solo or the meter green is refused with the
+  reason. Applied live, Esc in the picker puts the previous one back. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
@@ -1492,7 +1517,9 @@ Coverage:
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in
-  musical terms (`read_keys`, `set_keys`).
+  musical terms (`read_keys`, `set_keys`); Nota Twin's sides, parts, matrix and patterns
+  (`read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`, `set_twin_route`,
+  `get_twin_pattern`, `set_twin_pattern`, `twin_pattern_to_clip`).
 - **Moving devices**: `move_device_to_track` moves or copies an audio effect, a MIDI effect or
   the instrument to another track, with its automation.
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a

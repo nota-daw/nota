@@ -92,6 +92,13 @@ void Delay::process(float* buf, int32_t frames) {
     const int size = bufL_.capacity();
     if (size <= 4 || frames <= 0) return;
     const auto t0 = std::chrono::steady_clock::now();
+    // Read first: an exchange on every block would write the flag's cache line each time.
+    if (reset_.load(std::memory_order_relaxed) && reset_.exchange(false, std::memory_order_relaxed)) {
+        clear_.store(true, std::memory_order_relaxed);
+        wowPhase_ = 0.0;
+        curL_ = curR_ = oldL_ = oldR_ = 0.0;
+        fadePos_ = fadeLen_;
+    }
     if (clear_.exchange(false, std::memory_order_relaxed)) wipe();
 
     const bool sync = on(SyncMode) && spb_ > 0.0;
@@ -299,6 +306,7 @@ void Delay::setParam(int32_t i, float v) {
 
 void Delay::deviceAction(int32_t id, int32_t, float) {
     if (id == A_ClearLoop) clear_.store(true, std::memory_order_relaxed);
+    else if (id == A_Reset) reset_.store(true, std::memory_order_relaxed);
     wake();
 }
 
