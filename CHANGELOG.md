@@ -238,7 +238,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   mode), the tail EQ (the cuts, its position) and a new Output view with the meters (Width, Mono
   f, the quality); Convolution, Algorithm, Mod and Mix (routing, the blend, ducking, wet only,
   zero latency) panels over Dry, Dry/wet and Output; S is the IR over its picker and Predelay,
-  Size, Attack, Dry/wet.
+  Size, Attack, Dry/wet. **Nota Compressor:** Threshold, Ratio and Knee by the curve (the
+  character under it), Attack, Release and Hold by the motion, HP, LP and Q by the key; the
+  Output tab is gone — Dynamics (detector, Range, the output box, Auto gain, Stereo link), Timing
+  (Auto-release, look-ahead, the live box) and Key (External, Listen, source, tap, SC Gain) panels
+  over Dry/wet and Makeup; S is the curve over the character and Threshold, Ratio, Release,
+  Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

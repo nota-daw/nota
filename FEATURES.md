@@ -869,13 +869,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   (with a **Label** shown next to its node — **Labels** hides them — and a multiline **Note**),
   Scale and Output in one narrow column at the right that folds away; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
-- **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
+- **Nota Compressor** (1) — in two sizes (L 700 / S 260, S·L toggle) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
   auto-gain, Range, MIX; a sidechain key (internal, another track or one pad / chain / voice
   of it, pre/post tap, External key switch) through 2-pole HP/LP filters with Q and SC Gain, Listen, Stereo link on/off.
   Tabs: Curve (draggable transfer curve + gain-reduction history, crest in → out) / Motion
   (reduction envelope against the input, measured transient and recovery) / Sidechain (key
-  spectrum under draggable filters), and Dynamics / Output. 31 factory presets. MCP: `read_dynamics`, `set_device_sidechain` /
+  spectrum under draggable filters), each with its knobs beside it, and a right panel that
+  follows them (Dynamics · Timing · Key) over Mix and Makeup. 31 factory presets. MCP: `read_dynamics`, `set_device_sidechain` /
   `get_device_sidechain`.
 - **Nota Reverb** (2) — in two sizes (L 700 / S 260, S·L toggle) — Hall/Room/Plate/Chamber, a decay calibrated as a true RT60, HF damp,
   pre-delay, size, diffusion (input diffuser + tail allpasses), early reflections spaced by

@@ -5,8 +5,11 @@
 // Compressor" mockup (700 × 260) on the Lens / Delay / Reverb frame: a centre tabbed graph
 // that fills its panel — Curve (transfer curve + reduction history), Motion (the reduction
 // envelope against the input, so attack and release are seen, not guessed) and Sidechain (the
-// key's spectrum under its filters) — and a right panel holding the controls of the centre tab
-// (Dynamics / Timing / Key) beside Output. The graphs are
+// key's spectrum under its filters), each with its knobs beside it (Threshold · Ratio · Knee,
+// Attack · Release · Hold, HP · LP · Q) and the character under the curve — and a right panel
+// with no tabs of its own that follows them (Dynamics / Timing / Key) over Dry/wet · Makeup;
+// laid out the #531 way (CardLayout). S is the curve over the character and Threshold, Ratio,
+// Release, Dry/wet. The graphs are
 // controls: drag the transfer curve for threshold / ratio, the key filter handles for HP / LP / Q. Every control is a device
 // param (raw units), so automation / MIDI learn / presets / A-B / persistence come for free;
 // the key source and its pre/post tap are the device's sidechain routing, not params.
@@ -43,6 +46,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
     private static readonly double[] Windows = { 300, 600, 1000, 1500, 2000 };
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Dynamics";
 
@@ -151,6 +156,20 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return b;
         }
 
+        // Gauge knob over a raw param through its 0..1 map (automation gesture, MIDI learn, live follow).
+        Control KM(int p, string name, Func<double, string> fmt, (Func<double, double> N, Func<double, double> V) map, double cellW = 50, double size = 34, bool teal = false)
+        {
+            var val = Mono(fmt(P(p)), 7, TextPrimary);
+            var knob = new Knob(map.N(P(p)), 1.0) { Accent = true, ArcColor = teal ? DeviceCardKit.ModInk : null, Default = map.N(Def(p)), Width = size, Height = size };
+            knob.Format = n => fmt(map.V(n));
+            knob.ValueChanged += n => { Raw(p, map.V(n)); val.Text = fmt(P(p)); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => End(p);
+            MidiLearn.Bind(knob, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
+            readouts.Add(() => { if (!knob.Dragging) { double c = map.N(P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+            return KnobCell(name, knob, val, cellW);
+        }
+
         // A caps label + slider row over a raw param.
         Control SliderRow(string label, int p, Func<double, string> fmt, (Func<double, double> N, Func<double, double> V) map, bool teal = false, double valW = 34)
         {
@@ -232,11 +251,14 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             MidiLearn.Bind(transfer, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
             readouts.Add(() => { if (!transfer.Dragging) transfer.Set(P(Threshold), P(Ratio), P(Knee), P(Range), KeyDb()); });
 
-            var graphs = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Margin = new Thickness(8, 6) };
+            var graphs = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
             graphs.Children.Add(transfer);
             graphs.Children.Add(Col(grHist, 1));
             return graphs;
         }
+        Control CurveView() => CardLayout.View(CurveTab(),
+            CardLayout.KnobColumn(KM(Threshold, "THRESH", Db, Lin(Threshold)), KM(Ratio, "RATIO", RatioF, Log(Ratio)), KM(Knee, "KNEE", Db, Lin(Knee))),
+            CharSeg());
 
         // ======================================================================
         // CENTRE — Motion
@@ -246,7 +268,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             var motion = new CompMotionView();
             ToolTip.SetTip(motion, Loc.T("device.compressor.the_reduction_neutral_ink_hanging"));
             readouts.Add(() => motion.Set(envIn, envGr, scN >= kScope + 2 * EnvN ? EnvN : 0, P(Threshold), WindowMs()));
-            return new Border { Margin = new Thickness(8, 6), Child = motion };
+            return CardLayout.View(motion, CardLayout.KnobColumn(KM(Attack, "ATTACK", Ms, Log(Attack)), KM(Release, "RELEASE", Ms, Log(Release)),
+                KM(Hold, "HOLD", v => v < 0.5 ? "off" : Ms(v), Sq(Hold), teal: true)));
         }
 
         // ======================================================================
@@ -274,7 +297,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 if (!key.Dragging) key.SetFilter(P(ScHP), P(ScLP), P(ScQ), On(ScListen));
                 if (scN >= ScopeLen) key.SetKey(scope, kScope + 2 * EnvN, KeyN, Sc(S_SampleRate));
             });
-            return new Border { Margin = new Thickness(8, 6), Child = key };
+            return CardLayout.View(key, CardLayout.KnobColumn(KM(ScHP, "HP", HpF, Log(ScHP)), KM(ScLP, "LP", LpF, Log(ScLP)),
+                KM(ScQ, "Q", v => NotaNum.F($"{v:0.00}"), Log(ScQ))));
         }
 
         // ======================================================================
@@ -344,56 +368,27 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return box;
         }
 
-        Control OutputTab()
-        {
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            var listen = Latch(ScListen, "Listen", Loc.T("device.compressor.listen_hear_the_filtered_key"));
-            var autoGain = Latch(AutoGain, "Auto gain", Loc.T("device.compressor.auto_gain_make_up_that"));
-            listen.HorizontalAlignment = HorizontalAlignment.Stretch; autoGain.HorizontalAlignment = HorizontalAlignment.Stretch;
-            btns.Children.Add(listen); btns.Children.Add(Col(autoGain, 1));
-            var rows = new Control[]
-            {
-                GrBox(true),
-                SliderRow("MAKEUP", Makeup, v => NotaNum.F($"{v:+0.0;−0.0;0.0}"), Lin(Makeup)),
-                SliderRow("MIX", Mix, PctF, Lin(Mix)),
-                SliderRow("RANGE", Range, RangeF, RangeMap(), teal: true),
-                new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = btns },
-                new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                    Toggle(External, "External key", Loc.T("device.compressor.external_key_key_off_the")),
-                    Toggle(StereoLink, "Stereo link", Loc.T("device.compressor.stereo_link_one_reduction_for")) } },
-            };
-            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,*,*,Auto,*"), RowSpacing = 3 };
-            for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
-            return new Border { Padding = new Thickness(8, 5), Child = grid };
-        }
-
         // Character chips — on the Curve and the Motion panels, so the voicing can be changed while
         // watching either graph.
         Control CharSeg()
         {
-            var charSeg = Segments(Chars, () => Sel(Character, 5), iv => SetP(Character, iv), out var charSync, fill: true, padX: 1, fontSize: 8);
+            var charSeg = Segments(Chars, () => Sel(Character, 5), iv => SetP(Character, iv), out var charSync, padX: 6);
             readouts.Add(charSync);
             MidiLearn.Bind(charSeg, MidiTarget.DeviceParam(track, di, Character), engine.DeviceParamName(track, di, Character));
             ToolTip.SetTip(charSeg, Loc.T("device.compressor.character_the_voicing_clean_as"));
             return charSeg;
         }
 
-        Control CurvePanel()
+        (Control, Control) CurvePanel()
         {
-            var charSeg = CharSeg();
-            var detSeg = Seg(Detection, Detects, fill: true);
+            var detSeg = Seg(Detection, Detects);
             ToolTip.SetTip(detSeg, Loc.T("device.compressor.detector_peak_reacts_to_every"));
-            return Rows(
-                charSeg,
-                Labelled("DETECT", detSeg),
-                SliderRow("THRESH", Threshold, Db, Lin(Threshold)),
-                SliderRow("RATIO", Ratio, RatioF, Log(Ratio)),
-                SliderRow("KNEE", Knee, Db, Lin(Knee)),
-                SliderRow("MIX", Mix, PctF, Lin(Mix)),
-                Rule(),
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.compressor.dynamics")), detSeg), Rows(
                 SliderRow("RANGE", Range, RangeF, RangeMap(), teal: true),
-                GrBox(false),
-                Toggle(AutoGain, "Auto gain", Loc.T("device.compressor.auto_gain_make_up_that")));
+                Rule(),
+                GrBox(true),
+                Toggle(AutoGain, "Auto gain", Loc.T("device.compressor.auto_gain_make_up_that")),
+                Toggle(StereoLink, "Stereo link", Loc.T("device.compressor.stereo_link_one_reduction_for"))));
         }
 
         // The Motion read-outs: the attack / release the detector really runs (after Character
@@ -419,17 +414,12 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return box;
         }
 
-        Control MotionPanel() => Rows(
-            CharSeg(),
-            SliderRow("ATTACK", Attack, Ms, Log(Attack)),
-            SliderRow("RELEASE", Release, Ms, Log(Release)),
-            SliderRow("HOLD", Hold, v => v < 0.5 ? "off" : Ms(v), Sq(Hold), teal: true),
+        (Control, Control) MotionPanel() => (CardLayout.Head(Toggle(AutoRelease, "Auto-release", Loc.T("device.compressor.auto_release_a_slower_second"))), Rows(
             SliderRow("AHEAD", Lookahead, v => v < 0.05 ? "off" : Ms(v), Lin(Lookahead)),
             Rule(),
-            MotionBox(),
-            Toggle(AutoRelease, "Auto-release", Loc.T("device.compressor.auto_release_a_slower_second")));
+            MotionBox()));
 
-        Control KeyPanel()
+        (Control, Control) KeyPanel()
         {
             var combo = picker.Combo;
             combo.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -446,30 +436,18 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 i => { engine.SetDeviceSidechainTapPre(track, di, i == 0); ctx.NotifyChanged(); }, out var tapSync, fill: true);
             readouts.Add(tapSync);
             ToolTip.SetTip(tap, Loc.T("device.compressor.where_the_source_is_tapped"));
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
             var listen = Latch(ScListen, "Listen", Loc.T("device.compressor.listen_hear_the_filtered_key"));
-            var ext = Latch(External, Loc.T("device.compressor.external"), Loc.T("device.compressor.external_key_key_off_the_source"));
-            listen.HorizontalAlignment = HorizontalAlignment.Stretch; ext.HorizontalAlignment = HorizontalAlignment.Stretch;
-            btns.Children.Add(ext); btns.Children.Add(Col(listen, 1));
-            return Rows(
+            var ext = Toggle(External, Loc.T("device.compressor.external"), Loc.T("device.compressor.external_key_key_off_the_source"));
+            return (CardLayout.Head(ext, listen), Rows(
                 Labelled("SOURCE", combo),
                 Labelled("TAP", tap),
-                btns,
-                SliderRow("HP", ScHP, HpF, Log(ScHP)),
-                SliderRow("LP", ScLP, LpF, Log(ScLP)),
-                SliderRow("Q", ScQ, v => NotaNum.F($"{v:0.00}"), Log(ScQ)),
-                SliderRow(engine.DeviceParamName(track, di, ScGain), ScGain, SDb, Lin(ScGain)),
                 Rule(),
-                Toggle(StereoLink, "Stereo link", Loc.T("device.compressor.stereo_link_one_reduction_for")));
+                SliderRow(engine.DeviceParamName(track, di, ScGain), ScGain, SDb, Lin(ScGain))));
         }
 
         // ======================================================================
         // Tab frame + the panel that follows it
         // ======================================================================
-        var centreHost = new ContentControl();
-        var centreBodies = new Control?[3];
-        var panelHost = new ContentControl();
-        var panelBodies = new Control?[3];
         string Crest(double pk, double rms) => rms > 1e-5 && pk > 1e-5 ? NotaNum.F($"{LinDb(pk) - LinDb(rms):0.0}") : "–";
         var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
@@ -497,29 +475,16 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                     extras.Foreground = TextTertiary; break;
             }
         });
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => MotionTab(), 2 => SidechainTab(), _ => CurveTab() };
-        Control PanelBody(int t) => panelBodies[t] ??= t switch { 1 => MotionPanel(), 2 => KeyPanel(), _ => CurvePanel() };
-        string[] panelTitles = { Loc.T("device.compressor.dynamics"), Loc.T("device.compressor.timing"), Loc.T("device.compressor.key") };
-        // The right panel's first tab follows the centre tab; Output stays beside it.
-        int rightTab = 0;
-        TextBlock[] rightLabels = System.Array.Empty<TextBlock>();
-        Control? outputBody = null;
-        Control RightBody(int t) => t == 1 ? outputBody ??= OutputTab() : PanelBody(centreTab);
-        void ShowPanel(int t)
-        {
-            if (rightLabels.Length > 0) rightLabels[0].Text = panelTitles[t];
-            if (rightTab == 0) panelHost.Content = PanelBody(t);
-        }
-
-        var centre = TabFrame(new[] { "Curve", "Motion", "Sidechain" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
-        var rightFrame = TabFrame(new[] { panelTitles[0], "Output" }, panelHost, RightBody, true, t => { rightTab = t; Refresh(); }, null, l => rightLabels = l);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
-
-        // ---- assemble ---------------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(CurveTab(), CharSeg(),
+                KM(Threshold, "THRESH", Db, Lin(Threshold), 56), KM(Ratio, "RATIO", RatioF, Log(Ratio), 56),
+                KM(Release, "RELEASE", Ms, Log(Release), 56), KM(Mix, "DRY/WET", PctF, Lin(Mix), 56))
+            : CardLayout.Large(new[] { "Curve", "Motion", "Sidechain" }, 0,
+                t => t switch { 1 => MotionTab(), 2 => SidechainTab(), _ => CurveView() },
+                t => t switch { 1 => MotionPanel(), 2 => KeyPanel(), _ => CurvePanel() },
+                extras,
+                CardLayout.Output(null, KM(Mix, "DRY/WET", PctF, Lin(Mix), 58, 44), KM(Makeup, "MAKEUP", v => NotaNum.F($"{v:+0.0;−0.0;0.0} dB"), Lin(Makeup), 54)),
+                t => { centreTab = t; Refresh(); });
 
         void Refresh()
         {
@@ -539,51 +504,5 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl,
-                         Action<TextBlock[]>? labels = null)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, e) =>
-                {
-                    if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                    sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv);
-                };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            labels?.Invoke(btns.Select(b => (TextBlock)b.Child!).ToArray());
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

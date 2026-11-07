@@ -4738,7 +4738,7 @@ Console.WriteLine("-- Nota Compressor --");
     const int Thresh = 0, Ratio = 1, Attack = 2, Release = 3, Lookahead = 7, Detection = 8, Character = 12,
               ScHP = 13, ScListen = 15, ScGain = 16, Hold = 17, ScQ = 18, External = 19, StereoLink = 20;
     Check(cd >= 0 && ce.TrackDeviceBuiltinKind(ct, cd) == 1 && ce.DeviceName(ct, cd) == "Nota Compressor"
-          && ce.DeviceParamCount(ct, cd) == 21, $"add built-in Nota Compressor (kind 1, 21 params — got {ce.DeviceParamCount(ct, cd)})");
+          && ce.DeviceParamCount(ct, cd) == 22, $"add built-in Nota Compressor (kind 1, 22 params, View appended — got {ce.DeviceParamCount(ct, cd)})");
     Check(ce.DeviceParamName(ct, cd, ScGain) == "SC Gain" && ce.DeviceParamName(ct, cd, Hold) == "Hold"
           && ce.DeviceParamName(ct, cd, ScQ) == "SC Q" && ce.DeviceParamName(ct, cd, External) == "External Key"
           && ce.DeviceParamName(ct, cd, StereoLink) == "Stereo Link", "Compressor names its appended params");
