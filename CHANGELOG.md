@@ -185,6 +185,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   handle, the incoming signal's spectrum as a filled line, the cutoff lit on a frequency axis
   under the plot, and a hover marker with the frequency, note and gain. The Mod tab drops its
   Cutoff box and the Output tab its in / out / cutoff box.
+- **The other built-in audio effects laid out like Auto Filter, in S / L sizes**
+  (nota-daw/nota#531): each graph fills its tab with the knobs it moves in a column on its
+  right and its choices in a row under it; the right panel has no tabs of its own and follows
+  the centre tab, with the section's switch and mode in its title bar and its read-out boxes
+  kept; the output knobs sit under it on every tab; an S / L toggle in the header folds the
+  card to a 260 × 260 S with the main graph over one row of knobs (each device appends a View
+  parameter, saved with the project and left alone by presets, A/B and the automation menu).
+  The parameters are unchanged. **Nota Utility:** Width and Balance by the field, Mono by the
+  width graph, Target by the levels; Phase (Ø L, Ø R, Mute, correlation), Mono (on, slope) and
+  Match (level and gain match, measurements, true-peak limiter) panels over Gain; S is the
+  field over Gain, Width, Balance and Mono.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

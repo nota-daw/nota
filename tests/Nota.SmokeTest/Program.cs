@@ -4565,7 +4565,8 @@ Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.D
 int delDev = engine.AddBuiltinDevice(fxT, 3);
 Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 24, "add built-in Delay (24 params)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
-Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 17, "add built-in Utility (17 params)");
+Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 18, "add built-in Utility (18 params, View appended)");
+Check(engine.DeviceParamName(fxT, utilDev, 17) == "View" && !Nota.Application.DeviceView.IsMini(engine, fxT, utilDev), "Utility's View param (card size, #531) defaults to L");
 engine.DeviceSetParam(fxT, delDev, 12, 0.5f); // Delay Dry/Wet (index 12)
 Check(Math.Abs(engine.DeviceGetParam(fxT, delDev, 12) - 0.5f) < 0.001f, "Delay param round-trips");
 int ampDev = engine.AddBuiltinDevice(fxT, 6);

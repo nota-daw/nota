@@ -891,12 +891,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   bending the pitch tape-style; output stage with dry level, width, bass mono, wet only and
   latency compensation for the diffuser. Tabs: Time / Loop · Wow and Levels / Output, over a
   live repeat window that lights the repeat sounding now. Tap tempo. 29 factory presets.
-- **Nota Utility** (4) — gain, L/R balance, stereo width 0–400 % with an L/R or M/S law, channel
+- **Nota Utility** (4) — in two sizes (L 700 / S 260, S·L toggle) — gain, L/R balance, stereo width 0–400 % with an L/R or M/S law, channel
   mode (Stereo / Left / Right / Swap), mono below a cutoff at 6 / 12 / 24 dB/oct, mute, phase
   invert per side; Gain match and continuous Level match to the input or a Target (LUFS-S / peak /
   RMS), a zero-latency true-peak limiter. Tabs: Field (the stereo field by frequency, drag balance /
   width) / Mono (width over frequency, drag the cutoff) / Levels (in and out over 8 s against the
-  target) and Routing / Output, with correlation. 30 factory
+  target), each with its knobs beside it, and a right panel that follows them (Phase · Mono · Match)
+  over Gain, with correlation. 30 factory
   presets. MCP: `read_utility`.
 - **Nota Valve** (6, formerly Amplifier) — guitar amp: 7 models (Clean / Boost / Blues /
   Rock / Lead / Heavy / Bass), gain, a Bass / Middle / Treble / Presence tone stack with a

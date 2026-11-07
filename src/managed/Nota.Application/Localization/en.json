@@ -1641,7 +1641,7 @@
     "device.utility.mute_the_output": "Mute the output",
     "device.utility.out_of_phase_mono_risk": "out of phase — mono risk",
     "device.utility.output_correlation_1_mono_0": "Output correlation — +1 mono, 0 unrelated, below 0 out of phase (it cancels in mono)",
-    "device.utility.pan_by_frequency_1_s": "pan by frequency · 1 s window",
+    "device.utility.phase": "Phase",
     "device.utility.reset_gain_back_to_0": "Reset — Gain back to 0 dB, and the meters, holds and the level history start over",
     "device.utility.slope_of_the_mono_cutoff": "Slope of the mono cutoff — 6, 12 or 24 dB/oct; click to step",
     "device.utility.the_outputs_stereo_field_by": "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; grey dots: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.",
