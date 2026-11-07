@@ -42,6 +42,12 @@ internal static partial class DesignTokenCheck
                     fails.Count == 0 ? $"{id}: {p.Id} → {Accent.Hex(r.Tokens!["Accent"])}{(r.Adjusted ? " (lightness adjusted)" : "")} passes every accent rule"
                         : $"{id}: {p.Id} fails {string.Join(", ", fails)}");
             }
+            // The style guide's "picked" tint (AccentSoft) is a wash: it takes the accent's hue
+            // and keeps the theme's lightness, like the other blend tokens.
+            var aqua = AccentColours.Wear(t, new AccentChoice("aqua")).Tokens;
+            yield return (aqua is not null && aqua["AccentSoft"] != t["AccentSoft"]
+                          && Math.Abs(AccentColours.OkLch(aqua["AccentSoft"]).L - AccentColours.OkLch(t["AccentSoft"]).L) < 0.02,
+                $"{id}: the picked tint follows the accent (Aqua) at the theme's lightness");
         }
 
         // Custom colours (research R3; mockup § 2).
