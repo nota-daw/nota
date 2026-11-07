@@ -6,8 +6,11 @@
 // Level / Reduction / Loudness tabs — the input, the part over the ceiling and the output over
 // 4 s with the reduction under it (drag the ceiling), the reduction with the transients that
 // reached the clip, momentary / short-term / integrated loudness over 60 s around the Target
-// (drag it) — with Character over the graph and Gain / Ceiling / Release under it, and a right
-// panel with Meters / Detector tabs. The pictures come from the engine (Ceiling.h scopeRead).
+// (drag it) — each filling its tab, and a right panel with no tabs of its own that follows them:
+// Meters (True peak and Character in its title bar, the meter box, Delta, Reset peaks), Detector
+// (Auto release and the key source in its title bar, Look, Link, SC HP, the detector box),
+// Loudness (the Target presets in its title bar, the integrated box, the meters, Reset) — over
+// Gain · Ceiling · Release knobs, which stay (DESIGN.md § Devices › Card layout). The pictures come from the engine (Ceiling.h scopeRead).
 // Every control is a device param (raw units), so automation / MIDI learn / presets / A-B /
 // persistence come for free; the key source is the device's sidechain routing, the resets are
 // device actions.
@@ -135,17 +138,17 @@ internal sealed class CeilingDeviceBody : IDeviceBody
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
         // `lit` brightens the label and value (the knob that matters now); `arc` recolours the arc.
-        Control K(int p, string name, Func<double, string> fmt, string tip, Func<bool>? lit = null, Func<bool>? teal = null)
+        Control K(int p, string name, Func<double, string> fmt, string tip, Func<bool>? lit = null, Func<bool>? teal = null, double cellW = 52, double size = 34)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(N(p), 1.0) { Accent = true, Default = DefN(p), Width = 34, Height = 34 };
+            var knob = new Knob(N(p), 1.0) { Accent = true, Default = DefN(p), Width = size, Height = size };
             knob.Format = v => fmt(FromN(p, v));   // read-out at any value: typing searches it
             knob.ValueChanged += v => { SetN(p, v); val.Text = fmt(P(p)); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
             Learn(knob, p);
             ToolTip.SetTip(knob, tip);
-            var cell = KnobCell(name, knob, val, 52);
+            var cell = KnobCell(name, knob, val, cellW);
             TextBlock? label = null;
             if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { label = tb; break; }
             readouts.Add(() =>
@@ -153,7 +156,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 knob.ArcColor = teal?.Invoke() == true ? Teal : null;
                 if (!knob.Dragging) { double c = N(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
-                bool on = lit?.Invoke() ?? false;
+                if (lit is null) return;
+                bool on = lit();
                 val.Foreground = on ? TextPrimary : TextSecondary;
                 if (label is not null) label.Foreground = on ? TextSecondary : TextTertiary;
             });
@@ -190,7 +194,6 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             readouts.Add(Hi); Hi();
             return b;
         }
-        Control ParamChip(int p, string text, string tip) => Chip(p, () => On(p), () => SetP(p, On(p) ? 0f : 1f), text, tip);
 
         // Slider row: caps label · track · mono value.
         Control SliderRow(string label, int p, Func<double, string> fmt, bool modulation = false, Func<bool>? lit = null)
@@ -277,61 +280,47 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             return list;
         }, Loc.T("device.ceiling.target_the_loudness_the_meters"), Target);
 
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
-        }
-        Control CharSeg(bool words = true)
+        Control CharSeg()
         {
             var seg = Segments(CharNames, CharI, i => { SetP(Character, i); RefreshAll(); }, out var sync, padX: 6);
             readouts.Add(sync);
             Learn(seg, Character);
             ToolTip.SetTip(seg, Loc.T("device.ceiling.character_clean_transparent_the_fastest"));
-            var wordsTb = new TextBlock { FontSize = 7, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-            readouts.Add(() => wordsTb.Text = CharWords[CharI()]);
-            return words ? Row(6, Caps("CHARACTER"), seg, wordsTb) : Row(6, Caps("CHARACTER"), seg);
+            return seg;
         }
-        Control Info(Func<string> text, IBrush? ink = null)
+        // A read-out line in a panel (ink 2, trims).
+        Control Info(Func<string> text, Func<IBrush>? ink = null)
         {
-            var t = Mono("", 7, ink ?? TextSecondary);
-            readouts.Add(() => t.Text = text());
+            var t = Mono("", 8, TextSecondary);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            readouts.Add(() => { t.Text = text(); t.Foreground = ink?.Invoke() ?? TextSecondary; });
             return t;
         }
 
-        // The knob row under every graph: Gain, Ceiling, Release, the two chips, two info lines.
-        int centreTab = 0;
-        Control KnobRow(Func<string> info1, Func<string> info2)
+        // ======================================================================
+        // Layout pieces (DESIGN.md § Devices › Card layout: graph, tabs and output)
+        // ======================================================================
+        static Control View(Control graph) => new Border { Margin = new Thickness(6, 6, 6, 5), Child = graph };
+        static Control Head(Control left, Control? right = null)
         {
-            var i1 = Mono("", 7, TextTertiary); i1.HorizontalAlignment = HorizontalAlignment.Right;
-            var i2 = Mono("", 7, TextTertiary); i2.HorizontalAlignment = HorizontalAlignment.Right;
-            i1.TextTrimming = i2.TextTrimming = TextTrimming.CharacterEllipsis;
-            readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var chips = new StackPanel
-            {
-                Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children =
-                {
-                    ParamChip(AutoRelease, "Auto rel", Loc.T("device.ceiling.auto_release_the_release_slows")),
-                    ParamChip(TruePeak, "True peak", Loc.T("device.ceiling.true_peak_the_detector_reads")),
-                },
-            };
-            var knobs = Row(2,
-                K(Gain, "GAIN", GainF, Loc.T("device.ceiling.gain_how_hard_the_signal"), lit: () => centreTab != 1),
-                K(Ceil, "CEILING", v => NotaNum.F($"{v:0.0}\u2009dB"), Loc.T("device.ceiling.ceiling_the_output_never_goes")),
-                K(Release, "RELEASE", RelF, Loc.T("device.ceiling.release_how_fast_the_gain"),
-                    lit: () => centreTab == 1, teal: () => On(AutoRelease)));
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Height = 52, ColumnSpacing = 8 };
-            g.Children.Add(knobs);
-            g.Children.Add(Col(chips, 1));
-            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 2));
-            return g;
+            var d = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center };
+            if (right != null) d.Children.Add(Docked(right, Dock.Right));
+            d.Children.Add(Docked(left, Dock.Left));
+            return d;
         }
-        static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
+        static Control Rows(params Control[] rows)
         {
-            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
-        };
+            var grid = new Grid { RowSpacing = 2 };
+            for (int r = 0; r < rows.Length; r++)
+            {
+                bool fixedH = rows[r] is Border { Height: 1 } || rows[r] is Border { Background: not null };   // rules and read-out boxes keep their height
+                grid.RowDefinitions.Add(new RowDefinition(fixedH ? GridLength.Auto : GridLength.Star));
+                grid.Children.Add(GRow(rows[r], r));
+            }
+            return new Border { Padding = new Thickness(8, 5, 8, 5), Child = grid };
+        }
+        static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
+
         void WireDrag<T>(T v, int param, string name, Func<double, string> fmt) where T : ShDragView
         {
             // ⌥-click the handle to type it (specs/035).
@@ -357,19 +346,17 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // CENTRE — Level / Reduction / Loudness
+        // CENTRE — Level / Reduction / Loudness: each graph fills its tab (the Level graph drags
+        // the ceiling, the Loudness graph the target).
         // ======================================================================
+        int centreTab = 0;
         CeLevelView? level = null;
         Control LevelTab()
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
             WireDrag(level, Ceil, "Ceiling", CeilF);
             ToolTip.SetTip(level, MenuKit.Keys(Loc.T("device.ceiling.the_last_4_s_the")));
-            var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
-            var knobs = KnobRow(
-                () => ScDb(S_WinInPeak) <= -119 ? Loc.T("common.no_signal") : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
-                () => Loc.F("device.ceiling.over_of_the_time", Sc(S_OverPct) * 100));
-            return TabBody(head, level, knobs);
+            return View(level);
         }
 
         CeReductionView? reduction = null;
@@ -377,9 +364,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             reduction = new CeReductionView();
             ToolTip.SetTip(reduction, Loc.T("device.ceiling.the_gain_reduction_over_the"));
-            var head = HeadRow(CharSeg(), Info(() => NotaNum.F($"avg {GrF(Sc(S_AvgGr))} · max {GrF(Sc(S_WinMaxGr))}")));
-            var knobs = KnobRow(ReleaseRange, ClipText);
-            return TabBody(head, reduction, knobs);
+            return View(reduction);
         }
 
         CeLoudnessView? loudness = null;
@@ -388,25 +373,13 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
             WireDrag(loudness, Target, "Target", TargetF);
             ToolTip.SetTip(loudness, MenuKit.Keys(Loc.T("device.ceiling.momentary_teal_short_term_neutral")));
-            var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
-                Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : Loc.T("device.ceiling.measuring")));
-            var knobs = KnobRow(
-                () => NotaNum.F($"LRA {Sc(S_Lra):0.0}\u2009LU · PLR {(HaveI() ? NotaNum.F($"{Sc(S_Plr):0.0}") : "—")}"),
-                () => NotaNum.F($"GR on average {GrF(Sc(S_AvgGr))}\u2009dB"));
-            return TabBody(head, loudness, knobs);
+            return View(loudness);
         }
 
         // ======================================================================
-        // RIGHT — Meters / Detector
+        // RIGHT — follows the centre tab: Meters (Level) · Detector (Reduction) · Loudness (Loudness).
+        // The read-out boxes are what the limiter measures; they stay where the view they explain is.
         // ======================================================================
-        static Control Spread(params Control[] rows)
-        {
-            var defs = new List<string>();
-            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
-            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
-            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
-            return new Border { Padding = new Thickness(8, 6), Child = g };
-        }
         Control MeterGrid(params (string Key, Func<string> Val, Func<IBrush> Ink)[] cells)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"), ColumnSpacing = 6, RowSpacing = 3 };
@@ -424,31 +397,63 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             return new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 5), Child = g };
         }
         IBrush OverInk(double db, double limit) => db > limit + 0.05 ? NotaPalette.DangerBright : TextPrimary;
-        Control ResetRow(bool loud)
+        Border ResetChip(bool loud)
         {
             var reset = Chip(-1, () => false, () => engine.DeviceAction(track, di, loud ? A_ResetLoudness : A_ResetPeaks, 0, 0),
                 loud ? "Reset" : "Reset peaks", loud ? Loc.T("device.ceiling.reset_start_the_integrated_loudness") : Loc.T("device.ceiling.reset_peaks_clear_the_peak"), fill: true);
             reset.HorizontalAlignment = HorizontalAlignment.Right;
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6 };
-            g.Children.Add(KeyDrop());
-            g.Children.Add(Col(reset, 1));
-            return new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = g };
+            return reset;
         }
-        Control DeltaSwitch() => Toggle(DeltaP, Loc.T("device.ceiling.delta_hear_what_it_removes"), Loc.T("device.ceiling.delta_play_the_difference_between"));
-        Control LookRow() => SliderRow("LOOK", Lookahead, LookF, lit: () => false);
-        Control LinkRow() => SliderRow("LINK", StereoLink, LinkF);
 
-        Control MetersTab() => Spread(
-            MeterGrid(
-                ("peak in", () => Lvl(ScDb(S_PeakInHold)), () => OverInk(ScDb(S_PeakInHold), 0)),
-                ("peak out", () => Lvl(ScDb(S_PeakOutHold)), () => TextPrimary),
-                ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary),
-                ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
-                ("LUFS-I", () => Lufs(ScDb(S_LufsI)), () => TextPrimary),
-                ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil)))),
-            LookRow(), LinkRow(), ResetRow(false), DeltaSwitch());
+        (Control, Control) MetersPanel() => (
+            Head(Toggle(TruePeak, "True peak", Loc.T("device.ceiling.true_peak_the_detector_reads")), CharSeg()),
+            Rows(
+                MeterGrid(
+                    ("peak in", () => Lvl(ScDb(S_PeakInHold)), () => OverInk(ScDb(S_PeakInHold), 0)),
+                    ("peak out", () => Lvl(ScDb(S_PeakOutHold)), () => TextPrimary),
+                    ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary),
+                    ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
+                    ("LUFS-I", () => Lufs(ScDb(S_LufsI)), () => TextPrimary),
+                    ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil)))),
+                Info(() => CharWords[CharI()] + " · " + Loc.F("device.ceiling.over_of_the_time", Sc(S_OverPct) * 100)),
+                Rule(),
+                Toggle(DeltaP, Loc.T("device.ceiling.delta_hear_what_it_removes"), Loc.T("device.ceiling.delta_play_the_difference_between")),
+                ResetChip(false)));
 
-        Control LoudMetersTab()
+        (Control, Control) DetectorPanel()
+        {
+            var t = Caps("DETECTOR");
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
+            var l1 = Mono("", 9, TextPrimary);
+            var l2 = Mono("", 8, TextSecondary);
+            l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
+            var box = new Border
+            {
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
+            };
+            readouts.Add(() =>
+            {
+                bool d = On(DeltaP);
+                t.Text = d ? "Delta" : "Detector";
+                t.Foreground = d ? AccentBright : TextTertiary;
+                l1.Text = d ? Loc.T("device.ceiling.hearing_what_it_removes") : (Tp() ? Loc.T("device.ceiling.true_peak_4") : "sample peak") + (ExtOn() ? " · key" : "");
+                l2.Text = d ? Loc.T("device.ceiling.the_difference_in_out") : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
+                l1.Foreground = d ? AccentBright : TextPrimary;
+                dot.Background = d ? Brass : Sc(S_Gr) > 0.1 ? Success : NotaPalette.BorderStrong;
+                box.BorderBrush = d ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
+            });
+            ToolTip.SetTip(box, Loc.T("device.ceiling.what_the_limiter_listens_to"));
+            return (Head(Toggle(AutoRelease, Loc.T("device.ceiling.auto_release"), Loc.T("device.ceiling.auto_release_the_release_slows")), KeyDrop()),
+                Rows(
+                    SliderRow("LOOK", Lookahead, LookF),
+                    SliderRow("LINK", StereoLink, LinkF),
+                    SliderRow("SC HP", ScHp, HpF, modulation: true, lit: () => P(ScHp) > 20.5f),
+                    Rule(),
+                    box));
+        }
+
+        (Control, Control) LoudnessPanel()
         {
             var big = Mono("", 16, TextPrimary);
             var unit = new TextBlock { Text = "LUFS", FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2) };
@@ -467,79 +472,63 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 Child = new StackPanel { Spacing = 1, Children = { Caps("INTEGRATED"), line } },
             };
             ToolTip.SetTip(box, Loc.T("device.ceiling.integrated_loudness_since_the_last"));
-            return Spread(box,
-                MeterGrid(
-                    ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
-                    ("LUFS-M", () => Lufs(ScDb(S_LufsM)), () => TextPrimary),
-                    ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil))),
-                    ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary)),
-                LookRow(), ResetRow(true));
+            var title = new TextBlock { Text = "Target", FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+            return (Head(title, TargetDrop()),
+                Rows(
+                    box,
+                    MeterGrid(
+                        ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
+                        ("LUFS-M", () => Lufs(ScDb(S_LufsM)), () => TextPrimary),
+                        ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil))),
+                        ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary)),
+                    ResetChip(true)));
         }
 
-        Control DetectorTab()
+        // Under every panel: Gain (into the limiter) · Ceiling (the main knob) · Release. Ceiling has
+        // no dry/wet, so the ceiling takes the middle.
+        Control OutputStrip()
         {
-            var t = Caps("DETECTOR");
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
-            var l1 = Mono("", 9, TextPrimary);
-            var l2 = Mono("", 8, TextSecondary);
-            l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
-            var box = new Border
-            {
-                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
-                Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
-            };
-            readouts.Add(() =>
-            {
-                bool d = On(DeltaP);
-                t.Text = d ? "Delta" : "Detector";
-                t.Foreground = d ? AccentBright : TextTertiary;
-                l1.Text = d ? Loc.T("device.ceiling.hearing_what_it_removes") : (Tp() ? Loc.T("device.ceiling.true_peak_4") : "sample peak") + (ExtOn() ? " · key" : "");
-                l2.Text = d ? Loc.T("device.ceiling.the_difference_in_out") : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
-                l1.Foreground = d ? AccentBright : TextPrimary;
-                dot.Background = d ? Brass : Sc(S_Gr) > 0.1 ? Success : NotaPalette.BorderStrong;
-                box.BorderBrush = d ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
-            });
-            ToolTip.SetTip(box, Loc.T("device.ceiling.what_the_limiter_listens_to"));
-            return Spread(
-                LookRow(), LinkRow(),
-                SliderRow("SC HP", ScHp, HpF, modulation: true, lit: () => P(ScHp) > 20.5f),
-                ResetRow(false), box, DeltaSwitch());
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), Margin = new Thickness(-4, 5, -4, 4) };
+            Control Cell(Control c, int col) { c.HorizontalAlignment = HorizontalAlignment.Center; c.VerticalAlignment = VerticalAlignment.Bottom; return Col(c, col); }
+            g.Children.Add(Cell(K(Gain, "GAIN", GainF, Loc.T("device.ceiling.gain_how_hard_the_signal"), cellW: 54), 0));
+            g.Children.Add(Cell(K(Ceil, "CEILING", v => NotaNum.F($"{v:0.0} dB"), Loc.T("device.ceiling.ceiling_the_output_never_goes"), cellW: 58, size: 44), 1));
+            g.Children.Add(Cell(K(Release, "RELEASE", RelF, Loc.T("device.ceiling.release_how_fast_the_gain"), teal: () => On(AutoRelease), cellW: 54), 2));
+            return new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(8, 0), Child = g };
         }
 
         // ======================================================================
-        // Tab frames
+        // Tab frame + the panel that follows it
         // ======================================================================
         var centreHost = new ContentControl();
-        var rightHost = new ContentControl();
+        var panelHost = new ContentControl();
+        var headHost = new ContentControl();
         var centreBodies = new Control?[3];
-        var rightBodies = new Control?[3];
-        int rightTab = 0;
+        var panels = new (Control Head, Control Body)?[3];
         var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
             extras.Text = centreTab switch
             {
-                1 => NotaNum.F($"0 … −{(reduction?.Scale ?? 12):0} dB"),
-                2 => "window 60 s",
-                _ => "window 4 s",
+                1 => ReleaseRange() + " · " + ClipText(),
+                2 => NotaNum.F($"LRA {Sc(S_Lra):0.0} LU · PLR {(HaveI() ? NotaNum.F($"{Sc(S_Plr):0.0}") : "—")} · ")
+                     + (HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0} LU from target") : Loc.T("device.ceiling.measuring")),
+                _ => (ScDb(S_WinInPeak) <= -119 ? Loc.T("common.no_signal") : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}")) + " · window 4 s",
             };
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => ReductionTab(), 2 => LoudnessTab(), _ => LevelTab() };
-        // Meters shows the loudness readings while the Loudness tab is up.
-        Control RightBody(int t)
+        void ShowPanel(int t)
         {
-            int slot = t == 1 ? 2 : centreTab == 2 ? 1 : 0;
-            return rightBodies[slot] ??= slot switch { 2 => DetectorTab(), 1 => LoudMetersTab(), _ => MetersTab() };
+            var (head, body) = panels[t] ??= t switch { 1 => DetectorPanel(), 2 => LoudnessPanel(), _ => MetersPanel() };
+            headHost.Content = head;
+            panelHost.Content = body;
+            RefreshAll();
         }
 
-        var centre = TabFrame(new[] { "Level", "Reduction", "Loudness" }, centreHost, CentreBody, false, t =>
-        {
-            centreTab = t;
-            rightHost.Content = RightBody(rightTab);
-            Refresh();
-        }, extras);
-        var rightFrame = TabFrame(new[] { "Meters", "Detector" }, rightHost, RightBody, true, t => { rightTab = t; RefreshAll(); }, null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
+        var centre = TabFrame(new[] { "Level", "Reduction", "Loudness" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
+        ShowPanel(centreTab);
+        var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };
+        var rightCol = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), Docked(OutputStrip(), Dock.Bottom), panelHost } };
+        var right = new RuleSection { Width = 186, Child = rightCol };
         DockPanel.SetDock(right, Dock.Right);
         var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 

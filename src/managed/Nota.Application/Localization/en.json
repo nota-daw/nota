@@ -651,6 +651,7 @@
     "device.card.previous_preset": "Previous preset",
     "device.card.value": "Value",
     "device.ceiling.attack_passed_to_the_clip": { "one": "attack passed to the clip · {0} time", "other": "attack passed to the clip · {0} times" },
+    "device.ceiling.auto_release": "Auto release",
     "device.ceiling.auto_release_the_release_slows": "Auto release — the release slows as the reduction deepens (up to 5× at 7 dB), so dense passages don't pump",
     "device.ceiling.ceiling_the_output_never_goes": "Ceiling — the output never goes above it (in dBTP with True peak on)",
     "device.ceiling.character_clean_transparent_the_fastest": "Character — Clean: transparent, the fastest attack; Punch: a slower attack lets the transient through to the clip; Glue: a slow release and a soft knee under the ceiling",

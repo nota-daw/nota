@@ -136,6 +136,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   size, Length's Start from, Velocity's random direction and Random's seed and Lock are now
   set in L. The parameters themselves are unchanged, so projects, presets and automation are
   unaffected. The effect racks keep their status line.
+- **Nota Ceiling: one home per control, laid out like Auto Filter** (nota-daw/nota#531): the
+  Level, Reduction and Loudness graphs fill their tabs (drag the ceiling and the target on
+  them). The right panel loses its Meters / Detector tabs and follows the centre tab: on Level
+  the meters (True peak and Clean / Punch / Glue in its title bar, the meter box, the
+  character and time over the ceiling, Delta, Reset peaks), on Reduction the detector (Auto
+  release and the key source in its title bar, Look, Link, SC HP, the detector box), on
+  Loudness the target (its presets in the title bar, the integrated box, the loudness meters,
+  Reset). Under it on every tab: Gain, Ceiling (the larger knob) and Release. The read-outs
+  that sat beside the knobs move to the tab bar; the meter boxes stay. The parameters are
+  unchanged.
 - **Nota Beat Repeat: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
   each graph fills its tab with the knobs it shows in a column on its right — Chance and
   Variation by the Timeline, Offset and Gate by the Slices (which drag them), Freq and Width by
