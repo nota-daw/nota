@@ -981,7 +981,7 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Nota Strata** (15) — in two sizes (L 700 / S 260, S·L toggle; S is the counter over the transport and Feedback, Input, Speed) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
   count-in, set-tempo, Export; audio layers persist into the project.
-- **Nota Forge** (17) — multi-stage saturator: 3 stages (Tube/Tape/Diode/Fuzz/Fold/Digital),
+- **Nota Forge** (17) — in two sizes (L 700 / S 260, S·L toggle; S is the curve and harmonics over Amount, Wet, Out) — multi-stage saturator: 3 stages (Tube/Tape/Diode/Fuzz/Fold/Digital),
   each with drive, output trim, feedback and its own Bias / Tone / Width; Serial / Parallel /
   Mid-Side (Mid · Side · M+S) / Multiband (< 180 Hz · mids · > 2.4 kHz) routings; Amount /
   Wet / Out; LFO→Drive (free or synced) and Env→Tone; a transfer curve (whole device or the

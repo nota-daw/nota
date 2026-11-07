@@ -7024,7 +7024,7 @@ Console.WriteLine("-- Nota Forge --");
     Check(fg >= 0, "add built-in Nota Forge");
     Check(fe.DeviceName(ft2, fg) == "Nota Forge", $"name is Nota Forge (got '{fe.DeviceName(ft2, fg)}')");
     Check(fe.TrackDeviceBuiltinKind(ft2, fg) == 17, $"builtin kind is 17 (got {fe.TrackDeviceBuiltinKind(ft2, fg)})");
-    Check(fe.DeviceParamCount(ft2, fg) == 36, $"Nota Forge exposes 36 params (got {fe.DeviceParamCount(ft2, fg)})");
+    Check(fe.DeviceParamCount(ft2, fg) == 37, $"Nota Forge exposes 37 params, View appended (got {fe.DeviceParamCount(ft2, fg)})");
     // Append-only layout: the old indices keep their names, the per-stage shape sits at 27..35, neutral.
     Check(fe.DeviceParamName(ft2, fg, 0) == "Amount" && fe.DeviceParamName(ft2, fg, 12) == "S1 Drive" && fe.DeviceParamName(ft2, fg, 26) == "Oversampling"
           && fe.DeviceParamName(ft2, fg, 27) == "S1 Bias" && fe.DeviceParamName(ft2, fg, 31) == "S2 Tone" && fe.DeviceParamName(ft2, fg, 35) == "S3 Width",
