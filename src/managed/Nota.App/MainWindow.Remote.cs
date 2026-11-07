@@ -96,18 +96,24 @@ public partial class MainWindow : IRemoteHost
     // The phone wears the theme the window wears, or under Follow phone one of the user's two
     // picks (spec 014). Built once per theme and once per change, so the hub's reference check
     // costs nothing on the ticks in between.
-    private readonly Dictionary<string, RemoteTheme> _remoteThemes = new();
+    // Keyed by the worn theme object: the same theme in another accent (spec 084) is another
+    // entry, so an accent change re-sends the phone its colours.
+    private readonly Dictionary<NotaColourTheme, RemoteTheme> _remoteThemes = new(ReferenceEqualityComparer.Instance);
     private RemoteAppearance? _remoteLook;
-    private (NotaColourTheme, AppearanceChoice)? _remoteLookFor;
+    private (NotaColourTheme, AppearanceChoice, AccentChoice)? _remoteLookFor;
 
     RemoteAppearance IRemoteHost.Appearance
     {
         get
         {
-            var key = (NotaPalette.Theme ?? NotaThemes.Default, NotaThemeService.Choice);
+            var key = (NotaPalette.Theme ?? NotaThemes.Default, NotaThemeService.Choice, NotaThemeService.Accent);
             if (_remoteLook is null || !key.Equals(_remoteLookFor))
             {
-                RemoteTheme Of(NotaColourTheme? t) => RemoteThemeOf(t ?? NotaThemes.Default);
+                // A new accent makes every cached theme stale; drop them rather than keep a
+                // copy per colour a picker drag went through.
+                if (_remoteLookFor is { } was && was.Item3 != key.Item3) _remoteThemes.Clear();
+                // The phone's own dark/light picks wear the accent too.
+                RemoteTheme Of(NotaColourTheme? t) => RemoteThemeOf(NotaThemeService.Worn(t ?? NotaThemes.Default));
                 _remoteLook = new RemoteAppearance(Of(key.Item1), Of(NotaThemes.Find(key.Item2.Dark)), Of(NotaThemes.Find(key.Item2.Light)),
                     CssHex(NotaPalette.InkDark), CssHex(NotaPalette.InkLight));
                 _remoteLookFor = key;
@@ -118,8 +124,8 @@ public partial class MainWindow : IRemoteHost
 
     private RemoteTheme RemoteThemeOf(NotaColourTheme t)
     {
-        if (!_remoteThemes.TryGetValue(t.Id, out var r))
-            _remoteThemes[t.Id] = r = new RemoteTheme(t.Id, t.Name, t.IsDark, Enumerable.ToDictionary(t.Colors, c => c.Key, c => CssHex(c.Value)));
+        if (!_remoteThemes.TryGetValue(t, out var r))
+            _remoteThemes[t] = r = new RemoteTheme(t.Id, t.Name, t.IsDark, Enumerable.ToDictionary(t.Colors, c => c.Key, c => CssHex(c.Value)));
         return r;
     }
 

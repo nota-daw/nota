@@ -4,8 +4,27 @@
     {
       "name": "nota-docs",
       "runtimeExecutable": "/opt/homebrew/Cellar/node/26.10.0_1/bin/node",
-      "runtimeArgs": ["../nota-docs/node_modules/astro/bin/astro.mjs", "dev", "--root", "../nota-docs", "--port", "4321"],
+      "runtimeArgs": [
+        "../nota-docs/node_modules/astro/bin/astro.mjs",
+        "dev",
+        "--root",
+        "../nota-docs",
+        "--port",
+        "4321"
+      ],
       "port": 4321
+    },
+    {
+      "name": "mockup-311",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8311",
+        "--directory",
+        "/Users/egorkhindikaynen/repos/nota/nota-311"
+      ],
+      "port": 8311
     }
   ]
 }

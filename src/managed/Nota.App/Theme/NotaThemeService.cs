@@ -13,6 +13,9 @@
 //             it is Default: Avalonia resolves it from the OS and raises
 //             ActualThemeVariantChanged when the OS flips, which swaps the theme.
 //
+// The theme is worn with the user's accent (spec 084): NotaAccent overlays the accent family
+// on the theme, and the accented theme goes through the same three layers.
+//
 // Custom-drawn Render() overrides read slot colours without subscribing to them, so every
 // switch forces a repaint of every window.
 
@@ -35,8 +38,28 @@ internal static class NotaThemeService
     private static bool _published;
     private static AppearanceChoice _choice = new(false, Appearance.StudioDark, Appearance.StudioDark, Appearance.StudioLight);
 
+    private static AccentChoice _accent = AccentChoice.Default;
+
     /// <summary>The appearance being followed.</summary>
     public static AppearanceChoice Choice => _choice;
+
+    /// <summary>The accent every theme is worn with.</summary>
+    public static AccentChoice Accent => _accent;
+
+    /// <summary>Raised after a theme or accent change has been applied and repainted.</summary>
+    public static event Action? Changed;
+
+    /// <summary><paramref name="theme"/> as it is worn with the current accent — for the theme
+    /// cards and Nota Remote, so they show what the window would wear.</summary>
+    public static NotaColourTheme Worn(NotaColourTheme theme) => NotaAccent.Wear(theme, _accent);
+
+    /// <summary>Wear a new accent in whichever theme is active. Live; saving is the caller's.</summary>
+    public static void SetAccent(AccentChoice accent)
+    {
+        if (accent == _accent) return;
+        _accent = accent;
+        ApplyActive();
+    }
 
     /// <summary>Every loaded theme id → whether it is dark — what <see cref="Appearance.Resolve"/> needs.</summary>
     public static IReadOnlyDictionary<string, bool> KnownThemes =>
@@ -69,7 +92,7 @@ internal static class NotaThemeService
         if (app is null) return;
         // With no OS signal Avalonia reports Light, which is the spec's fallback too.
         bool osDark = app.ActualThemeVariant == ThemeVariant.Dark;
-        var theme = NotaThemes.Find(_choice.Active(osDark)) ?? NotaThemes.Default;
+        var theme = Worn(NotaThemes.Find(_choice.Active(osDark)) ?? NotaThemes.Default);
 
         if (!_choice.FollowSystem)
             app.RequestedThemeVariant = theme.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
@@ -78,6 +101,7 @@ internal static class NotaThemeService
         NotaPalette.Apply(theme);
         ApplyResources(app, theme);
         RepaintEverything();
+        Changed?.Invoke();
     }
 
     // Put the slot brushes into the application resources once. They are re-tinted in

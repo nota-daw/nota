@@ -28,6 +28,8 @@ public interface IAuditionRig : IDisposable
     bool SetSamplerSample(string? path, int rootNote = 60);
     /// <summary>Nota Mosaic's program (MosaicProgram text); returns once its samples are loaded.</summary>
     bool SetMosaicProgram(string text);
+    /// <summary>The instrument's state blob after its params (a Nota Twin preset's patterns).</summary>
+    bool InstrumentState(byte[] data);
     /// <summary>Effect source: the first <paramref name="maxSeconds"/> of an audio file.</summary>
     bool SetSourceFile(string path, double maxSeconds);
     /// <summary>A fresh rig at the same rate, to render one part of a demo track.</summary>
