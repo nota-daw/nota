@@ -1408,6 +1408,7 @@
     "device.reverb.input_muted_tail_held": "input muted · tail held",
     "device.reverb.kill_tail_empty_the_reverb": "Kill tail — empty the reverb at once; whatever is still ringing (or frozen) stops",
     "device.reverb.latency_comp": "Latency comp.",
+    "device.reverb.mod": "Mod",
     "device.reverb.mod_on_tail_the_modulation": "Mod on tail — the modulation wobbles the tail itself (a chorused, evolving decay); off, it moves only the early part and the tail stays still",
     "device.reverb.tail_held_no_decay": "Tail held · no decay",
     "device.reverb.the_decay_tail_the_impulse": "The decay tail — the impulse at the pre-delay (dashed grey), the early reflections (drawn magnified), then the RT60 curve over 4 s. Drag the pre-delay marker, drag the tail for the decay; ⌥-click to type, double-click to reset.",

@@ -877,13 +877,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   (reduction envelope against the input, measured transient and recovery) / Sidechain (key
   spectrum under draggable filters), and Dynamics / Output. 31 factory presets. MCP: `read_dynamics`, `set_device_sidechain` /
   `get_device_sidechain`.
-- **Nota Reverb** (2) — Hall/Room/Plate/Chamber, a decay calibrated as a true RT60, HF damp,
+- **Nota Reverb** (2) — in two sizes (L 700 / S 260, S·L toggle) — Hall/Room/Plate/Chamber, a decay calibrated as a true RT60, HF damp,
   pre-delay, size, diffusion (input diffuser + tail allpasses), early reflections spaced by
   the algorithm and size, low/high cut, width, modulation on the tail or on the early part
   only, Vintage (band-limited, 12-bit colour); Freeze (tail held, input muted) and Kill
   tail; output stage with dry level, bass mono, wet only and latency compensation for the
-  diffuser. Tabs: Space / Tone · Mod and Levels / Output, over a live decay-tail window
-  (drag the pre-delay marker or the tail). 30 factory presets.
+  diffuser. Tabs: Space / Tone · Mod over a live decay-tail window (drag the pre-delay marker or
+  the tail) with their knobs beside it, and a right panel that follows them (Space · Mod) over
+  Dry, Mix and Out. 30 factory presets.
 - **Nota Delay** (3) — in two sizes (L 700 / S 260, S·L toggle) — independent L/R times (ms or tempo-synced 1/16…1/2 with triplets
   and dotted values), Link, feedback, spread, ping-pong; a tone stage in the loop (low cut,
   high cut, allpass diffusion, tape saturation) with tape WOW modulation; Freeze (loop held,

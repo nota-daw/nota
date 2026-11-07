@@ -4561,7 +4561,7 @@ Check(Rms(buf, frames) > 1e-4f, $"audio flows through EQ + Compressor chain (rms
 
 // -- M6-3: Reverb / Delay / Utility built-ins --
 int revDev = engine.AddBuiltinDevice(fxT, 2);
-Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 21, "add built-in Reverb (21 params)");
+Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 22, "add built-in Reverb (22 params, View appended)");
 int delDev = engine.AddBuiltinDevice(fxT, 3);
 Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 25, "add built-in Delay (25 params, View appended)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
@@ -4894,7 +4894,7 @@ Console.WriteLine("-- Nota Reverb --");
     int rd = re.AddBuiltinDevice(rt, 2);
     const int Decay = 0, HFDamp = 1, PreDelay = 2, Size = 3, Algorithm = 10, Freeze = 11, DryWet = 12, Output = 13,
               DryLevel = 14, EarlyRefl = 15, ModOnTail = 16, Vintage = 17, BassMono = 18, WetOnly = 19, LatencyComp = 20;
-    Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 21, "add built-in Nota Reverb (kind 2, 21 params)");
+    Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 22, "add built-in Nota Reverb (kind 2, 22 params, View appended)");
     Check(re.ReverbWrapSelfTest(), "Reverb comb read stays inside its delay line at the wrap edge (no metallic burst)");
     Check(re.DeviceParamName(rt, rd, Decay) == "Decay" && re.DeviceParamName(rt, rd, Output) == "Output"
           && re.DeviceParamName(rt, rd, DryLevel) == "Dry Level" && re.DeviceParamName(rt, rd, EarlyRefl) == "Early Refl"

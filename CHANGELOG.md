@@ -229,7 +229,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Fade under it), Diffuse and the wow on Loop · Wow (Tape mode and Clear loop under it); Stereo
   (Tap tempo, Spread, Width, Mono f, Wet only, latency comp) and Loop (Freeze, the repeats'
   filter, the wet meter) panels over Dry, Dry/wet and Out; S is the window over the mode and L,
-  R, Feedback, Dry/wet.
+  R, Feedback, Dry/wet. **Nota Reverb:** Decay, Pre and Size by the tail on Space (the algorithm
+  under it), Low cut, High cut and Width on Tone · Mod (Vintage and Mod on tail under it); Space
+  (Freeze, Kill tail, Diffuse, HF damp, early reflections, wet only, the wet meter) and Mod
+  (Rate, Depth, Mono f, latency comp) panels over Dry, Dry/wet and Out; S is the tail over the
+  algorithm and Decay, Pre, Size, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

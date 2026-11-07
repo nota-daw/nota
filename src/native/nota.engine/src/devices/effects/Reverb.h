@@ -64,6 +64,7 @@ class Reverb : public Device {
         BassMono,
         WetOnly,
         LatencyComp,
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     // Scope telemetry layout (read by the card).
