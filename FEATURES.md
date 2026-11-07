@@ -939,8 +939,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   time signature), Offset, Grid with Triplet, Variation, Chance, Gate; Mix / Insert / Gate
   modes; Pitch and Pitch Decay, Decay, Volume; a repeat filter (LP / BP / HP, width in
   octaves, optionally narrowing with each repeat); Repeat (hold or Latch) and Mix. Timeline /
-  Slices / Filter graphs (drag the offset, the gate and the filter), a state
-  box and meters; 31 factory presets; MCP `read_beat_repeat`.
+  Slices / Filter graphs (drag the offset, the gate and the filter) with their knobs beside
+  them, a right panel that follows them (Repeat · Capture · Filter) over Decay, Dry/wet and
+  Volume knobs; 31 factory presets; MCP `read_beat_repeat`.
 - **Nota Orbit** (9, formerly Auto Pan) — auto-pan and tremolo on one LFO: L/R phase (0° =
   tremolo … 180° = pan, with 0° / 90° / 180° buttons), Sine / Tri / Saw / Sqr / S&H, Shape
   (Glide on S&H), Amount, Mix; rate free (0.01–40 Hz) or synced (4/1 … 1/32 with dotted and

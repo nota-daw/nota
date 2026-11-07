@@ -136,6 +136,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   size, Length's Start from, Velocity's random direction and Random's seed and Lock are now
   set in L. The parameters themselves are unchanged, so projects, presets and automation are
   unaffected. The effect racks keep their status line.
+- **Nota Beat Repeat: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
+  each graph fills its tab with the knobs it shows in a column on its right — Chance and
+  Variation by the Timeline, Offset and Gate by the Slices (which drag them), Freq and Width by
+  the Filter. The right panel loses its Character / Output tabs and follows the centre tab:
+  Repeat on Timeline (Mix / Insert / Gate in its title bar, Repeat and Reset, Latch, what the
+  repeater is doing), Capture on Slices (Interval, Grid with its triplets, the slice it takes),
+  Filter on Filter (its switch and LP / BP / HP in the title bar, Narrow with repeats, Pitch,
+  Pitch decay). Under it on every tab: Decay, Dry/wet (the larger knob) and Volume knobs. Chance,
+  Gate, Offset, Variation, Volume, Pitch and the switches lose their second copies; the state
+  box and the in / repeat / out measurements give way to read-out lines. The parameters are
+  unchanged.
 - **Nota Auto Shift: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
   each graph fills its tab with its own knobs in a column on the right — Amount, Speed and
   Human by the Trace, Glide and Bend by the MIDI target — and the scale's notes under the
