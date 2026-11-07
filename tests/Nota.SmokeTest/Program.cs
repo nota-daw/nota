@@ -11244,7 +11244,7 @@ Console.WriteLine("-- Nota Vintage (effect kind 8) --");
     Check(vveng.DeviceName(vvt, vvdi) == "Nota Vintage", $"device is Nota Vintage (got '{vveng.DeviceName(vvt, vvdi)}')");
     Check(vveng.TrackDeviceBuiltinKind(vvt, vvdi) == 8, "device reports builtin kind 8");
     int vvpc = vveng.DeviceParamCount(vvt, vvdi);
-    Check(vvpc == 24, $"Nota Vintage exposes 24 params ({vvpc})");
+    Check(vvpc == 25, $"Nota Vintage exposes 25 params, View appended ({vvpc})");
     const int VMode = 0, VDrive = 1, VWow = 3, VFlutter = 4, VNoise = 5, VCrackle = 6, VWear = 7, VMix = 8, VOutput = 9,
         VLow = 11, VHigh = 12, VModel = 13, VChar = 14, VComp = 15, VWowRate = 16, VFlutRate = 17, VWowSync = 18,
         VHissHp = 19, VFollow = 20, VStereo = 21, VStage = 22, VEven = 23;

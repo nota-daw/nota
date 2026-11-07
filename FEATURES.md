@@ -929,13 +929,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   and Formant shift, Skip sibilants, Mix, latency compensated. Trace / Scale / MIDI graphs with
   their knobs beside them, a right panel that follows them (Detect · Key · MIDI) over Shift,
   Dry/wet and Formant knobs; 34 factory presets; MCP `read_auto_shift`.
-- **Nota Vintage** (8) — degradation and saturation: 6 era characters
+- **Nota Vintage** (8) — in two sizes (L 700 / S 260, S·L toggle) — degradation and saturation: 6 era characters
   (Vinyl/Cassette/Reel/VHS/Tube/Analog, with the voicing switchable off), drive, tone with a
   Warm / Flat / Dark model and low / high shelves, wow (free or tempo-synced) and flutter with
   their rates, noise with a hiss high-pass, crackle, wear, wear that follows the input, stereo
   drift, a Tube / Analog output stage, even-harmonics-only saturation, auto gain compensation,
   mix, output, oversampling. Tabs: Curve (the transfer curve, the input on it) / Wear (pitch
-  drift over 4 s in cents) / Output (harmonics against the hiss floor) and Tone / Output.
+  drift over 4 s in cents) / Output (harmonics against the hiss floor), each with its knobs beside
+  it, and a right panel that follows them (Character · Wear · Output) over Mix and Output.
   30 factory presets. MCP: `read_vintage`.
 - **Nota Beat Repeat** (11) — in two sizes (L 700 / S 260, S·L toggle; S is the timeline over Interval, Repeat, Chance, Gate, Decay and Dry/wet) — tempo-synced repeater: Interval (1/8 … 4 bars, bars follow the
   time signature), Offset, Grid with Triplet, Variation, Chance, Gate; Mix / Insert / Gate

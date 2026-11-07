@@ -219,7 +219,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   harmonics alone (drag for Gain, Even only under it); Tone (Bass, Treble, Presence, Bright,
   Deep, the model box), Cabinet (on, the cuts, the cabinet box) and Output (auto-comp, the
   measurements box, the gate) panels over Gain, Dry/wet and Output; S is the tone stack over the
-  model and Gain, Bass, Treble, Dry/wet.
+  model and Gain, Bass, Treble, Dry/wet. **Nota Vintage:** Drive and Tone by the curve (the
+  character and OS under it), Wow, Flutter and Crackle by the pitch drift (what it shows under
+  it), the harmonics alone (Even only under it); Character (on, the tone model, the shelves, the
+  character box), Wear (sync, the rates, Wear, follow, stereo drift) and Output (auto-comp, the
+  measurements box, noise, hiss HP, Tube / Analog) panels over Dry/wet and Output; S is the curve
+  over the character and Drive, Tone, Wow, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale
