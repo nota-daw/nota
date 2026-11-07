@@ -1002,7 +1002,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   Loudness (an 8 s graph, drag the target) / Meters (IN / OUT / TP / correction) tabs and a
   right panel that follows them (Correction · Response) over Trim;
   30 factory presets; MCP `read_level`, `set_level`, `level_match`.
-- **Nota Shutter** (19) — noise gate and ducker: Threshold/Return (hysteresis),
+- **Nota Shutter** (19) — in two sizes (L 700 / S 260, S·L toggle; S is the Signal graph over Threshold, Attack, Release, Floor) — noise gate and ducker: Threshold/Return (hysteresis),
   Attack/Hold/Release with a Linear / Log / Snap shape, Floor (range), Lookahead, Flip
   (ducker), Retrigger (trigger mode), a 12 dB/oct detector band-pass (switchable) with Listen,
   Peak hold, internal or external key; Signal / Envelope / Sidechain graphs (drag the

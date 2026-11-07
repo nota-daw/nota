@@ -252,7 +252,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Nota Strata** keeps its layer stack and loop rail and gains S: the bar counter and the cycle
   ticks over the four transport buttons and Feedback, Input and Speed. **Nota Forge** keeps
   its stages, curve and shape columns and gains S: the transfer curve and the harmonics over
-  Amount, Dry/wet and Out.
+  Amount, Dry/wet and Out. **Nota Shutter:** Signal (Look, Peak hold and Live under it), Envelope
+  (Attack, Hold, Release beside it, the shape and Retrig under it), Sidechain (SC HP and SC LP
+  beside it, SC EQ and Listen under it) and Pattern tabs; Detector (the state and the
+  measurements, Reset), Opening (the times and openings per bar), the key (External sidechain,
+  the source, its level and band) and Rhythm (Sync / Free, Rate, Depth, Copy / Paste / Clear,
+  the MIDI and gate options) panels over the Gate / Duck switch and Floor, Threshold and Return
+  (Shutter has no dry/wet, so Threshold takes the middle); S is the Signal graph over Gate / Duck
+  and Threshold, Attack, Release and Floor.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

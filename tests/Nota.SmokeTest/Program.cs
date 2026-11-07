@@ -5933,7 +5933,7 @@ Console.WriteLine("-- Nota Shutter --");
         Check(gd >= 0, "add built-in Nota Shutter");
         Check(ge.DeviceName(gt, gd) == "Nota Shutter", $"name is Nota Shutter (got '{ge.DeviceName(gt, gd)}')");
         Check(ge.TrackDeviceBuiltinKind(gt, gd) == 19, $"builtin kind is 19 (got {ge.TrackDeviceBuiltinKind(gt, gd)})");
-        Check(ge.DeviceParamCount(gt, gd) == 60, $"Nota Shutter exposes 60 params (got {ge.DeviceParamCount(gt, gd)})");
+        Check(ge.DeviceParamCount(gt, gd) == 61, $"Nota Shutter exposes 61 params (got {ge.DeviceParamCount(gt, gd)})");
         Check(ge.DeviceParamName(gt, gd, 16) == "Pattern Target" && ge.DeviceParamName(gt, gd, 27) == "Pattern Out"
               && ge.DeviceParamName(gt, gd, 28) == "Step 1" && ge.DeviceParamName(gt, gd, 59) == "Step 32", "Shutter appends the Pattern params and Step 1..32");
         Check(ge.DeviceParamDefault(gt, gd, 16) < 0.01f, "Pattern is off by default (the gate sounds as before)");
