@@ -33,4 +33,8 @@ public interface IFactoryPresets
     /// parameter at its default (deviceIndex -1 = the track's instrument). The card size and a
     /// loaded sample stay as they are. Returns "" on success or a user-facing warning.</summary>
     string ResetInPlace(IAudioEngine engine, int trackId, int deviceIndex, bool midiEffect);
+
+    /// <summary>A built-in instrument preset's params by id (null when the id is unknown or the
+    /// preset names none) — for loading part of a preset, e.g. one Nota Twin part (specs/055).</summary>
+    IReadOnlyDictionary<string, float>? InstrumentParams(string id) => null;
 }

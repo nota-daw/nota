@@ -23,9 +23,11 @@ void MpeInput::message(int32_t status, int32_t channel, int32_t d1, int32_t d2, 
             }
             break;
         }
-        [[fallthrough]];
+        out.mpeNoteOff(d1); // a note-on at velocity 0: no release velocity
+        c.held[d1 >> 5] &= ~(1u << (d1 & 31));
+        break;
     case 0x80:
-        out.mpeNoteOff(d1);
+        out.mpeNoteOffVelocity(d1, d2 / 127.0f);
         c.held[d1 >> 5] &= ~(1u << (d1 & 31));
         break;
     case 0xE0: {

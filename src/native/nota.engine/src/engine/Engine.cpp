@@ -1012,6 +1012,22 @@ bool Engine::applyMix(const MixChange& c, bool after) {
         eq->setState(st.data(), static_cast<int32_t>(st.size()));
         return true;
     }
+    if (c.kind == MixKind::InstrumentEdit) { // an instrument's edit state (sequencer patterns)
+        Instrument* inst = editStateInstrument(c.trackId, c.deviceIndex, c.paramIndex);
+        const auto at = static_cast<size_t>(v);
+        if (!inst || at >= noteStates_.size()) return false; // gone: skip
+        const auto& st = noteStates_[at];
+        inst->setEditState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
+    if (c.kind == MixKind::InstrumentState) { // a rack chain instrument's whole state
+        Instrument* inst = editStateInstrument(c.trackId, c.deviceIndex, c.paramIndex);
+        const auto at = static_cast<size_t>(v);
+        if (!inst || at >= noteStates_.size()) return false; // gone: skip
+        const auto& st = noteStates_[at];
+        inst->setState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
     if (c.kind == MixKind::MasterVolume) {
         setMasterVolume(v);
         return true;
@@ -1217,6 +1233,7 @@ void Engine::clearUndoHistory() {
     // them here frees nothing the audio thread can still be reading.
     undoStack_.clear();
     redoStack_.clear();
+    compactNoteStates(true); // nothing refers to the saved states any more
     mixGestures_.clear(); // a gesture can't outlive the history it would land in
     touchGestures_.clear();
     undoGroupDepth_ = 0;

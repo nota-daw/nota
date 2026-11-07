@@ -207,7 +207,11 @@ void RackInstrument::fanOff(int32_t pitch) {
     syncChains();
     const int32_t n = static_cast<int32_t>(st->chains.size());
     for (int32_t ci = 0; ci < n; ++ci)
-        if (st->chains[ci].instrument && !midiChainAt(ci)) st->chains[ci].instrument->noteOff(pitch);
+        if (st->chains[ci].instrument && !midiChainAt(ci)) {
+            if (relVel_ > 0.0f) st->chains[ci].instrument->noteOffVelocity(pitch, relVel_);
+            else
+                st->chains[ci].instrument->noteOff(pitch);
+        }
 }
 
 void RackInstrument::endGlide() {
@@ -269,6 +273,12 @@ void RackInstrument::noteOn(int32_t pitch, float velocity) {
     m.sounding = pitch;
     m.glideBend = glide ? static_cast<float>(prev - pitch) : 0.0f;
     m.glideTotal = m.glideLeft = glide ? std::max<int64_t>(1, std::llround(ms * 0.001 * sampleRate_)) : 0;
+}
+
+void RackInstrument::noteOffVelocity(int32_t pitch, float velocity) {
+    relVel_ = velocity;
+    noteOff(pitch);
+    relVel_ = 0.0f;
 }
 
 void RackInstrument::noteOff(int32_t pitch) {

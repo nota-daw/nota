@@ -52,7 +52,7 @@ internal static class BrowserCategoryTests
 
         // Picks are per tab, and a pick keeps "Group by source"'s header.
         vm.SetCategoryFilter(1, "Reverb & delay");
-        yield return (vm.CategoryFilter(1) == "Reverb & delay" && vm.CategoryFilter(0) == "" && Devices(vm.Instruments).Count == 16,
+        yield return (vm.CategoryFilter(1) == "Reverb & delay" && vm.CategoryFilter(0) == "" && Devices(vm.Instruments).Count == 17,
             "a pick narrows only its own tab");
         yield return (vm.Effects.Select(r => r.Name).SequenceEqual(new[] { "BUILT-IN", "Nota Chamber", "Nota Delay", "Nota Reverb" }),
             $"Reverb & delay lists Chamber, Delay, Reverb ({string.Join(", ", vm.Effects.Select(r => r.Name))})");
