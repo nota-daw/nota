@@ -27,6 +27,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/primitives/LevelHistory.h"
 
 #include <algorithm>
 #include <atomic>
@@ -66,7 +67,8 @@ class Reverb : public Device {
         LatencyComp,
         kNumParams
     };
-    // Scope telemetry layout (read by the card).
+    // Scope telemetry layout (read by the card). After the kScope values comes the level
+    // history (dsp::LevelHistory: input dB, tail dB before the mix, tail samples), oldest first.
     enum {
         S_WetPk = 0,
         S_OutL,
@@ -261,6 +263,7 @@ class Reverb : public Device {
     double erSmp_[kEr] = {};
     float hpL_ = 0, hpR_ = 0, hpPrevL_ = 0, hpPrevR_ = 0, lpL_ = 0, lpR_ = 0, vlp_ = 0, monoS_ = 0;
     double cpuS_ = 0.0;
+    dsp::LevelHistory hist_; // the card's live tail graph
 
     // Auto-sleep hangover.
     uint64_t quietSamples_ = 0;
