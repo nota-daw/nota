@@ -1917,7 +1917,7 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
 
         // ---- Nota Lens (kind 22) — analyzer, all params normalized 0..1 (unnamed params reset to
         //      their defaults: a 4096-point Hann spectrum, −6 dB top over 90 dB). Discrete choices:
-        //      View Spectrum 0 / Scope .5 / Waterfall 1 · Spectrum FFT 512 0 / 2048 .333 / 4096 .667 /
+        //      Graph Spectrum 0 / Scope .5 / Waterfall 1 · Spectrum FFT 512 0 / 2048 .333 / 4096 .667 /
         //      16384 1 · Window Hann 0 / Blackman-Harris .5 / Flat-top 1 · Scope Trigger Auto 0 /
         //      Normal .5 / Single 1 · Edge rising 0 / falling 1 · Waterfall Speed 4 s 0 / 12 s .5 /
         //      60 s 1 · Waterfall Overlap 0 % 0 / 50 % .333 / 75 % .667 / 87.5 % 1.
@@ -1927,73 +1927,73 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         //      exponential: Decay 0.05…8 s, Peak Time 0.5…30 s, Persist Time 0.05…2 s,
         //      Time/Div 20 µs…20 ms, Volt/Div 0.02…2.
         Section("Spectrum");
-        Fx("lens", 22, "Mix Overview",         ("View", 0f), ("Spectrum FFT", 0.667f), ("Spectrum Average", 0.2f), ("Spectrum Smooth", 0.35f),
+        Fx("lens", 22, "Mix Overview",         ("Graph", 0f), ("Spectrum FFT", 0.667f), ("Spectrum Average", 0.2f), ("Spectrum Smooth", 0.35f),
                                                ("Spectrum Decay", 0.5463f), ("Spectrum Tilt", 0.5f), ("Scale Top", 0.5f), ("Scale Range", 0.667f),
                                                ("Spectrum Peak Hold", 1f), ("Spectrum Peak Time", 0.5079f));
-        Fx("lens", 22, "Fine Resolution",      ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 0.5f), ("Spectrum Average", 0.4667f),
+        Fx("lens", 22, "Fine Resolution",      ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 0.5f), ("Spectrum Average", 0.4667f),
                                                ("Spectrum Smooth", 0.2f), ("Spectrum Decay", 0.6702f), ("Scale Top", 0.5f), ("Scale Range", 0.667f), ("Display Rate", 0.4f));
-        Fx("lens", 22, "Fast Response",        ("View", 0f), ("Spectrum FFT", 0f), ("Spectrum Average", 0f), ("Spectrum Smooth", 0.15f),
+        Fx("lens", 22, "Fast Response",        ("Graph", 0f), ("Spectrum FFT", 0f), ("Spectrum Average", 0f), ("Spectrum Smooth", 0.15f),
                                                ("Spectrum Decay", 0.1366f), ("Spectrum Peak Hold", 0f), ("Display Rate", 1f), ("Scale Range", 0.4667f));
-        Fx("lens", 22, "Low End Focus",        ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Average", 0.4667f), ("Spectrum Smooth", 0.5f),
+        Fx("lens", 22, "Low End Focus",        ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Average", 0.4667f), ("Spectrum Smooth", 0.5f),
                                                ("Spectrum Tilt", 0f), ("Scale Top", 0.6f), ("Scale Range", 0.333f), ("Display Note Grid", 1f));
-        Fx("lens", 22, "Tonal Balance",        ("View", 0f), ("Spectrum FFT", 0.667f), ("Spectrum Average", 0.4667f), ("Spectrum Smooth", 0.8f),
+        Fx("lens", 22, "Tonal Balance",        ("Graph", 0f), ("Spectrum FFT", 0.667f), ("Spectrum Average", 0.4667f), ("Spectrum Smooth", 0.8f),
                                                ("Spectrum Tilt", 0.5f), ("Spectrum Decay", 0.8068f), ("Scale Top", 0.4f), ("Scale Range", 0.4667f));
-        Fx("lens", 22, "Peak Finder",          ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 1f), ("Spectrum Average", 0f),
+        Fx("lens", 22, "Peak Finder",          ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 1f), ("Spectrum Average", 0f),
                                                ("Spectrum Smooth", 0f), ("Spectrum Peak Hold", 1f), ("Spectrum Peak Time", 1f), ("Scale Range", 0.778f));
-        Fx("lens", 22, "Flat-Top Calibration", ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 1f), ("Spectrum Average", 1f),
+        Fx("lens", 22, "Flat-Top Calibration", ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 1f), ("Spectrum Average", 1f),
                                                ("Spectrum Smooth", 0f), ("Spectrum Tilt", 0f), ("Scale Top", 0.4f), ("Scale Range", 0.667f), ("Display Rate", 0.2f));
-        Fx("lens", 22, "Mid / Side Check",     ("View", 0f), ("Mid/Side", 1f), ("Source", 0.5f), ("Spectrum FFT", 0.667f),
+        Fx("lens", 22, "Mid / Side Check",     ("Graph", 0f), ("Mid/Side", 1f), ("Source", 0.5f), ("Spectrum FFT", 0.667f),
                                                ("Spectrum Tilt", 0.5f), ("Spectrum Smooth", 0.45f), ("Scale Range", 0.667f));
-        Fx("lens", 22, "Noise Floor",          ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Average", 1f), ("Spectrum Decay", 0.8068f),
+        Fx("lens", 22, "Noise Floor",          ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Average", 1f), ("Spectrum Decay", 0.8068f),
                                                ("Spectrum Floor", 0f), ("Scale Top", 0.8f), ("Scale Range", 1f), ("Spectrum Peak Hold", 1f), ("Spectrum Peak Time", 1f));
-        Fx("lens", 22, "Tuning Check",         ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 1f), ("Spectrum Smooth", 0f),
+        Fx("lens", 22, "Tuning Check",         ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 1f), ("Spectrum Smooth", 0f),
                                                ("Spectrum Average", 0.4667f), ("Display Note Grid", 1f), ("Scale Top", 0.6f), ("Scale Range", 0.333f));
-        Fx("lens", 22, "Loudness Watch",       ("View", 0f), ("Spectrum FFT", 0.667f), ("Spectrum Tilt", 0.5f), ("Spectrum Average", 1f),
+        Fx("lens", 22, "Loudness Watch",       ("Graph", 0f), ("Spectrum FFT", 0.667f), ("Spectrum Tilt", 0.5f), ("Spectrum Average", 1f),
                                                ("Spectrum Decay", 0.8068f), ("Scale Top", 0.4f), ("Scale Range", 0.333f), ("Spectrum Peak Hold", 1f));
-        Fx("lens", 22, "Linear Sweep",         ("View", 0f), ("Display Log Freq", 0f), ("Spectrum FFT", 1f), ("Spectrum Smooth", 0.2f),
+        Fx("lens", 22, "Linear Sweep",         ("Graph", 0f), ("Display Log Freq", 0f), ("Spectrum FFT", 1f), ("Spectrum Smooth", 0.2f),
                                                ("Spectrum Average", 0.2f), ("Scale Range", 0.667f));
-        Fx("lens", 22, "Master Bus",           ("View", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 0.5f), ("Spectrum Tilt", 0.5f),
+        Fx("lens", 22, "Master Bus",           ("Graph", 0f), ("Spectrum FFT", 1f), ("Spectrum Window", 0.5f), ("Spectrum Tilt", 0.5f),
                                                ("Spectrum Average", 0.4667f), ("Spectrum Smooth", 0.45f), ("Scale Top", 0.4f), ("Scale Range", 0.667f),
                                                ("Spectrum Peak Hold", 1f), ("Spectrum Peak Time", 0.6772f));
         Section("Scope");
-        Fx("lens", 22, "Scope · Waveform",     ("View", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f), ("Scope Trigger", 0f),
+        Fx("lens", 22, "Scope · Waveform",     ("Graph", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f), ("Scope Trigger", 0f),
                                                ("Scope Level", 0.59f), ("Scope Persist", 1f), ("Scope Persist Time", 0.5769f), ("Scope Traces", 0.286f), ("Scope Bright", 0.66f));
-        Fx("lens", 22, "Scope · Transient",    ("View", 0.5f), ("Scope Time/Div", 0.466f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 0.5f),
+        Fx("lens", 22, "Scope · Transient",    ("Graph", 0.5f), ("Scope Time/Div", 0.466f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 0.5f),
                                                ("Scope Level", 0.65f), ("Scope Holdoff", 0f), ("Scope Persist", 0f), ("Scope Bright", 1f));
-        Fx("lens", 22, "Scope · Single Shot",  ("View", 0.5f), ("Scope Time/Div", 0.799f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 1f),
+        Fx("lens", 22, "Scope · Single Shot",  ("Graph", 0.5f), ("Scope Time/Div", 0.799f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 1f),
                                                ("Scope Level", 0.75f), ("Scope Persist", 0f), ("Cursor On", 1f), ("Cursor A", 0.25f), ("Cursor B", 0.5f));
-        Fx("lens", 22, "Scope · Sub Bass",     ("View", 0.5f), ("Scope Time/Div", 0.9f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 0f),
+        Fx("lens", 22, "Scope · Sub Bass",     ("Graph", 0.5f), ("Scope Time/Div", 0.9f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 0f),
                                                ("Scope Level", 0.52f), ("Scope Holdoff", 0.1f), ("Scope Persist", 1f), ("Scope Persist Time", 0.7517f), ("Scope Traces", 0.571f));
-        Fx("lens", 22, "Scope · Clip Watch",   ("View", 0.5f), ("Scope Time/Div", 1f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 0.5f),
+        Fx("lens", 22, "Scope · Clip Watch",   ("Graph", 0.5f), ("Scope Time/Div", 1f), ("Scope Volt/Div", 0.8495f), ("Scope Trigger", 0.5f),
                                                ("Scope Level", 0.975f), ("Scope Persist", 1f), ("Scope Persist Time", 0.922f), ("Scope Traces", 1f), ("Scope Bright", 1f));
-        Fx("lens", 22, "Scope · Side Signal",  ("View", 0.5f), ("Mid/Side", 1f), ("Source", 1f), ("Scope Time/Div", 0.667f),
+        Fx("lens", 22, "Scope · Side Signal",  ("Graph", 0.5f), ("Mid/Side", 1f), ("Source", 1f), ("Scope Time/Div", 0.667f),
                                                ("Scope Volt/Div", 0.5f), ("Scope Trigger", 0f), ("Scope Persist", 1f), ("Scope Traces", 0.429f));
-        Fx("lens", 22, "Scope · Afterglow",    ("View", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f), ("Scope Persist", 1f),
+        Fx("lens", 22, "Scope · Afterglow",    ("Graph", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f), ("Scope Persist", 1f),
                                                ("Scope Persist Time", 0.922f), ("Scope Traces", 1f), ("Scope Bright", 1f), ("Scope Trigger", 0f));
-        Fx("lens", 22, "Scope · Cursor Measure",("View", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f), ("Scope Trigger", 0.5f),
+        Fx("lens", 22, "Scope · Cursor Measure",("Graph", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f), ("Scope Trigger", 0.5f),
                                                ("Cursor On", 1f), ("Cursor A", 0.25f), ("Cursor B", 0.5f), ("Cursor Snap", 1f), ("Scope Persist", 0f));
-        Fx("lens", 22, "Scope · High Frequency",("View", 0.5f), ("Scope Time/Div", 0.233f), ("Scope Volt/Div", 0.5f), ("Scope Trigger", 0.5f),
+        Fx("lens", 22, "Scope · High Frequency",("Graph", 0.5f), ("Scope Time/Div", 0.233f), ("Scope Volt/Div", 0.5f), ("Scope Trigger", 0.5f),
                                                ("Scope Level", 0.55f), ("Scope Holdoff", 0.01f), ("Scope Persist", 1f), ("Scope Persist Time", 0.1879f));
-        Fx("lens", 22, "Scope · Left Channel", ("View", 0.5f), ("Source", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f),
+        Fx("lens", 22, "Scope · Left Channel", ("Graph", 0.5f), ("Source", 0.5f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f),
                                                ("Scope Trigger", 0f), ("Scope Persist", 1f), ("Scope Traces", 0.286f));
-        Fx("lens", 22, "Scope · Right Channel",("View", 0.5f), ("Source", 1f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f),
+        Fx("lens", 22, "Scope · Right Channel",("Graph", 0.5f), ("Source", 1f), ("Scope Time/Div", 0.667f), ("Scope Volt/Div", 0.699f),
                                                ("Scope Trigger", 0f), ("Scope Persist", 1f), ("Scope Traces", 0.286f));
-        Fx("lens", 22, "Scope · Falling Edge", ("View", 0.5f), ("Scope Time/Div", 0.566f), ("Scope Volt/Div", 0.699f), ("Scope Trigger", 0.5f),
+        Fx("lens", 22, "Scope · Falling Edge", ("Graph", 0.5f), ("Scope Time/Div", 0.566f), ("Scope Volt/Div", 0.699f), ("Scope Trigger", 0.5f),
                                                ("Scope Edge", 1f), ("Scope Level", 0.4f), ("Scope Persist", 1f), ("Scope Traces", 0.286f));
         Section("Waterfall");
-        Fx("lens", 22, "Waterfall · Arrangement",("View", 1f), ("Waterfall Speed", 1f), ("Waterfall Gain", 0.5f), ("Waterfall Floor", 0.375f),
+        Fx("lens", 22, "Waterfall · Arrangement",("Graph", 1f), ("Waterfall Speed", 1f), ("Waterfall Gain", 0.5f), ("Waterfall Floor", 0.375f),
                                                ("Waterfall Contrast", 0.7f), ("Waterfall Overlap", 0.667f), ("Spectrum FFT", 0.333f), ("Scale Top", 0.6f));
-        Fx("lens", 22, "Waterfall · Detail",   ("View", 1f), ("Waterfall Speed", 0f), ("Spectrum FFT", 1f), ("Waterfall Overlap", 1f),
+        Fx("lens", 22, "Waterfall · Detail",   ("Graph", 1f), ("Waterfall Speed", 0f), ("Spectrum FFT", 1f), ("Waterfall Overlap", 1f),
                                                ("Waterfall Contrast", 0.85f), ("Waterfall Gain", 0.625f), ("Waterfall Floor", 0.45f));
-        Fx("lens", 22, "Waterfall · Resonance Hunt",("View", 1f), ("Waterfall Speed", 0.5f), ("Spectrum Window", 0.5f), ("Waterfall Overlap", 0.667f),
+        Fx("lens", 22, "Waterfall · Resonance Hunt",("Graph", 1f), ("Waterfall Speed", 0.5f), ("Spectrum Window", 0.5f), ("Waterfall Overlap", 0.667f),
                                                ("Waterfall Gain", 0.75f), ("Waterfall Floor", 0.525f), ("Waterfall Contrast", 0.9f), ("Display Note Grid", 1f), ("Spectrum FFT", 1f));
-        Fx("lens", 22, "Waterfall · Reverb Tail",("View", 1f), ("Waterfall Speed", 0.5f), ("Waterfall Gain", 0.625f), ("Waterfall Floor", 0.25f),
+        Fx("lens", 22, "Waterfall · Reverb Tail",("Graph", 1f), ("Waterfall Speed", 0.5f), ("Waterfall Gain", 0.625f), ("Waterfall Floor", 0.25f),
                                                ("Waterfall Contrast", 0.5f), ("Waterfall Overlap", 0.667f), ("Spectrum FFT", 0.667f));
-        Fx("lens", 22, "Waterfall · Noise Print",("View", 1f), ("Waterfall Speed", 1f), ("Waterfall Gain", 0.875f), ("Waterfall Floor", 0f),
+        Fx("lens", 22, "Waterfall · Noise Print",("Graph", 1f), ("Waterfall Speed", 1f), ("Waterfall Gain", 0.875f), ("Waterfall Floor", 0f),
                                                ("Waterfall Contrast", 1f), ("Spectrum Average", 0.4667f), ("Spectrum FFT", 1f));
-        Fx("lens", 22, "Waterfall · Drum Pattern",("View", 1f), ("Waterfall Speed", 0f), ("Waterfall Gain", 0.625f), ("Waterfall Contrast", 0.9f),
+        Fx("lens", 22, "Waterfall · Drum Pattern",("Graph", 1f), ("Waterfall Speed", 0f), ("Waterfall Gain", 0.625f), ("Waterfall Contrast", 0.9f),
                                                ("Waterfall Overlap", 1f), ("Spectrum FFT", 0.333f), ("Spectrum Average", 0f));
-        Fx("lens", 22, "Waterfall · Vocal Formants",("View", 1f), ("Waterfall Speed", 0.5f), ("Spectrum FFT", 0.667f), ("Waterfall Overlap", 0.667f),
+        Fx("lens", 22, "Waterfall · Vocal Formants",("Graph", 1f), ("Waterfall Speed", 0.5f), ("Spectrum FFT", 0.667f), ("Waterfall Overlap", 0.667f),
                                                ("Waterfall Gain", 0.6667f), ("Waterfall Floor", 0.4f), ("Waterfall Contrast", 0.75f), ("Spectrum Smooth", 0.3f));
 
         // ---- Compressor (kind 1) — 31 presets, raw units: Thresh −60..0 dB, Ratio 1..20, Attack .1..100 ms,

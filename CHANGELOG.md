@@ -278,7 +278,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Attack and Release beside it and Bands, Formant and Hold under it (Low and High are its
   draggable edges, no longer knobs too); the Carrier panel (Saw / Noise / Track, the carrier
   track and tap, Tilt, Pitch, Mod gain and the Key and Out meters) sits over Unvoiced, Dry/wet
-  (Mix) and Gain; S is the graph over the carrier choice and Bands, Formant, Dry/wet and Gain.
+  (Mix) and Gain; S is the graph over the carrier choice and Bands, Formant, Dry/wet and Gain. A preset no longer saves or
+  applies the View param of a built-in audio effect: loading one keeps the card's S / L size.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

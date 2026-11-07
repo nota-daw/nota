@@ -76,7 +76,8 @@ public static class PresetService
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             doc.NamedParams = new Dictionary<string, float>(pc);
             for (int i = 0; i < pc; i++)
-                doc.NamedParams[engine.DeviceParamName(trackId, deviceIndex, i)] = engine.DeviceGetParam(trackId, deviceIndex, i);
+                if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))   // the card size is editor state (#531)
+                    doc.NamedParams[pn] = engine.DeviceGetParam(trackId, deviceIndex, i);
             if (bk == EqKind) doc.BandText = CaptureBandText(engine, trackId, deviceIndex);
             return doc;
         }
@@ -437,10 +438,11 @@ public static class PresetService
                 {
                     // A param the preset doesn't name goes back to its default (like instruments),
                     // so switching presets never inherits leftovers from the previous one.
+                    // The card size (View, #531) is editor state: the card keeps its S / L size.
                     for (int i = 0; i < pc; i++)
-                        engine.DeviceSetParam(trackId, deviceIndex, i,
-                            doc.NamedParams.TryGetValue(engine.DeviceParamName(trackId, deviceIndex, i), out var v)
-                                ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
+                        if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))
+                            engine.DeviceSetParam(trackId, deviceIndex, i,
+                                doc.NamedParams.TryGetValue(pn, out var v) ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
                 }
                 else
                 {

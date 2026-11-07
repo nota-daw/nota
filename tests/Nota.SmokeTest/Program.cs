@@ -6611,7 +6611,8 @@ Console.WriteLine("-- Nota Lens --");
     // spectrum peak, the scope period and the third-octave table are all predictable.
     // The analysis runs lazily on the message thread and is rate-limited by Display Rate,
     // so each read is preceded by a render + a short wait.
-    const int ViewP = 0, FreezeP = 1, SourceP = 2, MidSideP = 3, FftSizeP = 4, WindowP = 5,
+    const int ViewP = 0,   // "Graph" (was "View" before #531)
+        FreezeP = 1, SourceP = 2, MidSideP = 3, FftSizeP = 4, WindowP = 5,
               AverageP = 6, SmoothP = 7, TiltP = 9, PeakHoldP = 11, TimeDivP = 15, TrigModeP = 17,
               TrigLevelP = 19, CursorAP = 26, CursorBP = 27, RateP = 36;
     const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10,
@@ -6794,6 +6795,10 @@ Console.WriteLine("-- Nota Lens --");
             Check(pf == 0, $"every Lens preset applies and still passes audio through ({pf} failed)");
             cat.ApplyInPlace(le, "lens/Scope · Single Shot", lt, ld);
             Check(le.DeviceGetParam(lt, ld, ViewP) > 0.4f && le.DeviceGetParam(lt, ld, TrigModeP) > 0.9f, "Scope · Single Shot selects the scope and arms Single");
+            le.DeviceSetParam(lt, ld, 42, 1f);   // the card size (View, #531): S
+            cat.ApplyInPlace(le, "lens/Scope · Waveform", lt, ld);
+            Check(le.DeviceParamName(lt, ld, 42) == "View" && le.DeviceGetParam(lt, ld, 42) > 0.5f, "a Lens preset keeps the card's S / L size");
+            le.DeviceSetParam(lt, ld, 42, 0f);
             cat.ApplyInPlace(le, "lens/Mix Overview", lt, ld);
             Check(le.DeviceGetParam(lt, ld, ViewP) < 1e-3 && le.DeviceGetParam(lt, ld, TrigModeP) < 1e-3, "unnamed params reset to defaults between presets");
             for (int i = 0; i < lpc; i++) le.DeviceSetParam(lt, ld, i, le.DeviceParamDefault(lt, ld, i));
