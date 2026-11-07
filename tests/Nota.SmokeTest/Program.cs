@@ -5036,10 +5036,10 @@ Console.WriteLine("-- Nota Crush --");
     Check(ce.TrackDeviceBuiltinKind(ct, cd) == 12, $"builtin kind is 12 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
     int pc = ce.DeviceParamCount(ct, cd);
     Check(pc == 14, $"Nota Crush exposes 14 params, View appended (got {pc})");
-    string[] crNames = { "Bits", "Rate", "Mode", "Dither", "Jitter", "Noise Floor", "Post Filter", "Dry/Wet", "Anti-Alias", "Output", "Drive", "Auto Gain", "DC Filter" };
+    string[] crNames = { "Bits", "Rate", "Mode", "Dither", "Jitter", "Noise Floor", "Post Filter", "Dry/Wet", "Anti-Alias", "Output", "Drive", "Auto Gain", "DC Filter", "View" };
     bool crNamesOk = pc == crNames.Length;
     for (int p = 0; p < Math.Min(pc, crNames.Length); p++) crNamesOk &= ce.DeviceParamName(ct, cd, p) == crNames[p];
-    Check(crNamesOk, "the original eleven params keep their order; Auto Gain and DC Filter are appended");
+    Check(crNamesOk, "the original eleven params keep their order; Auto Gain, DC Filter and View are appended");
     Check(ce.DeviceParamDefault(ct, cd, 11) == 0f && ce.DeviceParamDefault(ct, cd, 12) == 0f, "appended params default off (the old sound)");
 
     // Param round-trip.
@@ -11583,7 +11583,7 @@ Console.WriteLine("-- Nota Flanger (effect kind 23) --");
     int fpc = fe.DeviceParamCount(ft, fdi);
     Check(fpc == 10, $"Nota Flanger exposes 10 params, View appended ({fpc})");
     var fnames = Enumerable.Range(0, fpc).Select(i => fe.DeviceParamName(ft, fdi, i)).ToArray();
-    Check(string.Join(",", fnames) == "Rate,Delay,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo", $"param layout ({string.Join(",", fnames)})");
+    Check(string.Join(",", fnames) == "Rate,Delay,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,View", $"param layout ({string.Join(",", fnames)})");
     Check(Math.Abs(fe.DeviceParamDefault(ft, fdi, 1) - 0.735f) < 1e-3f && Math.Abs(fe.DeviceParamDefault(ft, fdi, 3) - (0.5f + 0.7f / 1.9f)) < 1e-3f
           && Math.Abs(fe.DeviceParamDefault(ft, fdi, 8) - 0.5f) < 1e-3f, "defaults: 2.5 ms, feedback +70 %, stereo 90° (the Jet Plane)");
     fe.DeviceSetParam(ft, fdi, 2, 0.42f);
@@ -11779,7 +11779,7 @@ Console.WriteLine("-- Nota Phaser (effect kind 24) --");
     int ppc = pe.DeviceParamCount(pt, pdi);
     Check(ppc == 11, $"Nota Phaser exposes 11 params, View appended ({ppc})");
     var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pdi, i)).ToArray();
-    Check(string.Join(",", pnames) == "Rate,Center,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,Stages", $"param layout ({string.Join(",", pnames)})");
+    Check(string.Join(",", pnames) == "Rate,Center,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,Stages,View", $"param layout ({string.Join(",", pnames)})");
     Check(Math.Abs(pe.DeviceParamDefault(pt, pdi, 1) - 0.602f) < 1e-3f && Math.Abs(pe.DeviceParamDefault(pt, pdi, 3) - (0.5f + 0.4f / 1.9f)) < 1e-3f
           && Math.Abs(pe.DeviceParamDefault(pt, pdi, 9) - 0.25f) < 1e-3f, "defaults: 800 Hz, feedback +40 %, 4 stages (Script 45)");
     pe.DeviceSetParam(pt, pdi, 2, 0.42f);
@@ -12007,7 +12007,7 @@ Console.WriteLine("-- Nota Chorus (effect kind 25) --");
     int cpc = ce.DeviceParamCount(ct, cdi);
     Check(cpc == 12, $"Nota Chorus exposes 12 params, View appended ({cpc})");
     var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cdi, i)).ToArray();
-    Check(string.Join(",", cnames) == "Rate,Mode,Sync,Division,Offset,HPF,Amount,Feedback,Width,Warmth,Mix", $"param layout ({string.Join(",", cnames)})");
+    Check(string.Join(",", cnames) == "Rate,Mode,Sync,Division,Offset,HPF,Amount,Feedback,Width,Warmth,Mix,View", $"param layout ({string.Join(",", cnames)})");
     Check(Math.Abs(ce.DeviceParamDefault(ct, cdi, 0) - 0.6157f) < 1e-3f && ce.DeviceParamDefault(ct, cdi, 1) == 0f
           && ce.DeviceParamDefault(ct, cdi, 4) == 1f && Math.Abs(ce.DeviceParamDefault(ct, cdi, 6) - 0.4f) < 1e-4f
           && ce.DeviceParamDefault(ct, cdi, 8) == 0.5f && ce.DeviceParamDefault(ct, cdi, 10) == 0.5f,
