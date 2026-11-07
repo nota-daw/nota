@@ -233,7 +233,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   under it), Low cut, High cut and Width on Tone · Mod (Vintage and Mod on tail under it); Space
   (Freeze, Kill tail, Diffuse, HF damp, early reflections, wet only, the wet meter) and Mod
   (Rate, Depth, Mono f, latency comp) panels over Dry, Dry/wet and Out; S is the tail over the
-  algorithm and Decay, Pre, Size, Dry/wet.
+  algorithm and Decay, Pre, Size, Dry/wet. **Nota Chamber:** four views — the IR (Predelay,
+  Size, Attack beside it, the IR picker under it), the decay per band (Decay, Size, Damping, the
+  mode), the tail EQ (the cuts, its position) and a new Output view with the meters (Width, Mono
+  f, the quality); Convolution, Algorithm, Mod and Mix (routing, the blend, ducking, wet only,
+  zero latency) panels over Dry, Dry/wet and Output; S is the IR over its picker and Predelay,
+  Size, Attack, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

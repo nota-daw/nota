@@ -6201,7 +6201,7 @@ Console.WriteLine("-- Nota Chamber --");
     Check(ce.DeviceName(ct, cd) == "Nota Chamber", $"name is Nota Chamber (got '{ce.DeviceName(ct, cd)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cd) == 20, $"builtin kind is 20 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
     int cpc = ce.DeviceParamCount(ct, cd);
-    Check(cpc == 45, $"Nota Chamber exposes 45 params (got {cpc})");
+    Check(cpc == 46, $"Nota Chamber exposes 46 params, View appended (got {cpc})");
     var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cd, i)).ToList();
     Check(cnames.Distinct().Count() == cpc && cnames.All(n => n.Length > 0), "Chamber param names are unique and non-empty");
     ce.DeviceSetParam(ct, cd, AlgoDecay, 0.42f);

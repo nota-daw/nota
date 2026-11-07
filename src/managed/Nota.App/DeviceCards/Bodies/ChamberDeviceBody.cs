@@ -2,9 +2,15 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Chamber body (device kind 20), a build of the "Nota Chamber"
-// mockup (700 × 260) on the Monolith / Pentad frame: a centre tabbed panel (Convolution /
-// Algorithm / EQ · Mod) and a right tabbed panel (Levels — the convolution ⇄ algorithm split,
-// Dry and Wet among them — / Output). The IR view, the decay-per-band graph and the tail-EQ
+// mockup, laid out the #531 way (CardLayout): a centre panel with Convolution / Algorithm /
+// EQ · Mod / Output tabs — the IR (Predelay, Size, Attack beside it, the IR picker under it), the
+// decay per band (Decay, Size, Damping beside it, the mode under it), the tail EQ (the cuts
+// beside it, its position under it), the output meters (Width, Mono f beside them, the quality
+// under them) — and a right panel with no tabs of its own that follows them: Convolution (on,
+// true stereo, reverse, sync), Algorithm (on, Freeze, Diffuse, Predelay, Hold in, Vintage, Sync),
+// Mod (Rate, Depth, the shimmer), Mix (routing, the conv ⇄ algo blend, ducking, wet only, zero
+// latency) — over Dry · Dry/wet · Output. S is the IR over its picker and Predelay, Size,
+// Attack, Dry/wet. The IR view, the decay-per-band graph and the tail-EQ
 // curve are controls (drag trims, RT60 markers, EQ handles); an audio file dropped on the IR
 // view (or picked with Load…) becomes the user IR. Every control is a device param, so
 // automation / MIDI learn / presets / A-B / persistence come for free.
@@ -12,6 +18,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -69,6 +76,8 @@ internal sealed class ChamberDeviceBody : IDeviceBody
     private static readonly IBrush OffPill = NotaPalette.SurfaceRaised;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Hybrid";
 
@@ -124,7 +133,6 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         string LowCutF(double v) => v <= 0.001 ? "off" : Hz(Exp(v, 20, 2000));
         string HighCutF(double v) => v >= 0.999 ? "off" : Hz(Exp(v, 1000, 20000));
         static string GainF(double v) { double db = (v - 0.5) * 36; return Math.Abs(db) < 0.05 ? "0\u2009dB" : NotaNum.F($"{db:+0.0;−0.0}\u2009dB"); }
-        static double ShareDb(double share) => share <= 1e-4 ? -100 : 10 * Math.Log10(share);   // equal-power blend gain
         static double DryDb(double v) { double g = 2 * v * v; return g <= 1e-5 ? -100 : 20 * Math.Log10(g); }
 
         // ---- small builders ---------------------------------------------------------
@@ -135,8 +143,6 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
-        static Control GRow(Control c, int row) { Grid.SetRow(c, row); return c; }
-        static Border Divider(Control child, double top = 5) => new() { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
         static Border InsetBox(Control child) => new() { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, ClipToBounds = true, Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
@@ -263,14 +269,13 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         irView.DropHover += ctx.HideDropGlow;   // the IR view owns the highlight, not the panel
 
         // ======================================================================
-        // CENTRE — Convolution
+        // CENTRE — Convolution (the IR: Predelay · Size · Attack beside it, the IR picker under it)
         // ======================================================================
-        Control ConvTab()
+        Control IrPicker(double boxW = 210, bool loadBtn = true)
         {
-            // IR selector: ‹ [name · length · rate ▾] › + Load…
             var irName = new TextBlock { FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var irInfo = Mono("", 7, MutedC);
-            var irBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            var irBox = new Border { Height = 16, Width = boxW, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), Docked(irInfo, Dock.Right), irName } } };
             ToolTip.SetTip(irBox, Loc.T("device.chamber.impulse_response_built_in_rooms"));
             MidiLearn.Bind(irBox, MidiTarget.DeviceParam(track, di, IrSelect), "IR");
@@ -280,7 +285,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 string user = ir == IrCount - 1 ? engine.DeviceText(track, di, 2) : "";
                 irName.Text = ir < irList.Count ? irList[ir].Name : user.Length > 0 ? user : Loc.T("device.chamber.user_ir_none_loaded_2");
                 double s = IrSecs(), sr = Sc(S_IrRate); int ch = (int)Sc(S_IrChannels);
-                irInfo.Text = s > 0 ? NotaNum.F($"{s:0.0}\u2009s · {sr / 1000:0.#}\u2009kHz · {(ch >= 4 ? "4-ch" : ch == 2 ? "stereo" : "mono")}  ") : "";
+                irInfo.Text = s > 0 ? NotaNum.F($"{s:0.0} s · {sr / 1000:0.#} kHz · {(ch >= 4 ? "4-ch" : ch == 2 ? "stereo" : "mono")}  ") : "";
             });
             void StepIr(int d) { int ir = Sel(IrSelect, IrCount); int max = engine.DeviceText(track, di, 2).Length > 0 ? IrCount - 1 : IrCount - 2; SetP(IrSelect, Math.Clamp(ir + d, 0, max) / (float)(IrCount - 1)); }
             irBox.PointerPressed += (_, e) =>
@@ -298,7 +303,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                         lastCat = irList[i].Cat;
                     }
                     int iv = i;
-                    var mi = new MenuItem { Header = NotaNum.F($"{irList[i].Name}   {irList[i].Len}\u2009s") };
+                    var mi = new MenuItem { Header = NotaNum.F($"{irList[i].Name}   {irList[i].Len} s") };
                     mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = i == cur;
                     mi.Click += (_, _) => SetP(IrSelect, iv / (float)(IrCount - 1));
                     fly.Items.Add(mi);
@@ -315,63 +320,50 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 fly.ShowAt(irBox);
                 e.Handled = true;
             };
-            var irRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 4, Height = 18 };
-            irRow.Children.Add(Caps("IR"));
-            irRow.Children.Add(Col(GlyphBtn(GlyphKind.ChevronLeft, () => StepIr(-1), "Previous IR"), 1));
-            irRow.Children.Add(Col(irBox, 2));
-            irRow.Children.Add(Col(GlyphBtn(GlyphKind.ChevronRight, () => StepIr(1), "Next IR"), 3));
-            irRow.Children.Add(Col(Btn(Loc.T("device.chamber.load"), () => PickIr(irRow), Loc.T("device.chamber.load_an_impulse_response_wav")), 4));
-
-            // IR view: trims drive IR Start / IR Decay.
-            irView.TrimChanged += (s, e) => { Raw(IrStart, (float)s); Raw(IrDecay, (float)e); };
-            irView.DragStarted += h => Begin(h == 1 ? IrStart : IrDecay);
-            irView.DragEnded += h => End(h == 1 ? IrStart : IrDecay);
-            ValueEntry.AttachHandles(irView, [CF(IrStart, "IR start", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))],
-                [CF(IrDecay, "IR decay", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))]);
-            ToolTip.SetTip(irView, MenuKit.Keys(Loc.T("device.chamber.drag_the_trim_lines_to")));
-            readouts.Add(() =>
-            {
-                string sig = NotaNum.F($"{Sel(IrSelect, IrCount)}|{Sc(S_IrSeconds):0.000}|{Sc(S_IrChannels)}|{Sc(S_UserIr)}");
-                if (sig != waveSig) { waveSig = sig; FetchWave(); }
-                int ir = Sel(IrSelect, IrCount);
-                bool noUser = ir == IrCount - 1 && Sc(S_UserIr) < 0.5;
-                irView.Set(IrSecs(), P(IrStart), P(IrDecay), 0.5 * P(IrAttack) * P(IrAttack), On(IrReverse), Sc(S_Building) > 0.5,
-                           noUser ? Loc.T("device.chamber.drop_an_impulse_response_here") : null);
-                FetchPreviews();
-                irView.SetResult(resEnv, Sc(S_ResultSeconds), PreSec(ConvPredelay, ConvSync));
-            });
-
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,Auto"), Height = 54 };
-            knobs.Children.Add(K(ConvPredelay, "PREDELAY", _ => Pre(ConvPredelay, ConvSync)));
-            knobs.Children.Add(Col(K(IrSize, "SIZE", v => NotaNum.F($"{Exp(v, 0.5, 2) * 100:0}\u2009%")), 1));
-            knobs.Children.Add(Col(K(IrAttack, "ATTACK", v => Ms(500 * v * v)), 2));
-            knobs.Children.Add(Col(K(IrDecay, "DECAY", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v)), 3));
-            var toggles = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = {
-                Toggle(IrTrueStereo, "True stereo"), Toggle(IrReverse, "Reverse IR"), Toggle(ConvSync, "Sync predelay") } };
-            knobs.Children.Add(Col(toggles, 4));
-
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 2), Children = {
-                Docked(irRow, Dock.Top),
-                Docked(knobs, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 4, 0, 2), Child = InsetBox(irView) } } };
+            var row = Row(4, GlyphBtn(GlyphKind.ChevronLeft, () => StepIr(-1), "Previous IR"), irBox, GlyphBtn(GlyphKind.ChevronRight, () => StepIr(1), "Next IR"));
+            if (loadBtn) row.Children.Add(Btn(Loc.T("device.chamber.load"), () => PickIr(row), Loc.T("device.chamber.load_an_impulse_response_wav")));
+            return row;
         }
+        bool irWired = false;
+        Control IrView()
+        {
+            if (!irWired)
+            {
+                irWired = true;
+                // IR view: trims drive IR Start / IR Decay.
+                irView.TrimChanged += (s, e) => { Raw(IrStart, (float)s); Raw(IrDecay, (float)e); };
+                irView.DragStarted += h => Begin(h == 1 ? IrStart : IrDecay);
+                irView.DragEnded += h => End(h == 1 ? IrStart : IrDecay);
+                ValueEntry.AttachHandles(irView, [CF(IrStart, "IR start", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))],
+                    [CF(IrDecay, "IR decay", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))]);
+                ToolTip.SetTip(irView, MenuKit.Keys(Loc.T("device.chamber.drag_the_trim_lines_to")));
+                readouts.Add(() =>
+                {
+                    string sig = NotaNum.F($"{Sel(IrSelect, IrCount)}|{Sc(S_IrSeconds):0.000}|{Sc(S_IrChannels)}|{Sc(S_UserIr)}");
+                    if (sig != waveSig) { waveSig = sig; FetchWave(); }
+                    int ir = Sel(IrSelect, IrCount);
+                    bool noUser = ir == IrCount - 1 && Sc(S_UserIr) < 0.5;
+                    irView.Set(IrSecs(), P(IrStart), P(IrDecay), 0.5 * P(IrAttack) * P(IrAttack), On(IrReverse), Sc(S_Building) > 0.5,
+                               noUser ? Loc.T("device.chamber.drop_an_impulse_response_here") : null);
+                    FetchPreviews();
+                    irView.SetResult(resEnv, Sc(S_ResultSeconds), PreSec(ConvPredelay, ConvSync));
+                });
+            }
+            return InsetBox(irView);
+        }
+        Control ConvPreKnob(double cellW) => K(ConvPredelay, "PREDELAY", _ => Pre(ConvPredelay, ConvSync), 34, cellW);
+        Control IrSizeKnob(double cellW) => K(IrSize, "SIZE", v => NotaNum.F($"{Exp(v, 0.5, 2) * 100:0} %"), 34, cellW);
+        Control AttackKnob(double cellW) => K(IrAttack, "ATTACK", v => Ms(500 * v * v), 34, cellW);
+        Control ConvTab() => CardLayout.View(IrView(), CardLayout.KnobColumn(ConvPreKnob(50), IrSizeKnob(50), AttackKnob(50)), IrPicker());
 
         // ======================================================================
-        // CENTRE — Algorithm
+        // CENTRE — Algorithm (the decay per band: Decay · Size · Damping beside it, the mode under it)
         // ======================================================================
         Control AlgoTab()
         {
-            // MODE chips + tail readout
             var chips = DeviceCardKit.Segments(Modes, () => Sel(AlgoMode, Modes.Length), i => SetP(AlgoMode, i / 3f), out var hiModes);
             MidiLearn.Bind(chips, MidiTarget.DeviceParam(track, di, AlgoMode), "Algo Mode");
             readouts.Add(hiModes);
-            var tail = Mono("", 7, MutedC);
-            readouts.Add(() => tail.Text = On(Freeze) ? "tail ∞ (frozen)" : NotaNum.F($"tail {Secs(RtMid())}"));
-            var modeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5, Height = 20 };
-            modeRow.Children.Add(Caps("MODE")); modeRow.Children.Add(Col(chips, 1));
-            tail.HorizontalAlignment = HorizontalAlignment.Right; modeRow.Children.Add(Col(tail, 2));
-
-            // DECAY PER BAND graph
             var graph = new ChamberDecayGraph();
             graph.Changed += (band, rt) =>
             {
@@ -393,27 +385,17 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 graph.SetEchogram(echoEnv, Sc(S_PreviewSeconds));
                 graph.Set(PreSec(AlgoPredelay, AlgoSync), RtLow(), RtMid(), RtHigh(), On(Freeze), NotaNum.F($"· hf ≥ {Hz(Exp(P(AlgoDamping), 500, 18000))}"));
             });
-
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*,Auto"), Height = 56 };
-            knobs.Children.Add(K(AlgoDecay, "DECAY", v => Secs(Exp(v, 0.2, 20)), 36, 50));
-            knobs.Children.Add(Col(K(AlgoSize, "SIZE", v => NotaNum.F($"{Exp(v, 0.4, 2.5) * 100:0}\u2009%"), 36, 50), 1));
-            knobs.Children.Add(Col(K(AlgoDiffusion, "DIFFUSE", v => Pct(v), 36, 50), 2));
-            knobs.Children.Add(Col(K(AlgoDamping, "DAMPING", v => Hz(Exp(v, 500, 18000)), 36, 50), 3));
-            knobs.Children.Add(Col(K(AlgoPredelay, "PREDELAY", _ => Pre(AlgoPredelay, AlgoSync), 36, 50), 4));
-            var toggles = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = {
-                Toggle(Freeze, "Freeze"), Toggle(AlgoVintage, "Vintage"), Toggle(AlgoSync, "Sync") } };
-            knobs.Children.Add(Col(toggles, 5));
-
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 2), Children = {
-                Docked(modeRow, Dock.Top),
-                Docked(knobs, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 4, 0, 2), Child = InsetBox(graph) } } };
+            return CardLayout.View(InsetBox(graph),
+                CardLayout.KnobColumn(K(AlgoDecay, "DECAY", v => Secs(Exp(v, 0.2, 20)), 34, 50), K(AlgoSize, "SIZE", v => NotaNum.F($"{Exp(v, 0.4, 2.5) * 100:0} %"), 34, 50),
+                    K(AlgoDamping, "DAMPING", v => Hz(Exp(v, 500, 18000)), 34, 50)),
+                chips);
         }
 
         // ======================================================================
-        // CENTRE — EQ · Mod
+        // CENTRE — EQ · Mod (the tail EQ: Low cut · High cut beside it, the EQ position under it;
+        // the shelves drag on the curve)
         // ======================================================================
-        Control EqModTab()
+        Control EqTab()
         {
             var eq = new ChamberEqCurve();
             eq.Changed += (h, cut, gain) =>
@@ -427,159 +409,134 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 [CF(EqHighCut, "High cut", HighCutF), CF(EqHighShelf, "High shelf", GainF)]);
             ToolTip.SetTip(eq, MenuKit.Keys(Loc.T("device.chamber.left_handle_low_cut_x")));
             readouts.Add(() => eq.Set(P(EqLowCut), P(EqLowGain), P(EqHighShelf), P(EqHighCut)));
-            var eqKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Height = 50 };
-            eqKnobs.Children.Add(K(EqLowCut, "LOW-CUT", LowCutF, 30, 48));
-            eqKnobs.Children.Add(Col(K(EqLowGain, "LOW", GainF, 30, 48), 1));
-            eqKnobs.Children.Add(Col(K(EqHighShelf, "HIGH", GainF, 30, 48), 2));
-            eqKnobs.Children.Add(Col(K(EqHighCut, "HIGH-CUT", HighCutF, 30, 48), 3));
-            var eqCap = Caps("TAIL EQ"); eqCap.Margin = new Thickness(0, 0, 0, 3);
-            var left = new Border { Width = 214, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(7, 5),
-                Child = new DockPanel { Children = { Docked(eqCap, Dock.Top), Docked(eqKnobs, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 2), Child = InsetBox(eq) } } } };
-
-            // Modulation
-            var lfo = new ChamberLfoView { Height = 34 };
-            readouts.Add(() => lfo.Tick(Exp(P(ModRate), 0.05, 8), P(ModDepth)));
-            var modGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
-            modGrid.Children.Add(K(ModRate, "RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0}\u2009Hz") : NotaNum.F($"{hz:0.00}\u2009Hz"); }, 28, 42, TealC));
-            modGrid.Children.Add(Col(K(ModDepth, "DEPTH", v => Pct(v), 28, 42, TealC), 1));
-            modGrid.Children.Add(Col(new Border { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 1, 0, 0), Child = InsetBox(lfo) }, 2));
-            var mod = new StackPanel { Spacing = 2, Children = { Caps("MODULATION"), modGrid } };
-
-            // Shimmer
-            bool ShimDim() => Sel(AlgoMode, 4) != 3;
-            var shimCap = Caps(Loc.T("device.chamber.shimmer_pitch_shift_caps"));
-            readouts.Add(() => { shimCap.Text = ShimDim() ? Loc.T("device.chamber.shimmer_shimmer_mode_only") : Loc.T("device.chamber.shimmer_pitch_shift"); shimCap.Foreground = ShimDim() ? DimC : MutedC; });
-            var interval = Row(5, Caps("INTERVAL"), Seg(ShimmerPitch, new[] { "−12", "+7", "+12" }));
-            var shimGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
-            shimGrid.Children.Add(K(ShimmerAmount, "AMOUNT", v => Pct(v), 28, 44, ChamberInk.Mauve));
-            shimGrid.Children.Add(Col(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { interval, Toggle(ShimmerFeedback, Loc.T("device.chamber.feed_shimmer_back"), ShimDim) } }, 1));
-            var shim = Divider(new StackPanel { Spacing = 2, Children = { shimCap, shimGrid } }, 4);
-            shim.Margin = new Thickness(0, 3, 0, 0);
-
-            // EQ position
-            var posHint = Mono("", 7, MutedC); posHint.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => posHint.Text = Sel(EqPosition, 3) switch { 0 => "engine input", 2 => "dry + wet", _ => "wet only" });
-            var posRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
-            posRow.Children.Add(Caps("EQ POSITION")); posRow.Children.Add(Col(Seg(EqPosition, new[] { "Input", "Tail", "Output" }), 1)); posRow.Children.Add(Col(posHint, 2));
-            var pos = Divider(posRow, 4); pos.Margin = new Thickness(0, 3, 0, 0);
-
-            var right = new DockPanel { LastChildFill = false, Margin = new Thickness(7, 5, 7, 3), Children = { Docked(mod, Dock.Top), Docked(shim, Dock.Top), Docked(pos, Dock.Bottom) } };
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
+            return CardLayout.View(InsetBox(eq),
+                CardLayout.KnobColumn(K(EqLowCut, "LOW-CUT", LowCutF, 34, 50), K(EqHighCut, "HIGH-CUT", HighCutF, 34, 52)),
+                Seg(EqPosition, new[] { "Input", "Tail", "Output" }));
         }
 
         // ======================================================================
-        // RIGHT — Levels / Output
+        // CENTRE — Output (the meters: Width · Mono f beside them, the quality under them)
         // ======================================================================
-        Control LevelsTab()
+        Control OutTab()
         {
-            Control EngineRow(int onP, string name, bool conv)
+            Control MeterRow(string ch, Func<double> lin)
             {
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,30,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-                g.Children.Add(Toggle(onP, ""));
-                g.Children.Add(Col(Caps(name), 1));
-                var bar = HBar(Blend, () => conv ? 1 - P(Blend) : P(Blend), v => Raw(Blend, (float)(conv ? 1 - v : v)),
-                    v => ShortDb(ShareDb(v)), conv ? ChamberInk.Slate : NotaPalette.VizInk, () => !On(onP), 26);
-                ToolTip.SetTip(bar, conv ? Loc.T("device.chamber.convolution_share_of_the_blend") : Loc.T("device.chamber.algorithm_share_of_the_blend"));
-                g.Children.Add(Col(bar, 2));
+                var bar = new PentadLevelBar { Height = 8, VerticalAlignment = VerticalAlignment.Center };
+                var db = Mono("", 9, TxtC); db.Width = 40; db.TextAlignment = TextAlignment.Right;
+                readouts.Add(() => { double v = lin(); bar.SetLinear(v); db.Text = v > 1e-5 ? ShortDb(20 * Math.Log10(v)) : "−∞"; });
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("30,*,Auto"), ColumnSpacing = 8 };
+                g.Children.Add(Caps(ch)); g.Children.Add(Col(bar, 1)); g.Children.Add(Col(db, 2));
                 return g;
             }
-            var route = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
-            route.Children.Add(Caps("ROUTE"));
-            var rseg = Seg(Routing, new[] { "Parallel", "Serial" });
-            ToolTip.SetTip(rseg, Loc.T("device.chamber.parallel_both_engines_hear_the"));
-            route.Children.Add(Col(rseg, 1));
-            var dry = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
-            dry.Children.Add(Caps("DRY"));
-            dry.Children.Add(Col(HBar(DryLevel, () => P(DryLevel), v => Raw(DryLevel, (float)v), v => ShortDb(DryDb(v)), NotaPalette.BorderStrong, () => On(WetOnly), 26), 1));
-            var duck = SliderRow("DUCKING", DuckAmount, v => NotaNum.F($"{v * 24:0.0}"));
-            var rel = SliderRow("RELEASE", DuckRelease, v => NotaNum.F($"{Exp(v, 20, 2000):0}"));
-            ToolTip.SetTip(duck, Loc.T("device.chamber.ducking_the_wet_dips_up"));
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            btns.Children.Add(Latch(Freeze, "Freeze", Loc.T("device.chamber.freeze_hold_the_algorithm_tail")));
-            btns.Children.Add(Col(Latch(FreezeIn, "Hold in", Loc.T("device.chamber.hold_in_keep_feeding_the")), 1));
-            // Dry/wet, dimmed while Wet only sends the full wet signal.
-            var wet = SliderRow("WET", DryWet, v => NotaNum.F($"{v * 100:0}\u2009%"), dim: () => On(WetOnly));
-            ToolTip.SetTip(wet, Loc.T("device.chamber.dry_wet_double_click_resets"));
-            var duckGr = Mono("", 7, MutedC);
-            readouts.Add(() => { double gr = Sc(S_DuckDb); duckGr.Text = gr > 0.05 ? NotaNum.F($"−{gr:0.0}") : ""; });
-
-            var g = new Grid { RowDefinitions = new RowDefinitions("*,*,*,*,Auto,*,*,Auto,*,*") };
-            Control[] rows = { EngineRow(ConvOn, "CONV", true), EngineRow(AlgoOn, "ALGO", false), route, dry,
-                new Border { Height = 1, Background = BorderIn, Margin = new Thickness(0, 2) }, duck, rel,
-                new Border { Height = 1, Background = BorderIn, Margin = new Thickness(0, 2) }, btns, wet };
-            for (int r = 0; r < rows.Length; r++) g.Children.Add(GRow(rows[r], r));
-            return new Border { Padding = new Thickness(8, 4), Child = g };
-        }
-        Control OutputTab()
-        {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Mono("0", 7, DimC), GRow(Mono("−12", 7, DimC), 1), GRow(Mono("−48", 7, DimC), 2) } };
-            var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Caps("L", MutedC)) } },
-                                new StackPanel { Spacing = 2, Children = { meterR, Center(Caps("R", MutedC)) } }, scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(8, K(Output, "OUTPUT", v => Db(-24 + 36 * v), 40, 54), meters);
-            var qual = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
-            qual.Children.Add(Caps("QUALITY"));
+            var duckGr = Mono("", 9, MutedC);
+            readouts.Add(() => { double gr = Sc(S_DuckDb); duckGr.Text = gr > 0.05 ? NotaNum.F($"ducking −{gr:0.0} dB") : Loc.T("device.chamber.no_ducking"); });
+            var meters = new StackPanel { Spacing = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0), Children = {
+                MeterRow(Loc.T("device.chamber.out_l"), () => Sc(S_OutL)), MeterRow(Loc.T("device.chamber.out_r"), () => Sc(S_OutR)), MeterRow("WET", () => Sc(S_WetL)), duckGr } };
             var qseg = Seg(Quality, new[] { "Eco", "Mid", "High" });
             ToolTip.SetTip(qseg, Loc.T("device.chamber.eco_ir_up_to_3"));
-            qual.Children.Add(Col(qseg, 1));
-            var mid = new StackPanel { Spacing = 6, Children = {
-                SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0}"), 48),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 48),
-                qual } };
+            var mono = K(BassMono, "Mono f", v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0} Hz"), 34, 50);
+            return CardLayout.View(InsetBox(meters), CardLayout.KnobColumn(K(WidthP, "WIDTH", v => NotaNum.F($"{v * 200:0} %"), 34, 50), mono), qseg);
+        }
+
+        // ======================================================================
+        // RIGHT — follows the centre tab: Convolution · Algorithm · Mod · Mix
+        // ======================================================================
+        (Control, Control) ConvPanel() => (CardLayout.Head(Toggle(ConvOn, Loc.T("device.chamber.convolution"))), CardLayout.Rows(
+            Toggle(IrTrueStereo, "True stereo"),
+            Toggle(IrReverse, "Reverse IR"),
+            Toggle(ConvSync, "Sync predelay"),
+            CardLayout.Rule(),
+            Info(() =>
+            {
+                int ch = (int)Sc(S_IrChannels);
+                string ts = !On(IrTrueStereo) || ch <= 1 ? "stereo" : ch >= 4 ? "true stereo" : "mono-in stereo";
+                return Sc(S_KernelSeconds) > 0 ? NotaNum.F($"{ts} · {Sc(S_KernelSeconds):0.0} s IR") : ts;
+            })));
+        (Control, Control) AlgoPanel() => (CardLayout.Head(Toggle(AlgoOn, Loc.T("device.chamber.algorithm")), Latch(Freeze, "Freeze", Loc.T("device.chamber.freeze_hold_the_algorithm_tail"))),
+            CardLayout.Rows(
+                SliderRow("DIFFUSE", AlgoDiffusion, v => Pct(v), 52, valW: 34),
+                SliderRow("PREDELAY", AlgoPredelay, _ => Pre(AlgoPredelay, AlgoSync), 52, valW: 34),
+                CardLayout.Rule(),
+                CardLayout.Pair(Latch(FreezeIn, "Hold in", Loc.T("device.chamber.hold_in_keep_feeding_the")), Toggle(AlgoVintage, "Vintage")),
+                Toggle(AlgoSync, "Sync predelay")));
+        (Control, Control) ModPanel()
+        {
+            bool ShimDim() => Sel(AlgoMode, 4) != 3;
+            var interval = Seg(ShimmerPitch, new[] { "−12", "+7", "+12" });
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.chamber.mod"))), CardLayout.Rows(
+                SliderRow("RATE", ModRate, v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 52, valW: 34),
+                SliderRow("DEPTH", ModDepth, v => Pct(v), 52, valW: 34),
+                CardLayout.Rule(),
+                SliderRow("SHIMMER", ShimmerAmount, v => Pct(v), 52, ShimDim, 34),
+                CardLayout.LabelRow("INTERVAL", interval, 52),
+                Toggle(ShimmerFeedback, Loc.T("device.chamber.feed_shimmer_back"), ShimDim)));
+        }
+        (Control, Control) MixPanel()
+        {
+            var blend = HBar(Blend, () => P(Blend), v => Raw(Blend, (float)v), v => NotaNum.F($"{(1 - v) * 100:0}:{v * 100:0}"), NotaPalette.VizInk, null, 38);
+            ToolTip.SetTip(blend, Loc.T("device.chamber.convolution_share_of_the_blend"));
+            var rseg = Seg(Routing, new[] { "Parallel", "Serial" });
+            ToolTip.SetTip(rseg, Loc.T("device.chamber.parallel_both_engines_hear_the"));
+            var duck = SliderRow("DUCKING", DuckAmount, v => NotaNum.F($"{v * 24:0.0} dB"), 52, valW: 38);
+            ToolTip.SetTip(duck, Loc.T("device.chamber.ducking_the_wet_dips_up"));
             var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only_send"));
             ToolTip.SetTip(wetOnly, Loc.T("device.chamber.wet_only_100_wet_no"));
             var zl = Toggle(ZeroLatency, "Zero latency");
             ToolTip.SetTip(zl, Loc.T("device.chamber.on_exact_convolution_timing_at"));
-            var bottom = new StackPanel { Spacing = 5, Children = { wetOnly, zl } };
-            var body = new DockPanel { LastChildFill = false, Children = {
-                Docked(top, Dock.Top),
-                Docked(Divider(mid), Dock.Top),
-                Docked(Divider(bottom), Dock.Bottom) } };
-            ((Control)body.Children[1]).Margin = new Thickness(0, 5, 0, 0);
-            return new Border { Padding = new Thickness(8, 5), Child = body };
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.chamber.mix")), rseg), CardLayout.Rows(
+                CardLayout.LabelRow("BLEND", blend, 52, stretch: true),
+                duck,
+                SliderRow("RELEASE", DuckRelease, v => NotaNum.F($"{Exp(v, 20, 2000):0} ms"), 52, valW: 38),
+                CardLayout.Rule(),
+                wetOnly,
+                zl));
+        }
+        Control Info(Func<string> text)
+        {
+            var t = Mono("", 8, Txt2);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            readouts.Add(() => t.Text = text());
+            return t;
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (four views, the panel that follows them, Dry · Dry/wet · Output under it) ·
+        // S (the IR over its picker and Predelay · Size · Attack · Dry/wet)
         // ======================================================================
-        var centreHost = new ContentControl(); var rightHost = new ContentControl();
-        var centreBodies = new Control?[3]; var rightBodies = new Control?[2];
         int centreTab = 0;
         var extras = Mono("", 7, MutedC);
         readouts.Add(() =>
         {
             switch (centreTab)
             {
-                case 0:
-                    int ch = (int)Sc(S_IrChannels);
-                    string ts = !On(IrTrueStereo) || ch <= 1 ? "stereo" : ch >= 4 ? "true stereo" : "mono-in stereo";
-                    extras.Text = Sc(S_KernelSeconds) > 0 ? NotaNum.F($"{ts} · {Sc(S_KernelSeconds):0.0}\u2009s IR") : ts;
-                    extras.Foreground = MutedC; break;
                 case 1:
-                    extras.Text = On(Freeze) ? "Freeze active" : On(Routing) && On(ConvOn) ? "fed by convolution" : "";
+                    extras.Text = string.Join(" · ", new[] { On(Freeze) ? "Freeze active" : "", NotaNum.F($"tail {Secs(RtMid())}"), On(Routing) && On(ConvOn) ? "fed by convolution" : "" }.Where(x => x.Length > 0));
                     extras.Foreground = On(Freeze) ? AmberLit : MutedC; break;
-                default:
+                case 2:
                     extras.Text = Sel(EqPosition, 3) switch { 0 => Loc.T("device.chamber.at_the_input_before_both"), 2 => Loc.T("device.chamber.at_the_output_dry_wet"), _ => Loc.T("device.chamber.on_the_tail_before_dry") };
+                    extras.Foreground = MutedC; break;
+                case 3:
+                    extras.Text = NotaNum.F($"latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0} %");
+                    extras.Foreground = MutedC; break;
+                default:
+                    extras.Text = Pre(ConvPredelay, ConvSync) + " predelay · " + (On(ConvOn) ? "on" : "off");
                     extras.Foreground = MutedC; break;
             }
         });
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => AlgoTab(), 2 => EqModTab(), _ => ConvTab() };
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : LevelsTab();
-        var centre = TabFrame(new[] { "Convolution", "Algorithm", "EQ · Mod" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
-        var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        Control WetKnob(double cellW, double size)
+        {
+            var k = K(DryWet, "DRY/WET", v => NotaNum.F($"{v * 100:0} %"), size, cellW);
+            ToolTip.SetTip(k, Loc.T("device.chamber.dry_wet_double_click_resets"));
+            return k;
+        }
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(IrView(), IrPicker(170, false), ConvPreKnob(56), IrSizeKnob(56), AttackKnob(56), WetKnob(56, 34))
+            : CardLayout.Large(new[] { "Convolution", "Algorithm", "EQ · Mod", Loc.T("device.chamber.tab_output") }, 0,
+                t => t switch { 1 => AlgoTab(), 2 => EqTab(), 3 => OutTab(), _ => ConvTab() },
+                t => t switch { 1 => AlgoPanel(), 2 => ModPanel(), 3 => MixPanel(), _ => ConvPanel() },
+                extras,
+                CardLayout.Output(K(DryLevel, "DRY", v => ShortDb(DryDb(v)), 34, 54), WetKnob(58, 44), K(Output, "OUTPUT", v => Db(-24 + 36 * v), 34, 54)),
+                t => { centreTab = t; foreach (var a in readouts) a(); });
 
         void Refresh()
         {
@@ -590,36 +547,5 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0; var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? TabBg : Brushes.Transparent; btns[i].BorderBrush = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!; tb.Foreground = on ? NotaPalette.TextPrimary : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border { Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center } };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b; bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi(); host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

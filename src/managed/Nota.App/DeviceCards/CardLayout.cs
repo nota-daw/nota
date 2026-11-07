@@ -107,12 +107,12 @@ internal static class CardLayout
 
     public static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
 
-    /// <summary>A caps label in a fixed column, then the control.</summary>
-    public static Control LabelRow(string label, Control c, double labW = 40)
+    /// <summary>A caps label in a fixed column, then the control (left-aligned, or stretched — a slider).</summary>
+    public static Control LabelRow(string label, Control c, double labW = 40, bool stretch = false)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
         g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
-        c.HorizontalAlignment = HorizontalAlignment.Left;
+        c.HorizontalAlignment = stretch ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
         c.VerticalAlignment = VerticalAlignment.Center;
         g.Children.Add(Col(c, 1));
         return g;
