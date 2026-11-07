@@ -72,6 +72,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and not applied. Nota Remote follows. Orange looks exactly as before.
 
 ### Changed
+- **Nota Aurora: both oscillators on one Osc tab** (specs/053): the 1 / 2 switch is gone.
+  Osc 1 and Osc 2 sit side by side, each with its own table window, table and warp-mode
+  drop-downs, on switch and its Position, Warp, Level, Oct, Semi and Fine knobs, so both
+  tables are on screen together. An oscillator that is off greys out in place. The sub and
+  unison stay in one row under both. The table windows keep their drawing between paints,
+  so two of them cost no more than the one before. Sound, parameters, automation, MIDI
+  learn and presets are unchanged.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
@@ -106,6 +113,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
+- **Aurora's oscillator read-outs are back on the one-card Osc tab**: each oscillator's on switch
+  says on or off again, and a table window says "no modulation" (greyed) when nothing moves its
+  position.
 - **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
   Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
   audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3

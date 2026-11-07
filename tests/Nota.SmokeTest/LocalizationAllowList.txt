@@ -1260,7 +1260,6 @@ Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Unison Voices	# data: d
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Warp	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Wavetable	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	frame 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	→ Amp	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	$"Amp env {AdsrSum("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	$"LFO {LfoNames[Sel("	# data: device parameter, port and value names and live readouts of their values (FR-004)
