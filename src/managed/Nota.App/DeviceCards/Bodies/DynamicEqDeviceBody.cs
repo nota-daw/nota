@@ -9,7 +9,8 @@
 // marked on it — RANGE, ATTACK, RELEASE, its key and Solo). The live readings come from the
 // engine (DynamicEq.h scopeRead). Every control is a device param (raw units), so automation /
 // MIDI learn / presets / A-B / persistence come for free; the key track is the device's
-// sidechain routing.
+// sidechain routing. S / L (#531, CardLayout): S (260) is the band chips over the graph and the
+// selected band's Freq, Gain, Q and the output.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -29,6 +30,8 @@ namespace Nota.App;
 internal sealed class DynamicEqDeviceBody : IDeviceBody
 {
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Dynamic EQ";
 
@@ -165,7 +168,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         var footer = new DockPanel { Height = 20, Margin = new Thickness(8, 0, 8, 3), Children = { Docked(dynSw, Dock.Left), outRow } };
         DockPanel.SetDock(footer, Dock.Bottom);
 
-        var graphPanel = new RuleSection
+        Control GraphPanel() => new RuleSection
         {
             Margin = new Thickness(0, 0, 5, 0),
             Child = new DockPanel { LastChildFill = true, Children = { chipStrip, footer, new Border { Padding = new Thickness(5, 5, 5, 2), Child = curve } } },
@@ -410,15 +413,71 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             return panel;
         }
 
-        var right = new RuleSection { Width = 186, Child = bandHost };
-        DockPanel.SetDock(right, Dock.Right);
-        bandHost.Content = BandPanel(Sel());
-        curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
-        curve.Edited += RefreshAll;
+        // ---- L: the graph with the band chips and the Dynamic / Output footer; the selected
+        // band on the right (an EQ card: the band editor fills the panel, so the output stays
+        // in the footer under the graph) ------------------------------------------------------
+        Control LargeBody()
+        {
+            var right = new RuleSection { Width = 186, Child = bandHost };
+            DockPanel.SetDock(right, Dock.Right);
+            bandHost.Content = BandPanel(Sel());
+            curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
+            var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, GraphPanel() } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        }
 
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, graphPanel } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        // ---- S: the band chips over the graph and the selected band's Freq · Gain · Q and the
+        // output level ---------------------------------------------------------------------
+        Control MiniBody()
+        {
+            var host = new ContentControl();
+            Control Knobs(int b)
+            {
+                bandReadouts.Clear();
+                int pF = DynEq.P(b, DynEq.FreqF), pG = DynEq.P(b, DynEq.GainF), pQ = DynEq.P(b, DynEq.QF);
+                Control K(int p, string label, bool log, Func<string> fmt, Func<bool>? inactive = null)
+                {
+                    double ToN(double v) => log ? Math.Log(Math.Clamp(v, mn[p], mx[p]) / mn[p]) / Math.Log(mx[p] / mn[p]) : (Math.Clamp(v, mn[p], mx[p]) - mn[p]) / (mx[p] - mn[p]);
+                    double FromN(double n) { n = Math.Clamp(n, 0, 1); return log ? mn[p] * Math.Pow(mx[p] / mn[p], n) : mn[p] + n * (mx[p] - mn[p]); }
+                    var val = Mono(fmt(), 7, TextPrimary);
+                    var knob = new Knob(ToN(P(p)), 1.0) { Accent = true, Default = ToN(engine.DeviceParamDefault(track, di, p)), Width = 34, Height = 34 };
+                    knob.ValueChanged += v => { Raw(p, (float)FromN(v)); val.Text = fmt(); curve.InvalidateVisual(); RefreshAll(); };
+                    knob.GestureBegin += () => Begin(p);
+                    knob.GestureEnd += () => End(p);
+                    Learn(knob, p);
+                    bandReadouts.Add(() =>
+                    {
+                        if (!knob.Dragging) { double c = ToN(P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
+                        val.Text = fmt();
+                        if (inactive is not null) knob.IsDim = inactive();
+                    });
+                    return KnobCell(label, knob, val, 56);
+                }
+                var outVal = Mono("", 7, TextPrimary);
+                var outKnob = new Knob((P(DynEq.OutputP) + 18) / 36.0, 1.0) { Accent = true, Bipolar = true, Default = 0.5, Width = 34, Height = 34 };
+                outKnob.ValueChanged += v => { Raw(DynEq.OutputP, (float)(v * 36 - 18)); RefreshAll(); };
+                outKnob.GestureBegin += () => Begin(DynEq.OutputP);
+                outKnob.GestureEnd += () => End(DynEq.OutputP);
+                Learn(outKnob, DynEq.OutputP);
+                bandReadouts.Add(() =>
+                {
+                    if (!outKnob.Dragging) { double c = (P(DynEq.OutputP) + 18) / 36.0; if (Math.Abs(c - outKnob.Value) > 1e-4) outKnob.Value = c; }
+                    outVal.Text = DynEq.Db(P(DynEq.OutputP)) + " dB";
+                });
+                return new UniformGrid { Rows = 1, Margin = new Thickness(0, 6, 0, 0), Children = {
+                    K(pF, "FREQ", true, () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : "")),
+                    K(pG, "GAIN", false, () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", () => !Capable(b)),
+                    K(pQ, "Q", true, () => NotaNum.F($"{B(b, DynEq.QF):0.00}")),
+                    KnobCell(Loc.T("common.output"), outKnob, outVal, 56) } };
+            }
+            host.Content = Knobs(Sel());
+            curve.SelectionChanged += () => { host.Content = Knobs(Sel()); RefreshAll(); };
+            var body = new DockPanel { LastChildFill = true, Margin = new Thickness(6), Children = { chipStrip, Docked(host, Dock.Bottom), new Border { Margin = new Thickness(0, 4, 0, 0), Child = curve } } };
+            return new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = body } };
+        }
+
+        curve.Edited += RefreshAll;
+        Control root = CardLayout.IsMini(ctx, di) ? MiniBody() : LargeBody();
 
         void Refresh()
         {

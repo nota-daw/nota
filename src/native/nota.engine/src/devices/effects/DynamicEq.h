@@ -47,7 +47,8 @@ class DynamicEq : public Device {
         Dynamics = kBandParams + 3,
         KeyBase = kBandParams + 4
     };
-    static constexpr int kNumParams = KeyBase + kBands; // 92
+    static constexpr int View = KeyBase + kBands;   // 92: card size, not sound: 0 = L, 1 = S (#531); presets skip it
+    static constexpr int kNumParams = View + 1;      // 93
 
     // Telemetry slots (scopeRead).
     enum {

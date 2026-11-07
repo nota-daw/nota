@@ -41,6 +41,7 @@ DynamicEq::DynamicEq() {
     p_[Solo].store(0.0f);
     p_[Dynamics].store(1.0f);
     for (int b = 0; b < kBands; ++b) p_[KeyBase + b].store(0.0f);
+    p_[View].store(0.0f); // L
     for (int b = 0; b < kBands; ++b) {
         lvlA_[b].store(-120.0f);
         gr_[b].store(0.0f);
@@ -324,8 +325,9 @@ const char* DynamicEq::paramName(int32_t i) const {
     if (i == Sidechain) return "Sidechain";
     if (i == Solo) return "Solo";
     if (i == Dynamics) return "Dynamics";
+    if (i == View) return "View";
     static thread_local char buf[16];
-    if (i >= KeyBase && i < kNumParams) {
+    if (i >= KeyBase && i < View) {
         std::snprintf(buf, sizeof(buf), "%d Key", i - KeyBase + 1);
         return buf;
     }

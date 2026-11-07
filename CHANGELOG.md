@@ -243,7 +243,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Output tab is gone — Dynamics (detector, Range, the output box, Auto gain, Stereo link), Timing
   (Auto-release, look-ahead, the live box) and Key (External, Listen, source, tap, SC Gain) panels
   over Dry/wet and Makeup; S is the curve over the character and Threshold, Ratio, Release,
-  Dry/wet.
+  Dry/wet. **Nota Dynamic EQ-8** keeps its band editor on the right (it fills the panel, so the
+  output stays under the graph) and gains S: the band chips over the graph and the selected
+  band's Freq, Gain, Q and the output.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

@@ -969,7 +969,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   a Target. Level / Reduction / Loudness graphs (drag the ceiling and the target),
   a right panel that follows them (Meters · Detector · Target, with their meter boxes) over
   Gain, Ceiling and Release knobs; 32 factory presets; MCP `read_ceiling`.
-- **Nota Dynamic EQ-8** (13) — 8-band parametric with dynamics: each band Static / Duck
+- **Nota Dynamic EQ-8** (13) — in two sizes (L 700 / S 260, S·L toggle; S is the graph with the selected band's Freq, Gain, Q and Output) — 8-band parametric with dynamics: each band Static / Duck
   (above the threshold) / Lift (below it), threshold, signed range (cut or boost — upward and
   downward expansion too), attack / release and its own key (Self or a key track); a Dynamic
   master switch, Solo, output. A full-width response graph (live curve, static curve while

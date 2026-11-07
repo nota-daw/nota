@@ -5253,7 +5253,7 @@ Console.WriteLine("-- Nota Dynamic EQ-8 --");
     Check(de.DeviceName(dt, dd) == "Nota Dynamic EQ-8", $"name is Nota Dynamic EQ-8 (got '{de.DeviceName(dt, dd)}')");
     Check(de.TrackDeviceBuiltinKind(dt, dd) == 13, $"builtin kind is 13 (got {de.TrackDeviceBuiltinKind(dt, dd)})");
     int dpc = de.DeviceParamCount(dt, dd);
-    Check(dpc == 92, $"Dynamic EQ-8 exposes 92 params (got {dpc})");
+    Check(dpc == 93, $"Dynamic EQ-8 exposes 93 params, View appended (got {dpc})");
     string[] fields = { "On", "Type", "Freq", "Gain", "Q", "Mode", "Thr", "Rng", "Atk", "Rel" };
     bool layoutOk = true;
     for (int b = 0; b < 8; b++) for (int f = 0; f < 10; f++) layoutOk &= de.DeviceParamName(dt, dd, b * 10 + f) == $"{b + 1} {fields[f]}";
