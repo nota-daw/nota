@@ -49,6 +49,7 @@ class Eq : public Device {
         AnaRange, // 0 = 60, 1 = 90, 2 = 120 dB below 0 dBFS (display only)
         AnaPeak,  // 0 / 1 peak hold (display only)
         Labels,   // 0 / 1 band labels shown in the graph (display only, specs/049)
+        View,     // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     }; // 63
     enum { AnaPre = 0, AnaPost = 1, AnaOff = 2 };

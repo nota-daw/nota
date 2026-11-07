@@ -41,6 +41,7 @@ Eq::Eq() {
     p_[AnaRange].store(1.0f);
     p_[AnaPeak].store(0.0f);
     p_[Labels].store(1.0f);
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -367,6 +368,7 @@ const char* Eq::paramName(int32_t i) const {
     if (i == AnaRange) return "Analyzer Range";
     if (i == AnaPeak) return "Analyzer Peak";
     if (i == Labels) return "Labels";
+    if (i == View) return "View";
     static thread_local char buf[16];
     if (i >= SlopeBase && i < ChannelBase) {
         std::snprintf(buf, sizeof(buf), "%d Slope", i - SlopeBase + 1);
@@ -405,6 +407,7 @@ float Eq::paramMax(int32_t i) const {
     if (i == AnaRange) return 2.0f;
     if (i == AnaPeak) return 1.0f;
     if (i == Labels) return 1.0f;
+    if (i == View) return 1.0f;
     switch (i % kPerBand) {
     case On: return 1.0f;
     case Type: return kNumTypes - 1;

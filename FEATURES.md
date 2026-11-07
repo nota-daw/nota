@@ -858,7 +858,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   an Instrument Rack chain or a Drum Rack pad, with the same editor.
 
 ### Audio effects
-- **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
+- **Nota EQ-8** (kind 0) — in two sizes (L 700 / S 260, S·L toggle; S is the graph with the selected band's Freq, Gain, Q and Output) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
   Notch / High shelf / High cut, frequency, gain, Q (resonance on the cuts), a 12 / 24 / 48 dB/oct
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
