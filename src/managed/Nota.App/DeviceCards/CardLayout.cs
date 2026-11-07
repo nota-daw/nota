@@ -167,9 +167,11 @@ internal static class CardLayout
 
     // ---- frames ----------------------------------------------------------------------------
     /// <summary>The L body: tabbed centre views and the right panel that follows them over the
-    /// output. <paramref name="changed"/> runs after a tab switch (the body refreshes there).</summary>
+    /// output. <paramref name="changed"/> runs after a tab switch (the body refreshes there);
+    /// <paramref name="exposeSelect"/> hands out a selector for when the tab moves elsewhere (no
+    /// <paramref name="changed"/> then — the caller follows).</summary>
     public static Control Large(string[] tabs, int initial, Func<int, Control> centre, Func<int, (Control Head, Control Body)> panel,
-        Control? extras, Control output, Action<int> changed)
+        Control? extras, Control output, Action<int> changed, Action<Action<int>>? exposeSelect = null)
     {
         var centreHost = new ContentControl();
         var panelHost = new ContentControl();
@@ -217,6 +219,7 @@ internal static class CardLayout
         var tabBar = Docked(new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock }, Dock.Top);
         Hi();
         Show(sel);
+        exposeSelect?.Invoke(i => { if (i == sel) return; sel = i; Hi(); Show(i); });
 
         var centreFrame = new DockPanel { LastChildFill = true, Children = { tabBar, centreHost } };
         var headBar = new Border { Height = 20, Padding = new Thickness(8, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = headHost };

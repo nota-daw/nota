@@ -977,6 +977,7 @@
     "device.length.outline_the_note_played_in": "Outline — the note played in · fill — the note out · band — the range Random spreads it over. The shaded part is past the bar line.",
     "device.length.spread_per_note": "spread per note",
     "device.length.sync_a_tempo_division_ms": "Sync: a tempo division · ms: a fixed time · Gate %: a share of how long each note was held",
+    "device.lens.analysis": "Analysis",
     "device.lens.arm_the_next_single_capture": "Arm the next Single capture",
     "device.lens.crest_db_lufs": "crest {0:0.0} dB · LUFS {1:0.0}",
     "device.lens.db_bin": "{0:0.0} dB · bin {1:0}",

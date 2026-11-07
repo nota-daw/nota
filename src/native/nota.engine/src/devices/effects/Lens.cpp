@@ -12,7 +12,7 @@
 namespace nota {
 
 Lens::Lens() {
-    p_[View].store(0.0f);
+    p_[Graph].store(0.0f);
     p_[Freeze].store(0.0f);
     p_[Source].store(0.0f);
     p_[MidSide].store(0.0f);
@@ -54,6 +54,7 @@ Lens::Lens() {
     p_[KeyShow].store(1.0f);
     p_[KeyGain].store(0.5f); // 0 dB
     p_[Layout].store(0.0f);  // Overlay
+    p_[View].store(0.0f);    // L
     setSampleRate(44100.0, 0);
 }
 
@@ -334,7 +335,7 @@ std::string Lens::deviceText(int32_t id) const {
 
 const char* Lens::paramName(int32_t i) const {
     static const char* nm[] = {
-        "View",
+        "Graph",
         "Freeze",
         "Source",
         "Mid/Side",
@@ -376,6 +377,7 @@ const char* Lens::paramName(int32_t i) const {
         "Scope Key",
         "Scope Key Gain",
         "Scope Layout",
+        "View",
     };
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }

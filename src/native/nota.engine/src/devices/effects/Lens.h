@@ -48,7 +48,7 @@ namespace nota {
 class Lens : public Device {
   public:
     enum {
-        View = 0, // 0 Spectrum · .5 Scope · 1 Waterfall
+        Graph = 0, // 0 Spectrum · .5 Scope · 1 Waterfall (named "View" before #531)
         Freeze,   // >= .5 holds the capture (rings stop advancing)
         Source,   // 0 L+R · .5 first channel · 1 second channel
         MidSide,  // >= .5 the channel pair is Mid/Side instead of L/R
@@ -98,6 +98,7 @@ class Lens : public Device {
         KeyShow, // >= .5 draw the sidechain key's trace
         KeyGain, // −24..+24 dB, display only
         Layout,  // < .5 Overlay · >= .5 Stacked
+        View,    // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 
@@ -292,7 +293,7 @@ class Lens : public Device {
 
     const char* viewName() const {
         static const char* v[3] = {"Spectrum", "Scope", "Waterfall"};
-        return v[step(get(View), 3)];
+        return v[step(get(Graph), 3)];
     }
     const char* sourceName() const {
         const bool ms = get(MidSide) >= 0.5f;

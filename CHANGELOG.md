@@ -264,7 +264,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   panel that follows the tab — Gain reduction (the band count, the meters, Solo, Peak hold), the
   output stage (Auto makeup, the selected band's GR, boost and level, Soft clip) and Detector
   (Peak / RMS, Lookahead, the sidechain, Listen) — over Amount, Dry/wet and Output; S is the
-  spectrum over the band count and Amount, Dry/wet and Output.
+  spectrum over the band count and Amount, Dry/wet and Output. **Nota Lens:** Spectrum (Smooth,
+  Decay, Tilt beside it, FFT and Mid / Side under it), Scope (Time/Div, Volt/Div, Trig level
+  beside it, Sync, the trigger or span and Afterglow under it) and Waterfall (Gain, Floor,
+  Contrast beside it, the speed under it), the source and Freeze in the tab bar; the Analyze /
+  Display tabs give way to one panel per view (the spectrum's peak hold, window, averaging,
+  floor and scale with the peak / crest / LUFS box and the cursor; the scope's Cursors and
+  layout, holdoff, key and afterglow with the capture box; the waterfall's window, FFT, overlap,
+  averaging and frame rate). An analyzer has no output stage, so there are no output knobs. S is
+  the spectrum over the source and Smooth, Decay, Tilt and Floor. Lens's view param, the shown
+  graph, is renamed from View to Graph (presets still skip it) so View can hold the card size.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

@@ -6632,7 +6632,7 @@ Console.WriteLine("-- Nota Lens --");
         Check(le.DeviceName(lt, ld) == "Nota Lens", $"name is Nota Lens (got '{le.DeviceName(lt, ld)}')");
         Check(le.TrackDeviceBuiltinKind(lt, ld) == 22, $"builtin kind is 22 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
         int lpc = le.DeviceParamCount(lt, ld);
-        Check(lpc == 42, $"Nota Lens exposes 42 params (got {lpc})");
+        Check(lpc == 43, $"Nota Lens exposes 43 params (got {lpc})");
         var lnames = Enumerable.Range(0, lpc).Select(i => le.DeviceParamName(lt, ld, i)).ToList();
         Check(lnames.Distinct().Count() == lpc && lnames.All(n => n.Length > 0), "Lens param names are unique and non-empty");
         le.DeviceSetParam(lt, ld, TiltP, 0.42f);

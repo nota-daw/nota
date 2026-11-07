@@ -1030,7 +1030,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   band gain and solo. Amount scales every ratio; Peak/RMS detection, lookahead (PDC), a
   band-split external sidechain with Listen, auto makeup, Mix, output gain and a −0.3 dBFS soft
   clip. Transfer curve with drag handles, detector-envelope trace, per-band GR meters.
-- **Nota Lens** (22) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
+- **Nota Lens** (22) — in two sizes (L 700 / S 260, S·L toggle; S is the spectrum over Smooth, Decay, Tilt, Floor) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
   passing the audio through untouched. *Spectrum*: FFT 512–16384, Hann / Blackman-Harris /
   flat-top window, frame averaging, fractional-octave smoothing, fall time, pink tilt, peak
   hold, and a pointer cursor reading frequency, note, cents and level. *Scope*: the trace is
