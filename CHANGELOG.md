@@ -210,7 +210,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the notch and null read-outs) over Dry/wet; S is the comb over the waveform and Rate, Delay,
   Feedback, Dry/wet. **Nota Phaser:** the response over the corner sweep, Center, Feedback and
   Depth beside it, the waveform and the stages under it; the LFO panel over Dry/wet; S is the
-  response over the stages and Rate, Center, Feedback, Dry/wet.
+  response over the stages and Rate, Center, Feedback, Dry/wet. **Nota Crush:** Bits and Rate by
+  the quantiser (Anti-alias under it), Drive by the transfer (the mode under it); Grit (Dither,
+  Jitter, Noise, the result box) and Output (Auto gain, the measurements box, DC filter, the
+  images and THD+N) panels over Filter, Dry/wet and Gain; S is the quantiser over the mode and
+  Bits, Rate, Drive, Dry/wet.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

@@ -5035,7 +5035,7 @@ Console.WriteLine("-- Nota Crush --");
     Check(ce.DeviceName(ct, cd) == "Nota Crush", $"device name is Nota Crush (got '{ce.DeviceName(ct, cd)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cd) == 12, $"builtin kind is 12 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
     int pc = ce.DeviceParamCount(ct, cd);
-    Check(pc == 13, $"Nota Crush exposes 13 params (got {pc})");
+    Check(pc == 14, $"Nota Crush exposes 14 params, View appended (got {pc})");
     string[] crNames = { "Bits", "Rate", "Mode", "Dither", "Jitter", "Noise Floor", "Post Filter", "Dry/Wet", "Anti-Alias", "Output", "Drive", "Auto Gain", "DC Filter" };
     bool crNamesOk = pc == crNames.Length;
     for (int p = 0; p < Math.Min(pc, crNames.Length); p++) crNamesOk &= ce.DeviceParamName(ct, cd, p) == crNames[p];

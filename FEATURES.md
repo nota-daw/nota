@@ -950,11 +950,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   with the pan line, Amount and Phase beside it; the LFO panel (rate, Shape, OUT L / R meters)
   over Mix; 31 factory presets; MCP
   `read_orbit`.
-- **Nota Crush** (12) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
+- **Nota Crush** (12) — in two sizes (L 700 / S 260, S·L toggle) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
   Wet; Digital / Analog / Fold modes; Anti-alias (4th order); GRIT (Dither / Jitter / Noise);
   a post filter, output gain, Auto gain and a DC filter. Quantiser / Spectrum (engine FFT:
   signal, added content, images above the Nyquist) / Transfer graphs (drag Bits and Rate, the
-  Nyquist and the filter, Drive), Grit / Output panels; 33 factory
+  Nyquist and the filter, Drive) with their knobs beside them, a right panel that follows them
+  (Grit · Output) over Filter, Dry/wet and Gain; 33 factory
   presets; MCP `read_crush`.
 - **Nota Ceiling** (14) — in two sizes (L 700 / S 260, S·L toggle; S is the level graph over the character, Gain, Ceiling and Release) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
   program-dependent auto stage), Clean / Punch / Glue characters, look-ahead, stereo link,
