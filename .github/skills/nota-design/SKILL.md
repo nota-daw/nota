@@ -151,6 +151,12 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   `NotaGraph` (no fills under curves, orange only on the selected node).
 - A bypassed card keeps its layout and takes the unavailable look; a selected card has a
   1.5 px orange ring outside its outline.
+- **Laying out a card with a graph** (a new card, or a card's own layout change): DESIGN.md §
+  Devices › Card layout: graph, tabs and output — one home per parameter; the graph fills
+  the centre panel with one knob column (≤ 3, only what it draws) on its right; centre tabs
+  are views, the right panel has no tabs and follows them (switch + mode in its title bar);
+  output knobs Drive · **Dry/wet 44** · Gain at the bottom of the right panel on every tab.
+  Reference: Nota Auto Filter. The `nota-instrument` skill has the code shape.
 
 ## Adding a control
 

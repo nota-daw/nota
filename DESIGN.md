@@ -1269,6 +1269,73 @@ What the guide changes inside a card:
   list: S 260 wide names it over *Open editor* and *Save preset*; L 700 adds the parameters
   as a paged, filterable grid.
 
+### Card layout: graph, tabs and output
+
+How an L card with a graph lays out its controls (#531; Nota Auto Filter is the reference,
+`AutoFilterDeviceBody`). New cards start here; an existing card moves to it as its own
+change, one card at a time, not as part of a style pass (§ Devices, Don't).
+
+**One home per parameter.** Every parameter has exactly one control on the card. No second
+copy on another tab, in a summary, or as a switch that "follows" the tab. The one exception
+is the graph: a handle or a title that edits the same parameter in place (drag the
+amount, click the title to pick the target) is the graph doing its job, not a copy.
+
+**The graph** is the card's main control and gets the most room.
+
+- In L it fills the centre panel: the panel minus its tab bar (20), one knob column and the
+  selector row under it, with 6 margins. It is never a fixed size; it stretches with the
+  panel (`DockPanel`, the graph as the last child).
+- The centre panel takes the width the right panel leaves: on a 700 card the right panel
+  is 186, so the graph is about 430 wide and 150–190 high. Don't shrink it to make room for
+  a second knob column.
+- In S (260) the graph fills the top of the card and one row of up to four knobs sits under
+  it, the main parameters and Dry/wet.
+- A graph that drags a parameter says so in its tooltip and takes ⌥-click / MIDI learn for
+  it, like a knob.
+
+**Knobs next to the graph** are only the parameters the graph draws or drags.
+
+- One column of up to three knobs (34, secondary), on the graph's **right** side only, never
+  split left and right. Order: what the graph's X and Y move first (Freq, Res), then what
+  reshapes the curve (Morph).
+- Discrete choices for the same thing (type, slope, circuit) go in one centred row under
+  the graph: text chips for a type, segments for 2–3 options.
+- Anything the graph doesn't draw (Drive, Dry/wet, Gain, modulation amounts) doesn't sit
+  beside it.
+
+**Tabs.**
+
+- The centre panel's tabs are the views: each tab is one graph of one thing (Filter: the
+  response; Envelope: the cutoff over time; LFO: its wave). The first tab is the device's
+  main job.
+- The right panel has **no tabs of its own**. It follows the centre tab and holds that
+  view's controls, so its content never changes underneath you.
+- Its 20 high title bar lines up with the centre's tab bar and holds the section's on switch
+  on the left (its word is the section's name: "Envelope", "LFO") and the section's mode on
+  the right (Up / Down, Free / Sync). A section with no switch shows its name there, ink 2.
+- Under the bar, rows of value bars spread evenly down the panel (40 label column, 34 value
+  column); a 1 px rule sets off a routing control (the sidechain key) at the bottom.
+- On the main tab, whose own controls sit around the graph, the right panel gathers what
+  cuts across the views: the modulation (target, each source's amount, smoothing, the key).
+- A setting shared by several views (the modulation target) lives once, in that summary;
+  the views name it in their graph title ("LFO → Freq", with a chevron, ink 2 under the
+  pointer) and a click there opens a small picker for it.
+
+**Output** sits at the bottom of the right panel on every tab, under a 1 px rule, never in a
+tab of its own.
+
+- Knobs, not value bars: **Dry/wet 44 (main) in the middle**, the others 34 on either side
+  in signal order: what comes before the core on the left (Drive), the level after it on the
+  right (Gain, bipolar from 12 o'clock).
+- Values and names line up along the bottom (cells bottom-aligned), so the larger Dry/wet
+  knob rises above its neighbours rather than pushing their labels down.
+- A device with only a mix control shows Dry/wet alone, centred. A device with no dry/wet
+  (an instrument) keeps its single Volume knob as its output.
+
+**Don't:** give the right panel its own tab row · put the same switch on two tabs · put
+output controls in a tab · place knobs on both sides of a graph · shrink the graph for knobs
+it doesn't draw.
+
 ## Nota Remote
 
 The phone page (`src/web/remote`, spec 014) **keeps its own styling for now**: its radii
