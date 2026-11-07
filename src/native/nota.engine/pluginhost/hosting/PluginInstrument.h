@@ -32,6 +32,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
 
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
     bool handlesSustain() const override { return true; } // the plug-in gets CC64 itself
+    bool supportsParallelRender() const override { return parallelRender_; }
     bool takesTimedEvents() const override { return true; } // one processBlock per block (#436)
 
     void setSampleRate(double sr) override;
@@ -99,6 +100,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     int maxBlock_; // what the plug-in was prepared for: at most kPluginMaxBlock (#447)
     bool stereoOut_ = true;                                  // main output bus has a channel 1 (see prepare)
     std::string name_;                                       // cached plugin name for displayName()
+    bool parallelRender_ = false; // immutable format decision, made on the message thread
     std::atomic<int32_t> lastTouched_{-1};                   // "Learn" (M9-B3)
     std::atomic<int32_t> gestureBegin_{-1}, gestureEnd_{-1}; // write gestures (M9-C)
     GuiNoteQueue guiNotes_; // editor-window computer keyboard -> render() (message->audio)

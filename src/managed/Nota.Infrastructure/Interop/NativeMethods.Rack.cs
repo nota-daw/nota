@@ -44,6 +44,12 @@ internal static partial class NativeMethods
     internal static partial int RackChainInstrumentHeldNotes(IntPtr engine, int trackId, int chain, [Out] int[] outNotes, int maxN);
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_action")]
     internal static partial void RackChainInstrumentAction(IntPtr engine, int trackId, int chain, int id, int iarg, float farg);
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_record_state_undo")]
+    internal static partial int RackChainInstrumentRecordStateUndo(IntPtr engine, int trackId, int chain, byte[] before, int size);
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_instrument_record_state_undo")]
+    internal static partial int RackDevChainInstrumentRecordStateUndo(IntPtr engine, int trackId, int deviceIndex, int chain, byte[] before, int size);
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_instrument_set_state_undoable")]
+    internal static partial int RackChainInstrumentSetStateUndoable(IntPtr engine, int trackId, int chain, byte[] data, int size);
 
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_sampler_info")]
     internal static partial int RackChainSamplerInfo(IntPtr engine, int trackId, int chain, out NotaSamplerInfo info);
@@ -339,6 +345,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_instrument_action")]
     internal static partial void RackDevChainInstrumentAction(IntPtr engine, int trackId, int deviceIndex, int chain, int id, int iarg, float farg);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_instrument_set_state_undoable")]
+    internal static partial int RackDevChainInstrumentSetStateUndoable(IntPtr engine, int trackId, int deviceIndex, int chain, byte[] data, int size);
 
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_open_chain_instrument_editor")]
     internal static partial void RackDevOpenChainInstrumentEditor(IntPtr engine, int trackId, int deviceIndex, int chain);

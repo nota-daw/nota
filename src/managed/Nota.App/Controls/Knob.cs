@@ -34,6 +34,7 @@ public sealed class Knob : Control
     private static readonly IBrush LiveArc = NotaPalette.Accent;          // a flat knob while it is being set
     private static readonly IBrush Cap = NotaPalette.KnobCap;
     private static readonly IBrush CapEdge = NotaPalette.Seam;   // the guide's cap edge: Sunken in dark, Seam in light — within a step
+    private static readonly IBrush TickInk = NotaPalette.TextTertiary;    // a second value of the param (OtherValue)
     private static readonly IBrush PointerOn = NotaPalette.TextPrimary;
     private static readonly IBrush PointerOff = NotaPalette.TextDisabled;
     private static readonly IBrush MarkerInk = NotaPalette.TextSecondary;   // a live reading on the track
@@ -88,6 +89,16 @@ public sealed class Knob : Control
     /// <summary>A live reading marked on the track as a short tick, as a 0..max position (NaN = none).</summary>
     public double Marker { get => _marker; set { if (_marker.Equals(value)) return; _marker = value; InvalidateVisual(); } }
     private double _marker = double.NaN;
+
+    /// <summary>A second value of the same parameter shown as a tick outside the groove — Nota
+    /// Twin's other morph side (0..max; NaN = none).</summary>
+    public double OtherValue { get => _other; set { if (_other.Equals(value)) return; _other = value; InvalidateVisual(); } }
+    private double _other = double.NaN;
+
+    /// <summary>The value the sound is at right now, when that differs from the knob's own —
+    /// Nota Twin's morphed value — drawn as a dot on the groove (0..max; NaN = none).</summary>
+    public double SoundingValue { get => _sounding; set { if (_sounding.Equals(value)) return; _sounding = value; InvalidateVisual(); } }
+    private double _sounding = double.NaN;
 
     /// <summary>Value restored on double-click (NaN = no reset).</summary>
     public double Default { get; set; } = double.NaN;
@@ -247,6 +258,21 @@ public sealed class Knob : Control
                     ? new Pen(arcBrush, Stroke, ModDash, lineCap: PenLineCap.Flat)
                     : new Pen(arcBrush, Stroke, lineCap: PenLineCap.Round),
                 Arc(cx, cy, r, Math.Min(from, frac), Math.Max(from, frac)));
+
+        // Nota Twin's other morph side: a tick just outside the track.
+        if (!double.IsNaN(_other) && _max > 0 && Math.Abs(_other - _value) > 0.002 * _max)
+        {
+            double ao = (StartDeg + Math.Clamp(_other / _max, 0, 1) * SweepDeg) * Math.PI / 180.0;
+            double r0 = r + Stroke * 0.6, r1 = d / 2 - 0.5;
+            ctx.DrawLine(new Pen(on ? TickInk : PointerOff, 1.1, lineCap: PenLineCap.Round),
+                new Point(cx + Math.Cos(ao) * r0, cy + Math.Sin(ao) * r0), new Point(cx + Math.Cos(ao) * r1, cy + Math.Sin(ao) * r1));
+        }
+        // Where the sound is now (Twin's morphed value): a dot riding the track, in ink so it reads on the orange arc too.
+        if (!double.IsNaN(_sounding) && _max > 0 && on)
+        {
+            double asd = (StartDeg + Math.Clamp(_sounding / _max, 0, 1) * SweepDeg) * Math.PI / 180.0;
+            ctx.DrawEllipse(PointerOn, null, new Point(cx + Math.Cos(asd) * r, cy + Math.Sin(asd) * r), Stroke * 0.55, Stroke * 0.55);
+        }
 
         // A live reading: a short tick across the track.
         if (on && !double.IsNaN(_marker) && _max > 0)
