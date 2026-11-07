@@ -2,15 +2,14 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Crush body (bit crusher, device kind 12), a build of the
-// "Nota Crush" mockup (700 × 260) on the Ceiling / Beat Repeat frame: an always-visible CRUSH
-// column (input · output), a centre panel with Quantiser / Spectrum / Transfer tabs — the held
-// and quantised steps over a sine (drag: Bits up / down, Rate left / right), the output
-// spectrum from the engine's FFT with what the crush added and the images above the reduced
-// Nyquist (drag the Nyquist and the filter lines), the transfer curve with the form it makes
-// (drag: Drive) — with Mode and Anti-alias over the graph and Bits / Rate / Drive / Wet under
-// it, a right panel with Grit / Output tabs, and a status strip. The meters and the spectrum
-// come from the engine (Crush.h scopeRead). Every control is a device param (normalized 0..1),
-// so automation / MIDI learn / presets / A-B / persistence come for free.
+// "Nota Crush" mockup (700 × 260) on the Ceiling / Beat Repeat frame: a centre panel with
+// Quantiser / Spectrum / Transfer tabs — the held and quantised steps over a sine (drag: Bits
+// up / down, Rate left / right), the output spectrum from the engine's FFT with what the crush
+// added and the images above the reduced Nyquist (drag the Nyquist and the filter lines), the
+// transfer curve with the form it makes (drag: Drive) — with Mode and Anti-alias over the graph
+// and Bits / Rate / Drive / Wet under it, and a right panel with Grit / Output tabs. The
+// spectrum comes from the engine (Crush.h scopeRead). Every control is a device param
+// (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come for free.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -218,41 +217,6 @@ internal sealed class CrushDeviceBody : IDeviceBody
         };
 
         // ======================================================================
-        // LEFT — CRUSH column (input · output)
-        // ======================================================================
-        var colTitle = Caps("CRUSH"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 14 };
-        var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 14 };
-        ToolTip.SetTip(inPill, Loc.T("device.crush.the_input_peak_60_0"));
-        ToolTip.SetTip(outPill, Loc.T("device.crush.the_output_peak_60_0"));
-        var colIn = Mono("", 7, TextPrimary); colIn.HorizontalAlignment = HorizontalAlignment.Center;
-        var colOut = Mono("", 7, TextPrimary); colOut.HorizontalAlignment = HorizontalAlignment.Center;
-        static double NormLvl(double db) => Math.Clamp((db + 60) / 60, 0, 1);
-        bool Crushing() => Sc(S_Signal) > 0.5 && P(DryWet) > 0.01f;
-        readouts.Add(() =>
-        {
-            inPill.Set(NormLvl(ScDb(S_InPeak)), double.NaN);
-            outPill.Set(NormLvl(ScDb(S_OutPeak)), double.NaN);
-            colIn.Text = Lvl(ScDb(S_InPeak));
-            colOut.Text = Lvl(ScDb(S_OutPeak));
-            colTitle.Foreground = Crushing() ? AccentBright : TextTertiary;   // lit while it crushes
-        });
-        Control PillCol(ShPill pill, string lbl)
-        {
-            var l = Caps(lbl); l.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(l, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
-        }
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        pills.Children.Add(PillCol(inPill, "IN"));
-        pills.Children.Add(Col(PillCol(outPill, "OUT"), 1));
-        var leftCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colOut, Dock.Bottom), Docked(colIn, Dock.Bottom), pills } },
-        };
-        DockPanel.SetDock(leftCol, Dock.Left);
-
-        // ======================================================================
         // CENTRE — Quantiser / Spectrum / Transfer
         // ======================================================================
         CrQuantView? quant = null;
@@ -335,6 +299,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
         Control FilterRow() => SliderRow("FILTER", PostFilter, FiltF, Loc.T("device.crush.post_filter_a_low_pass"), modulation: true);
         Control GainRow() => SliderRow("GAIN", Output, GainF, Loc.T("device.crush.output_gain_12_db"), bipolar: true);
 
+        bool Crushing() => Sc(S_Signal) > 0.5 && P(DryWet) > 0.01f;
         Control GritTab()
         {
             var t = Caps("RESULT");
@@ -429,47 +394,11 @@ internal sealed class CrushDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { "Grit", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string>
-            {
-                CrushMath.Modes[ModeI()],
-                "bits " + BitsF(P(Bits)),
-                "rate " + KHz(RateHz(P(Rate))),
-                "drive " + DriveF(P(Drive)),
-                "wet " + Pct(P(DryWet)),
-            };
-            if (P(Dither) > 0.005f) parts.Add("dither " + Pct(P(Dither)));
-            if (P(Jitter) > 0.005f) parts.Add("jitter " + Pct(P(Jitter)));
-            if (P(NoiseFloor) > 0.005f) parts.Add("noise " + Pct(P(NoiseFloor)));
-            if (Math.Abs(GainDb(P(Output))) > 0.05) parts.Add("gain " + GainF(P(Output)));
-            if (On(AntiAlias)) parts.Add("AA on");
-            if (On(AutoGain)) parts.Add("auto gain");
-            if (On(DcFilter)) parts.Add("DC");
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0}\u2009%") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

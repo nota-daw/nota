@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Custom-drawn views for the Nota Chamber card: the two BLEND-column faders (the two-tone
-// convolution / algorithm split and the wet level), the IR waveform with draggable Start /
+// Custom-drawn views for the Nota Chamber card: the IR waveform with draggable Start /
 // Decay trims (also a file drop target), the three-band decay graph, the tail-EQ response
 // with its two handles and the modulation LFO trace. Values are pushed in by the card's
 // refresh tick; the interactive views raise Changed / DragStarted / DragEnded so the card
@@ -46,67 +45,6 @@ internal static class ChamberInk
     public static string AxisLabel(double s) => s >= 1 ? NotaNum.F($"{s:0.##}\u2009s") : NotaNum.F($"{s * 1000:0}\u2009ms");
     // Normalised amplitude → 0..1 height on a −60 dB floor.
     public static double DbHeight(double v, double floorDb = 60) => Math.Clamp((20 * Math.Log10(Math.Max(v, 1e-9)) + floorDb) / floorDb, 0, 1);
-}
-
-// A vertical fader. Split = the BLEND C/A fader: slate (convolution) above the handle, neutral
-// ink (algorithm) below, value = the algorithm share. Otherwise a neutral fill from the bottom;
-// the handle turns accent while dragged.
-internal sealed class ChamberFader : Control
-{
-    private double _v;
-    private bool _drag;
-    public bool Split { get; init; }
-    public double Default { get; set; } = double.NaN;
-    public bool Dragging => _drag;
-    public event Action<double>? Changed;
-    public event Action? DragStarted;
-    public event Action? DragEnded;
-
-    public ChamberFader() { Width = 16; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
-
-    public void Set(double v) { if (_drag) return; _v = Math.Clamp(v, 0, 1); InvalidateVisual(); }
-
-    private void Apply(PointerEventArgs e)
-    {
-        double h = Bounds.Height; if (h <= 2) return;
-        _v = Math.Clamp(1 - e.GetPosition(this).Y / h, 0, 1);
-        Changed?.Invoke(_v); InvalidateVisual();
-    }
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
-        {
-            DragStarted?.Invoke(); _v = Default; Changed?.Invoke(_v); DragEnded?.Invoke(); InvalidateVisual(); e.Handled = true; return;
-        }
-        _drag = true; DragStarted?.Invoke(); e.Pointer.Capture(this); Apply(e); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(); } }
-
-    // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 4) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, r, r);
-        double y = (1 - _v) * h;
-        using (ctx.PushClip(new RoundedRect(rect, r)))
-        {
-            if (Split) ctx.FillRectangle(ChamberInk.Alpha(NotaPalette.TextTertiary.Color, 0x59), new Rect(0, 0, w, y));
-            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x30), new Rect(0, y, w, h - y));
-        }
-        ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
-        double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
-    }
 }
 
 // The IR: a peak envelope of the source (left / LL above the centre line in neutral ink, right / RR

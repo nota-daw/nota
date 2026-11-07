@@ -2,14 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Utility body (device kind 4), a build of the "Nota Utility"
-// mockup (700 × 260) on the Valve / Vintage / Auto Filter frame: an always-visible LEVEL
-// column (input and output meters with their level in the meter's unit), a centre panel with
+// mockup (700 × 260) on the Valve / Vintage / Auto Filter frame: a centre panel with
 // Field / Mono / Levels tabs — the stereo field by frequency, the width over frequency with the
-// mono region, input and output over the last 8 s against the target — a right panel with
-// Routing / Output tabs, and a status strip. Every picture comes from the engine (Utility.h
-// scopeRead); every control is a device param, so automation / MIDI learn / presets / A-B /
-// persistence come for free. Params are in real units (Gain dB, Width %, Mono Freq Hz …);
-// the controls work on 0..1 and map.
+// mono region, input and output over the last 8 s against the target — and a right panel with
+// Routing / Output tabs. Every picture comes from the engine (Utility.h scopeRead); every
+// control is a device param, so automation / MIDI learn / presets / A-B / persistence come for
+// free. Params are in real units (Gain dB, Width %, Mono Freq Hz …); the controls work on
+// 0..1 and map.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -303,43 +302,6 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         string GainMatchTip = Loc.T("device.utility.gain_match_moves_gain_once");
         string ResetTip = Loc.T("device.utility.reset_gain_back_to_0");
 
-        // ======================================================================
-        // LEFT — Level column (input · output)
-        // ======================================================================
-        static AfFader MeterBar(IBrush ink) => new() { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
-        var levelTitle = Caps("LEVEL"); levelTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inMeter = MeterBar(NotaPalette.VizInk);
-        var outMeter = MeterBar(Teal);
-        var levelIn = Mono("", 7, TextPrimary); levelIn.HorizontalAlignment = HorizontalAlignment.Center;
-        var levelOut = Mono("", 7, TextPrimary); levelOut.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(levelIn, Loc.T("device.utility.the_inputs_level_in_the"));
-        ToolTip.SetTip(levelOut, Loc.T("device.utility.the_outputs_level_in_the"));
-        static double MeterN(double lin) => lin > 1e-6 ? Math.Clamp((20 * Math.Log10(lin) + 60) / 60, 0, 1) : 0;
-        readouts.Add(() =>
-        {
-            inMeter.Set(MeterN(Sc(S_InPk)), double.NaN);
-            outMeter.Set(MeterN(Sc(S_OutPk)), double.NaN);
-            levelIn.Text = LvlF(ScDb(S_InLevel));
-            levelOut.Text = NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}");
-            levelTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
-        });
-        Control MeterCell(AfFader m, string label, string tip)
-        {
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            var d = new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = m } } };
-            ToolTip.SetTip(d, tip);
-            return d;
-        }
-        var meters = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        meters.Children.Add(MeterCell(inMeter, "IN", Loc.T("device.utility.input_peak_60_0_dbfs")));
-        meters.Children.Add(Col(MeterCell(outMeter, "OUT", Loc.T("device.utility.output_peak_60_0_dbfs")), 1));
-        var levelCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(levelTitle, Dock.Top), Docked(levelOut, Dock.Bottom), Docked(levelIn, Dock.Bottom), meters } },
-        };
-        DockPanel.SetDock(levelCol, Dock.Left);
-
         Control WidthModeSeg() => Seg(WidthMode, new[] { "L/R", "M/S" },
             Loc.T("device.utility.width_law_l_r_the"));
 
@@ -570,64 +532,11 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { "Routing", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string>();
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(On(WidthMode) ? "M/S" : "L/R");
-                    parts.Add(On(MonoBelow) ? NotaNum.F($"mono ↓ {HzF(P(MonoFreq))} · {Slopes[Idx(MonoSlope)]} dB/oct") : "mono off");
-                    parts.Add(NotaNum.F($"width {P(Width_):0}"));
-                    parts.Add(NotaNum.F($"balance {BalF(P(Balance))}"));
-                    if (On(InvertL)) parts.Add("Ø L");
-                    if (On(InvertR)) parts.Add("Ø R");
-                    parts.Add("gain " + GainF(P(Gain)));
-                    break;
-                case 2:
-                    parts.Add(Meters[MeterI()]);
-                    parts.Add("in " + LvlF(ScDb(S_InLevel)));
-                    parts.Add("out " + LvlF(ScDb(S_OutLevel)));
-                    parts.Add(On(MatchTo) ? NotaNum.F($"target {P(Target):0.0}") : Loc.T("device.utility.match_to_input"));
-                    parts.Add("gain " + GainF(P(Gain)));
-                    if (On(AutoMatch)) parts.Add(NotaNum.F($"auto {Sc(S_AutoDb):+0.0;−0.0;0.0} dB"));
-                    if (On(TpLimit)) parts.Add("TP " + CeilF(P(TpCeiling)));
-                    parts.Add(NotaNum.F($"width {P(Width_):0}"));
-                    break;
-                default:
-                    parts.Add(Modes[Idx(ChannelMode)]);
-                    parts.Add("gain " + Db1(P(Gain)));
-                    parts.Add(NotaNum.F($"balance {BalF(P(Balance))}"));
-                    parts.Add(NotaNum.F($"width {P(Width_):0}{(On(WidthMode) ? " M/S" : "")}"));
-                    parts.Add(On(MonoBelow) ? NotaNum.F($"mono ↓ {HzF(P(MonoFreq))}") : "mono off");
-                    parts.Add(PhaseText());
-                    if (On(Mute)) parts.Add("muted");
-                    break;
-            }
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency 0 smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { levelCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

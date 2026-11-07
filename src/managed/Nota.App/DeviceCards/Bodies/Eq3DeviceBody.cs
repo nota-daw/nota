@@ -7,7 +7,7 @@
 // value and a KILL), and the response window on the right — the crossover readouts, Output, Range
 // and Slope over it; inside, each band's curve in its hue, the brass sum, the output spectrum
 // behind, and the two crossovers as handles along the top that drag left / right (a drag
-// elsewhere rides the band under the pointer). A status strip closes the card. Every control is
+// elsewhere rides the band under the pointer). Every control is
 // a device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free. FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
@@ -278,34 +278,11 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             Child = new DockPanel { Children = { Docked(headBar, Dock.Top), new Border { Padding = new Thickness(5), Child = graph } } },
         };
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            var parts = new List<string> { (Lr8() ? "LR 48" : "LR 24") + "\u2009dB/oct", Eq3Math.Hz(F1()) + " / " + Eq3Math.Hz(F2()) };
-            var killed = new List<string>();
-            for (int b = 0; b < 3; b++) if (Killed(b)) killed.Add(Eq3Math.Names[b].ToLowerInvariant());
-            if (killed.Count > 0) parts.Add("kill " + string.Join(", ", killed));
-            if (!Iso()) parts.Add("range ±15\u2009dB");
-            double o = OutDb(P(Gain));
-            if (Math.Abs(o) > 0.05) parts.Add("out " + Eq3Math.Db(o) + "\u2009dB");
-            statusLeft.Text = string.Join(" · ", parts);
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0}\u2009%") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        Grid.SetColumn(statusRight, 1); statusGrid.Children.Add(statusRight);
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5) };
         for (int b = 0; b < 3; b++) bodyRow.Children.Add(Docked(Strip(b), Dock.Left));
         bodyRow.Children.Add(graphBox);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { Docked(status, Dock.Bottom), bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

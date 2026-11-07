@@ -8,7 +8,7 @@
 // the floor the depth reaches (drag: Amount up / down, Phase left / right), the stereo position
 // on an L—R line over the swing it covers, a MOTION column (Amount, Phase, Mix, the 0° / 90° /
 // 180° phase snaps and the output meters) with the mode it makes (tremolo, auto-pan, offset
-// pan), and a status strip. The live picture comes from the engine (AutoPan.h scopeRead). Every
+// pan). The live picture comes from the engine (AutoPan.h scopeRead). Every
 // control is a device param (normalized 0..1), so automation / MIDI learn / presets / A-B /
 // persistence come for free. FullBleed — the shared shell draws the header (name · preset ·
 // badge · bypass).
@@ -66,7 +66,6 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         double RateHz() => Synced() ? Bpm() / 60 / OrbitMath.DivBeats[DivI()] : OrbitMath.FreeHz(P(Rate));
         double PeriodMs() => 1000 / Math.Max(1e-3, RateHz());
         double Deg() => P(Phase) * 360;
-        double Floor() => 1 - P(Amount) * P(Mix);
         string Mode()
         {
             if (!On()) return "bypass";
@@ -299,41 +298,9 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         var right = Island(HeadRow(Caps("MOTION"), modeWord), rightBody, 176);
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            string m = Mode();
-            double hz = RateHz();
-            bool warn = false;
-            string foot;
-            if (!On()) foot = Loc.T("device.auto_pan.panner_bypassed_the_signal_passes");
-            else if (P(Amount) < 0.01f || P(Mix) < 0.01f) { foot = Loc.T("device.auto_pan.amount_or_mix_at_zero"); warn = true; }
-            else if (hz > 8) { foot = Loc.T("device.auto_pan.above_8_hz_the_movement"); warn = true; }
-            else if (m == "tremolo") foot = Loc.T("device.auto_pan.phase_0_l_and_r") + OrbitMath.Db(Floor()) + "\u2009dB";
-            else if (m == "auto-pan")
-            {
-                double mn = Sc(S_PanMin), mx = Sc(S_PanMax);
-                foot = "Swing " + (mn < -0.02 ? PanF(mn) : "C") + " → " + (mx > 0.02 ? PanF(mx) : "C") + " · period " + Ms(PeriodMs());
-            }
-            else foot = Loc.F("device.auto_pan.phase_the_channels_are_offset", Deg());
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · ") : "") + NotaNum.F($"{Bpm():0.##}\u2009BPM · ") + (Synced() ? "retrig bar" : "free run");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

@@ -3,11 +3,10 @@
 //
 // Detail · Devices — built-in Nota EQ-8 body (device kind 0), a build of the "Nota EQ-8" mockup
 // (700 × 260), laid out like Dynamic EQ-8: a row of eight band chips over the response graph
-// (nodes drag right on the curve; the ANALYZER Pre / Post / Off switch sits in its corner), a
-// panel on the right edits the selected band (type, FREQ / GAIN / Q — RESO on the cuts —, the
-// cut's SLOPE, its CHANNEL: stereo, mid, side, left or right) and the device's GLOBAL controls
-// (Auto gain, SCALE, OUTPUT), and a status strip carries the summary, the output with the auto
-// gain in effect, and the engine. The live readings come from the engine (Eq.h scopeRead).
+// (nodes drag right on the curve; the ANALYZER Pre / Post / Off switch sits in its corner) and a
+// panel on the right that edits the selected band (type, FREQ / GAIN / Q — RESO on the cuts —,
+// the cut's SLOPE, its CHANNEL: stereo, mid, side, left or right) and the device's GLOBAL
+// controls (Auto gain, SCALE, OUTPUT). The live readings come from the engine (Eq.h scopeRead).
 // Every control is a device param (raw units), so automation / MIDI learn / presets / A-B /
 // persistence come for free. FullBleed — the shared shell draws the header (name · preset ·
 // badge · bypass).
@@ -60,7 +59,6 @@ internal sealed class EqDeviceBody : IDeviceBody
         var bandReadouts = new List<Action>();
         var scope = new float[Eq8.kScope];
         int scN = 0;
-        double Sc(int i) => scN > i ? scope[i] : 0;
 
         var curve = new Eq8Curve(engine, track, di);
         void RefreshAll()
@@ -434,79 +432,9 @@ internal sealed class EqDeviceBody : IDeviceBody
         curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
         curve.Edited += RefreshAll;
 
-        // ======================================================================
-        // Status strip: summary · output · engine
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        string StatusText()
-        {
-            int s = Sel(), nOn = 0, nMs = 0;
-            for (int b = 0; b < Eq8.Bands; b++)
-            {
-                if (!BandOn(b)) continue;
-                nOn++;
-                if (ChanOf(b) is Eq8.Mid or Eq8.Side) nMs++;
-            }
-            var parts = new List<string> { NotaNum.F($"{nOn} bands") };
-            if (nMs > 0) parts.Add(NotaNum.F($"M/S {nMs}"));
-            parts.Add(NotaNum.F($"scale {P(Eq8.ScaleP):0}\u2009%"));
-            string band = NotaNum.F($"B{s + 1} {Eq8.TypeNames[TypeOf(s)]} {Eq8.Hz(B(s, Eq8.FreqF))}");
-            if (Capable(s)) band += " " + Eq8.Db(B(s, Eq8.GainF)) + " dB";
-            if (Cut(s)) band += NotaNum.F($" · {Eq8.SlopeDb(SlopeOf(s))}\u2009dB/oct");
-            if (ChanOf(s) != Eq8.St) band += " · " + Eq8.ChannelNames[ChanOf(s)].ToLowerInvariant();
-            parts.Add(band);
-            return string.Join(" · ", parts);
-        }
-
-        // OUT: a mono readout that drags vertically (±12 dB), double-click resets to 0; it shows the
-        // auto gain on top when that is on.
-        var outTb = Mono("", 8, TextSecondary);
-        var outBox = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Child = outTb };
-        bool outDrag = false; double outY = 0;
-        outBox.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
-            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(Eq8.OutputP, 0); RefreshAll(); e.Handled = true; return; }
-            outDrag = true; outY = e.GetPosition(outBox).Y; e.Pointer.Capture(outBox); Begin(Eq8.OutputP); e.Handled = true;
-        };
-        outBox.PointerMoved += (_, e) =>
-        {
-            if (!outDrag) return;
-            double y = e.GetPosition(outBox).Y, dy = outY - y; outY = y;
-            bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-            Raw(Eq8.OutputP, P(Eq8.OutputP) + (float)(dy * 24.0 / (fine ? 1400.0 : 140.0)));
-            RefreshAll();
-        };
-        void OutEnd() { if (!outDrag) return; outDrag = false; End(Eq8.OutputP); }
-        outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
-        outBox.PointerCaptureLost += (_, _) => OutEnd();
-        Learn(outBox, Eq8.OutputP);
-        ToolTip.SetTip(outBox, MenuKit.Keys(Loc.T("device.eq.output_plus_the_auto_gain")));
-        ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, Eq8.OutputP, "Output", -12, 12, v => "Out " + Eq8.Db(v) + " dB", RefreshAll), outTb);
-        readouts.Add(() =>
-        {
-            float o = P(Eq8.OutputP);
-            double total = o + (AutoOn() ? Sc(Eq8.S_AutoGain) : 0);
-            outTb.Text = "Out " + Eq8.Db(total) + " dB" + (AutoOn() ? " auto" : "");
-            outTb.Foreground = Math.Abs(total) > 0.05 ? TextPrimary : TextSecondary;
-        });
-        var engineRead = Mono("", 8, TextTertiary);
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(Eq8.S_SampleRate);
-            engineRead.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency 0 smp · CPU {Sc(Eq8.S_Cpu) * 100:0.0}\u2009%") : "";
-        });
-        var statusRight = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = { outBox, engineRead } };
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, graphPanel } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

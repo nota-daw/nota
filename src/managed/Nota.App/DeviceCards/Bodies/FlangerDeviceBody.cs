@@ -8,7 +8,7 @@
 // of L and R (drag: the notch left / right = Delay, up / down = Feedback) and, under it, the delay
 // τ of both channels over two cycles with a running head, a DELAY LINE column (Delay, Depth, the
 // bipolar Feedback with its − / 0 / + snaps, Mix, and the first notch's sweep and null depth)
-// with the mode the feedback makes, and a status strip. The live τ comes from the engine
+// with the mode the feedback makes. The live τ comes from the engine
 // (Flanger.h scopeRead); the comb is drawn from the same formula the DSP runs. Every control is a
 // device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free. FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -295,45 +295,9 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         var right = Island(HeadRow(Caps("DELAY LINE"), modeWord), rightBody, 176);
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            double fb = Fb(), afb = Math.Abs(fb);
-            bool warn = false;
-            string foot;
-            if (!On()) foot = Loc.T("device.flanger.flanger_bypassed_the_signal_passes");
-            else if (P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
-            else if (afb >= 0.85)
-            {
-                foot = Loc.F("device.flanger.feedback_peaks_up_to_db_the", FbF(fb), FlangerMath.PeakDb(P(Mix), fb));
-                warn = true;
-            }
-            else if (P(Depth) < 0.01f) foot = Loc.T("device.flanger.depth_at_zero_the_comb");
-            else
-            {
-                var (th, _) = FlangerMath.Notch(P(Mix), fb);
-                double lo = th / (2 * Math.PI) / (TauMax() / 1000), hi = th / (2 * Math.PI) / (TauMin() / 1000);
-                foot = "Notch sweeps " + FlangerMath.HzF(lo) + " ↔ " + FlangerMath.HzF(hi) + " Hz · τ "
-                    + FlangerMath.Ms(TauMin()) + "–" + FlangerMath.Ms(TauMax()) + " ms";
-            }
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ") + (Synced() ? "retrig bar" : "free run");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

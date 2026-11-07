@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Valve body (guitar amp, device kind 6), a build of the
-// "Nota Valve" mockup (700 × 260) on the Vintage / Auto Filter / Lens frame: an always-
-// visible STAGE column (gain · output faders), a centre panel with Amp / Cab / Harmonics
-// tabs — the tone stack's response, the cabinet's response against on-axis, the harmonics
-// the preamp adds — each with the model or cabinet list in its head row, a right panel with
-// Cabinet / Output tabs, and a status strip. The responses and harmonics come from the
-// engine (Amp.h scopeRead), so the picture is what the amp runs. Every control is a device
-// param, so automation / MIDI learn / presets / A-B / persistence come for free.
+// "Nota Valve" mockup (700 × 260) on the Vintage / Auto Filter / Lens frame: a centre panel
+// with Amp / Cab / Harmonics tabs — the tone stack's response (Gain and the tone knobs under
+// it), the cabinet's response against on-axis, the harmonics the preamp adds — each with the
+// model or cabinet list in its head row, and a right panel with Cabinet / Output tabs. The
+// responses and harmonics come from the engine (Amp.h scopeRead), so the picture is what the
+// amp runs. Every control is a device param, so automation / MIDI learn / presets / A-B /
+// persistence come for free.
 // Params 0..13 are in raw units (Gain 0..10 …); the controls work on 0..1 and scale.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
@@ -95,7 +95,6 @@ internal sealed class ValveDeviceBody : IDeviceBody
         string OsText() => Sel(OS, 4) == 0 ? Loc.T("device.valve.no_oversampling") : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
         string AliasText() => Sc(S_AliasDb) <= -119 ? "aliasing < −120 dB" : NotaNum.F($"aliasing {Sc(S_AliasDb):0} dB");
         string AxisText() => P(Axis) <= 0.005f ? "on-axis" : NotaNum.F($"{P(Axis) * 100:0} % off-axis");
-        string CabLine() => On(CabOn) ? NotaNum.F($"{CabShort[Idx(CabType)]} · {Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : Loc.T("device.valve.no_cabinet");
         double H(int k) => Sc(S_H1 + k - 1);   // harmonic k, dB re the fundamental
         string Dominant()
         {
@@ -285,40 +284,6 @@ internal sealed class ValveDeviceBody : IDeviceBody
         };
 
         // ======================================================================
-        // LEFT — STAGE column (gain · output)
-        // ======================================================================
-        Control StageFader(int p, string label, IBrush ink, string tip)
-        {
-            var f = new AfFader { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Default = DefN(p) };
-            f.Changed += v => { RawN(p, v); RefreshAll(); };
-            f.GestureBegin += () => Begin(p);
-            f.GestureEnd += () => End(p);
-            Learn(f, p);
-            ToolTip.SetTip(f, tip);
-            readouts.Add(() => f.Set(N(p), double.NaN));
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
-        }
-        var stageTitle = Caps("STAGE"); stageTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var stageGain = Mono("", 7, TextPrimary); stageGain.HorizontalAlignment = HorizontalAlignment.Center;
-        var stageOut = Mono("", 7, TextPrimary); stageOut.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() =>
-        {
-            stageGain.Text = Ten(P(Gain));
-            stageOut.Text = OutDb(P(Output));
-            stageTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
-        });
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StageFader(Gain, "GAIN", NotaPalette.VizInk, Loc.T("device.valve.gain_how_hard_the_signal")));
-        faders.Children.Add(Col(StageFader(Output, "OUT", Teal, Loc.T("device.valve.output_the_master_level_after")), 1));
-        var stageCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(stageTitle, Dock.Top), Docked(stageOut, Dock.Bottom), Docked(stageGain, Dock.Bottom), faders } },
-        };
-        DockPanel.SetDock(stageCol, Dock.Left);
-
-        // ======================================================================
         // CENTRE — Amp (tone stack)
         // ======================================================================
         VlResponseView? toneView = null;
@@ -341,6 +306,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             var head = HeadRow(Row(6, Caps("MODEL"), ModelDrop(), count, new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames)), thd);
             var knobs = KnobRow(new[]
             {
+                K(Gain, "GAIN", Ten),
                 K(Bass, "BASS", Ten),
                 K(Middle, "MIDDLE", Ten),
                 K(MidFreq, "MID FREQ", MidF),
@@ -549,65 +515,11 @@ internal sealed class ValveDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { "Cabinet", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string> { ModelName(), "gain " + Ten(P(Gain)) };
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(On(CabOn) ? CabShort[Idx(CabType)] : Loc.T("device.valve.no_cab"));
-                    if (On(CabOn))
-                    {
-                        parts.Add(NotaNum.F($"{Mics[Idx(Mic)]} {DistF(P(MicDistance))}"));
-                        parts.Add("axis " + AxisF(P(Axis)));
-                        if (On(MicPosition)) parts.Add("edge");
-                    }
-                    if (P(LowCut) > 0.005f || P(HighCut) < 0.995f)
-                        parts.Add(NotaNum.F($"{(P(LowCut) > 0.005f ? LowCutF(P(LowCut)) : "open")}…{(P(HighCut) < 0.995f ? HighCutF(P(HighCut)) : "open")}"));
-                    if (P(Gate) > 0.001f) parts.Add("gate " + GateF(P(Gate)));
-                    break;
-                case 2:
-                    parts.Add("THD " + ThdF(Sc(S_Thd)));
-                    parts.Add("mix " + Pct(P(Mix)));
-                    if (P(Gate) > 0.001f) parts.Add("gate " + GateF(P(Gate)));
-                    parts.Add("out " + OutDb(P(Output)));
-                    if (On(EvenOnly)) parts.Add("even only");
-                    parts.Add(Sel(OS, 4) == 0 ? "OS off" : OsNames[Sel(OS, 4)] + " OS");
-                    break;
-                default:
-                    parts.Add(NotaNum.F($"{Ten(P(Bass))} / {Ten(P(Middle))} / {Ten(P(Treble))} / {Ten(P(Presence))}"));
-                    parts.Add("mid " + MidF(P(MidFreq)));
-                    if (On(Bright)) parts.Add("bright");
-                    if (On(Deep)) parts.Add("deep");
-                    parts.Add(CabLine());
-                    parts.Add("mix " + Pct(P(Mix)));
-                    if (On(AutoComp)) parts.Add("auto-comp");
-                    break;
-            }
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency 0 smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stageCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

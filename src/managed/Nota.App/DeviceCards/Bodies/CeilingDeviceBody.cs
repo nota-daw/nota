@@ -2,15 +2,15 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Ceiling body (look-ahead limiter, device kind 14), a build of
-// the "Nota Ceiling" mockup (700 × 260) on the Beat Repeat / Shutter frame: an always-visible
-// LIMIT column (input · reduction · output), a centre panel with Level / Reduction / Loudness
-// tabs — the input, the part over the ceiling and the output over 4 s with the reduction under
-// it (drag the ceiling), the reduction with the transients that reached the clip, momentary /
-// short-term / integrated loudness over 60 s around the Target (drag it) — with Character over
-// the graph and Gain / Ceiling / Release under it, a right panel with Meters / Detector tabs,
-// and a status strip. The pictures come from the engine (Ceiling.h scopeRead). Every control
-// is a device param (raw units), so automation / MIDI learn / presets / A-B / persistence come
-// for free; the key source is the device's sidechain routing, the resets are device actions.
+// the "Nota Ceiling" mockup (700 × 260) on the Beat Repeat / Shutter frame: a centre panel with
+// Level / Reduction / Loudness tabs — the input, the part over the ceiling and the output over
+// 4 s with the reduction under it (drag the ceiling), the reduction with the transients that
+// reached the clip, momentary / short-term / integrated loudness over 60 s around the Target
+// (drag it) — with Character over the graph and Gain / Ceiling / Release under it, and a right
+// panel with Meters / Detector tabs. The pictures come from the engine (Ceiling.h scopeRead).
+// Every control is a device param (raw units), so automation / MIDI learn / presets / A-B /
+// persistence come for free; the key source is the device's sidechain routing, the resets are
+// device actions.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -357,44 +357,6 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // LEFT — LIMIT column (input · reduction · output)
-        // ======================================================================
-        var colTitle = Caps("LIMIT"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        var grPill = new ShPill { Ink = NotaPalette.VizInk, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        ToolTip.SetTip(inPill, Loc.T("device.ceiling.the_input_after_gain_with"));
-        ToolTip.SetTip(grPill, Loc.T("device.ceiling.gain_reduction_0_24_db"));
-        ToolTip.SetTip(outPill, "The output");
-        var colGr = Mono("", 7, TextPrimary); colGr.HorizontalAlignment = HorizontalAlignment.Center;
-        var colOut = Mono("", 7, TextPrimary); colOut.HorizontalAlignment = HorizontalAlignment.Center;
-        static double NormLvl(double db) => Math.Clamp((db + 48) / 60, 0, 1);   // −48 … +12 dBFS
-        readouts.Add(() =>
-        {
-            inPill.Set(NormLvl(ScDb(S_InPeak)), NormLvl(P(Ceil)));
-            grPill.Set(Math.Clamp(Sc(S_Gr) / 24, 0, 1), double.NaN);
-            outPill.Set(NormLvl(ScDb(S_OutPeak)), double.NaN);
-            colGr.Text = GrF(Sc(S_Gr));
-            colOut.Text = Lvl(ScDb(S_OutPeak));
-            colTitle.Foreground = Sc(S_Gr) > 0.1 ? AccentBright : TextTertiary;   // lit while it limits
-        });
-        Control PillCol(ShPill pill, string lbl)
-        {
-            var l = Caps(lbl); l.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(l, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
-        }
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), ColumnSpacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        pills.Children.Add(PillCol(inPill, "IN"));
-        pills.Children.Add(Col(PillCol(grPill, "GR"), 1));
-        pills.Children.Add(Col(PillCol(outPill, "OUT"), 2));
-        var leftCol = new RuleSection
-        {
-            Width = 64, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colOut, Dock.Bottom), Docked(colGr, Dock.Bottom), pills } },
-        };
-        DockPanel.SetDock(leftCol, Dock.Left);
-
-        // ======================================================================
         // CENTRE — Level / Reduction / Loudness
         // ======================================================================
         CeLevelView? level = null;
@@ -579,42 +541,11 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { "Meters", "Detector" }, rightHost, RightBody, true, t => { rightTab = t; RefreshAll(); }, null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string> { CharNames[CharI()] };
-            if (centreTab == 2) parts.Add("target " + TargetF(P(Target)));
-            parts.Add("gain " + GainF(P(Gain)));
-            parts.Add("ceiling " + CeilF(P(Ceil)));
-            parts.Add("release " + (On(AutoRelease) ? "auto" : MsF(P(Release))));
-            parts.Add("look " + LookF(P(Lookahead)));
-            if (centreTab != 2) parts.Add("link " + LinkF(P(StereoLink)));
-            if (P(ScHp) > 20.5f) parts.Add("SC HP " + HzF(P(ScHp)));
-            if (ExtOn()) parts.Add("key " + KeyName());
-            if (On(DeltaP)) parts.Add("delta");
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

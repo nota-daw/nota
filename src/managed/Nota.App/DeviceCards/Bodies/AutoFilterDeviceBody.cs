@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Auto Filter body (device kind 7), a build of the "Nota Auto
-// Filter" mockup (700 × 260) on the Lens / Compressor / Delay frame: an always-visible
-// SHAPE column (cutoff · resonance faders, with the modulated value marked), a centre
-// panel with Filter / Envelope / LFO tabs — each one window, filling the panel, where the
-// cutoff's movement is seen (the response, the cutoff over time, the LFO over two bars) — a
-// right panel holding the controls of the centre tab, and a status strip. Every control is a device param, so automation /
-// MIDI learn / presets / A-B / persistence come for free; the sidechain source is routing.
+// Filter" mockup (700 × 260) on the Lens / Compressor / Delay frame: a centre panel with
+// Filter / Envelope / LFO tabs — each one window, filling the panel, where the cutoff's
+// movement is seen (the response, the cutoff over time, the LFO over two bars) — and a right
+// panel holding the controls of the centre tab (Freq and Res lead the Filter tab). Every
+// control is a device param, so automation / MIDI learn / presets / A-B / persistence come
+// for free; the sidechain source is routing.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -84,7 +84,6 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         static string Pct(double v) => NotaNum.F($"{v * 100:0} %");
         static string Bip(double v) => NotaNum.F($"{(v - 0.5) * 200:+0;−0;0} %");
         static string Ms(double ms) => ms >= 100 ? NotaNum.F($"{ms:0} ms") : ms >= 10 ? NotaNum.F($"{ms:0.0} ms") : NotaNum.F($"{ms:0.0#} ms");
-        static double Q(double res) => 0.5 + res * 14.5;
         static string GainF(double v) => NotaNum.F($"{(v - 0.5) * 48:+0.0;−0.0;0.0}\u2009dB");
         static double AttMs(double v) => Exp(v, 0.1, 500);
         static double RelMs(double v) => Exp(v, 1, 2000);
@@ -110,7 +109,6 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         int Target() => Sel(ModTarget, 3);   // 0 Freq, 1 Reso, 2 Both
         bool ToFreq() => Target() != 1;
         bool ToRes() => Target() != 0;
-        string TargetName() => Target() switch { 0 => "Freq", 1 => "Reso", _ => "Freq + Reso" };
         double EnvBip() => On(EnvOn) ? (P(EnvAmt) - 0.5) * 2 : 0;
         double LfoDepth() => On(LfoOn) ? P(LfoAmt) : 0;
         bool EnvAssigned() => Math.Abs(EnvBip()) > 0.004;
@@ -218,41 +216,6 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             g.Children.Add(Col(bar, 1));
             return g;
         }
-
-        // ======================================================================
-        // LEFT — SHAPE column (cutoff · resonance)
-        // ======================================================================
-        Control ShapeFader(int p, string label, IBrush ink, int liveSlot, string tip)
-        {
-            var f = new AfFader { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
-            f.Changed += v => { Raw(p, (float)v); RefreshAll(); };
-            f.GestureBegin += () => Begin(p);
-            f.GestureEnd += () => End(p);
-            Learn(f, p);
-            ToolTip.SetTip(f, MenuKit.Keys(tip));
-            ValueEntry.Attach(f, F(p, p == Freq ? "Cutoff" : "Resonance", p == Freq ? v => Hz(HzOf(v)) : Pct));
-            readouts.Add(() => f.Set(P(p), scN > liveSlot && Assigned() ? Sc(liveSlot) : double.NaN));
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
-        }
-        var shapeTitle = Caps("SHAPE"); shapeTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var shapeFreq = Mono("", 7, TextPrimary); shapeFreq.HorizontalAlignment = HorizontalAlignment.Center;
-        var shapeRes = Mono("", 7, TextPrimary); shapeRes.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() =>
-        {
-            shapeFreq.Text = Hz(BaseHz());
-            shapeRes.Text = Pct(P(Res));
-            shapeTitle.Foreground = Assigned() && scN > 0 && Math.Abs(Sc(S_Cut) - P(Freq)) > 0.01 ? AccentBright : TextTertiary;
-        });
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, Loc.T("device.auto_filter.cutoff_the_base_the_modulation")));
-        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, Loc.T("device.auto_filter.resonance_the_peak_at_the")), 1));
-        var shapeCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(shapeTitle, Dock.Top), Docked(shapeRes, Dock.Bottom), Docked(shapeFreq, Dock.Bottom), faders } },
-        };
-        DockPanel.SetDock(shapeCol, Dock.Left);
 
         // ======================================================================
         // CENTRE — Filter
@@ -560,10 +523,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return Rows(
                 types,
                 SlopeRow(slope, circuit),
+                SliderRow("FREQ", Freq, v => Hz(HzOf(v)), valW: 44),
+                SliderRow("RES", Res, Pct),
                 SliderRow("MORPH", Morph, Pct),
                 SliderRow("DRIVE", Drive, v => v <= 0.001 ? "off" : Pct(v)),
                 SliderRow("DRY/WET", DryWet, Pct),
-                SliderRow("GAIN", Gain, GainF, bipolar: true, valW: 44),
                 Rule(),
                 Labelled(Loc.T("device.auto_filter.mod_arrow"), target));
         }
@@ -691,53 +655,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { panelTitles[0], "Mod", "Output" }, panelHost, RightBody, true, t => { rightTab = t; RefreshAll(); }, null, l => rightLabels = l);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            string filter = NotaNum.F($"{TypeNames[Sel(Type, 4)]} {(On(Slope) ? 24 : 12)} dB/oct");
-            string baseHz = NotaNum.F($"base {Hz(BaseHz())}");
-            string env = EnvAssigned()
-                ? NotaNum.F($"ENV → {TargetName()} {Bip(P(EnvAmt))} · {Ms(AttMs(P(EnvAtt)))} / {Ms(RelMs(P(EnvRel)))}{(On(EnvHold) ? " · hold " + HoldF(P(EnvHoldTime)) : "")}")
-                : "";
-            string lfo = LfoAssigned()
-                ? NotaNum.F($"LFO {WaveNames[Sel(LfoWave, 5)]} · {(Synced() ? DivNames[Sel(LfoRate, 8)] + " sync" : LfoHzF(LfoHz()))} · amount {Pct(P(LfoAmt))}{(P(LfoMorph) > 0.004f ? " · morph " + Pct(P(LfoMorph)) : "")}")
-                : "";
-            var parts = new List<string>();
-            switch (centreTab)
-            {
-                case 1: parts.Add(filter); parts.Add(baseHz); parts.Add(env.Length > 0 ? env : Loc.T("device.auto_filter.envelope_not_assigned")); break;
-                case 2: parts.Add(lfo.Length > 0 ? lfo : Loc.T("device.auto_filter.lfo_not_assigned")); parts.Add(NotaNum.F($"cutoff {HzLong(LiveHz())}")); if (P(Drive) > 0.004f) parts.Add(NotaNum.F($"drive {Pct(P(Drive))}")); break;
-                default:
-                    parts.Add(filter); parts.Add(baseHz); parts.Add(NotaNum.F($"Q {Q(P(Res)):0.00}"));
-                    if (env.Length > 0) parts.Add(NotaNum.F($"ENV {Bip(P(EnvAmt))}"));
-                    if (lfo.Length > 0) parts.Add(NotaNum.F($"LFO {Pct(P(LfoAmt))}"));
-                    parts.Add(NotaNum.F($"mix {Pct(P(DryWet))}"));
-                    break;
-            }
-            if (engine.DeviceSidechainSource(track, di) >= 0) parts.Add("key: " + KeyName());
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency 0 smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { shapeCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

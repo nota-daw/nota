@@ -3,13 +3,13 @@
 //
 // Detail · Devices — built-in Nota Dynamic EQ-8 body (device kind 13), a build of the "Nota
 // Dynamic EQ" mockup (700 × 260): the response graph takes almost the whole width — nodes drag
-// right on the curve, a row of eight band chips above it shows each band's dynamic activity, a
-// panel on the right edits the selected band (type, FREQ / GAIN / Q, the dynamics mode with
-// THRESH — the band's level marked on it — RANGE, ATTACK, RELEASE, its key and Solo), and a
-// status strip carries the summary, the selected band's gain now, the Dynamic master switch
-// and the output. The live readings come from the engine (DynamicEq.h scopeRead). Every
-// control is a device param (raw units), so automation / MIDI learn / presets / A-B /
-// persistence come for free; the key track is the device's sidechain routing.
+// right on the curve, a row of eight band chips above it shows each band's dynamic activity,
+// the Dynamic master switch and the Output level sit under it — and a panel on the right edits
+// the selected band (type, FREQ / GAIN / Q, the dynamics mode with THRESH — the band's level
+// marked on it — RANGE, ATTACK, RELEASE, its key and Solo). The live readings come from the
+// engine (DynamicEq.h scopeRead). Every control is a device param (raw units), so automation /
+// MIDI learn / presets / A-B / persistence come for free; the key track is the device's
+// sidechain routing.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -63,7 +63,6 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         }
         var scope = new float[DynEq.kScope];
         int scN = 0;
-        double Sc(int i) => scN > i ? scope[i] : 0;
 
         var curve = new DynamicEqCurve(engine, track, di);
         int Sel() => curve.SelectedBand;
@@ -90,7 +89,6 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 
         // Key source: the device's sidechain routing (a track, or one pad / chain / voice of it,
         // specs/050), picked from a menu.
-        string KeyName() => SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di), "none");
         int Src() => engine.DeviceSidechainSource(track, di);
         void ShowKeyMenu(Control at)
         {
@@ -151,10 +149,26 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         DockPanel.SetDock(chipStrip, Dock.Top);
         ToolTip.SetTip(curve, Loc.T("device.dynamic_eq.drag_a_node_frequency_and")
             + Loc.T("device.dynamic_eq.double_click_empty_space_a"));
+        // Footer under the graph: the master Dynamic switch and the output level.
+        var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
+        Learn(dynSw, DynEq.DynamicsP);
+        ToolTip.SetTip(dynSw, Loc.T("device.dynamic_eq.dynamic_off_parks_every_band"));
+        readouts.Add(dynSync);
+        var outBar = DeviceCardKit.SliderRow("", () => (P(DynEq.OutputP) + 18) / 36.0, n => { Raw(DynEq.OutputP, (float)(n * 36 - 18)); RefreshAll(); },
+            () => DynEq.Db(P(DynEq.OutputP)) + " dB", out var outSync, begin: () => Begin(DynEq.OutputP), end: () => End(DynEq.OutputP),
+            reset: () => { SetP(DynEq.OutputP, 0); RefreshAll(); }, bipolar: true, valueWidth: 44);
+        readouts.Add(outSync);
+        Learn(outBar, DynEq.OutputP);
+        var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 8, Width = 220, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        outRow.Children.Add(Caps(Loc.T("common.output")));
+        outRow.Children.Add(Col(outBar, 1));
+        var footer = new DockPanel { Height = 20, Margin = new Thickness(8, 0, 8, 3), Children = { Docked(dynSw, Dock.Left), outRow } };
+        DockPanel.SetDock(footer, Dock.Bottom);
+
         var graphPanel = new RuleSection
         {
             Margin = new Thickness(0, 0, 5, 0),
-            Child = new DockPanel { LastChildFill = true, Children = { chipStrip, new Border { Padding = new Thickness(5), Child = curve } } },
+            Child = new DockPanel { LastChildFill = true, Children = { chipStrip, footer, new Border { Padding = new Thickness(5, 5, 5, 2), Child = curve } } },
         };
 
         // ======================================================================
@@ -402,93 +416,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
         curve.Edited += RefreshAll;
 
-        // ======================================================================
-        // Status strip: summary · gain now · Dynamic · output · engine
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        string StatusText()
-        {
-            int s = Sel(), nOn = 0, nDyn = 0;
-            for (int b = 0; b < DynEq.Bands; b++) { if (BandOn(b)) nOn++; if (IsDyn(b)) nDyn++; }
-            var parts = new List<string> { NotaNum.F($"{nOn} bands · {nDyn} dynamic") };
-            string band = NotaNum.F($"B{s + 1} {DynEq.TypeNames[TypeOf(s)]} {DynEq.Hz(B(s, DynEq.FreqF))}");
-            if (Capable(s)) band += " " + DynEq.Db(B(s, DynEq.GainF)) + " dB";
-            band += NotaNum.F($" · Q {B(s, DynEq.QF):0.00}");
-            parts.Add(band);
-            bool anyExt = false;
-            for (int b = 0; b < DynEq.Bands; b++) if (IsDyn(b) && KeyExt(b)) anyExt = true;
-            if (anyExt) parts.Add("key " + KeyName());
-            return string.Join(" · ", parts);
-        }
-        var nowRead = Mono("", 8, TextTertiary);
-        ToolTip.SetTip(nowRead, Loc.T("device.dynamic_eq.the_selected_bands_dynamic_gain"));
-        readouts.Add(() =>
-        {
-            int s = Sel();
-            if (IsDyn(s))
-            {
-                double g = curve.Gr(s);
-                nowRead.Text = NotaNum.F($"B{s + 1} ") + (B(s, DynEq.RangeF) >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(g):0.0} dB");
-                nowRead.Foreground = DirInk(s, bright: true);
-            }
-            else
-            {
-                nowRead.Text = Solo() >= 0 ? NotaNum.F($"Solo B{Solo() + 1}") : NotaNum.F($"B{s + 1} static");
-                nowRead.Foreground = Solo() >= 0 ? AccentBright : TextTertiary;
-            }
-        });
-        var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
-        Learn(dynSw, DynEq.DynamicsP);
-        ToolTip.SetTip(dynSw, Loc.T("device.dynamic_eq.dynamic_off_parks_every_band"));
-        readouts.Add(dynSync);
-
-        // OUT: a mono readout that drags vertically (±18 dB), double-click resets to 0.
-        var outTb = Mono("", 8, TextSecondary);
-        var outBox = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Child = outTb };
-        bool outDrag = false; double outY = 0;
-        outBox.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
-            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(DynEq.OutputP, 0); RefreshAll(); e.Handled = true; return; }
-            outDrag = true; outY = e.GetPosition(outBox).Y; e.Pointer.Capture(outBox); Begin(DynEq.OutputP); e.Handled = true;
-        };
-        outBox.PointerMoved += (_, e) =>
-        {
-            if (!outDrag) return;
-            double y = e.GetPosition(outBox).Y, dy = outY - y; outY = y;
-            bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-            Raw(DynEq.OutputP, P(DynEq.OutputP) + (float)(dy * 36.0 / (fine ? 1400.0 : 140.0)));
-            RefreshAll();
-        };
-        void OutEnd() { if (!outDrag) return; outDrag = false; End(DynEq.OutputP); }
-        outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
-        outBox.PointerCaptureLost += (_, _) => OutEnd();
-        Learn(outBox, DynEq.OutputP);
-        ToolTip.SetTip(outBox, MenuKit.Keys(Loc.T("device.dynamic_eq.output_drag_up_down_shift")));
-        ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, DynEq.OutputP, "Output", -18, 18, v => "Out " + DynEq.Db(v) + " dB", RefreshAll), outTb);
-        readouts.Add(() =>
-        {
-            float o = P(DynEq.OutputP);
-            outTb.Text = "Out " + DynEq.Db(o) + " dB";
-            outTb.Foreground = Math.Abs(o) > 0.05f ? TextPrimary : TextSecondary;
-        });
-        var engineRead = Mono("", 8, TextTertiary);
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(DynEq.S_SampleRate);
-            engineRead.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · CPU {Sc(DynEq.S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusRight = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = { nowRead, dynSw, outBox, engineRead } };
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, graphPanel } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

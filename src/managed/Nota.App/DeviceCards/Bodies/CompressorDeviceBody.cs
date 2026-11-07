@@ -2,12 +2,11 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Compressor body (device kind 1), a build of the "Nota
-// Compressor" mockup (700 × 260) on the Lens / Delay / Reverb frame: an always-visible LEVEL
-// column (threshold against the live key level · make-up, or the key gain on the Sidechain
-// tab), a centre tabbed graph that fills its panel — Curve (transfer curve + reduction
-// history), Motion (the reduction envelope against the input, so attack and release are seen,
-// not guessed) and Sidechain (the key's spectrum under its filters) — a right panel holding the
-// controls of the centre tab (Dynamics / Timing / Key) and a status strip. The graphs are
+// Compressor" mockup (700 × 260) on the Lens / Delay / Reverb frame: a centre tabbed graph
+// that fills its panel — Curve (transfer curve + reduction history), Motion (the reduction
+// envelope against the input, so attack and release are seen, not guessed) and Sidechain (the
+// key's spectrum under its filters) — and a right panel holding the controls of the centre tab
+// (Dynamics / Timing / Key) beside Output. The graphs are
 // controls: drag the transfer curve for threshold / ratio, the key filter handles for HP / LP / Q. Every control is a device
 // param (raw units), so automation / MIDI learn / presets / A-B / persistence come for free;
 // the key source and its pre/post tap are the device's sidechain routing, not params.
@@ -108,7 +107,6 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
         static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
@@ -216,73 +214,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return (Math.Max(reach - onset, 0.5), recovery);
         }
 
-        // ======================================================================
-        // LEFT — LEVEL column (threshold · make-up / key gain)
-        // ======================================================================
         int centreTab = 0;
-        var thrFader = new CompFader { Ink = NotaPalette.VizInk, Handle = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
-        var thrMap = Lin(Threshold);
-        thrFader.Default = thrMap.N(Def(Threshold));
-        thrFader.Changed += v => Raw(Threshold, thrMap.V(v));
-        thrFader.GestureBegin += () => Begin(Threshold);
-        thrFader.GestureEnd += () => End(Threshold);
-        MidiLearn.Bind(thrFader, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
-        ToolTip.SetTip(thrFader, MenuKit.Keys(Loc.T("device.compressor.threshold_the_tick_is_the")));
-
-        // The second fader is make-up on Curve / Motion and the key's gain on Sidechain.
-        int F2() => centreTab == 2 ? ScGain : Makeup;
-        var f2 = new CompFader { Ink = DeviceCardKit.ModInk, Handle = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Stretch };
-        f2.Changed += v => Raw(F2(), Lin(F2()).V(v));
-        f2.GestureBegin += () => Begin(F2());
-        f2.GestureEnd += () => End(F2());
-        // MIDI learn follows the fader's param: Makeup on Curve / Motion, SC gain on Sidechain.
-        int f2Bound = -1;
-        void BindF2()
-        {
-            int p2 = F2();
-            if (p2 == f2Bound) return;
-            f2Bound = p2;
-            MidiLearn.Bind(f2, MidiTarget.DeviceParam(track, di, p2), p2 == ScGain ? engine.DeviceParamName(track, di, ScGain) : "Makeup");
-        }
-        BindF2();
-
-        var thrLbl = Caps("THR"); thrLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var f2Lbl = Caps("MKP"); f2Lbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var thrVal = Mono("", 7, TextPrimary); thrVal.HorizontalAlignment = HorizontalAlignment.Center;
-        var f2Val = Mono("", 7, TextPrimary); f2Val.HorizontalAlignment = HorizontalAlignment.Center;
-        void RefreshAll() { foreach (var r in readouts) r(); }
-        readouts.Add(() =>
-        {
-            double keyDb = KeyDb();
-            thrFader.Set(thrMap.N(P(Threshold)), keyDb > -60 ? (keyDb + 60) / 60 : double.NaN);
-            int p2 = F2();
-            BindF2();
-            f2.Default = Lin(p2).N(Def(p2));
-            f2.Set(Lin(p2).N(P(p2)));
-            thrVal.Text = Db(P(Threshold));
-            f2Val.Text = SDb(P(p2));
-            f2Lbl.Text = NotaText.Label(p2 == ScGain ? "SC IN" : "MKP");
-            ToolTip.SetTip(f2, MenuKit.Keys(p2 == ScGain ? Loc.T("device.compressor.key_gain_drives_the_detector") : Loc.T("device.compressor.make_up_gain_click_types")));
-        });
-        ValueEntry.Attach(thrFader, F("Threshold", () => Threshold, Lin, Db), thrVal);
-        // The menu names the fader's param of the moment, and resets it to its own default:
-        // Make-up, or SC gain on the Sidechain tab.
-        ValueEntry.Attach(f2, F("Make-up", F2, Lin, SDb) with
-        {
-            NameNow = () => F2() == ScGain ? engine.DeviceParamName(track, di, ScGain) : "Make-up",
-            DefaultNow = () => Lin(F2()).N(Def(F2())),
-        }, f2Val);
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(new DockPanel { Children = { Docked(thrLbl, Dock.Bottom), thrFader } });
-        faders.Children.Add(Col(new DockPanel { Children = { Docked(f2Lbl, Dock.Bottom), f2 } }, 1));
-        var levelTitle = Caps("LEVEL"); levelTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var levelCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(levelTitle, Dock.Top), Docked(f2Val, Dock.Bottom), Docked(thrVal, Dock.Bottom), faders } },
-        };
-        DockPanel.SetDock(levelCol, Dock.Left);
-
         // ======================================================================
         // CENTRE — Curve
         // ======================================================================
@@ -323,8 +255,6 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // The key source: a track, or one pad / chain / voice of it (specs/050).
         var picker = new SidechainSourcePicker(engine, track, () => engine.DeviceSidechainKey(track, di),
             (src, part) => engine.SetDeviceSidechainKey(track, di, src, part));
-        string SourceName() => picker.SourceName();
-        bool ExtActive() => Sc(S_ExtKey) > 0.5;
 
         var key = new CompKeyView();
         Control SidechainTab()
@@ -456,6 +386,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return Rows(
                 charSeg,
                 Labelled("DETECT", detSeg),
+                SliderRow("THRESH", Threshold, Db, Lin(Threshold)),
                 SliderRow("RATIO", Ratio, RatioF, Log(Ratio)),
                 SliderRow("KNEE", Knee, Db, Lin(Knee)),
                 SliderRow("MIX", Mix, PctF, Lin(Mix)),
@@ -527,6 +458,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 SliderRow("HP", ScHP, HpF, Log(ScHP)),
                 SliderRow("LP", ScLP, LpF, Log(ScLP)),
                 SliderRow("Q", ScQ, v => NotaNum.F($"{v:0.00}"), Log(ScQ)),
+                SliderRow(engine.DeviceParamName(track, di, ScGain), ScGain, SDb, Lin(ScGain)),
                 Rule(),
                 Toggle(StereoLink, "Stereo link", Loc.T("device.compressor.stereo_link_one_reduction_for")));
         }
@@ -583,37 +515,11 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { panelTitles[0], "Output" }, panelHost, RightBody, true, t => { rightTab = t; Refresh(); }, null, l => rightLabels = l);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            if (On(ScListen))
-                return Loc.F("device.compressor.listen_only_the_key_is", SourceName(), engine.DeviceSidechainTapPre(track, di) ? "pre" : "post", HpF(P(ScHP)), LpF(P(ScLP)));
-            string range = P(Range) >= 47.5 ? "" : NotaNum.F($" · range {RangeF(P(Range))}");
-            string ext = ExtActive() ? NotaNum.F($" · key {SourceName()}") : "";
-            return NotaNum.F($"{Chars[Sel(Character, 5)]} · thresh {Db(P(Threshold))} · {RatioF(P(Ratio))} · knee {P(Knee):0.0} · {MsShort(P(Attack))} / {MsShort(P(Release))} ms · mix {PctF(P(Mix))}{range}{ext}");
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = On(ScListen) ? AccentBright : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { levelCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

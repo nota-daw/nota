@@ -1034,7 +1034,8 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
   `SurfaceDeep`: the mode tabs, the track (colour square, name, routing summary),
   Freeze / Live freeze, a rule, then pop-out and close as icon buttons.
 - **Status 22**: one line of caption text (Label 11, ink 2) on `SurfaceDeep`, a seam above it,
-  16 px in. This is the window's status line; a device's own status line sits inside its card.
+  16 px in. This is the window's status line; built-in device cards have none of their own
+  (the racks keep one inside the card).
 - **Mixer strips** are `Panel` columns on seams, each with a 3 px top bar in the track
   colour (grey for master); sliders and knobs are the flat shell kind, sends with their
   amount written inside the bar. The footer's Sends and I/O toggles are chips (shown is
@@ -1055,8 +1056,9 @@ The card each instrument or effect lives in, in the device panel.
 - **Header 22:** name (Device name 12 / 600), preset menu (where the device has presets),
   type tag in ink 3, power switch at the right, on every device, instruments and racks
   included.
-- **Body:** each device keeps its 0.57 layout and sizes, status line included; only the
-  elements in it take this guide's look (§ Devices).
+- **Body:** each device keeps its 0.57 layout and sizes; only the elements in it take this
+  guide's look (§ Devices). Built-in instruments, effects and MIDI effects drop the status
+  line under the body and the side column of upright faders or meters (#531).
 
 ### Track header
 
@@ -1212,7 +1214,8 @@ geometry, and no icon is a typed character (`RunIcons`).
 
 All 50 devices in 0.56.1 (16 instruments, 25 audio effects, 6 MIDI effects, 3 racks), and
 Nota Vocoder added since, **keep their 0.57 layouts and sizes**: the same sections in the
-same places, the same widths, the same status line under the body. The style guide
+same places, the same widths (since #531 without the status line under the body or the
+side column of upright faders and meters; the racks keep their status line). The style guide
 changes the elements inside them, not where they sit. (A full redraw of every card was
 tried first; it made the cards cramped and too large, so it was reverted on Oct 26.)
 
@@ -1220,8 +1223,8 @@ What the guide changes inside a card:
 
 - **Knobs** take the capped look with an orange value arc; the value sits over the name.
 - **Value bars** replace thin sliders: a 9 px groove with an orange wash and a 3 px line
-  (`SliderTrack`); upright faders (Auto Filter's shape, Compressor's Thr and Mkp, the EQ-3
-  bands, Lens, Level, Shutter, Delay) are the same bar standing up (`UprightBar`).
+  (`SliderTrack`); upright faders (the EQ-3 bands, Level's correction) are the same bar
+  standing up (`UprightBar`).
 - **Segments and switches** are the guide's: the picked cell tinted `AccentSoft` in a
   groove, switches 18 × 10.
 - **Sections** are pressed in with the guide's corners; graph windows keep their frame.

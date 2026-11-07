@@ -7,8 +7,8 @@
 // the Offset between the channels and the HPF on the wet input), a centre panel with every voice
 // over two cycles — its delay τ or its detune in cents (τ / ct) — with a running head (drag up /
 // down for Amount) and, under it, the voices' stereo field, and a VOICE column (Amount, the bipolar
-// Feedback, Width, Warmth, Mix, and the detune and delay ranges) with the state it is in, and a
-// status strip. In Ensemble the Offset is fixed (3 × 120°), in Vibrato the Mix (wet only). The
+// Feedback, Width, Warmth, Mix, and the detune and delay ranges) with the state it is in. In
+// Ensemble the Offset is fixed (3 × 120°), in Vibrato the Mix (wet only). The
 // live LFO phase comes from the engine (Chorus.h scopeRead); the curves are drawn from the same
 // formulas the DSP runs. Every control is a device param (normalized 0..1), so automation / MIDI
 // learn / presets / A-B / persistence come for free. FullBleed — the shared shell draws the header
@@ -320,40 +320,9 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         var right = Island(HeadRow(Caps("VOICE"), stateWord), rightBody, 176);
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            double fb = Fb(), afb = Math.Abs(fb);
-            bool warn = false;
-            string foot;
-            if (!On()) foot = Loc.T("device.chorus.chorus_bypassed_the_signal_passes");
-            else if (!Vib() && P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
-            else if (P(Amount) < 0.01f) foot = Loc.T("device.chorus.amount_at_zero_the_voices") + ChorusMath.Ms(ChorusMath.BaseMs[ModeI()]) + " ms delay remains";
-            else if (afb >= 0.6) { foot = "Feedback " + FbF(fb) + ": a metallic ring creeps in, like a flanger"; warn = true; }
-            else if (Vib()) foot = Loc.T("device.chorus.vibrato_no_dry_signal_the") + ChorusMath.Ct(MaxCt()) + " ct at " + HzF(RateHz()) + " Hz";
-            else if (WidthPct() < 1) foot = Loc.T("device.chorus.width_0_the_voices_fold");
-            else
-                foot = Loc.T("device.chorus.detune_up_to") + ChorusMath.Ct(MaxCt()) + " ct · τ " + ChorusMath.Ms(TauMin()) + "–" + ChorusMath.Ms(TauMax())
-                    + " ms · " + (Ens() ? "3" : "2") + " voices";
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ")
-                + (P(Warmth) > 0.01f ? NotaNum.F($"warm {P(Warmth) * 100:0} %") : "clean");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         var centsNow = new double[3];
         void Refresh()

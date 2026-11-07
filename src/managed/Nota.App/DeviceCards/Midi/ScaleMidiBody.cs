@@ -8,8 +8,7 @@
 //     Penta / Custom, each with its note count) | NOTE MAP: the twelve pitch classes as key
 //     cells — scale notes accent-washed (chosen), the root edged bright, the rest naming where they
 //     fold; click one to add / remove it (the scale turns Custom) | FOLD: Nearest / Down / Up,
-//     the last IN → OUT, Range (± an octave, drag for semitones), Follow key, Learn and Clear —
-//     over a status line.
+//     the last IN → OUT, Range (± an octave, drag for semitones), Follow key, Learn and Clear.
 //   • S 260 × 260 — root stepper, type and fold on one row, the note map, IN → OUT. Range,
 //     Follow key, Learn and Clear are L-only (presets still set them); the header keeps the
 //     same preset picker as L.
@@ -258,19 +257,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             typeIsland.Margin = new Thickness(0, 0, 5, 0); foldIsland.Margin = new Thickness(5, 0, 0, 0);
             var islands = new DockPanel { Children = { WithDock(typeIsland, Dock.Left), WithDock(foldIsland, Dock.Right), mapIsland } };
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                int t = (int)Math.Round(G(PTranspose));
-                statusL.Text = Loc.F("device.scale.notes_fold", Notes[Root()], TypeName(), Count(Mask()), Folds[Fold()].ToLowerInvariant())
-                             + $"{DeviceCardKit.NoteName(RangeLo())}–{DeviceCardKit.NoteName(RangeHi())}"
-                             + (t != 0 ? $" · transpose {(t > 0 ? "+" : "−")}{Math.Abs(t)}" : "")
-                             + (G(PFollowKey) >= 0.5f ? " · follow key" : "")
-                             + (G(PLearn) >= 0.5f ? " · learning" : "");
-                statusR.Text = Bypassed() ? "bypassed" : Loc.T("common.midi_latency_0_smp");
-            });
-            return Framed(islands, statusL, statusR);
+            return Framed(islands);
         }
 
         // =========================================================================================
@@ -294,27 +281,14 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             } };
             var island = new RuleSection { Padding = new Thickness(6), Child = inner };
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = Loc.F("device.scale.notes", Notes[Root()], TypeName(), Count(Mask()));
-                statusR.Text = Bypassed() ? "bypassed" : Mask() == 0 ? "empty" : Loc.F("device.scale.of_12_remapped", Remapped());
-            });
-            return Framed(island, statusL, statusR);
+            return Framed(island);
         }
 
         // ---- shared pieces -----------------------------------------------------------------------
         int RangeLo() => Math.Clamp((int)Math.Round(G(PRangeLo)), 0, 127);
         int RangeHi() => Math.Clamp((int)Math.Round(G(PRangeHi)), 0, 127);
 
-        Control Framed(Control main, TextBlock left, TextBlock right)
-        {
-            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
-                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
-            right.Margin = new Thickness(8, 0, 0, 0);
-            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
-        }
+        Control Framed(Control main) => new Border { Background = Ground, Padding = new Thickness(5), Child = main };
 
         Control IslandHead(Control left, Control? right)
         {

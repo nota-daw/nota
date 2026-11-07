@@ -2,9 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Lens body (device kind 22, analyzer), a build of the
-// "Nota Lens" mockup (700 × 260) on the Prism/Chamber frame: a permanent SCALE rail on the
-// left, one large graph in the middle behind Spectrum / Scope / Waterfall tabs, an
-// Analyze / Display panel on the right and a status strip. The scope behaves like a bench
+// "Nota Lens" mockup (700 × 260) on the Prism/Chamber frame: one large graph behind
+// Spectrum / Scope / Waterfall tabs and an Analyze / Display panel on the right. The scope behaves like a bench
 // instrument — the trace is pinned to the trigger point and stands still while older passes
 // fade out. Every control is a device param, so automation / MIDI learn / presets / A-B /
 // persistence come for free. FullBleed — the shared shell draws the header.
@@ -103,9 +102,6 @@ internal sealed class LensDeviceBody : IDeviceBody
         double VoltDiv() => Exp(P(VoltDivP), 0.02, 2.0);
         double TopDb() => 24 - P(ScaleTopP) * 60;
         double RangeDb() => 30 + P(ScaleRangeP) * 90;
-        int Avg() => (int)Math.Round(1 + P(AverageP) * 15);
-        double DecayS() => Exp(P(DecayP), 0.05, 8);
-        double PeakS() => Exp(P(PeakTimeP), 0.5, 30);
         double PersistS() => Exp(P(PersistTimeP), 0.05, 2.0);
         int TraceCount() => (int)Math.Round(1 + P(TracesP) * 7);
         double WfSpan() => WfSpans[Sel(WfSpeedP, 3)];
@@ -117,7 +113,6 @@ internal sealed class LensDeviceBody : IDeviceBody
         static string Ms(double sec) => sec >= 1 ? Inv($"{sec:0.00} s") : sec >= 0.001 ? Inv($"{sec * 1000:0.00} ms") : Inv($"{sec * 1e6:0} µs");
         static string Sec(double s) => s >= 1 ? Inv($"{s:0.0} s") : Inv($"{s * 1000:0} ms");
         static string Hz(double hz) => hz >= 1000 ? Inv($"{hz / 1000:0.00} kHz") : Inv($"{hz:0} Hz");
-        static string Db(double db) => Inv($"{db:0.0} dB");
         static string Pc(double v) => Inv($"{v * 100:0} %");
 
         // ---- small builders (same kit as Prism / Chamber) -----------------------------
@@ -445,65 +440,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             Toggle(NoteGridP, "Note grid"),
             Toggle(PeakHoldP, "Peak hold"));
 
-        // ---- Scale rail ---------------------------------------------------------------
-        var railTopVal = Mono("", 7, TxtC);
-        var railRngVal = Mono("", 7, TxtC);
-
-        // The slider stretches to the rail's height, its caption keeps its own line, and both
-        // retarget when the centre tab changes (dB scale for Spectrum / Waterfall, V and T for Scope).
-        Control RailSlider(Func<int> param, SolidColorBrush ink, Func<string> caption)
-        {
-            var s = new LensVSlider(P(param()), ink) { Default = Def(param()), VerticalAlignment = VerticalAlignment.Stretch };
-            var lbl = Caps(caption(), MutedC);
-            lbl.HorizontalAlignment = HorizontalAlignment.Center;
-            s.GestureBegin += () => Begin(param());
-            s.GestureEnd += () => End(param());
-            s.ValueChanged += v => Raw(param(), (float)v);
-            // ⌥-click types the value of whichever parameter the rail drives now (specs/035).
-            ValueEntry.Attach(s, new ValueField("Scale", () => P(param()), v => RailText(param(), v), v => { Raw(param(), (float)v); s.Value = v; },
-                () => Begin(param()), () => End(param()), null) { Reset = () => { Raw(param(), Def(param())); s.Value = Def(param()); } });
-            readouts.Add(() =>
-            {
-                lbl.Text = NotaText.Label(caption());
-                s.Default = Def(param());
-                if (!s.Dragging) { float c = P(param()); if (Math.Abs(c - s.Value) > 1e-4) s.Value = c; }
-            });
-            var g = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 3, Width = 16 };
-            g.Children.Add(s);
-            Grid.SetRow(lbl, 1); g.Children.Add(lbl);
-            return g;
-        }
-
-        string RailText(int p, double v) => p switch
-        {
-            VoltDivP => Inv($"{Exp(v, 0.02, 2.0):0.00} /d"),
-            TimeDivP => Ms(Exp(v, 0.00002, 0.02)),
-            ScaleTopP => Inv($"{24 - v * 60:0}\u2009dB"),
-            _ => Inv($"{30 + v * 90:0}\u2009dB"),
-        };
         int centreTab = Sel(ViewP, 3);
-        var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.VizInk, () => centreTab == 1 ? "V/D" : "TOP");
-        var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, DeviceCardKit.ModInk, () => centreTab == 1 ? "T/D" : "RNG");
-        var rail = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5),
-            Child = new DockPanel
-            {
-                LastChildFill = true,
-                Children =
-                {
-                    Docked(new TextBlock { Text = "Scale", FontSize = NotaType.KnobLabel, FontWeight = FontWeight.SemiBold, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) }, Dock.Top),
-                    Docked(new StackPanel { Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0), Children = { railTopVal, railRngVal } }, Dock.Bottom),
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal, Spacing = 9, HorizontalAlignment = HorizontalAlignment.Center,
-                        Children = { railA, railB },
-                    },
-                },
-            },
-        };
-        DockPanel.SetDock(rail, Dock.Left);
-
         // ---- assembly -----------------------------------------------------------------
         var centreHost = new ContentControl();
         var rightHost = new ContentControl();
@@ -612,22 +549,10 @@ internal sealed class LensDeviceBody : IDeviceBody
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
 
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
-        // ---- status strip ---------------------------------------------------------------
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, Txt2);
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border
-        {
-            Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(8, 0), Child = statusGrid,
-        };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { rail, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         // ---- WAV export of the captured scope window --------------------------------------
         async void ExportWav()
@@ -732,9 +657,6 @@ internal sealed class LensDeviceBody : IDeviceBody
 
             foreach (var a in readouts) a();
 
-            // Rail readouts + captions follow the active view.
-            railTopVal.Text = centreTab == 1 ? Inv($"{VoltDiv():0.00} /d") : Inv($"{TopDb():0} dB");
-            railRngVal.Text = centreTab == 1 ? Ms(TimeDiv()) : Inv($"{RangeDb():0} dB");
 
             int fftN = (int)Sc(M_FftN);
             string winName = new[] { "Hann", "B-H", "Flat" }[Sel(WindowP, 3)];
@@ -762,16 +684,6 @@ internal sealed class LensDeviceBody : IDeviceBody
             double dtSec = Math.Abs(P(CursorBP) - P(CursorAP)) * TimeDiv() * 8;
             measureBox.A.Text = Inv($"Δt {dtSec * 1000:0.000} ms → {(dtSec > 1e-9 ? 1 / dtSec : 0):0.0} Hz");
             measureBox.B.Text = Inv($"ΔV {Sc(M_CursorBv) - Sc(M_CursorAv):0.000} · {LensInk.Note(dtSec > 1e-9 ? 1 / dtSec : 0)}");
-
-            statusLeft.Text = centreTab switch
-            {
-                1 when data.SyncOn => Inv($"Scope · sync {LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {VoltDiv():0.00}/div{(data.KeyOn ? " · key " + data.KeyName : "")}"),
-                1 => Inv($"Scope · {Ms(TimeDiv())}/div · {VoltDiv():0.00}/div · trig {(On(TrigEdgeP) ? "↓" : "↑")} {(P(TrigLevelP) - 0.5) * 2:0.00} {new[] { "auto", "normal", "single" }[Sel(TrigModeP, 3)]}{(On(PersistP) ? Inv($" · persist {Sec(PersistS())}") : "")}"),
-                2 => Loc.F("device.lens.waterfall_bins_overlap_window_s", LensData.WfBins, winName, Overlaps[Sel(WfOverlapP, 4)], WfSpan(), -120 + P(WfFloorP) * 80),
-                _ => Inv($"Spectrum · FFT {fftN} · {winName} · avg {Avg()} · slope {P(TiltP) * 9:0.0} dB/oct{(On(MidSideP) ? " · Mid/Side" : "")}"),
-            };
-            statusLeft.Foreground = On(FreezeP) ? AmberLit : Txt2;
-            statusRight.Text = Inv($"{data.SampleRate / 1000:0.#} kHz · latency 0 smp · {(On(FreezeP) ? "frozen" : Inv($"{10 + P(RateP) * 50:0} fps"))} · corr {Sc(M_Corr):+0.00;−0.00;0.00}");
 
             // The right Analyze panel follows the centre tab (and the Cursors switch).
             if (rightTab == 0)

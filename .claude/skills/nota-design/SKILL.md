@@ -134,8 +134,9 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
 ## Device cards
 
 - **Every device keeps its 0.57 layout and size**: 700 × 260 (`DeviceCardKit.CardH`,
-  `IDeviceBody.Width`), the same sections in the same places, its status line inside the
-  body. The style guide restyles the elements, never the layout; repacking a card, growing
+  `IDeviceBody.Width`), the same sections in the same places. Built-in instruments, effects
+  and MIDI effects have no status line under the body and no side column of upright faders
+  or meters (#531); the racks keep their status line. The style guide restyles the elements, never the layout; repacking a card, growing
   its width or its text is a separate decision for Chris (a full redraw was reverted on
   Oct 26 for making the cards cramped and too large). Corner 9, raised.
 - **Header 22** (`BuildCardShell` in `DeviceChainView.Shell.cs` — every card uses it,

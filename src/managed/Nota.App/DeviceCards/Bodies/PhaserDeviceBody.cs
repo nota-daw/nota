@@ -8,7 +8,7 @@
 // notches ticked (drag: left / right = Center, up / down = Feedback) and, under it, the corner
 // frequency of both channels over two cycles with a running head, a STAGES column (2 / 4 / 6 / 8 /
 // 12, Center, Depth in octaves, the bipolar Feedback, Mix, and the first notch's sweep and null
-// depth) with the mode the feedback makes, and a status strip. The live fc comes from the engine
+// depth) with the mode the feedback makes. The live fc comes from the engine
 // (Phaser.h scopeRead); the response is drawn from the same formula the DSP runs. Every control is
 // a device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free. FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -279,44 +279,9 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         var right = Island(HeadRow(Caps("STAGES"), modeWord), rightBody, 176);
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
-        {
-            double fb = Fb(), afb = Math.Abs(fb);
-            bool warn = false;
-            string foot;
-            if (!On()) foot = Loc.T("device.phaser.phaser_bypassed_the_signal_passes");
-            else if (P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
-            else if (afb >= 0.85)
-            {
-                foot = Loc.F("device.phaser.feedback_peaks_up_to_db_the", FbF(fb), PhaserMath.PeakDb(P(Mix), fb));
-                warn = true;
-            }
-            else if (P(Depth) < 0.01f) foot = Loc.T("device.phaser.depth_at_zero_the_notches");
-            else
-            {
-                int n = StagesN();
-                foot = n + " stages · " + PhaserMath.NotchCount(n, fb) + (PhaserMath.NotchCount(n, fb) == 1 ? " notch" : " notches") + " · fc "
-                    + PhaserMath.HzF(FcMin()) + " ↔ " + PhaserMath.HzF(FcMax()) + NotaNum.F($" Hz ({2 * PhaserMath.DepthOct * P(Depth):0.0} oct)");
-            }
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ") + (Synced() ? "retrig bar" : "free run");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

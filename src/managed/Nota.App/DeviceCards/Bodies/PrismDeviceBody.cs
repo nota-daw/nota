@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Prism body (device kind 21, three-band dynamics), a build of
-// the "Nota Prism" mockup (700 × 260) on the Chamber frame: an always-visible Global column
-// (Amount + Output), a centre tabbed panel (Bands / Band detail / Time), a right tabbed panel
-// (Meters / Output) and a status strip. Bands are colour-coded Low = mauve, Mid = neutral ink,
-// High = teal. The spectrum's crossover lines, the transfer curve's threshold dots and every
-// slider are controls. Every control is a device param, so automation / MIDI learn / presets /
-// A-B / persistence come for free. FullBleed — the shared shell draws the header.
+// the "Nota Prism" mockup (700 × 260) on the Chamber frame: a centre tabbed panel (Bands / Band
+// detail / Time) and a right tabbed panel (Meters / Output — Amount and Output knobs on the
+// latter). Bands are colour-coded Low = mauve, Mid = neutral ink, High = teal. The spectrum's
+// crossover lines, the transfer curve's threshold dots and every slider are controls. Every
+// control is a device param, so automation / MIDI learn / presets / A-B / persistence come for
+// free. FullBleed — the shared shell draws the header.
 
 using System;
 using System.Collections.Generic;
@@ -224,32 +224,6 @@ internal sealed class PrismDeviceBody : IDeviceBody
             });
             return row;
         }
-
-        // ======================================================================
-        // LEFT — GLOBAL column (Amount + Output)
-        // ======================================================================
-        Control Fader(int p, string label, string tip)
-        {
-            var f = new ChamberFader { VerticalAlignment = VerticalAlignment.Stretch, Default = Def(p) };
-            f.Changed += v => Raw(p, (float)v);
-            f.DragStarted += () => Begin(p);
-            f.DragEnded += () => End(p);
-            readouts.Add(() => f.Set(P(p)));
-            Learn(f, p);
-            ToolTip.SetTip(f, tip);
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(lb, Dock.Bottom), f } };
-        }
-        var amtTxt = Mono("", 7, TxtC); amtTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        var outTxt = Mono("", 7, TxtC); outTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() => { amtTxt.Text = Pct(P(Amount)); outTxt.Text = DbShort((P(Output) - 0.5) * 48); });
-        var globTitle = Caps("GLOBAL"); globTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(Fader(Amount, "AMOUNT", Loc.T("device.prism.amount_scales_every_bands_compression")));
-        faders.Children.Add(Col(Fader(Output, "OUT", Loc.T("device.prism.output_gain_24_db_double")), 1));
-        var globCol = new RuleSection { Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(globTitle, Dock.Top), Docked(outTxt, Dock.Bottom), Docked(amtTxt, Dock.Bottom), faders } } };
-        DockPanel.SetDock(globCol, Dock.Left);
 
         // ======================================================================
         // CENTRE — Bands (spectrum + per-band overview)
@@ -511,15 +485,10 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }
         Control OutputTab()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 50 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 50 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 50, Children = { Mono("0", 7, DimC), GRow(Mono("−12", 7, DimC), 1), GRow(Mono("−48", 7, DimC), 2) } };
-            var meters = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Top, Children = {
-                new StackPanel { Spacing = 2, Children = { meterL, Center(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Center(Caps("R")) } }, scale } };
-            var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { K(Output, "OUTPUT", v => DbF((v - 0.5) * 48), 38, 54), meters } };
+            // Amount (it lived on the GLOBAL column) and the output gain, side by side.
+            var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = {
+                K(Amount, "AMOUNT", v => NotaNum.F($"{v * 100:0}\u2009%"), 38, 54),
+                K(Output, "OUTPUT", v => DbF((v - 0.5) * 48), 38, 54) } };
 
             // Sidechain source (None + every other track, and the pads / chains / voices of a
             // track's instrument, specs/050).
@@ -640,56 +609,11 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }, null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, Txt2);
-        string StatusText()
-        {
-            int nb = BandCount();
-            int solo = Sel(Solo, 4) - 1;
-            if (On(ScListen)) return Loc.T("device.prism.listening_to_the_detector_key") + (solo >= 0 ? Inv($" · {PrismInk.Names[solo]} band") : "");
-            switch (centreTab)
-            {
-                case 1:
-                {
-                    int b = band;
-                    string head = solo == b ? Inv($"{PrismInk.Names[b]} solo") : PrismInk.Names[b];
-                    string below = On(BP(b, BelowOn)) ? Inv($"below {ThrB(P(BP(b, BelowThresh))):0;−0}\u2009dB {RatioBF(P(BP(b, BelowRatio))).Replace(" ", "")}") : "below off";
-                    return Inv($"{head} · above {ThrA(P(BP(b, AboveThresh))):0;−0}\u2009dB {RatioAF(P(BP(b, AboveRatio))).Replace(" ", "")} · {below} · knee {P(BP(b, Knee)) * 24:0.#}\u2009dB");
-                }
-                case 2:
-                {
-                    var autos = Enumerable.Range(0, 3).Where(b => BandActive(b) && On(BP(b, AutoRelease))).Select(b => PrismInk.Names[b]).ToList();
-                    int src = engine.DeviceAcceptsSidechain(track, di) ? engine.DeviceSidechainSource(track, di) : -1;
-                    string sc = src >= 0 ? "sidechain: " + SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di)) : "own input";
-                    return Inv($"{(On(Detect) ? "RMS" : "Peak")} detector · {(autos.Count > 0 ? "auto release on " + string.Join(", ", autos) : "fixed release")} · {sc}");
-                }
-                default:
-                    string xo = nb == 3 ? Loc.F("device.prism.crossovers", HzF(XHz(P(XoverLow))), HzF(XHz(P(XoverHigh)))) : nb == 2 ? Inv($"crossover {HzF(XHz(P(XoverLow)))}") : "full band";
-                    return Inv($"{nb} {(nb == 1 ? "band" : "bands")} · {xo} · amount {P(Amount) * 100:0} %{(solo >= 0 && BandActive(solo) ? " · " + PrismInk.Names[solo] + " solo" : "")}");
-            }
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = (centreTab == 1 && Sel(Solo, 4) - 1 == band) || On(ScListen) ? AmberLit : Txt2;
-            double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
-            string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#}\u2009ms") : Loc.T("device.prism.no_lookahead");
-            string sc = Sc(S_ScActive) > 0.5 ? " · SC" : "";
-            statusRight.Text = sr > 0 ? Loc.F("device.prism.khz_cpu", sr / 1000, la, sc, Sc(S_Cpu) * 100) : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { globCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

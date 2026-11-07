@@ -11,7 +11,7 @@
 // over 8 s of loudness — input, output and the target with its ±1 LU band (drag the line for
 // Target) — and a readout row. On the right the METERS (IN / OUT against the target, TP against
 // the ceiling, the correction), RESPONSE (Fast / Slow, Window, Max Gain) and TRUE-PEAK SAFE with
-// its ceiling (drag the dBTP). A status strip says what the leveler is doing. Every control is a
+// its ceiling (drag the dBTP). Every control is a
 // device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free; double-click resets. FullBleed — the shared shell draws the header (name · preset ·
 // badge · bypass).
@@ -387,18 +387,6 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var right = Island(new DockPanel { Children = { Docked(Bar(metersHead, new Thickness(8, 0)), Dock.Top), rightBody } }, 176);
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-        ToolTip.SetTip(statusLeft, Loc.T("device.auto_gain.what_the_leveler_is_doing"));
-
         // ---- live state ---------------------------------------------------------------------
         static double MeterX(double lufs) => Math.Clamp((lufs - LevelMath.LBot) / (LevelMath.LTop - LevelMath.LBot), 0, 1);
         readouts.Add(() =>
@@ -448,31 +436,11 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             mTp.V.Text = Lufs(tp); mTp.V.Foreground = tpOver ? Danger : TextPrimary;
             double cf = Math.Clamp(g / Math.Max(0.01, maxG), -1, 1) / 2;
             mCor.M.Set(0.5, 0.5 + cf, Teal, 0.5); mCor.V.Text = Sgn(on ? g : 0);
-
-            // Status.
-            string foot; IBrush footInk = TextSecondary;
-            double matchG = Math.Clamp(target - measured - trim, -maxG, maxG);
-            if (!on) foot = Loc.T("device.auto_gain.leveler_bypassed_the_output_equals");
-            else if (!primed) foot = Loc.T("device.auto_gain.waiting_for_signal_the_gain");
-            else if (silent) foot = Loc.T("device.auto_gain.input_silent_the_measurement_and");
-            else if (manual && Math.Abs(delta) >= 1) { foot = Loc.F("device.auto_gain.output_lu_from_the_target", Sgn(delta), Sgn(matchG)); footInk = NotaPalette.Warning; }
-            else if (tpClamp) { foot = $"True-peak limits the gain to the {NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}")}\u2009dBTP ceiling"; footInk = NotaPalette.Warning; }
-            else if (clamp > 0 && !manual) { foot = Loc.F("device.auto_gain.needs_more_than_db_raise", maxG); footInk = NotaPalette.Warning; }
-            else
-            {
-                foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));
-                if (HasRef()) foot += " · matching " + RefName();
-                else if (Math.Abs(trim) > 0.05) foot += " · trim " + Sgn(trim) + "\u2009dB";
-            }
-            statusLeft.Text = foot; statusLeft.Foreground = footInk;
-            double sr = Sc(S_SampleRate);
-            string la = On(Safe) ? (On(Response) ? "look-ahead 20\u2009ms" : "look-ahead 5\u2009ms") : "look-ahead off";
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · {ScaleNames[si].ToLowerInvariant()} · {la} · corr {Sc(S_Corr):+0.00;−0.00;0.00}") : la;
         });
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         // One history sample per UI tick (the graph spans N ticks ≈ 8 s); edits only repaint.
         void Tick()

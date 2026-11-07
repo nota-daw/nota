@@ -2,15 +2,14 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Auto Shift body (pitch correction, device kind 10), a build
-// of the "Nota Auto Shift" mockup (700 × 260) on the Shutter / Utility / Valve frame: an
-// always-visible PITCH column (where the voice sits · the correction now), a centre panel
-// with Trace / Scale / MIDI tabs — the detected and corrected pitch on the scale's note
+// of the "Nota Auto Shift" mockup (700 × 260) on the Shutter / Utility / Valve frame: a centre
+// panel with Trace / Scale / MIDI tabs — the detected and corrected pitch on the scale's note
 // lanes, the sung-note histogram under the scale's notes (click to edit, Learn), the MIDI
-// target from another track's notes — a right panel with Shift / Detect tabs, and a status
-// strip. The pictures come from the engine (AutoShift.h scopeRead). Every control is a
-// device param, so automation / MIDI learn / presets / A-B / persistence come for free;
-// Learn and Reset are device actions, the MIDI source rides on the sidechain source, and
-// Follow (copy a Nota Scale's key and scale) is driven from here.
+// target from another track's notes — and a right panel with Shift / Detect tabs. The pictures
+// come from the engine (AutoShift.h scopeRead). Every control is a device param, so automation /
+// MIDI learn / presets / A-B / persistence come for free; Learn and Reset are device actions,
+// the MIDI source rides on the sidechain source, and Follow (copy a Nota Scale's key and
+// scale) is driven from here.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -106,12 +105,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         }
         string KeyScale() => $"{Keys[KeyOf()]} {ScaleName()}";
         double SpeedMs() => Exp(P(Speed), 2, 300);
-        double RangeSt() => 1 + P(Range) * 11;
-        double ShiftSt() => (P(Shift) - 0.5) * 24;
-        double FineCt() => (P(Fine) - 0.5) * 200;
-        double FormPct() => (P(FormantShift) - 0.5) * 200;
         double GlideMs() => Exp(P(MidiGlide), 5, 800);
-        double BendSt() => P(MidiBendRange) * 6;
         int LowNote() => 24 + (int)Math.Round(P(DetLow) * 72);
         int HighNote() => 24 + (int)Math.Round(P(DetHigh) * 72);
         string VoiceName()
@@ -420,40 +414,6 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         string TargetText() => TargetNote() >= 0 ? Note(TargetNote()) : "—";
 
         // ======================================================================
-        // LEFT — PITCH column (where the voice sits · the correction now)
-        // ======================================================================
-        var pitchTitle = Caps("PITCH"); pitchTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new AsPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
-        var corrPill = new AsPill { Ink = Teal, Bipolar = true, VerticalAlignment = VerticalAlignment.Stretch };
-        var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var corrLbl = Caps("CORR"); corrLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(inPill, Loc.T("device.auto_shift.the_detected_pitch_low_to"));
-        ToolTip.SetTip(corrPill, Loc.T("device.auto_shift.the_correction_now_up_or"));
-        var pitchNote = Mono("—", 9, AccentBright); pitchNote.HorizontalAlignment = HorizontalAlignment.Center; pitchNote.FontWeight = FontWeight.Medium;
-        var pitchCents = Mono("", 7, TextPrimary); pitchCents.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() =>
-        {
-            bool v = Voiced();
-            double lo = LowNote(), hi = Math.Max(lo + 1, HighNote());
-            inPill.Set(v ? (Sc(S_DetMidi) - lo) / (hi - lo) : double.NaN);
-            corrPill.Set(v ? Sc(S_CorrCents) / 200.0 : double.NaN);
-            pitchNote.Text = v ? (TargetNote() >= 0 ? Note(TargetNote()) : Note(DetNote())) : "—";
-            pitchNote.Foreground = v ? AccentBright : TextTertiary;
-            pitchCents.Text = v ? CentsF(Sc(S_CorrCents)) : "";
-            pitchTitle.Foreground = v && (MidiOn() || Math.Abs(Sc(S_CorrCents)) > 1) ? AccentBright : TextTertiary;
-        });
-        Control PillCol(AsPill pill, TextBlock lbl) => new DockPanel { Children = { Docked(lbl, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = pill } } };
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        pills.Children.Add(PillCol(inPill, inLbl));
-        pills.Children.Add(Col(PillCol(corrPill, corrLbl), 1));
-        var pitchCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(pitchTitle, Dock.Top), Docked(pitchCents, Dock.Bottom), Docked(pitchNote, Dock.Bottom), pills } },
-        };
-        DockPanel.SetDock(pitchCol, Dock.Left);
-
-        // ======================================================================
         // CENTRE — Trace
         // ======================================================================
         AsTraceView? trace = null;
@@ -695,67 +655,11 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         var rightFrame = TabFrame(new[] { "Shift", "Detect" }, rightHost, RightBody, true, 0, _ => RefreshAll(), null);
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string>();
-            string src = Src() switch { 0 => "auto", 2 => "MIDI", _ => "manual" };
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(KeyScale());
-                    parts.Add(Sc(S_Learning) > 0.5 ? "learning" : src);
-                    parts.Add(NotaNum.F($"{BitCount(ActiveMask())} notes"));
-                    parts.Add(NotaNum.F($"{VoiceName().ToLowerInvariant()} {Note(LowNote())}…{Note(HighNote())}"));
-                    parts.Add(NotaNum.F($"sens {P(DetSens) * 100:0} %"));
-                    if (On(SkipSib)) parts.Add("skip sibilants");
-                    break;
-                case 2:
-                    parts.Add("MIDI");
-                    parts.Add(MidiSrcName());
-                    parts.Add(On(MidiMode) ? "scale" : "note");
-                    if (On(MidiLatch)) parts.Add("latch");
-                    if (On(MidiOct)) parts.Add("oct lock");
-                    parts.Add(NotaNum.F($"amount {P(Amount) * 100:0} %"));
-                    parts.Add(On(MidiBend) ? NotaNum.F($"glide {MsF(GlideMs())} within ±{BendSt():0.#} st") : "steps");
-                    if (Math.Abs(FormPct()) >= 0.5) parts.Add(NotaNum.F($"formant {FormPct():+0;−0} %"));
-                    if (!MidiOn()) parts.Add("key source is " + src);
-                    break;
-                default:
-                    parts.Add(KeyScale());
-                    parts.Add(src);
-                    parts.Add(NotaNum.F($"amount {P(Amount) * 100:0} %"));
-                    parts.Add("speed " + MsF(SpeedMs()));
-                    parts.Add(NotaNum.F($"range ±{RangeSt():0} st"));
-                    if (P(Human) >= 0.01f) parts.Add(NotaNum.F($"human {P(Human) * 100:0} %"));
-                    parts.Add(NotaNum.F($"shift {ShiftSt():+0;−0;0}") + (Math.Abs(FineCt()) >= 0.5 ? NotaNum.F($" {FineCt():+0;−0} ¢") : ""));
-                    parts.Add(NotaNum.F($"mix {P(Mix) * 100:0} %"));
-                    break;
-            }
-            if (On(Follow) && centreTab != 2) parts.Add("follows Nota Scale");
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { pitchCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {

@@ -123,6 +123,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   rail, and the voice count sits right under the voice grid. Nota Monolith's contours have no
   release of their own, so the release point on their graphs is drawn but no longer drags or
   types. Nota Pentad's Output tab drops the voice strip that the Oscillators tab already shows.
+- **Built-in effect and MIDI effect cards without the status line or the side columns**
+  (nota-daw/nota#531): the 18 px text strip along the bottom of every built-in audio effect and
+  MIDI effect card is gone, in both sizes of the MIDI effects. The two- or three-bar column at
+  the left of Compressor, Reverb, Delay, Utility, Valve, Auto Filter, Vintage, Auto Shift,
+  Beat Repeat, Crush, Ceiling, Shutter, Chamber, Prism and Lens goes too, and the centre panel
+  takes its width. Parameters that lived only in those places move to the card itself:
+  Compressor's Threshold (Dynamics) and SC gain (Key) become sliders, Valve's Gain becomes the
+  first knob under the tone stack, Auto Filter's Freq and Res lead its Filter panel, Chamber's
+  Wet row becomes the Dry/wet slider, Prism's Amount sits beside Output (in place of its output
+  meters), and Dynamic EQ-8's Dynamic switch and Output slider sit under its graph. In the S
+  size, Length's Start from, Velocity's random direction and Random's seed and Lock are now
+  set in L. The parameters themselves are unchanged, so projects, presets and automation are
+  unaffected. The effect racks keep their status line.
 - **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
   stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
   under it and the A / D / S / R letter in the box's corner. The box still drags and types

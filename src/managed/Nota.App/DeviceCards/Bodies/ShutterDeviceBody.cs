@@ -2,16 +2,15 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Shutter body (noise gate / ducker, device kind 19), a build
-// of the "Nota Shutter" mockup (700 × 260) on the Utility / Valve / Vintage frame: an always-
-// visible STATE column (input or key level with the threshold · reduction), a centre panel
-// with Signal / Envelope / Sidechain / Pattern tabs — the input and the gated output over the
-// window with the threshold and the close level on it, one opening drawn from attack / hold /
-// release / shape / floor, the detector's band-pass under the reduction, the rhythmic gate's
-// step grid — a right panel with Detector / Meters tabs (Rhythm / Detector on the Pattern
-// tab), and a status strip. The pictures come from the engine (Shutter.h
-// scopeRead), so they show what the gate does. Every control is a device param, so
-// automation / MIDI learn / presets / A-B / persistence come for free; the window length,
-// Live (freeze) and Reset are view / meter actions, not params.
+// of the "Nota Shutter" mockup (700 × 260) on the Utility / Valve / Vintage frame: a centre
+// panel with Signal / Envelope / Sidechain / Pattern tabs — the input and the gated output over
+// the window with the threshold and the close level on it, one opening drawn from attack /
+// hold / release / shape / floor, the detector's band-pass under the reduction, the rhythmic
+// gate's step grid — and a right panel with Detector / Meters tabs (Rhythm / Detector on the
+// Pattern tab). The pictures come from the engine (Shutter.h scopeRead), so they show what the
+// gate does. Every control is a device param, so automation / MIDI learn / presets / A-B /
+// persistence come for free; the window length, Live (freeze) and Reset are view / meter
+// actions, not params.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -141,7 +140,6 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
-        static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -364,41 +362,6 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             v.GestureEnd += h => End(param(h));
             v.ResetRequested += h => { Reset(param(h)); RefreshAll(); };
         }
-
-        // ======================================================================
-        // LEFT — STATE column (input or key level · reduction)
-        // ======================================================================
-        var stateTitle = Caps("STATE"); stateTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
-        var grPill = new ShPill { Ink = Teal, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch };
-        var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var grLbl = Acr("GR"); grLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(inPill, Loc.T("device.shutter.the_level_the_detector_compares"));
-        ToolTip.SetTip(grPill, Loc.T("device.shutter.gain_reduction_how_far_the"));
-        var stateIn = Mono("", 7, TextPrimary); stateIn.HorizontalAlignment = HorizontalAlignment.Center;
-        var stateGr = Mono("", 7, TextPrimary); stateGr.HorizontalAlignment = HorizontalAlignment.Center;
-        static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
-        readouts.Add(() =>
-        {
-            bool ext = Sc(S_ExtKey) > 0.5;
-            double lvl = ext ? Sc(S_KeyDb) : Sc(S_InDb);
-            inLbl.Text = NotaText.Label(ext ? "SC" : "IN");
-            inPill.Set(Norm60(lvl), Norm60(ThrDb()));
-            grPill.Set(Math.Clamp(Sc(S_GrDb) / 60, 0, 1), double.NaN);
-            stateIn.Text = lvl <= -119 ? "−∞" : NotaNum.F($"{lvl:0.0}");
-            stateGr.Text = Sc(S_GrDb) < 0.05 ? "0.0\u2009dB" : Sc(S_GrDb) > 99 ? "−∞\u2009dB" : NotaNum.F($"−{Sc(S_GrDb):0.0}\u2009dB");
-            stateTitle.Foreground = State() is 1 or 2 or 3 ? AccentBright : TextTertiary;   // lit while the gate is open
-        });
-        Control PillCol(ShPill pill, TextBlock lbl) => new DockPanel { Children = { Docked(lbl, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = pill } } };
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        pills.Children.Add(PillCol(inPill, inLbl));
-        pills.Children.Add(Col(PillCol(grPill, grLbl), 1));
-        var stateCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(stateTitle, Dock.Top), Docked(stateGr, Dock.Bottom), Docked(stateIn, Dock.Bottom), pills } },
-        };
-        DockPanel.SetDock(stateCol, Dock.Left);
 
         // ======================================================================
         // CENTRE — Signal
@@ -853,72 +816,11 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             Refresh();
         }, extrasHost);
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            string floor = P(Floor) <= 0.001f ? "−∞" : NotaNum.F($"{FloorDb():0.0}\u2009dB");
-            var parts = new List<string> { Duck() ? "Duck" : "Gate" };
-            if (centreTab == 3)
-            {
-                int tg = Sel(PatTarget, 3);
-                return string.Join(" · ", new[]
-                {
-                    tg == 0 ? "Pattern off" : "Pattern", PatternName(), RateName(), NotaNum.F($"{NSteps()} × {NLevels()}"),
-                    "smooth " + Pct(P(PatSmooth)), "swing " + NotaNum.F($"{P(PatSwing) * 75:0}\u2009%"), "depth " + Pct(P(PatDepth)),
-                }) + (tg == 0 ? "" : tg == 2 ? Loc.T("device.shutter.map_pattern_out") : On(PatGated) ? Loc.T("device.shutter.volume_gated") : " → Volume")
-                  + (On(PatRetrig) ? " · MIDI retrig" : "");
-            }
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(Shapes[Sel(Shape, 3)].ToLowerInvariant());
-                    parts.Add(Times());
-                    parts.Add("floor " + floor);
-                    parts.Add(NotaNum.F($"threshold {ThrDb():0.0}"));
-                    parts.Add(NotaNum.F($"return {RetDb():0.0}"));
-                    if (On(Retrigger)) parts.Add("retrigger");
-                    break;
-                case 2:
-                    parts.Add("key " + KeyName());
-                    parts.Add(NotaNum.F($"threshold {ThrDb():0.0}"));
-                    parts.Add("range " + floor);
-                    parts.Add(On(DetFilter) ? "SC " + HpF(P(DetHP)) + "…" + LpF(P(DetLP)) : "SC full band");
-                    parts.Add(NotaNum.F($"look {LookMs()}\u2009ms"));
-                    if (On(Listen)) parts.Add("listening");
-                    break;
-                default:
-                    parts.Add(NotaNum.F($"threshold {ThrDb():0.0}\u2009dB"));
-                    parts.Add(NotaNum.F($"return {RetDb():0.0}"));
-                    parts.Add(Times());
-                    parts.Add("floor " + floor);
-                    parts.Add(NotaNum.F($"look {LookMs()}\u2009ms"));
-                    if (ExtOn()) parts.Add("key " + KeyName());
-                    break;
-            }
-            if (On(PeakHold) && centreTab != 1) parts.Add("peak hold");
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency {Sc(S_Latency):0}\u2009smp · CPU {Sc(S_Cpu) * 100:0.0}\u2009%") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
+        var centreBox = new RuleSection { Margin = new Thickness(0, 0, 5, 0), Child = centre };
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stateCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, centreBox } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         void Refresh()
         {
