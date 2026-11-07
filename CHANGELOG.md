@@ -195,7 +195,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   The parameters are unchanged. **Nota Utility:** Width and Balance by the field, Mono by the
   width graph, Target by the levels; Phase (Ø L, Ø R, Mute, correlation), Mono (on, slope) and
   Match (level and gain match, measurements, true-peak limiter) panels over Gain; S is the
-  field over Gain, Width, Balance and Mono.
+  field over Gain, Width, Balance and Mono. **Nota Level:** Loudness (the graph, Target beside
+  it, the scale and the target's standards under it) and Meters tabs; Correction (Auto / Manual,
+  the fader and the applied gain, Match / Reset) and Response (Fast / Slow, Window, Max gain,
+  True-peak safe) panels over Trim; S is the graph over Auto / Manual and Target, Trim, Window,
+  Max gain.
 - **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
   S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
   graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale

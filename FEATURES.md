@@ -987,12 +987,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   band's curve, the brass sum and the output spectrum (the same filled analyzer as EQ-8) — drag the crossover handles,
   or ride a band's gain in its zone; 30 factory presets; MCP `read_eq3`,
   `set_eq3`.
-- **Nota Level** (18) — loudness leveler (BS.1770 LUFS): Auto rides the gain to a Target
+- **Nota Level** (18) — in two sizes (L 700 / S 260, S·L toggle) — loudness leveler (BS.1770 LUFS): Auto rides the gain to a Target
   (−36 … 0 LUFS, standards menu) over Window (Fast / Slow), Manual holds a draggable fader and
   MATCH sets it to the distance to the target; Momentary / Short-term / Integrated (gated)
   scales; Max Gain, Trim; holds the gain in silence and release tails; True-peak safe
   look-ahead limiter (5 / 20 ms, PDC) with a Ceiling; match to a reference track (sidechain).
-  An 8 s loudness graph (drag the target), IN / OUT / TP / correction meters;
+  Loudness (an 8 s graph, drag the target) / Meters (IN / OUT / TP / correction) tabs and a
+  right panel that follows them (Correction · Response) over Trim;
   30 factory presets; MCP `read_level`, `set_level`, `level_match`.
 - **Nota Shutter** (19) — noise gate and ducker: Threshold/Return (hysteresis),
   Attack/Hold/Release with a Linear / Log / Snap shape, Floor (range), Lookahead, Flip

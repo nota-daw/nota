@@ -6834,8 +6834,8 @@ Console.WriteLine("-- Nota Level (AutoGain) --");
     Check(ag >= 0, "add built-in Nota Level");
     Check(ae.DeviceName(at, ag) == "Nota Level", $"name is Nota Level (got '{ae.DeviceName(at, ag)}')");
     Check(ae.TrackDeviceBuiltinKind(at, ag) == 18, $"builtin kind is 18 (got {ae.TrackDeviceBuiltinKind(at, ag)})");
-    Check(ae.DeviceParamCount(at, ag) == 10 && ae.DeviceParamName(at, ag, 9) == "Gain",
-          $"Nota Level exposes 10 params, Gain appended (got {ae.DeviceParamCount(at, ag)})");
+    Check(ae.DeviceParamCount(at, ag) == 11 && ae.DeviceParamName(at, ag, 9) == "Gain" && ae.DeviceParamName(at, ag, 10) == "View",
+          $"Nota Level exposes 11 params, Gain and View appended (got {ae.DeviceParamCount(at, ag)})");
     Check(Math.Abs(ae.DeviceParamDefault(at, ag, 9) - 0.5f) < 1e-4 && Math.Abs(ae.DeviceParamDefault(at, ag, 0) - 0.611f) < 1e-3,
           "Level defaults: Gain 0 dB, Target −14 LUFS");
 
