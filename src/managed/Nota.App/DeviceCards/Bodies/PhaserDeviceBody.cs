@@ -90,7 +90,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => new()
         { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -195,7 +195,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), fcWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), fcWord },
         };
         var response = new PhaserResponseView { Value = () => (P(Center), P(Feedback)) };
         response.GestureBegin += () => { Begin(Center); Begin(Feedback); };
@@ -204,7 +204,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         response.ResetRequested += () => { Reset(Center); Reset(Feedback); RefreshAll(); };
         Learn(response, Center);
         ToolTip.SetTip(response, MenuKit.Keys(Loc.T("device.phaser.the_notches_the_stages_cut")));
-        ValueEntry.AttachAll(response, ValueEntry.DeviceParam(engine, track, di, Center, "Center", v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + " Hz", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(PhaserMath.Fb(v)), RefreshAll));
+        ValueEntry.AttachAll(response, ValueEntry.DeviceParam(engine, track, di, Center, "Center", v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + "\u2009Hz", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(PhaserMath.Fb(v)), RefreshAll));
 
         var sweep = new PhaserSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, Loc.T("device.phaser.the_corner_frequency_of_both"));
@@ -221,13 +221,13 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, Loc.T("device.phaser.what_the_feedback_makes_positive"));
 
         var stageSeg = Segments(PhaserMath.StageCounts.Select(n => n.ToString()).ToArray(), () => PhaserMath.StageIndex(P(Stages)),
             i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, fill: true, padX: 0);
-        foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         readouts.Add(stageSync);
         Learn(stageSeg, Stages);
         ToolTip.SetTip(stageSeg, Loc.T("device.phaser.all_pass_stages_every_two"));
@@ -254,7 +254,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         }
         var sweepBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
         var sweepVal = Mono("", 8, TextPrimary);
-        var nullBar = new FlangerBar { Ink = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
+        var nullBar = new FlangerBar { Ink = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Center };
         var nullVal = Mono("", 8, TextPrimary);
         var reads = new Border
         {

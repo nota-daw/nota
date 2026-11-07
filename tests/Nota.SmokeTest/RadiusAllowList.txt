@@ -3,7 +3,7 @@
 #
 # Radius ratchet for DesignTokenCheck.RunGeometry (spec 012 T009).
 #
-# Rectangle RadiusX / RadiusY literals off the 0/1/2/3/4 scale, as of the day the check
+# Rectangle RadiusX / RadiusY literals off the scale (now 0/2/3/4/5/6/7/9, spec 038), as of the day the check
 # landed. A line may only be removed: a new offender fails, and so does a line that no
 # longer matches anything.
 #

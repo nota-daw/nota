@@ -24,6 +24,9 @@ public partial class App : Avalonia.Application
     {
         // Numbers read the same on every OS locale: a point, and U+2212 for the minus.
         NotaNum.Install();
+        // One typeface with tabular figures, so digits keep their width everywhere.
+        NotaFonts.InstallTabular();
+        NotaTextSize.Install();
         // Rounded, bordered, clipping Borders clip their child to the inner edge.
         BorderInnerClip.Install();
         AvaloniaXamlLoader.Load(this);
@@ -109,6 +112,8 @@ public partial class App : Avalonia.Application
         // popup they open take it from here.
         NotaUiScale.InitPopups();
         NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
+        // Text size (spec 038), likewise: every text the app draws takes its step.
+        NotaTextSize.Set(Services.GetRequiredService<ISettingsService>().Current.TextSize);
         // Interface language (spec 068), before any view model, window or static text table
         // exists: the language is fixed for the run, so those texts are built once, in it.
         InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);

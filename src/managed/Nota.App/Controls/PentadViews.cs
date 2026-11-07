@@ -59,7 +59,7 @@ internal sealed class PentadFilterCurve : Control
 {
     private static readonly IBrush Grid = NotaGraph.Grid;
     private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _cut = 0.5, _reso, _comp;
     private bool _drag;
 
@@ -129,7 +129,7 @@ internal sealed class PentadFilterCurve : Control
 
         double hz0 = 20 * Math.Pow(1000, _cut);
         string txt = (hz0 >= 1000 ? $"{hz0 / 1000:0.0}\u2009k" : $"{hz0:0}\u2009Hz") + $" · Q {_reso * 10:0.0}";
-        var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 7, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary, this);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
         double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(_cut)), 4, h - 4);
@@ -176,7 +176,7 @@ internal sealed class PentadEnvCurve : Control
 // N voice cells, lit (accent) while a voice sounds, brightness following its level.
 internal sealed class PentadVoiceStrip : Control
 {
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private readonly float[] _lv = new float[16];
     private int _n = 5;
 
@@ -206,40 +206,40 @@ internal sealed class PentadVoiceStrip : Control
             ctx.DrawRectangle(lit ? new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B)) : NotaPalette.BgSunken, lit ? on : off, r, 3, 3);
             if (cw >= 12)
             {
-                var ft = new FormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled);
+                var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled, this);
                 ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
             }
         }
     }
 }
 
-// A level bar in dBFS (−48..+3): green, amber above −6 dB. Vertical or horizontal.
+// A level bar in dBFS (−48..+3), drawn like every level meter (MeterScale): on the well,
+// corner 2, green below −6 dB, amber to 0 dBFS, red at and above. Upright it is one 3px
+// channel centred in its width (the L / R caption under it keeps the width); lying down it
+// fills its height (a thin wet level).
 internal sealed class PentadLevelBar : Control
 {
     private double _db = -100;
     public bool Vertical { get; init; }
-    public void SetLinear(double peak) { _db = peak > 1e-6 ? 20 * Math.Log10(peak) : -100; InvalidateVisual(); }
+    public void SetLinear(double peak)
+    {
+        double db = peak > 1e-6 ? 20 * Math.Log10(peak) : -100;
+        if (Math.Abs(db - _db) < 0.05) return;
+        _db = db; InvalidateVisual();
+    }
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+        if (w < 1 || h < 1) return;
+        // Its own −48..+3 dBFS scale, with the shared zones in dB: amber from −6, red from 0 dBFS.
         static double Frac(double db) => Math.Clamp((db + 48) / 51.0, 0, 1);
-        double f = Frac(_db), fw = Frac(-6);
-        if (f <= 0) return;
+        double f = Frac(_db), c = Frac(MeterScale.CautionDb), a = Frac(MeterScale.AlertDb);
         if (Vertical)
         {
-            double ih = h - 2;
-            double gTop = h - 1 - ih * Math.Min(f, fw);
-            ctx.FillRectangle(NotaPalette.Success, new Rect(1, gTop, w - 2, h - 1 - gTop));
-            if (f > fw) ctx.FillRectangle(NotaPalette.Warning, new Rect(1, h - 1 - ih * f, w - 2, ih * (f - fw)));
+            double cw = Math.Min(w, MeterScale.ChannelW);
+            MeterScale.DrawChannel(ctx, new Rect((w - cw) / 2, 0, cw, h), f, 0, horizontal: false, c, a);
         }
-        else
-        {
-            double iw = w;
-            ctx.FillRectangle(NotaPalette.Success, new Rect(0, 0, iw * Math.Min(f, fw), h));
-            if (f > fw) ctx.FillRectangle(NotaPalette.Warning, new Rect(iw * fw, 0, iw * (f - fw), h));
-        }
+        else MeterScale.DrawChannel(ctx, new Rect(0, 0, w, h), f, 0, horizontal: true, c, a);
     }
 }

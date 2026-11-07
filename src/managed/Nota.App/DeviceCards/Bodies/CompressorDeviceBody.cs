@@ -105,7 +105,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -150,7 +150,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Border Latch(int p, string text, string tip)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             void Hi()
             {
                 bool on = On(p);
@@ -241,7 +241,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
         // The second fader is make-up on Curve / Motion and the key's gain on Sidechain.
         int F2() => centreTab == 2 ? ScGain : Makeup;
-        var f2 = new CompFader { Ink = NotaPalette.Teal, Handle = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Stretch };
+        var f2 = new CompFader { Ink = DeviceCardKit.ModInk, Handle = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Stretch };
         f2.Changed += v => Raw(F2(), Lin(F2()).V(v));
         f2.GestureBegin += () => Begin(F2());
         f2.GestureEnd += () => End(F2());
@@ -251,6 +251,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         var f2Lbl = Caps("MKP"); f2Lbl.HorizontalAlignment = HorizontalAlignment.Center;
         var thrVal = Mono("", 7, TextPrimary); thrVal.HorizontalAlignment = HorizontalAlignment.Center;
         var f2Val = Mono("", 7, TextPrimary); f2Val.HorizontalAlignment = HorizontalAlignment.Center;
+        void RefreshAll() { foreach (var r in readouts) r(); }
         readouts.Add(() =>
         {
             double keyDb = KeyDb();
@@ -436,7 +437,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         {
             var title = Caps(levels ? "OUTPUT" : "REDUCTION");
             var stack = new StackPanel { Spacing = 2, Children = { title } };
-            var box = new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.ControlValue), Padding = new Thickness(6, 4), Child = stack };
+            var box = new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.FieldValue), Padding = new Thickness(6, 4), Child = stack };
             if (levels)
             {
                 Control Line(string name, Func<string> v, Func<IBrush> ink)

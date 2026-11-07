@@ -57,7 +57,7 @@ public sealed partial class MixerView
         return new Border
         {
             Width = CompactMetrics.Width, Background = Card, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -80,7 +80,7 @@ public sealed partial class MixerView
         return new Border
         {
             Width = CompactMetrics.Width, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -110,14 +110,14 @@ public sealed partial class MixerView
             Control bar;
             if (bus < returns)
             {
-                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
+                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center, Text = NotaNum.Pct };
                 int b = bus;
                 SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
                 ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", (char)('A' + b)), NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 bar = f;
             }
-            else bar = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
+            else bar = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(bar, 1);
             grid.Children.Add(bar);
             body.Children.Add(grid);

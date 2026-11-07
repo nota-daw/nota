@@ -97,7 +97,7 @@ public partial class MainWindow
         Child = new TextBlock
         {
             Text = Loc.T("main.detail_window.select_a_clip_in_the"),
-            FontSize = 12,
+            FontSize = 11,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,

@@ -141,7 +141,7 @@ internal static class RandomModel
 
 internal sealed class RandomOutputViz : Control
 {
-    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush Well = NotaPalette.Groove;
     private static readonly IBrush Edge = NotaPalette.GraphBorder;
     private static readonly IBrush Quarter = NotaPalette.GraphBorder;
     private static readonly IBrush Eighth = NotaPalette.SurfaceCard;
@@ -170,7 +170,7 @@ internal sealed class RandomOutputViz : Control
     }
 
     private static FormattedText Text(string s, double size, IBrush ink)
-        => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {
@@ -188,7 +188,7 @@ internal sealed class RandomOutputViz : Control
         double Y(int p) => win.Y + (hi - p - 0.5) * row;
         double X(double beat) => win.X + beat / RandomModel.BarBeats * win.Width;
 
-        ctx.DrawRectangle(Well, new Pen(Edge, 1), new RoundedRect(win.Deflate(0.5), 4));
+        ctx.DrawRectangle(Well, null, new RoundedRect(win, 6));
         using (ctx.PushClip(new RoundedRect(win.Deflate(1), 3)))
         {
             for (int p = (int)Math.Ceiling(lo / 12.0) * 12; p <= hi; p += 12)
@@ -227,7 +227,7 @@ internal sealed class RandomOutputViz : Control
         if (!Full) return;
         for (int p = (int)Math.Ceiling(lo / 12.0) * 12; p <= hi; p += 12)
         {
-            var ft = Text(DeviceCardKit.NoteName(p), 7, Axis);
+            var ft = Text(DeviceCardKit.NoteName(p), NotaType.RowLabel, Axis);
             double y = Math.Clamp(win.Y + (hi - p) * row - ft.Height / 2, 0, h - ft.Height);
             ctx.DrawText(ft, new Point(gutter - 4 - ft.Width, y));
         }
@@ -236,7 +236,7 @@ internal sealed class RandomOutputViz : Control
 
 internal sealed class RandomHistViz : Control
 {
-    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush Well = NotaPalette.Groove;
     private static readonly IBrush Edge = NotaPalette.GraphBorder;
     private static readonly IBrush Bar = NotaPalette.Wash(NotaPalette.VizInk, 0xA0);
     private static readonly IBrush Centre = NotaPalette.VizInk;
@@ -257,7 +257,7 @@ internal sealed class RandomHistViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Well, new Pen(Edge, 1), new RoundedRect(new Rect(0, 0, w, h).Deflate(0.5), 3));
+        ctx.DrawRectangle(Well, null, new RoundedRect(new Rect(0, 0, w, h), 6));
         int n = _bins.Length;
         if (n == 0) return;
         double x0 = 3, x1 = w - 3, top = 3, bot = h - 1, gap = 1;

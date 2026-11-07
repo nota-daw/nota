@@ -2497,7 +2497,6 @@ Nota.App/MainWindow.Commands.cs	Remote	# data: page id passed to ShowPreferences
 Nota.App/MainWindow.Commands.cs	Shortcuts	# data: page id passed to ShowPreferencesPage
 Nota.App/MainWindow.Commands.cs	Updates	# data: page id passed to ShowPreferencesPage
 Nota.App/MainWindow.Files.cs	$"Nota Export.{ext}"	# data: suggested file name
-Nota.App/MainWindow.Files.cs	Nota	# data: product name
 Nota.App/MainWindow.Freeze.cs	$"Audio {trackId}"	# data: default track name that is stored in the project
 Nota.App/MainWindow.History.cs	$"{Path.GetFileNameWithoutExtension(src)} ({version.CreatedAt.LocalDateTime:yyyy-MM-dd HH.mm}).nota"	# data: file name
 Nota.App/MainWindow.LiveFreeze.cs	$"Track {sourceId}"	# data: default track name that is stored in the project
@@ -2509,7 +2508,6 @@ Nota.App/MainWindow.axaml	BPM	# data: unit
 Nota.App/MainWindow.axaml	DSP 0%	# data: placeholder replaced at startup
 Nota.App/MainWindow.axaml	MIDI	# data: acronym
 Nota.App/MainWindow.axaml	Nota	# data: product name
-Nota.App/MainWindow.axaml	Untitled	# data: placeholder replaced at startup
 Nota.App/MainWindow.axaml.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MainWindow.axaml.cs	Play	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MainWindow.axaml.cs	Record	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
@@ -2556,9 +2554,12 @@ Nota.App/Theme/NotaColourTheme.cs	$"token '{p.Name}' must be opaque"	# data: dia
 Nota.App/Theme/NotaColourTheme.cs	$"unknown token '{p.Name}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: file declares id '{theme.Id}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: no theme file"	# data: diagnostics for people writing a theme file
+Nota.App/Theme/NotaColourTheme.cs	Bevel	# data: theme token name
+Nota.App/Theme/NotaColourTheme.cs	Well	# data: theme token name
 Nota.App/Theme/NotaColourTheme.cs	colors missing	# data: technical validation message for a theme file
 Nota.App/Theme/NotaColourTheme.cs	name must be 1–40 characters	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	the file must hold one JSON object	# data: diagnostics for people writing a theme file
+Nota.App/Theme/NotaTextSize.cs	Fixed	# data: attached property name
 Nota.App/WelcomeWindow.cs	$"  ·  {NotaNum.Unit(p.Fraction * 100, "	# data: numbers and units only
 Nota.App/WelcomeWindow.cs	$"{(p.Fraction * size).ToString("	# data: numbers and units only
 Nota.Application/Accent.cs	$"T3.4 AccentBright/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown

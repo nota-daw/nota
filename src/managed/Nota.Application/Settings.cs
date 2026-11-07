@@ -186,6 +186,9 @@ public sealed class Settings
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
     public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;
+    /// <summary>Text size step in points (Settings → Appearance, spec 038): one of
+    /// <see cref="Application.TextSize.Steps"/>; anything else reads as 0.</summary>
+    public int TextSize { get; set; } = Application.TextSize.Default;
     /// <summary>Interface language code, lower-case (Settings → Appearance, spec 068): "en" or
     /// "fr". Read at start-up, so a change applies after a restart. An empty, unknown or
     /// hand-edited value reads as English (<see cref="Localization.UiLanguage.Normalize"/>).</summary>

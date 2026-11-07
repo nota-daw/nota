@@ -54,7 +54,7 @@ public sealed partial class PreferencesWindow
         foreach (var preset in Accent.Presets)
         {
             var choice = new AccentChoice(preset.Id);
-            var fill = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Clip };
+            var fill = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Field };
             var ring = Ring(fill, SwatchSize);
             ToolTip.SetTip(ring, AccentName(preset.Id));
             // Reachable from the keyboard too: Tab to a swatch, Return or Space picks it, the
@@ -84,10 +84,10 @@ public sealed partial class PreferencesWindow
         }
 
         // Custom: a button with the custom colour's chip; its ring marks it chosen like a swatch.
-        var customChip = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Clip };
+        var customChip = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Field };
         var custom = new Button
         {
-            Height = 22, FontSize = 12, CornerRadius = NotaRadius.Tile, Padding = new Thickness(4, 0, 8, 0),
+            Height = 22, FontSize = 12, CornerRadius = NotaRadius.Group, Padding = new Thickness(4, 0, 8, 0),
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 6,
@@ -104,7 +104,7 @@ public sealed partial class PreferencesWindow
         row.Children.Add(customRing);
 
         var readout = new TextBlock { FontSize = 12, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-        var readoutHex = new TextBlock { FontSize = 12, Foreground = TextMuted, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
+        var readoutHex = new TextBlock { FontSize = 12, Foreground = TextMuted, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { readout, readoutHex } });
 
         void Show()
@@ -150,7 +150,7 @@ public sealed partial class PreferencesWindow
     {
         var ring = new Border
         {
-            BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Tile, Padding = new Thickness(size is null ? 1 : 2),
+            BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Group, Padding = new Thickness(size is null ? 1 : 2),
             BorderBrush = Brushes.Transparent, Background = Brushes.Transparent, Child = child,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -185,10 +185,10 @@ public sealed partial class PreferencesWindow
         ToolTip.SetTip(oldHalf, Loc.T("preferences.accent_before"));
         var chip = new Border
         {
-            Height = 22, CornerRadius = NotaRadius.Control, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), ClipToBounds = true,
+            Height = 22, CornerRadius = NotaRadius.Field, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), ClipToBounds = true,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { oldHalf, newHalf } },
         };
-        var hex = new TextBox { Classes = { "field" }, FontSize = 12, FontFamily = NotaFonts.MonoFamily, Height = 22, MinHeight = 22, Width = 216 - 38 - 6, MaxLength = 7 };
+        var hex = new TextBox { Classes = { "field" }, FontSize = 12, FontFamily = NotaFonts.UiFamily, Height = 22, MinHeight = 22, Width = 216 - 38 - 6, MaxLength = 7 };
         var hexRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { chip, hex } };
 
         var themes = NotaThemes.BuiltIn;
@@ -196,7 +196,7 @@ public sealed partial class PreferencesWindow
         var cells = new List<(Border Fill, Ellipse Dot)>();
         foreach (var t in themes)
         {
-            var fill = new Border { Height = 14, CornerRadius = NotaRadius.Clip, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1) };
+            var fill = new Border { Height = 14, CornerRadius = NotaRadius.Field, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1) };
             var dot = new Ellipse { Width = 4, Height = 4, Fill = NotaPalette.TextPrimary, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 2, 0), IsVisible = false };
             var cell = new StackPanel
             {
