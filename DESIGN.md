@@ -864,7 +864,14 @@ window (`Controls/NotaGraph.cs`):
 - Title sentence case in ink 3, top left; the legend lives inside the window, a drawn
   sample next to a value (`NotaGraph.Legend`).
 - The primary curve 1.8 px `VizInk`; a second source a darker grey. **No fills under
-  curves, no gradients.**
+  curves, no gradients** — with one exception, the frequency response.
+- **A frequency response** (a filter, an EQ — the shared filter graph, `FilterGraphBase`, and
+  the EQs drawn like it) is the accent curve, 1.8 px `AccentBright`, over a light accent fill
+  (`FilterAxis.ResponseFill`) to its floor or to 0 dB; a second response (modulated, a single
+  band, static) is a dashed grey line. Its frequency axis is a strip under the window
+  (`FilterAxis.Draw`) with the decades and their halves, and the value the graph is showing —
+  the cutoff, the selected band's frequency, gain and Q — lit on it as an accent pill (grey
+  for a band that is off) instead of a box over the plot. dB marks sit up the left edge.
 - Nodes 7 px with a 2 px ground-coloured ring; the selected or dragged node is orange; a
   picked but switched-off node is an orange ring.
 - Waveforms at rest in `VizInk`; second channel a darker grey; the trimmed part darkened,
@@ -1384,7 +1391,7 @@ drift).
 | `RunGeometry` | `Radius.*` / `Control.*` / `Space.*` in XAML equal `NotaGeometry`; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views; gradients inside `Theme/` only in `NotaPalette.cs` and `Theme/SplashArt/`; `Rectangle` `RadiusX` / `RadiusY` literals on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale (`RadiusAllowList.txt`) |
 | `RunType` | `Font.UI` matches `NotaFonts.UiUri`; it is the only font family (no Mono URI); `+tnum` is on (`NotaFonts.Tabular`); the four Geist weights are bundled and no other `.ttf`; the Geist OFL licence ships; no font names or `FontFamily.Default` in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; `Knob` snaps to its sizes (34 / 36 / 44 device, 24 inline, 28 flat); `SwitchTrack` is 18 × 10 with a 7 px knob inset 1.5; `SliderTrack` is a 9 px value bar in a groove with a 3 px line (16 in the shell) |
-| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, amber from −6 dBFS, red from 0 dBFS; the arrangement playhead 1 px without glow |
+| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves (a frequency response's goes through `FilterAxis.ResponseFill`); no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, amber from −6 dBFS, red from 0 dBFS; the arrangement playhead 1 px without glow |
 | `RunLayout` | `DeviceCardKit.HeaderH` 22 and cards 260 high; every card width between 260 and 940; the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 30 |
 | `RunNumbers` | Display culture installed; no hyphen in a negative format section or before ∞; no hyphen-minus before a digit in a view literal (`NumberAllowList.txt`); no invariant culture on readouts; thin space before units; no vowel-dropped labels |
 | `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |

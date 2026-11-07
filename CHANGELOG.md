@@ -280,6 +280,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track and tap, Tilt, Pitch, Mod gain and the Key and Out meters) sits over Unvoiced, Dry/wet
   (Mix) and Gain; S is the graph over the carrier choice and Bands, Formant, Dry/wet and Gain. A preset no longer saves or
   applies the View param of a built-in audio effect: loading one keeps the card's S / L size.
+- **Nota EQ-3, EQ-8 and Dynamic EQ-8 draw their response like Auto Filter** (nota-daw/nota#531):
+  the response is the orange curve over a light fill to 0 dB, with the spectrum as a filled area
+  behind it and a frequency strip under the window. The box with the selected band's values that
+  sat next to its node on EQ-8 and Dynamic EQ — and covered the curve and the other nodes — is
+  gone: the band's frequency, gain and Q (a cut's slope; for a dynamic band the gain it has now)
+  are lit on the frequency strip instead, and dB marks run up the left edge. The selected band's
+  own curve is a dashed grey line, Dynamic EQ's static response too. EQ-3's crossover values move
+  from the pills over the graph onto the strip; drag a crossover there or by its line.
 - **Nota Delay, Reverb and Chamber: graphs you can read, controls that sit together**
   (nota-daw/nota#531): Delay's Time tab draws the repeats as two lanes in dB — L over R — on a
   grid in beats or ms, the dry hit at 0 and each echo as tall as it is loud (ping-pong hops

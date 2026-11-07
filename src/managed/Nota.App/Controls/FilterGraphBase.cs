@@ -13,6 +13,7 @@
 //   · a hover marker: a line, a dot on the curve and the frequency, note and gain there.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -123,7 +124,7 @@ internal abstract class FilterGraphBase : Control
                 foreach (var q in pts) g.LineTo(q);
                 g.LineTo(new Point(pts[^1].X, r.Bottom)); g.EndFigure(true);
             }
-            ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x1E), null, area);
+            ctx.DrawGeometry(FilterAxis.ResponseFill, null, area);
         }
         ctx.DrawGeometry(null, new Pen(ink ?? NotaPalette.AccentBright, width, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), line);
     }
@@ -197,33 +198,15 @@ internal abstract class FilterGraphBase : Control
 
         // The cutoff: a dashed rule up to the curve and its value lit on the axis.
         double fc = CutoffHz;
-        Rect pill = default;
         if (double.IsFinite(fc) && fc > 0)
         {
             double cx = Math.Clamp(XOf(fc), r.X, r.Right);
             var dash = new Pen(NotaPalette.Wash(NotaPalette.Accent, Dragging ? (byte)0x90 : (byte)0x55), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
             double yTop = double.IsFinite(cutY) ? cutY : r.Y;
             ctx.DrawLine(dash, new Point(cx, yTop), new Point(cx, r.Bottom));
-            var ct = NotaGraph.AxisText(NotaNum.Hz(fc), NotaPalette.TextOnAccent);
-            double pw = ct.Width + 8, px = Math.Clamp(cx - pw / 2, 0, w - pw);
-            pill = new Rect(px, r.Bottom + 1, pw, AxisH - 1);
-            ctx.DrawRectangle(Dragging ? NotaPalette.AccentBright : NotaPalette.Accent, null, pill, 3, 3);
-            ctx.DrawText(ct, new Point(px + 4, pill.Y + (pill.Height - ct.Height) / 2));
+            FilterAxis.Draw(ctx, r, w, XOf, lo, hi, FilterAxis.Lit(fc, NotaNum.Hz(fc), Dragging));
         }
-
-        // The frequency labels: the decades and their halves, each left out where it would run
-        // into a neighbour or the cutoff.
-        double lastRight = -10;
-        foreach (var f in new[] { lo, 50, 100, 200, 500, 1000, 2000, 5000, 10000, hi })
-        {
-            if (f < lo * 0.999 || f > hi * 1.001 || (f != lo && f < lo * 1.6) || (f != hi && f > hi / 1.6)) continue;
-            var t = NotaGraph.AxisText(NotaNum.Hz(f));
-            double x = XOf(f), tx = Math.Clamp(x - t.Width / 2, 0, w - t.Width);
-            var box = new Rect(tx - 2, r.Bottom + 1, t.Width + 4, AxisH - 1);
-            if (tx <= lastRight + 3 || (pill.Width > 0 && box.Intersects(pill))) continue;
-            ctx.DrawText(t, new Point(tx, r.Bottom + 1 + (AxisH - 1 - t.Height) / 2));
-            lastRight = tx + t.Width;
-        }
+        else FilterAxis.Draw(ctx, r, w, XOf, lo, hi);
 
         // The hover marker.
         if (_hoverX is double hx)
@@ -251,6 +234,72 @@ internal abstract class FilterGraphBase : Control
         int n = (int)Math.Round(m), c = (int)Math.Round((m - n) * 100);
         string name = Names[((n % 12) + 12) % 12] + NotaNum.Str((n / 12) - 1, "0");
         return c == 0 ? name : $"{name} {(c > 0 ? "+" : "−")}{Math.Abs(c)} c";
+    }
+}
+
+/// <summary>The frequency axis under a filter graph's plot (#531) and the values lit on its edges,
+/// shared by FilterGraphBase and the EQs: the decades and their halves along the strip, and an
+/// accent pill for a value the graph is showing — a cutoff, the selected band's reading — so a
+/// reading sits on the scale it belongs to instead of over the plot.</summary>
+internal static class FilterAxis
+{
+    public const double H = 13;   // the strip under the plot
+
+    /// <summary>The light accent fill under a frequency response (DESIGN.md § Visualisers: the
+    /// one fill a graph draws — the response of a filter or an EQ, to its floor or to 0 dB).</summary>
+    public static readonly IBrush ResponseFill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
+
+    /// <summary>A pill on the frequency strip: the frequency it is centred on, its text, and how loud: lit (accent), hot (bright: dragged) or quiet (a band that
+    /// is off).</summary>
+    public readonly record struct Pill(double At, string Text, IBrush Fill, IBrush Ink);
+
+    public static Pill Lit(double at, string text, bool hot = false, bool quiet = false)
+        => quiet ? new(at, text, NotaPalette.SurfaceRaised, NotaPalette.TextSecondary)
+                 : new(at, text, hot ? NotaPalette.AccentBright : NotaPalette.Accent, NotaPalette.TextOnAccent);
+
+    private static Rect DrawPill(DrawingContext ctx, FormattedText ft, Rect box, IBrush fill)
+    {
+        ctx.DrawRectangle(fill, null, box, 3, 3);
+        ctx.DrawText(ft, new Point(box.X + 4, box.Y + (box.Height - ft.Height) / 2));
+        return box;
+    }
+
+    /// <summary>The frequency strip under <paramref name="r"/>: the pills at their frequencies
+    /// first, then the labels (decades and halves) that don't run into a neighbour or a pill.</summary>
+    public static void Draw(DrawingContext ctx, Rect r, double w, Func<double, double> xOf, double lo, double hi, params Pill[] pills)
+    {
+        var taken = new List<Rect>();
+        foreach (var p in pills)
+        {
+            var ft = NotaGraph.AxisText(p.Text, p.Ink);
+            double pw = ft.Width + 8, px = Math.Clamp(Math.Clamp(xOf(p.At), r.X, r.Right) - pw / 2, 0, Math.Max(0, w - pw));
+            taken.Add(DrawPill(ctx, ft, new Rect(px, r.Bottom + 1, pw, H - 1), p.Fill));
+        }
+        double lastRight = -10;
+        foreach (var f in new[] { lo, 50, 100, 200, 500, 1000, 2000, 5000, 10000, hi })
+        {
+            if (f < lo * 0.999 || f > hi * 1.001 || (f != lo && f < lo * 1.6) || (f != hi && f > hi / 1.6)) continue;
+            var t = NotaGraph.AxisText(NotaNum.Hz(f));
+            double x = xOf(f), tx = Math.Clamp(x - t.Width / 2, 0, w - t.Width);
+            var box = new Rect(tx - 2, r.Bottom + 1, t.Width + 4, H - 1);
+            if (tx <= lastRight + 3 || taken.Exists(q => q.Intersects(box))) continue;
+            ctx.DrawText(t, new Point(tx, r.Bottom + 1 + (H - 1 - t.Height) / 2));
+            lastRight = tx + t.Width;
+        }
+    }
+
+    /// <summary>dB marks up the plot's left edge, each above its line, left out where they would
+    /// meet <paramref name="avoid"/> or the plot's ends.</summary>
+    public static void DbMarks(DrawingContext ctx, Rect r, Func<double, double> yOf, Rect avoid, params double[] dbs)
+    {
+        foreach (var db in dbs)
+        {
+            var t = NotaGraph.AxisText(db == 0 ? "0" : NotaNum.F($"{db:+0;−0}"));
+            var at = new Point(r.X + 4, yOf(db) - t.Height - 1);
+            var box = new Rect(at, new Size(t.Width, t.Height));
+            if (box.Y < r.Y + 1 || box.Bottom > r.Bottom - 1 || (avoid.Width > 0 && box.Intersects(avoid))) continue;
+            ctx.DrawText(t, at);
+        }
     }
 }
 

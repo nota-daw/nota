@@ -185,7 +185,6 @@ Nota.App/Controls/DynamicEqCurve.cs	Ntch	# data: device parameter, port and valu
 Nota.App/Controls/DynamicEqCurve.cs	Response	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	Solo	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	Static	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/Controls/DynamicEqCurve.cs	dynamics off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/Eq8Views.cs	 · off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/Eq8Views.cs	$"Band {b + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/Eq8Views.cs	Channel	# data: device parameter, port and value names and live readouts of their values (FR-004)

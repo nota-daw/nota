@@ -880,7 +880,7 @@
     "device.dynamic_eq.key_self_the_band_listens": "Key — Self: the band listens to this track · Ext: to the key track (click Ext again to pick the track)",
     "device.dynamic_eq.lift_acts_as_it_falls": "Lift — acts as it falls below it (a boost by default)",
     "device.dynamic_eq.lift_acts_below_the_threshold": "Lift — acts below the threshold",
-    "device.dynamic_eq.no_dynamics": "no dynamics",
+    "device.dynamic_eq.now": "now",
     "device.dynamic_eq.q_the_width_the_resonance": "Q — the width (the resonance on the cuts); or the wheel over the node",
     "device.dynamic_eq.range_how_far_the_gain": "Range — how far the gain can move at full engagement (6 dB past the threshold); click the arrow to flip cut / boost",
     "device.dynamic_eq.release_how_fast_it_returns": "Release — how fast it returns to its static gain",

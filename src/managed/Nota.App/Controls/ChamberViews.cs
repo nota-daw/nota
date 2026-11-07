@@ -495,7 +495,7 @@ internal sealed class ChamberDecayGraph : Control, IValueHandles
             }
             ac.LineTo(new Point(r.Right, r.Bottom)); ac.EndFigure(true);
         }
-        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x1E), null, area);
+        ctx.DrawGeometry(FilterAxis.ResponseFill, null, area);
         ctx.DrawGeometry(null, new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), line);
 
         // The handles: one per band (its decay beside it) and the Damping grip on its line.

@@ -6,11 +6,14 @@
 //    value, the range's ends and 0 dB marked beside it. Vertical drag (relative — a click never
 //    jumps), 0.5 dB steps with a 0 dB detent; Shift / Ctrl / ⌘ for fine 0.1 dB steps;
 //    double-click resets (0 dB, and the kill off); ⌥-click types the gain.
-//  · Eq3Graph — the response window: the output spectrum (engine FFT) behind, each band's own
-//    curve thin in grey (Low light, Mid darker, High light and dashed), the sum in neutral ink, the two crossovers as dashed lines with handles
-//    along the top that drag left / right (the low/mid one held to at most half the mid/high
-//    one). A drag anywhere else in a band's zone rides that band's gain up / down; double-click
-//    a handle or a zone to reset it, ⌥-click it to type the crossover / the band's gain.
+//  · Eq3Graph — the response window, drawn like the shared filter graph (FilterGraphBase,
+//    #531): the output spectrum (engine FFT) behind, each band's own curve thin in grey (Low
+//    light, Mid darker, High light and dashed), the sum as the accent curve with a light fill to
+//    0 dB, the two crossovers as dashed lines whose frequencies sit lit on the frequency strip
+//    under the window. Drag a crossover's line or its value on the strip left / right (the
+//    low/mid one held to at most half the mid/high one); a drag anywhere else in a band's zone
+//    rides that band's gain up / down; double-click a crossover or a zone to reset it, ⌥-click
+//    it to type the crossover / the band's gain.
 // Eq3Math mirrors Eq3.h (Linkwitz-Riley tree, the low band's allpass) so the curves are the DSP.
 
 using System;
@@ -233,22 +236,26 @@ internal sealed class Eq3Graph : Control, IValueHandles
         InvalidateVisual();
     }
 
-    // dB → y: the fader's top at 10 %, −36 dB at 90 % (as the mockup draws it).
+    // dB → y: the fader's top at 10 %, −36 dB at 90 % of the plot (as the mockup draws it).
+    private double PlotH => Math.Max(1, Bounds.Height - FilterAxis.H);
     private double Y(double db, double h) => Math.Clamp(0.1 + (_top - db) / (_top + 36) * 0.8, 0, 1) * h;
 
+    // A crossover's value on the frequency strip (where FilterAxis draws it).
     private Rect Handle(int which, out FormattedText text)
     {
-        double f = which == 0 ? _f1 : _f2;
-        text = new NotaFormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextPrimary, this);
-        double w = text.Width + 14, x = Eq3Math.X(f) * Bounds.Width;
-        x = Math.Clamp(x - w / 2, 1, Math.Max(1, Bounds.Width - w - 1));
-        return new Rect(Math.Round(x), 4, Math.Round(w), Math.Round(text.Height + 4));
+        double f = which == 0 ? _f1 : _f2, w = Bounds.Width;
+        text = NotaGraph.AxisText(Eq3Math.Hz(f));
+        double pw = text.Width + 8, px = Math.Clamp(Math.Clamp(Eq3Math.X(f) * w, 0, w) - pw / 2, 0, Math.Max(0, w - pw));
+        return new Rect(px, PlotH + 1, pw, FilterAxis.H - 1);
     }
 
+    // The crossover under the pointer: its value on the strip, or its line in the plot.
     private int HitHandle(Point p)
     {
-        for (int i = 1; i >= 0; i--) if (Handle(i, out _).Inflate(new Thickness(2, 3)).Contains(p)) return i;
-        return -1;
+        for (int i = 1; i >= 0; i--) if (Handle(i, out _).Inflate(new Thickness(2, 1)).Contains(p)) return i;
+        if (p.Y > PlotH) return -1;
+        double d1 = Math.Abs(p.X - Eq3Math.X(_f1) * Bounds.Width), d2 = Math.Abs(p.X - Eq3Math.X(_f2) * Bounds.Width);
+        return Math.Min(d1, d2) > 4 ? -1 : d1 <= d2 ? 0 : 1;
     }
     private int ZoneAt(double x)
     {
@@ -264,7 +271,7 @@ internal sealed class Eq3Graph : Control, IValueHandles
         int b = handle - 2;
         double lo = b == 0 ? Eq3Math.FMin : b == 1 ? _f1 : _f2, hi = b == 0 ? _f1 : b == 1 ? _f2 : Eq3Math.FMax;
         double x = Eq3Math.X(Math.Sqrt(lo * hi)) * Bounds.Width;
-        return ValueEntry.Near(new Point(x, Y(_db[b], Bounds.Height)), Bounds.Size);
+        return ValueEntry.Near(new Point(x, Y(_db[b], PlotH)), Bounds.Size);
     }
 
     protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hover != -1) { _hover = -1; InvalidateVisual(); } }
@@ -320,7 +327,7 @@ internal sealed class Eq3Graph : Control, IValueHandles
         int b = _drag - 2;
         bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         double top = Eq3Math.TopDb(_iso), bot = Eq3Math.BottomDb(_iso);
-        double px = Math.Max(140, Bounds.Height);
+        double px = Math.Max(140, PlotH);
         double db = _startDb + (_startY - p.Y) / px * (top - bot) * (fine ? 0.2 : 1);
         if (fine) db = Math.Round(db * 10) / 10;
         else { db = Math.Round(db * 2) / 2; if (Math.Abs(db) < 0.75) db = 0; }
@@ -353,37 +360,41 @@ internal sealed class Eq3Graph : Control, IValueHandles
         base.OnPointerCaptureLost(e);
     }
 
+    private static readonly IPen SumPen = new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
+        double w = Bounds.Width, h = PlotH;
+        if (w <= 0 || Bounds.Height <= FilterAxis.H + 4) return;
         var r = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, r);
+        var clip = ctx.PushClip(new RoundedRect(r.Deflate(1), NotaGraph.Radius));
 
-        // Grid: decades, 0 dB brighter, the cut's steps faint.
+        // Grid: decades; 0 dB and the cut's steps.
         foreach (double f in new[] { 100.0, 1000, 10000 })
         {
             double x = Math.Round(Eq3Math.X(f) * w) + 0.5;
-            ctx.DrawLine(NotaGraph.GridPen, new Point(x, 0), new Point(x, h));
+            ctx.DrawLine(NotaGraph.GridPen, new Point(x, 1), new Point(x, h - 1));
         }
-        var faint = new Pen(NotaPalette.GridSubBeat, 1);
-        foreach (double db in new[] { -12.0, -24 }) { double y = Math.Round(Y(db, h)) + 0.5; ctx.DrawLine(faint, new Point(0, y), new Point(w, y)); }
+        foreach (double db in new[] { -12.0, -24 }) { double y = Math.Round(Y(db, h)) + 0.5; ctx.DrawLine(NotaGraph.GridPen, new Point(1, y), new Point(w - 1, y)); }
         double y0 = Math.Round(Y(0, h)) + 0.5;
-        ctx.DrawLine(new Pen(NotaPalette.GridBar, 1), new Point(0, y0), new Point(w, y0));
+        ctx.DrawLine(new Pen(NotaPalette.GridBar, 1), new Point(1, y0), new Point(w - 1, y0));
 
         // Output spectrum, behind everything, filled as on EQ-8: 0 dBFS at the top, −90 at the bottom.
         if (_specValid) SpectrumFill.Draw(ctx, _spec, w, h, 90, _specN);
 
-        // Band curves and the sum.
+        // Band curves and the sum (with its fill to 0 dB).
         int n = (int)Math.Clamp(w / 2, 60, 320);
         var lin = new double[3];
         for (int b = 0; b < 3; b++) lin[b] = _kill[b] ? 0 : Math.Pow(10, _db[b] / 20);
         var band = new StreamGeometry[3];
         var bc = new StreamGeometryContext[3];
         for (int b = 0; b < 3; b++) { band[b] = new StreamGeometry(); bc[b] = band[b].Open(); }
-        var sum = new StreamGeometry();
+        var sum = new StreamGeometry(); var fill = new StreamGeometry();
         using (var sc = sum.Open())
+        using (var fc = fill.Open())
         {
+            fc.BeginFigure(new Point(0, y0), true);
             for (int i = 0; i < n; i++)
             {
                 double fx = (double)i / (n - 1), f = Eq3Math.F(fx), x = fx * w;
@@ -398,23 +409,27 @@ internal sealed class Eq3Graph : Control, IValueHandles
                 }
                 var ps = new Point(x, Y(Eq3Math.ToDb(s.Magnitude), h));
                 if (i == 0) sc.BeginFigure(ps, false); else sc.LineTo(ps);
+                fc.LineTo(ps);
             }
             sc.EndFigure(false);
+            fc.LineTo(new Point(w, y0)); fc.EndFigure(true);
         }
+        ctx.DrawGeometry(FilterAxis.ResponseFill, null, fill);
         for (int b = 0; b < 3; b++)
         {
             bc[b].EndFigure(false); bc[b].Dispose();
             if (_kill[b]) continue;
             ctx.DrawGeometry(null, new Pen(Eq3Math.CurveInk(b), 1.2, Eq3Math.CurveDash(b), lineJoin: PenLineJoin.Round), band[b]);
         }
-        ctx.DrawGeometry(null, NotaGraph.PrimaryPen, sum);
+        ctx.DrawGeometry(null, SumPen, sum);
 
-        // Crossovers: dashed lines and their handles.
-        var dash = new Pen(NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
-        foreach (double f in new[] { _f1, _f2 })
+        // Crossovers: dashed lines (accent while held or under the pointer).
+        for (int i = 0; i < 2; i++)
         {
-            double x = Math.Round(Eq3Math.X(f) * w) + 0.5;
-            ctx.DrawLine(dash, new Point(x, 0), new Point(x, h));
+            bool hot = _drag == i || _hover == i;
+            double x = Math.Round(Eq3Math.X(i == 0 ? _f1 : _f2) * w) + 0.5;
+            var dash = new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+            ctx.DrawLine(dash, new Point(x, 1), new Point(x, h - 1));
         }
 
         // Band labels along the top, centred in each band's zone.
@@ -442,24 +457,18 @@ internal sealed class Eq3Graph : Control, IValueHandles
             ctx.DrawText(names[b], new Point(lx[b], 6));
             ctx.DrawText(vals[b], new Point(lx[b] + names[b].Width + 4, 6));
         }
-        for (int i = 0; i < 2; i++)
-        {
-            var rect = Handle(i, out var text);
-            bool hot = _drag == i || _hover == i;
-            ctx.DrawRectangle(hot ? NotaPalette.Accent : NotaPalette.SurfaceHover, null, rect, NotaRadius.CellValue, NotaRadius.CellValue);
-            if (hot) text.SetForegroundBrush(NotaPalette.TextOnAccent);
-            ctx.DrawText(text, new Point(rect.X + 7, rect.Y + (rect.Height - text.Height) / 2));
-        }
 
-        // Axis labels: 0 and the fader's floor on the right, the range in the bottom corners.
-        void RightLbl(string t, double db)
+        // dB marks up the left edge.
+        FilterAxis.DbMarks(ctx, r, db => Y(db, h), default, _iso ? new[] { 0.0, -12, -24 } : new[] { 12.0, 0, -12 });
+        clip.Dispose();
+
+        // The crossovers' values on the frequency strip: lit while held or under the pointer.
+        FilterAxis.Pill Xo(int i)
         {
-            var ft = NotaGraph.AxisText(t);
-            ctx.DrawText(ft, new Point(w - ft.Width - 5, Y(db, h) - ft.Height / 2));
+            double f = i == 0 ? _f1 : _f2;
+            return _drag == i || _hover == i ? FilterAxis.Lit(f, Eq3Math.Hz(f), _drag == i)
+                : new FilterAxis.Pill(f, Eq3Math.Hz(f), NotaPalette.SurfaceHover, NotaPalette.TextPrimary);
         }
-        RightLbl("0", 0);
-        RightLbl(NotaNum.F($"{Eq3Math.BottomDb(_iso):0}"), Eq3Math.BottomDb(_iso));
-        NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomLeft, "20");
-        NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomRight, "20k Hz");
+        FilterAxis.Draw(ctx, r, w, f => Eq3Math.X(f) * w, Eq3Math.FMin, Eq3Math.FMax, Xo(0), Xo(1));
     }
 }
