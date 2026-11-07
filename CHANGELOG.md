@@ -72,6 +72,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and not applied. Nota Remote follows. Orange looks exactly as before.
 
 ### Changed
+- **Lens: the graph fills the panel, controls on the right** (review of nota-daw/nota#296):
+  each view's graph takes the whole centre panel. The right panel's first tab is named after
+  the view and holds its controls (FFT, Window and the spectrum knobs; Sync, Trig, Key and the
+  trigger; the waterfall's speed and scale); Display keeps the scale and the afterglow. The
+  live reading, Freeze and the bigger-window button sit right of the view tabs. Every control
+  is the same parameter as before.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
@@ -106,6 +112,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
+- **Lens shows all its read-outs again** after the graph-fills-the-panel layout: the spectrum's
+  FFT window length and crest factor and the waterfall's row duration sit beside the graph
+  titles; the scope shows held / stable / free-run with the holdoff and edge on the graph, and
+  its RMS next to the period; the spectrum cursor gives the FFT bin, and the scope cursors the
+  note of 1/Δt. The waterfall picture (and the spectrum and scope) no longer pokes out past the
+  graph's rounded corners.
 - **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
   Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
   audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
