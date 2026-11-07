@@ -35,6 +35,8 @@ internal sealed class ChorusDeviceBody : IDeviceBody
     private const int S_Cents1 = 6, S_WinPhase = 9, S_SampleRate = 14, kTele = 32;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 
@@ -93,7 +95,6 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
         // Slider row: caps label · track · mono value. `locked` greys it out and stops the hand
         // (Offset in Ensemble, Mix in Vibrato); `ink` recolours the fill (Warmth in rose).
@@ -116,29 +117,28 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             return g;
         }
 
-        RuleSection Island(Control head, Control body, double width = double.NaN)
+        // Gauge knob over a normalized param; `locked` dims it and stops the hand (Offset in Ensemble).
+        Control K(int p, string name, Func<double, string> fmt, string tip, double cellW = 50, double size = 34, Func<double, double>? snap = null,
+            Func<bool>? locked = null, bool bipolar = false)
         {
-            var headBar = new Border
+            var val = Mono(fmt(P(p)), 7, TextPrimary);
+            var knob = new Knob(P(p), 1.0) { Accent = true, Bipolar = bipolar, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            knob.Format = fmt;
+            knob.ValueChanged += v => { Raw(p, snap is null ? v : snap(v)); RefreshAll(); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => End(p);
+            Learn(knob, p);
+            ToolTip.SetTip(knob, tip);
+            readouts.Add(() =>
             {
-                Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
-            };
-            return new RuleSection
-            {
-                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
-            };
+                if (locked is not null) { bool l = locked(); knob.IsDim = l; knob.IsHitTestVisible = !l; }
+                if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
+                val.Text = fmt(P(p));
+            });
+            return KnobCell(name, knob, val, cellW);
         }
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
-        }
+
         // A legend sample: a drawn 8px stroke and its word (never a typed dash).
-        static Control LegendItem(TextBlock word, Border stroke) => new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Children = { stroke, word },
-        };
 
         // ======================================================================
         // LEFT — LFO: Hz / Sync · mode · the rate · Rate · Offset · HPF
@@ -149,54 +149,9 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         Learn(syncSeg, Sync);
         ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
-        var modeSeg = Segments(ChorusMath.Modes, ModeI, i => { SetP(Mode, i / 2.0); RefreshAll(); }, out var modeSync, fill: true, padX: 0);
-        readouts.Add(modeSync);
-        Learn(modeSeg, Mode);
-        ToolTip.SetTip(modeSeg, Loc.T("device.chorus.classic_two_voices_left_and"));
-
-        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
-        var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
-        var period = Mono("", 7, TextTertiary); period.Margin = new Thickness(0, 2, 0, 0);
-        readouts.Add(() =>
-        {
-            double hz = RateHz();
-            if (Synced())
-            {
-                big.Text = ChorusMath.DivNames[DivI()];
-                bigSub.Text = NotaNum.F($"note · {Bpm():0.##} BPM");
-                period.Text = HzF(hz) + " Hz · period " + PeriodF(PeriodMs());
-            }
-            else
-            {
-                big.Text = HzF(hz);
-                bigSub.Text = "Hz · free";
-                period.Text = "period " + PeriodF(PeriodMs());
-            }
-            big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
-        });
-        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
-        ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
-
-        var rateRow = Slider("RATE", Rate, v => HzF(ChorusMath.FreeHz(v)) + " Hz", Loc.T("common.rate_the_free_lfo_rate"), 38, 46);
-        var divRow = Slider("RATE", Division, v => ChorusMath.DivNames[ChorusMath.DivIndex(v)],
-            Loc.T("device.chorus.rate_the_note_value_of"), 38, 46,
-            snap: v => ChorusMath.DivNorm(ChorusMath.DivIndex(v)));
-        readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
-        var offsetRow = Slider("OFFSET", Offset, v => Ens() ? "3 × 120°" : NotaNum.F($"{v * 180:0}°"),
-            Loc.T("device.chorus.offset_the_right_voices_lfo"),
-            38, 46, modulation: true, snap: v => Math.Round(v * 180) / 180, locked: Ens);
         var hpfRow = Slider("HPF", Hpf, v => ChorusMath.HpHz(v) <= 0 ? "off" : ChorusMath.HzF(ChorusMath.HpHz(v)) + " Hz",
             Loc.T("device.chorus.hpf_a_high_pass_on"), 38, 46,
             modulation: true, snap: v => Math.Round(v / 0.005) * 0.005);
-
-        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
-        leftBody.Children.Add(modeSeg);
-        leftBody.Children.Add(GRow(bigBlock, 1));
-        leftBody.Children.Add(GRow(new Panel { Children = { rateRow, divRow } }, 2));
-        leftBody.Children.Add(GRow(offsetRow, 3));
-        leftBody.Children.Add(GRow(hpfRow, 4));
-        var left = Island(HeadRow(Caps("LFO"), syncSeg), leftBody, 176);
-        DockPanel.SetDock(left, Dock.Left);
 
         // ======================================================================
         // CENTRE — VOICES over two cycles (τ / ct), and the stereo field
@@ -205,26 +160,6 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         bool? viewCents = null;
         bool Cents() => viewCents ?? Vib();
 
-        var legendWords = new TextBlock[3];
-        var legendStrokes = new Border[3];
-        var legendItems = new Control[3];
-        var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        for (int i = 0; i < 3; i++)
-        {
-            legendWords[i] = Mono("", 7, ChorusMath.VoiceInk(i));
-            legendStrokes[i] = new Border { Width = 8, Height = 1.5, Background = ChorusMath.VoiceInk(i), VerticalAlignment = VerticalAlignment.Center };
-            legendItems[i] = LegendItem(legendWords[i], legendStrokes[i]);
-            legend.Children.Add(legendItems[i]);
-        }
-        readouts.Add(() =>
-        {
-            var vs = ChorusMath.Voices(ModeI(), 0);
-            for (int i = 0; i < 3; i++)
-            {
-                legendItems[i].IsVisible = i < vs.Length;
-                if (i < vs.Length) legendWords[i].Text = vs[i].Name;
-            }
-        });
         var plotRead = Mono("", 7, TextTertiary);
         plotRead.Margin = new Thickness(0, 0, 5, 0);
         readouts.Add(() => plotRead.Text = Cents()
@@ -234,11 +169,6 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         viewSeg.Width = 52;
         readouts.Add(viewSync);
         ToolTip.SetTip(viewSeg, Loc.T("device.chorus.draws_each_voices_delay_ct"));
-        var headRight = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { plotRead, viewSeg } };
-        var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), VerticalAlignment = VerticalAlignment.Center };
-        centreHead.Children.Add(Caps("VOICES"));
-        centreHead.Children.Add(Col(legend, 1));
-        centreHead.Children.Add(Col(headRight, 3));
 
         var plot = new ChorusVoicesView { Value = () => P(Amount) };
         plot.GestureBegin += () => Begin(Amount);
@@ -251,16 +181,14 @@ internal sealed class ChorusDeviceBody : IDeviceBody
 
         var field = new ChorusFieldView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(field, Loc.T("device.chorus.where_the_voices_sit_in"));
-        var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(field, Dock.Bottom), plot } };
-        var centre = Island(centreHead, centreBody);
-        centre.Margin = new Thickness(5, 0);
+        // The voices over two cycles with their stereo field under them: one view.
+        var voicesView = new DockPanel { LastChildFill = true, Children = { Docked(field, Dock.Bottom), plot } };
 
         // ======================================================================
         // RIGHT — VOICE: Amount · Feedback · Width · Warmth · Mix · detune / delay readouts
         // ======================================================================
         var stateWord = Mono("", 7, TextSecondary);
-        stateWord.Margin = new Thickness(0, 0, 5, 0);
-        readouts.Add(() =>
+                readouts.Add(() =>
         {
             string s = State();
             stateWord.Text = s;
@@ -269,8 +197,6 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         ToolTip.SetTip(stateWord, Loc.T("device.chorus.how_many_voices_sing_or"));
 
         const double LW = 46, VW = 36;
-        var amountRow = Slider("AMOUNT", Amount, v => PctF(v), Loc.T("device.chorus.amount_how_far_the_lfo"), LW, VW,
-            snap: v => Math.Round(v * 100) / 100);
         var fbRow = Slider("FEEDBACK", Feedback, v => FbF(ChorusMath.Fb(v)),
             Loc.T("device.chorus.feedback_the_voices_fed_back"), LW, VW,
             modulation: true, bipolar: true, snap: v => ChorusMath.FbNorm(Math.Round(ChorusMath.Fb(v) * 100) / 100));
@@ -280,9 +206,6 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         var warmRow = Slider("WARMTH", Warmth, v => PctF(v),
             Loc.T("device.chorus.warmth_a_bucket_brigade_flavour"), LW, VW,
             snap: v => Math.Round(v * 100) / 100, ink: DeviceCardKit.ModInkBright);
-        var mixRow = Slider("MIX", Mix, v => Vib() ? "wet" : PctF(v), Loc.T("device.chorus.mix_0_dry_50_dry"), LW, VW,
-            snap: v => Math.Round(v * 100) / 100, locked: Vib);
-
         Control ReadRow(string label, FlangerBar bar, TextBlock value, string tip)
         {
             value.TextAlignment = TextAlignment.Right; value.Width = 44;
@@ -310,19 +233,41 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             },
         };
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        rightBody.Children.Add(amountRow);
-        rightBody.Children.Add(GRow(fbRow, 2));
-        rightBody.Children.Add(GRow(widthRow, 4));
-        rightBody.Children.Add(GRow(warmRow, 6));
-        rightBody.Children.Add(GRow(mixRow, 8));
-        rightBody.Children.Add(GRow(reads, 10));
-        var right = Island(HeadRow(Caps("VOICE"), stateWord), rightBody, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        // ======================================================================
+        // Frames: L (the voices with Amount · Rate · Offset beside them and the mode, Hz / Sync and
+        // τ / ct under them; the Voice panel; Dry/wet under it) · S (the voices over the mode and
+        // Rate · Amount · Width · Dry/wet)
+        // ======================================================================
+        var extras = Mono("", 7, TextTertiary);
+        readouts.Add(() => extras.Text = plotRead.Text + " · period " + PeriodF(PeriodMs()));
+        Control RateKnob(double cellW)
+        {
+            var free = K(Rate, "RATE", v => HzF(ChorusMath.FreeHz(v)) + "\u2009Hz", Loc.T("common.rate_the_free_lfo_rate"), cellW);
+            var div = K(Division, "RATE", v => ChorusMath.DivNames[ChorusMath.DivIndex(v)], Loc.T("device.chorus.rate_the_note_value_of"), cellW,
+                snap: v => ChorusMath.DivNorm(ChorusMath.DivIndex(v)));
+            readouts.Add(() => { free.IsVisible = !Synced(); div.IsVisible = Synced(); });
+            return new Panel { Children = { free, div } };
+        }
+        Control AmountKnob(double cellW) => K(Amount, "AMOUNT", v => PctF(v), Loc.T("device.chorus.amount_how_far_the_lfo"), cellW, snap: v => Math.Round(v * 100) / 100);
+        Control MixKnob(double cellW, double size) => K(Mix, "DRY/WET", v => Vib() ? "wet" : PctF(v), Loc.T("device.chorus.mix_0_dry_50_dry"), cellW, size,
+            snap: v => Math.Round(v * 100) / 100, locked: Vib);
+        Control OffsetKnob() => K(Offset, "OFFSET", v => Ens() ? "3 × 120°" : NotaNum.F($"{v * 180:0}°"), Loc.T("device.chorus.offset_the_right_voices_lfo"), 50,
+            snap: v => Math.Round(v * 180) / 180, locked: Ens);
+        var modeSel = Segments(ChorusMath.Modes, ModeI, i => { SetP(Mode, i / 2.0); RefreshAll(); }, out var modeSelSync, padX: 5);
+        readouts.Add(modeSelSync);
+        Learn(modeSel, Mode);
+        ToolTip.SetTip(modeSel, Loc.T("device.chorus.classic_two_voices_left_and"));
+        reads.Background = Brushes.Transparent;   // a fixed-height row in the panel
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(voicesView, modeSel, RateKnob(56), AmountKnob(56),
+                K(Spread, "WIDTH", v => NotaNum.F($"{ChorusMath.WidthPct(v):0}\u2009%"), Loc.T("device.chorus.width_the_voices_stereo_spread"), 56, snap: v => Math.Round(v * 200) / 200),
+                MixKnob(56, 34))
+            : CardLayout.Large(new[] { Loc.T("device.chorus.tab_voices") }, 0,
+                _ => CardLayout.View(voicesView, CardLayout.KnobColumn(AmountKnob(50), RateKnob(50), OffsetKnob()), CardLayout.Line(8, modeSel, syncSeg, viewSeg)),
+                _ => (CardLayout.Head(CardLayout.Title(Loc.T("device.chorus.voice")), stateWord), CardLayout.Rows(fbRow, widthRow, warmRow, hpfRow, reads)),
+                extras,
+                CardLayout.Output(null, MixKnob(58, 44), null),
+                _ => RefreshAll());
 
         var centsNow = new double[3];
         void Refresh()

@@ -12005,7 +12005,7 @@ Console.WriteLine("-- Nota Chorus (effect kind 25) --");
     Check(ce.DeviceName(ct, cdi) == "Nota Chorus", $"device is Nota Chorus (got '{ce.DeviceName(ct, cdi)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cdi) == 25, "device reports builtin kind 25");
     int cpc = ce.DeviceParamCount(ct, cdi);
-    Check(cpc == 11, $"Nota Chorus exposes 11 params ({cpc})");
+    Check(cpc == 12, $"Nota Chorus exposes 12 params, View appended ({cpc})");
     var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cdi, i)).ToArray();
     Check(string.Join(",", cnames) == "Rate,Mode,Sync,Division,Offset,HPF,Amount,Feedback,Width,Warmth,Mix", $"param layout ({string.Join(",", cnames)})");
     Check(Math.Abs(ce.DeviceParamDefault(ct, cdi, 0) - 0.6157f) < 1e-3f && ce.DeviceParamDefault(ct, cdi, 1) == 0f

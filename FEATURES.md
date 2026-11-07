@@ -1049,12 +1049,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   live all-pass response of L and R with the notches ticked (drag for Center, up / down for
   Feedback), the corner of both channels over two cycles, and the sweep and null depth;
   35 factory presets; MCP `read_phaser` / `set_phaser`.
-- **Nota Chorus** (25) — modulated delay voices: Classic (2 voices L / R, 8 ± 5 ms), Ensemble
+- **Nota Chorus** (25) — in two sizes (L 700 / S 260, S·L toggle) — modulated delay voices: Classic (2 voices L / R, 8 ± 5 ms), Ensemble
   (3 voices 120° apart, 12 ± 6 ms) and Vibrato (3 ± 2.5 ms, wet only); sine LFO free (0.02–8 Hz) or
   synced (4/1 … 1/16 with triplets, locked to the bar), Offset 0–180°, a wet HPF (off / 20 Hz – 2 kHz),
   Amount, bipolar Feedback ±90 %, Width 0–200 %, Warmth (dark, saturated BBD line), Mix. Every voice's
-  delay or detune over two cycles (drag for Amount), the voices' stereo field, the detune and delay
-  ranges; 34 factory presets; MCP `read_chorus` / `set_chorus`.
+  delay or detune over two cycles (drag for Amount) over the voices' stereo field, with Amount, Rate
+  and Offset beside it; a Voice panel (Feedback, Width, Warmth, HPF, the detune and delay ranges)
+  over Mix; 34 factory presets; MCP `read_chorus` / `set_chorus`.
 - **Nota Vocoder** (26) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
   key meter); the carrier is an internal Saw (at a Pitch, C0–C7 — a robot voice by default), Noise,
   or another track picked on the card with its colour (Pre / Post tap; keeps feeding while muted),
