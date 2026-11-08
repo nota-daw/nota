@@ -73,8 +73,8 @@ phase because they ship in different PRs (plan.md § Delivery slices).
 - [X] T017 [US1] Add `nota_audio_input_channel_count`, `nota_audio_input_channel_name`, `nota_audio_input_probe`, `nota_track_set_input`, `nota_track_get_input` (packs `first | (width << 8)`), `nota_track_input_available` to `H` (docs per contracts/c-abi.md) and shims in `E/abi/nota_engine_audio.cpp`; reject width ∉ {1,2} and odd stereo first with `NOTA_ERR_INVALID_ARG`
 - [X] T018 [P] [US1] Managed: `record struct InputPick(int First, int Width)` in `M/Nota.Application/Engine/EngineContracts.cs`; `IAudioEngine.SetTrackInput/GetTrackInput/TrackInputAvailable/AudioInputChannelCount/AudioInputChannelName/ProbeAudioInput` in `M/Nota.Application/Engine/IAudioEngine.cs`; P/Invoke in `M/Nota.Infrastructure/Interop/NativeMethods.Tracks.cs` and wrappers in `M/Nota.Infrastructure/Interop/NotaEngine.Tracks.cs`; update every other `IAudioEngine` implementation (test doubles) found by `grep -rn ": IAudioEngine" src tests`
 - [X] T019 [US1] Replace the fixed three-entry list in `M/Nota.App/RecordInputPick.cs` with a builder over the device's channels: mono entries "Input N" / device name, pairs "In N/N+1"; `HardwareShort(InputPick)` → "In 3", "In 3/4" or the device name; keep internal-source entries as they are
-- [ ] T020 [US1] Use the builder everywhere the input is shown or picked: track header menu and box, mixer strip, Session I/O row (`M/Nota.App/SessionView*.cs`), detail panel `M/Nota.App/MainWindow.Detail.cs:115`; > 16 mono inputs → "Mono inputs ▸" / "Stereo pairs ▸" submenus (contracts/mcp-and-ui.md)
-  - Done: every surface uses `RecordInputPick.HardwareEntries` (flat list). Pending: the "Mono inputs ▸ / Stereo pairs ▸" submenus past 16 inputs.
+- [X] T020 [US1] Use the builder everywhere the input is shown or picked: track header menu and box, mixer strip, Session I/O row (`M/Nota.App/SessionView*.cs`), detail panel `M/Nota.App/MainWindow.Detail.cs:115`; > 16 mono inputs → "Mono inputs ▸" / "Stereo pairs ▸" submenus (contracts/mcp-and-ui.md)
+  - Every surface uses `RecordInputPick.HardwareEntries`; the track menu groups past 16 inputs under "Mono inputs ▸ / Stereo pairs ▸" (PR 3); combo boxes stay flat (they scroll).
 - [X] T021 Localisation keys `record_input_pick.audio_input_mono`, `audio_inputs_stereo`, `in_n`, `in_pair`, `named_input_mono`, `not_available` in `M/Nota.Application/Localization/en.json` (other languages ship outside this repo); the `ext_1/ext_2/audio_input_*_mono/1_2_stereo` keys removed
 - [X] T022 [P] [US1] MCP: `list_audio_inputs`, `set_track_input`, `get_track_input` in `M/Nota.Mcp/Tools/MixerTools.cs` (1-based in the tool, per contracts/mcp-and-ui.md); `set_input_channels`/`get_input_channels` descriptions point at them
 
@@ -153,17 +153,24 @@ phase because they ship in different PRs (plan.md § Delivery slices).
 
 ### Tests
 
-- [ ] T044 [P] [US5] Smoke (managed only) in `T/MultiInputRecordTests.cs`: `InputSetupStore` per (system, uid) round-trip; menu builder with inputs 5–8 off lists 1–4 and pairs 1/2, 3/4 only; a name on input 1 shows in the short label; a pick on a switched-off input stays and reads "(switched off)"
+- [X] T044 [P] [US5] Smoke (managed only) in `T/MultiInputRecordTests.cs`: `InputSetupStore` per (system, uid) round-trip; menu builder with inputs 5–8 off lists 1–4 and pairs 1/2, 3/4 only; a name on input 1 shows in the short label; a pick on a switched-off input stays and reads "(switched off)"
+  - Pure part in `Nota.Application/InputPickList.cs` + `InputSetups.cs` (the smoke test can't reach Nota.App); plus the engine skip (reason 3) and a settings JSON round trip.
 
 ### Implementation
 
-- [ ] T045 [P] [US5] `InputSetup` + `InputSetupStore` in `M/Nota.Application/Audio/InputSetup.cs` (new file, SPDX): per `(audioSystem, deviceUid)`: `Enabled[i]` default true, `Name[i]` null, `PairName[k]` null; persisted in the app preferences file next to the audio settings
-- [ ] T046 [US5] Menu builder (`M/Nota.App/RecordInputPick.cs`) applies the setup: enabled-only lists, pairs only when both inputs on, display name order "user name → device name → Input N"; switched-off current pick greyed "(switched off)"; "Audio I/O setup…" entry at the bottom
-- [ ] T047 [US5] Preferences → Audio → Audio I/O page in `M/Nota.App/PreferencesWindow.AudioIo.cs` (new partial, SPDX): row per input (number · device name · switch · name field), row per pair (label · name field), "Reset names"; probes the device via `ProbeAudioInput` when no track has it open; live apply (FR-020) via an `InputSetupStore.Changed` event that every input menu/label listens to; follow `DESIGN.md` (nota-design skill)
-- [ ] T048 [US5] Engine skips switched-off inputs: a track on a switched-off input is treated like unavailable at take start — managed passes the skip list via a new `IAudioEngine.SetDisabledInputs(int[] channels)` → `nota_audio_input_set_disabled` in `H`/`E/abi/nota_engine_audio.cpp` (control-thread set read in `startArrangementTake`, reason 3 "switched off")
-- [ ] T049 [P] [US5] Arm tooltip "Arm for recording (⌘-click to arm more tracks)" (Ctrl on Windows/Linux) in `M/Nota.App/TrackArming.cs` callers (arrangement header, mixer strip, Session) + localisation keys (FR-005a)
-- [ ] T050 [P] [US5] Transport status line "Recording N tracks — M skipped" with a tooltip listing track + reason, from `RecordSkipped()` (`M/Nota.App/MainWindow*.cs` transport area) + localisation keys
-- [ ] T051 [P] [US5] Localisation for the Audio I/O page strings in `M/Nota.Application/Localization/en.json` and the Russian catalogue
+- [X] T045 [P] [US5] `InputSetup` + `InputSetupStore` in `M/Nota.Application/Audio/InputSetup.cs` (new file, SPDX): per `(audioSystem, deviceUid)`: `Enabled[i]` default true, `Name[i]` null, `PairName[k]` null; persisted in the app preferences file next to the audio settings
+  - As built: `InputSetup` + static `InputSetups` in `M/Nota.Application/InputSetups.cs`, stored in `Settings.InputSetups` keyed `device:<uid>` / `asio:<driver>`; app side `M/Nota.App/InputSetupAccess.cs`.
+- [X] T046 [US5] Menu builder (`M/Nota.App/RecordInputPick.cs`) applies the setup: enabled-only lists, pairs only when both inputs on, display name order "user name → device name → Input N"; switched-off current pick greyed "(switched off)"; "Audio I/O setup…" entry at the bottom
+  - List logic in `InputPickList.Build` (Application); `RecordInputPick.HardwareEntries` wraps it.
+- [X] T047 [US5] Preferences → Audio → Audio I/O page in `M/Nota.App/PreferencesWindow.AudioIo.cs` (new partial, SPDX): row per input (number · device name · switch · name field), row per pair (label · name field), "Reset names"; probes the device via `ProbeAudioInput` when no track has it open; live apply (FR-020) via an `InputSetupStore.Changed` event that every input menu/label listens to; follow `DESIGN.md` (nota-design skill)
+  - As built: an **Inputs** section of Settings → Audio (`PreferencesWindow.AudioIo.cs`), not a separate page; checked headless (dark).
+- [X] T048 [US5] Engine skips switched-off inputs: a track on a switched-off input is treated like unavailable at take start — managed passes the skip list via a new `IAudioEngine.SetDisabledInputs(int[] channels)` → `nota_audio_input_set_disabled` in `H`/`E/abi/nota_engine_audio.cpp` (control-thread set read in `startArrangementTake`, reason 3 "switched off")
+- [X] T049 [P] [US5] Arm tooltip "Arm for recording (⌘-click to arm more tracks)" (Ctrl on Windows/Linux) in `M/Nota.App/TrackArming.cs` callers (arrangement header, mixer strip, Session) + localisation keys (FR-005a)
+  - Already in place: the Arm tooltip says "⌘-click to arm several tracks" (#332, specs/076).
+- [X] T050 [P] [US5] Transport status line "Recording N tracks — M skipped" with a tooltip listing track + reason, from `RecordSkipped()` (`M/Nota.App/MainWindow*.cs` transport area) + localisation keys
+  - Transport status line: "● Recording N tracks… Not recording: <track> (<why>)."
+- [X] T051 [P] [US5] Localisation for the Audio I/O page strings in `M/Nota.Application/Localization/en.json` and the Russian catalogue
+  - en.json only; other languages ship outside this repo.
 
 **Checkpoint (PR 3 ready)**: #353 complete for Arrangement.
 

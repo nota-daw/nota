@@ -576,6 +576,10 @@ docks as a panel under any of the three, or floats in its own window — see
   monitoring (in/auto/off). The input is any input of the device alone (**In 3** — mono,
   centred) or a stereo pair (**In 3/4**), named as the device names them; new tracks take
   In 1. MCP `list_audio_inputs`, `set_track_input`, `get_track_input`.
+- **Several tracks in one pass**: Record records every armed audio track, each its own input,
+  aligned, one undo step; a mono input records a mono file.
+- **Inputs setup** (Settings → Audio → Inputs): switch inputs off and name inputs and stereo
+  pairs per device; track input menus follow.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
   **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after

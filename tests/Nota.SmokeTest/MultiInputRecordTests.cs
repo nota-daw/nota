@@ -27,6 +27,8 @@ internal static class MultiInputRecordTests
         foreach (var r in LinkedGroupRecordsBoth()) yield return r;
         foreach (var r in LoopPassesPerTrack()) yield return r;
         foreach (var r in SkippedTracks()) yield return r;
+        foreach (var r in InputSetupPickers()) yield return r;
+        foreach (var r in SwitchedOffInputSkipped()) yield return r;
     }
 
     // Input c carries the constant (c + 1) / 16 on every frame, so a clip says which input it holds.
@@ -260,6 +262,68 @@ internal static class MultiInputRecordTests
         yield return (lanes == 1 && Clips(e, near) == 1 && Clips(e, far) == 0, $"a track on an input the device lacks doesn't stop the others ({lanes} lane)");
         yield return (skipped.Length == 1 && skipped[0].TrackId == far && skipped[0].Reason == RecordSkipReason.InputUnavailable,
             $"…and the take says which track it skipped and why ({string.Join(",", skipped.Select(x => $"{x.TrackId}:{x.Reason}"))})");
+    }
+
+    // ---- PR 3: the Audio I/O setup ------------------------------------------------------------
+
+    private static IEnumerable<(bool, string)> InputSetupPickers()
+    {
+        InputSetup? s = null;
+        for (int c = 4; c < 8; c++) s = InputSetups.WithOn(s, c, false);
+        s = InputSetups.WithName(s, InputPick.Mono(0), " Vox ");
+        s = InputSetups.WithName(s, InputPick.Pair(2), "Gtr");
+        var list = InputPickList.Build(8, c => c == 1 ? "Mic 2" : "", s, null);
+        yield return (list.Count == 6 && list.All(e => e.State == InputPickState.Ok)
+                      && list.Select(e => e.Pick).SequenceEqual(new[] { InputPick.Mono(0), InputPick.Mono(1), InputPick.Mono(2), InputPick.Mono(3), InputPick.Pair(0), InputPick.Pair(2) }),
+            $"inputs 5–8 switched off: the picker lists inputs 1–4 and the pairs 1/2, 3/4 ({list.Count} entries)");
+        yield return (list[0].Short == "Vox" && list[0].Label.Contains("Vox") && list[1].Label.Contains("Mic 2") && list[5].Short == "Gtr",
+            $"the user's names and the device's show in the labels ({list[0].Short} / {list[1].Label} / {list[5].Short})");
+        var withCur = InputPickList.Build(8, null, s, InputPick.Mono(5));
+        var cur = withCur.FirstOrDefault(e => e.Pick == InputPick.Mono(5));
+        yield return (cur.State == InputPickState.SwitchedOff, "a track on a switched-off input still sees its pick, marked switched off");
+        var far = InputPickList.Build(2, null, null, InputPick.Mono(5)).FirstOrDefault(e => e.Pick == InputPick.Mono(5));
+        yield return (far.State == InputPickState.NotOnDevice, "a pick the device lacks is marked so");
+        var big = InputPickList.Build(32, null, null, null);
+        yield return (big.Count(e => !e.Pick.IsStereo) == 32 && big.Count(e => e.Pick.IsStereo) == 16
+                      && big.Count(e => !e.Pick.IsStereo) > InputPickList.SubmenuThreshold,
+            "a 32-input device lists 32 inputs and 16 pairs (grouped under submenus past 16)");
+
+        // Back to defaults: the setup disappears, so a never-configured device has no entry.
+        var back = InputSetups.WithName(InputSetups.WithName(s, InputPick.Mono(0), ""), InputPick.Pair(2), " ");
+        for (int c = 4; c < 8; c++) back = InputSetups.WithOn(back, c, true);
+        yield return (back is null, "clearing every name and switching every input back on leaves no setup");
+
+        // Kept in the settings file per device.
+        var settings = new Settings();
+        settings.InputSetups[InputSetups.KeyOf(AudioSystem.Wasapi, "uid-1", "")] = s!;
+        var json = System.Text.Json.JsonSerializer.Serialize(settings);
+        var read = System.Text.Json.JsonSerializer.Deserialize<Settings>(json)!;
+        var rs = read.InputSetups.GetValueOrDefault("device:uid-1");
+        yield return (rs is not null && rs.Off.SequenceEqual(new[] { 4, 5, 6, 7 }) && InputSetups.NameOf(rs, InputPick.Mono(0)) == "Vox"
+                      && InputSetups.NameOf(rs, InputPick.Pair(2)) == "Gtr",
+            "the setup survives the settings file, keyed by the device");
+    }
+
+    private static IEnumerable<(bool, string)> SwitchedOffInputSkipped()
+    {
+        using var e = new NotaEngine();
+        e.SetTestInputDevice(Inputs);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, 48000.0);
+        int on = e.AddAudioTrack(), off = e.AddAudioTrack();
+        e.SetTrackInput(on, InputPick.Mono(0));
+        e.SetTrackInput(off, InputPick.Mono(1));
+        e.SetTrackArmed(on, true);
+        e.SetTrackArmed(off, true);
+        e.SetDisabledInputs(new[] { 1 });
+        int lanes = e.TakeRecordTestArmed(DeviceFrames(), Inputs, Frames, 0.0);
+        var skipped = e.RecordSkipped();
+        yield return (lanes == 1 && Clips(e, on) == 1 && Clips(e, off) == 0 && skipped.Length == 1 && skipped[0].Reason == RecordSkipReason.SwitchedOff,
+            $"a track on a switched-off input records nothing and is reported; the other records ({lanes} lane)");
+        yield return (e.GetTrackInput(off) == InputPick.Mono(1), "…and it keeps its pick");
+        e.SetDisabledInputs(Array.Empty<int>());
+        lanes = e.TakeRecordTestArmed(DeviceFrames(), Inputs, Frames, 16.0);
+        yield return (lanes == 2, "switched on again, both tracks record");
     }
 
     private static int IndexOf(NotaEngine e, int trackId)

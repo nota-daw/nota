@@ -1284,6 +1284,8 @@ class Engine {
     int32_t inputChannelCount() const;
     std::string inputChannelName(int32_t index) const;
     int32_t probeAudioInput(); // open the device just to read its channels
+    // Inputs switched off on the Audio I/O page (specs/086): a take skips a track on one.
+    void setDisabledInputs(const int32_t* channels, int32_t count);
     void setTestInputDevice(int32_t channels); // tests: a pretend device, names "Test N"
     // Tests: feed `channels`-wide device frames to the record ring as the input thread would
     // (layout columns gathered), whatever the taps say.
@@ -2306,6 +2308,7 @@ class Engine {
     // Armed tracks the last take start could not record, with why (nota_engine_record_skipped).
     static constexpr int32_t kSkipInputUnavailable = 1, kSkipTooMany = 2, kSkipSwitchedOff = 3, kSkipMixedSources = 4;
     std::vector<std::pair<int32_t, int32_t>> recordSkipped_;
+    std::array<bool, kMaxInputChannels> inputDisabled_{}; // message thread
     void finishLoopPass(size_t to);
     // Two or more passes: keep each as a take on `nt` and comp the newest-first coverage.
     void materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,

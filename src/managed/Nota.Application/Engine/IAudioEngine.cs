@@ -361,6 +361,8 @@ public interface IAudioEngine : IDisposable
     string AudioInputChannelName(int index);
     /// <summary>Opens the selected capture device just to read its channels; returns the count.</summary>
     int ProbeAudioInput();
+    /// <summary>Inputs switched off on the Audio I/O page (0-based): a take skips a track on one.</summary>
+    void SetDisabledInputs(int[] channels);
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     void SetTestInputDevice(int channels);
     /// <summary>Tests: record <paramref name="frames"/> of <paramref name="channels"/>-wide

@@ -123,6 +123,11 @@ int32_t Engine::probeAudioInput() {
     releaseAudioInputIfIdle(); // nothing records or monitors: close it again
     return n;
 }
+void Engine::setDisabledInputs(const int32_t* channels, int32_t count) {
+    inputDisabled_.fill(false);
+    for (int32_t i = 0; channels && i < count; ++i)
+        if (channels[i] >= 0 && channels[i] < kMaxInputChannels) inputDisabled_[static_cast<size_t>(channels[i])] = true;
+}
 void Engine::forgetInputChannels() {
     inputChannelNames_.clear();
     inputProbed_ = false;
@@ -862,6 +867,13 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         }
         if (inputs > 0 && t->inputFirst() + t->inputWidth() > inputs) { // the device lacks its input
             recordSkipped_.emplace_back(t->id(), kSkipInputUnavailable);
+            continue;
+        }
+        bool off = false; // switched off on the Audio I/O page
+        for (int32_t c = t->inputFirst(); c < t->inputFirst() + t->inputWidth() && c < kMaxInputChannels; ++c)
+            off = off || inputDisabled_[static_cast<size_t>(c)];
+        if (off) {
+            recordSkipped_.emplace_back(t->id(), kSkipSwitchedOff);
             continue;
         }
         CaptureLane lane;

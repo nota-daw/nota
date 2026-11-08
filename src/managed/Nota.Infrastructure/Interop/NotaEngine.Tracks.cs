@@ -570,6 +570,10 @@ public sealed partial class NotaEngine
     public int ProbeAudioInput()
     { ThrowIfDisposed(); return NativeMethods.AudioInputProbe(_handle); }
 
+    /// <summary>Inputs switched off on the Audio I/O page (0-based): a take skips a track on one.</summary>
+    public void SetDisabledInputs(int[] channels)
+    { ThrowIfDisposed(); NativeMethods.AudioInputSetDisabled(_handle, channels, channels.Length); }
+
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     public void SetTestInputDevice(int channels)
     { ThrowIfDisposed(); NativeMethods.EngineSetTestInputDevice(_handle, channels); }

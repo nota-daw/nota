@@ -112,7 +112,7 @@ public partial class MainWindow
             {
                 parts.Add("audio");
                 int src = Engine.GetTrackRecordInput(trackId);
-                parts.Add(Loc.T("main.detail.in") + (src == 0 ? RecordInputPick.ShortLabel(Engine.GetTrackInput(trackId)) : src == -1 ? Loc.T("common.master") : ChipTrackName(src)));
+                parts.Add(Loc.T("main.detail.in") + (src == 0 ? RecordInputPick.ShortLabel(Engine, Engine.GetTrackInput(trackId)) : src == -1 ? Loc.T("common.master") : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
                 if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add(Loc.T("main.detail.monitor_in"));
             }

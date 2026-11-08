@@ -2725,6 +2725,7 @@ public sealed partial class ArrangementView : UserControl
             }
             var hardware = RecordInputPick.HardwareEntries(_engine, trackId, probe: true);
             foreach (var (pick, label, shortName) in hardware) Src(label, shortName, pick);
+            int hwCount = hardware.Count;
             int fixedCount = hardware.Count + 1;   // the hardware entries + Master
             Src(Loc.T("common.master"), Loc.T("common.master"), RecordInputPick.Track(-1));
             foreach (var v in _tracks)
@@ -2732,9 +2733,23 @@ public sealed partial class ArrangementView : UserControl
             foreach (var v in _returns)
             { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             recInput = MenuKit.ValueItem(Loc.T("common.record_input"), GlyphKind.Input, curName);
-            foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
+            if (RecordInputPick.NeedsSubmenus(hardware))
+            {
+                // A large interface (specs/086): its inputs and pairs under their own submenus.
+                var monoMenu = new MenuItem { Header = Loc.T("record_input_pick.mono_inputs") };
+                var pairMenu = new MenuItem { Header = Loc.T("record_input_pick.stereo_pairs") };
+                for (int k = 0; k < hwCount; k++) (hardware[k].Pick.Input.IsStereo ? pairMenu : monoMenu).Items.Add(choices[k]);
+                recInput.Items.Add(monoMenu);
+                if (pairMenu.Items.Count > 0) recInput.Items.Add(pairMenu);
+                recInput.Items.Add(choices[hwCount]);   // Master
+            }
+            else
+                foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
             if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
             foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
+            recInput.Items.Add(new Separator());
+            recInput.Items.Add(MenuKit.Item(Loc.T("record_input_pick.audio_io_setup"), GlyphKind.Levels,
+                () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowAudioPreferences()));
         }
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through

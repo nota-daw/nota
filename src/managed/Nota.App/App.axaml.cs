@@ -125,6 +125,10 @@ public partial class App : Avalonia.Application
             catch (Exception e) { log.Error("Couldn't make Mosaic presets for the sample packs", e); }
         });
 
+        // Inputs switched off on the Audio I/O page stay off for takes (specs/086).
+        try { InputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
+        catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+
         // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
         catch (Exception e) { log.Error("Couldn't register the Get Plug-ins folder", e); }

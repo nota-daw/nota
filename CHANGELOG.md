@@ -32,6 +32,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track mid-take lands its part and the rest keep going. Arm more tracks with ⌘-click
   (Ctrl-click). For now an audio take records either the hardware inputs or one track's
   output (internal resampling), not both at once.
+- **Name and switch off inputs** (#353, specs/086): Settings → Audio → **Inputs** lists every
+  input of the device with the name it gives it, a switch and a name of your own, then the
+  stereo pairs, which can be named too. Track input menus list only the inputs that are on,
+  under your names (an interface with more than 16 inputs groups them under **Mono inputs**
+  and **Stereo pairs**), and the track's Record input menu has **Audio I/O setup…**. Kept per
+  device; changes apply at once. A track set to an input you switched off keeps it and records
+  nothing from it. While recording several tracks the status line says how many, and which
+  armed tracks it skipped and why.
 
 ### Changed
 - **An audio track can record any input of the interface** (#353, specs/086): the input

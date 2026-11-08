@@ -1596,6 +1596,9 @@ NOTA_API int32_t    nota_track_input_available(const NotaEngine* engine, int32_t
 NOTA_API int32_t    nota_audio_input_channel_count(const NotaEngine* engine);
 NOTA_API int32_t    nota_audio_input_channel_name(const NotaEngine* engine, int32_t index, char* out, int32_t cap);
 NOTA_API int32_t    nota_audio_input_probe(NotaEngine* engine);
+/* Inputs switched off on the Audio I/O page (0-based channels; replaces the previous set). A
+ * take skips a track whose input is one of them (nota_engine_record_skipped reason 3). */
+NOTA_API void       nota_audio_input_set_disabled(NotaEngine* engine, const int32_t* channels, int32_t count);
 /* Tests: pretend a capture device with `channels` inputs ("Test N") is open; 0 clears it. */
 NOTA_API void       nota_engine_set_test_input_device(NotaEngine* engine, int32_t channels);
 /* Input monitoring (audio tracks, Monitor "In"): while on, the track plays its record-input

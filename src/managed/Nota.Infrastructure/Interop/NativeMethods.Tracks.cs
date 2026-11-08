@@ -345,6 +345,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_name")]
     internal static partial int AudioInputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
 
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_set_disabled")]
+    internal static partial void AudioInputSetDisabled(IntPtr engine, int[] channels, int count);
+
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_probe")]
     internal static partial int AudioInputProbe(IntPtr engine);
 
