@@ -1099,8 +1099,8 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private static TextBlock ModeLabel() => new() { FontSize = 11, Margin = new Thickness(0, 4, 0, -4) };
 
-    // A miniature Nota window in one theme's own colours, whichever theme is live, so each
-    // card previews itself: title bar, transport with the view keys, browser, arrangement
+    // A miniature Nota window in one theme's own colours (with the chosen accent), whichever
+    // theme is live, so each card previews itself: title bar, transport with the view keys, browser, arrangement
     // lanes with clips in the first track colours and the playhead, and the device panel.
     private sealed class ThemePreview : Control
     {
@@ -1108,7 +1108,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         private readonly NotaColourTheme _theme;
         public ThemePreview(NotaColourTheme theme) { _theme = theme; Width = W; Height = H; }
 
-        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, _theme));
+        // The theme as it is worn with the chosen accent (spec 084), so the card previews the pair.
+        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, NotaThemeService.Worn(_theme)));
 
         public override void Render(DrawingContext ctx)
         {
@@ -1370,6 +1371,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             Section("UI", 10,
                 TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
                 Row("", Caption(Loc.T("preferences.themes_change_colours_only_follow"))),
+                TopRow(Loc.T("preferences.accent"), AccentPicker()),
+                Row("", Caption(Loc.T("preferences.accent_caption"))),
                 Row(Loc.T("preferences.waveform"), WaveformPicker()),
                 Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
                 Row("", splitFades),

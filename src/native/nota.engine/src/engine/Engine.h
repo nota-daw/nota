@@ -758,12 +758,21 @@ class Engine {
     int32_t addConsortTrack();        // built-in Nota Consort (paraphonic semi-modular, kind 15)
     int32_t addKeysTrack();           // built-in Nota Keys (modelled electric piano, kind 16)
     int32_t addMosaicTrack();         // built-in Nota Mosaic (multisample instrument, kind 17)
+    int32_t addTwinTrack();           // built-in Nota Twin (two-part morphing analog poly, kind 18)
     // Nota Mosaic's program (see Mosaic.h): set parses + starts loading, get returns the text.
     bool mosaicSetProgram(int32_t trackId, const std::string& text, bool checkpoint);
     std::string mosaicProgram(int32_t trackId) const;
     bool mosaicStatus(int32_t trackId, NotaMosaicStatus* out) const;
     int64_t mosaicZoneSampleId(int32_t trackId, int32_t zone) const;
     void instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg);       // UI editing channel
+    void instrumentActionUndoable(Instrument& inst, int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t id,
+        int32_t iarg, float farg); // the action, plus its undo step when the edit state changed
+    bool instrumentSetStateUndoable(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* data,
+        int32_t size); // chain -1: the track's instrument; else that chain of the rack at deviceIndex
+    Instrument* editStateInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void pushInstrumentEdit(int32_t trackId, int32_t deviceIndex, int32_t chain, std::vector<uint8_t> before,
+        std::vector<uint8_t> after, MixKind kind = MixKind::InstrumentEdit);
+    bool recordInstrumentState(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* before, int32_t size);
     bool setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path); // Phase 2
     bool rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;   // sample id per voice
     int32_t rhythmVoiceSource(int32_t trackId, int32_t voice) const;                    // 0 Synth, 1 Sample
@@ -1279,7 +1288,7 @@ class Engine {
     // Live notes (computer keyboard, gamepad, MIDI). Producers on different threads
     // serialize on liveMidiMx_; the audio thread only pops (AR-6).
     void noteOn(int32_t pitch, float velocity);
-    void noteOff(int32_t pitch);
+    void noteOff(int32_t pitch, float releaseVelocity = 0.0f); // 0 = none
     // Per-note expression for live notes (MPE, NoteExpression.h): dim = ExprDim, pitch −1 =
     // the whole instrument. Reaches the same tracks as live notes do.
     void noteExpression(int32_t pitch, int32_t dim, float value);
@@ -1290,7 +1299,7 @@ class Engine {
     // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
     // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
     void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
-    void trackNoteOff(int32_t trackId, int32_t pitch);
+    void trackNoteOff(int32_t trackId, int32_t pitch, float releaseVelocity = 0.0f); // 0 = none
     void trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value);
     // Audition target: live notes also reach this track even when it isn't armed
     // (for clicking rack/drum pads). -1 = none. Lock-free.
@@ -1580,6 +1589,7 @@ class Engine {
         Engine* e = nullptr;
         void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity); }
         void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch); }
+        void mpeNoteOffVelocity(int32_t pitch, float velocity) override { e->noteOff(pitch, velocity); }
         void mpeExpression(int32_t pitch, int32_t dim, float value) override { e->noteExpression(pitch, dim, value); }
         void mpeController(int32_t ctl, float value) override { e->controller(ctl, value); }
     };
@@ -1812,6 +1822,8 @@ class Engine {
     // The EQ-8 annotation states undo steps point at (specs/049): append-only, 0 = none. A step
     // holds the indices of the device's whole state before and after the edit.
     std::vector<std::vector<uint8_t>> noteStates_ = std::vector<std::vector<uint8_t>>(1);
+    size_t noteStatesKept_ = 1; // its size after the last compaction
+    void compactNoteStates(bool force = false);
     bool applyMix(const MixChange& c, bool after); // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;
@@ -2313,7 +2325,7 @@ class Engine {
         bool audible = false, capturing = false, feeding = false, toMix = false;
         bool monitoring = false, frozenActive = false, sessionActive = false;
         bool postTapMuted = false; // sidechain tap muted with its source leaf (vocoder key)
-        bool eligible = false;     // parallel DSP (built-ins only, no shared writers)
+        bool eligible = false;     // worker-capable DSP, no shared writers
         LeafPath path = LeafPath::Skip;
         int wid = -1;           // pool worker that rendered this track (diagnostic)
         int64_t workNs = 0;     // time its parallel DSP took (sizes the next block's helpers)
@@ -2368,11 +2380,15 @@ class Engine {
     // kRtMaxHoldSeconds), so a wrong guess costs one late block, rarely.
     int64_t leafWorkNs_ = 0;
     int64_t parWorkNs_ = 0;
+    int64_t leafPeakNs_ = 0; // largest indivisible task: total work alone can under-size helpers
     bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
     bool rtParallel_ = false;
     double rtParallelLeftNs_ = 0;
     double rtProbeLeftNs_ = 0;
-    static constexpr double kRtSizeLoad = 0.85; // helpers: finish within this much of the buffer
+    // Once parallel rendering is needed, reserve half the callback for voice
+    // attacks and scheduler jitter. Near-deadline sizing leaves four large
+    // plug-in jobs in two serial waves despite useful cores being available.
+    static constexpr double kRtSizeLoad = 0.50;
     static constexpr double kRtHoldSeconds = 2.0;
     static constexpr double kRtMaxHoldSeconds = 32.0;
     static constexpr double kRtProbeSeconds = 0.5;
@@ -2502,6 +2518,10 @@ class Engine {
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return true;
         return false;
     }
+
+    // Built-in instruments' default param values, one fresh instance per kind
+    // (instrumentParamDefault). Message thread only.
+    mutable std::unordered_map<int32_t, std::vector<float>> instrumentDefaults_;
 };
 
 } // namespace nota

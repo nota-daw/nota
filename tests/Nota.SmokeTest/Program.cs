@@ -31,6 +31,24 @@ static float MonoRms(float[] buf)
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
 
+if (args.Length >= 2 && args[0] == "--profile-project")
+{
+    HostedPluginProfile.RunProject(args[1], args.Length > 2 ? int.Parse(args[2]) : 128,
+        args.Length > 3 ? int.Parse(args[3]) : 48000, args.Length > 4 ? args[4] : null);
+    return 0;
+}
+if (args.Length >= 2 && args[0] == "--profile-hosted")
+{
+    HostedPluginProfile.Run(args[1], args.Length > 2 ? int.Parse(args[2]) : 128,
+        args.Length > 3 ? int.Parse(args[3]) : 48000);
+    return 0;
+}
+if (args.Contains("--hosted-render-pool"))
+{
+    foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused
 // references, so a forbidden name appearing in an assembly's referenced set means
@@ -83,6 +101,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: accent --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAccent()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
     Console.WriteLine("-- localization: language --");
@@ -433,6 +453,15 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
+// OS user-folder defaults alone: `--user-dirs` (#522). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--user-dirs")
+{
+    Console.WriteLine("-- user dirs --");
+    foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "USER DIRS PASSED" : $"USER DIRS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Sends stay out of undo and automation: `--sends` (specs/069). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--sends")
 {
@@ -724,6 +753,14 @@ if (args.Length >= 1 && args[0] == "--keys")
     Console.WriteLine("-- nota keys --");
     foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Nota Twin alone (fast iteration): `--twin`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--twin")
+{
+    Console.WriteLine("-- nota twin --");
+    foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
@@ -15491,6 +15528,8 @@ Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota twin --");
+foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
@@ -15561,6 +15600,9 @@ foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- linux desktop --");
 foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- user dirs --");
+foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- range clipboard --");
 foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);

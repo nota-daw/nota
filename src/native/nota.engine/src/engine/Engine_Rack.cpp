@@ -243,6 +243,7 @@ static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& 
     r->pedalDown.store(src.pedalDown.load(rl), rl);
     r->pedalHeld[0].store(src.pedalHeld[0].load(rl), rl);
     r->pedalHeld[1].store(src.pedalHeld[1].load(rl), rl);
+    for (int p = 0; p < 128; ++p) r->pedalRelVel[p].store(src.pedalRelVel[p].load(rl), rl);
     for (int i = 0; i < kCtlCount; ++i) r->deliveredCtl[i].store(src.deliveredCtl[i].load(rl), rl);
     return r;
 }
@@ -1224,7 +1225,7 @@ int32_t Engine::rackChainInstrumentHeldNotes(int32_t t, int32_t di, int32_t c, i
 void Engine::rackChainInstrumentAction(int32_t t, int32_t di, int32_t c, int32_t id, int32_t iarg, float farg) {
     auto* r = rackCoreAt(t, di);
     Instrument* inst = r ? r->chainInstrument(c) : nullptr;
-    if (inst) inst->action(id, iarg, farg);
+    if (inst) instrumentActionUndoable(*inst, t, di, c, id, iarg, farg);
 }
 void Engine::rackOpenChainInstrumentEditor(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
