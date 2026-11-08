@@ -1272,6 +1272,14 @@ What the guide changes inside a card:
 - **The chain** sits tight in the Devices panel: a 6 px inset all round and 6 px between
   cards (`DeviceChainView.ChainInset`, room for the selection ring), and the panel opens at
   exactly the cards' height (seam + 32 px toolbar + insets + 260).
+- **The XL panel** (specs/085): a device that opts in (Nota EQ-8, Dynamic EQ-8) shows
+  `S / L / XL` in its header. XL moves its whole editor into a panel above the chain. The panel
+  uses the same shell, as wide as the Devices panel, 460 tall (at least 180 in a short window, then the Devices area scrolls).
+  The L body stretches in it: the graph takes the room, and the controls keep their sizes. The
+  card stays in the chain at 260 × 260, with no preset picker and a caption, "Open in XL
+  above". The panel's header leaves XL with a `Shrink` key, never a second ×. The panel has no
+  drag or fold. A track has one XL device, and the panel follows the selected track. The
+  Devices panel grows by the panel's height while it is open.
 - **Hosted plug-ins** (VST3 / AU / CLAP) use the same shell and keep their own parameter
   list: S 260 wide names it over *Open editor* and *Save preset*; L 700 adds the parameters
   as a paged, filterable grid.

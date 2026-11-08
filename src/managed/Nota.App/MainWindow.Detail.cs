@@ -453,8 +453,19 @@ public partial class MainWindow
         DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
         // Devices: exactly the cards' height — the 1px seam, the 32px toolbar, the chain inset
-        // above and below a card. Nothing floats under the chain.
-        ShowDetail(1 + 32 + 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH, honorPersist: false, resizable: false);
+        // above and below a card, and the XL panel over the chain when one is open (specs/085).
+        // Nothing floats under the chain.
+        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: false);
+    }
+
+    private double DevicesPanelHeight => 1 + 32 + (_deviceChain?.PreferredHeight ?? 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH);
+
+    // The chain's height changed (XL opened or closed, a track with or without an XL device
+    // shown): refit the docked Devices panel while it is the one showing. It is not opened for it.
+    private void FitDevicesPanel()
+    {
+        if (DetailFloating || !DetailPanel.IsVisible || !ReferenceEquals(DeviceHost.Content, _deviceChain) || DetailDevicesBtn.IsChecked != true) return;
+        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: false);
     }
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI

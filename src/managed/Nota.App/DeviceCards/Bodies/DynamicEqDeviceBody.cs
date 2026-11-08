@@ -10,7 +10,8 @@
 // engine (DynamicEq.h scopeRead). Every control is a device param (raw units), so automation /
 // MIDI learn / presets / A-B / persistence come for free; the key track is the device's
 // sidechain routing. S / L (#531, CardLayout): S (260) is the band chips over the graph and the
-// selected band's Freq, Gain, Q and the output.
+// selected band's Freq, Gain, Q and the output. XL (specs/085) is the L body in the panel above
+// the chain: the graph takes the extra width and height.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -31,7 +32,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 {
     public double Width => 700;
     public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
-    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex, xl: true);
+    public bool SupportsXl => true;   // XL (specs/085): the L body below, stretched in the panel above the chain
     public bool FullBleed => true;
     public string? Subtitle => "Dynamic EQ";
 

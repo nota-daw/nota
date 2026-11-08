@@ -55,6 +55,8 @@ public sealed partial class DeviceChainView : UserControl
     internal const double ChainInset = 6;
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = ChainInset, Margin = new Thickness(ChainInset) };
     private int _trackId = -1;
+    private readonly Grid _layout;
+    private readonly ScrollViewer _outer;
 
     /// <summary>Raised after a change that affects track headers (remove/reorder).</summary>
     public event Action? Changed;
@@ -136,7 +138,19 @@ public sealed partial class DeviceChainView : UserControl
             if (e.Source is ScrollViewer or Avalonia.Controls.Presenters.ScrollContentPresenter || ReferenceEquals(e.Source, _row))
             { ClearDeviceSelection(); Rebuild(); }
         };
-        Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        // The XL panel (specs/085) sits over the chain; without one the chain fills the view.
+        var chain = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        Grid.SetRow(chain, 1);
+        _layout = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Children = { _xlHost, chain } };
+        // In a window too short for the panel's minimum and the chain, the view scrolls instead of
+        // clipping the chain: the grid is at least that tall, and otherwise exactly the viewport.
+        _outer = new ScrollViewer
+        {
+            Content = _layout, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        _outer.SizeChanged += (_, _) => FitLayoutHeight();
+        Content = _outer;
         HookBrowserDrop();
     }
 
@@ -207,6 +221,9 @@ public sealed partial class DeviceChainView : UserControl
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
+        int devCount = _trackId > 0 ? _engine.TrackDeviceCount(_trackId) : 0;
+        _xlIndex = ResolveXl();
+        BuildXl(devCount);
         if (_trackId <= 0) { _row.Children.Add(Hint(Loc.T("device_chain.select_a_track"))); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).
@@ -233,6 +250,7 @@ public sealed partial class DeviceChainView : UserControl
         bool bypassed = _engine.DeviceBypassed(_trackId, index);
         string name = _engine.DeviceName(_trackId, index);
         if (_engine.DeviceFolded(_trackId, index)) return FoldedStrip(ChainKind.Effect, index, name, bypassable: true, bypassed);   // built-in or plug-in
+        if (index == _xlIndex) return XlPlaceholder(index, count, kind, name, bypassed);   // its editor is in the XL panel (specs/085)
 
         Control body;
         double width;
@@ -282,7 +300,8 @@ public sealed partial class DeviceChainView : UserControl
                s => StatusMessage?.Invoke(s),
                () => _rackSel,
                SelectRackDevice,
-               RackCopied);
+               RackCopied,
+               canXl: true);
 
     // ---- instrument / sends / add ----------------------------------------
 

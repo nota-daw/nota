@@ -365,6 +365,7 @@ float DynamicEq::paramMin(int32_t i) const {
 float DynamicEq::paramMax(int32_t i) const {
     if (i == Output) return 18.0f;
     if (i == Solo) return kBands;
+    if (i == View) return 2.0f; // 0 = L, 1 = S, 2 = XL (#540)
     if (i < 0 || i >= kBandParams) return 1.0f; // Sidechain, Dynamics, Key
     switch (i % kPerBand) {
     case On: return 1.0f;

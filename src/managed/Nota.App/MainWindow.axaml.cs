@@ -450,6 +450,7 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.PreferredHeightChanged += FitDevicesPanel;   // the XL panel opened or closed (specs/085)
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;

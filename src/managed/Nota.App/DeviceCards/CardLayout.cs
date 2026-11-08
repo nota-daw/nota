@@ -31,13 +31,31 @@ internal static class CardLayout
     static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
 
     // ---- S / L -----------------------------------------------------------------------------
+    // In XL the card in the chain is a 260 placeholder; the editor is in the panel (specs/085).
     public static double WidthFor(IAudioEngine engine, int trackId, int deviceIndex, double large)
-        => DeviceView.IsMini(engine, trackId, deviceIndex) ? MiniWidth : large;
+        => DeviceView.Size(engine, trackId, deviceIndex) == CardSize.L ? large : MiniWidth;
 
-    public static Control? SizeToggle(DeviceCardContext ctx, int deviceIndex)
-        => DeviceView.Index(ctx.Engine, ctx.TrackId, deviceIndex) < 0 ? null
-            : MidiCardHeader.SizeToggle(ctx, () => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex),
-                m => DeviceView.SetMini(ctx.Engine, ctx.TrackId, deviceIndex, m));
+    public static Control? SizeToggle(DeviceCardContext ctx, int deviceIndex, bool xl = false)
+    {
+        var e = ctx.Engine; int t = ctx.TrackId;
+        if (DeviceView.Index(e, t, deviceIndex) < 0) return null;
+        if (xl && ctx.CanXl && DeviceView.SupportsXlParam(e, t, deviceIndex))
+            return MidiCardHeader.SizeToggle(ctx, () => DeviceView.Size(e, t, deviceIndex), s => SetSize(e, t, deviceIndex, s));
+        return MidiCardHeader.SizeToggle(ctx, () => DeviceView.IsMini(e, t, deviceIndex), m => DeviceView.SetMini(e, t, deviceIndex, m));
+    }
+
+    /// <summary>Sets a device's card size; XL first returns any other XL device on the track to L,
+    /// so a track has one XL panel (specs/085).</summary>
+    public static void SetSize(IAudioEngine engine, int trackId, int deviceIndex, CardSize size)
+    {
+        if (size == CardSize.XL)
+        {
+            int n = engine.TrackDeviceCount(trackId);
+            for (int i = 0; i < n; i++)
+                if (i != deviceIndex && DeviceView.Size(engine, trackId, i) == CardSize.XL) DeviceView.SetSize(engine, trackId, i, CardSize.L);
+        }
+        DeviceView.SetSize(engine, trackId, deviceIndex, size);
+    }
 
     public static bool IsMini(DeviceCardContext ctx, int deviceIndex) => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex);
 

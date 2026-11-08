@@ -32,8 +32,13 @@ internal sealed class DeviceCardContext(
     Action<string>? status = null,
     Func<RackDeviceSel?>? rackSelection = null,
     Action<RackDeviceSel?, RackDeviceCommands?>? selectRackDevice = null,
-    Action? rackCopied = null)
+    Action? rackCopied = null,
+    bool canXl = false)
 {
+    /// <summary>True for a card in a track's own chain, where XL can open the panel above it
+    /// (specs/085); false in racks and pop-out windows.</summary>
+    public bool CanXl => canXl;
+
     public IAudioEngine Engine => engine;
     public int TrackId => trackId;
 

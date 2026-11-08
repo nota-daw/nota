@@ -53,4 +53,16 @@ internal static class MidiCardHeader
         ToolTip.SetTip(size, Loc.T("device.midi.card_size_s_mini_l"));
         return size;
     }
+
+    /// <summary>The S / L / XL toggle of a device that opens in the XL panel (specs/085): the
+    /// same segments with a third, XL. Picking one rebuilds the chain.</summary>
+    public static Control SizeToggle(DeviceCardContext ctx, Func<Nota.Application.CardSize> get, Action<Nota.Application.CardSize> set)
+    {
+        static int Seg(Nota.Application.CardSize s) => s switch { Nota.Application.CardSize.S => 0, Nota.Application.CardSize.XL => 2, _ => 1 };
+        var size = DeviceCardKit.Segments(new[] { "S", "L", "XL" }, () => Seg(get()),
+            i => { set(i == 0 ? Nota.Application.CardSize.S : i == 2 ? Nota.Application.CardSize.XL : Nota.Application.CardSize.L); ctx.RequestRebuild(); },
+            out _, padX: 0, minSegWidth: 16, fontSize: 8);
+        ToolTip.SetTip(size, Loc.T("device.xl.card_size_s_l_xl"));
+        return size;
+    }
 }

@@ -858,7 +858,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   an Instrument Rack chain or a Drum Rack pad, with the same editor.
 
 ### Audio effects
-- **Nota EQ-8** (kind 0) — in two sizes (L 700 / S 260, S·L toggle; S is the graph with the selected band's Freq, Gain, Q and Output) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
+- **Nota EQ-8** (kind 0) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the graph with the selected band's Freq, Gain, Q and Output; XL moves the whole editor into a large panel above the device chain, graph stretched, one per track, following the selected track) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
   Notch / High shelf / High cut, frequency, gain, Q (resonance on the cuts), a 12 / 24 / 48 dB/oct
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
@@ -969,7 +969,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   a Target. Level / Reduction / Loudness graphs (drag the ceiling and the target),
   a right panel that follows them (Meters · Detector · Target, with their meter boxes) over
   Gain, Ceiling and Release knobs; 32 factory presets; MCP `read_ceiling`.
-- **Nota Dynamic EQ-8** (13) — in two sizes (L 700 / S 260, S·L toggle; S is the graph with the selected band's Freq, Gain, Q and Output) — 8-band parametric with dynamics: each band Static / Duck
+- **Nota Dynamic EQ-8** (13) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle, as EQ-8) — 8-band parametric with dynamics: each band Static / Duck
   (above the threshold) / Lift (below it), threshold, signed range (cut or boost — upward and
   downward expansion too), attack / release and its own key (Self or a key track); a Dynamic
   master switch, Solo, output. A full-width response graph (live curve, static curve while

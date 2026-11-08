@@ -357,7 +357,8 @@ public static class PresetService
         {
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             for (int i = 0; i < pc; i++)
-                engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
+                if (!DeviceView.IsViewParam(engine.DeviceParamName(trackId, deviceIndex, i)))   // the card size (S / L / XL) stays
+                    engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
             if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == EqKind) ApplyBandText(null, engine, trackId, deviceIndex);
         }
         return "";

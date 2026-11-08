@@ -468,9 +468,13 @@ internal static class DeviceCardKit
     /// red means overload in Nota; a destructive key says what it does (DESIGN.md). Click, Enter
     /// or Space runs <paramref name="onRemove"/>; the press never reaches the header (no drag,
     /// no selection, no fold).</summary>
-    internal static Border RemoveButton(string tip, Action onRemove)
+    internal static Border RemoveButton(string tip, Action onRemove) => IconKey(GlyphKind.Close, tip, onRemove);
+
+    /// <summary>A header key like <see cref="RemoveButton"/> with another glyph — the XL panel's
+    /// Shrink (specs/085), so it never reads as the Remove × beside it.</summary>
+    internal static Border IconKey(GlyphKind kind, string tip, Action onRemove)
     {
-        var glyph = new Glyph(GlyphKind.Close, 8) { Foreground = TextTertiary, IsHitTestVisible = false };
+        var glyph = new Glyph(kind, 8) { Foreground = TextTertiary, IsHitTestVisible = false };
         var b = new Border
         {
             Width = 18, Height = 18, CornerRadius = NotaRadius.Field, Background = Brushes.Transparent,

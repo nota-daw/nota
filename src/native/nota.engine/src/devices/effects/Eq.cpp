@@ -407,7 +407,7 @@ float Eq::paramMax(int32_t i) const {
     if (i == AnaRange) return 2.0f;
     if (i == AnaPeak) return 1.0f;
     if (i == Labels) return 1.0f;
-    if (i == View) return 1.0f;
+    if (i == View) return 2.0f; // 0 = L, 1 = S, 2 = XL (#540)
     switch (i % kPerBand) {
     case On: return 1.0f;
     case Type: return kNumTypes - 1;

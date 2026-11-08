@@ -633,6 +633,14 @@ if (args.Length >= 1 && args[0] == "--lens-sync")
     Console.WriteLine(failures == 0 ? "LENS SYNC PASSED" : $"LENS SYNC FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The XL card size alone (specs/085): `--device-xl`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--device-xl")
+{
+    Console.WriteLine("-- device xl --");
+    foreach (var (ok, label) in DeviceXlTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEVICE XL PASSED" : $"DEVICE XL FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // EQ-8 band labels and notes alone (specs/049): `--eq-labels`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--eq-labels")
 {
@@ -15643,6 +15651,8 @@ Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
 Console.WriteLine("-- eq labels --");
 foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
+Console.WriteLine("-- device xl --");
+foreach (var (ok, label) in DeviceXlTests.Run()) Check(ok, label);
 Console.WriteLine("-- scope view --");
 foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
 Console.WriteLine("-- lens sync --");

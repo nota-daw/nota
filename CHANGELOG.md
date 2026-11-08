@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **XL for Nota EQ-8 and Dynamic EQ-8** (#540): the card's size toggle gains XL, which moves
+  the whole editor into a large panel above the device chain, as wide as the chain, with the
+  graph stretched to fill it. The card in the chain stays as a small 260 × 260 one that says
+  the editor is in XL. A track has one XL device. The panel follows the selected track and
+  comes back with the project. Shrink in the panel's header or Esc returns the device to L.
 - **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
   text in the app a point smaller or up to two points larger, live, without changing the
   layout (Interface scale still scales everything). Device cards keep their text size.

@@ -83,6 +83,12 @@ public sealed partial class DeviceChainView
     /// copy takes only the label, as a paste does. Call before the panel rebuilds.</summary>
     internal void DeviceTransferred(DeviceMoveRequest r, int newIndex)
     {
+        // A track has one XL device (specs/085): one moved or copied onto a track that has
+        // another goes back to L.
+        if (r.Family == DeviceFamily.Audio && DeviceView.Size(_engine, r.DstTrackId, newIndex) == CardSize.XL)
+            for (int i = 0, n = _engine.TrackDeviceCount(r.DstTrackId); i < n; i++)
+                if (i != newIndex && DeviceView.Size(_engine, r.DstTrackId, i) == CardSize.XL)
+                { DeviceView.SetSize(_engine, r.DstTrackId, newIndex, CardSize.L); break; }
         var k = r.Family switch { DeviceFamily.Midi => ChainKind.Midi, DeviceFamily.Instrument => ChainKind.Instrument, _ => ChainKind.Effect };
         int srcIdx = k == ChainKind.Instrument ? -1 : r.Index, dstIdx = k == ChainKind.Instrument ? -1 : newIndex;
         TrackExtras(r.SrcTrackId).TryGetValue(ExtraKey(k, srcIdx), out var own);

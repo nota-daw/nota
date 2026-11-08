@@ -1523,6 +1523,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         {
             ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_devices")),
             ("Esc", Loc.T("preferences.clear_the_device_selection_so")),
+            ("Esc", Loc.T("preferences.in_the_xl_panel_return")),
             ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected")),
             ("⌘D", Loc.T("preferences.duplicate_the_selected_devices_each")),
             ("⌘G", Loc.T("preferences.group_the_selected_devices_into")),
