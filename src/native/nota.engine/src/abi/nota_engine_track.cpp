@@ -739,6 +739,35 @@ NotaResult nota_track_set_input_channels(NotaEngine* e, int32_t track_id, int32_
 int32_t nota_track_get_input_channels(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackInputChannels(track_id) : 0;
 }
+NotaResult nota_track_set_input(NotaEngine* e, int32_t track_id, int32_t first, int32_t width) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackInput(track_id, first, width) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_input(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackInput(track_id) : -1;
+}
+int32_t nota_track_input_available(const NotaEngine* e, int32_t track_id) {
+    return (e && CENG(e)->trackInputAvailable(track_id)) ? 1 : 0;
+}
+int32_t nota_audio_input_channel_count(const NotaEngine* e) {
+    return e ? CENG(e)->inputChannelCount() : 0;
+}
+int32_t nota_audio_input_channel_name(const NotaEngine* e, int32_t index, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string name = CENG(e)->inputChannelName(index);
+    if (out && cap > 0) {
+        const size_t n = std::min(name.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, name.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(name.size());
+}
+int32_t nota_audio_input_probe(NotaEngine* e) {
+    return e ? ENG(e)->probeAudioInput() : 0;
+}
+void nota_engine_set_test_input_device(NotaEngine* e, int32_t channels) {
+    if (e) ENG(e)->setTestInputDevice(channels);
+}
 NotaResult nota_track_set_monitor(NotaEngine* e, int32_t track_id, int32_t on) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMonitor(track_id, on != 0);
@@ -894,6 +923,10 @@ NotaResult nota_track_restore_joined_edges(NotaEngine* e, int32_t track_id, cons
 int32_t nota_take_record_test(NotaEngine* e, int32_t track_id, const float* interleaved_stereo, int32_t frames,
     double start_beat) {
     return (e && ENG(e)->takeRecordTest(track_id, interleaved_stereo, frames, start_beat)) ? 1 : 0;
+}
+int32_t nota_take_record_test_n(NotaEngine* e, int32_t track_id, const float* interleaved, int32_t channels,
+    int32_t frames, double start_beat) {
+    return (e && ENG(e)->takeRecordTestN(track_id, interleaved, channels, frames, start_beat)) ? 1 : 0;
 }
 int32_t nota_sample_get_info(const NotaEngine* e, int64_t sample_id, NotaSampleInfo* out) {
     return (e && CENG(e)->sampleInfo(sample_id, out)) ? 1 : 0;

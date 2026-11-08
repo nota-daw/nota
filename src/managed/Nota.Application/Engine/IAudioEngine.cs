@@ -349,6 +349,23 @@ public interface IAudioEngine : IDisposable
     /// input 1 / input 2 alone as a mono source in the middle (#340). Hardware input only.</summary>
     void SetTrackInputChannels(int trackId, InputChannels channels);
     InputChannels GetTrackInputChannels(int trackId);
+    /// <summary>An audio track's hardware input: any device channel alone or an odd-aligned
+    /// stereo pair (specs/086). False for an invalid pick or a non-audio track.</summary>
+    bool SetTrackInput(int trackId, InputPick pick);
+    InputPick GetTrackInput(int trackId);
+    /// <summary>Whether the track's input exists on the open (or probed) capture device.</summary>
+    bool TrackInputAvailable(int trackId);
+    /// <summary>The capture device's input channels (0 when none is open) and their names
+    /// ("" where the device gives none).</summary>
+    int AudioInputChannelCount();
+    string AudioInputChannelName(int index);
+    /// <summary>Opens the selected capture device just to read its channels; returns the count.</summary>
+    int ProbeAudioInput();
+    /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
+    void SetTestInputDevice(int channels);
+    /// <summary>Tests: record <paramref name="frames"/> of <paramref name="channels"/>-wide
+    /// device frames into the track through the capture ring, the track taking its own input.</summary>
+    bool TakeRecordTestN(int trackId, float[] interleaved, int channels, int frames, double startBeat);
     /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
     /// source through the track in place of its clips. A master source stays silent.</summary>
     void SetTrackMonitor(int trackId, bool on);

@@ -2723,8 +2723,9 @@ public sealed partial class ArrangementView : UserControl
                 choices.Add(mi);
                 if (on) curName = shortName;
             }
-            foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
-            int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
+            var hardware = RecordInputPick.HardwareEntries(_engine, trackId, probe: true);
+            foreach (var (pick, label, shortName) in hardware) Src(label, shortName, pick);
+            int fixedCount = hardware.Count + 1;   // the hardware entries + Master
             Src(Loc.T("common.master"), Loc.T("common.master"), RecordInputPick.Track(-1));
             foreach (var v in _tracks)
                 if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
@@ -2819,11 +2820,11 @@ public sealed partial class ArrangementView : UserControl
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
             sources.Add(src);
         }
-        foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
+        foreach (var (pick, _, shortName) in RecordInputPick.HardwareEntries(_engine, trackId)) Add(shortName, pick);
         Add(Loc.T("common.master"), RecordInputPick.Track(-1));
         foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), RecordInputPick.Track(v.Id));
         foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id), RecordInputPick.Track(v.Id));
-        var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
+        var cur = _engine is null ? new RecordInputPick(0, InputPick.Mono(0)) : RecordInputPick.Of(_engine, trackId);
         int sel = sources.FindIndex(p => p.Matches(cur));
         cb.SelectedIndex = sel >= 0 ? sel : 0;
         monitor?.SetSource(sel >= 0 ? cur.Source : 0);

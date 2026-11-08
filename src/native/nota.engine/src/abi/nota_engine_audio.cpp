@@ -404,7 +404,8 @@ void checkRouting(AsioCheck& check) {
 }
 
 void checkDuplex(AsioCheck& check) {
-    // Input pair 2 of a 4-in driver reaches the input callback, before render, every switch.
+    // Every input of a 4-in driver reaches the input callback (specs/086), before render,
+    // every switch.
     Rig rig;
     FakeAsioDriver::Config cfg;
     cfg.inputs = 4;
@@ -415,31 +416,34 @@ void checkDuplex(AsioCheck& check) {
     opt.inputPair = 2;
     check(rig.open(cfg, opt), "duplex fake opens");
     std::vector<char> order;
-    float gotL = 0.0f, gotR = 0.0f;
-    const nota::InputCallback in = [&](const float* s, int32_t) {
+    float got[4] = {};
+    int32_t gotChannels = 0;
+    const nota::InputCallback in = [&](const float* s, int32_t, int32_t channels) {
         order.push_back('i');
-        gotL = s[0];
-        gotR = s[1];
+        gotChannels = channels;
+        for (int32_t c = 0; c < 4; ++c) got[c] = c < channels ? s[c] : -1.0f;
     };
     rig.session.setRenderCallback([&](float*, int32_t) { order.push_back('r'); });
     rig.session.setInputCallback(&in);
     rig.session.start();
     rig.fake->pump(3);
     check(order == std::vector<char>{'i', 'r', 'i', 'r', 'i', 'r'}, "input of switch n before render of switch n");
-    check(std::fabs(gotL - 0.3f) < 1e-6f && std::fabs(gotR - 0.4f) < 1e-6f, "input pair 3/4 reaches the callback");
+    check(gotChannels == 4 && std::fabs(got[0] - 0.1f) < 1e-6f && std::fabs(got[1] - 0.2f) < 1e-6f &&
+              std::fabs(got[2] - 0.3f) < 1e-6f && std::fabs(got[3] - 0.4f) < 1e-6f,
+        "all four inputs reach the callback");
     rig.session.setInputCallback(nullptr);
     rig.fake->pump(1);
     check(order.size() == 7, "an unregistered input is no longer called");
     rig.session.close();
 
-    // A trailing odd input is a mono pair: duplicated to both sides.
+    // An odd count stays odd: three columns, nothing duplicated.
     Rig mono;
     cfg.inputs = 3;
     check(mono.open(cfg, opt), "3-in fake opens");
     mono.session.setInputCallback(&in);
     mono.session.start();
     mono.fake->pump(1);
-    check(std::fabs(gotL - 0.3f) < 1e-6f && std::fabs(gotR - 0.3f) < 1e-6f, "mono input is duplicated");
+    check(gotChannels == 3 && std::fabs(got[2] - 0.3f) < 1e-6f && got[3] == -1.0f, "a 3-in driver gives three columns");
     mono.session.setInputCallback(nullptr);
     mono.session.close();
 

@@ -2077,8 +2077,17 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 void Engine::renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames) {
     const int32_t src = t.recordInputSource();
     if (src == 0) {
-        std::copy_n(monitorHwBuf_.data(), frames * 2, dst);
-        Track::foldInputChannels(dst, static_cast<size_t>(frames), t.inputChannels()); // a mono pick (#340)
+        // The track's own column(s) of this segment's capture (specs/086); a mono pick sounds
+        // in the middle (#340), a channel the layout doesn't carry is silent.
+        const size_t w = static_cast<size_t>(std::max(layoutAudio_.count, 0));
+        const int32_t cL = layoutAudio_.column(t.inputFirst());
+        const int32_t cR = t.inputWidth() == 2 ? layoutAudio_.column(t.inputFirst() + 1) : cL;
+        const float* in = monitorHwBuf_.data();
+        for (int32_t i = 0; i < frames; ++i) {
+            const size_t row = static_cast<size_t>(i) * w;
+            dst[i * 2] = cL >= 0 ? in[row + static_cast<size_t>(cL)] : 0.0f;
+            dst[i * 2 + 1] = cR >= 0 ? in[row + static_cast<size_t>(cR)] : 0.0f;
+        }
         return;
     }
     std::fill_n(dst, frames * 2, 0.0f);
@@ -2264,7 +2273,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         const int32_t recSrc = (countInActive_ || !captureGate_.load(std::memory_order_acquire))
                                    ? 0
                                    : internalRecordSource_.load(std::memory_order_relaxed);
-        if (recSrc != 0) markCaptureEpoch(rtCaptureEpoch_, capEp);
+        if (recSrc != 0) markCaptureEpoch(rtCaptureEpoch_, capEp, /*hardware=*/false);
 
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —
@@ -2696,7 +2705,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 }
                 for (int32_t i = 0; i < frames; ++i) {
                     const float l = m[i * 2], r = m[i * 2 + 1];
-                    if (w.tapRec && !inputQueue_.push(InputFrame{l, r})) ++recDropped; // record this track's output
+                    if (w.tapRec && !internalQueue_.push(InputFrame{l, r})) ++recDropped; // record this track's output
                     const float al = std::fabs(l), ar = std::fabs(r);
                     if (al > pkL) pkL = al;
                     if (ar > pkR) pkR = ar;
@@ -2708,7 +2717,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 for (int32_t i = 0; i < frames; ++i) {
                     float l, r;
                     ps.apply(i, post[i * 2], post[i * 2 + 1], l, r);
-                    if (w.tapRec && !inputQueue_.push(InputFrame{l, r})) ++recDropped; // record this track's output
+                    if (w.tapRec && !internalQueue_.push(InputFrame{l, r})) ++recDropped; // record this track's output
                     if (route && !w.postTapMuted) {
                         route[i * 2] += l;
                         route[i * 2 + 1] += r;
@@ -2826,7 +2835,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     if (route) simd_audio::addStereoScaled(route, m, 1.0f, 1.0f, frames);
                     for (int32_t i = 0; i < frames; ++i) {
                         const float l = m[i * 2], r = m[i * 2 + 1];
-                        if (tapRec && !inputQueue_.push(InputFrame{l, r})) ++recDropped;
+                        if (tapRec && !internalQueue_.push(InputFrame{l, r})) ++recDropped;
                         const float al = std::fabs(l), ar = std::fabs(r);
                         if (al > pkL) pkL = al;
                         if (ar > pkR) pkR = ar;
@@ -2886,7 +2895,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (route) simd_audio::addStereoScaled(route, m, 1.0f, 1.0f, frames);
                 for (int32_t i = 0; i < frames; ++i) {
                     const float l = m[i * 2], r = m[i * 2 + 1];
-                    if (tapRec && !inputQueue_.push(InputFrame{l, r})) ++recDropped;
+                    if (tapRec && !internalQueue_.push(InputFrame{l, r})) ++recDropped;
                     const float al = std::fabs(l), ar = std::fabs(r);
                     if (al > pkL) pkL = al;
                     if (ar > pkR) pkR = ar;
@@ -2900,7 +2909,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     ps.apply(i, scratch_[i * 2], scratch_[i * 2 + 1], l, r);
                     out[i * 2] += l;
                     out[i * 2 + 1] += r;
-                    if (tapRec && !inputQueue_.push(InputFrame{l, r})) ++recDropped;
+                    if (tapRec && !internalQueue_.push(InputFrame{l, r})) ++recDropped;
                     if (route) {
                         route[i * 2] += l;
                         route[i * 2 + 1] += r;
@@ -2923,7 +2932,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         if (recSrc == -1) {
             int64_t recDropped = 0;
             for (int32_t i = 0; i < frames; ++i)
-                if (!inputQueue_.push(InputFrame{out[i * 2], out[i * 2 + 1]})) ++recDropped;
+                if (!internalQueue_.push(InputFrame{out[i * 2], out[i * 2 + 1]})) ++recDropped;
             if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
         }
 

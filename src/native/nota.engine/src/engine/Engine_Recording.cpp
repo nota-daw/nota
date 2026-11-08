@@ -63,11 +63,100 @@ int32_t Engine::trackRecordInput(int32_t trackId) const {
 }
 void Engine::setTrackInputChannels(int32_t trackId, int32_t channels) {
     auto t = findTrackAuthoring(trackId);
-    if (t && t->type() == TrackType::Audio) t->setInputChannels(channels);
+    if (!t || t->type() != TrackType::Audio) return;
+    t->setInputChannels(channels);
+    updateCaptureLayout();
 }
 int32_t Engine::trackInputChannels(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->inputChannels() : Track::kInputStereo;
+}
+bool Engine::setTrackInput(int32_t trackId, int32_t first, int32_t width) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio || !t->setInput(first, width)) return false;
+    updateCaptureLayout(); // an armed / monitoring track's columns moved
+    return true;
+}
+int32_t Engine::trackInput(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio) return -1;
+    return t->inputFirst() | (t->inputWidth() << 8);
+}
+bool Engine::trackInputAvailable(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio) return false;
+    return t->inputFirst() + t->inputWidth() <= inputChannelCount();
+}
+
+// --- capture device channels (specs/086) ---------------------------------------------
+// While the device is open its own answer; otherwise what it said when it was last open
+// (or probed), until the input device changes.
+int32_t Engine::inputChannelCount() const {
+    if (inputTestChannels_ > 0) return inputTestChannels_;
+    if (input_ && input_->isRunning()) return input_->channelCount();
+    return static_cast<int32_t>(inputChannelNames_.size());
+}
+std::string Engine::inputChannelName(int32_t index) const {
+    if (inputTestChannels_ > 0)
+        return index >= 0 && index < inputTestChannels_ ? "Test " + std::to_string(index + 1) : std::string{};
+    if (input_ && input_->isRunning()) return input_->channelName(index);
+    return index >= 0 && index < static_cast<int32_t>(inputChannelNames_.size()) ? inputChannelNames_[static_cast<size_t>(index)]
+                                                                                  : std::string{};
+}
+void Engine::rememberInputChannels() {
+    inputChannelNames_.clear();
+    if (!input_ || !input_->isRunning()) return;
+    for (int32_t c = 0, n = input_->channelCount(); c < n; ++c) inputChannelNames_.push_back(input_->channelName(c));
+}
+int32_t Engine::probeAudioInput() {
+    if (inputTestChannels_ > 0) return inputTestChannels_;
+    if (input_ && input_->isRunning()) return input_->channelCount();
+    if (inputProbed_) return static_cast<int32_t>(inputChannelNames_.size()); // once per device
+    inputProbed_ = true;
+    if (!ensureAudioInput()) return 0;
+    const int32_t n = inputChannelCount();
+    releaseAudioInputIfIdle(); // nothing records or monitors: close it again
+    return n;
+}
+void Engine::forgetInputChannels() {
+    inputChannelNames_.clear();
+    inputProbed_ = false;
+}
+void Engine::setTestInputDevice(int32_t channels) {
+    inputTestChannels_ = std::clamp(channels, 0, kMaxInputChannels);
+    inputTestMode_ = inputTestChannels_ > 0 || inputTestMode_;
+}
+
+// The device channels the engine carries: every channel picked by an audio track that is armed
+// or monitors the hardware input, plus the hardware take in progress. Publishes only on change.
+void Engine::updateCaptureLayout() {
+    std::array<bool, kMaxInputChannels> want{};
+    auto addPick = [&](int32_t first, int32_t width) {
+        for (int32_t c = first; c < first + width; ++c)
+            if (c >= 0 && c < kMaxInputChannels) want[static_cast<size_t>(c)] = true;
+    };
+    if (authoring_)
+        for (auto& t : authoring_->tracks)
+            if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() == 0)
+                addPick(t->inputFirst(), t->inputWidth());
+    if (audioRecording_ && internalRecordSource_.load(std::memory_order_relaxed) == 0)
+        addPick(captureFirst_, captureWidth_);
+    addPick(0, testLayoutChannels_); // tests feeding a pretend device
+    CaptureLayoutSnapshot next;
+    for (int32_t c = 0; c < kMaxInputChannels; ++c)
+        if (want[static_cast<size_t>(c)]) {
+            next.columnOf[static_cast<size_t>(c)] = static_cast<int8_t>(next.count);
+            next.channel[static_cast<size_t>(next.count++)] = static_cast<int8_t>(c);
+        }
+    if (next.count == layoutMsg_.count && next.columnOf == layoutMsg_.columnOf) return;
+    next.generation = layoutMsg_.generation + 1;
+    layoutMsg_ = next;
+    layoutHistory_[next.generation % kLayoutHistory] = next;
+    captureLayout_.publish(next);
+}
+const CaptureLayoutSnapshot* Engine::layoutFor(uint32_t generation) const {
+    const auto& h = layoutHistory_[generation % kLayoutHistory];
+    return h.generation == generation ? &h : nullptr;
 }
 
 // --- live input monitoring ---------------------------------------------------
@@ -94,24 +183,28 @@ bool Engine::ensureAudioInput() {
     const bool asioFallback = asioSupported() && config_.audioSystem == AudioSystem::Asio && activeSystem_ != AudioSystem::Asio;
     const uint32_t inputDev = resolveAudioDeviceId(asioFallback ? std::string{} : config_.inputDeviceUid, /*inputScope=*/true);
     // The input thread only touches the lock-free rings (RT-safe).
-    return input_->start(
-        [this](const float* s, int32_t n) {
-            if (n > inputBlockFrames_.load(std::memory_order_relaxed))
-                inputBlockFrames_.store(n, std::memory_order_relaxed);
-            // The gate is shut while a count-in clicks: the take starts when the transport rolls.
-            const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate (specs/078)
-            if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_acquire)) {
-                markCaptureEpoch(hwCaptureEpoch_, capEp);
-                int64_t dropped = 0;
-                for (int32_t i = 0; i < n; ++i)
-                    if (!inputQueue_.push(InputFrame{s[i * 2], s[i * 2 + 1]})) ++dropped;
-                if (dropped) inputDroppedFrames_.fetch_add(dropped, std::memory_order_relaxed);
-            }
-            if (hwMonitorTap_.load(std::memory_order_relaxed))
-                for (int32_t i = 0; i < n; ++i)
-                    if (!monitorQueue_.push(InputFrame{s[i * 2], s[i * 2 + 1]})) break; // full: the audio thread trims
-        },
+    const bool ok = input_->start([this](const float* s, int32_t n, int32_t channels) { onInputBlock(s, n, channels); },
         inputDev);
+    if (ok) rememberInputChannels();
+    return ok;
+}
+
+// Input thread: copy the layout's columns of this device block into the take and monitor
+// rings. No allocation, no lock (AR-6): the layout is read by seqlock, the rings are SPSC.
+void Engine::onInputBlock(const float* s, int32_t n, int32_t channels) {
+    if (n > inputBlockFrames_.load(std::memory_order_relaxed)) inputBlockFrames_.store(n, std::memory_order_relaxed);
+    captureLayout_.read(layoutInput_); // a write in progress: keep the copy we had
+    const CaptureLayoutSnapshot& L = layoutInput_;
+    if (L.count <= 0) return;
+    // The gate is shut while a count-in clicks: the take starts when the transport rolls.
+    const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate (specs/078)
+    if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_acquire)) {
+        markCaptureEpoch(hwCaptureEpoch_, capEp, /*hardware=*/true);
+        if (!recordRing_.pushGather(L.generation, s, channels, n, L.channel.data(), L.count))
+            inputDroppedFrames_.fetch_add(n, std::memory_order_relaxed);
+    }
+    if (hwMonitorTap_.load(std::memory_order_relaxed))
+        monitorRing_.pushGather(L.generation, s, channels, n, L.channel.data(), L.count); // full: the audio thread trims
 }
 
 void Engine::releaseAudioInputIfIdle() {
@@ -123,6 +216,7 @@ void Engine::releaseAudioInputIfIdle() {
 // input, or is armed on it and meters it (#352). Only acts on a change, so a failed open
 // isn't retried on every edit.
 void Engine::updateMonitorInput() {
+    updateCaptureLayout(); // the channels armed / monitoring tracks pick
     bool want = false;
     if (authoring_)
         for (auto& t : authoring_->tracks)
@@ -140,12 +234,14 @@ void Engine::updateMonitorInput() {
     }
 }
 
-// Audio thread: pop this segment's hardware input into monitorHwBuf_. The capture and
-// output devices run on separate clocks, so keep a cushion of about one capture block
-// queued (re-primed after an underrun) and trim any excess so latency can't build up.
+// Audio thread: pop this segment's hardware input into monitorHwBuf_ (layoutAudio_ columns).
+// The capture and output devices run on separate clocks, so keep a cushion of about one
+// capture block queued (re-primed after an underrun) and trim any excess so latency can't
+// build up. A block written under another layout ends the segment early; the next segment
+// adopts that layout (a short gap, as a device reopen gives).
 void Engine::pullMonitorInput(int32_t frames) {
-    float* dst = monitorHwBuf_.data();
-    std::fill_n(dst, frames * 2, 0.0f);
+    const int32_t width0 = std::max(layoutAudio_.count, 0);
+    std::fill_n(monitorHwBuf_.data(), static_cast<size_t>(frames) * static_cast<size_t>(width0), 0.0f);
     if (!hwMonitorTap_.load(std::memory_order_relaxed)) {
         monitorPrimed_ = false;
         return;
@@ -158,10 +254,9 @@ void Engine::pullMonitorInput(int32_t frames) {
     const bool sharedClock = monitorSharedClock_.load(std::memory_order_relaxed);
     const size_t cushion = sharedClock ? 0 : block;
     const size_t keep = sharedClock ? std::max(block, n) : n + cushion;
-    size_t avail = monitorQueue_.size();
-    InputFrame f;
+    size_t avail = monitorRing_.framesQueued();
     if (avail > keep + cushion + 256) { // drifted / stalled: drop the stale backlog
-        for (size_t k = avail - keep; k > 0 && monitorQueue_.pop(f); --k) {}
+        skipMonitorFrames(avail - keep);
         avail = keep;
     }
     if (!monitorPrimed_) {
@@ -169,38 +264,81 @@ void Engine::pullMonitorInput(int32_t frames) {
         monitorPrimed_ = true;
     }
     size_t i = 0;
-    for (; i < n && monitorQueue_.pop(f); ++i) {
-        dst[i * 2] = f.l;
-        dst[i * 2 + 1] = f.r;
+    while (i < n) {
+        if (monitorRing_.remaining() == 0) {
+            CaptureBlock b;
+            if (!monitorRing_.next(b)) break;
+            if (b.flags & CaptureBlock::kMarker) continue;
+            monitorBlockGen_ = b.generation;
+        }
+        if (monitorBlockGen_ != layoutAudio_.generation) {
+            if (i > 0) return; // this segment's columns follow the old layout: finish it silent
+            CaptureLayoutSnapshot L;
+            if (captureLayout_.read(L) && L.generation == monitorBlockGen_) {
+                layoutAudio_ = L;
+                std::fill_n(monitorHwBuf_.data(), n * static_cast<size_t>(std::max(L.count, 0)), 0.0f);
+            }
+        }
+        if (monitorBlockGen_ != layoutAudio_.generation || monitorRing_.width() != layoutAudio_.count) {
+            monitorRing_.skip(monitorRing_.remaining()); // a layout already replaced: drop it
+            continue;
+        }
+        const size_t w = static_cast<size_t>(layoutAudio_.count);
+        i += static_cast<size_t>(monitorRing_.read(monitorHwBuf_.data() + i * w, static_cast<int32_t>(n - i)));
     }
     if (i < n) monitorPrimed_ = false; // underrun: rebuild the cushion
 }
 
+void Engine::skipMonitorFrames(size_t frames) {
+    while (frames > 0) {
+        if (monitorRing_.remaining() == 0) {
+            CaptureBlock b;
+            if (!monitorRing_.next(b)) return;
+            if (!(b.flags & CaptureBlock::kMarker)) monitorBlockGen_ = b.generation;
+            continue;
+        }
+        const int32_t k = static_cast<int32_t>(std::min<size_t>(frames, static_cast<size_t>(monitorRing_.remaining())));
+        monitorRing_.skip(k);
+        frames -= static_cast<size_t>(k);
+    }
+}
+
 void Engine::pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames) {
     inputTestMode_ = true;
+    testLayoutChannels_ = std::max(testLayoutChannels_, 2);
+    updateCaptureLayout();
     hwMonitorTap_.store(true, std::memory_order_relaxed);
-    for (int32_t i = 0; i < frames; ++i)
-        monitorQueue_.push(InputFrame{interleavedStereo[i * 2], interleavedStereo[i * 2 + 1]});
+    monitorRing_.pushGather(layoutMsg_.generation, interleavedStereo, 2, frames, layoutMsg_.channel.data(), layoutMsg_.count);
 }
 bool Engine::monitorSharedClockSelfTest() {
     constexpr int32_t kBlock = 512, kFirst = 10;
     const bool sharedWas = monitorSharedClock_.load();
     const int32_t blockWas = inputBlockFrames_.load();
     const bool tapWas = hwMonitorTap_.load();
-    InputFrame f;
-    while (monitorQueue_.pop(f)) {}
+    monitorRing_.clear();
+    testLayoutChannels_ = std::max(testLayoutChannels_, 2);
+    updateCaptureLayout();
     monitorSharedClock_.store(true);
     inputBlockFrames_.store(kBlock);
     hwMonitorTap_.store(true);
     monitorPrimed_ = false;
-    for (int32_t i = 0; i < kBlock; ++i) monitorQueue_.push(InputFrame{static_cast<float>(i), -static_cast<float>(i)});
+    std::vector<float> sig(static_cast<size_t>(kBlock) * 2);
+    for (int32_t i = 0; i < kBlock; ++i) {
+        sig[static_cast<size_t>(i) * 2] = static_cast<float>(i);
+        sig[static_cast<size_t>(i) * 2 + 1] = -static_cast<float>(i);
+    }
+    monitorRing_.pushGather(layoutMsg_.generation, sig.data(), 2, kBlock, layoutMsg_.channel.data(), layoutMsg_.count);
     bool ok = true;
     pullMonitorInput(kFirst);
-    for (int32_t i = 0; i < kFirst; ++i) ok = ok && monitorHwBuf_[i * 2] == static_cast<float>(i);
+    const size_t w = static_cast<size_t>(layoutAudio_.count);
+    const int32_t cL = layoutAudio_.column(0), cR = layoutAudio_.column(1);
+    ok = ok && cL >= 0 && cR >= 0;
+    for (int32_t i = 0; ok && i < kFirst; ++i) ok = monitorHwBuf_[static_cast<size_t>(i) * w + static_cast<size_t>(cL)] == static_cast<float>(i);
     pullMonitorInput(kBlock - kFirst);
-    for (int32_t i = 0; i < kBlock - kFirst; ++i)
-        ok = ok && monitorHwBuf_[i * 2] == static_cast<float>(kFirst + i) && monitorHwBuf_[i * 2 + 1] == -static_cast<float>(kFirst + i);
-    while (monitorQueue_.pop(f)) {}
+    for (int32_t i = 0; ok && i < kBlock - kFirst; ++i)
+        ok = monitorHwBuf_[static_cast<size_t>(i) * w + static_cast<size_t>(cL)] == static_cast<float>(kFirst + i) &&
+             monitorHwBuf_[static_cast<size_t>(i) * w + static_cast<size_t>(cR)] == -static_cast<float>(kFirst + i);
+    monitorRing_.clear();
     monitorSharedClock_.store(sharedWas);
     inputBlockFrames_.store(blockWas);
     hwMonitorTap_.store(tapWas);
@@ -541,19 +679,45 @@ void Engine::drainInputQueue() {
         activateLoopPunch(transport_.uiPositionBeats());
 
     captureScratch_.clear();
-    InputFrame f;
-    while (inputQueue_.pop(f)) {
-        if (isCaptureMarker(f)) { // the producer's first frames of a new capture epoch follow
+    // Hardware takes: blocks of layout columns; the take's pick is one column (a mono source,
+    // copied to both sides) or two (specs/086). A block of a layout that no longer carries the
+    // pick — or one too old to look up — keeps its length as silence.
+    CaptureBlock b;
+    while (recordRing_.next(b)) {
+        if (b.flags & CaptureBlock::kMarker) { // the producer's first frames of a new capture epoch follow
             if (awaitCaptureMarker_) captureScratch_.clear();
             awaitCaptureMarker_ = false;
             continue;
         }
-        if (awaitCaptureMarker_) continue; // written for the take a retry threw away (specs/078)
+        if (awaitCaptureMarker_) { // written for the take a retry threw away (specs/078)
+            recordRing_.skip(b.frames);
+            continue;
+        }
+        const CaptureLayoutSnapshot* L = layoutFor(b.generation);
+        const int32_t cL = L ? L->column(captureFirst_) : -1;
+        const int32_t cR = captureWidth_ == 2 ? (L ? L->column(captureFirst_ + 1) : -1) : cL;
+        const size_t w = static_cast<size_t>(std::max(b.width, 1));
+        captureBlock_.resize(static_cast<size_t>(b.frames) * w);
+        const int32_t got = recordRing_.read(captureBlock_.data(), b.frames);
+        for (int32_t i = 0; i < got; ++i) {
+            const float* row = captureBlock_.data() + static_cast<size_t>(i) * w;
+            captureScratch_.push_back(cL >= 0 && cL < b.width ? row[cL] : 0.0f);
+            captureScratch_.push_back(cR >= 0 && cR < b.width ? row[cR] : 0.0f);
+        }
+    }
+    // Internal resampling takes: stereo frames from the audio thread.
+    InputFrame f;
+    while (internalQueue_.pop(f)) {
+        if (isCaptureMarker(f)) {
+            if (awaitCaptureMarker_) captureScratch_.clear();
+            awaitCaptureMarker_ = false;
+            continue;
+        }
+        if (awaitCaptureMarker_) continue;
         captureScratch_.push_back(f.l);
         captureScratch_.push_back(f.r);
     }
     if (awaitCaptureMarker_) inputDroppedFrames_.store(0, std::memory_order_relaxed);
-    Track::foldInputChannels(captureScratch_.data(), captureScratch_.size() / 2, captureChannels_);
     // Frames the audio thread had to drop while this drain was stalled (ring full).
     // They are the newest samples — the ones that couldn't fit after the popped batch —
     // so append an equal run of silence *after* the drained frames. That keeps the take's
@@ -615,7 +779,8 @@ bool Engine::startAudioRecording(int32_t trackId) {
     // Internal resampling: capture another track / send / master output instead of the
     // hardware input. The audio thread feeds the ring from mixGraph; no device is opened.
     const int32_t src = t->recordInputSource();
-    captureChannels_ = src == 0 ? t->inputChannels() : Track::kInputStereo; // a mono pick is hardware-only
+    captureFirst_ = src == 0 ? t->inputFirst() : 0; // a mono pick is hardware-only
+    captureWidth_ = src == 0 ? t->inputWidth() : 2;
     // A hardware take is late by the device's round trip (in + out); 0 on backends that don't
     // report it, and for internal resampling (specs/049, research R7).
     audioRecordLatencyFrames_ = src == 0 ? audioInputLatencyFrames() + audioOutputLatencyFrames() : 0;
@@ -638,10 +803,14 @@ bool Engine::startAudioRecording(int32_t trackId) {
         audioRecordTrackId_ = 0;
         return false;
     }
+    recordRing_.clear();
     {
         InputFrame stale;
-        while (inputQueue_.pop(stale)) {}
+        while (internalQueue_.pop(stale)) {}
     }
+    audioRecording_ = true; // the layout below carries this take's pick
+    updateCaptureLayout();
+    audioRecording_ = false;
     hwRecordTap_.store(true, std::memory_order_relaxed);
     audioRecordSampleRate_ = input_ && input_->sampleRate() > 0 ? input_->sampleRate() : transport_.sampleRate();
     beginCaptureLayout();
@@ -665,6 +834,7 @@ void Engine::abortAudioRecording() {
     hwRecordTap_.store(false, std::memory_order_relaxed);
     releaseAudioInputIfIdle();
     drainInputQueue();
+    updateCaptureLayout(); // the take's pick may no longer be needed
     audioCaptureBuf_.clear();
     captureScratch_.clear();
     capturePasses_.clear();
@@ -682,6 +852,7 @@ void Engine::stopAudioRecording() {
     hwRecordTap_.store(false, std::memory_order_relaxed);      // stop the capture tap
     releaseAudioInputIfIdle();                                 // keep it open if monitoring
     drainInputQueue(); // pull whatever the input (or mix) thread pushed before it stopped
+    updateCaptureLayout(); // the take's pick may no longer be needed
 
     const int32_t trackId = audioRecordTrackId_;
     audioRecordTrackId_ = 0;
@@ -912,12 +1083,23 @@ int32_t Engine::audioRecordPeaks(float* outMinMax, int32_t maxPoints) const {
 }
 
 void Engine::pushInputFramesForTest(const float* interleavedStereo, int32_t frames) {
-    for (int32_t i = 0; i < frames; ++i)
-        inputQueue_.push(InputFrame{interleavedStereo[i * 2], interleavedStereo[i * 2 + 1]});
+    pushInputFramesForTestN(interleavedStereo, frames, 2);
+}
+
+void Engine::pushInputFramesForTestN(const float* interleaved, int32_t frames, int32_t channels) {
+    if (testLayoutChannels_ < channels) {
+        testLayoutChannels_ = std::min(channels, kMaxInputChannels);
+        updateCaptureLayout();
+    }
+    if (!recordRing_.pushGather(layoutMsg_.generation, interleaved, channels, frames, layoutMsg_.channel.data(),
+            layoutMsg_.count))
+        inputDroppedFrames_.fetch_add(frames, std::memory_order_relaxed);
 }
 
 bool Engine::audioRecordSelfTest() {
     const int32_t tid = addAudioTrack();
+    captureFirst_ = 0;
+    captureWidth_ = 2;
     audioCaptureBuf_.clear();
     captureWritePos_ = 0;
     captureLoop_ = false;
@@ -952,6 +1134,8 @@ bool Engine::sessionAudioRecordSelfTest() {
     const int32_t scene = 0;
 
     // Begin a session audio take without opening a device (mimic the input ring).
+    captureFirst_ = 0;
+    captureWidth_ = 2;
     audioCaptureBuf_.clear();
     captureWritePos_ = 0;
     captureLoop_ = false;

@@ -542,6 +542,38 @@ public sealed partial class NotaEngine
     public InputChannels GetTrackInputChannels(int trackId)
     { ThrowIfDisposed(); return (InputChannels)NativeMethods.TrackGetInputChannels(_handle, trackId); }
 
+    /// <summary>Sets an audio track's hardware input (any channel or odd-aligned pair, specs/086).</summary>
+    public bool SetTrackInput(int trackId, InputPick pick)
+    { ThrowIfDisposed(); return NativeMethods.TrackSetInput(_handle, trackId, pick.First, pick.Width) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Gets an audio track's hardware input.</summary>
+    public InputPick GetTrackInput(int trackId)
+    {
+        ThrowIfDisposed();
+        int v = NativeMethods.TrackGetInput(_handle, trackId);
+        return v < 0 ? InputPick.Stereo12 : new InputPick(v & 0xFF, (v >> 8) & 0xFF);
+    }
+
+    /// <summary>Whether the track's input exists on the open (or probed) capture device.</summary>
+    public bool TrackInputAvailable(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackInputAvailable(_handle, trackId) != 0; }
+
+    /// <summary>The capture device's input channel count (0 when none is open).</summary>
+    public int AudioInputChannelCount()
+    { ThrowIfDisposed(); return NativeMethods.AudioInputChannelCount(_handle); }
+
+    /// <summary>The name the capture device gives an input channel ("" when it gives none).</summary>
+    public string AudioInputChannelName(int index)
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioInputChannelName(_handle, index, b, c)); }
+
+    /// <summary>Opens the selected capture device just to read its channels; returns the count.</summary>
+    public int ProbeAudioInput()
+    { ThrowIfDisposed(); return NativeMethods.AudioInputProbe(_handle); }
+
+    /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
+    public void SetTestInputDevice(int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineSetTestInputDevice(_handle, channels); }
+
     /// <summary>Turns live input monitoring on/off for an audio track (hear its record input through the track).</summary>
     public void SetTrackMonitor(int trackId, bool on)
     { ThrowIfDisposed(); NativeMethods.TrackSetMonitor(_handle, trackId, on ? 1 : 0); }

@@ -116,7 +116,7 @@ internal sealed class TrackInspectorView : UserControl
             sb.Append(pick).Append(_engine.GetTrackMonitor(id));
             if (pick.Source > 0) sb.Append(TrackNames.Of(_engine, pick.Source));
             foreach (var c in _timeline.RecordInputChoices(id))
-                sb.Append('|').Append(c.Pick.Source).Append(':').Append((int)c.Pick.Channels).Append('=').Append(c.Label);
+                sb.Append('|').Append(c.Pick.Source).Append(':').Append(c.Pick.Input.First).Append('.').Append(c.Pick.Input.Width).Append('=').Append(c.Label);
         }
         if (ti.IsInstrument)
         {
@@ -235,7 +235,7 @@ internal sealed class TrackInspectorView : UserControl
         var choices = _timeline.RecordInputChoices(id);
         var cur = RecordInputPick.Of(_engine, id);
         int sel = choices.FindIndex(c => c.Pick.Matches(cur));
-        string label = sel >= 0 ? choices[sel].Label : RecordInputPick.Hardware[0].Label;
+        string label = sel >= 0 ? choices[sel].Label : choices[0].Label;
         var rows = new StackPanel { Spacing = 8 };
         rows.Children.Add(SessionView.Row(Loc.T("common.record_input"), SessionView.Chip(label, false, a =>
             SessionView.Pick(a, choices.Select(c => (c.Pick, c.Label)), p => p.Matches(cur),

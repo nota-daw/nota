@@ -22,6 +22,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- **An audio track can record any input of the interface** (#353, specs/086): the input
+  picker lists every input of the selected device — each one alone as a mono source,
+  recorded and heard in the middle, then the stereo pairs 1/2, 3/4, … — with the names the
+  device gives its inputs. The short label reads **In 3** or **In 3/4** instead of Ext 1 /
+  Ext 2. Projects keep the input; projects from 0.59 open with the input they had (Ext 1 →
+  In 1, Ext 2 → In 2, Ext 1/2 → In 1/2). A track set to an input the current device doesn't
+  have keeps it and records nothing from it until that device is back. On ASIO every input
+  of the driver is opened (a driver that refuses that many falls back to the saved pair).
+  MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
+
 ## [0.59.2] — 2026-11-08
 
 ### Added

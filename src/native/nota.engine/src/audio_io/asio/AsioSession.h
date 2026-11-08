@@ -79,13 +79,15 @@ class AsioSession {
     // The driver now runs at a different rate than the session opened with — set in the
     // driver's own panel. Read when a reset is reported; 0 if the rate didn't change.
     double driverChangedRate() const { return driverRate_; }
-    bool hasInputs() const { return inL_ >= 0; }
+    bool hasInputs() const { return inCount_ > 0; }
+    // Input channels handed to the input callback (every input, up to kMaxInputChannels).
+    int32_t inputCount() const { return inCount_; }
     // A buffer switch never returned (a stalled plug-in or driver): its state is kept alive
     // and no driver opens again in this process.
     bool wedged() const { return wedged_; }
     const std::vector<ChannelInfo>& channels(bool input) const { return input ? inChannels_ : outChannels_; }
     int32_t outputPair() const { return outL_; }
-    int32_t inputPair() const { return inL_; }
+    int32_t inputPair() const { return inPair_; } // the saved pair: the fallback capture
 
     bool openControlPanel();
     bool panelOpen() const { return driver_ && driver_->panelOpen(); }
@@ -110,10 +112,12 @@ class AsioSession {
         bool outputReady = false;
         std::vector<BufferInfo> buffers; // every output channel, then the chosen inputs
         std::vector<SampleType> outTypes;
-        SampleType inLType = SampleType::Float32LSB, inRType = SampleType::Float32LSB;
+        std::vector<SampleType> inTypes;  // per input channel
         int32_t outL = -1, outR = -1;     // output channels = their indices in buffers; R -1 = mono
-        int32_t inLBuf = -1, inRBuf = -1; // indices into buffers (-1 = none / mono)
+        std::vector<int32_t> inBufs;      // per input channel: index into buffers, -1 = silent
+        int32_t inCount = 0;              // input channels handed to the callback
         std::vector<float> interleaved;   // `frames` stereo frames
+        std::vector<float> inInterleaved; // `frames` × inCount input frames
         RenderCallback render;            // copied at start(): never swapped under the switch
     };
 
@@ -141,7 +145,8 @@ class AsioSession {
 
     std::vector<ChannelInfo> inChannels_, outChannels_; // for the UI (control side only)
     int32_t outL_ = -1, outR_ = -1;                     // output channel indices (R -1 = mono)
-    int32_t inL_ = -1, inR_ = -1;                       // input channel indices (-1 = none / mono)
+    int32_t inPair_ = -1;                               // saved input pair (fallback capture)
+    int32_t inCount_ = 0;                               // inputs handed to the callback
 
     RenderCallback render_;
     std::function<void()> xrun_;

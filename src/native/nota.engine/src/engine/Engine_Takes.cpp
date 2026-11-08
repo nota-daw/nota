@@ -448,13 +448,25 @@ bool Engine::restoreJoinedEdges(int32_t trackId, const int32_t* edges, int32_t c
 }
 
 bool Engine::takeRecordTest(int32_t trackId, const float* interleavedStereo, int32_t frames, double startBeat) {
+    return takeRecordTestImpl(trackId, interleavedStereo, 2, frames, startBeat, 0, 2);
+}
+
+bool Engine::takeRecordTestN(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat) {
     auto t = findTrackAuthoring(trackId);
-    if (!t || t->type() != TrackType::Audio || !interleavedStereo || frames <= 0 || audioRecording_) return false;
+    if (!t || t->type() != TrackType::Audio) return false;
+    return takeRecordTestImpl(trackId, interleaved, channels, frames, startBeat, t->inputFirst(), t->inputWidth());
+}
+
+bool Engine::takeRecordTestImpl(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames,
+    double startBeat, int32_t first, int32_t width) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio || !interleaved || channels <= 0 || frames <= 0 || audioRecording_) return false;
     const size_t before = t->takes.size();
     audioCaptureBuf_.clear();
     captureWritePos_ = 0;
     captureLoop_ = false;
-    captureChannels_ = Track::kInputStereo;
+    captureFirst_ = first;
+    captureWidth_ = width;
     inputDroppedFrames_.store(0, std::memory_order_relaxed);
     audioRecordTrackId_ = trackId;
     audioRecordStartBeat_ = startBeat;
@@ -464,7 +476,8 @@ bool Engine::takeRecordTest(int32_t trackId, const float* interleavedStereo, int
     audioRecording_ = true;
     constexpr int32_t kChunk = 1024; // well inside the capture ring, drained like poll() would
     for (int32_t at = 0; at < frames; at += kChunk) {
-        pushInputFramesForTest(interleavedStereo + static_cast<size_t>(at) * 2, std::min(kChunk, frames - at));
+        pushInputFramesForTestN(interleaved + static_cast<size_t>(at) * static_cast<size_t>(channels),
+            std::min(kChunk, frames - at), channels);
         drainInputQueue();
     }
     stopAudioRecording();

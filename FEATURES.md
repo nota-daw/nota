@@ -573,8 +573,9 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Audio: recording, clips, warp
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
-  monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
-  (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
+  monitoring (in/auto/off). The input is any input of the device alone (**In 3** — mono,
+  centred) or a stereo pair (**In 3/4**), named as the device names them; new tracks take
+  In 1. MCP `list_audio_inputs`, `set_track_input`, `get_track_input`.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
   **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
