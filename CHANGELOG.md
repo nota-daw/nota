@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.59.2] — 2026-11-08
+
 ### Added
 - **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
   Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
