@@ -15478,6 +15478,10 @@ foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
 Console.WriteLine("-- app: What's New release notes --");
 foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
 
+// --- app: the manual opens in the interface language ---
+Console.WriteLine("-- app: manual language --");
+foreach (var (ok, label) in ManualLanguageTests.Run()) Check(ok, label);
+
 // --- app: typed value entry (parser + read-out search) ---
 Console.WriteLine("-- typed value entry --");
 foreach (var (ok, label) in ValueEntryTests.Run()) Check(ok, label);

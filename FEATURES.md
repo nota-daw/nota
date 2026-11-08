@@ -1419,8 +1419,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   pads, crossovers, thresholds, trim and loop markers, the Stereo Map dots), envelope nodes
   (instrument envelopes and audio clips' ADSR handles) and mod-matrix cells (double-click
   or **Clear** removes a route); Tab moves to the handle's next value.
-- **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
-  opens it in the system language, the start window links to the first-track tutorial, and
+- **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
+  opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
 - **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
   Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
