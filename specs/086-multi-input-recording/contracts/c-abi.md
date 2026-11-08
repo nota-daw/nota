@@ -69,8 +69,17 @@ NOTA_API int32_t nota_engine_recording_tracks(const NotaEngine* engine, int32_t*
 NOTA_API int32_t nota_engine_record_skipped(const NotaEngine* engine, int32_t* track_ids, int32_t* reasons, int32_t cap);
 ```
 
+Per-track live geometry for drawing the growing takes (as built in PR 2):
+
+```c
+NOTA_API double  nota_engine_audio_record_length_beats_of(const NotaEngine* engine, int32_t track_id);
+NOTA_API int32_t nota_engine_audio_record_peaks_of(const NotaEngine* engine, int32_t track_id, float* out_min_max,
+                                                   int32_t max_points);
+```
+
 `nota_engine_audio_record_track` (existing) keeps returning the first audio lane's track,
-for old callers.
+for old callers; skip reason 4 = mixed sources (hardware lanes and an internal-source track in
+one take).
 
 ## Tests (no device)
 
@@ -79,11 +88,13 @@ The existing `nota_take_record_test` (one stereo track) stays. Added next to it:
 ```c
 /* Pretend a capture device with `channels` inputs (names "Test N") is open; 0 clears it. */
 NOTA_API void    nota_engine_set_test_input_device(NotaEngine* engine, int32_t channels);
-/* Smoke-test hook: record `frames` of `channels`-wide interleaved input as one take on every
- * armed track, started at start_beat — through the wide capture ring, the drain and stop,
- * under the current loop — without a device. Returns the number of lanes recorded. */
-NOTA_API int32_t nota_take_record_test_n(NotaEngine* engine, const float* interleaved, int32_t channels,
-                                         int32_t frames, double start_beat);
+/* Smoke-test hooks: `_n` records one track's own pick from `channels`-wide device frames;
+ * `_armed` records one take on every armed audio track through the real lane set-up — the
+ * ring, the drain and stop, under the current loop — without a device (returns the lanes). */
+NOTA_API int32_t nota_take_record_test_n(NotaEngine* engine, int32_t track_id, const float* interleaved,
+                                         int32_t channels, int32_t frames, double start_beat);
+NOTA_API int32_t nota_take_record_test_armed(NotaEngine* engine, const float* interleaved, int32_t channels,
+                                             int32_t frames, double start_beat);
 /* Feed a MIDI message as if hardware source `source` sent it. */
 NOTA_API void    nota_engine_push_midi_for_test(NotaEngine* engine, int32_t source, int32_t status, int32_t channel,
                                                 int32_t d1, int32_t d2);

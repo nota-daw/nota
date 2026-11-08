@@ -1124,6 +1124,16 @@ public interface IAudioEngine : IDisposable
     int MasterTrackId { get; }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     int AudioRecordPeaks(float[] outMinMax, int maxPoints);
+    /// <summary>Every track the audio take is recording (specs/086: one take records every
+    /// armed audio track), and its live length / peaks per track.</summary>
+    int[] RecordingTracks();
+    double AudioRecordLengthBeatsOf(int trackId);
+    int AudioRecordPeaksOf(int trackId, float[] outMinMax, int maxPoints);
+    /// <summary>Armed tracks the last take start could not record, with why.</summary>
+    (int TrackId, RecordSkipReason Reason)[] RecordSkipped();
+    /// <summary>Tests: one take on every armed audio track from <paramref name="channels"/>-wide
+    /// device frames, through the real lane set-up; returns the lanes recorded.</summary>
+    int TakeRecordTestArmed(float[] interleaved, int channels, int frames, double startBeat);
     /// <summary>Notes held into the in-progress MIDI take, for drawing them growing. Fills
     /// <paramref name="buffer"/> and returns the count (0 when no MIDI take records); trackId is
     /// the take's track (0 = none), sessionScene the Session scene (-1 = arrangement take),

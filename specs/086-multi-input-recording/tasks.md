@@ -110,26 +110,36 @@ phase because they ship in different PRs (plan.md § Delivery slices).
 
 ### Tests
 
-- [ ] T027 [P] [US2] `T/MultiInputRecordTests.cs`: four armed tracks on (0,1),(1,1),(2,2),(4,1) → four clips, equal start beat and frame count, bit-exact to their columns; mono picks give `SampleInfo.Channels == 1`
-- [ ] T028 [P] [US2] Same input twice → two identical clips; linked group of two audio tracks (#528, `GroupLinkTests` helpers) → two clips
+- [X] T027 [P] [US2] `T/MultiInputRecordTests.cs`: four armed tracks on (0,1),(1,1),(2,2),(4,1) → four clips, equal start beat and frame count, bit-exact to their columns; mono picks give `SampleInfo.Channels == 1`
+- [X] T028 [P] [US2] Same input twice → two identical clips; linked group of two audio tracks (#528, `GroupLinkTests` helpers) → two clips
 - [ ] T029 [P] [US2] One `Undo` removes all clips of the take, `Redo` brings all back; `RetryTake` mid-take → no clips; stop after retry → one clip per track at the original start beat
-- [ ] T030 [P] [US2] Loop recording over 3 passes with two tracks → each track has 3 take lanes
-- [ ] T031 [P] [US2] Track on (5,1) + track on (0,1), 2-input device → one clip; `nota_engine_record_skipped` lists the first with reason 1
+  - Done: one Undo / Redo over all lanes. Open: Discard and Retry over a multi-track take needs a live take in the smoke harness.
+- [X] T030 [P] [US2] Loop recording over 3 passes with two tracks → each track has 3 take lanes
+- [X] T031 [P] [US2] Track on (5,1) + track on (0,1), 2-input device → one clip; `nota_engine_record_skipped` lists the first with reason 1
 - [ ] T032 [P] [US2] Internal source: two tracks recording two other tracks' outputs plus one hardware track → three clips, aligned
+  - Open: a take is hardware lanes or one internal-source lane for now (T038).
 - [ ] T033 [P] [US2] Save the bundle; the mono take's WAV has 1 channel (`BundleContentTests` helpers)
+  - Covered by `SampleInfo.Channels == 1` in T027 plus the generic `WriteSampleWav` (writes the buffer's channel count); no bundle round-trip yet.
 
 ### Implementation
 
-- [ ] T034 [US2] In `E/engine/Engine.h` define `AudioTakeLane` and `AudioTake` exactly as data-model.md (lane: `trackId`, `column`, `width` 1|2, `internalSource`, `buf`, `writePos`, `passes`, `scene` −1, `keepFrom`, `stopAt` −1; take: lanes, `startBeat`, `sampleRate`, `latencyFrames`, loop geometry, retry markers); remove `audioRecordTrackId_`, `audioCaptureBuf_`, `captureWritePos_`, `captureChannels_`, `capturePasses_`, loop-capture per-take fields that move into lanes
-- [ ] T035 [US2] `startArrangementTake` (`E/engine/Engine_Recording.cpp`): collect **every** armed audio track; a track whose pick is unavailable goes to the skipped list (reason 1); publish + freeze the record layout; build one lane per track (column from the layout); `noteTakeTrack` for each; one latency correction
-- [ ] T036 [US2] `startAudioRecording` becomes `startAudioTake(lanes)`: shared setup once (flush ring, `hwRecordTap_`, sample rate, `beginCaptureLayout`, transport roll); reserve each lane's `buf` for 30 s and grow in 30 s chunks
-- [ ] T037 [US2] `drainInputQueue`: pop wide frames once, scatter column(s) into each running lane (mono → 1 channel); dropped frames insert silence in every lane; loop-punch cursor wrap and `finishLoopPass` per lane; retry boundary bookkeeping per take
+- [X] T034 [US2] In `E/engine/Engine.h` define `AudioTakeLane` and `AudioTake` exactly as data-model.md (lane: `trackId`, `column`, `width` 1|2, `internalSource`, `buf`, `writePos`, `passes`, `scene` −1, `keepFrom`, `stopAt` −1; take: lanes, `startBeat`, `sampleRate`, `latencyFrames`, loop geometry, retry markers); remove `audioRecordTrackId_`, `audioCaptureBuf_`, `captureWritePos_`, `captureChannels_`, `capturePasses_`, loop-capture per-take fields that move into lanes
+  - As built: `CaptureLane` (trackId, first, width, channels, buf, scratch, passes) in `captureLanes_`; cursor, loop geometry, start, clock and latency stay take-wide (hardware lanes share one device clock). Lane 0 = `audioRecordTrackId_`.
+- [X] T035 [US2] `startArrangementTake` (`E/engine/Engine_Recording.cpp`): collect **every** armed audio track; a track whose pick is unavailable goes to the skipped list (reason 1); publish + freeze the record layout; build one lane per track (column from the layout); `noteTakeTrack` for each; one latency correction
+- [X] T036 [US2] `startAudioRecording` becomes `startAudioTake(lanes)`: shared setup once (flush ring, `hwRecordTap_`, sample rate, `beginCaptureLayout`, transport roll); reserve each lane's `buf` for 30 s and grow in 30 s chunks
+  - `startAudioRecordingLanes(ids)`; `startAudioRecording(id)` = one lane (Session).
+- [X] T037 [US2] `drainInputQueue`: pop wide frames once, scatter column(s) into each running lane (mono → 1 channel); dropped frames insert silence in every lane; loop-punch cursor wrap and `finishLoopPass` per lane; retry boundary bookkeeping per take
 - [ ] T038 [US2] Internal-source lanes: replace `internalRecordSource_` with a fixed `std::atomic<int32_t> internalSources_[kMaxInternalLanes]` and a second `WideQueue` fed in `mixGraph` (`E/engine/Engine_Render.cpp`), two columns per source; drained into its lanes in `drainInputQueue`
-- [ ] T039 [US2] `stopAudioRecording`: within `beginUndoGroup()`/`endUndoGroup()` and the take's `TakePushScope`, materialise every lane (loop passes → take lanes via `materialiseLoopTakes`; otherwise a clip from a `SampleBuffer` with `channels = width`); release the record layout
-- [ ] T040 [US2] `abortAudioRecording` and `E/engine/Engine_TakeRetry.cpp`: drop every lane; retry restarts all lanes with the same tracks
-- [ ] T041 [US2] Live waveform / peaks while recording: `audioRecordPeaks`, `audioRecordLengthBeats`, `audioRecordTrackId` in `E/engine/Engine.h` take a track id (lane lookup); add `nota_engine_recording_tracks` and `nota_engine_record_skipped` to `H` + `E/abi/nota_engine_audio.cpp`; keep `nota_engine_audio_record_track` = first audio lane
-- [ ] T042 [US2] Managed: `IAudioEngine.RecordingTracks()`, `RecordSkipped()`, per-track recording peaks; update the arrangement live-take drawing (`M/Nota.App/ArrangementView*.cs`) to draw a growing take on every recording track
-- [ ] T043 [US2] Verify 1-channel recorded buffers through clip editor waveform, warp stream, export, bounce and "Slice to…" (fix any path that assumes 2 channels); record findings in a comment on T043 when done
+  - Open: internal sources still record one lane; armed tracks mixing hardware and internal sources skip the minority with reason 4 (`kSkipMixedSources`).
+- [X] T039 [US2] `stopAudioRecording`: within `beginUndoGroup()`/`endUndoGroup()` and the take's `TakePushScope`, materialise every lane (loop passes → take lanes via `materialiseLoopTakes`; otherwise a clip from a `SampleBuffer` with `channels = width`); release the record layout
+- [X] T040 [US2] `abortAudioRecording` and `E/engine/Engine_TakeRetry.cpp`: drop every lane; retry restarts all lanes with the same tracks
+  - Abort / retry drop every lane (no multi-lane retry test yet, see T029).
+- [X] T041 [US2] Live waveform / peaks while recording: `audioRecordPeaks`, `audioRecordLengthBeats`, `audioRecordTrackId` in `E/engine/Engine.h` take a track id (lane lookup); add `nota_engine_recording_tracks` and `nota_engine_record_skipped` to `H` + `E/abi/nota_engine_audio.cpp`; keep `nota_engine_audio_record_track` = first audio lane
+  - ABI: `nota_engine_recording_tracks`, `nota_engine_audio_record_length_beats_of`, `nota_engine_audio_record_peaks_of`, `nota_engine_record_skipped`, test hook `nota_take_record_test_armed`.
+- [X] T042 [US2] Managed: `IAudioEngine.RecordingTracks()`, `RecordSkipped()`, per-track recording peaks; update the arrangement live-take drawing (`M/Nota.App/ArrangementView*.cs`) to draw a growing take on every recording track
+  - Arrangement draws a growing take on every recording track; Session view unchanged (one lane per Session take until Phase 7).
+- [X] T043 [US2] Verify 1-channel recorded buffers through clip editor waveform, warp stream, export, bounce and "Slice to…" (fix any path that assumes 2 channels); record findings in a comment on T043 when done
+  - Readers of clip samples are channel-aware already (mono imports); grep found only buffer creators that assume stereo.
 
 **Checkpoint (PR 2 ready)**: audio part of #528 fixed; quickstart 2–7, 10 pass.
 

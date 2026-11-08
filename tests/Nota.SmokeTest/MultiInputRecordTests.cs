@@ -23,6 +23,10 @@ internal static class MultiInputRecordTests
         foreach (var r in AnyInput()) yield return r;
         foreach (var r in Availability()) yield return r;
         foreach (var r in SavedPicks()) yield return r;
+        foreach (var r in SeveralTracksOnePass()) yield return r;
+        foreach (var r in LinkedGroupRecordsBoth()) yield return r;
+        foreach (var r in LoopPassesPerTrack()) yield return r;
+        foreach (var r in SkippedTracks()) yield return r;
     }
 
     // Input c carries the constant (c + 1) / 16 on every frame, so a clip says which input it holds.
@@ -142,6 +146,127 @@ internal static class MultiInputRecordTests
             }
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    // ---- PR 2: one take records every armed audio track -------------------------------------
+
+    private static (double Start, long Frames, int Channels, float L, float R)? Take(NotaEngine e, int track)
+    {
+        int last = -1;
+        for (int i = 0; e.TryGetAudioClipInfo(track, i, out _); i++) last = i;
+        if (last < 0 || !e.TryGetAudioClipInfo(track, last, out var clip) || !e.TryGetSampleInfo(clip.SampleId, out var info)) return null;
+        var data = e.ReadSample(clip.SampleId);
+        int mid = (int)(info.Frames / 2) * info.Channels;
+        return (clip.StartBeat, info.Frames, info.Channels, data[mid], info.Channels > 1 ? data[mid + 1] : data[mid]);
+    }
+
+    private static int Clips(NotaEngine e, int track)
+    {
+        int n = 0;
+        while (e.TryGetAudioClipInfo(track, n, out _)) n++;
+        return n;
+    }
+
+    private static IEnumerable<(bool, string)> SeveralTracksOnePass()
+    {
+        using var e = new NotaEngine();
+        e.SetTestInputDevice(Inputs);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, 48000.0);   // a sample rate for the take
+        int[] tracks = { e.AddAudioTrack(), e.AddAudioTrack(), e.AddAudioTrack(), e.AddAudioTrack() };
+        InputPick[] picks = { InputPick.Mono(0), InputPick.Mono(1), InputPick.Pair(2), InputPick.Mono(4) };
+        for (int k = 0; k < tracks.Length; k++) { e.SetTrackInput(tracks[k], picks[k]); e.SetTrackArmed(tracks[k], true); }
+        int lanes = e.TakeRecordTestArmed(DeviceFrames(), Inputs, Frames, 4.0);
+        yield return (lanes == 4, $"one take records all four armed tracks ({lanes} lanes)");
+        var got = tracks.Select(t => Take(e, t)).ToArray();
+        yield return (got.All(g => g is not null), "each track has a clip of the take");
+        if (got.Any(g => g is null)) yield break;
+        yield return (got.All(g => g!.Value.Start == got[0]!.Value.Start && g.Value.Frames == got[0]!.Value.Frames),
+            $"every clip starts on the same beat with the same length ({string.Join(", ", got.Select(g => $"{g!.Value.Start}/{g.Value.Frames}"))})");
+        yield return (got[0]!.Value.Channels == 1 && got[1]!.Value.Channels == 1 && got[3]!.Value.Channels == 1 && got[2]!.Value.Channels == 2,
+            $"mono inputs record mono files, the pair a stereo one ({string.Join(",", got.Select(g => g!.Value.Channels))})");
+        yield return (Near(got[0]!.Value.L, Level(0)) && Near(got[1]!.Value.L, Level(1)) && Near(got[2]!.Value.L, Level(2))
+                      && Near(got[2]!.Value.R, Level(3)) && Near(got[3]!.Value.L, Level(4)),
+            "each clip holds its own input, nothing of the others");
+
+        yield return (e.Undo() && tracks.All(t => Clips(e, t) == 0), "one Undo takes the whole take back, on every track");
+        yield return (e.Redo() && tracks.All(t => Clips(e, t) == 1), "one Redo brings all four clips back");
+
+        // The same input on two tracks: both record it.
+        using var d = new NotaEngine();
+        d.SetTestInputDevice(Inputs);
+        d.RenderOffline(buf, 512, 48000.0);
+        int a = d.AddAudioTrack(), b = d.AddAudioTrack();
+        foreach (int t in new[] { a, b }) { d.SetTrackInput(t, InputPick.Mono(5)); d.SetTrackArmed(t, true); }
+        lanes = d.TakeRecordTestArmed(DeviceFrames(), Inputs, Frames, 0.0);
+        var ta = Take(d, a); var tb = Take(d, b);
+        yield return (lanes == 2 && ta is { } x && tb is { } y && Near(x.L, Level(5)) && Near(y.L, Level(5)) && x.Frames == y.Frames,
+            "two tracks on the same input both record it");
+    }
+
+    // #528: tracks of a linked group arm together — and now record together.
+    private static IEnumerable<(bool, string)> LinkedGroupRecordsBoth()
+    {
+        using var e = new NotaEngine();
+        e.SetTestInputDevice(Inputs);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, 48000.0);
+        int a = e.AddAudioTrack(), b = e.AddAudioTrack();
+        e.SetTrackInput(a, InputPick.Mono(0));
+        e.SetTrackInput(b, InputPick.Mono(1));
+        int g = e.CreateGroup(new[] { a, b });
+        e.SetTrackEditLink(g, true);
+        TrackArm.Set(e, a, true, additive: false);   // arming one arms the linked other
+        yield return (e.TryGetTrackInfo(IndexOf(e, b), out var bi) && bi.Armed != 0, "arming one linked track arms the other");
+        int lanes = e.TakeRecordTestArmed(DeviceFrames(), Inputs, Frames, 0.0);
+        yield return (lanes == 2 && Clips(e, a) == 1 && Clips(e, b) == 1, $"both linked tracks record (#528; {lanes} lanes)");
+    }
+
+    private static IEnumerable<(bool, string)> LoopPassesPerTrack()
+    {
+        using var e = new NotaEngine();
+        e.SetTestInputDevice(Inputs);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, 48000.0);
+        int a = e.AddAudioTrack(), b = e.AddAudioTrack();
+        e.SetTrackInput(a, InputPick.Mono(0));
+        e.SetTrackInput(b, InputPick.Pair(2));
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.SetLoop(true, 0.0, 1.0);   // one beat = 24000 frames at 120 BPM / 48 kHz
+        int frames = 24000 * 3;
+        var dev = new float[frames * Inputs];
+        for (int f = 0; f < frames; f++) for (int c = 0; c < Inputs; c++) dev[f * Inputs + c] = Level(c);
+        int lanes = e.TakeRecordTestArmed(dev, Inputs, frames, 0.0);
+        int ka = e.TakeCount(a), kb = e.TakeCount(b);
+        yield return (lanes == 2 && ka == 3 && kb == 3, $"three loop passes keep three takes on each track ({ka}, {kb})");
+        e.SetLoop(false, 0.0, 1.0);
+    }
+
+    private static IEnumerable<(bool, string)> SkippedTracks()
+    {
+        using var e = new NotaEngine();
+        e.SetTestInputDevice(2);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, 48000.0);
+        int far = e.AddAudioTrack(), near = e.AddAudioTrack();
+        e.SetTrackInput(far, InputPick.Mono(5));
+        e.SetTrackInput(near, InputPick.Mono(0));
+        e.SetTrackArmed(far, true);
+        e.SetTrackArmed(near, true);
+        var dev = new float[Frames * 2];
+        int lanes = e.TakeRecordTestArmed(dev, 2, Frames, 0.0);
+        var skipped = e.RecordSkipped();
+        yield return (lanes == 1 && Clips(e, near) == 1 && Clips(e, far) == 0, $"a track on an input the device lacks doesn't stop the others ({lanes} lane)");
+        yield return (skipped.Length == 1 && skipped[0].TrackId == far && skipped[0].Reason == RecordSkipReason.InputUnavailable,
+            $"…and the take says which track it skipped and why ({string.Join(",", skipped.Select(x => $"{x.TrackId}:{x.Reason}"))})");
+    }
+
+    private static int IndexOf(NotaEngine e, int trackId)
+    {
+        for (int i = 0; i < e.TrackCount; i++)
+            if (e.TryGetTrackInfo(i, out var t) && t.Id == trackId) return i;
+        return -1;
     }
 
     private static List<int> AudioTracks(NotaEngine e)

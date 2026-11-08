@@ -462,13 +462,8 @@ bool Engine::takeRecordTestImpl(int32_t trackId, const float* interleaved, int32
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio || !interleaved || channels <= 0 || frames <= 0 || audioRecording_) return false;
     const size_t before = t->takes.size();
-    audioCaptureBuf_.clear();
-    captureWritePos_ = 0;
-    captureLoop_ = false;
-    captureFirst_ = first;
-    captureWidth_ = width;
+    beginTestLane(trackId, first, width);
     inputDroppedFrames_.store(0, std::memory_order_relaxed);
-    audioRecordTrackId_ = trackId;
     audioRecordStartBeat_ = startBeat;
     audioRecordSampleRate_ = transport_.sampleRate();
     audioRecordLatencyFrames_ = 0;
@@ -483,6 +478,36 @@ bool Engine::takeRecordTestImpl(int32_t trackId, const float* interleaved, int32
     stopAudioRecording();
     auto nt = findTrackAuthoring(trackId);
     return nt && (nt->takes.size() > before || !nt->clips.empty());
+}
+
+// Tests (specs/086): one take on every armed audio track through the real lane set-up — picks,
+// skips, layout — fed `channels`-wide device frames, drained and stopped like poll() would.
+// The take starts at start_beat with the transport treated as rolling. Returns the lanes.
+int32_t Engine::takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat) {
+    if (!interleaved || channels <= 0 || frames <= 0 || audioRecording_ || !authoring_) return 0;
+    std::vector<int32_t> ids;
+    for (auto& t : authoring_->tracks)
+        if (t->armed() && t->type() == TrackType::Audio) ids.push_back(t->id());
+    inputTestMode_ = true; // never open a real device
+    takeStartOverride_ = startBeat;
+    takePlayingOverride_ = 1;
+    const bool ok = startAudioRecordingLanes(ids);
+    takeStartOverride_ = std::numeric_limits<double>::quiet_NaN();
+    takePlayingOverride_ = -1;
+    if (!ok) return 0;
+    audioRecordSampleRate_ = transport_.sampleRate() > 0 ? transport_.sampleRate() : 48000.0;
+    audioRecordLatencyFrames_ = 0;
+    recordReturnBeat_ = startBeat;
+    recordStartedTransport_ = false;
+    const int32_t lanes = static_cast<int32_t>(captureLanes_.size());
+    constexpr int32_t kChunk = 1024;
+    for (int32_t at = 0; at < frames; at += kChunk) {
+        pushInputFramesForTestN(interleaved + static_cast<size_t>(at) * static_cast<size_t>(channels),
+            std::min(kChunk, frames - at), channels);
+        drainInputQueue();
+    }
+    stopAudioRecording();
+    return lanes;
 }
 
 } // namespace nota

@@ -966,6 +966,16 @@ NOTA_API int32_t    nota_engine_master_track_id(const NotaEngine* engine);
 /* Live min/max peaks (interleaved, out_min_max[2*max_points]) over the in-progress
  * capture buffer so the take draws a growing waveform. Returns buckets written. */
 NOTA_API int32_t    nota_engine_audio_record_peaks(const NotaEngine* engine, float* out_min_max, int32_t max_points);
+/* A take records every armed audio track (specs/086): the tracks it is recording right now
+ * (up to `cap` ids into `out`, returns how many), and the same live geometry per track. */
+NOTA_API int32_t    nota_engine_recording_tracks(const NotaEngine* engine, int32_t* out, int32_t cap);
+NOTA_API double     nota_engine_audio_record_length_beats_of(const NotaEngine* engine, int32_t track_id);
+NOTA_API int32_t    nota_engine_audio_record_peaks_of(const NotaEngine* engine, int32_t track_id, float* out_min_max,
+                                                      int32_t max_points);
+/* Armed tracks the last take start could not record, with a reason each: 1 input not on the
+ * device, 2 too many lanes, 3 input switched off, 4 records another track while the take records
+ * the hardware input (or the other way round). Returns the count. */
+NOTA_API int32_t    nota_engine_record_skipped(const NotaEngine* engine, int32_t* track_ids, int32_t* reasons, int32_t cap);
 /* One note held into the in-progress MIDI take (live-recording preview). */
 typedef struct NotaRecordHeldNote {
     int32_t pitch;        /* 0..127 */
@@ -1214,6 +1224,11 @@ NOTA_API int32_t    nota_take_record_test(NotaEngine* engine, int32_t track_id, 
  * of `channels`-wide device frames, the track recording its own input pick. 1 = recorded. */
 NOTA_API int32_t    nota_take_record_test_n(NotaEngine* engine, int32_t track_id, const float* interleaved,
                                             int32_t channels, int32_t frames, double start_beat);
+/* Smoke-test hook (specs/086): one take on every armed audio track (each its own pick) from
+ * `frames` of `channels`-wide device frames, through the lane set-up, the ring, the drain and
+ * stop. Returns the lanes recorded (see nota_engine_record_skipped for the rest). */
+NOTA_API int32_t    nota_take_record_test_armed(NotaEngine* engine, const float* interleaved, int32_t channels,
+                                                int32_t frames, double start_beat);
 
 /* Decoded-sample metadata by id; returns 1 if found, else 0. */
 NOTA_API int32_t nota_sample_get_info(const NotaEngine* engine, int64_t sample_id, NotaSampleInfo* out);

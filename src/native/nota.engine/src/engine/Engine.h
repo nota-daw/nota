@@ -1329,6 +1329,7 @@ class Engine {
 
     // --- audio input recording (M4-3) ---
     bool startAudioRecording(int32_t trackId); // opens the input device; false if unavailable
+    bool startAudioRecordingLanes(const std::vector<int32_t>& trackIds); // one take on several tracks (specs/086)
     void stopAudioRecording();                 // materialise the captured clip
     bool isAudioRecording() const { return audioRecording_; }
     // Live audio-capture geometry so the UI can draw a growing take (M-fix): the
@@ -1337,11 +1338,14 @@ class Engine {
     double audioRecordStartBeat() const { return audioRecordStartBeat_; }
     // Length (beats) captured so far, so the live take draws a box that grows by the
     // real recorded duration (monotonic) instead of following the looping playhead.
-    double audioRecordLengthBeats() const;
+    double audioRecordLengthBeats(int32_t trackId = 0) const; // 0 = the first lane
     // Live min/max peaks over the in-progress capture buffer so the take can draw
     // a growing waveform (not just a flat box). 0 when not capturing. UI-thread
     // only — serialised with poll()'s drain, which is the sole writer.
-    int32_t audioRecordPeaks(float* outMinMax, int32_t maxPoints) const;
+    int32_t audioRecordPeaks(float* outMinMax, int32_t maxPoints, int32_t trackId = 0) const; // 0 = the first lane
+    // Every track the audio take records (lane order); the tracks the last take start skipped.
+    int32_t audioRecordingTracks(int32_t* out, int32_t cap) const;
+    int32_t recordSkipped(int32_t* trackIds, int32_t* reasons, int32_t cap) const;
     // Notes held into the in-progress MIDI take (live-recording preview, #56). Lock-free
     // read of the audio thread's per-block snapshot; take geometry from the message thread.
     int32_t recordHeldNotes(
@@ -1372,6 +1376,7 @@ class Engine {
     bool takeRecordTest(int32_t trackId, const float* interleavedStereo, int32_t frames, double startBeat);
     // The same through the multi-channel ring: `channels`-wide device frames, the track's own pick.
     bool takeRecordTestN(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat);
+    int32_t takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat);
     bool takeRecordTestImpl(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat,
         int32_t first, int32_t width);
 
@@ -2261,16 +2266,14 @@ class Engine {
     std::unique_ptr<AudioInput> input_;
     CaptureRecordRing recordRing_; // input thread -> message thread: hardware takes
     InputQueue internalQueue_;     // audio thread -> message thread: internal-resampling takes
-    std::vector<float> audioCaptureBuf_; // interleaved stereo, message-thread owned
-    std::vector<float> captureScratch_;  // per-drain batch scratch (message thread)
     std::vector<float> captureBlock_;    // one ring block's columns (message thread)
-    size_t captureWritePos_ = 0;         // frame cursor into audioCaptureBuf_
+    size_t captureWritePos_ = 0;         // frame cursor shared by every lane
     // Loop-punch capture: while the transport loops, capture is a fixed loop-region buffer
     // whose cursor advances by the captured-frame count (a steady clock, immune to transport
     // jitter) and wraps at the loop length, so each pass overwrites the previous in place.
     // Activated when loop is on at record start OR the moment loop is enabled mid-take.
     bool captureLoop_ = false;
-    int32_t captureFirst_ = 0, captureWidth_ = 2; // the take's hardware input pick (#340, specs/086)
+
     bool captureWrapped_ = false;
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
@@ -2278,11 +2281,31 @@ class Engine {
     // Take lanes (specs/067): each finished loop pass, copied out of the loop buffer when the
     // cursor wraps (message thread), in a zeroed loop-length buffer holding [from, to).
     struct LoopPass {
-        std::vector<float> buf;
+        std::vector<float> buf; // `channels` interleaved
+        int32_t channels = 2;
         size_t from = 0, to = 0;
     };
-    std::vector<LoopPass> capturePasses_;
     size_t capturePassFrom_ = 0; // where the open pass started recording
+    // A take records one lane per track (specs/086): its pick, its buffer (stored mono for a
+    // mono pick) and its loop passes; the cursor, loop geometry, start, clock and latency are
+    // the take's. Lane 0 is audioRecordTrackId_ (the Session / retry paths' track).
+    struct CaptureLane {
+        int32_t trackId = 0;
+        int32_t first = 0, width = 2; // hardware pick (an internal source: the stereo pair)
+        int32_t channels = 2;         // stored channels
+        std::vector<float> buf;       // message thread, `channels` interleaved
+        std::vector<float> scratch;   // this drain's frames
+        std::vector<LoopPass> passes;
+    };
+    std::vector<CaptureLane> captureLanes_;
+    const CaptureLane* captureLaneOf(int32_t trackId) const;
+    void beginTestLane(int32_t trackId, int32_t first, int32_t width);
+    struct TakeGeometry;
+    void materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g);
+    void finishCaptureLane(int32_t trackId); // one lane leaves a running take (its track disarmed)
+    // Armed tracks the last take start could not record, with why (nota_engine_record_skipped).
+    static constexpr int32_t kSkipInputUnavailable = 1, kSkipTooMany = 2, kSkipSwitchedOff = 3, kSkipMixedSources = 4;
+    std::vector<std::pair<int32_t, int32_t>> recordSkipped_;
     void finishLoopPass(size_t to);
     // Two or more passes: keep each as a take on `nt` and comp the newest-first coverage.
     void materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,

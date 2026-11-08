@@ -337,6 +337,9 @@ public enum PanLaw { Balance = 0, Stereo = 1 }
 /// stereo pair (1/2), or input 1 / input 2 alone — a mono source, placed in the middle.</summary>
 public enum InputChannels { Stereo = 0, Mono1 = 1, Mono2 = 2 }
 
+/// <summary>Why an armed track didn't record (specs/086); matches nota_engine_record_skipped.</summary>
+public enum RecordSkipReason { InputUnavailable = 1, TooMany = 2, SwitchedOff = 3, MixedSources = 4 }
+
 /// <summary>An audio track's hardware input (specs/086): device channel <see cref="First"/>
 /// (0-based) alone — a mono source, heard and recorded in the middle — or the stereo pair
 /// First/First+1 (First even).</summary>

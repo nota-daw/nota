@@ -924,6 +924,10 @@ int32_t nota_take_record_test(NotaEngine* e, int32_t track_id, const float* inte
     double start_beat) {
     return (e && ENG(e)->takeRecordTest(track_id, interleaved_stereo, frames, start_beat)) ? 1 : 0;
 }
+int32_t nota_take_record_test_armed(NotaEngine* e, const float* interleaved, int32_t channels, int32_t frames,
+    double start_beat) {
+    return e ? ENG(e)->takeRecordTestArmed(interleaved, channels, frames, start_beat) : 0;
+}
 int32_t nota_take_record_test_n(NotaEngine* e, int32_t track_id, const float* interleaved, int32_t channels,
     int32_t frames, double start_beat) {
     return (e && ENG(e)->takeRecordTestN(track_id, interleaved, channels, frames, start_beat)) ? 1 : 0;

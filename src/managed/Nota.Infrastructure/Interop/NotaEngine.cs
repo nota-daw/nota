@@ -170,6 +170,31 @@ public sealed partial class NotaEngine : IAudioEngine
     public int MasterTrackId { get { ThrowIfDisposed(); return NativeMethods.MasterTrackId(_handle); } }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     public int AudioRecordPeaks(float[] outMinMax, int maxPoints) { ThrowIfDisposed(); return NativeMethods.AudioRecordPeaks(_handle, outMinMax, maxPoints); }
+    public int[] RecordingTracks()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RecordingTracks(_handle, null, 0);
+        if (n <= 0) return Array.Empty<int>();
+        var ids = new int[n];
+        n = Math.Min(n, NativeMethods.RecordingTracks(_handle, ids, n));
+        return n == ids.Length ? ids : ids[..n];
+    }
+    public double AudioRecordLengthBeatsOf(int trackId) { ThrowIfDisposed(); return NativeMethods.AudioRecordLengthBeatsOf(_handle, trackId); }
+    public int AudioRecordPeaksOf(int trackId, float[] outMinMax, int maxPoints) { ThrowIfDisposed(); return NativeMethods.AudioRecordPeaksOf(_handle, trackId, outMinMax, maxPoints); }
+    public (int TrackId, RecordSkipReason Reason)[] RecordSkipped()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RecordSkipped(_handle, null, null, 0);
+        if (n <= 0) return Array.Empty<(int, RecordSkipReason)>();
+        var ids = new int[n];
+        var why = new int[n];
+        n = Math.Min(n, NativeMethods.RecordSkipped(_handle, ids, why, n));
+        var r = new (int, RecordSkipReason)[n];
+        for (int i = 0; i < n; i++) r[i] = (ids[i], (RecordSkipReason)why[i]);
+        return r;
+    }
+    public int TakeRecordTestArmed(float[] interleaved, int channels, int frames, double startBeat)
+    { ThrowIfDisposed(); return NativeMethods.TakeRecordTestArmed(_handle, interleaved, channels, frames, startBeat); }
     public int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat)
     { ThrowIfDisposed(); return NativeMethods.RecordHeldNotes(_handle, buffer, buffer.Length, out trackId, out sessionScene, out nowBeat); }
 

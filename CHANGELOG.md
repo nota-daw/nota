@@ -22,6 +22,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Record several audio tracks in one pass** (#353, #528, specs/086): Record now starts a take
+  on every armed audio track at once, each recording its own input — a drum kit on four inputs
+  goes to four tracks, all starting on the same beat and sample-aligned, with one latency
+  correction. A mono input is recorded to a mono file. The whole take is one Undo step; loop
+  recording keeps take lanes on every track. Tracks of a linked group now all record (#528).
+  A track set to an input the device lacks is skipped and the others record; disarming one
+  track mid-take lands its part and the rest keep going. Arm more tracks with ⌘-click
+  (Ctrl-click). For now an audio take records either the hardware inputs or one track's
+  output (internal resampling), not both at once.
+
 ### Changed
 - **An audio track can record any input of the interface** (#353, specs/086): the input
   picker lists every input of the selected device — each one alone as a mono source,
