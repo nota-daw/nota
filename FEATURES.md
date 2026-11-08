@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.59.1** (plus changes in development on `main`). This document describes what is
+**0.59.2** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -1181,6 +1181,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   window that opens on top and focused, and closes when the device is removed). Adding a
   plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in
   window on insert, on by default); loading a project, undo and paste don't.
+- **Multi-core rendering**: independent VST3 instrument and effect tracks render in
+  parallel on the engine's worker threads, keeping half of each buffer free for playing;
+  other formats, plug-ins inside racks and armed tracks render on the audio thread.
 - **State save and restore** in the project, and **bypass**.
 - **PDC** — plugin delay compensation (including a toggle in the Audio Effect Rack).
 - **Transport sync** — plugins receive tempo, position, play state and loop boundaries
@@ -1265,7 +1268,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   them — a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and
   bells, a held chord for Pendulum / Consort. **Drum Rack and Nota Rhythm kits** play a
   groove on their own pads (gain, pan, choke groups and pad effects as when loaded) at a
-  tempo that fits the kit. MIDI effects play a phrase that shows what they do into a plain
+  tempo that fits the kit. A preset plays its own state: a Nota Twin preset with a sequence
+  plays its pattern. MIDI effects play a phrase that shows what they do into a plain
   keys patch. Audio effects process a **demo track**: Drums / Keys / Bass parts, or genre
   loops (Pop, House, Techno, Hip-Hop, Trap, Drum & Bass, Synthwave, Ambient) built from
   Nota's factory kits and presets and levelled alike. A track that suits the effect is
@@ -1440,7 +1444,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
-- **Library**: library folders.
+- **Library**: library folders. Without an explicit choice, the Projects and Samples folders
+  sit in the system's Documents and Music locations (Known Folders on Windows and macOS,
+  `user-dirs.dirs` on Linux), relocated or translated ones included.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
