@@ -384,6 +384,8 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         TrackArming.OthersChanged -= OnArmsChanged;
         TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
+        InputSetups.Changed -= OnArmsChanged;
+        InputSetups.Changed += OnArmsChanged;          // inputs renamed / switched off (specs/086): pickers relabel
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar

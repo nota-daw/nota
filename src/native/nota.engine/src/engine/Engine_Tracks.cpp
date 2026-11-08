@@ -3674,7 +3674,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setReturnIndex(src.returnIndex());
     nt->setGroupId(src.groupId()); // keep membership on duplicate (paste resets to top-level)
     nt->setRecordInputSource(src.recordInputSource());
-    nt->setInputChannels(src.inputChannels());
+    nt->setInput(src.inputFirst(), src.inputWidth());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));

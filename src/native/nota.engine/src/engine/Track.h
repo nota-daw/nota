@@ -18,6 +18,7 @@
 #include "media/SampleBuffer.h"
 #include "SessionPlayer.h"
 #include "media/Warp.h"
+#include "audio_io/AudioInput.h" // kMaxInputChannels
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -293,21 +294,37 @@ class Track {
     int32_t recordInputSource() const { return recordInputSource_.load(std::memory_order_relaxed); }
     void setRecordInputSource(int32_t s) { recordInputSource_.store(s, std::memory_order_relaxed); }
 
-    // Which channels of the hardware input an audio track takes (#340): 0 = both, as a
-    // stereo pair (1/2); 1 = input 1 alone, 2 = input 2 alone — a mono source, heard and
-    // recorded in the middle of both sides. Only the hardware input: an internal source is
-    // always stereo. Atomic (the audio thread reads it while monitoring).
-    static constexpr int32_t kInputStereo = 0, kInputMono1 = 1, kInputMono2 = 2;
-    int32_t inputChannels() const { return inputChannels_.load(std::memory_order_relaxed); }
-    void setInputChannels(int32_t c) {
-        inputChannels_.store(c == kInputMono1 || c == kInputMono2 ? c : kInputStereo, std::memory_order_relaxed);
+    // The hardware input an audio track takes (#340, specs/086): device channel `first`
+    // (0-based) alone — a mono source, heard and recorded in the middle — or the stereo pair
+    // first/first+1 (`first` even). Only the hardware input: an internal source is always
+    // stereo. Kept when the device lacks the channel (the track then hears nothing).
+    // Atomic: the audio thread reads it while monitoring.
+    static constexpr int32_t kInputStereo = 0, kInputMono1 = 1, kInputMono2 = 2; // the old 0/1/2 picks
+    int32_t inputFirst() const { return inputFirst_.load(std::memory_order_relaxed); }
+    int32_t inputWidth() const { return inputWidth_.load(std::memory_order_relaxed); }
+    // False for a width other than 1/2, an odd stereo first or a channel out of range.
+    static bool validInput(int32_t first, int32_t width) {
+        return first >= 0 && (width == 1 || width == 2) && first + width <= kMaxInputChannels &&
+               (width == 1 || first % 2 == 0);
     }
-    // A mono pick: copy the chosen channel to both sides of interleaved stereo frames.
-    static void foldInputChannels(float* lr, size_t frames, int32_t channels) {
-        if (channels == kInputMono1)
-            for (size_t i = 0; i < frames; ++i) lr[i * 2 + 1] = lr[i * 2];
-        else if (channels == kInputMono2)
-            for (size_t i = 0; i < frames; ++i) lr[i * 2] = lr[i * 2 + 1];
+    bool setInput(int32_t first, int32_t width) {
+        if (!validInput(first, width)) return false;
+        inputFirst_.store(first, std::memory_order_relaxed);
+        inputWidth_.store(width, std::memory_order_relaxed);
+        return true;
+    }
+    // The old three-value pick: 0 = pair 1/2, 1 = input 1, 2 = input 2; -1 for any other pick.
+    int32_t inputChannels() const {
+        const int32_t f = inputFirst(), w = inputWidth();
+        if (f == 0 && w == 2) return kInputStereo;
+        if (w == 1 && f == 0) return kInputMono1;
+        if (w == 1 && f == 1) return kInputMono2;
+        return -1;
+    }
+    void setInputChannels(int32_t c) {
+        if (c == kInputMono1) setInput(0, 1);
+        else if (c == kInputMono2) setInput(1, 1);
+        else setInput(0, 2);
     }
 
     // Input monitoring (audio tracks, Ableton's Monitor "In"): while on, the track plays its
@@ -406,7 +423,8 @@ class Track {
     int32_t returnIndex_ = -1;                                          // >=0 for return tracks
     int32_t groupId_ = -1;                                              // parent Group track id, or -1 (top-level)
     std::atomic<int32_t> recordInputSource_{0};                         // 0 hardware, -1 master, >0 source track id
-    std::atomic<int32_t> inputChannels_{kInputStereo};                  // hardware input channels (#340)
+    std::atomic<int32_t> inputFirst_{0};                                // hardware input (#340, specs/086)
+    std::atomic<int32_t> inputWidth_{2};
     std::atomic<bool> monitor_{false};                                  // live input monitoring (audio tracks)
     std::atomic<int32_t> midiFromTrackId_{-1};                          // -1 off, >0 forward MIDI to this track id
     std::atomic<bool> frozen_{false};                                   // M7: play frozenBuf instead of the live chain

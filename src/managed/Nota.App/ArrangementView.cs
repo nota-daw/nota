@@ -2779,17 +2779,33 @@ public sealed partial class ArrangementView : UserControl
                 choices.Add(mi);
                 if (on) curName = shortName;
             }
-            foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
-            int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
+            var hardware = RecordInputPick.HardwareEntries(_engine, trackId, probe: true);
+            foreach (var (pick, label, shortName) in hardware) Src(label, shortName, pick);
+            int hwCount = hardware.Count;
+            int fixedCount = hardware.Count + 1;   // the hardware entries + Master
             Src(Loc.T("common.master"), Loc.T("common.master"), RecordInputPick.Track(-1));
             foreach (var v in _tracks)
                 if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             foreach (var v in _returns)
             { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             recInput = MenuKit.ValueItem(Loc.T("common.record_input"), GlyphKind.Input, curName);
-            foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
+            if (RecordInputPick.NeedsSubmenus(hardware))
+            {
+                // A large interface (specs/086): its inputs and pairs under their own submenus.
+                var monoMenu = new MenuItem { Header = Loc.T("record_input_pick.mono_inputs") };
+                var pairMenu = new MenuItem { Header = Loc.T("record_input_pick.stereo_pairs") };
+                for (int k = 0; k < hwCount; k++) (hardware[k].Pick.Input.IsStereo ? pairMenu : monoMenu).Items.Add(choices[k]);
+                recInput.Items.Add(monoMenu);
+                if (pairMenu.Items.Count > 0) recInput.Items.Add(pairMenu);
+                recInput.Items.Add(choices[hwCount]);   // Master
+            }
+            else
+                foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
             if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
             foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
+            recInput.Items.Add(new Separator());
+            recInput.Items.Add(MenuKit.Item(Loc.T("record_input_pick.audio_io_setup"), GlyphKind.Levels,
+                () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowAudioPreferences()));
         }
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
@@ -2846,18 +2862,19 @@ public sealed partial class ArrangementView : UserControl
         return flyout;
     }
 
-    // Compact record-input selector for an audio track header: Ext (hardware), Master,
+    // Compact record-input selector for an audio track header: an input (In 1, In 3/4…), Master,
     // or another track / send. Reflects and writes the track's stored input source.
     private Control BuildInputCombo(int trackId, MonitorChip? monitor = null)
     {
         var picks = new List<RecordInputPick>();
         var sources = new List<(string, int)>();
         void Add(string name, RecordInputPick pick) { sources.Add((name, picks.Count)); picks.Add(pick); }
-        foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
+        // Every switched-on input of the device, then the pairs (specs/086).
+        foreach (var (pick, _, shortName) in RecordInputPick.HardwareEntries(_engine, trackId)) Add(shortName, pick);
         Add(Loc.T("common.master"), RecordInputPick.Track(-1));
         foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), RecordInputPick.Track(v.Id));
         foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id), RecordInputPick.Track(v.Id));
-        var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
+        var cur = _engine is null ? new RecordInputPick(0, InputPick.Mono(0)) : RecordInputPick.Of(_engine, trackId);
         int sel = picks.FindIndex(p => p.Matches(cur));
         monitor?.SetSource(sel >= 0 ? cur.Source : 0);
         return InPicker(sources, Math.Max(0, sel), k =>

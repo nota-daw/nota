@@ -305,7 +305,8 @@ public sealed partial class SessionView
             if (_engine.TryGetTrackInfo(i, out var t) && t.Id != c.TrackId && !t.IsGroup)
                 names.Add((t.Id, TrackNames.Of(_engine, t), t.IsInstrument));
 
-        // An audio track's hardware input appears once per channel pick (#340): 1, 2, 1/2.
+        // An audio track's hardware input appears once per channel pick: every input, then the
+        // stereo pairs (#340, specs/086).
         var items = new List<(RecordInputPick Value, string Label)>();
         RecordInputPick cur;
         if (c.IsInstrument)
@@ -316,7 +317,7 @@ public sealed partial class SessionView
         }
         else
         {
-            foreach (var (pick, _, shortName) in RecordInputPick.Hardware) items.Add((pick, shortName));
+            foreach (var (pick, _, shortName) in RecordInputPick.HardwareEntries(_engine, c.TrackId)) items.Add((pick, shortName));
             items.Add((RecordInputPick.Track(-1), Loc.T("common.master")));
             foreach (var n in names) items.Add((RecordInputPick.Track(n.Id), n.Name));
             cur = RecordInputPick.Of(_engine, c.TrackId);

@@ -16,6 +16,7 @@
 #include "audio_io/AudioInput.h"
 #include "CommandQueue.h"
 #include "engine/AudioThreadPool.h"
+#include "engine/CaptureRing.h"
 #include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
 #include "Graph.h"
@@ -1276,7 +1277,21 @@ class Engine {
     void setTrackRecordInput(int32_t trackId, int32_t source);
     int32_t trackRecordInput(int32_t trackId) const;
     void setTrackInputChannels(int32_t trackId, int32_t channels); // Track::kInputStereo / kInputMono1 / kInputMono2
-    int32_t trackInputChannels(int32_t trackId) const;
+    int32_t trackInputChannels(int32_t trackId) const;             // -1 for a pick the old values can't name
+    // Hardware input pick (specs/086): device channel `first` (0-based), width 1 or 2.
+    bool setTrackInput(int32_t trackId, int32_t first, int32_t width);
+    int32_t trackInput(int32_t trackId) const; // first | (width << 8); -1 for a non-audio track
+    bool trackInputAvailable(int32_t trackId) const;
+    // The capture device's input channels (opened for monitoring / recording, or probed).
+    int32_t inputChannelCount() const;
+    std::string inputChannelName(int32_t index) const;
+    int32_t probeAudioInput(); // open the device just to read its channels
+    // Inputs switched off on the Audio I/O page (specs/086): a take skips a track on one.
+    void setDisabledInputs(const int32_t* channels, int32_t count);
+    void setTestInputDevice(int32_t channels); // tests: a pretend device, names "Test N"
+    // Tests: feed `channels`-wide device frames to the record ring as the input thread would
+    // (layout columns gathered), whatever the taps say.
+    void pushInputFramesForTestN(const float* interleaved, int32_t frames, int32_t channels);
     // Input monitoring (audio tracks): hear the record-input source live through the track.
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
@@ -1318,6 +1333,7 @@ class Engine {
 
     // --- audio input recording (M4-3) ---
     bool startAudioRecording(int32_t trackId); // opens the input device; false if unavailable
+    bool startAudioRecordingLanes(const std::vector<int32_t>& trackIds); // one take on several tracks (specs/086)
     void stopAudioRecording();                 // materialise the captured clip
     bool isAudioRecording() const { return audioRecording_; }
     // Live audio-capture geometry so the UI can draw a growing take (M-fix): the
@@ -1326,11 +1342,14 @@ class Engine {
     double audioRecordStartBeat() const { return audioRecordStartBeat_; }
     // Length (beats) captured so far, so the live take draws a box that grows by the
     // real recorded duration (monotonic) instead of following the looping playhead.
-    double audioRecordLengthBeats() const;
+    double audioRecordLengthBeats(int32_t trackId = 0) const; // 0 = the first lane
     // Live min/max peaks over the in-progress capture buffer so the take can draw
     // a growing waveform (not just a flat box). 0 when not capturing. UI-thread
     // only — serialised with poll()'s drain, which is the sole writer.
-    int32_t audioRecordPeaks(float* outMinMax, int32_t maxPoints) const;
+    int32_t audioRecordPeaks(float* outMinMax, int32_t maxPoints, int32_t trackId = 0) const; // 0 = the first lane
+    // Every track the audio take records (lane order); the tracks the last take start skipped.
+    int32_t audioRecordingTracks(int32_t* out, int32_t cap) const;
+    int32_t recordSkipped(int32_t* trackIds, int32_t* reasons, int32_t cap) const;
     // Notes held into the in-progress MIDI take (live-recording preview, #56). Lock-free
     // read of the audio thread's per-block snapshot; take geometry from the message thread.
     int32_t recordHeldNotes(
@@ -1359,6 +1378,11 @@ class Engine {
     bool restoreJoinedEdges(int32_t trackId, const int32_t* edges, int32_t count);
     // A loop take through the real capture path (ring -> drain -> stop), no device.
     bool takeRecordTest(int32_t trackId, const float* interleavedStereo, int32_t frames, double startBeat);
+    // The same through the multi-channel ring: `channels`-wide device frames, the track's own pick.
+    bool takeRecordTestN(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat);
+    int32_t takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat);
+    bool takeRecordTestImpl(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat,
+        int32_t first, int32_t width);
 
     // --- undo/redo (M6-6) ---
     // Every structural edit publishes a fresh, immutable Graph snapshot, so the
@@ -2000,11 +2024,15 @@ class Engine {
     // Producer side: mark the first push of a new capture epoch. RT-safe (one atomic load).
     // Load the epoch before the capture gate: a retry shuts the gate before it moves the epoch,
     // so a producer that sees the new epoch also sees the gate shut until the restart opens it.
-    void markCaptureEpoch(uint32_t& last, uint32_t ep) {
+    void markCaptureEpoch(uint32_t& last, uint32_t ep, bool hardware) {
         if (ep == last) return;
         last = ep;
+        if (hardware) {
+            recordRing_.pushMarker();
+            return;
+        }
         const float nan = std::numeric_limits<float>::quiet_NaN();
-        inputQueue_.push(InputFrame{nan, nan});
+        internalQueue_.push(InputFrame{nan, nan});
     }
     // Session MIDI retry: the audio thread adopts the new take epoch only once the slot has
     // actually relaunched, so nothing played while it waits (shown pending) enters the take.
@@ -2199,36 +2227,57 @@ class Engine {
     static void noteExprEvents(
         const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap);
 
+    // Capture layout (specs/086): the device channels some track uses — armed or monitoring
+    // on the hardware input, or the take in progress — published to the input and audio
+    // threads by seqlock. Blocks in both rings carry the generation they were written with;
+    // the message thread keeps recent layouts so the drain can read older blocks.
+    CaptureLayout captureLayout_;
+    CaptureLayoutSnapshot layoutMsg_;   // message thread: the published one
+    CaptureLayoutSnapshot layoutInput_; // input thread's copy
+    CaptureLayoutSnapshot layoutAudio_; // audio thread's copy: the columns of monitorHwBuf_
+    static constexpr size_t kLayoutHistory = 16;
+    std::array<CaptureLayoutSnapshot, kLayoutHistory> layoutHistory_{}; // message thread
+    const CaptureLayoutSnapshot* layoutFor(uint32_t generation) const;
+    void updateCaptureLayout(); // recompute + publish when the channel set changed
+    int32_t inputTestChannels_ = 0; // tests: a pretend device's channel count (0 = none)
+    std::vector<std::string> inputChannelNames_; // the device's channels when last open / probed
+    bool inputProbed_ = false;                   // probed since the input device last changed
+    void rememberInputChannels();
+    void forgetInputChannels();
+    int32_t testLayoutChannels_ = 0; // tests: channels 0..n-1 always carried
     // Live input monitoring: the input thread also feeds this ring while any audio track
     // monitors the hardware input; the audio thread pops one segment's worth per mixGraph
     // into monitorHwBuf_, holding a small cushion so the two device clocks don't click.
     // Declared before input_ so it outlives the capture thread on destruction.
-    MonitorQueue monitorQueue_;
-    std::vector<float> monitorHwBuf_;          // audio thread, this segment's hw input
+    CaptureMonitorRing monitorRing_;
+    std::vector<float> monitorHwBuf_;          // audio thread, this segment's hw input (layoutAudio_ columns)
     bool monitorPrimed_ = false;               // audio thread: cushion reached
+    uint32_t monitorBlockGen_ = 0;             // audio thread: layout of the monitor block being read
     std::atomic<int32_t> inputBlockFrames_{0}; // largest capture callback seen (cushion size)
     std::atomic<bool> monitorSharedClock_{false}; // capture shares the output callback (ASIO): no cushion
-    std::atomic<bool> hwMonitorTap_{false};    // input thread -> monitorQueue_
-    std::atomic<bool> hwRecordTap_{false};     // input thread -> inputQueue_ (hw take rolling)
+    std::atomic<bool> hwMonitorTap_{false};    // input thread -> monitorRing_
+    std::atomic<bool> hwRecordTap_{false};     // input thread -> recordRing_ (hw take rolling)
     bool hwMonitorWanted_ = false;             // message thread: some track monitors hw input
     bool inputTestMode_ = false;               // tests: never open a real capture device
     bool ensureAudioInput();                   // open the capture device once (shared)
     void releaseAudioInputIfIdle();            // close it when nothing records/monitors
     void updateMonitorInput();                 // (re)evaluate hw monitoring after edits
     void pullMonitorInput(int32_t frames);     // audio thread: ring -> monitorHwBuf_
+    void skipMonitorFrames(size_t frames);     // audio thread: drop a backlog across blocks
+    void onInputBlock(const float* s, int32_t n, int32_t channels); // input thread
 
     // audio input recording (M4-3): input thread -> ring -> message-thread buffer.
     std::unique_ptr<AudioInput> input_;
-    InputQueue inputQueue_;
-    std::vector<float> audioCaptureBuf_; // interleaved stereo, message-thread owned
-    std::vector<float> captureScratch_;  // per-drain batch scratch (message thread)
-    size_t captureWritePos_ = 0;         // frame cursor into audioCaptureBuf_
+    CaptureRecordRing recordRing_; // input thread -> message thread: hardware takes
+    InputQueue internalQueue_;     // audio thread -> message thread: internal-resampling takes
+    std::vector<float> captureBlock_;    // one ring block's columns (message thread)
+    size_t captureWritePos_ = 0;         // frame cursor shared by every lane
     // Loop-punch capture: while the transport loops, capture is a fixed loop-region buffer
     // whose cursor advances by the captured-frame count (a steady clock, immune to transport
     // jitter) and wraps at the loop length, so each pass overwrites the previous in place.
     // Activated when loop is on at record start OR the moment loop is enabled mid-take.
     bool captureLoop_ = false;
-    int32_t captureChannels_ = Track::kInputStereo; // the take's hardware channel pick (#340)
+
     bool captureWrapped_ = false;
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
@@ -2236,11 +2285,32 @@ class Engine {
     // Take lanes (specs/067): each finished loop pass, copied out of the loop buffer when the
     // cursor wraps (message thread), in a zeroed loop-length buffer holding [from, to).
     struct LoopPass {
-        std::vector<float> buf;
+        std::vector<float> buf; // `channels` interleaved
+        int32_t channels = 2;
         size_t from = 0, to = 0;
     };
-    std::vector<LoopPass> capturePasses_;
     size_t capturePassFrom_ = 0; // where the open pass started recording
+    // A take records one lane per track (specs/086): its pick, its buffer (stored mono for a
+    // mono pick) and its loop passes; the cursor, loop geometry, start, clock and latency are
+    // the take's. Lane 0 is audioRecordTrackId_ (the Session / retry paths' track).
+    struct CaptureLane {
+        int32_t trackId = 0;
+        int32_t first = 0, width = 2; // hardware pick (an internal source: the stereo pair)
+        int32_t channels = 2;         // stored channels
+        std::vector<float> buf;       // message thread, `channels` interleaved
+        std::vector<float> scratch;   // this drain's frames
+        std::vector<LoopPass> passes;
+    };
+    std::vector<CaptureLane> captureLanes_;
+    const CaptureLane* captureLaneOf(int32_t trackId) const;
+    void beginTestLane(int32_t trackId, int32_t first, int32_t width);
+    struct TakeGeometry;
+    void materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g);
+    void finishCaptureLane(int32_t trackId); // one lane leaves a running take (its track disarmed)
+    // Armed tracks the last take start could not record, with why (nota_engine_record_skipped).
+    static constexpr int32_t kSkipInputUnavailable = 1, kSkipTooMany = 2, kSkipSwitchedOff = 3, kSkipMixedSources = 4;
+    std::vector<std::pair<int32_t, int32_t>> recordSkipped_;
+    std::array<bool, kMaxInputChannels> inputDisabled_{}; // message thread
     void finishLoopPass(size_t to);
     // Two or more passes: keep each as a take on `nt` and comp the newest-first coverage.
     void materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,
@@ -2260,7 +2330,7 @@ class Engine {
     // a dropout stays a bounded local gap instead of shifting everything after it —
     // otherwise every lost frame permanently desyncs the rest of the take.
     std::atomic<int64_t> inputDroppedFrames_{0};
-    void drainInputQueue(); // ring -> audioCaptureBuf_
+    void drainInputQueue(); // rings -> every capture lane's buffer
 
     // per-block live events (audio thread, drained from liveMidi_).
     static constexpr int kMaxLive = 256;

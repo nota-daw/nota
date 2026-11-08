@@ -114,7 +114,9 @@ public sealed class ProjectService
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
                 Monitor = engine.GetTrackMonitor(ti.Id),
-                InputChannels = (int)engine.GetTrackInputChannels(ti.Id),
+                InputChannels = engine.GetTrackInput(ti.Id).AsChannels is { } oldPick ? (int)oldPick : null,
+                InputFirst = engine.GetTrackInput(ti.Id).First + 1,
+                InputWidth = engine.GetTrackInput(ti.Id).Width,
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
             };
@@ -749,7 +751,7 @@ public sealed class ProjectService
             if (t.EditLink == true) engine.SetTrackEditLink(id, true);   // group Link (specs/076)
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
-            engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair
+            engine.SetTrackInput(id, TrackInputOf(t));
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
@@ -1162,6 +1164,15 @@ public sealed class ProjectService
         }
         doc.SampleRefs.TryAdd(rel, sampleId);
         return rel;
+    }
+
+    // A saved track's hardware input (specs/086): the device channel + width, or — in files
+    // saved before 0.60 — the old three-value pick (absent before 0.58: the stereo pair).
+    internal static InputPick TrackInputOf(TrackDto t)
+    {
+        if (t.InputFirst is int first && t.InputWidth is int width && new InputPick(first - 1, width) is { IsValid: true } p)
+            return p;
+        return InputPick.From((InputChannels)(t.InputChannels ?? 0));
     }
 
     // Writes a sample unless its content-named file is already complete on disk.

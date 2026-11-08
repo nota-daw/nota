@@ -8,6 +8,8 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreAudio/CoreAudio.h>
 
+#include <algorithm>
+#include <string>
 #include <vector>
 
 namespace nota {
@@ -16,11 +18,11 @@ struct CoreAudioInput::Impl {
     AudioUnit unit = nullptr;
     UInt32 channels = 2;        // device input channels (client format)
     std::vector<float> scratch; // device-format frames (channels interleaved)
-    std::vector<float> stereo;  // downmixed stereo scratch
+    std::vector<std::string> names; // per input channel, read at start (control thread)
     CoreAudioInput* owner = nullptr;
 };
 
-// CoreAudio input thread: pull captured frames, downmix to stereo, hand to owner.
+// CoreAudio input thread: pull captured frames and hand every channel to the owner (specs/086).
 static OSStatus inputProc(void* inRefCon, AudioUnitRenderActionFlags* ioActionFlags, const AudioTimeStamp* inTimeStamp,
     UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList* /*ioData*/) {
     auto* impl = static_cast<CoreAudioInput::Impl*>(inRefCon);
@@ -36,15 +38,8 @@ static OSStatus inputProc(void* inRefCon, AudioUnitRenderActionFlags* ioActionFl
     if (AudioUnitRender(impl->unit, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, &abl) != noErr)
         return noErr;
 
-    const float* src = impl->scratch.data();
-    float* dst = impl->stereo.data();
-    for (UInt32 i = 0; i < inNumberFrames; ++i) {
-        const float l = src[i * ch];
-        const float r = ch > 1 ? src[i * ch + 1] : l;
-        dst[i * 2] = l;
-        dst[i * 2 + 1] = r;
-    }
-    if (impl->owner->cb_) impl->owner->cb_(dst, static_cast<int32_t>(inNumberFrames));
+    if (impl->owner->cb_)
+        impl->owner->cb_(impl->scratch.data(), static_cast<int32_t>(inNumberFrames), static_cast<int32_t>(ch));
     return noErr;
 }
 
@@ -128,7 +123,20 @@ bool CoreAudioInput::start(InputCallback cb, uint32_t device) {
     // Preallocate RT scratch (generous cap so the input proc never allocates).
     constexpr UInt32 kMaxFrames = 16384;
     impl_->scratch.assign(kMaxFrames * ch, 0.0f);
-    impl_->stereo.assign(kMaxFrames * 2, 0.0f);
+
+    // The names the device gives its input channels ("" where it gives none).
+    impl_->names.assign(ch, std::string{});
+    for (UInt32 c = 0; c < ch; ++c) {
+        AudioObjectPropertyAddress na{kAudioObjectPropertyElementName, kAudioDevicePropertyScopeInput, c + 1};
+        CFStringRef name = nullptr;
+        UInt32 nsz = sizeof(name);
+        if (AudioObjectHasProperty(dev, &na) &&
+            AudioObjectGetPropertyData(dev, &na, 0, nullptr, &nsz, &name) == noErr && name) {
+            char buf[256] = {};
+            if (CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8)) impl_->names[c] = buf;
+            CFRelease(name);
+        }
+    }
 
     AURenderCallbackStruct cbs{};
     cbs.inputProc = &inputProc;
@@ -150,6 +158,16 @@ bool CoreAudioInput::start(InputCallback cb, uint32_t device) {
 
     running_ = true;
     return true;
+}
+
+int32_t CoreAudioInput::channelCount() const {
+    if (!running_) return 0;
+    return static_cast<int32_t>(std::min<UInt32>(impl_->channels, static_cast<UInt32>(kMaxInputChannels)));
+}
+
+std::string CoreAudioInput::channelName(int32_t index) const {
+    if (index < 0 || index >= static_cast<int32_t>(impl_->names.size())) return {};
+    return impl_->names[static_cast<size_t>(index)];
 }
 
 void CoreAudioInput::stop() {

@@ -198,6 +198,9 @@ public sealed class Settings
     public bool PianoRollAudition { get; set; } = true;
     /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
     public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
+    /// <summary>Audio I/O setup per capture device (specs/086): switched-off inputs and their
+    /// names, keyed by <see cref="InputSetups.KeyOf"/>. A device never set up has no entry.</summary>
+    public Dictionary<string, InputSetup> InputSetups { get; set; } = new();
     /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
     /// the velocity; true — wheel up lowers it.</summary>
     public bool PianoRollVelocityWheelReversed { get; set; }

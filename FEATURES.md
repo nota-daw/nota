@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.59.1** (plus changes in development on `main`). This document describes what is
+**0.59.2** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -576,8 +576,13 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Audio: recording, clips, warp
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
-  monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
-  (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
+  monitoring (in/auto/off). The input is any input of the device alone (**In 3** — mono,
+  centred) or a stereo pair (**In 3/4**), named as the device names them; new tracks take
+  In 1. MCP `list_audio_inputs`, `set_track_input`, `get_track_input`.
+- **Several tracks in one pass**: Record records every armed audio track, each its own input,
+  aligned, one undo step; a mono input records a mono file.
+- **Inputs setup** (Settings → Audio → Inputs): switch inputs off and name inputs and stereo
+  pairs per device; track input menus follow.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
   **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
@@ -1217,6 +1222,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   window that opens on top and focused, and closes when the device is removed). Adding a
   plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in
   window on insert, on by default); loading a project, undo and paste don't.
+- **Multi-core rendering**: independent VST3 instrument and effect tracks render in
+  parallel on the engine's worker threads, keeping half of each buffer free for playing;
+  other formats, plug-ins inside racks and armed tracks render on the audio thread.
 - **State save and restore** in the project, and **bypass**.
 - **PDC** — plugin delay compensation (including a toggle in the Audio Effect Rack).
 - **Transport sync** — plugins receive tempo, position, play state and loop boundaries
@@ -1301,7 +1309,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   them — a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and
   bells, a held chord for Pendulum / Consort. **Drum Rack and Nota Rhythm kits** play a
   groove on their own pads (gain, pan, choke groups and pad effects as when loaded) at a
-  tempo that fits the kit. MIDI effects play a phrase that shows what they do into a plain
+  tempo that fits the kit. A preset plays its own state: a Nota Twin preset with a sequence
+  plays its pattern. MIDI effects play a phrase that shows what they do into a plain
   keys patch. Audio effects process a **demo track**: Drums / Keys / Bass parts, or genre
   loops (Pop, House, Techno, Hip-Hop, Trap, Drum & Bass, Synthwave, Ambient) built from
   Nota's factory kits and presets and levelled alike. A track that suits the effect is
@@ -1476,7 +1485,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
-- **Library**: library folders.
+- **Library**: library folders. Without an explicit choice, the Projects and Samples folders
+  sit in the system's Documents and Music locations (Known Folders on Windows and macOS,
+  `user-dirs.dirs` on Linux), relocated or translated ones included.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for

@@ -254,7 +254,7 @@ public sealed partial class ArrangementView
     /// other tracks, the returns), with their menu labels.</summary>
     internal List<(RecordInputPick Pick, string Label)> RecordInputChoices(int trackId)
     {
-        var list = RecordInputPick.Hardware.Select(h => (h.Pick, h.Label)).ToList();
+        var list = RecordInputPick.HardwareEntries(_engine, trackId, probe: true).Select(h => (h.Pick, h.Label)).ToList();
         list.Add((RecordInputPick.Track(-1), Loc.T("common.master")));
         foreach (var v in _tracks)
             if (v.Id != trackId) list.Add((RecordInputPick.Track(v.Id), v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id)));

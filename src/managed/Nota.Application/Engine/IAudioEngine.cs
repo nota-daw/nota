@@ -349,6 +349,25 @@ public interface IAudioEngine : IDisposable
     /// input 1 / input 2 alone as a mono source in the middle (#340). Hardware input only.</summary>
     void SetTrackInputChannels(int trackId, InputChannels channels);
     InputChannels GetTrackInputChannels(int trackId);
+    /// <summary>An audio track's hardware input: any device channel alone or an odd-aligned
+    /// stereo pair (specs/086). False for an invalid pick or a non-audio track.</summary>
+    bool SetTrackInput(int trackId, InputPick pick);
+    InputPick GetTrackInput(int trackId);
+    /// <summary>Whether the track's input exists on the open (or probed) capture device.</summary>
+    bool TrackInputAvailable(int trackId);
+    /// <summary>The capture device's input channels (0 when none is open) and their names
+    /// ("" where the device gives none).</summary>
+    int AudioInputChannelCount();
+    string AudioInputChannelName(int index);
+    /// <summary>Opens the selected capture device just to read its channels; returns the count.</summary>
+    int ProbeAudioInput();
+    /// <summary>Inputs switched off on the Audio I/O page (0-based): a take skips a track on one.</summary>
+    void SetDisabledInputs(int[] channels);
+    /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
+    void SetTestInputDevice(int channels);
+    /// <summary>Tests: record <paramref name="frames"/> of <paramref name="channels"/>-wide
+    /// device frames into the track through the capture ring, the track taking its own input.</summary>
+    bool TakeRecordTestN(int trackId, float[] interleaved, int channels, int frames, double startBeat);
     /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
     /// source through the track in place of its clips. A master source stays silent.</summary>
     void SetTrackMonitor(int trackId, bool on);
@@ -1111,6 +1130,16 @@ public interface IAudioEngine : IDisposable
     int MasterTrackId { get; }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     int AudioRecordPeaks(float[] outMinMax, int maxPoints);
+    /// <summary>Every track the audio take is recording (specs/086: one take records every
+    /// armed audio track), and its live length / peaks per track.</summary>
+    int[] RecordingTracks();
+    double AudioRecordLengthBeatsOf(int trackId);
+    int AudioRecordPeaksOf(int trackId, float[] outMinMax, int maxPoints);
+    /// <summary>Armed tracks the last take start could not record, with why.</summary>
+    (int TrackId, RecordSkipReason Reason)[] RecordSkipped();
+    /// <summary>Tests: one take on every armed audio track from <paramref name="channels"/>-wide
+    /// device frames, through the real lane set-up; returns the lanes recorded.</summary>
+    int TakeRecordTestArmed(float[] interleaved, int channels, int frames, double startBeat);
     /// <summary>Notes held into the in-progress MIDI take, for drawing them growing. Fills
     /// <paramref name="buffer"/> and returns the count (0 when no MIDI take records); trackId is
     /// the take's track (0 = none), sessionScene the Session scene (-1 = arrangement take),

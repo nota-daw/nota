@@ -26,7 +26,7 @@ Engine::Engine()
     authoring_->masterTrack = std::make_shared<Track>(kMasterTrackId, TrackType::Audio);
     scratch_.assign(kMaxBlock * 2, 0.0f);
     mixTmp_.assign(kMaxBlock * 2, 0.0f);
-    monitorHwBuf_.assign(kMaxBlock * 2, 0.0f);
+    monitorHwBuf_.assign(static_cast<size_t>(kMaxBlock) * kMaxInputChannels, 0.0f); // every carried column (specs/086)
     clipEnvScratch_.assign(kMaxBlock * 2, 0.0f);
     for (auto& b : returnBus_) b.assign(kMaxBlock * 2, 0.0f); // M6-1 send buses
     for (auto& b : groupBus_) b.assign(kMaxBlock * 2, 0.0f);  // group submix buses
@@ -256,6 +256,7 @@ bool Engine::applyAudioConfig() {
     stop();
     // Drop the cached input unit so the next capture re-opens the chosen device.
     if (input_) input_.reset();
+    forgetInputChannels(); // the input device (or its system) may have changed
     const bool ok = start();
     // A rate the ASIO driver refused isn't kept: the driver's own rate runs, and the saved
     // config says "device default" so the next launch doesn't ask again (FR-007).
@@ -671,7 +672,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setReturnIndex(t.returnIndex());                             // M6-1
     nt->setGroupId(t.groupId());                                     // group membership
     nt->setRecordInputSource(t.recordInputSource());                 // internal record routing
-    nt->setInputChannels(t.inputChannels());                         // mono / stereo hardware input
+    nt->setInput(t.inputFirst(), t.inputWidth());                    // hardware input pick
     nt->setMonitor(t.monitor());                                     // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels

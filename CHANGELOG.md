@@ -33,48 +33,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   layout (Interface scale still scales everything). Device cards keep their text size.
 - **Send levels in the Large track header**: a track at the Large height shows a value bar for
   its send to each return, two per row, as far as the height allows.
-
-- **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
-  Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
-  them, including the effects and the depth of each modulation route. The voice has two
-  oscillators that run triangle → saw → square continuously, with a Metal folder, sync and FM;
-  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
-  feedback and drive; three envelopes and three LFOs. The card's A / B switch picks the side the
-  knobs, automation and MIDI learn write to. Each knob marks the other side and where the sound
-  is now. **A → B**, **B → A** and **Swap** are one undo step each.
-  - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
-    time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
-    pressure morphs only the pressed note.
-  - **Matrix**: a source × destination grid, as on Nota Consort — drag a cell for the depth,
-    double-click removes the route. Up to 64 routes per part from 29 sources (LFOs, envelopes,
-    velocity, release velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to
-    Morph, pitch, vibrato or any sound control. A route has a depth per side.
-  - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
-    them morphing. One switch bypasses the section.
-  - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
-    velocity, gate or tie), swing, transpose by a held key, latch and step record. With the
-    transport stopped a held key plays the pattern (or the arpeggio) at the project tempo;
-    with it rolling they keep time with the song. Four motion
-    lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
-    arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
-    Patterns travel with presets and projects; every pattern edit is one undo step.
-  - **Split and Layer**: two parts, Lower and Upper, each a full Twin sound. They split at a key
-    (learnable from a played key) or layer on every key. The 12 voices are shared between the
-    parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
-    or swaps them, or loads a factory or saved sound into one part.
-  - **117 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
-    L and S sizes.
-  - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
-    `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
-- **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
-  playing its pattern.
-- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
-  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
-  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
-  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
-  applies at once, in every theme, tuned to each so it stays readable; a colour that would
-  be confused with the record red, mute, solo or the meter green, or a grey, is explained
-  and not applied. Nota Remote follows. Orange looks exactly as before.
+- **Record several audio tracks in one pass** (#353, #528, specs/086): Record now starts a take
+  on every armed audio track at once, each recording its own input — a drum kit on four inputs
+  goes to four tracks, all starting on the same beat and sample-aligned, with one latency
+  correction. A mono input is recorded to a mono file. The whole take is one Undo step; loop
+  recording keeps take lanes on every track. Tracks of a linked group now all record (#528).
+  A track set to an input the device lacks is skipped and the others record; disarming one
+  track mid-take lands its part and the rest keep going. Arm more tracks with ⌘-click
+  (Ctrl-click). For now an audio take records either the hardware inputs or one track's
+  output (internal resampling), not both at once.
+- **Name and switch off inputs** (#353, specs/086): Settings → Audio → **Inputs** lists every
+  input of the device with the name it gives it, a switch and a name of your own, then the
+  stereo pairs, which can be named too. Track input menus list only the inputs that are on,
+  under your names (an interface with more than 16 inputs groups them under **Mono inputs**
+  and **Stereo pairs**), and the track's Record input menu has **Audio I/O setup…**. Kept per
+  device; changes apply at once. A track set to an input you switched off keeps it and records
+  nothing from it. While recording several tracks the status line says how many, and which
+  armed tracks it skipped and why.
 
 ### Changed
 - **A new filter graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
@@ -375,6 +350,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     capped knobs with an orange value arc, value bars instead of thin sliders, the new
     switches and segment groups, pressed-in sections, one font, greys instead of the old
     identity colours, and inactive controls in a quieter grey instead of faded.
+- **An audio track can record any input of the interface** (#353, specs/086): the input
+  picker lists every input of the selected device — each one alone as a mono source,
+  recorded and heard in the middle, then the stereo pairs 1/2, 3/4, … — with the names the
+  device gives its inputs. The short label reads **In 3** or **In 3/4** instead of Ext 1 /
+  Ext 2. Projects keep the input; projects from 0.59 open with the input they had (Ext 1 →
+  In 1, Ext 2 → In 2, Ext 1/2 → In 1/2). A track set to an input the current device doesn't
+  have keeps it and records nothing from it until that device is back. On ASIO every input
+  of the driver is opened (a driver that refuses that many falls back to the saved pair).
+  MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
 - **Tabs at the top of a card section keep its rounded corner** (nota-daw/nota#531): a selected
@@ -392,6 +376,80 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
   The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
   under the Auto gain switch.
+- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
+  range beside its icon again; the arrangement's header column names the **Sections** and
+  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
+  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
+  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
+  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
+  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
+  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
+  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
+- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
+  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
+  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
+  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
+  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
+  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
+  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
+  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
+  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
+  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
+  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
+  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
+  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
+  and labelled; Flux shows when the reaction pulls the vector. Value bars and EQ-3's faders
+  light up under the pointer, and the Auto Filter and Compressor handles only look grabbed
+  while hovered or dragged. Operator's OUT drop zone is the
+  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
+  graph tooltips that named colours no longer drawn now describe what is on screen.
+
+## [0.59.2] — 2026-11-08
+
+### Added
+- **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
+  Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
+  them, including the effects and the depth of each modulation route. The voice has two
+  oscillators that run triangle → saw → square continuously, with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes and three LFOs. The card's A / B switch picks the side the
+  knobs, automation and MIDI learn write to. Each knob marks the other side and where the sound
+  is now. **A → B**, **B → A** and **Swap** are one undo step each.
+  - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
+    time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
+    pressure morphs only the pressed note.
+  - **Matrix**: a source × destination grid, as on Nota Consort — drag a cell for the depth,
+    double-click removes the route. Up to 64 routes per part from 29 sources (LFOs, envelopes,
+    velocity, release velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to
+    Morph, pitch, vibrato or any sound control. A route has a depth per side.
+  - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
+    them morphing. One switch bypasses the section.
+  - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
+    velocity, gate or tie), swing, transpose by a held key, latch and step record. With the
+    transport stopped a held key plays the pattern (or the arpeggio) at the project tempo;
+    with it rolling they keep time with the song. Four motion
+    lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
+    arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
+    Patterns travel with presets and projects; every pattern edit is one undo step.
+  - **Split and Layer**: two parts, Lower and Upper, each a full Twin sound. They split at a key
+    (learnable from a played key) or layer on every key. The 12 voices are shared between the
+    parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
+    or swaps them, or loads a factory or saved sound into one part.
+  - **117 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
+    L and S sizes.
+  - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
+    `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
+- **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
+  playing its pattern.
+- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
+  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
+  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
+  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
+  applies at once, in every theme, tuned to each so it stays readable; a colour that would
+  be confused with the record red, mute, solo or the meter green, or a grey, is explained
+  and not applied. Nota Remote follows. Orange looks exactly as before.
+
+### Fixed
 - **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
   Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
   audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
@@ -422,33 +480,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   tab was connected, or the Remote popup was open, the sound dropped out about every
   10 seconds. Nota started a system helper on that interval to find USB network links; it now
   reads them directly and only again when the network changes.
-- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
-  range beside its icon again; the arrangement's header column names the **Sections** and
-  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
-  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
-  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
-  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
-  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
-  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
-  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
-- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
-  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
-  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
-  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
-  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
-  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
-  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
-  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
-  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
-  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
-  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
-  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
-  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
-  and labelled; Flux shows when the reaction pulls the vector. Value bars and EQ-3's faders
-  light up under the pointer, and the Auto Filter and Compressor handles only look grabbed
-  while hovered or dragged. Operator's OUT drop zone is the
-  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
-  graph tooltips that named colours no longer drawn now describe what is on screen.
 
 ## [0.59.1] — 2026-11-05
 
