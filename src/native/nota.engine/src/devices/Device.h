@@ -75,10 +75,15 @@ class Device {
     // 4=Utility, 6=Amp), or -1 for a hosted plugin. Message thread only.
     virtual int32_t builtinKind() const { return -1; }
 
-    // True when processing this device runs a hosted plugin instance — the device itself,
-    // or one nested in it (a rack's chains). Such a device stays on the audio thread:
-    // plugin instances aren't safe to process from a pool worker. Audio thread safe.
+    // True when processing this device runs a hosted plugin instance - the device itself,
+    // or one nested in it (a rack's chains). Identity is separate from the render
+    // scheduling contract below. Audio thread safe.
     virtual bool hostsPlugin() const { return builtinKind() < 0; }
+
+    // May process on a pool worker, with exclusive ownership of this instance for
+    // the whole block. Hosted adapters must explicitly opt in after auditing their
+    // format/buffers; unknown hosted types and hosted-containing racks stay serial.
+    virtual bool supportsParallelRender() const { return !hostsPlugin(); }
 
     // Stable plugin identifier for project save (M7-6c); empty for built-ins.
     // Message thread only.

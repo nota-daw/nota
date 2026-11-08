@@ -1165,7 +1165,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Control SideAction(string text, string tip, Nota.Application.Twin.TwinSides.Edit edit)
             {
                 var tb = new TextBlock { Text = text, FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = 16, CornerRadius = NotaRadius.Field, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerEntered += (_, _) => { b.Background = NotaPalette.SurfaceHover; tb.Foreground = TextPrimary; };
                 b.PointerExited += (_, _) => { b.Background = Brushes.Transparent; tb.Foreground = TextSecondary; };
                 ToolTip.SetTip(b, tip);

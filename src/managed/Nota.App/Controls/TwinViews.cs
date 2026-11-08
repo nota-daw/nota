@@ -129,7 +129,7 @@ internal sealed class TwinExpressionPad : Control
 
     private void Label(DrawingContext ctx, string text, double x, double y, bool rightAlign)
     {
-        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, NotaPalette.TextTertiary, this);
+        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, NotaPalette.TextTertiary, NotaTextSize.InCard);
         ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
     }
 }

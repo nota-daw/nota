@@ -54,7 +54,7 @@ public sealed partial class PreferencesWindow
         foreach (var preset in Accent.Presets)
         {
             var choice = new AccentChoice(preset.Id);
-            var fill = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Cell };
+            var fill = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Field };
             var ring = Ring(fill, SwatchSize);
             ToolTip.SetTip(ring, AccentName(preset.Id));
             // Reachable from the keyboard too: Tab to a swatch, Return or Space picks it, the
@@ -84,7 +84,7 @@ public sealed partial class PreferencesWindow
         }
 
         // Custom: a button with the custom colour's chip; its ring marks it chosen like a swatch.
-        var customChip = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Cell };
+        var customChip = new Border { Width = SwatchFill, Height = SwatchFill, CornerRadius = NotaRadius.Field };
         var custom = new Button
         {
             Height = 22, FontSize = 12, CornerRadius = NotaRadius.Group, Padding = new Thickness(4, 0, 8, 0),
@@ -196,7 +196,7 @@ public sealed partial class PreferencesWindow
         var cells = new List<(Border Fill, Ellipse Dot)>();
         foreach (var t in themes)
         {
-            var fill = new Border { Height = 14, CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1) };
+            var fill = new Border { Height = 14, CornerRadius = NotaRadius.Field, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1) };
             var dot = new Ellipse { Width = 4, Height = 4, Fill = NotaPalette.TextPrimary, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 2, 0), IsVisible = false };
             var cell = new StackPanel
             {

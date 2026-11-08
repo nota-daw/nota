@@ -17,6 +17,9 @@ namespace hosting {
 PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock)
     : plugin_(std::move(p)) {
     if (plugin_) name_ = plugin_->getName().toStdString();
+    // Per-instance VST3 buffers/playhead/sidechain data permit an exclusive worker
+    // process call. Initialization, state and editors remain on the message thread.
+    parallelRender_ = plugin_ && plugin_->getPluginDescription().pluginFormatName == "VST3";
     empty_.ensureSize(256);
     setSampleRate(sr, maxBlock);
     if (plugin_) plugin_->addListener(this); // "Learn" (M9-B3)

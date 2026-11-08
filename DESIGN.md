@@ -332,7 +332,7 @@ Text is never faded: a quieter line takes the next ink.
 The values are the default, Orange. The user's accent choice replaces this family (the
 soft tint, the ramp, and `TextOnAccent` by the derived ink) — see § Colour themes, **Accent**.
 
-Fluent's `SystemAccentColor` ramps are retinted to the theme's orange, so stock controls
+Fluent's `SystemAccentColor` ramps are retinted to the accent, so stock controls
 match. `AccentSubtle`, `AccentDim`, `AccentMute` and `AccentHover` are older shades; new
 code uses the three above.
 

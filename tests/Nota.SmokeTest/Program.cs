@@ -31,6 +31,24 @@ static float MonoRms(float[] buf)
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
 
+if (args.Length >= 2 && args[0] == "--profile-project")
+{
+    HostedPluginProfile.RunProject(args[1], args.Length > 2 ? int.Parse(args[2]) : 128,
+        args.Length > 3 ? int.Parse(args[3]) : 48000, args.Length > 4 ? args[4] : null);
+    return 0;
+}
+if (args.Length >= 2 && args[0] == "--profile-hosted")
+{
+    HostedPluginProfile.Run(args[1], args.Length > 2 ? int.Parse(args[2]) : 128,
+        args.Length > 3 ? int.Parse(args[3]) : 48000);
+    return 0;
+}
+if (args.Contains("--hosted-render-pool"))
+{
+    foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused
 // references, so a forbidden name appearing in an assembly's referenced set means

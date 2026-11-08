@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
+  text in the app a point smaller or up to two points larger, live, without changing the
+  layout (Interface scale still scales everything). Device cards keep their text size.
+- **Send levels in the Large track header**: a track at the Large height shows a value bar for
+  its send to each return, two per row, as far as the height allows.
+
 - **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
   Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
   them, including the effects and the depth of each modulation route. The voice has two
@@ -64,11 +70,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   applies at once, in every theme, tuned to each so it stays readable; a colour that would
   be confused with the record red, mute, solo or the meter green, or a grey, is explained
   and not applied. Nota Remote follows. Orange looks exactly as before.
-- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
-  text in the app a point smaller or up to two points larger, live, without changing the
-  layout (Interface scale still scales everything). Device cards keep their text size.
-- **Send levels in the Large track header**: a track at the Large height shows a value bar for
-  its send to each return, two per row, as far as the height allows.
 
 ### Changed
 - **A new filter graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
@@ -386,6 +387,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
   The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
   under the Auto gain switch.
+- **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
+  Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
+  audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
+  adapter keeps all its state inside the instance, so independent hosted instrument/effect
+  tracks may now render their work exclusively on a render-pool worker per block; the engine
+  joins the pool before the next block, and lifecycle/editor work stays on the message thread.
+  Unknown hosted formats, rack-nested chains and record-armed/capture-routed tracks keep the
+  serial fallback, and a light load leaves helpers parked. Measured with a deterministic VST3
+  probe: four heavy instances went from 5.82 ms median (218 % of a 2.67 ms callback period,
+  every block late) to 1.58–1.69 ms with zero late blocks on the same machine.
+- **The render pool reserves playback headroom** (#532): when the pool joins the callback, its
+  helper count now keeps half the buffer free for voice attacks and scheduler jitter (the
+  previous boundary left only 15 %), and the sizing accounts for the largest indivisible track
+  job (list scheduling's bound) — heavy plug-in jobs no longer schedule into serial waves while
+  cores idle. Pools under a 512-frame four-instance load keep the per-callback cost at ~93 % of
+  one such instance instead of four.
 - **Default Projects/Samples folders follow the OS locations** (#522): the browser and
   save dialogs no longer default to hardcoded `~/Documents/Nota Projects` and
   `~/Music/Nota Samples`. On Linux they read `user-dirs.dirs` (`XDG_DOCUMENTS_DIR`,

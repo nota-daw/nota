@@ -2485,19 +2485,20 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             }
             w.tapRec = (recSrc > 0 && t.id() == recSrc); // internal resampling source
 
-            // Parallel eligibility: built-in DSP only (hosted plugin instances
-            // are not thread-safe across threads — also when nested in a rack),
-            // no shared-queue writers (record queues are SPSC), no hardware
-            // monitoring.
+            // Parallel eligibility is an instance's processing contract, not its
+            // hosted identity: independent audited VST3 adapters own their state
+            // just like built-ins. Unknown formats and hosted-containing racks
+            // remain serial. Shared-queue writers (record queues are SPSC) must
+            // stay on the caller regardless of processor capability.
             bool eligible = parallelOk;
             const int32_t srcId = t.midiFromTrackId();
             if (srcId >= 0 && t.id() == recordTrackId_ && (playing || countInActive_) && recArmed && spb > 0.0)
                 eligible = false;                          // captureRouted destination prints into shared takes
             if (srcId >= 0 && t.armed()) eligible = false; // routed source prints while armed
-            if (eligible && t.instrument && t.instrument->hostsPlugin()) eligible = false;
+            if (eligible && t.instrument && !t.instrument->supportsParallelRender()) eligible = false;
             if (eligible)
                 for (auto& d : t.devices)
-                    if (d && !d->bypassed() && d->hostsPlugin()) {
+                    if (d && !d->bypassed() && !d->supportsParallelRender()) {
                         eligible = false;
                         break;
                     }
@@ -2536,7 +2537,29 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 }
                 if (rtParallel_) {
                     const double work = (double)std::max(leafWorkNs_, parWorkNs_);
-                    const int threads = (int)std::ceil(work / (kRtSizeLoad * periodNs));
+                    const double target = kRtSizeLoad * periodNs;
+                    int threads = (int)std::ceil(work / target);
+                    // Track jobs are indivisible: four 1.4 ms jobs cannot meet a
+                    // 2.67 ms deadline on three threads even though their total
+                    // divided by three fits. List scheduling's upper bound is
+                    // work / threads + (1 - 1 / threads) * largestJob. Use it to
+                    // size helpers without sorting jobs or allocating in the callback.
+                    const double peak = std::min(work, (double)leafPeakNs_);
+                    if (peak > 0) {
+                        const int available = std::min(m, pool_->workerCount() + 1);
+                        if (peak < target) {
+                            // T >= (work - peak) / (target - peak): the smallest count
+                            // whose list-scheduling bound still fits the target.
+                            const double needed = std::ceil((work - peak) / (target - peak));
+                            threads = std::max(threads, (int)std::min((double)available, needed));
+                        } else {
+                            // The largest job alone overflows the target: no count meets
+                            // the bound. Every extra worker still lowers it (the small
+                            // jobs run beside the heavy one instead of queueing in front),
+                            // so take the whole pool rather than park on the average.
+                            threads = std::max(threads, available);
+                        }
+                    }
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
@@ -2559,12 +2582,15 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // pool's summed task time while it runs (see leafWorkNs_).
             if (!offline && m > 0) {
                 int64_t work = 0;
+                int64_t peak = 0;
                 bool alone = true;
                 for (int j = 0; j < m; ++j) {
                     const LeafWork& w = rs_->leafWork[(size_t)rs_->parIdx[(size_t)j]];
                     work += w.workNs;
+                    peak = std::max(peak, w.workNs);
                     alone = alone && w.wid == pool_->workerCount();
                 }
+                leafPeakNs_ += (peak - leafPeakNs_) / 16;
                 if (rtParallel_) {
                     parWorkNs_ += (work - parWorkNs_) / 16;
                 } else {

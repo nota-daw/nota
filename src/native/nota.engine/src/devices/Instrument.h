@@ -256,10 +256,13 @@ class Instrument {
     // -1 = hosted plugin / unknown. Message thread only.
     virtual int32_t kind() const { return -1; }
 
-    // True when rendering this instrument runs a hosted plugin instance — the instrument
-    // itself, or one nested in it (a rack's chains). Keeps the track off the render pool
-    // (see Device::hostsPlugin). Audio thread safe.
+    // True when rendering this instrument runs a hosted plugin instance - the instrument
+    // itself, or one nested in it (a rack's chains). Audio thread safe.
     virtual bool hostsPlugin() const { return kind() < 0; }
+
+    // Same exclusive-per-block worker contract as Device::supportsParallelRender.
+    // Unknown hosted instruments and hosted-containing racks remain serial.
+    virtual bool supportsParallelRender() const { return !hostsPlugin(); }
 
     // Human-readable name (built-in "Synth"/"Sampler", or the hosted plugin's name).
     // Used to label the track. Message thread only.

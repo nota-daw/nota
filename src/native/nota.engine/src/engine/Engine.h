@@ -2327,7 +2327,7 @@ class Engine {
         bool audible = false, capturing = false, feeding = false, toMix = false;
         bool monitoring = false, frozenActive = false, sessionActive = false;
         bool postTapMuted = false; // sidechain tap muted with its source leaf (vocoder key)
-        bool eligible = false;     // parallel DSP (built-ins only, no shared writers)
+        bool eligible = false;     // worker-capable DSP, no shared writers
         LeafPath path = LeafPath::Skip;
         int wid = -1;           // pool worker that rendered this track (diagnostic)
         int64_t workNs = 0;     // time its parallel DSP took (sizes the next block's helpers)
@@ -2382,11 +2382,15 @@ class Engine {
     // kRtMaxHoldSeconds), so a wrong guess costs one late block, rarely.
     int64_t leafWorkNs_ = 0;
     int64_t parWorkNs_ = 0;
+    int64_t leafPeakNs_ = 0; // largest indivisible task: total work alone can under-size helpers
     bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
     bool rtParallel_ = false;
     double rtParallelLeftNs_ = 0;
     double rtProbeLeftNs_ = 0;
-    static constexpr double kRtSizeLoad = 0.85; // helpers: finish within this much of the buffer
+    // Once parallel rendering is needed, reserve half the callback for voice
+    // attacks and scheduler jitter. Near-deadline sizing leaves four large
+    // plug-in jobs in two serial waves despite useful cores being available.
+    static constexpr double kRtSizeLoad = 0.50;
     static constexpr double kRtHoldSeconds = 2.0;
     static constexpr double kRtMaxHoldSeconds = 32.0;
     static constexpr double kRtProbeSeconds = 0.5;
