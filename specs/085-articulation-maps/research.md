@@ -36,6 +36,10 @@ was not. "Unverified" means no code or file in this checkout proves it.
 
 ## R3. Channel, program change and bank select on the `Instrument` interface
 
+- **Recipient gate (implemented)**: `Instrument::takesArticulations()` defaults to false;
+  hosted plug-ins return true, as do racks containing one. Built-in instruments therefore
+  receive no articulation actions. This avoids treating a library's keyswitch as a musical
+  note on a built-in synth. Note timing offsets still apply. The user guide documents the gate.
 - **Decision**: Add `int32_t eventChannel = 0` beside `eventOffset` (0 = the note's own / channel
   1) and `virtual void programChange(int32_t program)` (default: ignore). Bank select goes
   through the existing `controller()` path with CC 0 and CC 32. `PluginInstrument` uses

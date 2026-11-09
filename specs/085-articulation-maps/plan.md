@@ -1,6 +1,6 @@
 # Implementation Plan: Articulation maps
 
-**Branch**: none (checked-out `develop`, local only) | **Date**: 2026-11-09 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/articulation-maps` (PR #549 → `develop`) | **Date**: 2026-11-09 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/085-articulation-maps/spec.md`
 
@@ -39,9 +39,11 @@ pure C ABI), `DESIGN.md` for the UI, and `CONTRIBUTING.md` for licensing. The `n
 
 **Audio-Thread Impact**: Yes, in the render path. The audio thread reads an immutable table and
 per-clip timeline through the graph snapshot; the track offset is a relaxed atomic. No allocation,
-lock or I/O: the per-block event list lives in the pre-sized scratch buffer (`RenderScratch`,
-sized in `publishRaw`), capped like the existing 1024-event buffers; on overflow events are dropped
-and counted, never allocated. The new timeline and table are built on the message thread.
+lock or I/O: articulation events use a fixed 256-event stack array, and Session latching releases
+use fixed-capacity audio-thread-owned storage. Overflow never grows the buffers; wiring dropped
+event counts into the render call sites remains T092. Tables and timelines are built on the message
+thread. `Instrument::takesArticulations()` gates switch delivery to hosted plug-ins or racks
+containing one; built-ins still receive offset musical notes without articulation actions.
 
 **Testing**: `tests/Nota.SmokeTest`: pure managed tests (importers, file format, model), engine
 tests through a recording `Probe : Instrument` exposed as `nota_engine_articulation_selftest`, and
@@ -55,9 +57,9 @@ and macOS are not expected to differ.
 **Performance Goals**: No new dropouts on the existing perf test; scheduling cost O(notes in block
 + log articulations) per track per block.
 
-**Constraints**: Offsets in milliseconds independent of tempo; ±2000 ms; no fake data (no invented
-library offsets); the native engine cannot be built here until its dependencies are available
-offline (research R12).
+**Constraints**: Offsets in milliseconds independent of tempo; ±2000 ms; no invented library
+measurements. Native builds are verified locally on Windows and in CI on all three platforms;
+the initial dependency blocker in research R12 is historical.
 
 **Scale/Scope**: Maps of ~50 articulations per track; clips with thousands of notes.
 
@@ -68,12 +70,12 @@ offline (research R12).
 | Principle | Status |
 |---|---|
 | 0. Approved issue first | Pass: #547, labelled `approved`. (The work started locally before the issue was linked; that waiver is now closed.) |
-| I. Real-time safety | Pass by design (table and timeline immutable and published with the snapshot; scratch and Session release queue fixed-size; pending keys and chase origins audio-thread-owned). Native scheduler/Session probes and audio-thread review cover the fixes. Revision `96733e0e` passed Linux instruction-count CI; follow-up commits require a new CI run. |
+| I. Real-time safety | Pass by design (table and timeline immutable and published with the snapshot; scratch and Session release queue fixed-size; pending keys and chase origins audio-thread-owned). Native scheduler/Session probes and audio-thread review cover the fixes. Source `6c876cf5` passes the Linux instruction-count gate (all 63 scenarios, run `42629193021`). |
 | II. Boundary discipline | Pass: only POD structs and `nota_*` C functions cross; no JUCE outside `pluginhost/`. |
 | III. Licensing | Pass: no dependency. Every new file needs the SPDX header (done for the files written so far). |
-| IV. Verification gate | Pending: smoke tests for importers exist; engine tests and the full `build-win.ps1` run need the native build (blocked, R12). |
+| IV. Verification gate | Pass: full local Windows build/smoke/scanner/scan-scale and 414 focused articulation checks; CI build and smoke pass on macOS, Windows and Linux (run `42629193115`). |
 | V. One logical change | The feature is large; delivery is split into the phases below, each independently buildable and testable. |
-| VI. Docs in sync | Planned in the final phase: CHANGELOG, FEATURES.md, manual, shortcuts. |
+| VI. Docs in sync | CHANGELOG and FEATURES.md updated; EN/RU manual built and checked, patch attached for upstream integration. No new shortcut. See review-evidence.md. |
 | VII. Spec-first | **Deviation to correct**: code (note id, track offset, scheduler shift, model, importers, importer tests) was written before this plan. It is provisional; `/speckit-tasks` lists it as tasks to review and `/speckit-converge` must pass over it. |
 | VIII. Rules not weakened | Pass. |
 

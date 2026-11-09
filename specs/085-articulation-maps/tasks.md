@@ -11,7 +11,7 @@ description: "Task list for articulation maps"
 
 **Tests**: Included. The owner's request lists the tests to write, and Constitution IV requires the smoke test to cover engine behaviour changes.
 
-**Organization**: Grouped by user story (spec.md). `[x]` = written **and** verified by a passing test on 2026-11-09 (full smoke test: 5300 pass, 0 fail). That code was written before the plan (plan, Constitution VII); T089 reviews it.
+**Organization**: Grouped by user story (spec.md). `[x]` = written **and** verified by a passing test on 2026-11-09 (full smoke test: 5300 pass, 0 fail). That code was written before the plan (plan, Constitution VII); T071 reviews it.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -182,7 +182,7 @@ description: "Task list for articulation maps"
 ## Phase 9: Polish & Cross-Cutting Concerns
 
 - [x] T071 [P] Run `/speckit-converge` on `specs/085-articulation-maps/` over the code written before the plan (Constitution VII deviation): T004–T010, T024–T027, T047 — *done 2026-11-09: 27 FRs, 8 SCs, 21 acceptance scenarios, 10 edge cases, 12 plan decisions and 9 constitution principles checked; 7 findings appended as Phase 10 (T090–T096), none critical or high; one reported item (English literals in ProjectService warnings) dropped as the layer's existing convention*
-- [ ] T072 Perf check (SC-007): `scripts/perf-gate.py` / `tests/perf/nota_perf.cpp` with and without a mapped track — *local check 2026-11-09, not the gate: scripts/perf-gate.sh needs Linux + Valgrind + git worktrees, none possible here (Windows; owner rule: no worktrees). Offline render, 16 hosted-probe tracks, a note every 32nd with the articulation changing on every note (worst case), fastest of 7 interleaved rounds: 536 ms without a map, 628 ms with (1.79 % → 2.09 % of real time, ~2 µs per track per 512-sample block); tracks without a map add only a null check per note. Run the gate on Linux before release*
+- [ ] T072 Perf check (SC-007), with and without a mapped track — *the canonical Linux/Valgrind gate now passes all 63 scenarios on source `6c876cf5` (run `42629193021`), with charts, raw data and method linked in [review-evidence.md](review-evidence.md). This gate tests ordinary engine scenarios; a reproducible mapped-library versus unmapped comparison remains open. The earlier author-reported 536/628 ms timing has no raw artifact and is not treated as a completed controlled benchmark.*
 - [x] T073 Run quickstart.md scenarios A–F and record the results — *done 2026-11-09: A, B, C pass; D, E, F pass with one claim each not directly tested — recorded in quickstart.md Results*
 - [x] T074 Review every new line on the audio thread in `Engine_Render.cpp` for allocation, locks, I/O, logging (Constitution I) — *done 2026-11-09: no allocation, lock, I/O or logging on the new audio-thread code; two fixes — PluginInstrument's MidiBuffers reserve room for a block's articulation MIDI (kMaxBlockArt × 9 bytes on top of the notes' 8192), and a static_assert that Track::midiOffsetMs_ is lock-free. Seen, not changed: the notes' own worst case (1024 notes + 1024 expression events) already exceeded the 8192 bytes before this feature*
 
@@ -192,7 +192,7 @@ description: "Task list for articulation maps"
 - [x] T076 [P] AGPL-3.0-only SPDX two-line header on every new source file (`src/managed/Nota.Application/Articulations/*.cs`, `src/native/nota.engine/src/engine/ArticulationTable.*`, `tests/Nota.SmokeTest/Articulation*.cs`, new `src/managed/Nota.App/*` files) — *done 2026-11-09: all 24 new files carry the two-line AGPL-3.0-only header*
 - [x] T077 [P] New dependency: none (XML is the .NET base library) → N/A — *done 2026-11-09: no package, FetchContent or find_package added; CMake gains only the two new source files*
 - [x] T078 [P] `CHANGELOG.md` `[Unreleased]` entry for articulation maps and the track MIDI offset — *done 2026-11-09: Added — articulation maps, the map manager, track MIDI offset, notes coloured by articulation*
-- [ ] T079 [P] FEATURES.md via `nota-features`; manual pages via `nota-docs` including the cases that cannot be played early (FR-023); shortcuts via `nota-shortcuts` if any — *FEATURES.md done 2026-11-09 (Articulation maps bullet, Track inspector bullet); no shortcut added, so nota-shortcuts has nothing to do. Manual pages blocked: the docs repo (../nota-docs) is not on this machine — the FR-023 limit (a note at a loop start with a negative offset sounds late on each repeat, T050) must go into the manual there*
+- [ ] T079 FEATURES.md and user manual — *FEATURES.md is updated. EN/RU articulation-map pages, links from the track and piano-roll pages, screenshots and capture tooling are prepared and committed separately in `../nota-docs`. `npm run build` and `npm run check` pass (zero errors). The patch is [attached to PR #549](https://github.com/thoi1/nota/blob/pr-assets/pr549-documentation/nota-docs.patch); upstream manual integration remains pending, so this task stays open. The guide includes FR-023 loop-start limits. No keyboard shortcut was added.*
 - [x] T080 Engine behaviour change → smoke test extended in `tests/Nota.SmokeTest/` (T010, T023, T041, T045, T054); confirm all pass — *done 2026-11-09: full smoke test with the rebuilt engine 5401 pass / 0 fail, 153 articulation checks (T010, T023, T041 self-test 25 checks, T045, T054, T059, T066)*
 
 ---
@@ -253,8 +253,8 @@ Phase 2 + US1 + US2 + US3 (all P1): import a real map, articulate notes, hear th
 - [ ] T092 Count articulation events dropped on a full block buffer during playback, per plan "on overflow events are dropped and counted" (partial) — the render call sites don't pass `dropped`
 - [x] T093 Make the chase re-send the articulation whose switch fired last in time (the latest trigger before the landing point), not the last by beat, so a seek gives the same state as straight playback when per-articulation offsets or leads reorder the triggers, per FR-021 (partial) — *done with the PR #549 review fixes: the scheduler decides latching switches by trigger time across the whole track, and the chase takes the last switch before the landing point (self-test 11, 25, 27)*
 - [ ] T094 Let the manager create, rename and remove articulation groups, or record that groups come only from imported files, per FR-001 / FR-009 (partial)
-- [ ] T095 Record the `Instrument::takesArticulations()` gate (built-ins and racks without a plug-in get no articulation MIDI at all) as a decision in plan.md / research R3, per FR-024 (unrequested — undocumented design)
-- [ ] T096 Bring `contracts/c-abi.md` up to date (the self-test returns 0 on pass, else the failed check's number; drop "not yet built"), and fix the intro's stale "T089" reference to T071, per plan: contracts (contradicts — stale artifact)
+- [x] T095 Record `Instrument::takesArticulations()` — *documented in research R3 and the C ABI contract: hosted plug-ins and racks containing one receive articulation actions; built-ins do not. The user guide explains the recipient gate and rack limits.*
+- [x] T096 Correct the C ABI contract and task reference — *the self-test returns 0 on pass or the failing probe number; the implemented API is marked verified; explicit channel handling and the recipient gate match the code. The intro now names T071.*
 
 ## PR #549 review fixes
 
@@ -271,3 +271,14 @@ Phase 2 + US1 + US2 + US3 (all P1): import a real map, articulate notes, hear th
 - [x] R9 Session tempo changes during a latching switch's 20 ms hold could skip the release — *fixed-capacity pending keys count rendered frames for both natural and chased switches; due releases have priority, map removal still drains them, and launch/stop clears flushed keys (self-tests 36, 37)*
 - [x] R10 Duplicate readable `.notamap` files with the same ID made the manager's catalog throw — *the lookup keeps the first copy per ID and continues to prefer project maps; manager regressions cover project-backed and library-only catalogs*
 - [x] R11 Muted/solo-gated Session tracks retained obsolete queued releases after flushing voices — *discard pending releases on the silent-track path; native check 38 reproduces the old failure and verifies unmuting into a momentary hold of the same key*
+
+
+## PR #549 documentation attachments
+
+- [x] Update the PR description from the template with the final behaviour, validation and remaining limits.
+- [x] Capture comparable inspector and piano-roll screenshots, plus the manager and import preview.
+- [x] Attach before/after benchmark charts, tables, raw data, measured revisions and reproduction instructions on `pr-assets`.
+- [x] Prepare and validate the EN/RU manual update as a separate docs-repository patch.
+- [ ] Publish the attached manual patch to the upstream documentation site (separate repository).
+
+See [review-evidence.md](review-evidence.md) for the attachment index and exact validation scope.

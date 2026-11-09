@@ -4,7 +4,7 @@ Pure C, no exceptions (AR-7). All functions are on the message thread. The audio
 calls them; it reads the published snapshot. `nota_*` symbols are exported by wildcard on every
 platform, so no export list changes.
 
-## Already written (not yet built)
+## Implemented and verified
 
 ```c
 typedef struct NotaNoteData {
@@ -56,7 +56,7 @@ NOTA_API NotaResult nota_track_clear_articulation_map(NotaEngine*, int32_t track
 NOTA_API int32_t nota_track_get_articulation_map_json(const NotaEngine*, int32_t track_id,
     char* out, int32_t max_len);
 
-/* Self-test with a recording test instrument: returns 1 on pass. Used by the smoke test. */
+/* Self-test with a recording test instrument: 0 on pass, otherwise the failed check number. */
 NOTA_API int32_t nota_engine_articulation_selftest(NotaEngine*);
 ```
 
@@ -75,10 +75,13 @@ NOTA_API int32_t nota_engine_articulation_selftest(NotaEngine*);
 
 ```cpp
 class Instrument {
-    int32_t eventChannel = 0;                       // like eventOffset; 0 = channel 1 / note's own
+    int32_t eventChannel = 0;                       // 0 = default channel 1; otherwise 1..16
     virtual void programChange(int32_t /*program*/) {}   // default: ignored
+    virtual bool takesArticulations() const { return false; }
 };
 ```
 
-`PluginInstrument` sends on `eventChannel + 1` (it hardcodes 1 today) and maps `programChange` to
-a real MIDI program change. Bank select uses `controller(0, v)` and `controller(32, v)`.
+`PluginInstrument` uses the event's explicit MIDI channel (1–16), or channel 1 when it is 0,
+and maps `programChange` to a real MIDI program change. Bank select uses `controller(0, v)`
+and `controller(32, v)`. `takesArticulations()` is true for hosted plug-ins and racks containing
+one; built-in instruments do not receive articulation actions.
