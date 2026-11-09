@@ -2516,6 +2516,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     // what it holds, or a note crossed while silent would sound on after unmute.
                     // Once, on going silent: a hosted plug-in queues each release until it renders.
                     if (t.instrument && !t.sessionSilentReleased) t.instrument->allNotesOff();
+                    // Those voices were flushed; an old latching release must not survive the
+                    // silent interval and cut a new momentary hold after mute/solo is lifted.
+                    t.sessionPlayer->articulationReleases.count = 0;
                     t.sessionSilentReleased = true;
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
@@ -3670,6 +3673,39 @@ int32_t Engine::articulationSelfTest() {
         track.sessionPlayer->articulationReleases.count = 1;
         track.sessionPlayer->requestStopNow();
         if (!track.sessionPlayer->maybeApply(0, 1, 0) || track.sessionPlayer->articulationReleases.count != 0) return 37;
+    }
+    // 38: mute/solo gating flushes an old latching hold. Its obsolete release must never resume
+    // after unmuting and cut a new momentary hold of the same key.
+    for (bool soloGate : {false, true}) {
+        auto engine = std::make_unique<Engine>();
+        const int id = engine->addInstrumentTrack(), other = engine->addAudioTrack();
+        auto target = engine->cloneTrack(*engine->findTrackAuthoring(id));
+        auto capture = std::make_shared<Probe>();
+        capture->articulations = true;
+        target->instrument = capture;
+        const ArticulationAction key{AK::Keyswitch, 0, 24, 100};
+        const ArticulationEntry entries[] = {{1, ArticulationTrigger::Latching, 0, 0, 0, 1},
+            {2, ArticulationTrigger::Momentary, 0, 0, 0, 1}};
+        target->articulationTable = ArticulationTable::build(0, entries, 2, &key, 1);
+        target->sessionSlots.resize(1);
+        auto& clip = target->sessionSlots[0];
+        clip.hasClip = true;
+        clip.lengthBeats = 4;
+        clip.midi.notes = makeClip({{0.0, 1}, {0.046875, 2}}, 1.0).notes; // momentary starts at frame 1125
+        engine->republishWithTrack(id, target);
+        engine->setLaunchQuant(0);
+        engine->transportPlay();
+        engine->launchSlot(id, 0);
+        engine->renderOffline(dst, B, sr); // first 512 frames: latching key has 448 frames left
+        if (target->sessionPlayer->articulationReleases.count != 1) return 38;
+        if (soloGate) engine->setTrackSolo(other, true); else engine->setTrackMute(id, true);
+        engine->renderOffline(dst, 256, sr); // the mute flushes voices; the slot still advances
+        if (soloGate) engine->setTrackSolo(other, false); else engine->setTrackMute(id, false);
+        capture->events.clear();
+        engine->renderOffline(dst, B, sr); // momentary key at offset 357, obsolete off would be 448
+        if (target->sessionPlayer->articulationReleases.count != 0 ||
+            std::count(capture->events.begin(), capture->events.end(), E5{1, 24, 100, 357, 0}) != 1 ||
+            std::any_of(capture->events.begin(), capture->events.end(), [](const E5& e) { return e[0] == 0 && e[1] == 24; })) return 38;
     }
     return 0;
 }
