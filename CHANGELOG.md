@@ -23,6 +23,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Fixed
+- Muting or solo-gating a Session track discards keyswitch releases for the flushed voices,
+  preventing them from cutting a new articulation after unmute. Clip edits reuse the track's
+  Session player directly instead of allocating and discarding temporary playback state.
 - Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
   files with duplicate IDs no longer prevent the articulation map manager from opening.
 - Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
