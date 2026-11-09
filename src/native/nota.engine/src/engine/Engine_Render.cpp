@@ -1551,6 +1551,7 @@ void Engine::renderInstrumentRaw(
         ab.sampleRate = transport_.sampleRate();
         ab.trackOffsetMs = t.midiOffsetMs();
         ab.chase = chaseNotes_;
+        ab.chaseStart = articulationChaseStart_;
         ab.seamOffs = seamOffs_;
         ab.seamEnd = seamEndSamples_;
         an = scheduleArticulations(t.midiClips, *t.articulationTable, ab, aev, kMaxBlockArt);
@@ -2062,6 +2063,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             presentationFrames += seg;
         }
         chaseNotes_ = chase;
+        if (chase) articulationChaseStart_ = segStart;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
@@ -3196,6 +3198,7 @@ int32_t Engine::articulationSelfTest() {
         ArtEv buf[kMaxBlockArt];
         for (double s = from; s < to; s += B) {
             ArticulationBlock b{B, s, spb, sr, trackMs, chase && s == from, false, 0.0};
+            b.chaseStart = chase ? from : -1.0;
             int d = 0;
             const int n = scheduleArticulations(clips, *table, b, buf, kMaxBlockArt, &d);
             if (dropped) *dropped += d;
@@ -3398,6 +3401,15 @@ int32_t Engine::articulationSelfTest() {
             return 25;
     }
 
+    // 26: a chase in a block shorter than 20 ms lets go exactly 20 ms later, in a subsequent block.
+    {
+        std::vector<Abs> got;
+        const double land = 0.5 * spb; // inside the first Long phrase
+        play(land, land + 3 * B, 0.0, true, got);
+        if (count(got, ArtEvKind::KeyOn, 24) != 1 || count(got, ArtEvKind::KeyOff, 24) != 1 ||
+            at(got, ArtEvKind::KeyOn, 24) != land || at(got, ArtEvKind::KeyOff, 24) != land + 960.0) return 26;
+    }
+
     // 27: overlapping clips share the instrument's state. Clip A: Long at beats 0 and 2; clip B:
     // Legato at beat 1. Beat 2's Long must be sent again — B changed the articulation in between.
     {
@@ -3417,6 +3429,18 @@ int32_t Engine::articulationSelfTest() {
         if (longs != 2 || legatos != 1 || at(got, ArtEvKind::Control, 58, 81) != 0.0) return 27;
     }
 
+    // 34: even one-frame render segments preserve the full chased-key hold.
+    {
+        ArtEv buf[kMaxBlockArt];
+        const double land = 0.5 * spb;
+        ArticulationBlock b{1, land, spb, sr, 0.0, true};
+        b.chaseStart = land;
+        if (scheduleArticulations(clips, *table, b, buf, kMaxBlockArt) != 3) return 34;
+        b.chase = false;
+        b.blockStart = land + 960;
+        const int cnt = scheduleArticulations(clips, *table, b, buf, kMaxBlockArt);
+        if (cnt != 2 || buf[0].kind != ArtEvKind::KeyOff || buf[0].off != 0 || buf[1].kind != ArtEvKind::KeyOff) return 34;
+    }
     return 0;
 }
 

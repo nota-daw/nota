@@ -61,6 +61,7 @@ struct ArticulationBlock {
     bool chase = false;      // start / seek / loop wrap: re-send what is in force
     bool seamOffs = false;   // a loop seam just passed: let go of keys held across it
     double seamEnd = 0.0;    // where the seam was (samples), when seamOffs
+    double chaseStart = -1.0; // last discontinuity on this clock, for a chased key's later release
 };
 
 // Fills `out` (capacity `cap`) with the block's events, sorted, and returns how many. Events that

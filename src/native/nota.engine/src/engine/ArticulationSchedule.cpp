@@ -220,12 +220,18 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
         }
     });
 
-    // ---- chase: restore the track's last trigger at the landing point ----
-    if (b.chase && covered && !landingSent) {
-        if (const ArticulationEntry* e = c.table.find(inForceBefore(c, all, Key{win.start, LONG_MIN, INT32_MIN}))) {
-            sendActions(w, c.table, *e, win.start, win);
-            releaseKeys(w, c.table, *e, win.start + c.hold, win);
-        }
+    // ---- chase: retain its origin so a 20 ms release can land in a later block ----
+    const double chaseStart = b.chase ? win.start : b.chaseStart;
+    if (chaseStart >= 0.0 && ((b.chase && covered && !landingSent) || win.contains(chaseStart + c.hold))) {
+        const int32_t id = inForceBefore(c, all, Key{chaseStart, LONG_MIN, INT32_MIN});
+        // A natural switch at the landing sample supplies its own release; the old articulation
+        // was never chased. Repeated points selecting the same ID are suppressed, so still chase.
+        const int32_t landed = inForceBefore(c, all, Key{chaseStart + 1.0, LONG_MIN, INT32_MIN});
+        if (id == landed)
+            if (const ArticulationEntry* e = c.table.find(id)) {
+                if (b.chase) sendActions(w, c.table, *e, chaseStart, win);
+                releaseKeys(w, c.table, *e, chaseStart + c.hold, win);
+            }
     }
 
     // ---- momentary: per note, held while the note sounds ----
