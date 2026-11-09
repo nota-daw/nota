@@ -86,7 +86,9 @@ std::string effectiveAudioDeviceUid(const std::string& uid, bool inputScope) {
         if (!uid.empty() && idToUid(info.id) == uid) return uid;
     for (const auto& info : infos)
         if (info.isDefault) return idToUid(info.id); // empty or gone -> the system default
-    return {};
+    // A backend that flags no default (ALSA on some machines): the first device it lists, so
+    // "System default" still names a device.
+    return infos.empty() ? std::string{} : idToUid(infos.front().id);
 }
 
 bool notaMiniaudioDeviceIdForIndex(bool inputScope, uint32_t oneBasedIndex, ma_device_id& out) {
