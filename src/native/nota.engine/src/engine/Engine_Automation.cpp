@@ -7,6 +7,7 @@
 #include "ParamResolve.h"
 #include "bridge/PluginHostBridge.h"
 #include "devices/instruments/Synth.h"
+#include "devices/instruments/Twin.h"
 
 #include <algorithm>
 #include <limits>
@@ -117,6 +118,11 @@ std::string Engine::pluginParamId(int32_t trackId, int32_t deviceIndex, int32_t 
     if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return {};
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamId(paramIndex) : std::string{};
+}
+int32_t Engine::pluginParamIndexFromV1(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || deviceIndex >= 0 || !t->instrument || t->instrument->kind() != 18) return paramIndex;
+    return twin::paramFromV1(paramIndex); // Twin's side blocks grew (#531)
 }
 std::string Engine::pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);

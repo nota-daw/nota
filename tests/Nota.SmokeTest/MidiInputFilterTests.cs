@@ -22,6 +22,8 @@ internal static class MidiInputFilterTests
     public static IEnumerable<(bool, string)> Run()
     {
         foreach (var r in FilterPerTrack()) yield return r;
+        foreach (var r in InputChangedWhileHeld()) yield return r;
+        foreach (var r in OtherInputKeepsHeld()) yield return r;
         foreach (var r in LinkedGroupRecordsBoth()) yield return r;
         foreach (var r in OverdubPerTrack()) yield return r;
         foreach (var r in SavedAndDisconnected()) yield return r;
@@ -122,6 +124,68 @@ internal static class MidiInputFilterTests
         yield return (qp.SequenceEqual(new[] { 62 }), $"a track on one device and channel records only that ({string.Join(",", qp)})");
         var mi = e.GetTrackMidiInput(q);
         yield return (mi.Channel == 1, $"…and reads its channel back ({mi.Channel})");
+    }
+
+    // The input switched while a key is held: its note-off, from the old input, still ends the
+    // note, both the sound and the recorded note.
+    private static IEnumerable<(bool, string)> InputChangedWhileHeld()
+    {
+        using var e = Engine();
+        int t = Instrument(e);
+        e.SetTrackMidiInputSourceForTest(t, 0, 0);
+        e.SetTrackArmed(t, true);
+        e.StopTransport();
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.1);
+        e.PushMidiForTest(0, 0x90, 0, 60, 100);
+        Beats(e, 0.25);
+        e.SetTrackMidiInputSourceForTest(t, 1, 0);   // now device 1
+        Beats(e, 0.1);
+        e.PushMidiForTest(0, 0x80, 0, 60, 0);        // the key comes up on device 0
+        Beats(e, 2.0);
+        var tail = new float[Chunk * 2];
+        e.RenderOffline(tail, Chunk, Sr);
+        float peak = tail.Max(MathF.Abs);
+        e.SetRecording(false);
+        e.Poll();
+        e.StopTransport();
+        var notes = e.TryGetClipInfo(t, 0, out _) ? e.GetClipNotes(t, 0) : Array.Empty<NotaNote>();
+        double len = notes.Length == 1 ? notes[0].LengthBeats : -1;
+        yield return (peak < 1e-4f && notes.Length == 1 && len > 0.25 && len < 0.5,
+            $"a key held while the track's MIDI input changes still ends: sound and recorded note (peak {peak:E1}, length {len:F2})");
+    }
+
+    // …but only the input that played it: the same key released on a keyboard the track
+    // doesn't listen to leaves the note sounding and recording.
+    private static IEnumerable<(bool, string)> OtherInputKeepsHeld()
+    {
+        using var e = Engine();
+        int t = Instrument(e);
+        e.SetTrackMidiInputSourceForTest(t, 0, 0);
+        e.SetTrackArmed(t, true);
+        e.StopTransport();
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.1);
+        e.PushMidiForTest(0, 0x90, 0, 60, 100);
+        Beats(e, 0.25);
+        e.PushMidiForTest(1, 0x80, 0, 60, 0);        // the same key up on device 1
+        Beats(e, 1.0);
+        var tail = new float[Chunk * 2];
+        e.RenderOffline(tail, Chunk, Sr);
+        float peak = tail.Max(MathF.Abs);
+        e.PushMidiForTest(0, 0x80, 0, 60, 0);        // and on device 0, which played it
+        Beats(e, 0.25);
+        e.SetRecording(false);
+        e.Poll();
+        e.StopTransport();
+        var notes = e.TryGetClipInfo(t, 0, out _) ? e.GetClipNotes(t, 0) : Array.Empty<NotaNote>();
+        double len = notes.Length == 1 ? notes[0].LengthBeats : -1;
+        yield return (peak > 1e-3f && notes.Length == 1 && len > 1.2,
+            $"…releasing the same key on another device doesn't end it (peak {peak:E1}, length {len:F2})");
     }
 
     // T059: #528 for instrument groups — arming one linked track arms both, both record.

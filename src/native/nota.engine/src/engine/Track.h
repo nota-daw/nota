@@ -244,6 +244,7 @@ class Track {
     // follows the track whatever happens to its instrument. Audio thread only.
     struct LiveHeld {
         uint64_t bits[2] = {0, 0};
+        int8_t source[128] = {}, channel[128] = {}; // where each held note came from (its off must too)
         bool release = false;
         int64_t tailQuiet = -1; // see tailQuiet() above
     };

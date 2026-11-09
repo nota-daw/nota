@@ -74,6 +74,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   stops on its own, and Discard and Retry restarts them all.
 
 ### Changed
+- **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
+  Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
+  for Russian, and the English one otherwise. The choice used to follow the OS language, so a
+  French interface got the English manual and a Russian OS with an English interface got the
+  Russian one.
 - **S cards keep their name readable** (#540): on an S card the preset picker is a small list
   key in the header (Previous / Next, Init and the presets in its menu), so it no longer crowds
   the device name.
@@ -402,14 +407,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     next beat. A stopped loop no longer runs on in the background, so Play starts it from the
     top and Record or Overdub from Stop start at once.
   - **Count-in 1 bar** and **Set tempo from loop** did nothing. Count-in now waits one bar
-    before the first pass (the counter shows the beats left, Stop cancels it), and Set tempo
-    changes the song tempo when the first loop closes so the loop is a whole number of bars.
+    before the first pass (the counter shows the beats left, Stop cancels it, the dimmed buttons
+    leave it running), and Set tempo changes the song tempo when the first loop closes so the
+    loop is a whole number of bars, even with another track shown by then.
   - **Export** did nothing; it now writes the loop as you hear it (every unmuted layer at its
-    level) to a WAV file.
+    level, at its speed, backwards when reversed) to a WAV file, and says so if the file can't
+    be written.
   - The captions under the actions say what a press does now (for example "close, then play"
     or "layer 3, next bar"), and actions that would do nothing are dimmed. The first pass
     draws its waveform as it records, and a stopped loop's layers say Stopped. Right-clicking
     a transport or mute button no longer triggers it.
+- **Twin MIDI mappings keep their controls** (#531): Nota Twin's envelope shapes grew its
+  parameter list, so a knob mapped in a 0.59 project would have moved a different control. Mappings
+  now save the parameter's id and find it again on load, and older projects' Twin mappings move
+  with the new layout.
+- **Disarming one of several recording tracks** (specs/086): disarming the first-armed audio track
+  no longer stops the other tracks' recording, and an instrument track disarmed while others record
+  keeps its controller moves (mod wheel, pedal) up to the moment it left.
 - **Tabs at the top of a card section keep its rounded corner** (nota-daw/nota#531): a selected
   tab such as Global on a built-in instrument's rail painted over the section's corner. A
   section now clips what it holds to its rounded edge.

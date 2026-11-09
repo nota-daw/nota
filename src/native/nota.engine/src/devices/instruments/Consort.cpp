@@ -1086,6 +1086,7 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
     auto rate = [sr](float sec) { return static_cast<float>(1.0 / (std::max(1e-4f, sec) * sr)); };
     const RcEnvCoefs fRc{fA, 1.3f, fD, fR, 1e-6f, rate(c.fASec), rate(c.fDSec), rate(c.fRSec)};
     const RcEnvCoefs aRc{aA, 1.3f, aD, aR, 3e-5f, rate(c.aASec), rate(c.aDSec), rate(c.aRSec)};
+    const bool fNative = rcEnvNative(c.fShape), aNative = rcEnvNative(c.aShape);
     const float velA = (1.0f - c.velVca * 0.85f * (1.0f - V.vel)) * c.voiceGain;
     const int os = c.os;
     const float kPiF = static_cast<float>(kPi);
@@ -1141,8 +1142,8 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
             V.g2s = g;
         }
         // -- envelopes (RC curves; the attack aims past 1 like the analog charge — or shaped, #531) --
-        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape);
-        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape);
+        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, fNative);
+        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, aNative);
         if (V.ast == 0 && !V.gate && V.fade == 0 && !V.retrig) { // asleep: stop computing this voice
             V.active = false;
             V.fst = 0;
@@ -1415,8 +1416,9 @@ void Consort::publishTelemetry() {
     const Voice& F = voices_[focus_];
     tele_[ScEnv1].store(F.active ? F.fenv : 0.0f, std::memory_order_relaxed);
     tele_[ScEnv2].store(F.active ? F.aenv : 0.0f, std::memory_order_relaxed);
-    publishRcEnvTele(tele_ + ScEnvTele, F.active, F.fst, F.fsh);
-    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, F.active, F.ast, F.ash);
+    publishRcEnvTele(tele_ + ScEnvTele, F.active, F.fst, F.fsh, F.fenv, pn_[FSustain].load(std::memory_order_relaxed));
+    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, F.active, F.ast, F.ash, F.aenv,
+        pn_[ASustain].load(std::memory_order_relaxed));
     if (st == 3) { // the four most recent sounding voices
         int idx[kOsc] = {-1, -1, -1, -1};
         for (int v = 0; v < kMaxVoices; ++v) {

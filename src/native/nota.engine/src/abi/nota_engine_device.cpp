@@ -676,6 +676,9 @@ const char* nota_plugin_param_id(const NotaEngine* e, int32_t track_id, int32_t 
     s = e ? CENG(e)->pluginParamId(track_id, device_index, param_index) : std::string{};
     return s.c_str();
 }
+int32_t nota_plugin_param_index_from_v1(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t param_index) {
+    return e ? CENG(e)->pluginParamIndexFromV1(track_id, device_index, param_index) : param_index;
+}
 const char* nota_plugin_param_name(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t param_index) {
     static std::string s; // owned by the engine, valid until the next call
     s = e ? CENG(e)->pluginParamName(track_id, device_index, param_index) : std::string{};

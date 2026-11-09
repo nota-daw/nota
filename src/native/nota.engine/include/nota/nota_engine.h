@@ -472,6 +472,9 @@ NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine,
  * string getters return a pointer valid until the next call (engine-owned). */
 NOTA_API int32_t     nota_plugin_param_count(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API const char* nota_plugin_param_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+/* Where a param index saved by an older version (a MIDI mapping) sits today: Nota Twin's
+ * layout grew after 0.59 (#531); any other device's index is returned unchanged. */
+NOTA_API int32_t     nota_plugin_param_index_from_v1(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API const char* nota_plugin_param_name(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 /* The plugin's display text for a param's current value ("-12.0 dB", unit appended), and its
  * normalized default. Engine-owned string, valid until the next call. */
@@ -1233,6 +1236,11 @@ NOTA_API int32_t    nota_take_record_test_n(NotaEngine* engine, int32_t track_id
  * stop. Returns the lanes recorded (see nota_engine_record_skipped for the rest). */
 NOTA_API int32_t    nota_take_record_test_armed(NotaEngine* engine, const float* interleaved, int32_t channels,
                                                 int32_t frames, double start_beat);
+/* The same, with `disarm_track_id` disarmed once `disarm_at_frame` frames are in (a lane that
+ * leaves mid-take); the rest record on to the end. */
+NOTA_API int32_t    nota_take_record_test_armed_disarm(NotaEngine* engine, const float* interleaved, int32_t channels,
+                                                       int32_t frames, double start_beat, int32_t disarm_track_id,
+                                                       int32_t disarm_at_frame);
 
 /* Decoded-sample metadata by id; returns 1 if found, else 0. */
 NOTA_API int32_t nota_sample_get_info(const NotaEngine* engine, int64_t sample_id, NotaSampleInfo* out);

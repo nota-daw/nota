@@ -25,6 +25,7 @@ internal static class MultiInputRecordTests
         foreach (var r in SavedPicks()) yield return r;
         foreach (var r in SeveralTracksOnePass()) yield return r;
         foreach (var r in LinkedGroupRecordsBoth()) yield return r;
+        foreach (var r in DisarmFirstLaneRecordsOn()) yield return r;
         foreach (var r in LoopPassesPerTrack()) yield return r;
         foreach (var r in SkippedTracks()) yield return r;
         foreach (var r in InputSetupPickers()) yield return r;
@@ -226,6 +227,27 @@ internal static class MultiInputRecordTests
         var ta = Take(d, a); var tb = Take(d, b);
         yield return (lanes == 2 && ta is { } x && tb is { } y && Near(x.L, Level(5)) && Near(y.L, Level(5)) && x.Frames == y.Frames,
             "two tracks on the same input both record it");
+    }
+
+    // Disarming the first-armed track mid-take lands its clip; the others record on to the
+    // end (specs/086), the take doesn't stop with it.
+    private static IEnumerable<(bool, string)> DisarmFirstLaneRecordsOn()
+    {
+        using var e = new NotaEngine();
+        e.SetTestInputDevice(Inputs);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, 48000.0);
+        int a = e.AddAudioTrack(), b = e.AddAudioTrack();
+        e.SetTrackInput(a, InputPick.Mono(0));
+        e.SetTrackInput(b, InputPick.Mono(1));
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        var dev = DeviceFrames();
+        int lanes = e.TakeRecordTestArmedDisarm(dev, Inputs, Frames, 0.0, a, Frames / 2);
+        var ta = Take(e, a); var tb = Take(e, b);
+        yield return (lanes == 2 && ta is { } x && tb is { } y && Near(x.L, Level(0)) && Near(y.L, Level(1))
+                      && y.Frames > x.Frames * 3 / 2 && y.Start == x.Start,
+            $"disarming the first-armed track mid-take keeps the other recording ({lanes} lanes, {ta?.Frames} / {tb?.Frames} frames)");
     }
 
     // #528: tracks of a linked group arm together — and now record together.

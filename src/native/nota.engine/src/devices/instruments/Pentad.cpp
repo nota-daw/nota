@@ -708,6 +708,7 @@ void Pentad::renderVoice(Voice& V, int n, const VoiceCtl& c) {
     auto rate = [sr](float sec) { return static_cast<float>(1.0 / (std::max(1e-4f, sec) * sr)); };
     const RcEnvCoefs fRc{fA, 1.3f, fD, fR, 1e-6f, rate(c.sFA * ef), rate(c.sFD * ef), rate(c.sFR * ef)};
     const RcEnvCoefs aRc{aA, 1.3f, aD, aR, 3e-5f, rate(c.sAA * ea), rate(c.sAD * ea), rate(c.sAR * ea)};
+    const bool fNative = rcEnvNative(c.fShape), aNative = rcEnvNative(c.aShape);
     // Unison stacks stay fat but don't scale linearly with the voice count.
     const float stackGain = V.stackN > 1 ? std::pow(static_cast<float>(V.stackN), -0.4f) : 1.0f;
     const float velA = (1.0f - c.velAmp * (1.0f - V.vel)) * stackGain;
@@ -745,8 +746,8 @@ void Pentad::renderVoice(Voice& V, int n, const VoiceCtl& c) {
         // -- glide (exponential, in semitones) --
         V.pitch += (V.pitchTgt - V.pitch) * c.glideC;
         // -- envelopes (RC curves; attack aims past 1 like the analog charge — or shaped, #531) --
-        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape);
-        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape); // the amp's floor ≈ −90 dB
+        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, fNative);
+        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, aNative); // the amp's floor ≈ −90 dB
         if (V.ast == 0 && V.fade == 0) { // asleep: stop computing this voice
             V.active = false;
             V.gate = false;
@@ -935,8 +936,10 @@ void Pentad::publishTelemetry(int32_t /*frames*/) {
     const Voice* nv = nullptr;
     for (const Voice& V : voices_)
         if (V.active && (!nv || V.order > nv->order)) nv = &V;
-    publishRcEnvTele(tele_ + ScEnvTele, nv != nullptr, nv ? nv->fst : 0, nv ? nv->fsh : EnvShapeState{});
-    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, nv != nullptr, nv ? nv->ast : 0, nv ? nv->ash : EnvShapeState{});
+    publishRcEnvTele(tele_ + ScEnvTele, nv != nullptr, nv ? nv->fst : 0, nv ? nv->fsh : EnvShapeState{}, nv ? nv->fenv : 0.0f,
+        pn_[FSustain].load(std::memory_order_relaxed));
+    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, nv != nullptr, nv ? nv->ast : 0, nv ? nv->ash : EnvShapeState{},
+        nv ? nv->aenv : 0.0f, pn_[ASustain].load(std::memory_order_relaxed));
 }
 
 } // namespace nota

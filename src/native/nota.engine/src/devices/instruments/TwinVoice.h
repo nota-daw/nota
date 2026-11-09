@@ -153,8 +153,11 @@ constexpr float kRouteVibratoSt = 1.0f; // … to Vibrato: ±1 st of LFO 1
 // With a bent decay / release or Lin (#531) the stages run the shared shaped step instead
 // (EnvShape.h), at the segments' own lengths; the defaults keep the RC generator exactly.
 struct Env {
-    enum : uint8_t { Idle, Delay, Attack, Decay, Release };
+    // Sustain is the decay once it has reached the sustain level (the graphs show it apart);
+    // it steps exactly like Decay.
+    enum : uint8_t { Idle, Delay, Attack, Decay, Sustain, Release };
     uint8_t st = Idle;
+    bool native = true; // rcEnvNative(shape): the RC generator runs inline in tick()
     float lvl = 0.0f;
     int32_t dly = 0;
     float aC = 1, dC = 1, rC = 1, aTgt = 1.3f, sus = 1;
@@ -163,17 +166,52 @@ struct Env {
     EnvShapeParams shape{0.5f, 0.5f, 1.0f};
     EnvShapeState sh;
 
+    // A stage starts: what the shared step does on the first sample of a new stage
+    // (EnvShape.h's code: 0 A · 1 D · 2 S · 3 R). Done when the stage changes rather than
+    // checked on every sample; the level doesn't move between here and the next tick.
+    void enter(int code) {
+        sh.last = code;
+        sh.p = 0.0f;
+        sh.from = lvl;
+    }
     void gateOn(int32_t delaySamples) {
         dly = delaySamples;
         st = dly > 0 ? Delay : Attack; // retrigger from the current level, no click
-        sh.last = -1;
+        enter(0);
     }
     // The stage for the graphs (EnvShape.h's code) and its progress.
     int teleStage() const {
-        return st == Attack ? 0 : st == Decay ? (sh.last == 2 ? 2 : 1) : st == Release ? 3 : 4;
+        return st == Attack ? 0 : st == Decay ? (sh.last == 2 ? 2 : 1) : st == Sustain ? 2 : st == Release ? 3 : 4;
+    }
+    // The progress through the stage. The RC generator works it out here, when the graphs
+    // or a change of shape ask, rather than on every sample.
+    float progress() const {
+        if (!native) return sh.p;
+        switch (sh.last) {
+        case 0: return sh.from < 1.0f ? std::clamp((lvl - sh.from) / (1.0f - sh.from), 0.0f, 1.0f) : 1.0f;
+        case 1:
+        case 2: return sh.from - sus > 1e-6f ? std::clamp((sh.from - lvl) / (sh.from - sus), 0.0f, 1.0f) : 1.0f;
+        case 3: return sh.from > 1e-6f ? std::clamp((sh.from - lvl) / sh.from, 0.0f, 1.0f) : 1.0f;
+        default: return 0.0f;
+        }
     }
     void gateOff() {
-        if (st != Idle) st = Release;
+        if (st == Idle) return;
+        if (st != Release || sh.last != 3) enter(3);
+        st = Release;
+    }
+    // Per-control-interval shape, set before setTimes (the progress below reads the old sustain).
+    void setShape(const EnvShapeParams& s) {
+        const bool nat = rcEnvNative(s);
+        if (native && !nat) sh.p = progress(); // the shaped step carries on from here
+        if (!native && nat && st != Idle && st != Delay) {
+            // The shaped step starts a stage on its first sample; the inline generator expects it started.
+            const int code = st == Attack ? 0 : st == Release ? 3 : sh.last == 2 ? 2 : 1;
+            if (code != sh.last) enter(code);
+            if (code == 2) st = Sustain;
+        }
+        native = nat;
+        shape = s;
     }
     // Per-control-interval coefficients from times in seconds.
     void setTimes(float a, float d, float s, float r, float curve, double sr, bool loopIt) {
@@ -189,19 +227,64 @@ struct Env {
         decR = static_cast<float>(1.0 / (std::max(1e-4, static_cast<double>(d)) * sr));
         relR = static_cast<float>(1.0 / (std::max(1e-4, static_cast<double>(r)) * sr));
     }
+    // One sample. With the default shape this is the RC generator, as advanceRcEnv's native
+    // branch steps it; any other shape runs the shared shaped step.
     float tick() {
-        if (st == Delay) {
+        switch (st) {
+        case Delay:
             if (--dly <= 0) st = Attack;
             return lvl;
+        case Attack:
+            if (!native) return tickShaped();
+            lvl += (aTgt - lvl) * aC;
+            if (lvl >= 1.0f) {
+                lvl = 1.0f;
+                st = Decay;
+                enter(1);
+                loopAt();
+            }
+            return lvl;
+        case Decay:
+            if (!native) return tickShaped();
+            lvl += (sus - lvl) * dC;
+            if (std::fabs(lvl - sus) < 1e-3f) {
+                sh.last = 2; // the graph's sustain
+                st = Sustain;
+                loopAt();
+            }
+            return lvl;
+        case Sustain:
+            if (!native) return tickShaped();
+            lvl += (sus - lvl) * dC;
+            if (loop) loopAt();
+            return lvl;
+        case Release:
+            if (!native) return tickShaped();
+            lvl -= lvl * rC;
+            if (lvl < 3e-5f) { // ≈ −90 dB
+                lvl = 0.0f;
+                st = Idle;
+            }
+            return lvl;
+        default: return lvl; // Idle
         }
-        if (st == Idle) return lvl;
-        int code = st == Attack ? 1 : st == Decay ? 2 : 3;
+    }
+    // The mod envelope's loop: back to the attack once the decay reaches the sustain level.
+    void loopAt() {
+        if (loop && std::fabs(lvl - sus) < 1e-3f) {
+            st = Attack;
+            enter(0);
+        }
+    }
+    // A bent decay / release or Lin: the shared shaped step (EnvShape.h).
+    float tickShaped() {
+        int code = st == Attack ? 1 : st == Release ? 3 : 2;
         const RcEnvCoefs c{aC, aTgt, dC, rC, 3e-5f /* ≈ −90 dB */, atkR, decR, relR};
         advanceRcEnv(lvl, code, sh, sus, c, shape);
         st = code == 1 ? Attack : code == 2 ? Decay : code == 3 ? Release : Idle;
-        if (loop && st == Decay && (rcEnvNative(shape) ? std::fabs(lvl - sus) < 1e-3f : sh.last == 2)) {
+        if (loop && st == Decay && sh.last == 2) {
             st = Attack;
-            sh.last = -1;
+            enter(0);
         }
         return lvl;
     }

@@ -37,14 +37,18 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
         recording_.load(std::memory_order_relaxed) && recordSessionScene_ < 0 ? midiLaneOf(trackId) : -1;
     const bool endsTake = inAudioTake || midiLane >= 0;
     if (inAudioTake) {
-        // The first lane carries the take (Session, retry): its track ends the audio take; any
-        // other lane leaves with what it recorded so far and the rest keep going (specs/086).
-        if (trackId == audioRecordTrackId_ || captureLanes_.size() == 1) stopAudioRecording();
+        // The last lane ends the audio take; any other lane, the first included, leaves with
+        // what it recorded so far and the rest keep going (specs/086): finishCaptureLane hands
+        // the first lane's role (the Session slot, the retry) to the next.
+        if (captureLanes_.size() == 1) stopAudioRecording();
         else finishCaptureLane(trackId);
     }
     if (midiLane >= 0 && openMidiLaneCount() > 1) {
-        // Other instrument tracks record on (specs/086): this lane folds what it has and closes.
+        // Other instrument tracks record on (specs/086): this lane folds what it has, ends its
+        // controllers still in flight here (as flushCtlTake does for the last lane), and closes.
         foldRecordedTake();
+        ctlStopAt_ = transport_.uiPositionBeats();
+        foldMidiLane(midiLanes_[static_cast<size_t>(midiLane)], midiLane, {}, {}, true, 0, false);
         closeMidiLane(midiLane);
     } else if (midiLane >= 0) {
         flushCtlTake(); // the take's controllers still in flight (specs/020)
@@ -1267,7 +1271,9 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
     // quantum after it, so what came before that boundary goes.
     // The boundary frame was noted as the capture crossed it (drainInputQueue); stopped before
     // that, nothing of the retried take is kept.
-    if (recordSessionAudio_ && !std::isnan(retryStartBeat_)) {
+    // A slot lane (lane.scene), not recordSessionAudio_: the first slot landed clears that flag,
+    // and every slot of a multi-slot retry needs the same trim.
+    if (lane.scene >= 0 && !std::isnan(retryStartBeat_)) {
         const size_t have = lane.buf.size() / ch;
         const size_t keep = retryKeepFrom_ < 0 ? have + lane.offset : static_cast<size_t>(retryKeepFrom_);
         const size_t drop = std::min(have, keep > lane.offset ? keep - lane.offset : 0); // in the lane's frames
