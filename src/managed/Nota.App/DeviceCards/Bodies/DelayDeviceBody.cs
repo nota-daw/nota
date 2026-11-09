@@ -267,9 +267,16 @@ internal sealed class DelayDeviceBody : IDeviceBody
             int litL = -1, litR = -1;
             if (age >= 0 && Sc(S_WetPk) > 5e-4 && msl > 1 && msr > 1)
             {
-                double ms = age * 1000.0, firstR = msr + (On(PingPong) ? msl : SpreadMs());
-                litL = (int)(ms / msl) - 1;
-                litR = ms >= firstR ? (int)((ms - firstR) / msr) : -1;
+                // The same spacing as the stems (DelayTaps.Echoes): ping-pong alternates the
+                // lanes, so each lane repeats every L + R; otherwise L every L time and R every
+                // R time plus the spread. Count from each lane's first echo.
+                double ms = age * 1000.0;
+                bool ping = On(PingPong);
+                double firstL = msl, periodL = ping ? msl + msr : msl;
+                double firstR = ping ? msl + msr : msr + SpreadMs(), periodR = ping ? msl + msr : msr + SpreadMs();
+                static int Lit(double t, double first, double period) => t >= first ? (int)((t - first) / period) : -1;
+                litL = Lit(ms, firstL, periodL);
+                litR = Lit(ms, firstR, periodR);
             }
             foreach (var t in tapViews) t.SetLit(litL, litR);
         }

@@ -4751,6 +4751,14 @@ Console.WriteLine("-- Nota Delay --");
     for (int i = 0; i < 1536; i++) { dIn = Math.Max(dIn, dh[11 + i]); dWet = Math.Max(dWet, dh[11 + 1536 + i]); }
     Check(dhn == dh.Length && dIn > -60 && dWet > -60 && dIn <= 12 && dWet <= 12,
           $"Delay scope appends the level history (in {dIn:0.0} dB, echoes {dWet:0.0} dB)");
+    // With no blocks run (a settled track), a read moves the history on by the idle time: the
+    // newest points turn to silence and the old echoes scroll left instead of standing still.
+    Thread.Sleep(300);
+    de.DeviceScope(dt, dd, dh, dh.Length);
+    float dNew = -999, dOld = -999;
+    for (int i = 1536 - 40; i < 1536; i++) dNew = Math.Max(dNew, dh[11 + 1536 + i]);
+    for (int i = 0; i < 1536 - 40; i++) dOld = Math.Max(dOld, dh[11 + 1536 + i]);
+    Check(dNew <= -119 && dOld > -60, $"Delay level history scrolls on while no blocks run (newest {dNew:0} dB, older {dOld:0.0} dB)");
     string text = de.DeviceText(dt, dd, 0);
     Check(text.Contains("1/8"), $"Delay status text names the division (got '{text}')");
 

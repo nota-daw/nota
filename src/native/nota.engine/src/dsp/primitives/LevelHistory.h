@@ -4,9 +4,12 @@
 // A level history for an effect card's live graph: two rings of peak dB (input and wet) at a
 // fixed 4 ms bucket, about six seconds of each, plus a ring of the latest mono wet samples
 // for a spectrum. The audio thread writes it inside process() and publishes the write
-// positions once per block; scopeRead() appends it to the scope, oldest first. Like the
-// Compressor's envelope rings, a read can race a write by a point or two, which a graph
-// never shows. Fixed size, no allocation.
+// positions and the time once per block; scopeRead() appends it to the scope, oldest first.
+// Every slot is a relaxed atomic, so a read on the UI thread never races a write (it may be
+// a point or two behind, which a graph never shows). When the engine stops calling the device
+// (a settled track), the history goes stale; read() moves it on by the time since the last
+// publish, filling with silence, so an old hit scrolls away instead of standing still.
+// Fixed size, no allocation, no lock.
 
 #pragma once
 
@@ -14,6 +17,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 
@@ -26,6 +30,7 @@ class LevelHistory {
     static constexpr double kBucketSec = 0.004;
     static constexpr int kFloats = 2 * kPoints + kSpecN;
     static constexpr float kFloorDb = -120.0f;
+    static constexpr int64_t kStaleNs = 60'000'000; // a publish older than this means no blocks run
 
     void setSampleRate(double sr) {
         bucket_ = std::max(1, static_cast<int>(std::lround(sr * kBucketSec)));
@@ -33,18 +38,19 @@ class LevelHistory {
     }
 
     void reset() {
-        std::fill(std::begin(in_), std::end(in_), kFloorDb);
-        std::fill(std::begin(wet_), std::end(wet_), kFloorDb);
-        std::fill(std::begin(spec_), std::end(spec_), 0.0f);
+        for (auto& v : in_) v.store(kFloorDb, std::memory_order_relaxed);
+        for (auto& v : wet_) v.store(kFloorDb, std::memory_order_relaxed);
+        for (auto& v : spec_) v.store(0.0f, std::memory_order_relaxed);
         w_ = s_ = cnt_ = 0;
         pkIn_ = pkWet_ = 0.0f;
         wA_.store(0, std::memory_order_relaxed);
         sA_.store(0, std::memory_order_relaxed);
+        pubNs_.store(0, std::memory_order_relaxed);
     }
 
     // One sample: the input and wet magnitudes (any stereo fold the caller likes) and the mono wet.
     void push(float inAbs, float wetAbs, float wetMono) {
-        spec_[s_] = std::isfinite(wetMono) ? wetMono : 0.0f;
+        spec_[s_].store(std::isfinite(wetMono) ? wetMono : 0.0f, std::memory_order_relaxed);
         if (++s_ >= kSpecN) s_ = 0;
         pkIn_ = std::max(pkIn_, inAbs);
         pkWet_ = std::max(pkWet_, wetAbs);
@@ -54,13 +60,14 @@ class LevelHistory {
     // A block the device skipped (asleep on silence): the graph keeps scrolling through it.
     void silence(int32_t frames) {
         for (int32_t i = 0, n = std::min<int32_t>(frames, kSpecN); i < n; ++i) {
-            spec_[s_] = 0.0f;
+            spec_[s_].store(0.0f, std::memory_order_relaxed);
             if (++s_ >= kSpecN) s_ = 0;
         }
         cnt_ += frames;
         while (cnt_ >= bucket_) {
             cnt_ -= bucket_;
-            in_[w_] = wet_[w_] = kFloorDb;
+            in_[w_].store(kFloorDb, std::memory_order_relaxed);
+            wet_[w_].store(kFloorDb, std::memory_order_relaxed);
             if (++w_ >= kPoints) w_ = 0;
         }
         publish();
@@ -69,36 +76,52 @@ class LevelHistory {
     void publish() {
         wA_.store(w_, std::memory_order_relaxed);
         sA_.store(s_, std::memory_order_relaxed);
+        pubNs_.store(nowNs(), std::memory_order_release);
     }
 
     // Appends input dB[kPoints], wet dB[kPoints] and wet samples[kSpecN], each oldest first.
-    // Returns the floats written (0 when out is too small).
+    // A stale history is moved on by the time since its last publish. Returns the floats
+    // written (0 when out is too small).
     int32_t read(float* out, int32_t room) const {
         if (!out || room < kFloats) return 0;
+        const int64_t pub = pubNs_.load(std::memory_order_acquire);
         const int w = wA_.load(std::memory_order_relaxed), s = sA_.load(std::memory_order_relaxed);
+        const int64_t idle = pub > 0 ? nowNs() - pub : 0;
+        const bool stale = idle > kStaleNs;
+        const int skip = stale ? static_cast<int>(std::min<int64_t>(kPoints, idle / static_cast<int64_t>(kBucketSec * 1e9))) : 0;
         for (int k = 0; k < kPoints; ++k) {
-            const int i = (w + k) % kPoints;
-            out[k] = in_[i];
-            out[kPoints + k] = wet_[i];
+            if (k >= kPoints - skip) {
+                out[k] = out[kPoints + k] = kFloorDb;
+                continue;
+            }
+            const int i = (w + k + skip) % kPoints;
+            out[k] = in_[i].load(std::memory_order_relaxed);
+            out[kPoints + k] = wet_[i].load(std::memory_order_relaxed);
         }
-        for (int k = 0; k < kSpecN; ++k) out[2 * kPoints + k] = spec_[(s + k) % kSpecN];
+        for (int k = 0; k < kSpecN; ++k)
+            out[2 * kPoints + k] = stale ? 0.0f : spec_[(s + k) % kSpecN].load(std::memory_order_relaxed);
         return kFloats;
     }
 
   private:
+    static int64_t nowNs() {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
     static float toDb(float lin) { return lin > 1.0e-6f ? std::max(kFloorDb, fast_math::linToDb(lin)) : kFloorDb; }
     void close() {
-        in_[w_] = toDb(pkIn_);
-        wet_[w_] = toDb(pkWet_);
+        in_[w_].store(toDb(pkIn_), std::memory_order_relaxed);
+        wet_[w_].store(toDb(pkWet_), std::memory_order_relaxed);
         if (++w_ >= kPoints) w_ = 0;
         cnt_ = 0;
         pkIn_ = pkWet_ = 0.0f;
     }
 
-    float in_[kPoints] = {}, wet_[kPoints] = {}, spec_[kSpecN] = {};
+    std::atomic<float> in_[kPoints]{}, wet_[kPoints]{}, spec_[kSpecN]{};
     int w_ = 0, s_ = 0, cnt_ = 0, bucket_ = 176;
     float pkIn_ = 0.0f, pkWet_ = 0.0f;
     std::atomic<int> wA_{0}, sA_{0};
+    std::atomic<int64_t> pubNs_{0};
+    static_assert(std::atomic<float>::is_always_lock_free, "the audio thread must not lock");
 };
 
 } // namespace nota::dsp

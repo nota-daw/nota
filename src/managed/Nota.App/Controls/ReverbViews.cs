@@ -35,6 +35,10 @@ internal sealed class ReverbTailView : Control, IValueHandles
     private bool _freeze;
     // The latest hit of your audio: (seconds after the hit, dB against its own peak); empty = none.
     private readonly List<(double Sec, double Db)> _inLive = new(), _tailLive = new();
+    // The hit the curve belongs to: its age when last seen in the history, when that was, and the
+    // tail's peak, so a tail longer than the history (6.1 s) keeps its curve after the hit scrolls out.
+    private double _hitAge = -1, _tailRef;
+    private long _hitSeen;
     private int _drag, _hover;        // 0 none, 1 decay, 2 pre-delay
 
     public event Action<int, double>? Changed;   // target (0 decay / 1 pre-delay), new normalised value
@@ -74,12 +78,14 @@ internal sealed class ReverbTailView : Control, IValueHandles
     public void SetLive(float[] scope, int off, bool has)
     {
         bool had = _tailLive.Count > 0;
-        _inLive.Clear(); _tailLive.Clear();
-        int hit = has && scope.Length >= off + SpaceDraw.Floats ? SpaceDraw.LatestHit(scope, off) : -1;
+        has = has && scope.Length >= off + SpaceDraw.Floats;
+        int hit = has ? SpaceDraw.LatestHit(scope, off) : -1;
+        int wetOff = off + SpaceDraw.Points;
         if (hit >= 0)
         {
+            _inLive.Clear(); _tailLive.Clear(); _hitAge = -1;
             var input = SpaceDraw.Since(scope, off, hit);
-            var tail = SpaceDraw.Since(scope, off + SpaceDraw.Points, hit);
+            var tail = SpaceDraw.Since(scope, wetOff, hit);
             double inPk = -120, tailPk = -120;
             foreach (var (_, db) in input) inPk = Math.Max(inPk, db);
             foreach (var (_, db) in tail) tailPk = Math.Max(tailPk, db);
@@ -87,8 +93,26 @@ internal sealed class ReverbTailView : Control, IValueHandles
             {
                 foreach (var (t, db) in input) _inLive.Add((t, db - inPk));
                 foreach (var (t, db) in tail) _tailLive.Add((t, db - tailPk));
+                _hitAge = (SpaceDraw.Points - 1 - hit) * SpaceDraw.PointSec;
+                _hitSeen = System.Diagnostics.Stopwatch.GetTimestamp();
+                _tailRef = tailPk;
             }
         }
+        else if (has && _hitAge >= 0)
+        {
+            // The hit has left the history but its tail may still ring: keep what was drawn before
+            // the history's oldest point and redraw the rest from the history.
+            double age = _hitAge + System.Diagnostics.Stopwatch.GetElapsedTime(_hitSeen).TotalSeconds;
+            if (age > Windows[^1]) { _inLive.Clear(); _tailLive.Clear(); _hitAge = -1; }
+            else
+            {
+                double oldest = age - (SpaceDraw.Points - 1) * SpaceDraw.PointSec;
+                _tailLive.RemoveAll(e => e.Sec >= oldest);
+                foreach (var (t, db) in SpaceDraw.Since(scope, wetOff, 0))
+                    _tailLive.Add((oldest + t, db - _tailRef));
+            }
+        }
+        else { _inLive.Clear(); _tailLive.Clear(); _hitAge = -1; }
         if (had || _tailLive.Count > 0) InvalidateVisual();
     }
 
