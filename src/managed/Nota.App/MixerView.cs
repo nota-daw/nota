@@ -923,7 +923,9 @@ public sealed partial class MixerView : UserControl
             // Plain strings drawn by a template, so the closed box builds a live TextBlock that
             // trims with "…". A TextBlock handed over as the item's Content is shown there as a
             // picture of itself, centred, and a name wider than the box lost both ends (#550).
-            cb.ItemTemplate = new FuncDataTemplate<string>((label, _) => new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, true);
+            // No recycling: the closed box would keep the first TextBlock, whose Text is set once, and
+            // go on showing the previous name after another source is picked.
+            cb.ItemTemplate = new FuncDataTemplate<string>((label, _) => new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, supportsRecycling: false);
             var item = new Style(x => x.OfType<ComboBoxItem>());
             item.Setters.Add(new Setter(TemplatedControl.PaddingProperty, new Thickness(5, 1)));
             item.Setters.Add(new Setter(Layoutable.MinHeightProperty, 0.0));
