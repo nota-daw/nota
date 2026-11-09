@@ -142,7 +142,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         // Stopping materialises the captured audio into a clip — refresh so the take
         // appears (otherwise the last live frame lingers and the take seems to vanish).
         if (!value) { TracksChanged?.Invoke(); Message?.Invoke(""); return; }
-        if (_engine.IsRecording) { Message?.Invoke(Loc.T("transport.recording")); return; }
+        if (_engine.IsRecording) { Message?.Invoke(RecordingMessage()); return; }
 
         // Failed only because nothing is armed? Auto-arm the record target and
         // retry, so pressing Record just works without a separate arm click.
@@ -151,7 +151,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             _engine.SetTrackArmed(tid, true);
             TracksChanged?.Invoke();
             _engine.SetRecording(true);
-            if (_engine.IsRecording) { Message?.Invoke(Loc.T("transport.recording")); return; }
+            if (_engine.IsRecording) { Message?.Invoke(RecordingMessage()); return; }
         }
 
         // Couldn't start — pop the button back up and explain why.
@@ -162,6 +162,31 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             2 => Loc.T("transport.cant_record_no_audio_input"),
             _ => Loc.T("transport.recording_didnt_start"),
         });
+    }
+
+    // "● Recording…", or for a take on several tracks how many, and which armed tracks it
+    // skipped and why (specs/086).
+    private string RecordingMessage()
+    {
+        int n = _engine.RecordingTracks().Length;
+        var skipped = _engine.RecordSkipped();
+        if (n <= 1 && skipped.Length == 0) return Loc.T("transport.recording");
+        string msg = Loc.Plural("transport.recording_n_tracks", n);
+        if (skipped.Length == 0) return msg;
+        var why = new System.Collections.Generic.List<string>();
+        foreach (var (id, reason) in skipped)
+        {
+            string name = _engine.GetTrackName(id);
+            if (name.Length == 0) name = Loc.F("common.track_n", id);
+            why.Add(reason switch
+            {
+                RecordSkipReason.InputUnavailable => Loc.F("transport.skipped_not_on_device", name),
+                RecordSkipReason.SwitchedOff => Loc.F("transport.skipped_switched_off", name),
+                RecordSkipReason.MixedSources => Loc.F("transport.skipped_mixed_sources", name),
+                _ => Loc.F("transport.skipped_too_many", name),
+            });
+        }
+        return Loc.F("transport.recording_with_skipped", msg, string.Join(", ", why));
     }
 
     /// <summary>⌘. (#185, specs/078): throw the take being recorded away and record it again —

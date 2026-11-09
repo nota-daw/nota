@@ -52,7 +52,7 @@ public sealed partial class SessionView
         else if (ColumnFor(_sel.TrackId) is { } c)
         {
             if (c.Kind == ColKind.Group) BuildGroupInspector(stack, c, _sel.Scene);
-            else if (SlotFilled(c.TrackId, _sel.Scene) && !(_recTrack == c.TrackId && _recScene == _sel.Scene)) BuildClipInspector(stack, c, _sel.Scene);
+            else if (SlotFilled(c.TrackId, _sel.Scene) && !(_recTrack == c.TrackId && _recScene == _sel.Scene) && _engine.SessionSlotState(c.TrackId, _sel.Scene) != 4) BuildClipInspector(stack, c, _sel.Scene);
             else BuildEmptyInspector(stack, c, _sel.Scene);
         }
         else if (_sel.Kind == SelKind.Bus && BusColumn(_sel.TrackId) is { } bus) BuildBusInspector(stack, bus);
@@ -413,7 +413,7 @@ public sealed partial class SessionView
 
     private void BuildEmptyInspector(StackPanel s, Column c, int scene)
     {
-        bool rec = _recTrack == c.TrackId && _recScene == scene;
+        bool rec = (_recTrack == c.TrackId && _recScene == scene) || (_recScene >= 0 && _engine.SessionSlotState(c.TrackId, scene) == 4);
         s.Children.Add(Title(NotaPalette.BorderStrong, rec ? Loc.T("session.recording") : Loc.T("session.inspector.empty_slot"), $"{c.Name} · {SceneName(scene)}"));
         bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
         var rows = new StackPanel { Spacing = 8 };
@@ -426,7 +426,7 @@ public sealed partial class SessionView
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
         if (c.IsInstrument) actions.Add((Loc.T("session.insert_midi_clip"), "", () => InsertMidiClip(c.TrackId, scene)));
-        actions.Add(rec ? (Loc.T("session.inspector.stop_recording"), "", () => { _engine.StopSessionRecord(); Refresh(); })
+        actions.Add(rec ? (Loc.T("session.inspector.stop_recording"), "", () => { _engine.StopSessionRecordSlot(c.TrackId); Refresh(); })
                         : (Loc.T("session.record_here"), "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
         if (CanPaste) actions.Add((Loc.T("common.paste"), Shortcut.Cmd('V'), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));

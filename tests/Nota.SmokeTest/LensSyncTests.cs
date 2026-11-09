@@ -135,7 +135,7 @@ internal static class LensSyncTests
         using var _ = e;
         string[] names = { "Scope Sync", "Scope Span", "Scope Key", "Scope Key Gain", "Scope Layout" };
         float[] defs = { 0f, 4f / 6f, 1f, 0.5f, 0f };
-        bool ok = e.DeviceParamCount(t, d) == 42;
+        bool ok = e.DeviceParamCount(t, d) == 43;   // + View, the card size (#531)
         for (int i = 0; i < 5; i++)
             ok &= e.DeviceParamName(t, d, SyncP + i) == names[i] && Math.Abs(e.DeviceGetParam(t, d, SyncP + i) - defs[i]) < 1e-5;
         yield return (ok && e.DeviceAcceptsSidechain(t, d),

@@ -58,7 +58,10 @@ public partial class MainWindow
                 break;
         }
         items.Add(new Separator());
-        items.Add(MenuKit.Item(Loc.T("main.audio_format.audio_settings"), GlyphKind.Levels, () => ShowPreferencesPage("Audio")));
+        items.Add(MenuKit.Item(Loc.T("main.audio_format.audio_settings"), GlyphKind.Levels, ShowAudioPreferences));
         return items.ToArray();
     }
+
+    /// <summary>Preferences on the Audio page (the input setup lives there, specs/086).</summary>
+    internal void ShowAudioPreferences() => ShowPreferencesPage("Audio");
 }

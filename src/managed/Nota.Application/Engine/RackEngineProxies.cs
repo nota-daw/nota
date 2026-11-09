@@ -46,6 +46,7 @@ public class RackChainEngineProxy : DispatchProxy
             case nameof(IAudioEngine.EndAutomationWrite):   return null;
             // Live telemetry comes from the chain instrument, not the track's rack instrument.
             case nameof(IAudioEngine.InstrumentScope):      return Inner.RackChainInstrumentScope((int)args![0]!, Chain, (float[])args![1]!);
+            case nameof(IAudioEngine.InstrumentOutput):     return 0;   // no tap inside a chain: the graph draws its curve alone
             case nameof(IAudioEngine.InstrumentVoiceCount): return Inner.RackChainInstrumentVoiceCount((int)args![0]!, Chain);
             case nameof(IAudioEngine.InstrumentHeldNotes):  return Inner.RackChainInstrumentHeldNotes((int)args![0]!, Chain, (int[])args![1]!);
             case nameof(IAudioEngine.InstrumentAction):     Inner.RackChainInstrumentAction((int)args![0]!, Chain, (int)args![1]!, (int)args![2]!, (float)args![3]!); return null;

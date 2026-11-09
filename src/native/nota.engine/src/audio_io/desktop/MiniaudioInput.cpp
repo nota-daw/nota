@@ -13,13 +13,14 @@ struct MiniaudioInput::Impl {
     MiniaudioInput* owner = nullptr;
 };
 
-// miniaudio capture thread: hand the interleaved stereo float frames to the owner.
+// miniaudio capture thread: hand the interleaved float frames (every channel) to the owner.
 // MUST be real-time safe (no alloc/lock/IO) — the callback only pushes into a
 // lock-free ring (AR-6).
 static void captureCallback(ma_device* dev, void* /*pOutput*/, const void* pInput, ma_uint32 frameCount) {
     auto* impl = static_cast<MiniaudioInput::Impl*>(dev->pUserData);
     if (impl && impl->owner && impl->owner->cb_)
-        impl->owner->cb_(static_cast<const float*>(pInput), static_cast<int32_t>(frameCount));
+        impl->owner->cb_(static_cast<const float*>(pInput), static_cast<int32_t>(frameCount),
+            static_cast<int32_t>(dev->capture.channels));
 }
 
 MiniaudioInput::MiniaudioInput() : impl_(new Impl()) {
@@ -41,7 +42,7 @@ bool MiniaudioInput::start(InputCallback cb, uint32_t device) {
     ma_device_config config = ma_device_config_init(ma_device_type_capture);
     config.capture.pDeviceID = haveId ? &id : nullptr; // NULL = system default input
     config.capture.format = ma_format_f32;
-    config.capture.channels = 2; // miniaudio downmixes/converts
+    config.capture.channels = 0; // the device's own channel count (specs/086)
     config.dataCallback = &captureCallback;
     config.pUserData = impl_;
 
@@ -54,8 +55,13 @@ bool MiniaudioInput::start(InputCallback cb, uint32_t device) {
     }
 
     sampleRate_ = impl_->device.sampleRate;
+    channels_ = static_cast<int32_t>(impl_->device.capture.channels);
     running_ = true;
     return true;
+}
+
+int32_t MiniaudioInput::channelCount() const {
+    return running_ ? (channels_ < kMaxInputChannels ? channels_ : kMaxInputChannels) : 0;
 }
 
 void MiniaudioInput::stop() {

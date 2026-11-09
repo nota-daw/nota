@@ -337,6 +337,38 @@ public enum PanLaw { Balance = 0, Stereo = 1 }
 /// stereo pair (1/2), or input 1 / input 2 alone — a mono source, placed in the middle.</summary>
 public enum InputChannels { Stereo = 0, Mono1 = 1, Mono2 = 2 }
 
+/// <summary>Why an armed track didn't record (specs/086); matches nota_engine_record_skipped.</summary>
+public enum RecordSkipReason { InputUnavailable = 1, TooMany = 2, SwitchedOff = 3, MixedSources = 4 }
+
+/// <summary>An instrument track's MIDI input (specs/086): the device's uid (null = All inputs)
+/// and channel (0 = all, 1–16); <see cref="Connected"/> is false while that device is away.</summary>
+public readonly record struct TrackMidiInput(string? Uid, int Channel, bool Connected)
+{
+    public static TrackMidiInput All => new(null, 0, true);
+}
+
+/// <summary>An audio track's hardware input (specs/086): device channel <see cref="First"/>
+/// (0-based) alone — a mono source, heard and recorded in the middle — or the stereo pair
+/// First/First+1 (First even).</summary>
+public readonly record struct InputPick(int First, int Width)
+{
+    public const int MaxChannels = 64;
+    public static readonly InputPick Stereo12 = new(0, 2);
+    public static InputPick Mono(int first) => new(first, 1);
+    public static InputPick Pair(int first) => new(first, 2);
+    public bool IsStereo => Width == 2;
+    public bool IsValid => First >= 0 && (Width == 1 || Width == 2) && First + Width <= MaxChannels && (Width == 1 || First % 2 == 0);
+    /// <summary>The old three-value pick, when this is one of them.</summary>
+    public InputChannels? AsChannels => this == Stereo12 ? InputChannels.Stereo
+        : this == Mono(0) ? InputChannels.Mono1 : this == Mono(1) ? InputChannels.Mono2 : null;
+    public static InputPick From(InputChannels c) => c switch
+    {
+        InputChannels.Mono1 => Mono(0),
+        InputChannels.Mono2 => Mono(1),
+        _ => Stereo12,
+    };
+}
+
 /// <summary>One Stereo Map row (specs/008), laid out like native NotaStereoMeasure: what a
 /// track / return / the master sends to the master, averaged over ~300 ms. Balance is on the
 /// pan scale (a mono source panned to p reads p); width = 1 − correlation, clamped 0..1.</summary>

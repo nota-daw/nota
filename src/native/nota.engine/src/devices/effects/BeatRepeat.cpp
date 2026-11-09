@@ -32,6 +32,7 @@ BeatRepeat::BeatRepeat() {
     p_[Triplet].store(0.0f);
     p_[FilterType].store(0.5f); // BP — the original filter
     p_[FilterNarrow].store(0.0f);
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -345,7 +346,7 @@ int32_t BeatRepeat::paramCount() const {
 const char* BeatRepeat::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Interval", "Offset", "Grid", "Variation", "Chance", "Gate", "Pitch",
         "Pitch Decay", "Volume", "Decay", "Filter On", "Filter Freq", "Filter Width", "Mode", "Mix", "Repeat", "Latch",
-        "Triplet", "Filter Type", "Filter Narrow"};
+        "Triplet", "Filter Type", "Filter Narrow", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 float BeatRepeat::paramMin(int32_t /*i*/) const {

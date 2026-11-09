@@ -496,6 +496,7 @@ public sealed partial class NotaEngine
 
     /// <summary>Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a plugin.</summary>
     public int TrackDeviceBuiltinKind(int trackId, int deviceIndex) { ThrowIfDisposed(); return NativeMethods.TrackDeviceBuiltinKind(_handle, trackId, deviceIndex); }
+    public long TrackDeviceId(int trackId, int deviceIndex) { ThrowIfDisposed(); return NativeMethods.TrackDeviceId(_handle, trackId, deviceIndex); }
 
     /// <summary>Stable identifier of a track's plugin instrument (empty if it isn't a plugin, M7-6c).</summary>
     public string TrackInstrumentPluginId(int trackId) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.TrackInstrumentPluginId(_handle, trackId)) ?? ""; }

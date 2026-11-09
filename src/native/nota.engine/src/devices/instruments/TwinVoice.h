@@ -23,6 +23,7 @@
 
 #include "Pentad.h" // pentad:: band-limited oscillator core, Rng, hash32, Adaa
 #include "dsp/math/FastMath.h"
+#include "EnvShape.h"
 #include "engine/NoteExpression.h"
 #include "dsp/primitives/LadderFilter.h"
 #include "dsp/primitives/SteinerFilter.h"
@@ -91,6 +92,7 @@ struct PartCtl {
     float aA = 0, aD = 0.1f, aS = 1, aR = 0.1f, aVel = 0.5f, aCurve = 0.5f;
     float mDly = 0, mA = 0, mD = 0.1f, mS = 0, mR = 0.1f, mVel = 0;
     bool mLoop = false;
+    EnvShapeParams fShape{0.5f, 0.5f, 1.0f}, aShape{0.5f, 0.5f, 1.0f}, mShape{0.5f, 0.5f, 1.0f}; // #531
     // LFO 1 (vibrato in US1; the matrix reads all three in US4)
     float lfoHz[3] = {1, 1, 1}, lfoFade[3] = {0, 0, 0}, lfoAmt[3] = {1, 1, 1};
     int lfoShape[3] = {0, 0, 0};
@@ -148,17 +150,27 @@ constexpr float kRouteVibratoSt = 1.0f; // … to Vibrato: ±1 st of LFO 1
 // RC segments like an analog generator: the attack charges towards a target above 1 (the
 // curve sets how far: near-linear at 0, strongly exponential at 1), decay and release fall
 // exponentially. The mod envelope adds a delay and can loop attack → decay while held.
+// With a bent decay / release or Lin (#531) the stages run the shared shaped step instead
+// (EnvShape.h), at the segments' own lengths; the defaults keep the RC generator exactly.
 struct Env {
     enum : uint8_t { Idle, Delay, Attack, Decay, Release };
     uint8_t st = Idle;
     float lvl = 0.0f;
     int32_t dly = 0;
     float aC = 1, dC = 1, rC = 1, aTgt = 1.3f, sus = 1;
+    float atkR = 1, decR = 1, relR = 1; // the shaped step's per-sample rates
     bool loop = false;
+    EnvShapeParams shape{0.5f, 0.5f, 1.0f};
+    EnvShapeState sh;
 
     void gateOn(int32_t delaySamples) {
         dly = delaySamples;
         st = dly > 0 ? Delay : Attack; // retrigger from the current level, no click
+        sh.last = -1;
+    }
+    // The stage for the graphs (EnvShape.h's code) and its progress.
+    int teleStage() const {
+        return st == Attack ? 0 : st == Decay ? (sh.last == 2 ? 2 : 1) : st == Release ? 3 : 4;
     }
     void gateOff() {
         if (st != Idle) st = Release;
@@ -173,31 +185,23 @@ struct Env {
         rC = static_cast<float>(1.0 - std::exp(-6.9 / (std::max(1e-4, static_cast<double>(r)) * sr)));
         sus = std::clamp(s, 0.0f, 1.0f);
         loop = loopIt;
+        atkR = static_cast<float>(1.0 / (std::max(1e-5, static_cast<double>(a)) * sr));
+        decR = static_cast<float>(1.0 / (std::max(1e-4, static_cast<double>(d)) * sr));
+        relR = static_cast<float>(1.0 / (std::max(1e-4, static_cast<double>(r)) * sr));
     }
     float tick() {
-        switch (st) {
-        case Delay:
+        if (st == Delay) {
             if (--dly <= 0) st = Attack;
-            break;
-        case Attack:
-            lvl += (aTgt - lvl) * aC;
-            if (lvl >= 1.0f) {
-                lvl = 1.0f;
-                st = Decay;
-            }
-            break;
-        case Decay:
-            lvl += (sus - lvl) * dC;
-            if (loop && std::fabs(lvl - sus) < 1e-3f) st = Attack;
-            break;
-        case Release:
-            lvl -= lvl * rC;
-            if (lvl < 3e-5f) { // ≈ −90 dB
-                lvl = 0.0f;
-                st = Idle;
-            }
-            break;
-        default: break;
+            return lvl;
+        }
+        if (st == Idle) return lvl;
+        int code = st == Attack ? 1 : st == Decay ? 2 : 3;
+        const RcEnvCoefs c{aC, aTgt, dC, rC, 3e-5f /* ≈ −90 dB */, atkR, decR, relR};
+        advanceRcEnv(lvl, code, sh, sus, c, shape);
+        st = code == 1 ? Attack : code == 2 ? Decay : code == 3 ? Release : Idle;
+        if (loop && st == Decay && (rcEnvNative(shape) ? std::fabs(lvl - sus) < 1e-3f : sh.last == 2)) {
+            st = Attack;
+            sh.last = -1;
         }
         return lvl;
     }

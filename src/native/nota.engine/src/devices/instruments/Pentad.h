@@ -54,6 +54,7 @@
 #include "engine/NoteExpression.h"
 #include "dsp/core/ScopedNoDenormals.h"
 #include "dsp/math/FastMath.h"
+#include "EnvShape.h"
 #include <hiir/Downsampler2xFpu.h>
 
 #include <algorithm>
@@ -338,6 +339,13 @@ class Pentad final : public Instrument {
         PmFreqA,
         PmPwA,
         PmFilter,
+        // --- appended (#531): the envelope shapes — straight curves, Exp on (the RC generator) ---
+        FDCurve,
+        FRCurve,
+        FEnvExp,
+        ADCurve,
+        ARCurve,
+        AEnvExp,
         kNumParams
     };
 
@@ -354,7 +362,8 @@ class Pentad final : public Instrument {
         ScOs,
         ScRate,
         ScVoices,
-        kScopeN = ScVoices + kMaxVoices
+        ScEnvTele = ScVoices + kMaxVoices, // the newest voice's filter env stage, progress, then the amp env's
+        kScopeN = ScEnvTele + 2 * kEnvTeleFloats
     };
 
     Pentad();
@@ -476,6 +485,7 @@ class Pentad final : public Instrument {
         // envelopes: stage 0 idle, 1 attack, 2 decay/sustain, 3 release
         float fenv = 0.0f, aenv = 0.0f;
         int fst = 0, ast = 0;
+        EnvShapeState fsh, ash; // the curve of each envelope's current stage
         pentad::Osc A, B;
         float s[4] = {0, 0, 0, 0}, df[4] = {0, 0, 0, 0}; // filter integrator states / stage diffs
         float y4 = 0.0f;                                 // last filter output (loop saturation)
@@ -553,6 +563,8 @@ class Pentad final : public Instrument {
         bool sync, kbdB, loB, pmFreqA, pmPwA, pmFilt, noiseFloor;
         float velAmp, velFilt, comp;
         float tFA, tFD, tFR, tAA, tAD, tAR, fS, aS;
+        float sFA, sFD, sFR, sAA, sAD, sAR; // nominal stage lengths, for a shaped envelope (#531)
+        EnvShapeParams fShape, aShape;
         float glideC, walkC, spread, invFade, cutMax;
     };
 

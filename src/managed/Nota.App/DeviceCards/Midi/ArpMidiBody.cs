@@ -6,7 +6,7 @@
 // choice is the device's "View" param, so it persists with the project):
 //   • L 700 × 260 — ORDER list | Pattern / Groove window over the Free·Sync + division
 //     strip | PLAY (Gate · Swing · Vel Amt sliders, Octaves, Retrig, Transpose, Steps,
-//     Hold, Restart) — over a status line (held chord · order · rate · steps · retrig).
+//     Hold, Restart).
 //   • S 260 × 260 — the window with a Pattern / Groove toggle (the lane picked by clicking
 //     its name) over four knobs (Rate · Gate · Oct · Swing). The header keeps the full preset
 //     picker (same list, same current preset as L); what S can't edit, presets still set.
@@ -128,14 +128,6 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             Learn(seg, p, engine.MidiEffectParamName(track, mi, p));
             return seg;
         }
-
-        // ---- the status strings ----
-        string ChordText()
-        {
-            var c = grid.Chord;
-            return c.Count == 0 ? Loc.T("device.arp.no_notes_yet") : string.Join(" ", c.Select(DeviceCardKit.NoteName));
-        }
-        string RetrigText() => RetrigNames[Math.Clamp(GI(GRetrig), 0, 2)].ToLowerInvariant();
 
         // ---- the window's header readout ----
         string InfoText(bool shortForm)
@@ -305,14 +297,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             islands.Margin = new Thickness(0);
             orderIsland.Margin = new Thickness(0, 0, 5, 0); playIsland.Margin = new Thickness(5, 0, 0, 0);
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = $"{ChordText()} · {OrderName(GI(GOrder))} · {Math.Clamp(GI(GOctaves), 1, 8)} oct · {RateLabel(engine, track, mi)} · {grid.StepCount} steps · retrig {RetrigText()}{(G(GHold) > 0.5f ? " · hold" : "")}";
-                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : grid.Running ? Loc.T("common.midi_latency_0_smp") : Loc.T("device.arp.midi_waiting_for_notes");
-            });
-            return Framed(islands, statusL, statusR);
+            return Framed(islands);
         }
 
         // =======================================================================================
@@ -359,24 +344,11 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 info.Foreground = grid.Groove ? Txt : Cap;
             });
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = Loc.F("device.arp.oct", ChordText(), Math.Clamp(GI(GOctaves), 1, 8));
-                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : RateLabel(engine, track, mi);
-            });
-            return Framed(new Border { Background = Ground, Child = island }, statusL, statusR);
+            return Framed(new Border { Background = Ground, Child = island });
         }
 
         // ---- shared pieces ---------------------------------------------------------------------
-        Control Framed(Control main, TextBlock left, TextBlock right)
-        {
-            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
-                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
-            right.Margin = new Thickness(8, 0, 0, 0);
-            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
-        }
+        Control Framed(Control main) => new Border { Background = Ground, Padding = new Thickness(5), Child = main };
 
         Control IslandHead(Control left, Control? right)
         {

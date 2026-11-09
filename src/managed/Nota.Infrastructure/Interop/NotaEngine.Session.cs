@@ -86,6 +86,10 @@ public sealed partial class NotaEngine
     public void StopSessionRecord()
     { ThrowIfDisposed(); Check(NativeMethods.SessionStopRecord(_handle)); }
 
+    /// <summary>Stops one recording slot; the other slots of the take keep recording (specs/086).</summary>
+    public void StopSessionRecordSlot(int trackId)
+    { ThrowIfDisposed(); Check(NativeMethods.SessionStopRecordSlot(_handle, trackId)); }
+
     /// <summary>Copies a session slot into a new arrangement clip at startBeat; returns its index or -1 (M5-6).</summary>
     public int SessionSlotToArrangement(int trackId, int scene, double startBeat)
     { ThrowIfDisposed(); return NativeMethods.SessionSlotToArrangement(_handle, trackId, scene, startBeat); }

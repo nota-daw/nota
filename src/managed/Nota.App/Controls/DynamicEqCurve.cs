@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Dynamic EQ-8 (device kind 13) response graph, a build of the "Nota Dynamic EQ" mockup.
-// A dynamic EQ has two answers at once — where a band sits and where it is right now — so the
-// window draws the live response (static gain + each band's momentary dynamic gain) as the
-// neutral primary curve and the static response as a teal dashed line, shown only while the two
-// differ. Under them: the output spectrum (the engine's FFT, a dim line) and the selected
-// band's own curve (a faint accent line). Every band is a numbered node — selected accent, the
-// rest Ink 3, an off band Ink 6. A dynamic band grows a whisker from its node to where Range
-// can take it (teal for a cut, rose for a boost), with a dot riding it at the gain it has now.
-// A tooltip beside the selected node reads the band, and for a dynamic band its gain now with
-// a 2-second history of it.
+// Nota Dynamic EQ-8 (device kind 13) response graph, drawn like the shared filter graph
+// (FilterGraphBase, #531). A dynamic EQ has two answers at once — where a band sits and where
+// it is right now — so the window draws the live response (static gain + each band's momentary
+// dynamic gain) as the accent curve with a light fill to 0 dB and the static response as a grey
+// dashed line, shown only while the two differ. Under them: the output spectrum (the engine's
+// FFT, a filled area) and the selected band's own curve (a dashed grey line). Every band is a
+// numbered node — selected accent, the rest light grey, an off band dark grey. A dynamic band
+// grows a whisker from its node to where Range can take it (a cut dashed, a boost solid), with a
+// dot riding it at the gain it has now. The selected band reads on the scale, not over the
+// plot: its frequency, gain (for a dynamic band also the gain it has now) and Q lit on the
+// frequency strip under the window.
 //
 // Drag a node — frequency and gain; the wheel over a node — Q; ⌥-click a node types its
 // frequency, gain and Q (Tab between them); double-click a node turns the band on / off,
@@ -124,15 +125,12 @@ internal static class DynEq
 
 public sealed class DynamicEqCurve : Control, IValueEntryHost
 {
-    public const int HistLen = 120;   // 2 s at 60 Hz
     private const int Pts = 150;
-    private const double NodeD = 13, HitR = 9;
+    private const double NodeD = 13, HitR = 9, AxisH = FilterAxis.H;
 
-    private static readonly IPen GridFaint = new Pen(NotaPalette.GridSubBeat, 1);
-    private static readonly IPen GridMid = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.TrackOff, 1);
-    private static readonly IPen SpecPen = new Pen(NotaPalette.BorderStrong, 1);
-    private static readonly IPen SelPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x5A), 1);
+    private static readonly IPen SelPen = new Pen(NotaPalette.TextSecondary, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
+    private static readonly IPen MainPen = new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
     private static readonly IPen StaticPen = new Pen(NotaPalette.TextTertiary, 1.2) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen OffSelPen = new Pen(NotaPalette.Accent, 1.5);
     // The dynamics marks (whiskers, the ring on a dynamic band, the gain history): greys told
@@ -151,8 +149,6 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
     private readonly float[] _lvl = new float[DynEq.Bands];
     private readonly float[] _spec = new float[DynEq.kSpec];
     private bool _specOk;
-    private readonly float[] _hist = new float[DynEq.Bands * HistLen];
-    private int _histHead;
 
     public event Action? SelectionChanged;
     /// <summary>Raised after a gesture on the graph wrote params (so the card repaints).</summary>
@@ -185,8 +181,6 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         }
         _specOk = n >= DynEq.kScope && scope[DynEq.S_Analysed] > 0.5f;
         if (_specOk) Array.Copy(scope, DynEq.kTele, _spec, 0, DynEq.kSpec);
-        _histHead = (_histHead + 1) % HistLen;
-        for (int b = 0; b < DynEq.Bands; b++) _hist[b * HistLen + _histHead] = IsDyn(b) ? _gr[b] : 0f;
         InvalidateVisual();
     }
 
@@ -237,9 +231,10 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
     private bool IsDyn(int b) => DynMaster && BandOn(b) && DynEq.HasGain(BandType(b)) && BandMode(b) != DynEq.Static;
     private double Sr => _engine.SampleRate > 0 ? _engine.SampleRate : 48000;
 
-    // ---- geometry: the plot is the whole control ----
+    // ---- geometry: the plot is the control over the frequency strip ----
+    private double PlotH => Math.Max(1, Bounds.Height - AxisH);
     private double X(double f) => DynEq.FreqToN(f) * Bounds.Width;
-    private double Y(double db) => DynEq.GainToN(db) * Bounds.Height;
+    private double Y(double db) => DynEq.GainToN(db) * PlotH;
     // A node at 20 Hz or 20 kHz stays whole inside the window.
     private Point NodeAt(int b) => new(Math.Clamp(X(P(b, DynEq.FreqF)), NodeD / 2 + 2, Math.Max(NodeD / 2 + 2, Bounds.Width - NodeD / 2 - 2)),
         Y(DynEq.HasGain(BandType(b)) ? P(b, DynEq.GainF) : 0));
@@ -264,7 +259,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         var p = e.GetPosition(this);
         if (_drag < 0) { Cursor = Hit(p) >= 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default; return; }
         SetP(_drag, DynEq.FreqF, DynEq.NToFreq(p.X / Math.Max(1, Bounds.Width)));
-        if (DynEq.HasGain(BandType(_drag))) SetP(_drag, DynEq.GainF, DynEq.NToGain(p.Y / Math.Max(1, Bounds.Height)));
+        if (DynEq.HasGain(BandType(_drag))) SetP(_drag, DynEq.GainF, DynEq.NToGain(p.Y / PlotH));
         Edited?.Invoke();
         InvalidateVisual();
     }
@@ -346,7 +341,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         for (int b = 0; b < DynEq.Bands; b++)
         {
             if (BandOn(b)) continue;
-            double f = DynEq.NToFreq(p.X / Math.Max(1, Bounds.Width)), g = DynEq.NToGain(p.Y / Math.Max(1, Bounds.Height));
+            double f = DynEq.NToFreq(p.X / Math.Max(1, Bounds.Width)), g = DynEq.NToGain(p.Y / PlotH);
             Gesture(DynEq.P(b, DynEq.TypeF), () => SetP(b, DynEq.TypeF, DynEq.Bell));
             Gesture(DynEq.P(b, DynEq.FreqF), () => SetP(b, DynEq.FreqF, f));
             Gesture(DynEq.P(b, DynEq.GainF), () => SetP(b, DynEq.GainF, g));
@@ -426,17 +421,16 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height, sr = Sr;
-        if (w <= 0 || h <= 0) return;
+        double w = Bounds.Width, h = PlotH, sr = Sr;
+        if (w <= 0 || Bounds.Height <= AxisH + 4) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        using var clip = ctx.PushClip(new RoundedRect(frame.Deflate(1), NotaGraph.Radius));
+        var clip = ctx.PushClip(new RoundedRect(frame.Deflate(1), NotaGraph.Radius));
 
-        // grid: 100 Hz · 1 kHz (stronger) · 10 kHz; ±6 / ±12 dB, 0 dB stronger
-        foreach (var f in new[] { 100.0, 10000.0 }) ctx.DrawLine(GridFaint, new Point(X(f), 0), new Point(X(f), h));
-        ctx.DrawLine(GridMid, new Point(X(1000), 0), new Point(X(1000), h));
-        foreach (var db in new[] { -12.0, -6.0, 6.0, 12.0 }) ctx.DrawLine(GridFaint, new Point(0, Y(db)), new Point(w, Y(db)));
-        ctx.DrawLine(ZeroPen, new Point(0, Y(0)), new Point(w, Y(0)));
+        // grid: the decades; 0 dB and ±12 dB
+        foreach (var f in new[] { 100.0, 1000.0, 10000.0 }) ctx.DrawLine(NotaGraph.GridPen, new Point(X(f), 1), new Point(X(f), h - 1));
+        foreach (var db in new[] { -12.0, 12.0 }) ctx.DrawLine(NotaGraph.GridPen, new Point(1, Y(db)), new Point(w - 1, Y(db)));
+        ctx.DrawLine(ZeroPen, new Point(1, Y(0)), new Point(w - 1, Y(0)));
 
         // band state + coefficients
         int solo = SoloBand;
@@ -456,26 +450,17 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         int selT = BandType(sel);
         var selK = DynEq.Coeffs(selT, sr, P(sel, DynEq.FreqF), P(sel, DynEq.GainF) + (IsDyn(sel) ? _gr[sel] : 0), P(sel, DynEq.QF));
 
-        // spectrum (output, 0 dBFS at the top … −80 at the bottom)
-        if (_specOk)
-        {
-            var sg = new StreamGeometry();
-            using (var g = sg.Open())
-                for (int i = 0; i < DynEq.kSpec; i++)
-                {
-                    double x = (i + 0.5) / DynEq.kSpec * w;
-                    double y = Math.Clamp(-_spec[i] / 80.0, 0, 1) * h;
-                    if (i == 0) g.BeginFigure(new Point(x, y), false); else g.LineTo(new Point(x, y));
-                }
-            ctx.DrawGeometry(null, SpecPen, sg);
-        }
+        // spectrum (output, 0 dBFS at the top … −80 at the bottom), filled as on EQ-8
+        if (_specOk) SpectrumFill.Draw(ctx, _spec, w, h, 80);
 
         // curves
-        var gl = new StreamGeometry(); var gs = new StreamGeometry(); var gx = new StreamGeometry();
-        double diff = 0;
+        var gl = new StreamGeometry(); var gf = new StreamGeometry(); var gs = new StreamGeometry(); var gx = new StreamGeometry();
+        double diff = 0, yZero = Y(0);
         using (var cl = gl.Open())
+        using (var cf = gf.Open())
         using (var cs = gs.Open())
         using (var cx = gx.Open())
+        {
             for (int i = 0; i < Pts; i++)
             {
                 double n = i / (double)(Pts - 1), x = n * w;
@@ -491,26 +476,24 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
                 var pl = new Point(x, Math.Clamp(Y(l), -2, h + 2));
                 var ps = new Point(x, Math.Clamp(Y(s), -2, h + 2));
                 var px = new Point(x, Math.Clamp(Y(DynEq.MagDb(selK, wv)), -2, h + 2));
-                if (i == 0) { cl.BeginFigure(pl, false); cs.BeginFigure(ps, false); cx.BeginFigure(px, false); }
+                if (i == 0) { cl.BeginFigure(pl, false); cf.BeginFigure(new Point(x, yZero), true); cs.BeginFigure(ps, false); cx.BeginFigure(px, false); }
                 else { cl.LineTo(pl); cs.LineTo(ps); cx.LineTo(px); }
+                cf.LineTo(pl);
             }
+            cf.LineTo(new Point(w, yZero)); cf.EndFigure(true);
+        }
+        ctx.DrawGeometry(FilterAxis.ResponseFill, null, gf);
         if (BandOn(sel)) ctx.DrawGeometry(null, SelPen, gx);
         if (diff > 0.05) ctx.DrawGeometry(null, StaticPen, gs);
-        ctx.DrawGeometry(null, NotaGraph.PrimaryPen, gl);
-
-        // axis labels
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "20");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "20k Hz");
-        var k1 = NotaGraph.AxisText("1k");
-        ctx.DrawText(k1, new Point(X(1000) + 3, h - 4 - k1.Height + 1));
-        var p12 = NotaGraph.AxisText("+12"); var m12 = NotaGraph.AxisText("−12");
-        ctx.DrawText(p12, new Point(w - 5 - p12.Width, Y(12) - p12.Height - 1));
-        ctx.DrawText(m12, new Point(w - 5 - m12.Width, Y(-12) + 1));
+        ctx.DrawGeometry(null, MainPen, gl);
 
         // title + legend
         var title = solo >= 0 ? NotaNum.F($"Solo · B{solo + 1}") : "Response";
-        ctx.DrawText(Text(title, solo >= 0 ? NotaPalette.AccentBright : NotaGraph.TitleInk, NotaGraph.TitleSize, bold: true, mono: false), new Point(8, 5));
-        NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed), ("live", NotaPalette.VizInk, NotaGraph.Mark.Line));
+        var titleFt = Text(title, solo >= 0 ? NotaPalette.AccentBright : NotaGraph.TitleInk, NotaGraph.TitleSize, bold: true, mono: false);
+        ctx.DrawText(titleFt, new Point(8, 5));
+        var titleBox = new Rect(0, 0, 8 + titleFt.Width + 6, 5 + titleFt.Height + 2);
+        if (diff > 0.05)
+            NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed), ("live", NotaPalette.AccentBright, NotaGraph.Mark.Line));
 
         // whiskers (dynamic bands): node → where Range can take it, a dot at the gain it has now
         for (int b = 0; b < DynEq.Bands; b++)
@@ -536,6 +519,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
             // The number takes ink derived from its own node, so it reads on all of them.
             IBrush num = bOn && !dimmed && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : isSel ? NotaPalette.AccentBright : NotaPalette.TextTertiary;
             double r = NodeD / 2;
+            if (isSel && _drag == b) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, c, r + 5, r + 5);
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
             if (!bOn && isSel) ctx.DrawEllipse(null, OffSelPen, c, r, r);
             else if (IsDyn(b) && on[b])
@@ -547,47 +531,15 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }
 
-        DrawTip(ctx, w, h);
-    }
+        FilterAxis.DbMarks(ctx, frame, Y, titleBox, 12, 0, -12);
+        clip.Dispose();
 
-    // The selected band's reading beside its node, clear of the node and inside the window.
-    private void DrawTip(DrawingContext ctx, double w, double h)
-    {
-        int b = _selected, ty = BandType(b);
-        bool bOn = BandOn(b), g = DynEq.HasGain(ty), dyn = IsDyn(b);
-        double r = P(b, DynEq.RangeF);
-        var a = Text(NotaNum.F($"B{b + 1} {DynEq.TypeNames[ty]}") + (bOn ? "" : " · off"), NotaPalette.TextPrimary, 11, bold: true, mono: false);
-        var l2 = Text(DynEq.Hz(P(b, DynEq.FreqF)) + (g ? " · " + DynEq.Db(P(b, DynEq.GainF)) + " dB" : "") + NotaNum.F($" · Q {P(b, DynEq.QF):0.00}"),
-            NotaPalette.TextSecondary, 10.5);
-        IBrush dynInk = r >= 0 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary;
-        string c = dyn ? (r >= 0 ? "↑ " : "↓ ") + DynEq.Db(_gr[b]) + " dB of " + DynEq.Db(r)
-            : !g ? Loc.T("device.dynamic_eq.no_dynamics") : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
-        var l3 = Text(c, dyn ? dynInk : NotaPalette.TextTertiary, 10.5);
-        double histH = dyn ? 12 : 0;
-        double tw = Math.Max(a.Width, Math.Max(l2.Width, l3.Width)) + 16, th = a.Height + l2.Height + l3.Height + 10 + histH;
-        var n = NodeAt(b);
-        double x = n.X > w * 0.62 ? n.X - 14 - tw : n.X + 14;
-        double y = n.Y < h * 0.34 ? n.Y + 8 : n.Y - 8 - th;
-        x = Math.Clamp(x, 3, Math.Max(3, w - tw - 3)); y = Math.Clamp(y, 3, Math.Max(3, h - th - 3));
-        var box = new Rect(x, y, tw, th);
-        ctx.DrawRectangle(NotaPalette.SurfaceHover, null, new RoundedRect(box, NotaRadius.CellValue));
-        double ty0 = y + 5;
-        ctx.DrawText(a, new Point(x + 8, ty0)); ty0 += a.Height;
-        ctx.DrawText(l2, new Point(x + 8, ty0)); ty0 += l2.Height;
-        ctx.DrawText(l3, new Point(x + 8, ty0)); ty0 += l3.Height;
-        if (!dyn) return;
-        // 2-second history of the band's dynamic gain, 0 dB at the top for a cut, the bottom for a boost.
-        double hx0 = x + 8, hx1 = x + tw - 8, hy0 = ty0 + 1, hy1 = ty0 + histH - 2, span = Math.Max(1, Math.Abs(r));
-        ctx.DrawLine(new Pen(NotaPalette.GridBeat, 1), new Point(hx0, r >= 0 ? hy1 : hy0), new Point(hx1, r >= 0 ? hy1 : hy0));
-        var sg = new StreamGeometry();
-        using (var gg = sg.Open())
-            for (int i = 0; i < HistLen; i++)
-            {
-                float v = _hist[b * HistLen + (_histHead + 1 + i) % HistLen];
-                double t = Math.Clamp(Math.Abs(v) / span, 0, 1);
-                var pt = new Point(hx0 + (hx1 - hx0) * i / (HistLen - 1), r >= 0 ? hy1 - t * (hy1 - hy0) : hy0 + t * (hy1 - hy0));
-                if (i == 0) gg.BeginFigure(pt, false); else gg.LineTo(pt);
-            }
-        ctx.DrawGeometry(null, new Pen(DynInk(r), 1), sg);
+        // The selected band on the frequency strip: its frequency, gain (and the gain it has now) and Q.
+        int sty = BandType(sel);
+        bool sOn = BandOn(sel), hot = _drag == sel, sDyn = IsDyn(sel);
+        string gain = !DynEq.HasGain(sty) ? ""
+            : " · " + DynEq.Db(P(sel, DynEq.GainF)) + "\u2009dB" + (sDyn ? ", " + Loc.T("device.dynamic_eq.now") + " " + DynEq.Db(P(sel, DynEq.GainF) + _gr[sel]) : "");
+        string ft = DynEq.Hz(P(sel, DynEq.FreqF)) + gain + NotaNum.F($" · Q {P(sel, DynEq.QF):0.00}") + (sOn ? "" : " · off");
+        FilterAxis.Draw(ctx, frame, w, X, DynEq.Fmin, DynEq.Fmax, FilterAxis.Lit(P(sel, DynEq.FreqF), ft, hot, !sOn));
     }
 }

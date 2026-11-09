@@ -56,7 +56,7 @@ namespace nota {
 class Chorus : public Device {
   public:
     // Param layout — order is the persisted/automation layout. APPEND ONLY.
-    enum { Rate = 0, Mode, Sync, Division, Offset, Hpf, Amount, Feedback, Width, Warmth, Mix, kNumParams };
+    enum { Rate = 0, Mode, Sync, Division, Offset, Hpf, Amount, Feedback, Width, Warmth, Mix, View /* card size, not sound: 0 = L, 1 = S (#531) */, kNumParams };
 
     // Telemetry slots (scopeRead).
     enum {

@@ -7,10 +7,9 @@
 //   • L 700 × 260 — LENGTH (mode Sync / ms / Gate %, the big value, its slider, the eight
 //     sync divisions, Start from note-on / note-off) | GATE (one bar of five demo notes: the
 //     input outlined, the output filled, Random's range as a band, a playhead) | MODIFIERS
-//     (bipolar Vel → Len and Key → Len, Random, Legato, Clip length limit) — over a status line.
+//     (bipolar Vel → Len and Key → Len, Random, Legato, Clip length limit).
 //   • S 260 × 260 — the mode chip and value over the GATE window and four knobs (Length ·
-//     Vel · Key · Random); the footer's "from note-on" flips the start point. Legato and
-//     Clip are L-only controls (presets still set them).
+//     Vel · Key · Random). Start from, Legato and Clip are L-only controls (presets still set them).
 // The playhead follows the transport's bar while it runs, and free-runs at the project tempo
 // otherwise; Random re-rolls each pass. A bypassed device greys the output and stops.
 
@@ -150,8 +149,6 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             }
             notes = LengthGateViz.Compute(G, Bpm(), cycle);
         }
-        string AvgOut() => LengthGateViz.Ms(notes.Average(n => n.Out) * 60000.0 / Bpm());
-        string TrigName() => G(PTrigger) >= 0.5f ? "note-off" : "note-on";
 
         Tick();
         Control rootView = mini ? BuildMini() : BuildLarge();
@@ -257,15 +254,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             lenIsland.Margin = new Thickness(0, 0, 5, 0); modIsland.Margin = new Thickness(5, 0, 0, 0);
             var islands = new DockPanel { Children = { WithDock(lenIsland, Dock.Left), WithDock(modIsland, Dock.Right), gateIsland } };
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = Loc.F("device.length.from_avg_out", Modes[Mode(G)], LenValue(G), TrigName(), AvgOut())
-                             + (G(PLegato) >= 0.5f ? " · legato" : "") + (G(PClipLimit) >= 0.5f ? " · clip" : "");
-                statusR.Text = Bypassed() ? "bypassed" : Loc.T("common.midi_latency_0_smp");
-            });
-            return Framed(islands, statusL, statusR);
+            return Framed(islands);
         }
 
         // =========================================================================================
@@ -315,34 +304,11 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
                 gate.Set(notes, now, Bpm(), Bypassed());
             });
 
-            // Footer: "from note-on" flips the start point.
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
-            statusL.PointerEntered += (_, _) => statusL.Foreground = Txt;
-            statusL.PointerExited += (_, _) => statusL.Foreground = Sub;
-            statusL.PointerPressed += (_, ev) =>
-            {
-                if (!ev.GetCurrentPoint(statusL).Properties.IsLeftButtonPressed) return;
-                Begin(PTrigger); S(PTrigger, G(PTrigger) >= 0.5f ? 0 : 1); End(PTrigger); Refresh(); ev.Handled = true;
-            };
-            ToolTip.SetTip(statusL, Loc.T("device.length.count_the_length_from_the"));
-            Learn(statusL, PTrigger, "Start From");
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = $"from {TrigName()}";
-                statusR.Text = Bypassed() ? "bypassed" : $"avg {AvgOut()}";
-            });
-            return Framed(island, statusL, statusR);
+            return Framed(island);
         }
 
         // ---- shared pieces -----------------------------------------------------------------------
-        Control Framed(Control main, TextBlock left, TextBlock right)
-        {
-            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
-                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
-            right.Margin = new Thickness(8, 0, 0, 0);
-            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
-        }
+        Control Framed(Control main) => new Border { Background = Ground, Padding = new Thickness(5), Child = main };
 
         Control IslandHead(Control left, Control? right)
         {

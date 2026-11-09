@@ -36,6 +36,7 @@ Vintage::Vintage() {
     p_[Character].store(1.0f);
     p_[WowRate].store(kWowRateDefault);      // 0.55 Hz
     p_[FlutterRate].store(kFlutRateDefault); // 7 Hz
+    p_[View].store(0.0f); // L
 }
 
 void Vintage::setSampleRate(double sr, int32_t maxBlock) {
@@ -386,7 +387,7 @@ int32_t Vintage::scopeRead(float* out, int32_t maxSamples) const {
 const char* Vintage::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Mode", "Drive", "Tone", "Wow", "Flutter", "Noise", "Crackle", "Wear", "Mix",
         "Output", "Oversampling", "Tone Low", "Tone High", "Tone Model", "Character", "Auto Comp", "Wow Rate",
-        "Flutter Rate", "Wow Sync", "Hiss HP", "Wear Follow", "Stereo Drift", "Output Stage", "Even Only"};
+        "Flutter Rate", "Wow Sync", "Hiss HP", "Wear Follow", "Stereo Drift", "Output Stage", "Even Only", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

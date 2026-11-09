@@ -453,9 +453,8 @@ public partial class MainWindow
         _blockMoves.Clear();             // ...and the clip moves it remembers are the old project's
         _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
-        _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
+        _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project, and so do device windows
         _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
-        LensWindow.CloseAll();             // and Lens windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
         PianoRollView.ForgetBendPicks();   // and the Bend lane ranges picked per clip
         Timeline.Refresh();

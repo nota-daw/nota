@@ -202,11 +202,24 @@ enum SideParam : int {
     DlyOn,
     RevOn,
     MatAmt0, // slot n's depth on this side (bipolar, 0.5 = none)
-    kSideN = MatAmt0 + kRoutes
+    // --- appended (#531): each envelope's shape — straight curves + Exp, the RC generator ---
+    // A project saved before these (kSideNv1) is laid out again by setState.
+    FDCurve = MatAmt0 + kRoutes,
+    FRCurve,
+    FEnvExp,
+    ADCurve,
+    ARCurve,
+    AEnvExp,
+    MDCurve,
+    MRCurve,
+    MEnvExp,
+    kSideN
 };
+constexpr int kSideNv1 = MatAmt0 + kRoutes; // the side block before the envelope shapes
 
 constexpr int kPartBlock = kPartN + kSides * kSideN;
 constexpr int kNumParams = kGlobalN + kParts * kPartBlock;
+constexpr int kNumParamsV1 = kGlobalN + kParts * (kPartN + kSides * kSideNv1);
 
 constexpr int globalIdx(int g) { return g; }
 constexpr int partIdx(int part, int p) { return kGlobalN + part * kPartBlock + p; }
@@ -267,7 +280,9 @@ class Twin final : public Instrument {
         ScPeakDb = ScLfoPhase0 + 3,                     // output peak, dBFS
         ScRecStep,      // the step the next recorded chord lands on (−1 = not recording)
         ScLastKey,      // the last key played (−1 none): the card's split-point learn
-        kScopeN
+        ScEnvLo,        // per part, the newest voice's filter / amp / mod env: stage, progress (EnvShape.h)
+        ScEnvUp = ScEnvLo + 3 * kEnvTeleFloats,
+        kScopeN = ScEnvUp + 3 * kEnvTeleFloats
     };
     // The sequencer's editing channel (contracts/c-abi.md, append-only). Each edit is one undo
     // step (editState); they act on the pattern selected for editing (A_SelectPattern).

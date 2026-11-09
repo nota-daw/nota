@@ -429,7 +429,7 @@ const char* Prism::paramName(int32_t i) const {
         "Mid Below Thresh", "Mid Below Ratio", "Mid Below Attack", "Mid Below Release", "Mid Floor", "Mid Knee",
         "Mid Auto Release", "High Above Thresh", "High Above Ratio", "High Attack", "High Release", "High Gain",
         "High Below On", "High Below Thresh", "High Below Ratio", "High Below Attack", "High Below Release",
-        "High Floor", "High Knee", "High Auto Release"};
+        "High Floor", "High Knee", "High Auto Release", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

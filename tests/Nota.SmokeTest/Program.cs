@@ -633,6 +633,14 @@ if (args.Length >= 1 && args[0] == "--lens-sync")
     Console.WriteLine(failures == 0 ? "LENS SYNC PASSED" : $"LENS SYNC FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The XL card size alone (specs/085): `--device-xl`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--device-xl")
+{
+    Console.WriteLine("-- device xl --");
+    foreach (var (ok, label) in DeviceXlTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEVICE XL PASSED" : $"DEVICE XL FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // EQ-8 band labels and notes alone (specs/049): `--eq-labels`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--eq-labels")
 {
@@ -785,6 +793,16 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine("-- session launch + record input --");
     foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Multi-channel input alone (fast iteration): `--multi-input`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--multi-input")
+{
+    Console.WriteLine("-- multi-channel input --");
+    foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MULTI INPUT PASSED" : $"MULTI INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Group Link alone (fast iteration): `--group-link`. Also part of the full run.
@@ -2028,7 +2046,7 @@ Console.WriteLine("-- Nota Physical --");
     Check(pe.DeviceName(t, -1) == "Nota Physical", $"instrument is Nota Physical (got '{pe.DeviceName(t, -1)}')");
 
     int pc = pe.PluginParamCount(t, -1);
-    Check(pc == 38, $"Nota Physical exposes 38 params (got {pc})");
+    Check(pc == 41, $"Nota Physical exposes 41 params (got {pc})");
     int dec = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2239,7 +2257,7 @@ Console.WriteLine("-- Nota Aurora --");
     Check(ae.DeviceName(t, -1) == "Nota Aurora", $"instrument is Nota Aurora (got '{ae.DeviceName(t, -1)}')");
 
     int pc = ae.PluginParamCount(t, -1);
-    Check(pc == 156, $"Nota Aurora exposes 156 params (got {pc})");
+    Check(pc == 162, $"Nota Aurora exposes 162 params (got {pc})");
     int pos = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2460,7 +2478,7 @@ Console.WriteLine("-- Nota Volt --");
     Check(ve.DeviceName(t, -1) == "Nota Volt", $"instrument is Nota Volt (got '{ve.DeviceName(t, -1)}')");
 
     int pc = ve.PluginParamCount(t, -1);
-    Check(pc == 143, $"Nota Volt exposes 143 params (got {pc})");
+    Check(pc == 150, $"Nota Volt exposes 150 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2475,7 +2493,7 @@ Console.WriteLine("-- Nota Volt --");
     // State round-trips to another track (project save/load path).
     ve.PluginParamSet(t, -1, cut, 0.88f);
     var state = ve.GetPluginState(t, -1);
-    Check(state.Length >= 143 * 4, $"volt state serialized ({state.Length} bytes)");
+    Check(state.Length >= 150 * 4, $"volt state serialized ({state.Length} bytes)");
     int t2 = ve.AddVoltSynthTrack();
     ve.SetPluginState(t2, -1, state);
     Check(Math.Abs(ve.PluginParamGet(t2, -1, cut) - 0.88f) < 1e-4, "volt state restores params on another track");
@@ -2718,7 +2736,7 @@ Console.WriteLine("-- Nota Bass --");
     Check(be.DeviceName(t, -1) == "Nota Bass", $"instrument is Nota Bass (got '{be.DeviceName(t, -1)}')");
 
     int pc = be.PluginParamCount(t, -1);
-    Check(pc == 39, $"Nota Bass exposes 39 params (got {pc})");
+    Check(pc == 45, $"Nota Bass exposes 45 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2906,7 +2924,7 @@ Console.WriteLine("-- Nota Monolith --");
     Check(me.DeviceName(t, -1) == "Nota Monolith", $"instrument is Nota Monolith (got '{me.DeviceName(t, -1)}')");
 
     int pc = me.PluginParamCount(t, -1);
-    Check(pc == 52, $"Nota Monolith exposes 52 params (got {pc})");
+    Check(pc == 58, $"Nota Monolith exposes 58 params (got {pc})");
     int cut = -1; bool idsOk = true;
     for (int i = 0; i < pc; i++)
     {
@@ -2969,7 +2987,7 @@ Console.WriteLine("-- Nota Pentad --");
     Check(pe.DeviceName(t, -1) == "Nota Pentad", $"instrument is Nota Pentad (got '{pe.DeviceName(t, -1)}')");
 
     int pc = pe.PluginParamCount(t, -1);
-    Check(pc == 76, $"Nota Pentad exposes 76 params (got {pc})");
+    Check(pc == 82, $"Nota Pentad exposes 82 params (got {pc})");
     var ids = new HashSet<string>();
     bool namesOk = true;
     for (int i = 0; i < pc; i++) { ids.Add(pe.PluginParamId(t, -1, i)); if (pe.PluginParamName(t, -1, i).Length == 0) namesOk = false; }
@@ -3248,7 +3266,7 @@ Console.WriteLine("-- Nota Consort --");
     Check(ce.TrackInstrumentKind(t) == 15, $"instrument kind is 15 (got {ce.TrackInstrumentKind(t)})");
     Check(ce.DeviceName(t, -1) == "Nota Consort", $"instrument is Nota Consort (got '{ce.DeviceName(t, -1)}')");
     int pc = ce.PluginParamCount(t, -1);
-    Check(pc == 145, $"Nota Consort exposes 145 params (got {pc})");
+    Check(pc == 151, $"Nota Consort exposes 151 params (got {pc})");
     var cids = new HashSet<string>();
     bool cnames = true;
     for (int i = 0; i < pc; i++) { cids.Add(ce.PluginParamId(t, -1, i)); if (ce.PluginParamName(t, -1, i).Length == 0) cnames = false; }
@@ -3611,7 +3629,7 @@ Console.WriteLine("-- Nota Operator --");
     Check(oe.DeviceName(t, -1) == "Nota Operator", $"instrument is Nota Operator (got '{oe.DeviceName(t, -1)}')");
 
     int pc = oe.PluginParamCount(t, -1);
-    Check(pc == 48, $"Nota Operator exposes 48 params (got {pc})");
+    Check(pc == 60, $"Nota Operator exposes 60 params (got {pc})");
     int algoI = -1; bool idsOk = true;
     var opIds = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++)
@@ -4116,7 +4134,7 @@ Console.WriteLine("-- Sampler --");
     Check(t > 0 && se.TrackInstrumentKind(t) == 1, "AddSamplerInstrumentTrack → kind 1");
     Check(se.DeviceName(t, -1) == "Nota Sampler", $"instrument is Nota Sampler (got '{se.DeviceName(t, -1)}')");
     int pc = se.PluginParamCount(t, -1);
-    Check(pc == 27, $"Nota Sampler exposes 27 params (got {pc})");
+    Check(pc == 30, $"Nota Sampler exposes 30 params (got {pc})");
     se.AddMidiClip(t, 0.0, 4.0);
     se.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 3.0, 0.9f) });
 
@@ -4563,7 +4581,7 @@ Check(m4Dry > 1e-4f, $"instrument audible (rms={m4Dry:0.0000})");
 int eqDev = engine.AddBuiltinDevice(fxT, 0); // 0 = EQ-8 (flat by default = passthrough)
 Check(eqDev >= 0, "add built-in EQ-8");
 Check(engine.DeviceName(fxT, eqDev) == "Nota EQ-8", "EQ-8 device name");
-Check(engine.DeviceParamCount(fxT, eqDev) == 63, "EQ-8 exposes 63 params (8 bands × 5, slopes, channels, globals, analyzer range and peak, labels)");
+Check(engine.DeviceParamCount(fxT, eqDev) == 64, "EQ-8 exposes 64 params (8 bands × 5, slopes, channels, globals, analyzer range and peak, labels, view)");
 engine.Seek(0);
 engine.RenderOffline(buf, frames);
 Check(Rms(buf, frames) > 1e-4f, $"audio flows through flat EQ-8 (rms={Rms(buf, frames):0.0000})");
@@ -4579,15 +4597,16 @@ Check(Rms(buf, frames) > 1e-4f, $"audio flows through EQ + Compressor chain (rms
 
 // -- M6-3: Reverb / Delay / Utility built-ins --
 int revDev = engine.AddBuiltinDevice(fxT, 2);
-Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 21, "add built-in Reverb (21 params)");
+Check(revDev >= 0 && engine.DeviceName(fxT, revDev) == "Nota Reverb" && engine.DeviceParamCount(fxT, revDev) == 22, "add built-in Reverb (22 params, View appended)");
 int delDev = engine.AddBuiltinDevice(fxT, 3);
-Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 24, "add built-in Delay (24 params)");
+Check(delDev >= 0 && engine.DeviceName(fxT, delDev) == "Nota Delay" && engine.DeviceParamCount(fxT, delDev) == 25, "add built-in Delay (25 params, View appended)");
 int utilDev = engine.AddBuiltinDevice(fxT, 4);
-Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 17, "add built-in Utility (17 params)");
+Check(utilDev >= 0 && engine.DeviceName(fxT, utilDev) == "Nota Utility" && engine.DeviceParamCount(fxT, utilDev) == 18, "add built-in Utility (18 params, View appended)");
+Check(engine.DeviceParamName(fxT, utilDev, 17) == "View" && !Nota.Application.DeviceView.IsMini(engine, fxT, utilDev), "Utility's View param (card size, #531) defaults to L");
 engine.DeviceSetParam(fxT, delDev, 12, 0.5f); // Delay Dry/Wet (index 12)
 Check(Math.Abs(engine.DeviceGetParam(fxT, delDev, 12) - 0.5f) < 0.001f, "Delay param round-trips");
 int ampDev = engine.AddBuiltinDevice(fxT, 6);
-Check(ampDev >= 0 && engine.DeviceName(fxT, ampDev) == "Nota Valve" && engine.DeviceParamCount(fxT, ampDev) == 23, "add built-in Nota Valve (23 params)");
+Check(ampDev >= 0 && engine.DeviceName(fxT, ampDev) == "Nota Valve" && engine.DeviceParamCount(fxT, ampDev) == 24, "add built-in Nota Valve (24 params, View appended)");
 Check(Math.Abs(engine.DeviceGetParam(fxT, ampDev, 0) - 2f) < 0.001f, $"Nota Valve defaults to Blues model (Model={engine.DeviceGetParam(fxT, ampDev, 0)})");
 Check(engine.DeviceParamName(fxT, ampDev, 8) == "Cab On" && engine.DeviceParamName(fxT, ampDev, 9) == "Cabinet"
       && engine.DeviceParamName(fxT, ampDev, 11) == "Axis" && engine.DeviceParamName(fxT, ampDev, 12) == "Gate", "mockup-2m params present (Cab On/Cabinet/Axis/Gate)");
@@ -4755,7 +4774,7 @@ Console.WriteLine("-- Nota Compressor --");
     const int Thresh = 0, Ratio = 1, Attack = 2, Release = 3, Lookahead = 7, Detection = 8, Character = 12,
               ScHP = 13, ScListen = 15, ScGain = 16, Hold = 17, ScQ = 18, External = 19, StereoLink = 20;
     Check(cd >= 0 && ce.TrackDeviceBuiltinKind(ct, cd) == 1 && ce.DeviceName(ct, cd) == "Nota Compressor"
-          && ce.DeviceParamCount(ct, cd) == 21, $"add built-in Nota Compressor (kind 1, 21 params — got {ce.DeviceParamCount(ct, cd)})");
+          && ce.DeviceParamCount(ct, cd) == 22, $"add built-in Nota Compressor (kind 1, 22 params, View appended — got {ce.DeviceParamCount(ct, cd)})");
     Check(ce.DeviceParamName(ct, cd, ScGain) == "SC Gain" && ce.DeviceParamName(ct, cd, Hold) == "Hold"
           && ce.DeviceParamName(ct, cd, ScQ) == "SC Q" && ce.DeviceParamName(ct, cd, External) == "External Key"
           && ce.DeviceParamName(ct, cd, StereoLink) == "Stereo Link", "Compressor names its appended params");
@@ -4911,7 +4930,7 @@ Console.WriteLine("-- Nota Reverb --");
     int rd = re.AddBuiltinDevice(rt, 2);
     const int Decay = 0, HFDamp = 1, PreDelay = 2, Size = 3, Algorithm = 10, Freeze = 11, DryWet = 12, Output = 13,
               DryLevel = 14, EarlyRefl = 15, ModOnTail = 16, Vintage = 17, BassMono = 18, WetOnly = 19, LatencyComp = 20;
-    Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 21, "add built-in Nota Reverb (kind 2, 21 params)");
+    Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 22, "add built-in Nota Reverb (kind 2, 22 params, View appended)");
     Check(re.ReverbWrapSelfTest(), "Reverb comb read stays inside its delay line at the wrap edge (no metallic burst)");
     Check(re.DeviceParamName(rt, rd, Decay) == "Decay" && re.DeviceParamName(rt, rd, Output) == "Output"
           && re.DeviceParamName(rt, rd, DryLevel) == "Dry Level" && re.DeviceParamName(rt, rd, EarlyRefl) == "Early Refl"
@@ -5052,11 +5071,11 @@ Console.WriteLine("-- Nota Crush --");
     Check(ce.DeviceName(ct, cd) == "Nota Crush", $"device name is Nota Crush (got '{ce.DeviceName(ct, cd)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cd) == 12, $"builtin kind is 12 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
     int pc = ce.DeviceParamCount(ct, cd);
-    Check(pc == 13, $"Nota Crush exposes 13 params (got {pc})");
-    string[] crNames = { "Bits", "Rate", "Mode", "Dither", "Jitter", "Noise Floor", "Post Filter", "Dry/Wet", "Anti-Alias", "Output", "Drive", "Auto Gain", "DC Filter" };
+    Check(pc == 14, $"Nota Crush exposes 14 params, View appended (got {pc})");
+    string[] crNames = { "Bits", "Rate", "Mode", "Dither", "Jitter", "Noise Floor", "Post Filter", "Dry/Wet", "Anti-Alias", "Output", "Drive", "Auto Gain", "DC Filter", "View" };
     bool crNamesOk = pc == crNames.Length;
     for (int p = 0; p < Math.Min(pc, crNames.Length); p++) crNamesOk &= ce.DeviceParamName(ct, cd, p) == crNames[p];
-    Check(crNamesOk, "the original eleven params keep their order; Auto Gain and DC Filter are appended");
+    Check(crNamesOk, "the original eleven params keep their order; Auto Gain, DC Filter and View are appended");
     Check(ce.DeviceParamDefault(ct, cd, 11) == 0f && ce.DeviceParamDefault(ct, cd, 12) == 0f, "appended params default off (the old sound)");
 
     // Param round-trip.
@@ -5270,7 +5289,7 @@ Console.WriteLine("-- Nota Dynamic EQ-8 --");
     Check(de.DeviceName(dt, dd) == "Nota Dynamic EQ-8", $"name is Nota Dynamic EQ-8 (got '{de.DeviceName(dt, dd)}')");
     Check(de.TrackDeviceBuiltinKind(dt, dd) == 13, $"builtin kind is 13 (got {de.TrackDeviceBuiltinKind(dt, dd)})");
     int dpc = de.DeviceParamCount(dt, dd);
-    Check(dpc == 92, $"Dynamic EQ-8 exposes 92 params (got {dpc})");
+    Check(dpc == 93, $"Dynamic EQ-8 exposes 93 params, View appended (got {dpc})");
     string[] fields = { "On", "Type", "Freq", "Gain", "Q", "Mode", "Thr", "Rng", "Atk", "Rel" };
     bool layoutOk = true;
     for (int b = 0; b < 8; b++) for (int f = 0; f < 10; f++) layoutOk &= de.DeviceParamName(dt, dd, b * 10 + f) == $"{b + 1} {fields[f]}";
@@ -5451,8 +5470,10 @@ Console.WriteLine("-- Nota Ceiling --");
     Check(le.DeviceName(lt, ld) == "Nota Ceiling", $"name is Nota Ceiling (got '{le.DeviceName(lt, ld)}')");
     Check(le.TrackDeviceBuiltinKind(lt, ld) == 14, $"builtin kind is 14 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
     int lpc = le.DeviceParamCount(lt, ld);
-    Check(lpc == 11, $"Nota Ceiling exposes 11 params (got {lpc})");
-    string[] lnames = { "Ceiling", "Gain", "Release", "AutoRelease", "Character", "Lookahead", "StereoLink", "True Peak", "Delta", "SC HP", "Target" };
+    Check(lpc == 12, $"Nota Ceiling exposes 12 params (got {lpc})");
+    Check(le.DeviceParamDefault(lt, ld, 11) == 0f && Nota.Application.DeviceView.Index(le, lt, ld) == 11 && !Nota.Application.DeviceView.IsMini(le, lt, ld),
+        "appended View param (card size, #531) defaults to L");
+    string[] lnames = { "Ceiling", "Gain", "Release", "AutoRelease", "Character", "Lookahead", "StereoLink", "True Peak", "Delta", "SC HP", "Target", "View" };
     bool lnamesOk = lpc == lnames.Length;
     for (int p = 0; p < Math.Min(lpc, lnames.Length); p++) lnamesOk &= le.DeviceParamName(lt, ld, p) == lnames[p];
     Check(lnamesOk, "the original seven params keep their order; True Peak, Delta, SC HP, Target are appended");
@@ -5497,7 +5518,7 @@ Console.WriteLine("-- Nota Ceiling --");
         Check(mfin && Rms(mb, 8192) > 0.001f, $"Ceiling character {c} renders finite + audible (rms {Rms(mb, 8192):F3})");
     }
     le.DeviceSetParam(lt, ld, 4, 0f);
-    Check(le.DeviceParamCount(lt, ld) == 11, "param count stable after render");
+    Check(le.DeviceParamCount(lt, ld) == 12, "param count stable after render");
 
     // Reset peaks (action 0) clears the holds.
     le.DeviceAction(lt, ld, 0, 0, 0);
@@ -5667,7 +5688,7 @@ Console.WriteLine("-- Nota Strata --");
     Check(sd >= 0, "add built-in Nota Strata");
     Check(se.DeviceName(st, sd) == "Nota Strata", $"name is Nota Strata (got '{se.DeviceName(st, sd)}')");
     Check(se.TrackDeviceBuiltinKind(st, sd) == 15, $"builtin kind is 15 (got {se.TrackDeviceBuiltinKind(st, sd)})");
-    Check(se.DeviceParamCount(st, sd) == 7, $"Nota Strata exposes 7 params (got {se.DeviceParamCount(st, sd)})");
+    Check(se.DeviceParamCount(st, sd) == 8, $"Nota Strata exposes 8 params, View appended (got {se.DeviceParamCount(st, sd)})");
 
     // Param round-trip (Feedback = 0).
     se.DeviceSetParam(st, sd, 0, 72f);
@@ -5780,7 +5801,7 @@ Console.WriteLine("-- Nota EQ-3 --");
     Check(q3 >= 0, "add built-in Nota EQ-3");
     Check(engine.DeviceName(qt, q3) == "Nota EQ-3", $"name is Nota EQ-3 (got '{engine.DeviceName(qt, q3)}')");
     Check(engine.TrackDeviceBuiltinKind(qt, q3) == 16, $"builtin kind is 16 (got {engine.TrackDeviceBuiltinKind(qt, q3)})");
-    Check(engine.DeviceParamCount(qt, q3) == 11 && engine.DeviceParamName(qt, q3, 10) == "Range", $"Nota EQ-3 exposes 11 params, Range appended (got {engine.DeviceParamCount(qt, q3)})");
+    Check(engine.DeviceParamCount(qt, q3) == 12 && engine.DeviceParamName(qt, q3, 10) == "Range" && engine.DeviceParamName(qt, q3, 11) == "View", $"Nota EQ-3 exposes 12 params, Range and View appended (got {engine.DeviceParamCount(qt, q3)})");
     Check(engine.DeviceGetParam(qt, q3, 10) > 0.5f && Math.Abs(engine.DeviceGetParam(qt, q3, 0) - 0.8f) < 1e-4, "a new EQ-3 is in the Isolator range at 0 dB (0.8)");
 
     // Param round-trip.
@@ -5986,7 +6007,7 @@ Console.WriteLine("-- Nota Shutter --");
         Check(gd >= 0, "add built-in Nota Shutter");
         Check(ge.DeviceName(gt, gd) == "Nota Shutter", $"name is Nota Shutter (got '{ge.DeviceName(gt, gd)}')");
         Check(ge.TrackDeviceBuiltinKind(gt, gd) == 19, $"builtin kind is 19 (got {ge.TrackDeviceBuiltinKind(gt, gd)})");
-        Check(ge.DeviceParamCount(gt, gd) == 60, $"Nota Shutter exposes 60 params (got {ge.DeviceParamCount(gt, gd)})");
+        Check(ge.DeviceParamCount(gt, gd) == 61, $"Nota Shutter exposes 61 params (got {ge.DeviceParamCount(gt, gd)})");
         Check(ge.DeviceParamName(gt, gd, 16) == "Pattern Target" && ge.DeviceParamName(gt, gd, 27) == "Pattern Out"
               && ge.DeviceParamName(gt, gd, 28) == "Step 1" && ge.DeviceParamName(gt, gd, 59) == "Step 32", "Shutter appends the Pattern params and Step 1..32");
         Check(ge.DeviceParamDefault(gt, gd, 16) < 0.01f, "Pattern is off by default (the gate sounds as before)");
@@ -6254,7 +6275,7 @@ Console.WriteLine("-- Nota Chamber --");
     Check(ce.DeviceName(ct, cd) == "Nota Chamber", $"name is Nota Chamber (got '{ce.DeviceName(ct, cd)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cd) == 20, $"builtin kind is 20 (got {ce.TrackDeviceBuiltinKind(ct, cd)})");
     int cpc = ce.DeviceParamCount(ct, cd);
-    Check(cpc == 45, $"Nota Chamber exposes 45 params (got {cpc})");
+    Check(cpc == 46, $"Nota Chamber exposes 46 params, View appended (got {cpc})");
     var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cd, i)).ToList();
     Check(cnames.Distinct().Count() == cpc && cnames.All(n => n.Length > 0), "Chamber param names are unique and non-empty");
     ce.DeviceSetParam(ct, cd, AlgoDecay, 0.42f);
@@ -6476,7 +6497,7 @@ Console.WriteLine("-- Nota Prism --");
         Check(pe.DeviceName(pt, pd) == "Nota Prism", $"name is Nota Prism (got '{pe.DeviceName(pt, pd)}')");
         Check(pe.TrackDeviceBuiltinKind(pt, pd) == 21, $"builtin kind is 21 (got {pe.TrackDeviceBuiltinKind(pt, pd)})");
         int ppc = pe.DeviceParamCount(pt, pd);
-        Check(ppc == 52, $"Nota Prism exposes 52 params (got {ppc})");
+        Check(ppc == 53, $"Nota Prism exposes 53 params (got {ppc})");
         var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pd, i)).ToList();
         Check(pnames.Distinct().Count() == ppc && pnames.All(n => n.Length > 0), "Prism param names are unique and non-empty");
         Check(pe.DeviceAcceptsSidechain(pt, pd), "Prism accepts a sidechain");
@@ -6664,7 +6685,8 @@ Console.WriteLine("-- Nota Lens --");
     // spectrum peak, the scope period and the third-octave table are all predictable.
     // The analysis runs lazily on the message thread and is rate-limited by Display Rate,
     // so each read is preceded by a render + a short wait.
-    const int ViewP = 0, FreezeP = 1, SourceP = 2, MidSideP = 3, FftSizeP = 4, WindowP = 5,
+    const int ViewP = 0,   // "Graph" (was "View" before #531)
+        FreezeP = 1, SourceP = 2, MidSideP = 3, FftSizeP = 4, WindowP = 5,
               AverageP = 6, SmoothP = 7, TiltP = 9, PeakHoldP = 11, TimeDivP = 15, TrigModeP = 17,
               TrigLevelP = 19, CursorAP = 26, CursorBP = 27, RateP = 36;
     const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10,
@@ -6685,7 +6707,7 @@ Console.WriteLine("-- Nota Lens --");
         Check(le.DeviceName(lt, ld) == "Nota Lens", $"name is Nota Lens (got '{le.DeviceName(lt, ld)}')");
         Check(le.TrackDeviceBuiltinKind(lt, ld) == 22, $"builtin kind is 22 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
         int lpc = le.DeviceParamCount(lt, ld);
-        Check(lpc == 42, $"Nota Lens exposes 42 params (got {lpc})");
+        Check(lpc == 43, $"Nota Lens exposes 43 params (got {lpc})");
         var lnames = Enumerable.Range(0, lpc).Select(i => le.DeviceParamName(lt, ld, i)).ToList();
         Check(lnames.Distinct().Count() == lpc && lnames.All(n => n.Length > 0), "Lens param names are unique and non-empty");
         le.DeviceSetParam(lt, ld, TiltP, 0.42f);
@@ -6847,6 +6869,10 @@ Console.WriteLine("-- Nota Lens --");
             Check(pf == 0, $"every Lens preset applies and still passes audio through ({pf} failed)");
             cat.ApplyInPlace(le, "lens/Scope · Single Shot", lt, ld);
             Check(le.DeviceGetParam(lt, ld, ViewP) > 0.4f && le.DeviceGetParam(lt, ld, TrigModeP) > 0.9f, "Scope · Single Shot selects the scope and arms Single");
+            le.DeviceSetParam(lt, ld, 42, 1f);   // the card size (View, #531): S
+            cat.ApplyInPlace(le, "lens/Scope · Waveform", lt, ld);
+            Check(le.DeviceParamName(lt, ld, 42) == "View" && le.DeviceGetParam(lt, ld, 42) > 0.5f, "a Lens preset keeps the card's S / L size");
+            le.DeviceSetParam(lt, ld, 42, 0f);
             cat.ApplyInPlace(le, "lens/Mix Overview", lt, ld);
             Check(le.DeviceGetParam(lt, ld, ViewP) < 1e-3 && le.DeviceGetParam(lt, ld, TrigModeP) < 1e-3, "unnamed params reset to defaults between presets");
             for (int i = 0; i < lpc; i++) le.DeviceSetParam(lt, ld, i, le.DeviceParamDefault(lt, ld, i));
@@ -6887,8 +6913,8 @@ Console.WriteLine("-- Nota Level (AutoGain) --");
     Check(ag >= 0, "add built-in Nota Level");
     Check(ae.DeviceName(at, ag) == "Nota Level", $"name is Nota Level (got '{ae.DeviceName(at, ag)}')");
     Check(ae.TrackDeviceBuiltinKind(at, ag) == 18, $"builtin kind is 18 (got {ae.TrackDeviceBuiltinKind(at, ag)})");
-    Check(ae.DeviceParamCount(at, ag) == 10 && ae.DeviceParamName(at, ag, 9) == "Gain",
-          $"Nota Level exposes 10 params, Gain appended (got {ae.DeviceParamCount(at, ag)})");
+    Check(ae.DeviceParamCount(at, ag) == 11 && ae.DeviceParamName(at, ag, 9) == "Gain" && ae.DeviceParamName(at, ag, 10) == "View",
+          $"Nota Level exposes 11 params, Gain and View appended (got {ae.DeviceParamCount(at, ag)})");
     Check(Math.Abs(ae.DeviceParamDefault(at, ag, 9) - 0.5f) < 1e-4 && Math.Abs(ae.DeviceParamDefault(at, ag, 0) - 0.611f) < 1e-3,
           "Level defaults: Gain 0 dB, Target −14 LUFS");
 
@@ -7077,7 +7103,7 @@ Console.WriteLine("-- Nota Forge --");
     Check(fg >= 0, "add built-in Nota Forge");
     Check(fe.DeviceName(ft2, fg) == "Nota Forge", $"name is Nota Forge (got '{fe.DeviceName(ft2, fg)}')");
     Check(fe.TrackDeviceBuiltinKind(ft2, fg) == 17, $"builtin kind is 17 (got {fe.TrackDeviceBuiltinKind(ft2, fg)})");
-    Check(fe.DeviceParamCount(ft2, fg) == 36, $"Nota Forge exposes 36 params (got {fe.DeviceParamCount(ft2, fg)})");
+    Check(fe.DeviceParamCount(ft2, fg) == 37, $"Nota Forge exposes 37 params, View appended (got {fe.DeviceParamCount(ft2, fg)})");
     // Append-only layout: the old indices keep their names, the per-stage shape sits at 27..35, neutral.
     Check(fe.DeviceParamName(ft2, fg, 0) == "Amount" && fe.DeviceParamName(ft2, fg, 12) == "S1 Drive" && fe.DeviceParamName(ft2, fg, 26) == "Oversampling"
           && fe.DeviceParamName(ft2, fg, 27) == "S1 Bias" && fe.DeviceParamName(ft2, fg, 31) == "S2 Tone" && fe.DeviceParamName(ft2, fg, 35) == "S3 Width",
@@ -7226,7 +7252,7 @@ Console.WriteLine("-- EQ-8 --");
     engine.AddMidiClip(et, 0.0, 4.0);
     engine.SetClipNotes(et, 0, new[] { new NotaNote(69, 0.0, 3.0, 0.9f) });   // A4 = 440 Hz + harmonics
     int eq = engine.AddBuiltinDevice(et, 0);
-    Check(engine.DeviceParamCount(et, eq) == 63, "EQ-8 has 63 params on a fresh track");
+    Check(engine.DeviceParamCount(et, eq) == 64, "EQ-8 has 64 params on a fresh track");
 
     // Band 3 (index 2) is a bell; param base = 2*5. On=+0, Type=+1, Freq=+2, Gain=+3, Q=+4.
     int b2 = 2 * 5;
@@ -10282,7 +10308,7 @@ Console.WriteLine("-- Drum Rack: engine + C ABI + persistence --");
 
     // Rich Sampler editing per pad: chain param id/count/default + Sampler info/root all
     // reachable so the full editor works inside a Drum Rack pad (not just the track).
-    Check(re.RackChainInstrumentParamCount(t, p2) == 27, "sampler pad exposes 27 chain params");
+    Check(re.RackChainInstrumentParamCount(t, p2) == 30, "sampler pad exposes 30 chain params");
     Check(re.RackChainInstrumentParamId(t, p2, 4) == "start", $"chain param id maps (got '{re.RackChainInstrumentParamId(t, p2, 4)}')");
     Check(re.RackChainSamplerInfo(t, p2, out var cinfo) && cinfo.SampleId != 0 && cinfo.RootNote == 40, "chain sampler info (sample + root) readable");
     // Load a (new) sample into an existing chain Sampler (the pop-out drop path).
@@ -10758,7 +10784,10 @@ Console.WriteLine("-- Auto Filter (effect kind 7) --");
     Check(afdi >= 0, "add Auto Filter device");
     Check(afeng.TrackDeviceBuiltinKind(aft, afdi) == 7, "device reports builtin kind 7");
     int afpc = afeng.DeviceParamCount(aft, afdi);
-    Check(afpc == 26, $"Auto Filter exposes 26 params ({afpc})");
+    Check(afpc == 27, $"Auto Filter exposes 27 params ({afpc})");
+    Check(afeng.DeviceParamName(aft, afdi, 26) == "View" && afeng.DeviceParamDefault(aft, afdi, 26) == 0f
+          && Nota.Application.DeviceView.Index(afeng, aft, afdi) == 26 && !Nota.Application.DeviceView.IsMini(afeng, aft, afdi),
+        "appended View param (card size, #531) defaults to L");
     const int AfFreq = 0, AfRes = 1, AfType = 2, AfSlope = 3, AfEnvAmt = 5, AfEnvOn = 15, AfLfoAmt = 9, AfLfoRate = 10,
         AfLfoWave = 11, AfLfoSync = 19, AfTarget = 21, AfHoldTime = 22, AfSmooth = 23, AfOffset = 24, AfRetrig = 25;
     Check(afeng.DeviceParamName(aft, afdi, AfTarget) == "Mod Target" && afeng.DeviceParamName(aft, afdi, AfHoldTime) == "Env Hold Time"
@@ -10894,7 +10923,7 @@ Console.WriteLine("-- Nota Valve (effect kind 6) --");
     int avd = aveng.AddBuiltinDevice(avt, 6);
     Check(avd >= 0 && aveng.DeviceName(avt, avd) == "Nota Valve" && aveng.TrackDeviceBuiltinKind(avt, avd) == 6, "add Nota Valve (kind 6)");
     int avpc = aveng.DeviceParamCount(avt, avd);
-    Check(avpc == 23, $"Nota Valve exposes 23 params ({avpc})");
+    Check(avpc == 24, $"Nota Valve exposes 24 params, View appended ({avpc})");
     const int AModel = 0, AGain = 1, AMiddle = 3, AOutput = 6, AMix = 7, ACabOn = 8, ACab = 9, AMic = 10, AAxis = 11, AGate = 12, AOs = 13,
         AMidFreq = 14, ADist = 15, APos = 16, ALowCut = 17, AHighCut = 18, AEven = 19, AComp = 20, ABright = 21, ADeep = 22;
     Check(aveng.DeviceParamName(avt, avd, AMidFreq) == "Mid Freq" && aveng.DeviceParamName(avt, avd, ADist) == "Mic Distance"
@@ -11080,7 +11109,7 @@ Console.WriteLine("-- Nota Utility (effect kind 4) --");
     int ud = ueng.AddBuiltinDevice(ut, 4);
     Check(ud >= 0 && ueng.DeviceName(ut, ud) == "Nota Utility" && ueng.TrackDeviceBuiltinKind(ut, ud) == 4, "add Nota Utility (kind 4)");
     int upc = ueng.DeviceParamCount(ut, ud);
-    Check(upc == 17, $"Nota Utility exposes 17 params ({upc})");
+    Check(upc == 18, $"Nota Utility exposes 18 params, View appended ({upc})");
     const int UGain = 0, UBal = 1, UWidth = 2, UMode = 3, UMonoF = 4, UMono = 5, UMute = 6, UInvL = 7, UWMode = 9, USlope = 10,
         UAuto = 11, UMatchTo = 12, UTarget = 13, UMeter = 14, UTp = 15, UCeil = 16;
     string[] uNames = { "Gain", "Balance", "Width", "Channel Mode", "Mono Freq", "Mono Below", "Mute", "Invert L", "Invert R",
@@ -11294,7 +11323,7 @@ Console.WriteLine("-- Nota Vintage (effect kind 8) --");
     Check(vveng.DeviceName(vvt, vvdi) == "Nota Vintage", $"device is Nota Vintage (got '{vveng.DeviceName(vvt, vvdi)}')");
     Check(vveng.TrackDeviceBuiltinKind(vvt, vvdi) == 8, "device reports builtin kind 8");
     int vvpc = vveng.DeviceParamCount(vvt, vvdi);
-    Check(vvpc == 24, $"Nota Vintage exposes 24 params ({vvpc})");
+    Check(vvpc == 25, $"Nota Vintage exposes 25 params, View appended ({vvpc})");
     const int VMode = 0, VDrive = 1, VWow = 3, VFlutter = 4, VNoise = 5, VCrackle = 6, VWear = 7, VMix = 8, VOutput = 9,
         VLow = 11, VHigh = 12, VModel = 13, VChar = 14, VComp = 15, VWowRate = 16, VFlutRate = 17, VWowSync = 18,
         VHissHp = 19, VFollow = 20, VStereo = 21, VStage = 22, VEven = 23;
@@ -11467,7 +11496,8 @@ Console.WriteLine("-- Nota Orbit (effect kind 9) --");
     Check(apeng.DeviceName(apt, apdi) == "Nota Orbit", $"device is Nota Orbit (got '{apeng.DeviceName(apt, apdi)}')");
     Check(apeng.TrackDeviceBuiltinKind(apt, apdi) == 9, "device reports builtin kind 9");
     int appc = apeng.DeviceParamCount(apt, apdi);
-    Check(appc == 8, $"Nota Orbit exposes 8 params ({appc})");
+    Check(appc == 9, $"Nota Orbit exposes 9 params ({appc})");
+    Check(apeng.DeviceParamName(apt, apdi, 8) == "View" && !Nota.Application.DeviceView.IsMini(apeng, apt, apdi), "Orbit's appended View param (card size, #531) defaults to L");
     Check(apeng.DeviceParamName(apt, apdi, 0) == "Rate" && apeng.DeviceParamName(apt, apdi, 5) == "Mix"
           && apeng.DeviceParamName(apt, apdi, 6) == "Sync" && apeng.DeviceParamName(apt, apdi, 7) == "Division",
           "original params keep their places; Sync and Division are appended");
@@ -11630,9 +11660,9 @@ Console.WriteLine("-- Nota Flanger (effect kind 23) --");
     Check(fe.DeviceName(ft, fdi) == "Nota Flanger", $"device is Nota Flanger (got '{fe.DeviceName(ft, fdi)}')");
     Check(fe.TrackDeviceBuiltinKind(ft, fdi) == 23, "device reports builtin kind 23");
     int fpc = fe.DeviceParamCount(ft, fdi);
-    Check(fpc == 9, $"Nota Flanger exposes 9 params ({fpc})");
+    Check(fpc == 10, $"Nota Flanger exposes 10 params, View appended ({fpc})");
     var fnames = Enumerable.Range(0, fpc).Select(i => fe.DeviceParamName(ft, fdi, i)).ToArray();
-    Check(string.Join(",", fnames) == "Rate,Delay,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo", $"param layout ({string.Join(",", fnames)})");
+    Check(string.Join(",", fnames) == "Rate,Delay,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,View", $"param layout ({string.Join(",", fnames)})");
     Check(Math.Abs(fe.DeviceParamDefault(ft, fdi, 1) - 0.735f) < 1e-3f && Math.Abs(fe.DeviceParamDefault(ft, fdi, 3) - (0.5f + 0.7f / 1.9f)) < 1e-3f
           && Math.Abs(fe.DeviceParamDefault(ft, fdi, 8) - 0.5f) < 1e-3f, "defaults: 2.5 ms, feedback +70 %, stereo 90° (the Jet Plane)");
     fe.DeviceSetParam(ft, fdi, 2, 0.42f);
@@ -11826,9 +11856,9 @@ Console.WriteLine("-- Nota Phaser (effect kind 24) --");
     Check(pe.DeviceName(pt, pdi) == "Nota Phaser", $"device is Nota Phaser (got '{pe.DeviceName(pt, pdi)}')");
     Check(pe.TrackDeviceBuiltinKind(pt, pdi) == 24, "device reports builtin kind 24");
     int ppc = pe.DeviceParamCount(pt, pdi);
-    Check(ppc == 10, $"Nota Phaser exposes 10 params ({ppc})");
+    Check(ppc == 11, $"Nota Phaser exposes 11 params, View appended ({ppc})");
     var pnames = Enumerable.Range(0, ppc).Select(i => pe.DeviceParamName(pt, pdi, i)).ToArray();
-    Check(string.Join(",", pnames) == "Rate,Center,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,Stages", $"param layout ({string.Join(",", pnames)})");
+    Check(string.Join(",", pnames) == "Rate,Center,Depth,Feedback,Mix,Waveform,Sync,Division,Stereo,Stages,View", $"param layout ({string.Join(",", pnames)})");
     Check(Math.Abs(pe.DeviceParamDefault(pt, pdi, 1) - 0.602f) < 1e-3f && Math.Abs(pe.DeviceParamDefault(pt, pdi, 3) - (0.5f + 0.4f / 1.9f)) < 1e-3f
           && Math.Abs(pe.DeviceParamDefault(pt, pdi, 9) - 0.25f) < 1e-3f, "defaults: 800 Hz, feedback +40 %, 4 stages (Script 45)");
     pe.DeviceSetParam(pt, pdi, 2, 0.42f);
@@ -12054,9 +12084,9 @@ Console.WriteLine("-- Nota Chorus (effect kind 25) --");
     Check(ce.DeviceName(ct, cdi) == "Nota Chorus", $"device is Nota Chorus (got '{ce.DeviceName(ct, cdi)}')");
     Check(ce.TrackDeviceBuiltinKind(ct, cdi) == 25, "device reports builtin kind 25");
     int cpc = ce.DeviceParamCount(ct, cdi);
-    Check(cpc == 11, $"Nota Chorus exposes 11 params ({cpc})");
+    Check(cpc == 12, $"Nota Chorus exposes 12 params, View appended ({cpc})");
     var cnames = Enumerable.Range(0, cpc).Select(i => ce.DeviceParamName(ct, cdi, i)).ToArray();
-    Check(string.Join(",", cnames) == "Rate,Mode,Sync,Division,Offset,HPF,Amount,Feedback,Width,Warmth,Mix", $"param layout ({string.Join(",", cnames)})");
+    Check(string.Join(",", cnames) == "Rate,Mode,Sync,Division,Offset,HPF,Amount,Feedback,Width,Warmth,Mix,View", $"param layout ({string.Join(",", cnames)})");
     Check(Math.Abs(ce.DeviceParamDefault(ct, cdi, 0) - 0.6157f) < 1e-3f && ce.DeviceParamDefault(ct, cdi, 1) == 0f
           && ce.DeviceParamDefault(ct, cdi, 4) == 1f && Math.Abs(ce.DeviceParamDefault(ct, cdi, 6) - 0.4f) < 1e-4f
           && ce.DeviceParamDefault(ct, cdi, 8) == 0.5f && ce.DeviceParamDefault(ct, cdi, 10) == 0.5f,
@@ -12273,7 +12303,10 @@ Console.WriteLine("-- Nota Auto Shift (effect kind 10) --");
     Check(aseng.DeviceName(ast, asdi) == "Nota Auto Shift", $"device is Nota Auto Shift (got '{aseng.DeviceName(ast, asdi)}')");
     Check(aseng.TrackDeviceBuiltinKind(ast, asdi) == 10, "device reports builtin kind 10");
     int aspc = aseng.DeviceParamCount(ast, asdi);
-    Check(aspc == 36, $"Nota Auto Shift exposes 36 params ({aspc})");
+    Check(aspc == 37, $"Nota Auto Shift exposes 37 params ({aspc})");
+    Check(aseng.DeviceParamName(ast, asdi, 36) == "View" && aseng.DeviceParamDefault(ast, asdi, 36) == 0f
+          && Nota.Application.DeviceView.Index(aseng, ast, asdi) == 36 && !Nota.Application.DeviceView.IsMini(aseng, ast, asdi),
+        "appended View param (card size, #531) defaults to L");
     Check(aseng.DeviceParamName(ast, asdi, 6) == "Range" && aseng.DeviceParamName(ast, asdi, 7) == "Formant"
           && aseng.DeviceParamName(ast, asdi, 9) == "Follow Scale", "original params keep their names and places");
     Check(aseng.DeviceParamName(ast, asdi, 10) == "Human" && aseng.DeviceParamName(ast, asdi, 12) == "Formant Shift"
@@ -12539,7 +12572,10 @@ Console.WriteLine("-- Nota Beat Repeat (effect kind 11) --");
     Check(breng.DeviceName(brt, brdi) == "Nota Beat Repeat", $"device is Nota Beat Repeat (got '{breng.DeviceName(brt, brdi)}')");
     Check(breng.TrackDeviceBuiltinKind(brt, brdi) == 11, "device reports builtin kind 11");
     int brpc = breng.DeviceParamCount(brt, brdi);
-    Check(brpc == 20, $"Nota Beat Repeat exposes 20 params ({brpc})");
+    Check(brpc == 21, $"Nota Beat Repeat exposes 21 params ({brpc})");
+    Check(breng.DeviceParamName(brt, brdi, 20) == "View" && breng.DeviceParamDefault(brt, brdi, 20) == 0f
+          && Nota.Application.DeviceView.Index(breng, brt, brdi) == 20 && !Nota.Application.DeviceView.IsMini(breng, brt, brdi),
+        "appended View param (card size, #531) defaults to L");
     Check(breng.DeviceParamName(brt, brdi, 15) == "Repeat" && breng.DeviceParamName(brt, brdi, 16) == "Latch" && breng.DeviceParamName(brt, brdi, 17) == "Triplet"
           && breng.DeviceParamName(brt, brdi, 18) == "Filter Type" && breng.DeviceParamName(brt, brdi, 19) == "Filter Narrow",
           "appended params: Repeat (was Latch), Latch, Triplet, Filter Type, Filter Narrow");
@@ -15556,6 +15592,10 @@ Console.WriteLine("-- take lanes --");
 foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+Console.WriteLine("-- multi-channel input --");
+foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- group link --");
 foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
 Console.WriteLine("-- group membership --");
@@ -15663,6 +15703,8 @@ Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
 Console.WriteLine("-- eq labels --");
 foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
+Console.WriteLine("-- device xl --");
+foreach (var (ok, label) in DeviceXlTests.Run()) Check(ok, label);
 Console.WriteLine("-- scope view --");
 foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
 Console.WriteLine("-- lens sync --");

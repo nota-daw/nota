@@ -8,10 +8,9 @@
 //     OUTPUT (one bar of eight demo notes: the input dashed, the output filled — brightness =
 //     velocity, a link when the pitch moved, × when skipped — under a playhead) | DICE (Chance,
 //     the distribution Gauss / Even / Walk and its histogram, Per note / Per bar, seed with
-//     Reroll and Lock, Stay in scale) — over a status line.
+//     Reroll and Lock, Stay in scale).
 //   • S 260 × 260 — the distribution chip over the OUTPUT window and four knobs (Chance · Note
-//     · Velocity · Timing); the footer's seed rerolls and its lock holds the roll. Skip, Octave,
-//     Rate and Stay in scale are L-only controls (presets still set them).
+//     · Velocity · Timing). Seed, Lock, Skip, Octave, Rate and Stay in scale are L-only controls (presets still set them).
 // The playhead follows the transport's bar while it runs and free-runs at the project tempo
 // otherwise; every bar is a new roll until the seed is locked — Lock holds the bar showing
 // (its "Lock Bar"), so what you see is what keeps playing. A bypassed device greys out.
@@ -239,15 +238,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             varyIsland.Margin = new Thickness(0, 0, 5, 0); diceIsland.Margin = new Thickness(5, 0, 0, 0);
             var islands = new DockPanel { Children = { WithDock(varyIsland, Dock.Left), WithDock(diceIsland, Dock.Right), outIsland } };
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = $"Chance {ChanceText(G(PChance))} · {Dists[Dist(G)]} · {(G(PRate) >= 0.5f ? "per bar" : "per note")} · seed {Seed(G)}"
-                             + (Locked(G) ? " locked" : "") + (G(PStayInScale) >= 0.5f ? " · C maj" : "");
-                statusR.Text = Bypassed() ? "bypassed" : Loc.T("common.midi_latency_0_smp");
-            });
-            return Framed(islands, statusL, statusR);
+            return Framed(islands);
         }
 
         // =========================================================================================
@@ -296,34 +287,11 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 viz.Set(notes, now, Bypassed());
             });
 
-            // Footer: "seed N" rerolls, "lock" holds the roll.
-            var seedTb = FooterLink("", Loc.T("device.random.reroll_the_next_seed"), Reroll);
-            Learn(seedTb, PSeed, "Seed");
-            var lockTb = FooterLink("", Loc.T("device.random.lock_hold_the_roll_showing"), ToggleLock, mono: false);
-            Learn(lockTb, PLocked, "Locked");
-            var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { seedTb, lockTb } };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                seedTb.Text = $"seed {Seed(G)}";
-                bool on = Locked(G);
-                lockTb.Text = on ? "locked" : "lock";
-                lockTb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                lockTb.Tag = on ? NotaPalette.AccentHover : Sub;
-                if (!lockTb.IsPointerOver) lockTb.Foreground = (IBrush)lockTb.Tag;
-                statusR.Text = Bypassed() ? "bypassed" : Loc.F("device.random.changed_skip", Changed(), Skipped());
-            });
-            return Framed(island, left, statusR);
+            return Framed(island);
         }
 
         // ---- shared pieces -----------------------------------------------------------------------
-        Control Framed(Control main, Control left, TextBlock right)
-        {
-            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
-                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
-            right.Margin = new Thickness(8, 0, 0, 0);
-            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
-        }
+        Control Framed(Control main) => new Border { Background = Ground, Padding = new Thickness(5), Child = main };
 
         Control IslandHead(Control left, Control? right)
         {
@@ -435,23 +403,6 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             Learn(row, p, label);
             readouts.Add(() => { bool on = G(p) >= 0.5f; sw.IsOn = on; tb.Foreground = on ? Txt : Muted; });
             return row;
-        }
-
-        // A clickable footer word (mini view): Ink 3, primary on hover.
-        TextBlock FooterLink(string text, string tip, Action click, bool mono = true)
-        {
-            var tb = mono ? Mono(text, Sub) : new TextBlock { Text = text, FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center };
-            tb.Tag = Sub;
-            tb.Cursor = new Cursor(StandardCursorType.Hand); tb.Background = Brushes.Transparent;
-            tb.PointerEntered += (_, _) => tb.Foreground = Txt;
-            tb.PointerExited += (_, _) => tb.Foreground = (IBrush)tb.Tag!;
-            tb.PointerPressed += (_, ev) =>
-            {
-                if (!ev.GetCurrentPoint(tb).Properties.IsLeftButtonPressed) return;
-                click(); ev.Handled = true;
-            };
-            ToolTip.SetTip(tb, tip);
-            return tb;
         }
 
         // A mini-view knob: 34px gauge, caps label, mono value.

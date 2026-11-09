@@ -20,6 +20,7 @@ Strata::Strata() {
     p_[CountIn].store(0.0f);
     p_[SetTempo].store(0.0f);
     p_[Reverse].store(0.0f);
+    p_[View].store(0.0f); // L
     for (int k = 0; k < kMaxLayers; ++k) {
         gainDb_[k].store(0.0f);
         muted_[k].store(false);
@@ -265,7 +266,7 @@ int32_t Strata::paramCount() const {
     return kNumParams;
 }
 const char* Strata::paramName(int32_t i) const {
-    static const char* nm[] = {"Feedback", "InputGain", "Speed", "Quantize", "CountIn", "SetTempo", "Reverse"};
+    static const char* nm[] = {"Feedback", "InputGain", "Speed", "Quantize", "CountIn", "SetTempo", "Reverse", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 float Strata::paramMin(int32_t i) const {

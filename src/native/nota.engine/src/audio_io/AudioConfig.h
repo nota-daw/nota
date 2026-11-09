@@ -46,6 +46,9 @@ std::vector<AudioDeviceInfo> enumerateAudioDevices(bool inputScope);
 // AudioBackend interface stays free of CoreAudio headers). An empty or unknown
 // UID falls back to the current system default device; 0 if none exists.
 uint32_t resolveAudioDeviceId(const std::string& uid, bool inputScope);
+// The uid of the device a saved uid opens (specs/086): that device when it is there, else
+// the system default — "" when there is none. Settings kept per device key on this.
+std::string effectiveAudioDeviceUid(const std::string& uid, bool inputScope);
 
 // Persistence: audio.json in the data dir the app sets (nota_set_data_dir), atomic write.
 AudioConfig loadAudioConfig();

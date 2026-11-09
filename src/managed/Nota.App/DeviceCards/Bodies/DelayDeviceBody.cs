@@ -2,16 +2,20 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Delay body (device kind 3), a build of the "Nota Delay"
-// mockup (700 × 260) on the Chamber frame: an always-visible LOOP column (Feedback ·
-// Spread), a centre tabbed panel (Time / Loop · Wow) over the live repeat window, a right
-// tabbed panel (Levels / Output) and a status strip. The repeat window and the feedback
-// filter are controls, not decoration. Every control is a device param, so automation /
+// mockup, laid out the #531 way (CardLayout): a centre panel with Time / Loop · Wow tabs over
+// the live repeat window (L · R time — ms or a note division — and Feedback beside it on Time,
+// the mode and Link / Ping / Fade under it; Diffuse and the wow beside it on Loop, Tape and Clear
+// loop under it) and a right panel with no tabs of its own that follows them: Stereo (Tap tempo,
+// Spread, Width, Mono f, Wet only, latency comp) and Loop (Freeze, the repeats' filter, the wet
+// meter) — over Dry · Dry/wet · Out. S is the window over the mode and L, R, Feedback, Dry/wet. The repeat window and the
+// feedback filter are controls, not decoration. Every control is a device param, so automation /
 // MIDI learn / presets / A-B / persistence come for free; Tap tempo and Clear loop are the
 // two actions that are not (the first writes Time L/R, the second wipes the loop).
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -42,6 +46,8 @@ internal sealed class DelayDeviceBody : IDeviceBody
     private static readonly double[] WindowRanges = { 0.25, 0.4, 0.6, 0.8, 1.2, 1.6, 2.4, 3.2, 4.8, 6.4, 9.6 };
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Delay";
 
@@ -99,21 +105,17 @@ internal sealed class DelayDeviceBody : IDeviceBody
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
-        static StackPanel Row(double sp, params Control[] cs)
-        { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static Border Divider(Control child, double top = 5) => new()
-        { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null, Action? onChange = null)
+        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null, Action? onChange = null,
+            Func<double, double>? snap = null, Func<bool>? dim = null)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
-            knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); onChange?.Invoke(); };
+            knob.ValueChanged += v => { Raw(p, (float)(snap is null ? v : snap(v))); val.Text = fmt(P(p)); onChange?.Invoke(); };
+            if (dim is not null) readouts.Add(() => knob.IsDim = dim());
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
             MidiLearn.Bind(knob, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
@@ -194,10 +196,34 @@ internal sealed class DelayDeviceBody : IDeviceBody
         var tapViews = new List<DelayTaps>();
         double windowSec = 0;
         var start = DateTime.UtcNow;
+        bool tapDrag = false;
+        float fb0 = 0;
         DelayTaps NewTaps()
         {
             var t = new DelayTaps();
             ToolTip.SetTip(t, Loc.T("device.delay.the_repeat_train_l_above"));
+            // The first echo of a lane is its handle: sideways sets the lane's time (the note
+            // division when synced), up / down sets Feedback. Linked, both lanes move L.
+            int TimeP(int lane) => On(SyncMode) ? (lane == 0 || On(LinkLR) ? DivL : DivR) : (lane == 0 || On(LinkLR) ? TimeL : TimeR);
+            t.GestureBegin += lane => { tapDrag = true; fb0 = P(Feedback); Begin(TimeP(lane)); Begin(Feedback); };
+            t.GestureEnd += lane => { End(TimeP(lane)); End(Feedback); tapDrag = false; SyncTaps(); };
+            t.TimeDragged += (lane, frac) =>
+            {
+                bool l = lane == 0 || On(LinkLR);
+                double ms = frac * windowSec * 1000.0;
+                // R's first echo comes after L's in ping-pong, after the spread otherwise.
+                if (!l) ms -= On(PingPong) ? MsL() : SpreadMs();
+                if (On(SyncMode))
+                {
+                    double beats = ms / BeatMs();
+                    int best = 0;
+                    for (int k = 1; k < DivBeats.Length; k++) if (Math.Abs(DivBeats[k] - beats) < Math.Abs(DivBeats[best] - beats)) best = k;
+                    Raw(l ? DivL : DivR, best / 7f);
+                }
+                else Raw(l ? TimeL : TimeR, (float)(Math.Max(1, ms) / 2000.0));
+                SyncTaps(); foreach (var a in readouts) a();
+            };
+            t.FeedbackDragged += (_, dy) => { if (!On(Freeze)) Raw(Feedback, (float)(fb0 + dy / 160.0)); };
             tapViews.Add(t);
             return t;
         }
@@ -206,30 +232,31 @@ internal sealed class DelayDeviceBody : IDeviceBody
             if (tapViews.Count == 0) return;
             bool sync = On(SyncMode), link = On(LinkLR), freeze = On(Freeze);
             double msl = MsL(), msr = link ? msl : MsR();
-            double fracL, fracR; string title, sub, ruler, win;
+            // The window holds still while a handle is dragged, so the echo stays under the pointer.
+            if (!tapDrag)
+                windowSec = sync ? SyncWindowBeats * BeatMs() / 1000.0 : NiceWindow(Math.Max(msl, msr + SpreadMs()) * 3.2 / 1000.0);
+            double winMs = windowSec * 1000.0;
+            double fracL = msl / winMs, fracR = (msr + (On(PingPong) ? 0 : SpreadMs())) / winMs;
+            string labelL, labelR;
+            var ticks = new List<(double, string)>();
             if (sync)
             {
                 int dl = Sel(DivL, 8), dr = link ? dl : Sel(DivR, 8);
-                windowSec = SyncWindowBeats * BeatMs() / 1000.0;
-                fracL = DivBeats[dl] / SyncWindowBeats;
-                fracR = (DivBeats[dr] * BeatMs() + SpreadMs()) / (windowSec * 1000.0);
-                title = NotaNum.F($"L {DivNames[dl]}");
-                sub = NotaNum.F($"R {DivNames[dr]}");
-                ruler = "0 · 1 bar · 2 bars";
-                win = "";
+                labelL = NotaNum.F($"{DivNames[dl]} · {Ms(msl)}");
+                labelR = NotaNum.F($"{DivNames[dr]} · {Ms(msr)}");
+                string[] beatNames = { "1/4", "1/2", "3/4", "1 bar", "5/4", "6/4", "7/4", "2 bars" };
+                double bpw = winMs / BeatMs();
+                for (int b = 1; b <= beatNames.Length && b <= bpw + 1e-6; b++) ticks.Add((b * BeatMs() / winMs, beatNames[b - 1]));
             }
             else
             {
-                windowSec = NiceWindow(Math.Max(msl, msr + SpreadMs()) * 3.2 / 1000.0);
-                double winMs = windowSec * 1000.0;
-                fracL = msl / winMs; fracR = (msr + SpreadMs()) / winMs;
-                title = NotaNum.F($"L {Ms(msl)}");
-                sub = NotaNum.F($"R {Ms(msr)}");
-                ruler = "";
-                win = Window(windowSec);
+                labelL = Ms(msl);
+                labelR = Ms(msr);
+                double step = new[] { 25.0, 50, 100, 200, 250, 500, 1000, 2000 }.First(st => winMs / st <= 6);
+                for (double m = step; m <= winMs + 1e-6; m += step) ticks.Add((m / winMs, Ms(m)));
             }
-            if (freeze) { title = Loc.T("device.delay.loop_held_no_decay"); sub = NotaNum.F($"R {Ms(msr)}"); }
-            foreach (var t in tapViews) t.Set(fracL, fracR, P(Feedback), On(PingPong), freeze, title, sub, ruler, win);
+            if (freeze) labelL = Loc.T("device.delay.loop_held_no_decay");
+            foreach (var t in tapViews) t.Set(fracL, fracR, P(Feedback), On(PingPong), freeze, link, labelL, labelR, ticks.ToArray());
 
             // Light the repeat that is sounding: the card counts them off the wall clock at the
             // repeat period, and only while the wet path is actually making sound.
@@ -246,138 +273,57 @@ internal sealed class DelayDeviceBody : IDeviceBody
         readouts.Add(SyncTaps);
 
         // ======================================================================
-        // LEFT — Loop column (Feedback · Spread)
+        // Time knobs: the free time in ms, or the note division when synced (the same place)
         // ======================================================================
-        Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<double, string> fmt, string tip)
+        Control TimeKnob(string name, int timeP, int divP, Func<bool>? linked, double cellW)
         {
-            var f = new DelayFader { Ink = ink, Handle = handle, Width = 18, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
-            f.Changed += v => Raw(p, (float)v);
-            f.GestureBegin += () => Begin(p);
-            f.GestureEnd += () => End(p);
-            MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ToolTip.SetTip(f, MenuKit.Keys(tip));
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            var val = Mono("", 7, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Center;
-            ValueEntry.Attach(f, ValueEntry.DeviceParam(engine, track, di, p, NotaText.Label(label), fmt), val);
-            string value() => fmt(P(p));
-            readouts.Add(() =>
-            {
-                f.Set(P(p));
-                val.Text = value();
-                bool hot = On(Freeze) && p == Feedback;
-                val.Foreground = hot ? AccentBright : P(p) > 0.9f ? NotaPalette.Warning : TextPrimary;   // Freeze is live; > 90 % runs away
-                lb.Foreground = hot ? AccentBright : TextTertiary;
-            });
-            return new DockPanel { Width = 44, Children = { Docked(val, Dock.Bottom), Docked(lb, Dock.Bottom), f } };
+            var free = K(timeP, name, v => linked?.Invoke() == true ? Ms(P(TimeL) * 2000) : Ms(v * 2000), 34, cellW, null, SyncTaps, dim: linked);
+            var div = K(divP, name, v => linked?.Invoke() == true ? DivNames[Sel(DivL, 8)] : DivNames[Math.Clamp((int)Math.Round(v * 7), 0, 7)], 34, cellW, null, SyncTaps,
+                snap: v => Math.Round(v * 7) / 7, dim: linked);
+            readouts.Add(() => { free.IsVisible = !On(SyncMode); div.IsVisible = On(SyncMode); });
+            return new Panel { Children = { free, div } };
         }
-        var loopTitle = Caps("LOOP"); loopTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
-        faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
-            v => On(Freeze) ? "Hold" : Pct(v),
-            Loc.T("device.delay.feedback_how_much_of_each")));
-        faders.Children.Add(Col(LoopFader(Spread, "SPREAD", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
-            v => NotaNum.F($"{v * 50:0} ms"),
-            Loc.T("device.delay.spread_pushes_the_right_channel")), 1));
-        var loopCol = new RuleSection
+        Control FeedbackKnob(double cellW) => K(Feedback, "FEEDBACK", v => On(Freeze) ? "HOLD" : Pct(v), 34, cellW, null, SyncTaps);
+        Control MixKnob(double cellW, double size) => K(DryWet, "DRY/WET", Pct, size, cellW, dim: () => On(WetOnly));
+        Control ModeSeg() => Seg(SyncMode, new[] { "ms", "Sync" }, onPick: SyncTaps);
+
+        // ======================================================================
+        // CENTRE — Time (the repeat window: L · R · Feedback beside it; the mode and Link,
+        // Ping, Fade under it) / Loop · Wow (Diffuse · Wow rate · Wow depth beside it)
+        // ======================================================================
+        Control TimeTab() => CardLayout.View(NewTaps(),
+            CardLayout.KnobColumn(TimeKnob("L TIME", TimeL, DivL, null, 50), TimeKnob("R TIME", TimeR, DivR, () => On(LinkLR), 50), FeedbackKnob(50)),
+            CardLayout.Line(5, ModeSeg(),
+                Latch(LinkLR, "Link", Loc.T("device.delay.link_l_r_the_right")),
+                Latch(PingPong, "Ping", Loc.T("device.delay.ping_pong_each_repeat_crosses")),
+                Latch(FadeChange, "Fade", Loc.T("device.delay.fade_on_change_crossfade_to"))));
+
+        Control FilterTab()
         {
-            Width = 96, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(loopTitle, Dock.Top), faders } },
-        };
-        DockPanel.SetDock(loopCol, Dock.Left);
-
-        // ======================================================================
-        // CENTRE — Time
-        // ======================================================================
-        Control TimeTab()
-        {
-            var host = new ContentControl();
-            // The bottom half changes with the mode: divisions in Sync, free times in ms.
-            Control SyncRows()
-            {
-                Control LR(string ch, int p, Func<bool>? dim)
-                {
-                    var g = new Grid { ColumnDefinitions = new ColumnDefinitions("12,*"), ColumnSpacing = 5, Height = 20 };
-                    var lbl = Caps(ch); g.Children.Add(lbl);
-                    // Eight divisions: past the almanac's four-choice limit for segments — an
-                    // accepted exception, see DESIGN.md § Accepted exceptions.
-                    g.Children.Add(Col(Seg(p, DivNames, fill: true, onPick: SyncTaps), 1));
-                    if (dim is not null) readouts.Add(() => lbl.Foreground = dim() ? TextDisabled : TextTertiary);
-                    return g;
-                }
-                return new StackPanel { Spacing = 4, Children = { LR("L", DivL, null), LR("R", DivR, () => On(LinkLR)) } };
-            }
-            Control MsRow()
-            {
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,Auto"), Height = 56 };
-                g.Children.Add(K(TimeL, "L TIME", v => Ms(v * 2000), 34, 50, null, SyncTaps));
-                g.Children.Add(Col(K(TimeR, "R TIME", v => On(LinkLR) ? Ms(P(TimeL) * 2000) : Ms(v * 2000), 34, 50, null, SyncTaps), 1));
-                g.Children.Add(Col(K(Feedback, "FEEDBACK", Pct, 34, 50, null, SyncTaps), 2));
-                g.Children.Add(Col(K(Spread, "SPREAD", v => NotaNum.F($"{v * 50:0} ms"), 34, 50, null, SyncTaps), 3));
-                var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), Children = {
-                    Toggle(LinkLR, "Link L/R"), Toggle(FadeChange, "Fade on change") } };
-                g.Children.Add(Col(toggles, 4));
-                return g;
-            }
-            Control? syncRows = null, msRow = null;
-            void Refill() => host.Content = On(SyncMode) ? syncRows ??= SyncRows() : msRow ??= MsRow();
-            Refill();
-
-            var modeSeg = Seg(SyncMode, new[] { "ms", "Sync" }, onPick: () => { Refill(); SyncTaps(); });
-            var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => hint.Text = On(SyncMode)
-                ? NotaNum.F($"L {DivNames[Sel(DivL, 8)]} · R {DivNames[On(LinkLR) ? Sel(DivL, 8) : Sel(DivR, 8)]}")
-                : On(LinkLR) ? "channels linked" : "channels independent");
-
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*"), ColumnSpacing = 5, Height = 20 };
-            head.Children.Add(Caps("MODE"));
-            head.Children.Add(Col(modeSeg, 1));
-            head.Children.Add(Col(Latch(LinkLR, "Link", Loc.T("device.delay.link_l_r_the_right")), 2));
-            head.Children.Add(Col(Latch(PingPong, "Ping", Loc.T("device.delay.ping_pong_each_repeat_crosses")), 3));
-            head.Children.Add(Col(Latch(FadeChange, "Fade", Loc.T("device.delay.fade_on_change_crossfade_to")), 4));
-            head.Children.Add(Col(hint, 5));
-
-            var bottom = new Border { Child = host };
-            // Automation or a preset can flip Sync under us — follow it.
-            readouts.Add(() => { if (On(SyncMode) != ReferenceEquals(host.Content, syncRows)) Refill(); });
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 4), Children = {
-                Docked(head, Dock.Top),
-                Docked(bottom, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 4, 0, 4), Child = NewTaps() } } };
-        }
-
-        // ======================================================================
-        // CENTRE — Loop · Wow
-        // ======================================================================
-        Control LoopTab()
-        {
-            var filter = new DelayFilterCurve { MinWidth = 78 };
-            filter.Changed += (h, v) => Raw(h == 0 ? LowCut : HighCut, (float)v);
-            filter.GestureBegin += h => Begin(h == 0 ? LowCut : HighCut);
-            filter.GestureEnd += h => End(h == 0 ? LowCut : HighCut);
-            filter.Reset += h => Reset(h == 0 ? LowCut : HighCut);
-            ValueEntry.AttachHandles(filter, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", v => Hz(LowHz(v)))],
+            var band = new DelayBandCurve();
+            band.Changed += (h, v) => { Raw(h == 0 ? LowCut : HighCut, (float)v); foreach (var r in readouts) r(); };
+            band.GestureBegin += h => Begin(h == 0 ? LowCut : HighCut);
+            band.GestureEnd += h => End(h == 0 ? LowCut : HighCut);
+            band.Reset += h => Reset(h == 0 ? LowCut : HighCut);
+            ValueEntry.AttachHandles(band, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", v => Hz(LowHz(v)))],
                 [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", v => Hz(HighHz(v)))]);
-            ToolTip.SetTip(filter, MenuKit.Keys(Loc.T("device.delay.the_band_the_repeats_live")));
-            MidiLearn.Bind(filter, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
-            readouts.Add(() => { if (!filter.Dragging) filter.Set(P(LowCut), P(HighCut), LowHz(P(LowCut)), HighHz(P(HighCut))); });
-
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,48,*,60,60,Auto"), ColumnSpacing = 4, Height = 58 };
-            g.Children.Add(K(Feedback, "FEEDBACK", v => On(Freeze) ? "HOLD" : Pct(v), 34, 48, null, SyncTaps));
-            g.Children.Add(Col(K(Diffuse, "DIFFUSE", Pct, 34, 48), 1));
-            g.Children.Add(Col(new Border { Margin = new Thickness(2, 2, 2, 6), Child = filter }, 2));
-            g.Children.Add(Col(K(WowRate, "WOW RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 34, 60, Teal), 3));
-            g.Children.Add(Col(K(WowDepth, "WOW DEPTH", Pct, 34, 60, Teal), 4));
-            var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = {
-                Toggle(Freeze, "Freeze"), Toggle(TapeMode, "Tape mode") } };
-            g.Children.Add(Col(toggles, 5));
-
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 4), Children = {
-                Docked(g, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 0, 0, 4), Child = NewTaps() } } };
+            ToolTip.SetTip(band, MenuKit.Keys(Loc.T("device.delay.the_band_the_repeats_live")));
+            MidiLearn.Bind(band, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
+            readouts.Add(() => { if (!band.Dragging) band.Set(LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) <= 0.001, P(HighCut) >= 0.999); });
+            return CardLayout.View(band,
+                CardLayout.KnobColumn(K(LowCut, "LOW CUT", LowCutF, 34, 50), K(HighCut, "HIGH CUT", HighCutF, 34, 52)));
         }
 
+        Control LoopTab() => CardLayout.View(NewTaps(),
+            CardLayout.KnobColumn(
+                K(Diffuse, "DIFFUSE", Pct, 34, 50),
+                K(WowRate, "WOW RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 34, 52, Teal),
+                K(WowDepth, "WOW DEPTH", Pct, 34, 52, Teal)),
+            CardLayout.Line(6, Latch(TapeMode, "Tape mode", Loc.T("device.delay.tape_mode")),
+                Btn(Loc.T("device.delay.clear_loop"), () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), Loc.T("device.delay.empty_the_delay_buffer_silences"))));
+
         // ======================================================================
-        // RIGHT — Levels / Output
+        // RIGHT — follows the centre tab: Stereo (Time) · Loop (Loop · Wow)
         // ======================================================================
         double lastTap = 0; int tapCount = 0; double tapSum = 0;
         void TapTempo()
@@ -394,7 +340,23 @@ internal sealed class DelayDeviceBody : IDeviceBody
             SyncTaps();
         }
 
-        Control LevelsTab()
+        (Control, Control) StereoPanel()
+        {
+            var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only_send"));
+            ToolTip.SetTip(wetOnly, Loc.T("device.delay.wet_only_repeats_with_no"));
+            var comp = Toggle(LatencyComp, Loc.T("device.delay.latency_comp"));
+            ToolTip.SetTip(comp, Loc.T("device.delay.the_diffuser_lengthens_the_loop"));
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.delay.stereo")), Btn(Loc.T("device.delay.tap_tempo"), TapTempo, Loc.T("device.delay.tap_four_times_to_set"))),
+                CardLayout.Rows(
+                    SliderRow("SPREAD", Spread, v => NotaNum.F($"{v * 50:0} ms"), 46, valW: 36),
+                    SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0} %"), 46, valW: 36),
+                    SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0} Hz"), 46, valW: 36),
+                    CardLayout.Rule(),
+                    wetOnly,
+                    comp));
+        }
+
+        (Control, Control) LoopPanel()
         {
             var wetBar = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
             var wetDb = Mono("", 8, TextPrimary); wetDb.Width = 30; wetDb.TextAlignment = TextAlignment.Right;
@@ -408,80 +370,51 @@ internal sealed class DelayDeviceBody : IDeviceBody
             });
             var wet = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
             wet.Children.Add(Caps("WET")); wet.Children.Add(Col(wetBar, 1)); wet.Children.Add(Col(wetDb, 2));
-
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            var freezeBtn = Btn("Freeze", () => { SetP(Freeze, On(Freeze) ? 0f : 1f); SyncTaps(); }, Loc.T("device.delay.freeze_hold_the_loop_forever"));
-            var freezeTxt = (TextBlock)freezeBtn.Child!;
-            freezeBtn.BorderThickness = new Thickness(1);
-            readouts.Add(() =>
-            {
-                bool on = On(Freeze);
-                freezeBtn.Background = on ? NotaPalette.AccentSubtle : Raised;
-                freezeBtn.BorderBrush = on ? NotaPalette.BorderBrass : Brushes.Transparent;
-                freezeTxt.Foreground = on ? NotaPalette.AccentHover : TextPrimary;
-                freezeTxt.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-            });
-            btns.Children.Add(freezeBtn);
-            btns.Children.Add(Col(Btn(Loc.T("device.delay.tap_tempo"), TapTempo, Loc.T("device.delay.tap_four_times_to_set")), 1));
-
-            var clear = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            clear.Children.Add(Btn(Loc.T("device.delay.clear_loop"), () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), Loc.T("device.delay.empty_the_delay_buffer_silences")));
-            clear.Children.Add(Col(Toggle(WetOnly, "Wet only"), 1));
-
-            var rows = new Control[]
-            {
-                SliderRow("MIX", DryWet, Pct, 52, () => On(WetOnly)),
-                SliderRow("DRY", DryLevel, v => ShortDb(DryDb(v)), 52, () => On(WetOnly)),
-                SliderRow("OUT", Output, v => ShortDb(OutDb(v))),
-                new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
-                SliderRow("FEEDBACK", Feedback, v => On(Freeze) ? "HOLD" : Pct(v), 52),
-                SliderRow("SPREAD", Spread, v => NotaNum.F($"{v * 50:0}"), 52),
-                new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
-                btns, clear, wet,
-            };
-            var grid = new Grid { RowDefinitions = new RowDefinitions("*,*,*,Auto,*,*,Auto,*,*,*") };
-            for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
-            return new Border { Padding = new Thickness(8, 4), Child = grid };
+            var freeze = Toggle(Freeze, "Freeze");
+            ToolTip.SetTip(freeze, Loc.T("device.delay.freeze_hold_the_loop_forever"));
+            return (CardLayout.Head(freeze), CardLayout.Rows(
+                wet,
+                Info(() => NotaNum.F($"loop {Secs(MsL() / 1000)} · repeats {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}"))));
         }
-
-        Control OutputTab()
+        // The Filter tab's panel: how long the repeats ring and what's left of them.
+        (Control, Control) TonePanel()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Centre(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Mono("0", 7, TextDisabled), GRow(Mono("−12", 7, TextDisabled), 1), GRow(Mono("−48", 7, TextDisabled), 2) } };
-            var meters = Row(4,
-                new StackPanel { Spacing = 2, Children = { meterL, Centre(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Centre(Caps("R")) } },
-                scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(8, K(Output, "OUT", v => Db(OutDb(v)), 40, 54), meters);
-
-            var mid = new StackPanel { Spacing = 6, Children = {
-                SliderRow("MIX", DryWet, Pct, 52, () => On(WetOnly)),
-                SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0}"), 52),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 52) } };
-
-            var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only_send"));
-            ToolTip.SetTip(wetOnly, Loc.T("device.delay.wet_only_repeats_with_no"));
-            var comp = Toggle(LatencyComp, Loc.T("device.delay.latency_comp"));
-            ToolTip.SetTip(comp, Loc.T("device.delay.the_diffuser_lengthens_the_loop"));
-            var bottom = new StackPanel { Spacing = 5, Children = { wetOnly, comp } };
-
-            var body = new DockPanel { LastChildFill = false, Children = {
-                Docked(top, Dock.Top), Docked(Divider(mid), Dock.Top), Docked(Divider(bottom), Dock.Bottom) } };
-            ((Control)body.Children[1]).Margin = new Thickness(0, 5, 0, 0);
-            return new Border { Padding = new Thickness(8, 5), Child = body };
+            Control Line(Func<string> k, Func<string> v)
+            {
+                var key = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+                var val = Mono("", 8, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+                readouts.Add(() => { key.Text = k(); val.Text = v(); });
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                g.Children.Add(key); g.Children.Add(Col(val, 1));
+                return g;
+            }
+            // Repeats until they fall 48 dB (the lanes' floor); −1 = for ever.
+            int Ring()
+            {
+                double fb = P(Feedback);
+                if (On(Freeze) || fb >= 0.999) return -1;
+                if (fb <= 0.001) return 1;
+                return (int)Math.Ceiling(-48 / (20 * Math.Log10(fb))) + 1;
+            }
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = {
+                Caps(Loc.T("device.delay.repeats")),
+                Line(() => Loc.T("device.delay.band"), () => NotaNum.F($"{LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}")),
+                Line(() => Loc.T("device.delay.repeats_to_48_db"), () => Ring() < 0 ? "∞" : Ring().ToString(NotaNum.Culture)),
+                Line(() => Loc.T("device.delay.ring_time"), () => Ring() < 0 ? "∞" : Secs(Ring() * MsL() / 1000)) } });
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.delay.repeats"))), CardLayout.Rows(box));
+        }
+        Control Info(Func<string> text)
+        {
+            var t = Mono("", 8, TextSecondary);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            readouts.Add(() => t.Text = text());
+            return t;
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (Time / Loop · Wow, the panel that follows them, Dry · Dry/wet · Out under
+        // it) · S (the repeat window over the mode and L · R · Feedback · Dry/wet)
         // ======================================================================
-        var centreHost = new ContentControl();
-        var rightHost = new ContentControl();
-        var centreBodies = new Control?[2];
-        var rightBodies = new Control?[2];
         int centreTab = 0;
         var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
@@ -493,61 +426,28 @@ internal sealed class DelayDeviceBody : IDeviceBody
                     : NotaNum.F($"L {Ms(MsL())} · R {Ms(On(LinkLR) ? MsL() : MsR())} · window {Window(windowSec)}");
                 extras.Foreground = TextTertiary;
             }
+            else if (centreTab == 1)
+            {
+                extras.Text = NotaNum.F($"repeats {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
+                extras.Foreground = TextTertiary;
+            }
             else
             {
                 extras.Text = On(Freeze)
                     ? NotaNum.F($"input muted · loop {Secs(MsL() / 1000)}")
-                    : NotaNum.F($"filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
+                    : NotaNum.F($"diffuse {Pct(P(Diffuse))} · wow {Pct(P(WowDepth))}");
                 extras.Foreground = On(Freeze) ? AccentBright : TextTertiary;
             }
         });
-        Control CentreBody(int t) => centreBodies[t] ??= t == 1 ? LoopTab() : TimeTab();
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : LevelsTab();
-
-        var centre = TabFrame(new[] { "Time", "Loop · Wow" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
-        var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            if (On(Freeze))
-                return Loc.F("device.delay.freeze_loop_held_input_muted", LowCutF(P(LowCut)), HighCutF(P(HighCut)));
-            string time = On(SyncMode)
-                ? NotaNum.F($"Sync {DivNames[Sel(DivL, 8)]}{(On(LinkLR) ? "" : NotaNum.F($" / {DivNames[Sel(DivR, 8)]}"))}")
-                : NotaNum.F($"ms · L {MsL():0} / R {(On(LinkLR) ? MsL() : MsR()):0}");
-            string mode = On(PingPong) ? " · ping-pong" : "";
-            string tape = On(TapeMode) ? " · tape" : "";
-            // How many repeats stay above −60 dB — the honest answer to "how long does it ring".
-            float fb = Math.Clamp(P(Feedback), 0.001f, 0.98f);
-            int audible = (int)Math.Floor(Math.Log(0.001) / Math.Log(fb));
-            return NotaNum.F($"{time}{mode}{tape} · feedback {Pct(P(Feedback))} · {audible} audible repeats");
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = On(Freeze) ? AccentBright : TextSecondary;
-            double sr = Sc(S_SampleRate), diff = Sc(S_DiffuseSmp);
-            string comp = P(Diffuse) <= 0.001f || diff < 1 ? "" : On(LatencyComp)
-                ? Loc.F("device.delay.diffuser_smp_compensated", diff)
-                : NotaNum.F($" · diffuser +{diff:0}\u2009smp");
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { loopCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(NewTaps(), ModeSeg(),
+                TimeKnob("L TIME", TimeL, DivL, null, 56), TimeKnob("R TIME", TimeR, DivR, () => On(LinkLR), 56), FeedbackKnob(56), MixKnob(56, 34))
+            : CardLayout.Large(new[] { "Time", "Filter", "Loop · Wow" }, 0,
+                t => t switch { 1 => FilterTab(), 2 => LoopTab(), _ => TimeTab() },
+                t => t switch { 1 => TonePanel(), 2 => LoopPanel(), _ => StereoPanel() },
+                extras,
+                CardLayout.Output(K(DryLevel, "DRY", v => ShortDb(DryDb(v)), 34, 54, dim: () => On(WetOnly)), MixKnob(58, 44), K(Output, "OUT", v => Db(OutDb(v)), 34, 54)),
+                t => { centreTab = t; foreach (var a in readouts) a(); });
 
         void Refresh()
         {
@@ -558,45 +458,5 @@ internal sealed class DelayDeviceBody : IDeviceBody
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

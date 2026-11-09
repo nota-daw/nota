@@ -9,10 +9,10 @@
 // (the whole device — the selected stage in M/S and Multi — every stage alone faintly, the
 // LFO-modulated curve dashed teal, a node where the input sits; drag it for Amount) and the
 // harmonics of a −6 dB sine with THD. On the right the selected stage's shape (type, Bias, Tone,
-// Width), the modulation (LFO → Drive, Env → Tone, Rate, Sync) and Oversampling; a status strip
-// under it all. Curves, harmonics and meters come from the engine (Forge.h scopeRead). Every
+// Width), the modulation (LFO → Drive, Env → Tone, Rate, Sync) and Oversampling. Curves, harmonics and meters come from the engine (Forge.h scopeRead). Every
 // control is a device param (normalized 0..1), so automation / MIDI learn / presets / A-B /
-// persistence come for free. Double-click resets a control.
+// persistence come for free. Double-click resets a control. S (260, #531): the transfer curve and
+// the harmonics over Amount, Wet and Out knobs.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -47,6 +47,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
     private static readonly string[] OsNames = { "Off", "2×", "4×", "8×" };
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Saturation";
 
@@ -349,49 +351,34 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         var right = Island(new DockPanel { Children = { Docked(Bar(shapeHead, new Thickness(8, 0)), Dock.Top), rightBody } }, 184);
         DockPanel.SetDock(right, Dock.Right);
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            if (Sc(ForgeMath.S_Alias) > 0.5) return Loc.T("device.forge.digital_fold_without_oversampling_alias");
-            int on = 0; for (int s = 0; s < 3; s++) if (On(OnP(s))) on++;
-            var parts = new List<string>
-            {
-                Loc.F("device.forge.of_3_stages", on),
-                new[] { "serial", "parallel", "mid/side", "multiband" }[RouteI()],
-                $"S{sel + 1} {ForgeMath.AlgoNames[TypeI(sel)]} {PctF(P(DriveP(sel)))}",
-            };
-            if (P(LfoDrive) > 0.005f) parts.Add($"LFO {PctF(P(LfoDrive))} {RateF(P(LfoRate))}");
-            if (P(EnvTone) > 0.005f) parts.Add(Loc.F("device.forge.env_tone", PctF(P(EnvTone))));
-            // The master offsets have no knob on the card (their per-stage successors do) — say so when set.
-            if (Math.Abs(P(Tone) - 0.5f) > 0.002f) parts.Add("master tone " + SgnI((P(Tone) - 0.5) * 200) + " %");
-            if (Math.Abs(P(Bias) - 0.5f) > 0.002f) parts.Add("master bias " + BiasF(P(Bias)));
-            if (Math.Abs(P(WidthP) - 0.5f) > 0.002f) parts.Add("master width " + WidthF(P(WidthP)));
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            bool alias = Sc(ForgeMath.S_Alias) > 0.5;
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = alias ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(ForgeMath.S_SampleRate);
-            statusRight.Text = sr > 0
-                ? NotaNum.F($"{sr / 1000:0.#} kHz · OS {(OsI() == 0 ? "off" : OsNames[OsI()])} · latency {Sc(ForgeMath.S_Latency):0} smp · CPU {Sc(ForgeMath.S_Cpu) * 100:0.0} %")
-                : "";
-        });
-        ToolTip.SetTip(statusLeft, Loc.T("device.forge.what_the_device_is_doing"));
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control root;
+        if (CardLayout.IsMini(ctx, di))
+        {
+            // S (#531): the transfer curve and the harmonics over Amount · Wet · Out.
+            Control MK(int p, string name, Func<double, string> fmt, bool bipolar = false)
+            {
+                var val = Mono(fmt(P(p)), 7, TextPrimary);
+                var knob = new Knob(P(p), 1.0) { Accent = true, Bipolar = bipolar, Default = Def(p), Width = 34, Height = 34 };
+                knob.Format = fmt;
+                knob.ValueChanged += v => { Raw(p, v); Refresh(); };
+                knob.GestureBegin += () => Begin(p);
+                knob.GestureEnd += () => End(p);
+                Learn(knob, p);
+                readouts.Add(() => { if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+                return KnobCell(name, knob, val, 60);
+            }
+            graphs.Children.Clear();
+            if (harm.Parent is Border hb) hb.Child = null;   // the harmonics move under the mini curve
+            graphs.Margin = new Thickness(0);
+            var miniGraph = new DockPanel { LastChildFill = true, Children = { Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = harm }, Dock.Bottom), transfer } };
+            root = CardLayout.Mini(miniGraph, null, MK(Amount, "AMOUNT", AmtF), MK(Wet, "DRY/WET", PctF), MK(Output, "OUT", OutF, bipolar: true));
+        }
+        else
+        {
+            var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
+            root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
+        }
 
         var onArr = new bool[3];
         refreshNow = () =>
