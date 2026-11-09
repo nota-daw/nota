@@ -23,6 +23,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Fixed
+- Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
+  files with duplicate IDs no longer prevent the articulation map manager from opening.
 - Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
   Session launches, and preserves notes, releases and expression when timing offsets span short
   loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
