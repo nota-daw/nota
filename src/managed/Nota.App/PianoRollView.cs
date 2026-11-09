@@ -264,11 +264,13 @@ public sealed partial class PianoRollView : UserControl
         s_lastLen = _notes[i].LengthBeats;
         s_lastVel = _notes[i].Velocity;
     }
+
+    /// <summary>The length a drawn note takes before the clip end trims it (#554): the last
+    /// touched note's length, or one grid step before any note was touched.</summary>
+    private double DrawLength => double.IsNaN(s_lastLen) ? MinNoteLen : Math.Max(MinNoteLen, s_lastLen);
+
     private double NewNoteLen(double start, int slot)
-    {
-        double len = double.IsNaN(s_lastLen) ? MinNoteLen : Math.Max(MinNoteLen, s_lastLen);
-        return Math.Max(MinNoteLen, Math.Min(len, _set.EditorEnd(slot) - start));
-    }
+        => Math.Max(MinNoteLen, Math.Min(DrawLength, _set.EditorEnd(slot) - start));
 
     /// <summary>The clip a note drawn at <paramref name="beat"/> goes into (specs/029 FR-007):
     /// the active clip when it holds the beat, else another open, editable clip of the active
@@ -2534,6 +2536,10 @@ public sealed partial class PianoRollView : UserControl
             double at = Math.Max(0, Snap(XToBeat(p.X)));
             int slot = _o.DrawTarget(at);
             if (slot < 0) return false;
+            // The stroke starts in this clip, so this clip becomes the active one: the header,
+            // the inspector and the envelopes follow it (as the double-click does). Only the
+            // cell the stroke starts in switches — later cells keep drawing where they are.
+            if (slot != _o._set.Active) _o.SetActiveClip(slot);
             var n = new NotaNote(YToPitch(p.Y), at, _o.NewNoteLen(at, slot), s_lastVel);
             _o.AddNote(n, slot);
             _primary = _o._notes.Count - 1;
@@ -2542,14 +2548,18 @@ public sealed partial class PianoRollView : UserControl
             _o.Audition(n.Pitch, n.Velocity, slot: slot);
             _paintAnchorBeat = at;
             // Cells sit a grid step apart — or the note's own length, when that is wider, so a
-            // longer note tiles the run instead of stacking same-pitch notes on itself.
-            _paintStep = NotePaint.Step(_o.SnapStep, n.LengthBeats);
+            // longer note tiles the run instead of stacking same-pitch notes on itself. The
+            // length is the drawn one, not the clipped one the clip end may have cut it to:
+            // a note trimmed by the edge must not narrow the step and make the run overlap.
+            _paintStep = NotePaint.Step(_o.SnapStep, _o.DrawLength);
             _paintCol = 0; _paintRow = RowAtY(p.Y);
             _drag = Mode.Paint;
             _dragMoved = false;
             _liveStarted = true;
             _o.Invalidate();
-            _o.CommitNotes();   // the run's one undo step: the clip as it was plus this note
+            // The run's one undo step: the clip as it was plus this note. Only a live path
+            // seeds it here; a Session slot has none, so its stroke commits once on release.
+            if (_o.HasLivePath) _o.CommitNotes();
             _o.Changed?.Invoke();
             return true;
         }
@@ -2830,7 +2840,14 @@ public sealed partial class PianoRollView : UserControl
             }
             _orig.Clear();
             if (was is Mode.Resize or Mode.ResizeLeft or Mode.Place or Mode.Paint && _dragMoved) _o.Remember(_primary);
-            if (was != Mode.Marquee && _dragMoved)
+            if (was == Mode.Paint && !_o.HasLivePath)
+            {
+                // A Session slot has no live path: the stroke lands here as its one undo step,
+                // whether it moved or not (the press deferred it, #554).
+                _o._placementPending = true;   // overwrites once the selection is let go
+                _o.CommitNotes();
+            }
+            else if (was != Mode.Marquee && _dragMoved)
             {
                 _o._placementPending = true;   // overwrites once the selection is let go
                 // Live path: undo was seeded on the first move; push the final state (no undo).
@@ -2906,7 +2923,9 @@ public sealed partial class PianoRollView : UserControl
                 if (Math.Abs(dy) < 0.01) { StopAutoScroll(); return; }
                 sv.Offset = new Vector(sv.Offset.X, newY);
                 _lastGrid = new Point(_lastGrid.X, _lastGrid.Y + dy);   // same screen point, new grid-y
-                DragUpdate(_lastGrid);
+                // A paint stroke keeps painting while the view scrolls (the drag has no
+                // Paint branch: DragUpdate would only scroll and paint nothing).
+                if (_drag == Mode.Paint) PaintTo(_lastGrid); else DragUpdate(_lastGrid);
                 EvaluateAutoScroll(_lastGrid);
             };
             _autoScroll.Start();
