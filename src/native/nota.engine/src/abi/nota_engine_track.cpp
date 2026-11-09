@@ -768,6 +768,9 @@ int32_t nota_audio_input_probe(NotaEngine* e) {
 void nota_audio_input_set_disabled(NotaEngine* e, const int32_t* channels, int32_t count) {
     if (e) ENG(e)->setDisabledInputs(channels, count);
 }
+void nota_engine_feed_input_test(NotaEngine* e, const float* interleaved, int32_t frames, int32_t channels) {
+    if (e && interleaved && frames > 0 && channels > 0) ENG(e)->feedInputForTest(interleaved, frames, channels);
+}
 void nota_engine_set_test_input_device(NotaEngine* e, int32_t channels) {
     if (e) ENG(e)->setTestInputDevice(channels);
 }

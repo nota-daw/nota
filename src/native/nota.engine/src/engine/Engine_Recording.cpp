@@ -48,7 +48,8 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     }
     // Its take is kept (specs/078): with nothing else recording the attempt ends; otherwise a
     // retry goes on covering the capture still running, without this track.
-    if (endsTake && takeAttempt_.active && !takeAttempt_.session) {
+    // A Session lane that leaves while other slots record is kept the same way (specs/086).
+    if (endsTake && takeAttempt_.active && (!takeAttempt_.session || (inAudioTake && audioRecording_))) {
         if (!isRecording()) closeTakeAttempt();
         else keepTakeTrack(trackId);
     }
@@ -789,10 +790,11 @@ void Engine::drainInputQueue() {
     const size_t chunk = static_cast<size_t>(std::max(audioRecordSampleRate_, 8000.0) * 30.0);
     for (auto& l : captureLanes_) {
         const size_t ch = static_cast<size_t>(l.channels);
-        const size_t need = (base + frames) * ch;
+        const size_t at = base > l.offset ? base - l.offset : 0; // a lane that joined later starts at its own 0
+        const size_t need = (at + frames) * ch;
         if (l.buf.capacity() < need) l.buf.reserve(need + chunk * ch);
         if (l.buf.size() < need) l.buf.resize(need, 0.0f);
-        std::copy_n(l.scratch.data(), std::min(l.scratch.size(), frames * ch), l.buf.data() + base * ch);
+        std::copy_n(l.scratch.data(), std::min(l.scratch.size(), frames * ch), l.buf.data() + at * ch);
     }
     captureWritePos_ = base + frames;
     // A retried Session audio take (specs/078) keeps what follows its launch boundary: note the
@@ -838,6 +840,7 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         for (size_t k = 1; k < tracks.size(); ++k) recordSkipped_.emplace_back(tracks[k]->id(), kSkipMixedSources);
         CaptureLane lane;
         lane.trackId = tracks[0]->id();
+        lane.scene = recordSessionAudio_ ? recordSessionScene_ : -1;
         captureLanes_.push_back(std::move(lane));
         audioRecordTrackId_ = captureLanes_[0].trackId;
         audioRecordLatencyFrames_ = 0; // internal resampling has no device round trip (specs/049, R7)
@@ -881,6 +884,7 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         lane.first = t->inputFirst();
         lane.width = t->inputWidth();
         lane.channels = lane.width; // a mono pick is stored mono
+        lane.scene = recordSessionAudio_ ? recordSessionScene_ : -1;
         captureLanes_.push_back(std::move(lane));
     }
     if (captureLanes_.empty()) {
@@ -977,6 +981,16 @@ void Engine::finishCaptureLane(int32_t trackId) {
         if (captureLanes_[k].trackId != trackId) continue;
         CaptureLane lane = std::move(captureLanes_[k]);
         captureLanes_.erase(captureLanes_.begin() + static_cast<std::ptrdiff_t>(k));
+        if (k == 0 && !captureLanes_.empty()) { // the take goes on carried by the next lane
+            audioRecordTrackId_ = captureLanes_[0].trackId;
+            if (recordSessionAudio_) {
+                recordSessionTrackId_ = captureLanes_[0].trackId;
+                recordSessionScene_ = captureLanes_[0].scene;
+                takeAttempt_.sessionTrackId = recordSessionTrackId_;
+                takeAttempt_.sessionScene = recordSessionScene_;
+            }
+        }
+        const bool session = recordSessionAudio_;
         TakeGeometry g;
         g.loop = captureLoop_;
         g.wrapped = captureWrapped_;
@@ -997,9 +1011,37 @@ void Engine::finishCaptureLane(int32_t trackId) {
             lane.passes.push_back(std::move(p));
         }
         materialiseCaptureLane(lane, g);
+        recordSessionAudio_ = session; // the other lanes still record into their slots
         break;
     }
     updateCaptureLayout();
+}
+
+// A Session slot launched on another armed audio track while a Session audio take runs: it
+// joins the take as a lane of its own from now (the take's clock and correction), so several
+// slots record together and each stops on its own (specs/086).
+bool Engine::addSessionAudioLane(int32_t trackId, int32_t scene) {
+    if (!audioRecording_ || !recordSessionAudio_ || internalRecordSource_.load(std::memory_order_relaxed) != 0) return false;
+    if (captureLaneOf(trackId)) return false;
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Audio || t->recordInputSource() != 0) return false;
+    const int32_t inputs = inputChannelCount();
+    if (inputs > 0 && t->inputFirst() + t->inputWidth() > inputs) return false;
+    for (int32_t c = t->inputFirst(); c < t->inputFirst() + t->inputWidth() && c < kMaxInputChannels; ++c)
+        if (inputDisabled_[static_cast<size_t>(c)]) return false;
+    drainInputQueue(); // the cursor up to now: the lane starts here
+    CaptureLane lane;
+    lane.trackId = trackId;
+    lane.first = t->inputFirst();
+    lane.width = t->inputWidth();
+    lane.channels = lane.width;
+    lane.scene = scene;
+    lane.offset = captureWritePos_;
+    captureLanes_.push_back(std::move(lane));
+    noteTakeTrack(trackId);
+    if (takeAttempt_.active) takeAttempt_.sessionSlots.emplace_back(trackId, scene); // a retry relaunches it
+    updateCaptureLayout(); // its input joins the capture
+    return true;
 }
 
 // One lane of a stopped take into its track: loop passes as take lanes (specs/067), a Session
@@ -1011,7 +1053,7 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
     if (!old || lane.buf.empty()) return;
 
     // Two or more passes keep every pass as a take (specs/067). A session take never loops here.
-    if (g.loop && lane.passes.size() >= 2 && !(recordSessionAudio_ && recordSessionScene_ >= 0)) {
+    if (g.loop && lane.passes.size() >= 2 && lane.scene < 0) {
         const double sr = audioRecordSampleRate_ > 0 ? audioRecordSampleRate_ : transport_.sampleRate();
         auto nt = cloneTrack(*old);
         materialiseLoopTakes(*nt, lane.passes, g.loopFrames, g.loopStartBeat, sr);
@@ -1025,7 +1067,8 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
     // that, nothing of the retried take is kept.
     if (recordSessionAudio_ && !std::isnan(retryStartBeat_)) {
         const size_t have = lane.buf.size() / ch;
-        const size_t drop = retryKeepFrom_ < 0 ? have : std::min(have, static_cast<size_t>(retryKeepFrom_));
+        const size_t keep = retryKeepFrom_ < 0 ? have + lane.offset : static_cast<size_t>(retryKeepFrom_);
+        const size_t drop = std::min(have, keep > lane.offset ? keep - lane.offset : 0); // in the lane's frames
         lane.buf.erase(lane.buf.begin(), lane.buf.begin() + static_cast<std::ptrdiff_t>(drop * ch));
     }
     if (lane.buf.empty()) { // stopped before the retried take's boundary: nothing to keep
@@ -1044,8 +1087,8 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
 
     // Session-slot take (M5-4): store into the slot with a loop length derived
     // from the captured duration at the current tempo.
-    if (recordSessionAudio_ && recordSessionScene_ >= 0) {
-        const int32_t scene = recordSessionScene_;
+    if (lane.scene >= 0) {
+        const int32_t scene = lane.scene;
         recordSessionAudio_ = false;
         if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
             nt->sessionSlots.resize(authoring_->sceneCount);
@@ -1229,11 +1272,22 @@ void Engine::pushInputFramesForTest(const float* interleavedStereo, int32_t fram
     pushInputFramesForTestN(interleavedStereo, frames, 2);
 }
 
+void Engine::feedInputForTest(const float* interleaved, int32_t frames, int32_t channels) {
+    constexpr int32_t kChunk = 1024; // well inside the ring, drained like poll() would
+    for (int32_t at = 0; at < frames; at += kChunk) {
+        pushInputFramesForTestN(interleaved + static_cast<size_t>(at) * static_cast<size_t>(channels),
+            std::min(kChunk, frames - at), channels);
+        if (audioRecording_) drainInputQueue();
+    }
+}
+
 void Engine::pushInputFramesForTestN(const float* interleaved, int32_t frames, int32_t channels) {
     if (testLayoutChannels_ < channels) {
         testLayoutChannels_ = std::min(channels, kMaxInputChannels);
         updateCaptureLayout();
     }
+    // As the input thread does: the first push after a retry marks the new capture epoch.
+    markCaptureEpoch(hwCaptureEpoch_, captureEpoch_.load(std::memory_order_acquire), /*hardware=*/true);
     if (!recordRing_.pushGather(layoutMsg_.generation, interleaved, channels, frames, layoutMsg_.channel.data(),
             layoutMsg_.count))
         inputDroppedFrames_.fetch_add(frames, std::memory_order_relaxed);
@@ -1287,6 +1341,7 @@ bool Engine::sessionAudioRecordSelfTest() {
 
     // Begin a session audio take without opening a device (mimic the input ring).
     beginTestLane(tid, 0, 2);
+    captureLanes_[0].scene = scene; // a Session lane lands in its slot (specs/086)
     recordSessionTrackId_ = tid;
     recordSessionScene_ = scene;
     recordSessionAudio_ = true;

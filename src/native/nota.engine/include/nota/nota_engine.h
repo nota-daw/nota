@@ -1302,6 +1302,9 @@ NOTA_API NotaResult nota_session_remove_scene(NotaEngine* engine, int32_t scene)
  * is cut to whole launch quanta (bars when unquantized), or to the fixed record length. */
 NOTA_API NotaResult nota_session_record_slot(NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_stop_record(NotaEngine* engine);
+/* Stop recording one slot (specs/086): while other slots of the Session audio take still record,
+ * only this track's lands in its slot and loops back; otherwise as nota_session_stop_record. */
+NOTA_API NotaResult nota_session_stop_record_slot(NotaEngine* engine, int32_t track_id);
 /* Move MIDI between Session and Arrangement (M5-6). slot->arrangement returns the
  * new arrangement clip index (or -1); arrangement->slot returns 1/0. */
 NOTA_API int32_t nota_session_slot_to_arrangement(NotaEngine* engine, int32_t track_id, int32_t scene, double start_beat);
@@ -1601,6 +1604,9 @@ NOTA_API int32_t    nota_audio_input_probe(NotaEngine* engine);
 NOTA_API void       nota_audio_input_set_disabled(NotaEngine* engine, const int32_t* channels, int32_t count);
 /* Tests: pretend a capture device with `channels` inputs ("Test N") is open; 0 clears it. */
 NOTA_API void       nota_engine_set_test_input_device(NotaEngine* engine, int32_t channels);
+/* Tests: `frames` of `channels`-wide device frames into the capture ring, then drained into
+ * the running take as poll() would. */
+NOTA_API void       nota_engine_feed_input_test(NotaEngine* engine, const float* interleaved, int32_t frames, int32_t channels);
 /* Input monitoring (audio tracks, Monitor "In"): while on, the track plays its record-input
  * source live through its devices + fader instead of its clips. A master source stays
  * silent (it would feed back). push_monitor_frames feeds the hardware-monitor ring without

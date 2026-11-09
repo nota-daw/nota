@@ -792,6 +792,7 @@ if (args.Length >= 1 && args[0] == "--multi-input")
 {
     Console.WriteLine("-- multi-channel input --");
     foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "MULTI INPUT PASSED" : $"MULTI INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -15528,6 +15529,7 @@ Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- multi-channel input --");
 foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
 Console.WriteLine("-- group link --");
 foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
 Console.WriteLine("-- group membership --");

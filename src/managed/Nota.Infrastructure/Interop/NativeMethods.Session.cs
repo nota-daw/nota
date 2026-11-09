@@ -70,6 +70,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_session_stop_record")]
     internal static partial NotaResult SessionStopRecord(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_session_stop_record_slot")]
+    internal static partial NotaResult SessionStopRecordSlot(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_session_slot_to_arrangement")]
     internal static partial int SessionSlotToArrangement(IntPtr engine, int trackId, int scene, double startBeat);
 

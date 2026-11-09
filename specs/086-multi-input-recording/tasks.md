@@ -184,15 +184,21 @@ phase because they ship in different PRs (plan.md § Delivery slices).
 
 ### Tests
 
-- [ ] T052 [P] [US3] `T/MultiInputSessionTests.cs`: two armed tracks on (0,1),(1,1); launch empty slots in scene 0 for the same boundary; feed 4 bars; stop slot A after 2 bars → A has a 2-bar clip, B still recording; stop B → 4-bar clip; both start at the boundary; save/reopen → both slots, distinct sample ids
-- [ ] T053 [P] [US3] Retry on one Session lane retries only that slot; the other lane keeps its take
+- [X] T052 [P] [US3] `T/MultiInputSessionTests.cs`: two armed tracks on (0,1),(1,1); launch empty slots in scene 0 for the same boundary; feed 4 bars; stop slot A after 2 bars → A has a 2-bar clip, B still recording; stop B → 4-bar clip; both start at the boundary; save/reopen → both slots, distinct sample ids
+  - `T/MultiInputSessionTests.cs` (in `--multi-input` and the full run): two slots, stop one after 2 beats, the other after 4; lengths, mono, own input, save → load.
+- [X] T053 [P] [US3] Retry on one Session lane retries only that slot; the other lane keeps its take
+  - As built (FR-007, one retry unit; `RetryTake` names no slot): a retry drops and restarts every slot the take still records; a slot already stopped keeps its take. `RetryEverySlot` in `T/MultiInputSessionTests.cs`.
 
 ### Implementation
 
-- [ ] T054 [US3] Move `recordSessionTrackId_`, `recordSessionScene_`, `recordSessionAudio_` into `AudioTakeLane` (`scene`) in `E/engine/Engine.h`; `E/engine/Engine_Session.cpp` (~295, ~347) adds a lane to the running take (or starts one) when an empty slot on an armed audio track launches; the lane's `keepFrom` is the frame the launch boundary is crossed (same mechanism as `retryKeepFrom_`)
-- [ ] T055 [US3] Slot stop (`E/engine/Engine_Session.cpp:128`, `finalizeSessionRecord`) closes only its lane at the stop boundary (`stopAt`), materialises it into its slot, and leaves the take running while other lanes remain; the take ends when its last lane stops
-- [ ] T056 [US3] A track armed after the Session take began records from its slot's boundary: its channels join the layout when it is armed (research R2); cover it in `T/MultiInputSessionTests.cs`
-- [ ] T057 [US3] Retry (`E/engine/Engine_TakeRetry.cpp`) for a Session lane discards and restarts only that lane
+- [X] T054 [US3] Move `recordSessionTrackId_`, `recordSessionScene_`, `recordSessionAudio_` into `AudioTakeLane` (`scene`) in `E/engine/Engine.h`; `E/engine/Engine_Session.cpp` (~295, ~347) adds a lane to the running take (or starts one) when an empty slot on an armed audio track launches; the lane's `keepFrom` is the frame the launch boundary is crossed (same mechanism as `retryKeepFrom_`)
+  - As built: `CaptureLane.scene` + `offset` (the take frame it joined at); `recordSessionSlot` on an audio track while a Session audio take runs calls `addSessionAudioLane` — from now, not from a launch boundary (Session audio takes start when launched today).
+- [X] T055 [US3] Slot stop (`E/engine/Engine_Session.cpp:128`, `finalizeSessionRecord`) closes only its lane at the stop boundary (`stopAt`), materialises it into its slot, and leaves the take running while other lanes remain; the take ends when its last lane stops
+  - `stopSessionRecordSlot(track)` (ABI `nota_session_stop_record_slot`, MCP `stop_session_record_slot`): lands that lane and relaunches its slot; the last lane ends the take as before; the first lane leaving hands the take to the next. The grid and inspector stop one slot; the toolbar stops all.
+- [X] T056 [US3] A track armed after the Session take began records from its slot's boundary: its channels join the layout when it is armed (research R2); cover it in `T/MultiInputSessionTests.cs`
+  - Arming adds the input to the layout at once; a slot launched later joins the running take (`addSessionAudioLane`).
+- [X] T057 [US3] Retry (`E/engine/Engine_TakeRetry.cpp`) for a Session lane discards and restarts only that lane
+  - As built: `TakeAttempt.sessionSlots` lists the slots still recording (a lane that lands leaves it via `keepTakeTrack`); `discardTake` restores each of those slots, `retryTake` relaunches the first and re-joins the others as lanes; the retry boundary trim is per lane (`offset`).
 
 **Checkpoint (PR 4 ready)**: ultralooper's acceptance case in #353 passes.
 

@@ -115,6 +115,9 @@ public interface IAudioEngine : IDisposable
     bool ArrangementActive { get; }
     void RecordSessionSlot(int trackId, int scene);
     void StopSessionRecord();
+    /// <summary>Stop recording one slot: while other slots of the Session audio take still record,
+    /// only this track's lands and loops back (specs/086); otherwise as <see cref="StopSessionRecord"/>.</summary>
+    void StopSessionRecordSlot(int trackId);
     int SessionSlotToArrangement(int trackId, int scene, double startBeat);
     void ArrangementClipToSession(int trackId, int clipIndex, int scene);
     /// <summary>Copies an arrangement audio clip into a session slot (loops the whole sample).</summary>
@@ -365,6 +368,8 @@ public interface IAudioEngine : IDisposable
     void SetDisabledInputs(int[] channels);
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     void SetTestInputDevice(int channels);
+    /// <summary>Tests: device frames into the capture ring, drained into the running take as poll() would.</summary>
+    void FeedInputForTest(float[] interleaved, int frames, int channels);
     /// <summary>Tests: record <paramref name="frames"/> of <paramref name="channels"/>-wide
     /// device frames into the track through the capture ring, the track taking its own input.</summary>
     bool TakeRecordTestN(int trackId, float[] interleaved, int channels, int frames, double startBeat);

@@ -90,6 +90,11 @@ NotaResult nota_session_record_slot(NotaEngine* e, int32_t track_id, int32_t sce
     ENG(e)->recordSessionSlot(track_id, scene);
     return NOTA_OK;
 }
+NotaResult nota_session_stop_record_slot(NotaEngine* e, int32_t track_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->stopSessionRecordSlot(track_id);
+    return NOTA_OK;
+}
 NotaResult nota_session_stop_record(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->stopSessionRecord();

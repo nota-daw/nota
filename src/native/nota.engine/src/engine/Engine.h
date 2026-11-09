@@ -480,6 +480,10 @@ class Engine {
     void stopScene(int32_t scene); // stop tracks whose playing/queued slot is this row
     void stopAllSession();
     void recordSessionSlot(int32_t trackId, int32_t scene); // M5-4: launch + overdub-record MIDI into the slot
+    // Stop one recording slot (specs/086): with other slots still recording only its lane lands
+    // and loops back; the last one ends the take as stopSessionRecord() does.
+    void stopSessionRecordSlot(int32_t trackId);
+    bool sessionSlotRecording(int32_t trackId, int32_t scene) const;
     void stopSessionRecord();                               // stop recording; the slot keeps playing
     // M5-6: move clips between Session and Arrangement (MIDI, instrument tracks).
     int32_t sessionSlotToArrangement(int32_t trackId, int32_t scene, double startBeat); // -> new clip index or -1
@@ -1290,6 +1294,7 @@ class Engine {
     // Tests: feed `channels`-wide device frames to the record ring as the input thread would
     // (layout columns gathered), whatever the taps say.
     void pushInputFramesForTestN(const float* interleaved, int32_t frames, int32_t channels);
+    void feedInputForTest(const float* interleaved, int32_t frames, int32_t channels); // push in chunks + drain
     // Input monitoring (audio tracks): hear the record-input source live through the track.
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
@@ -1999,6 +2004,8 @@ class Engine {
         size_t undoBase = 0;              // undoStack_ size when the take began
         std::vector<UndoEntry> redoSaved; // redoStack_ when the take began
         int32_t sessionTrackId = 0, sessionScene = -1;
+        // Every slot a Session take still records (specs/086): the first, then slots that joined.
+        std::vector<std::pair<int32_t, int32_t>> sessionSlots;
     };
     TakeAttempt takeAttempt_;
     bool takePushing_ = false;   // the take itself is checkpointing (its clip, its first lane write)
@@ -2295,6 +2302,8 @@ class Engine {
         int32_t trackId = 0;
         int32_t first = 0, width = 2; // hardware pick (an internal source: the stereo pair)
         int32_t channels = 2;         // stored channels
+        int32_t scene = -1;           // Session slot the lane records into (-1: Arrangement)
+        size_t offset = 0;            // take frame where the lane joined (a Session slot launched later)
         std::vector<float> buf;       // message thread, `channels` interleaved
         std::vector<float> scratch;   // this drain's frames
         std::vector<LoopPass> passes;
@@ -2305,6 +2314,8 @@ class Engine {
     struct TakeGeometry;
     void materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g);
     void finishCaptureLane(int32_t trackId); // one lane leaves a running take (its track disarmed)
+    // Session (specs/086): another slot joins the running Session audio take as a lane of its own.
+    bool addSessionAudioLane(int32_t trackId, int32_t scene);
     // Armed tracks the last take start could not record, with why (nota_engine_record_skipped).
     static constexpr int32_t kSkipInputUnavailable = 1, kSkipTooMany = 2, kSkipSwitchedOff = 3, kSkipMixedSources = 4;
     std::vector<std::pair<int32_t, int32_t>> recordSkipped_;

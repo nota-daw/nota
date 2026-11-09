@@ -574,6 +574,10 @@ public sealed partial class NotaEngine
     public void SetDisabledInputs(int[] channels)
     { ThrowIfDisposed(); NativeMethods.AudioInputSetDisabled(_handle, channels, channels.Length); }
 
+    /// <summary>Tests: device frames into the capture ring, drained into the running take.</summary>
+    public void FeedInputForTest(float[] interleaved, int frames, int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineFeedInputTest(_handle, interleaved, frames, channels); }
+
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     public void SetTestInputDevice(int channels)
     { ThrowIfDisposed(); NativeMethods.EngineSetTestInputDevice(_handle, channels); }

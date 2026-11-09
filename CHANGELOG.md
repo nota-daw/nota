@@ -40,6 +40,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   device; changes apply at once. A track set to an input you switched off keeps it and records
   nothing from it. While recording several tracks the status line says how many, and which
   armed tracks it skipped and why.
+- **Several Session slots record at once** (#353, specs/086): with a Session audio take
+  running, launching an empty slot on another armed audio track records into it too, in the
+  same take, from that moment. Clicking a recording slot stops that slot alone — its take lands
+  and loops — while the others keep recording; the toolbar's stop ends them all. Each slot
+  keeps its own take and input through save and load. MCP: `stop_session_record_slot`.
 
 ### Changed
 - **An audio track can record any input of the interface** (#353, specs/086): the input

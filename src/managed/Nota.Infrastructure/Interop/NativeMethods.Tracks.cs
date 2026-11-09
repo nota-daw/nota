@@ -351,6 +351,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_probe")]
     internal static partial int AudioInputProbe(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_feed_input_test")]
+    internal static partial void EngineFeedInputTest(IntPtr engine, float[] interleaved, int frames, int channels);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_test_input_device")]
     internal static partial void EngineSetTestInputDevice(IntPtr engine, int channels);
 
