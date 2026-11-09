@@ -127,6 +127,28 @@ internal static class ArticulationManagerTests
             yield return (restored == 2 && OffsetOn(t1) == -150.5 && OffsetOn(t2) == -150.5
                           && !ArticulationMapUsage.Catalog(e, lib).Single(x => x.Map.Id == shared.Id).DiffersFromLibrary,
                 "articulations: saving a small edit after undo preserves the restored project offsets on every track");
+
+            // Copy readable map files to other filenames, including a differing version of the
+            // same ID. Both project-backed maps and maps only in the library must remain usable.
+            File.Copy(Path.Combine(dir, shared.Id + ArticulationMapFile.Extension), Path.Combine(dir, "copied.notamap"));
+            var onlyInLibrary = shared.DuplicateAs("Library-only map");
+            lib.Save(onlyInLibrary);
+            var different = ArticulationMapFile.Read(ArticulationMapFile.Write(onlyInLibrary), "").Map!;
+            different.Name = "Another copy";
+            File.WriteAllText(Path.Combine(dir, "different.notamap"), ArticulationMapFile.Write(different));
+            var readable = lib.List();
+            var duplicateCatalog = ArticulationMapUsage.Catalog(e, lib);
+            yield return (readable.Count == 4 && duplicateCatalog.Count == 3
+                          && duplicateCatalog.Count(x => x.Map.Id == shared.Id) == 1
+                          && duplicateCatalog.Count(x => x.Map.Id == onlyInLibrary.Id) == 1
+                          && OffsetOn(t1) == -150.5 && !duplicateCatalog.Single(x => x.Map.Id == shared.Id).DiffersFromLibrary,
+                "articulations: copied map files with duplicate IDs do not block the manager or replace the project's map");
+            using var emptyProject = new NotaEngine();
+            var libraryCatalog = ArticulationMapUsage.Catalog(emptyProject, lib);
+            yield return (libraryCatalog.Count == 2 && libraryCatalog.All(x => !x.OnlyInProject && !x.DiffersFromLibrary)
+                          && ArticulationMapFile.Write(libraryCatalog.Single(x => x.Map.Id == onlyInLibrary.Id).Map)
+                             == ArticulationMapFile.Write(readable.First(x => x.Id == onlyInLibrary.Id)),
+                "articulations: a library-only catalog lists each duplicate ID once and retains the first readable copy");
         }
         finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch (IOException) { } }
 

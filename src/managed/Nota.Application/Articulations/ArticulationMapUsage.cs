@@ -57,7 +57,10 @@ public static class ArticulationMapUsage
     /// <c>OnlyInProject</c>. Several tracks with different copies of one map: the first track's.</summary>
     public static List<(ArticulationMap Map, bool OnlyInProject, bool DiffersFromLibrary)> Catalog(IAudioEngine engine, IArticulationLibrary? library)
     {
-        var lib = (library?.List() ?? Array.Empty<ArticulationMap>()).ToDictionary(m => m.Id, StringComparer.Ordinal);
+        var lib = new Dictionary<string, ArticulationMap>(StringComparer.Ordinal);
+        // A copied file can repeat an ID under another filename. Keep the first readable copy,
+        // as with project tracks below, so a duplicate can't prevent the manager from opening.
+        foreach (var m in library?.List() ?? Array.Empty<ArticulationMap>()) lib.TryAdd(m.Id, m);
         var list = new List<(ArticulationMap Map, bool OnlyInProject, bool DiffersFromLibrary)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < engine.TrackCount; i++)
