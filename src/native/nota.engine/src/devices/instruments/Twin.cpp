@@ -1555,7 +1555,7 @@ void Twin::publishTelemetry(float peak) {
         const twin::Env* envs[3] = {nv ? &nv->fenv : nullptr, nv ? &nv->aenv : nullptr, nv ? &nv->menv : nullptr};
         for (int e = 0; e < 3; ++e) {
             set(base + e * kEnvTeleFloats, envs[e] ? static_cast<float>(envs[e]->teleStage()) : 4.0f);
-            set(base + e * kEnvTeleFloats + 1, envs[e] ? envs[e]->sh.p : 0.0f);
+            set(base + e * kEnvTeleFloats + 1, envs[e] ? envs[e]->progress() : 0.0f);
         }
     }
 }
