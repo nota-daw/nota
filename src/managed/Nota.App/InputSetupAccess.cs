@@ -28,15 +28,17 @@ internal static class InputSetupAccess
     public static InputSetup? Current(IAudioEngine engine)
         => Settings is { } s && s.Current.InputSetups.TryGetValue(KeyOf(engine), out var v) ? v : null;
 
-    /// <summary>The device may have changed (start, Settings → Audio, a device plugged in or
+    /// <summary>The device may have changed (start, any audio restart, a device plugged in or
     /// out): find its key again, and hand a setup saved before 0.60's fix under "System
-    /// default" (key "device:") to the device that was the default then — the one opened now.</summary>
+    /// default" (key "device:") to the default device it was made on. Only while the config still
+    /// names System default: then the device opened is the default one. A device picked by name
+    /// says nothing about who owned that setup, so it stays put until System default is back.</summary>
     public static void Refresh(IAudioEngine engine)
     {
         _key = null;
         string key = KeyOf(engine);
-        if (Settings is not { } s || key == InputSetups.KeyOf(engine.AudioSystem, "", engine.AsioDriver)) return;
         string legacy = InputSetups.KeyOf(engine.AudioSystem, "", engine.AsioDriver);
+        if (Settings is not { } s || key == legacy || !string.IsNullOrEmpty(engine.GetAudioConfig().InputUid)) return;
         if (s.Current.InputSetups.Remove(legacy, out var old) && !s.Current.InputSetups.ContainsKey(key))
         {
             s.Current.InputSetups[key] = old;

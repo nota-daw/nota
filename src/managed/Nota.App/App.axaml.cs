@@ -192,6 +192,13 @@ public partial class App : Avalonia.Application
                 recovery.BeginSession();
 
                 var vm = Services.GetRequiredService<MainWindowViewModel>();   // constructs the engine
+                // Every audio restart may open another device (the system default changed):
+                // its own input names and switched-off inputs (specs/086).
+                vm.AudioApplied += () =>
+                {
+                    try { InputSetupAccess.Push(vm.Engine); }
+                    catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+                };
                 var main = new MainWindow { DataContext = vm, PendingRecovery = pending };
                 desktop.MainWindow = main;
 

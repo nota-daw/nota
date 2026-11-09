@@ -601,8 +601,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     private void Apply()
     {
         if (_loading || _main is null) return;
-        _main.ApplyAudioSettings();
-        InputSetupAccess.Push(_main.Engine);   // another device: its own switched-off inputs
+        _main.ApplyAudioSettings();             // re-reads the device's input setup (AudioApplied)
         RebuildInputs(_main.Engine);           // ...its own inputs and names on the page (specs/086)
         UpdateLatency();
     }
