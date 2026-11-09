@@ -72,7 +72,8 @@ class Strata : public Device {
 
     // ---- scope + persistence ---------------------------------------------------
     // Scope pack: [mode, loopBars, posPhase, layerCount, recLayer, recProgress,
-    // then per layer k: state, gainDb, muted]. Read lock-free by the UI.
+    // then per layer k: state, gainDb, muted, then countInBeats, loopBpm, beatsPerBar, pendingCmd].
+    // Read lock-free by the UI.
     int32_t scopeRead(float* out, int32_t maxSamples) const override;
     // Settings are params; the recorded layers are the blob.
     std::vector<uint8_t> getState() const override;
@@ -95,9 +96,11 @@ class Strata : public Device {
 
     // Shared state (audio thread owns pos_/recCount_; atomics cross to the UI/message thread).
     std::atomic<int> mode_{M_Empty}, layerCount_{0}, recLayer_{-1};
+    int id_ = 0; // this instance, for the UI to follow it when devices move (whole in a float)
     std::atomic<int64_t> loopLen_{0};
     int loopBars_ = 1;
     double pos_ = 0.0, recCount_ = 0.0;
+    double countLeft_ = 0.0; // count-in samples still to run before the first pass records
     std::atomic<int> pending_{-1};
     std::atomic<float> gainDb_[kMaxLayers];
     std::atomic<bool> muted_[kMaxLayers];

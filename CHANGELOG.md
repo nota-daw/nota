@@ -380,6 +380,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     capped knobs with an orange value arc, value bars instead of thin sliders, the new
     switches and segment groups, pressed-in sections, one font, greys instead of the old
     identity colours, and inactive controls in a quieter grey instead of faded.
+  - **Nota Strata** (review of nota-daw/nota#296): the transport, layer list and Loop rail are
+    pressed-in sections; the transport buttons are neutral, with the running one in orange
+    (Record in red) and a queued one outlined; layer waves are greys, newest brightest; each
+    layer's level is a value bar (double-click for 0 dB, or type a value); the tick strip has a
+    tick per beat of the loop; and the list fits all eight layers.
 - **An audio track can record any input of the interface** (#353, specs/086): the input
   picker lists every input of the selected device — each one alone as a mono source,
   recorded and heard in the middle, then the stereo pairs 1/2, 3/4, … — with the names the
@@ -391,6 +396,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Strata's layer list and beat strip are back as they were** after the restyle: the layer count
+  says "· one cycle shown" again, the beat tick strip is on screen before the first loop closes,
+  and every layer keeps its own shade of grey (with a matching outline), so all eight can be told
+  apart.
+- **Nota Strata looper** (review of nota-daw/nota#296):
+  - Record and Overdub on the first pass close the loop (Overdub goes straight on to layer 2);
+    before, only Play or Stop could end the first pass.
+  - With Quantize at 1/4, Play or Stop on the first pass waited forever; they now land on the
+    next beat. A stopped loop no longer runs on in the background, so Play starts it from the
+    top and Record or Overdub from Stop start at once.
+  - **Count-in 1 bar** and **Set tempo from loop** did nothing. Count-in now waits one bar
+    before the first pass (the counter shows the beats left, Stop cancels it, the dimmed buttons
+    leave it running), and Set tempo changes the song tempo when the first loop closes so the
+    loop is a whole number of bars, even with another track shown by then.
+  - **Export** did nothing; it now writes the loop as you hear it (every unmuted layer at its
+    level, at its speed, backwards when reversed) to a WAV file, and says so if the file can't
+    be written.
+  - The captions under the actions say what a press does now (for example "close, then play"
+    or "layer 3, next bar"), and actions that would do nothing are dimmed. The first pass
+    draws its waveform as it records, and a stopped loop's layers say Stopped. Right-clicking
+    a transport or mute button no longer triggers it.
 - **Twin MIDI mappings keep their controls** (#531): Nota Twin's envelope shapes grew its
   parameter list, so a knob mapped in a 0.59 project would have moved a different control. Mappings
   now save the parameter's id and find it again on load, and older projects' Twin mappings move
