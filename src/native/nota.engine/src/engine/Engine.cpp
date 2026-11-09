@@ -706,6 +706,13 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
 // Whether every clip of `t` (arrangement and Session) has the articulation timeline its notes
 // and its track's table call for — O(1) per clip on a track without a map. Message thread.
 bool Engine::articulationsCurrent(const Track& t) {
+    if (!t.articulationTable) { // the common case, inline: no map means no timelines
+        for (const auto& c : t.midiClips)
+            if (c.articulations) return false;
+        for (const auto& s : t.sessionSlots)
+            if (s.midi.articulations) return false;
+        return true;
+    }
     for (const auto& c : t.midiClips)
         if (!articulationTimelineCurrent(c, t.articulationTable)) return false;
     for (const auto& s : t.sessionSlots)
@@ -789,7 +796,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             return false;
         };
         for (auto& t : g->tracks) {
-            if (!t || playing(t) || articulationsCurrent(*t)) continue;
+            if (!t || articulationsCurrent(*t) || playing(t)) continue; // cheap test first: `playing` scans the graph
             if (restored) t = cloneTrack(*t);
             settleArticulations(*t);
         }

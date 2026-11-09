@@ -227,7 +227,7 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         const int32_t nOff = k < n ? std::clamp(evs[k].off, 0, frames) : INT32_MAX;
         const int32_t xOff = x < xn ? std::clamp(xev[x].off, 0, frames) : INT32_MAX;
         const int32_t aOff = a < an ? std::clamp(aev[a].off, 0, frames) : INT32_MAX;
-        const int32_t at = std::min({nOff, xOff, aOff});
+        const int32_t at = std::min(std::min(nOff, xOff), aOff);
         if (timed) {
             if (at >= frames) break; // after the render, at the next block's start (as segmented)
             if (at > 0) liveAt0();   // live input sits after the offset-0 notes
@@ -1258,44 +1258,53 @@ int Engine::gatherInstrumentNotes(
             const bool hasVel = !clip.velocityEnvelope.points.empty();
             // Track MIDI offset (ms → samples at the device rate). Playback-only: the shift
             // is applied to the scheduled times below, never to the stored notes.
+            // A track without a map and without an offset (most tracks) pays nothing per note here:
+            // the per-note articulation lookup is skipped and the shift stays a constant zero.
             const double msToS = transport_.sampleRate() / 1000.0;
             const double trackShiftS = t.midiOffsetMs() * msToS;
             const ArticulationTable* artTable = t.articulationTable.get();
-            for (const Note& note : clip.notes) {
-                // FR-018: track offset + the note's articulation offset, applied once (specs/085).
-                const double shiftS = trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS;
-                // Clip length gates note starts (M4-2): notes outside don't play. A note that
-                // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
-                // sounds from the clip start for the part that reaches into it.
-                if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
-                const double nominalOn = clipStart + std::max(0.0, note.startBeat) * spb;
-                // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
-                // shortened) end stops at the boundary instead of sounding its full length.
-                double nominalOff = clipStart + (note.startBeat + note.lengthBeats) * spb;
-                if (nominalOff > clipEnd) nominalOff = clipEnd;
-                const double onS = nominalOn + shiftS;
-                double offS = nominalOff + shiftS;
-                // Velocity envelope (M9 follow-up): scale by the curve at the note's
-                // clip-local start beat.
-                float vel = note.velocity;
-                if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
-                if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
-                        static_cast<float>((offS - onS) / spb)};
-                // Loop seam: a note still sounding at the loop end releases here, ahead of any
-                // chase re-trigger at the same offset (offs sort first).
-                if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
-                    evs[n++] = {0, false, note.pitch, 0.0f};
-                // Chase: a note already held at the jump point starts sounding right here.
-                if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
-                    evs[n++] = {0, true, note.pitch, vel};
-                if (offS >= blockStart && offS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
-                // Recorded MPE: the note's curve while it sounds in this block.
-                if (xev && note.expr && clipActive)
-                    noteExprEvents(note, clipStart + note.startBeat * spb + shiftS - blockStart, offS - blockStart, frames, spb,
-                        xev, *xn, kMaxBlockExpr); // curve timed from the true start
-            }
+            const auto gatherClip = [&]<bool shifted>() {
+                for (const Note& note : clip.notes) {
+                    // FR-018: track offset + the note's articulation offset, applied once (specs/085).
+                    double shiftS = 0.0;
+                    if constexpr (shifted)
+                        shiftS = artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS : trackShiftS;
+                    // Clip length gates note starts (M4-2): notes outside don't play. A note that
+                    // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
+                    // sounds from the clip start for the part that reaches into it.
+                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
+                    const double nominalOn = clipStart + std::max(0.0, note.startBeat) * spb;
+                    // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
+                    // shortened) end stops at the boundary instead of sounding its full length.
+                    double nominalOff = clipStart + (note.startBeat + note.lengthBeats) * spb;
+                    if (nominalOff > clipEnd) nominalOff = clipEnd;
+                    const double onS = shifted ? nominalOn + shiftS : nominalOn;
+                    const double offS = shifted ? nominalOff + shiftS : nominalOff;
+                    // Velocity envelope (M9 follow-up): scale by the curve at the note's
+                    // clip-local start beat.
+                    float vel = note.velocity;
+                    if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
+                    if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
+                        evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
+                            static_cast<float>((offS - onS) / spb)};
+                    // Loop seam: a note still sounding at the loop end releases here, ahead of any
+                    // chase re-trigger at the same offset (offs sort first).
+                    if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
+                        evs[n++] = {0, false, note.pitch, 0.0f};
+                    // Chase: a note already held at the jump point starts sounding right here.
+                    if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
+                        evs[n++] = {0, true, note.pitch, vel};
+                    if (offS >= blockStart && offS < blockStart + frames && n < 1024)
+                        evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+                    // Recorded MPE: the note's curve while it sounds in this block.
+                    if (xev && note.expr && clipActive)
+                        noteExprEvents(note, (shifted ? clipStart + note.startBeat * spb + shiftS : clipStart + note.startBeat * spb) - blockStart,
+                            offS - blockStart, frames, spb,
+                            xev, *xn, kMaxBlockExpr); // curve timed from the true start
+                }
+            };
+            if (!artTable && trackShiftS == 0.0) gatherClip.template operator()<false>();
+            else gatherClip.template operator()<true>();
             // The clip's controllers (specs/020).
             if (xev && clipActive)
                 clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr);
