@@ -13,6 +13,8 @@
 namespace nota {
 
 Strata::Strata() {
+    static std::atomic<int> next{0};
+    id_ = (next.fetch_add(1) % 16777215) + 1;
     p_[Feedback].store(100.0f);
     p_[InputGain].store(0.0f);
     p_[Speed].store(1.0f);
@@ -294,7 +296,7 @@ void Strata::setParam(int32_t i, float v) {
 }
 
 // Scope pack: [mode, loopBars, posPhase, layerCount, recLayer, recProgress,
-// then per layer k: state, gainDb, muted, then countInBeats, loopBpm, beatsPerBar, pendingCmd].
+// then per layer k: state, gainDb, muted, then countInBeats, loopBpm, beatsPerBar, pendingCmd, instanceId].
 // Read lock-free by the UI.
 int32_t Strata::scopeRead(float* out, int32_t maxSamples) const {
     if (!out || maxSamples < 6) return 0;
@@ -322,6 +324,7 @@ int32_t Strata::scopeRead(float* out, int32_t maxSamples) const {
         out[n++] = len > 0 ? (float)(60.0 * tsNum_ * loopBars_ * sr_ / (double)len) : 0.0f;
         out[n++] = (float)tsNum_;
         out[n++] = (float)pending_.load(std::memory_order_acquire);
+        if (n < maxSamples) out[n++] = (float)id_;
     }
     return n;
 }

@@ -96,6 +96,7 @@ class Strata : public Device {
 
     // Shared state (audio thread owns pos_/recCount_; atomics cross to the UI/message thread).
     std::atomic<int> mode_{M_Empty}, layerCount_{0}, recLayer_{-1};
+    int id_ = 0; // this instance, for the UI to follow it when devices move (whole in a float)
     std::atomic<int64_t> loopLen_{0};
     int loopBars_ = 1;
     double pos_ = 0.0, recCount_ = 0.0;

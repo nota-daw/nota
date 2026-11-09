@@ -46,39 +46,36 @@ internal sealed class StrataDeviceBody : IDeviceBody
 
     // Set tempo from loop (#372): the song takes the loop's tempo when the first pass closes,
     // whether or not the card is on screen then. Watched here, apart from any one card. Moving or
-    // removing devices shifts the index, so the watch follows the Strata to its new place.
+    // removing devices shifts the index, so the watch follows the Strata by its instance id.
     private const int StrataKind = 15, LayerRecording = 2;   // Strata::LS_Rec
+    private const int S_Id = S_Pending + 1;
     private static readonly HashSet<(IAudioEngine, int, int)> TempoWatch = new();
 
-    private static bool OnFirstPass(IAudioEngine engine, int track, int di, float[] sc, out int n)
+    private static float InstanceAt(IAudioEngine engine, int track, int di, float[] sc, out int n)
     {
-        n = engine.DeviceScope(track, di, sc, sc.Length);
-        return n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0;
+        n = di < engine.TrackDeviceCount(track) && engine.TrackDeviceBuiltinKind(track, di) == StrataKind
+            ? engine.DeviceScope(track, di, sc, sc.Length) : 0;
+        return n > S_Id ? sc[S_Id] : 0f;
     }
 
     private static void WatchTempo(IAudioEngine engine, int track, int di)
     {
-        if (!TempoWatch.Add((engine, track, di))) return;
-        var sc = new float[S_Pending + 1];
-        int count = engine.TrackDeviceCount(track);
+        var sc = new float[S_Id + 1];
+        float id = InstanceAt(engine, track, di, sc, out _);
+        if (id <= 0 || !TempoWatch.Add((engine, track, (int)id))) return;
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         timer.Tick += (_, _) =>
         {
-            int now = engine.TrackDeviceCount(track);
-            if (now != count || di >= now || engine.TrackDeviceBuiltinKind(track, di) != StrataKind)
+            int n;
+            if (InstanceAt(engine, track, di, sc, out n) != id)
             {
-                // The chain changed under the watch: find the Strata still on its first pass.
-                count = now;
-                int found = -1;
-                for (int i = 0; i < now && found < 0; i++)
-                    if (engine.TrackDeviceBuiltinKind(track, i) == StrataKind && OnFirstPass(engine, track, i, sc, out _)) found = i;
-                TempoWatch.Remove((engine, track, di));
-                if (found < 0 || !TempoWatch.Add((engine, track, found))) { timer.Stop(); return; }   // gone, or watched already
-                di = found;
+                int count = engine.TrackDeviceCount(track);   // moved: find it again
+                for (di = 0; di < count && InstanceAt(engine, track, di, sc, out n) != id; di++) { }
+                if (di >= count) n = 0;                        // removed
             }
-            if (OnFirstPass(engine, track, di, sc, out int n)) return;
+            if (n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0) return;   // still on the first pass
             timer.Stop();
-            TempoWatch.Remove((engine, track, di));
+            TempoWatch.Remove((engine, track, (int)id));
             float lb = n > S_LoopBpm && sc[3] > 0 ? sc[S_LoopBpm] : 0f;            // closed (not cleared or gone)
             if (lb >= 20 && lb <= 300 && engine.DeviceGetParam(track, di, SetTempo) > 0.5f) engine.SetBpm(Math.Round(lb, 2));
         };
