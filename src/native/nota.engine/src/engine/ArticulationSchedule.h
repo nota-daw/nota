@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Articulation playback (specs/085): which articulation MIDI one block sends. A pure function of
-// the track's clips, its table and the block — it keeps no state between blocks, so a seek, a
-// loop wrap or a restart can't leave it out of step:
+// the track's clips, its table and the block. Session latching releases also retain the actual
+// keys and their remaining rendered frames, so tempo changes cannot skip a pending release:
 //
 //   effective note time = nominal + track offset + articulation offset      (FR-018)
 //   trigger time        = effective − lead                                   (FR-019)
@@ -53,6 +53,18 @@ static_assert(std::is_trivially_default_constructible_v<ArtEv>);
 inline constexpr double kKeyswitchHoldMs = 20.0; // how long a latching keyswitch note is held
 inline constexpr int kMaxBlockArt = 256;          // a block's articulation events (stack array)
 
+// Audio-thread-owned, fixed-capacity release storage. Only emitted latching key-ons enter it.
+// Remaining frames count down with rendering, independent of a slot's beat position or tempo.
+// The pending array is deliberately uninitialized: entries beyond count are never read.
+struct ArticulationReleaseState {
+    struct Pending {
+        int32_t remaining;
+        uint8_t channel, pitch;
+    };
+    Pending pending[kMaxBlockArt];
+    int count = 0;
+};
+
 struct ArticulationBlock {
     int32_t frames = 0;
     double blockStart = 0.0; // samples, the transport position of the block's first frame
@@ -63,6 +75,7 @@ struct ArticulationBlock {
     bool seamOffs = false;   // a loop seam just passed: let go of keys held across it
     double seamEnd = 0.0;    // where the seam was (samples), when seamOffs
     double chaseStart = -1.0; // last discontinuity on this clock, for a chased key's later release
+    ArticulationReleaseState* releases = nullptr; // Session: rendered-frame clock for all latching releases
 };
 
 // Fills `out` (capacity `cap`) with the block's events, sorted, and returns how many. Events that
@@ -76,6 +89,9 @@ int scheduleArticulations(const std::vector<MidiClip>& clips, const Articulation
 // Every pass whose events can reach the block is read, however far the offsets move them.
 int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool loop, const ArticulationTable& table,
     const ArticulationBlock& b, ArtEv* out, int cap, int* dropped = nullptr);
+
+// Continue pending releases even after the track's map was cleared; no table or beat clock needed.
+int scheduleArticulationReleases(ArticulationReleaseState& releases, int32_t frames, ArtEv* out, int cap);
 
 // The offset (ms) an articulation adds to a note with this id: its entry's (or the default's), else 0.
 double articulationOffsetMs(const ArticulationTable* table, int32_t noteArticulation);

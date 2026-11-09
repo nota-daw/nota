@@ -35,14 +35,37 @@ struct Writer {
     int n = 0;
     int dropped = 0;
     int seq = 0;
-    void put(int32_t off, ArtEvKind kind, int32_t channel, int32_t d1, int32_t d2) {
+    bool put(int32_t off, ArtEvKind kind, int32_t channel, int32_t d1, int32_t d2) {
         if (n >= cap) {
             ++dropped;
-            return;
+            return false;
         }
         out[n++] = {off, seq++, kind, static_cast<uint8_t>(channel), static_cast<uint8_t>(d1), static_cast<uint8_t>(d2)};
+        return true;
     }
 };
+
+// Advance only [from, count): old entries advance before new key-ons are scheduled, then newly
+// queued entries advance at block end. Due releases get buffer space before new actions. If a
+// release cannot fit, keep it due at offset 0 of the next block instead of losing the held key.
+void advanceReleases(Writer& w, ArticulationReleaseState& state, int32_t frames, int from = 0) {
+    int kept = from;
+    for (int i = from; i < state.count; ++i) {
+        auto key = state.pending[i];
+        if (key.remaining < frames) {
+            if (w.put(std::max(0, key.remaining), ArtEvKind::KeyOff, key.channel, key.pitch, 0)) continue;
+            key.remaining = 0;
+        } else key.remaining -= frames;
+        state.pending[kept++] = key;
+    }
+    state.count = kept;
+}
+
+int beginReleases(Writer& w, const ArticulationBlock& b) {
+    if (!b.releases) return 0;
+    advanceReleases(w, *b.releases, b.frames);
+    return b.releases->count;
+}
 
 struct Window {
     double start, end; // [start, end)
@@ -51,14 +74,23 @@ struct Window {
 };
 
 // An entry's actions, in map order, at `at` (absolute samples), if that falls in the block.
-void sendActions(Writer& w, const ArticulationTable& table, const ArticulationEntry& e, double at, const Window& win) {
+void sendActions(Writer& w, const ArticulationTable& table, const ArticulationEntry& e, double at, const Window& win,
+    ArticulationReleaseState* releases = nullptr, double hold = 0.0) {
     if (!win.contains(at)) return;
     const int32_t off = win.offsetOf(at);
     const ArticulationAction* a = table.actionsOf(e);
     for (int32_t i = 0; i < e.actionCount; ++i) {
         const ArticulationAction& x = a[i];
         switch (x.kind) {
-        case ArticulationActionKind::Keyswitch: w.put(off, ArtEvKind::KeyOn, x.channel, x.data1, x.data2); break;
+        case ArticulationActionKind::Keyswitch:
+            if (releases && releases->count >= kMaxBlockArt) {
+                ++w.dropped; // don't press a key whose release cannot be retained
+                break;
+            }
+            if (w.put(off, ArtEvKind::KeyOn, x.channel, x.data1, x.data2) && releases)
+                releases->pending[releases->count++] = {off + static_cast<int32_t>(std::lround(hold)),
+                    static_cast<uint8_t>(x.channel), static_cast<uint8_t>(x.data1)};
+            break;
         case ArticulationActionKind::ControlChange: w.put(off, ArtEvKind::Control, x.channel, x.data1, x.data2); break;
         case ArticulationActionKind::ProgramChange: w.put(off, ArtEvKind::Program, x.channel, x.data1, 0); break;
         case ArticulationActionKind::BankSelectMsb: w.put(off, ArtEvKind::Control, x.channel, 0, x.data2); break;
@@ -236,8 +268,8 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
             if (trig + c.hold < win.start || trig >= win.end) continue;
             if (inForceBefore(c, all, Key{trig, p.order, static_cast<int32_t>(i)}) == x.entryId) continue; // already selected
             if (win.contains(trig) && trig < win.start + 1.0) landingSent = true;
-            sendActions(w, c.table, *e, trig, win);
-            releaseKeys(w, c.table, *e, trig + c.hold, win);
+            sendActions(w, c.table, *e, trig, win, b.releases, c.hold);
+            if (!b.releases) releaseKeys(w, c.table, *e, trig + c.hold, win);
         }
         // A loop seam just passed: a key pressed before it and due for release after it (its
         // release would have come past the loop end) lets go now. Those points sit at the seam,
@@ -258,15 +290,15 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
 
     // ---- chase: retain its origin so a 20 ms release can land in a later block ----
     const double chaseStart = b.chase ? win.start : b.chaseStart;
-    if (chaseStart >= 0.0 && ((b.chase && covered && !landingSent) || win.contains(chaseStart + c.hold))) {
+    if (chaseStart >= 0.0 && ((b.chase && covered && !landingSent) || (!b.releases && win.contains(chaseStart + c.hold)))) {
         const int32_t id = inForceBefore(c, all, Key{chaseStart, LONG_MIN, INT32_MIN});
         // A natural switch at the landing sample supplies its own release; the old articulation
         // was never chased. Repeated points selecting the same ID are suppressed, so still chase.
         const int32_t landed = inForceBefore(c, all, Key{chaseStart + 1.0, LONG_MIN, INT32_MIN});
         if (id == landed)
             if (const ArticulationEntry* e = c.table.find(id)) {
-                if (b.chase) sendActions(w, c.table, *e, chaseStart, win);
-                releaseKeys(w, c.table, *e, chaseStart + c.hold, win);
+                if (b.chase) sendActions(w, c.table, *e, chaseStart, win, b.releases, c.hold);
+                if (!b.releases) releaseKeys(w, c.table, *e, chaseStart + c.hold, win);
             }
     }
 
@@ -300,7 +332,8 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
     });
 }
 
-int finish(Writer& w, ArtEv* out, int* dropped) {
+int finish(Writer& w, ArtEv* out, int* dropped, const ArticulationBlock* b = nullptr, int carried = 0) {
+    if (b && b->releases) advanceReleases(w, *b->releases, b->frames, carried);
     std::sort(out, out + w.n, [](const ArtEv& a, const ArtEv& c) {
         if (a.off != c.off) return a.off < c.off;
         const bool ra = a.kind == ArtEvKind::KeyOff, rc = c.kind == ArtEvKind::KeyOff;
@@ -328,6 +361,7 @@ int scheduleArticulations(const std::vector<MidiClip>& clips, const Articulation
     }
     const Window win{b.blockStart, b.blockStart + b.frames};
     const Ctx c = makeCtx(table, b);
+    const int carried = beginReleases(w, b);
     // Every active clip of the track, in its order.
     auto active = [&](auto&& f) {
         long i = 0;
@@ -337,7 +371,7 @@ int scheduleArticulations(const std::vector<MidiClip>& clips, const Articulation
         }
     };
     scheduleAll(w, c, win, active, active);
-    return finish(w, out, dropped);
+    return finish(w, out, dropped, &b, carried);
 }
 
 int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool loop, const ArticulationTable& table,
@@ -349,6 +383,7 @@ int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool l
     }
     const Window win{b.blockStart, b.blockStart + b.frames};
     const Ctx c = makeCtx(table, b);
+    const int carried = beginReleases(w, b);
     // The passes whose events can fall in this block: a pass's events lie between its start plus
     // the earliest trigger and its end plus the latest note shift and the hold — on a short loop
     // with a large offset, several passes away. No neighboring-pass limit: even a very short
@@ -366,8 +401,7 @@ int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool l
     long hi = static_cast<long>(std::floor((win.end - std::min(0.0, early)) / loopS));
     if (!loop) hi = std::min(hi, 0L); // one-shot: a single pass
     if (hi < lo) {
-        if (dropped) *dropped = 0;
-        return 0;
+        return finish(w, out, dropped, &b, carried);
     }
     auto passes = [&](long from) {
         return [&slotClip, loopS, loopBeats, from, hi](auto&& f) {
@@ -376,7 +410,14 @@ int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool l
     };
     // Decisions look one pass further back, so a pass's first point knows what the pass before left in force.
     scheduleAll(w, c, win, passes(lo), passes(std::max(0L, lo - 1)));
-    return finish(w, out, dropped);
+    return finish(w, out, dropped, &b, carried);
+}
+
+int scheduleArticulationReleases(ArticulationReleaseState& releases, int32_t frames, ArtEv* out, int cap) {
+    Writer w{out, cap};
+    if (frames <= 0) return 0;
+    advanceReleases(w, releases, frames);
+    return finish(w, out, nullptr);
 }
 
 } // namespace nota

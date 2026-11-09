@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "ArticulationSchedule.h"
+
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -16,6 +18,10 @@ namespace nota {
 
 class SessionPlayer {
   public:
+    // Keep make_shared<SessionPlayer>() from zero-filling unused pending-release storage.
+    // Every live field has its own initializer; pending entries are read only below count.
+    SessionPlayer() noexcept {}
+
     static constexpr int32_t kNone = -2;    // no pending request
     static constexpr int32_t kStop = -1;    // pending stop (quantized)
     static constexpr int32_t kStopNow = -3; // pending stop, applied at the next block (per-track "back to arrangement")
@@ -35,7 +41,7 @@ class SessionPlayer {
 
     // Audio-thread-only.
     double localBeats = 0.0; // absolute position within the loop clock
-    double articulationChaseStart = -1.0; // last launch on the slot's sample clock
+    ArticulationReleaseState articulationReleases; // pending latching keys, timed by rendered frames
     float gain = 1.0f;       // launch-velocity gain of the playing slot
 
     void requestLaunch(int32_t slot, double quant = -1.0, bool legato = false, float g = 1.0f);

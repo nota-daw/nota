@@ -1682,11 +1682,12 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         // slot starts — its start, or the outgoing position for a legato launch — goes out, so a
         // switch whose lead falls before the launch isn't lost.
         ab.chase = sp.playedBeats.load(std::memory_order_relaxed) == 0.0;
-        if (ab.chase) sp.articulationChaseStart = ab.blockStart;
-        ab.chaseStart = sp.articulationChaseStart;
+        ab.releases = &sp.articulationReleases;
         ab.seamOffs = false;
         ab.seamEnd = 0.0;
         an = scheduleSlotArticulations(s.midi, L, s.loop, *artTable, ab, aev, kMaxBlockArt);
+    } else if (sp.articulationReleases.count > 0 && inst->takesArticulations()) {
+        an = scheduleArticulationReleases(sp.articulationReleases, frames, aev, kMaxBlockArt);
     }
     playEvents(*inst, dst, frames, evs, n, xev, xn, aev, an, p, spb, true, [&] { // the slot's own loop clock
         if (!monitoring) return;
@@ -3607,6 +3608,68 @@ int32_t Engine::articulationSelfTest() {
             slotEngine->renderSessionSlotRaw(track, dst, B, spb);
             if (std::find(probe->events.begin(), probe->events.end(), E5{0, 24, 0, 448, 0}) == probe->events.end()) return 35;
         }
+    }
+    // 36: Session releases count rendered frames, even when tempo changes between the press and
+    // release at a nonzero legato position. Check both faster and slower tempo, natural switches,
+    // and clearing the map while the key is held. Every release still lands at frame 960.
+    {
+        const ArticulationAction keys[] = {{AK::Keyswitch, 0, 24, 100}, {AK::Keyswitch, 0, 25, 100}};
+        const ArticulationEntry entries[] = {{1, ArticulationTrigger::Latching, 0, 0, 0, 1},
+            {2, ArticulationTrigger::Latching, 0, 0, 1, 1}};
+        const auto mapped = ArticulationTable::build(0, entries, 2, keys, 2);
+        slot.midi.notes = makeClip({{0.0, 1}, {0.5, 2}}, 0.25).notes;
+        slot.midi.articulations = buildArticulationTimeline(slot.midi, mapped);
+        for (bool chase : {false, true})
+            for (double nextSpb : {spb / 2, spb * 2})
+                for (bool clearMap : {false, true}) {
+                    track.articulationTable = mapped;
+                    track.sessionPlayer->localBeats = chase ? 8.125 : 8.0;
+                    track.sessionPlayer->requestLaunch(0, 0, true);
+                    if (!track.sessionPlayer->maybeApply(0, B / spb, 0)) return 36;
+                    if (!chase) track.sessionPlayer->playedBeats.store(1.0); // normal beat-8 switch, not a chase
+                    probe->events.clear();
+                    slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+                    if (std::count(probe->events.begin(), probe->events.end(), E5{1, 24, 100, 0, 0}) != 1 ||
+                        track.sessionPlayer->articulationReleases.count != 1) return 36;
+                    track.sessionPlayer->publish(B / spb);
+                    if (clearMap) track.articulationTable.reset();
+                    probe->events.clear();
+                    slotEngine->renderSessionSlotRaw(track, dst, B, nextSpb);
+                    if (std::count(probe->events.begin(), probe->events.end(), E5{0, 24, 0, 448, 0}) != 1 ||
+                        track.sessionPlayer->articulationReleases.count != 0) return 36;
+                }
+    }
+    // 37: a bounded pending queue never presses a key whose release can't be retained. Due offs
+    // have priority, and an output buffer too small for them carries the rest to the next block.
+    {
+        std::vector<ArticulationAction> keys;
+        for (int i = 0; i <= kMaxBlockArt; ++i) keys.push_back({AK::Keyswitch, 1 + i / 128, i % 128, 100});
+        const ArticulationEntry entry{1, ArticulationTrigger::Latching, 0, 0, 0, static_cast<int32_t>(keys.size())};
+        auto many = ArticulationTable::build(0, &entry, 1, keys.data(), static_cast<int32_t>(keys.size()));
+        MidiClip clip = makeClip({{0.0, 1}});
+        clip.articulations = buildArticulationTimeline(clip, many);
+        ArticulationReleaseState pending;
+        ArticulationBlock b{1, 0, spb, sr};
+        b.releases = &pending;
+        ArtEv buf[kMaxBlockArt];
+        int dropped = 0;
+        if (scheduleSlotArticulations(clip, 8, true, *many, b, buf, kMaxBlockArt, &dropped) != kMaxBlockArt ||
+            dropped != 1 || pending.count != kMaxBlockArt) return 37;
+        if (scheduleArticulationReleases(pending, 960, buf, kMaxBlockArt) != kMaxBlockArt || pending.count != 0) return 37;
+        for (int i = 0; i < kMaxBlockArt; ++i)
+            if (buf[i].kind != ArtEvKind::KeyOff || buf[i].off != 959 || buf[i].channel != keys[i].channel ||
+                buf[i].data1 != keys[i].data1) return 37;
+        pending.pending[0] = {0, 2, 30};
+        pending.pending[1] = {0, 3, 31};
+        pending.count = 2;
+        if (scheduleArticulationReleases(pending, 1, buf, 1) != 1 || pending.count != 1 || buf[0].data1 != 30) return 37;
+        if (scheduleArticulationReleases(pending, 1, buf, 1) != 1 || pending.count != 0 || buf[0].data1 != 31) return 37;
+        track.sessionPlayer->articulationReleases.count = 1;
+        track.sessionPlayer->requestLaunch(0, 0, true);
+        if (!track.sessionPlayer->maybeApply(0, 1, 0) || track.sessionPlayer->articulationReleases.count != 0) return 37;
+        track.sessionPlayer->articulationReleases.count = 1;
+        track.sessionPlayer->requestStopNow();
+        if (!track.sessionPlayer->maybeApply(0, 1, 0) || track.sessionPlayer->articulationReleases.count != 0) return 37;
     }
     return 0;
 }
