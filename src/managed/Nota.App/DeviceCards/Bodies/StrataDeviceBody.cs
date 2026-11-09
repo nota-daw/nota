@@ -45,18 +45,38 @@ internal sealed class StrataDeviceBody : IDeviceBody
     public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
 
     // Set tempo from loop (#372): the song takes the loop's tempo when the first pass closes,
-    // whether or not the card is on screen then. Watched here, apart from any one card.
+    // whether or not the card is on screen then. Watched here, apart from any one card. Moving or
+    // removing devices shifts the index, so the watch follows the Strata to its new place.
+    private const int StrataKind = 15, LayerRecording = 2;   // Strata::LS_Rec
     private static readonly HashSet<(IAudioEngine, int, int)> TempoWatch = new();
+
+    private static bool OnFirstPass(IAudioEngine engine, int track, int di, float[] sc, out int n)
+    {
+        n = engine.DeviceScope(track, di, sc, sc.Length);
+        return n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0;
+    }
 
     private static void WatchTempo(IAudioEngine engine, int track, int di)
     {
         if (!TempoWatch.Add((engine, track, di))) return;
         var sc = new float[S_Pending + 1];
+        int count = engine.TrackDeviceCount(track);
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         timer.Tick += (_, _) =>
         {
-            int n = engine.DeviceScope(track, di, sc, sc.Length);
-            if (n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0) return;   // still on the first pass
+            int now = engine.TrackDeviceCount(track);
+            if (now != count || di >= now || engine.TrackDeviceBuiltinKind(track, di) != StrataKind)
+            {
+                // The chain changed under the watch: find the Strata still on its first pass.
+                count = now;
+                int found = -1;
+                for (int i = 0; i < now && found < 0; i++)
+                    if (engine.TrackDeviceBuiltinKind(track, i) == StrataKind && OnFirstPass(engine, track, i, sc, out _)) found = i;
+                TempoWatch.Remove((engine, track, di));
+                if (found < 0 || !TempoWatch.Add((engine, track, found))) { timer.Stop(); return; }   // gone, or watched already
+                di = found;
+            }
+            if (OnFirstPass(engine, track, di, sc, out int n)) return;
             timer.Stop();
             TempoWatch.Remove((engine, track, di));
             float lb = n > S_LoopBpm && sc[3] > 0 ? sc[S_LoopBpm] : 0f;            // closed (not cleared or gone)
@@ -282,12 +302,12 @@ internal sealed class StrataDeviceBody : IDeviceBody
             float F() { float v = BitConverter.ToSingle(blob, off); off += 4; return v; }
             I(); int sr = I(), len = I(); I(); int lc = Math.Clamp(I(), 0, MaxLayers);
             if (len <= 0 || lc <= 0 || blob.Length < 20 + lc * 12 + (long)lc * len * 8) return;
-            var gain = new float[lc];
+            var gain = new float[lc];   // the layer being recorded is unfinished: left out, as Strata plays it
             float fb = Math.Clamp(P(Feedback) * 0.01f, 0f, 1f);
             for (int k = 0; k < lc; k++)
             {
-                float db = F(); bool muted = I() != 0; I();
-                gain[k] = muted ? 0f : MathF.Pow(10f, db / 20f) * MathF.Pow(fb, lc - 1 - k);
+                float db = F(); bool muted = I() != 0; bool recording = I() == LayerRecording;
+                gain[k] = muted || recording ? 0f : MathF.Pow(10f, db / 20f) * MathF.Pow(fb, lc - 1 - k);
             }
             var sum = new float[len * 2];
             for (int k = 0; k < lc; k++)
