@@ -2590,6 +2590,10 @@ NOTA_API const char* nota_audio_output_device_uid(int32_t index);
 NOTA_API const char* nota_audio_output_device_name(int32_t index);
 NOTA_API const char* nota_audio_input_device_uid(int32_t index);
 NOTA_API const char* nota_audio_input_device_name(int32_t index);
+/* The uid of the input device the staged config opens (specs/086): the chosen device when it
+ * is connected, else the system default ("" when there is none). Copied into `out`; returns
+ * its length. Settings kept per input device key on it. */
+NOTA_API int32_t     nota_audio_effective_input_uid(const NotaEngine* engine, char* out, int32_t cap);
 
 /* Stage the desired config. Pass "" for a device to mean "system default",
  * 0 for sample_rate / buffer_frames to mean "device default". */

@@ -1290,6 +1290,10 @@ public interface IAudioEngine : IDisposable
     void SetAudioSystem(AudioSystem system);
     void SetAsioDriver(string id);
     string AsioDriver { get; }
+    /// <summary>The uid of the input device the staged config opens: the chosen device when it
+    /// is connected, else the system default ("" when there is none). Per-device input settings
+    /// key on it, so "System default" and a missing device never share another's (specs/086).</summary>
+    string EffectiveInputUid();
     /// <summary>Channel names of the open ASIO driver; empty when ASIO isn't running.</summary>
     IReadOnlyList<string> AsioChannels(bool input);
     int AsioPair(bool input);

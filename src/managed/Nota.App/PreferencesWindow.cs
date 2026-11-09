@@ -333,7 +333,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             device.Add(Row(Loc.T("preferences.latency"), latency));
             var asioBody = Sections(
                 Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
-                InputsSection(engine),
+                InputsHost(engine),
                 Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
             _loading = false;
             return asioBody;
@@ -361,7 +361,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         var body = Sections(
             Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
-            InputsSection(engine),
+            InputsHost(engine),
             Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
         _loading = false;
         return body;
@@ -603,6 +603,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         if (_loading || _main is null) return;
         _main.ApplyAudioSettings();
         InputSetupAccess.Push(_main.Engine);   // another device: its own switched-off inputs
+        RebuildInputs(_main.Engine);           // ...its own inputs and names on the page (specs/086)
         UpdateLatency();
     }
 

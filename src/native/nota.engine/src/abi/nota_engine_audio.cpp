@@ -77,6 +77,16 @@ const char* nota_audio_input_device_uid(int32_t i) {
 const char* nota_audio_input_device_name(int32_t i) {
     return deviceField(g_inputDevices, i, false);
 }
+int32_t nota_audio_effective_input_uid(const NotaEngine* e, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string uid = nota::effectiveAudioDeviceUid(CENG(e)->audioConfig().inputDeviceUid, /*inputScope=*/true);
+    if (out && cap > 0) {
+        const size_t n = std::min(uid.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, uid.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(uid.size());
+}
 
 NotaResult nota_audio_set_output_device(NotaEngine* e, const char* uid) {
     if (!e) return NOTA_ERR_INVALID_ARG;

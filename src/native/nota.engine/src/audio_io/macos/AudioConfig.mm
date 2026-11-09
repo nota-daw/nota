@@ -116,6 +116,11 @@ uint32_t resolveAudioDeviceId(const std::string& uid, bool inputScope) {
     return defaultDeviceId(inputScope); // empty or unknown UID -> current default
 }
 
+std::string effectiveAudioDeviceUid(const std::string& uid, bool inputScope) {
+    const AudioDeviceID dev = resolveAudioDeviceId(uid, inputScope);
+    return dev == kAudioObjectUnknown ? std::string{} : deviceUidString(dev);
+}
+
 } // namespace nota
 
 #endif // defined(__APPLE__)

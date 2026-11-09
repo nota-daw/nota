@@ -22,6 +22,21 @@ public sealed partial class PreferencesWindow
 {
     private const double InputNameW = 200, InputDeviceW = 170;
 
+    // The Inputs section sits in a host so a device change can rebuild it alone: the list is
+    // the device's inputs, its names and switches its own entry in the settings.
+    private ContentControl? _inputsHost;
+
+    private Control InputsHost(IAudioEngine engine)
+    {
+        _inputsHost = new ContentControl { Content = InputsSection(engine) };
+        return _inputsHost;
+    }
+
+    private void RebuildInputs(IAudioEngine engine)
+    {
+        if (_inputsHost is { } host) host.Content = InputsSection(engine);
+    }
+
     private Control InputsSection(IAudioEngine engine)
     {
         int count = engine.AudioInputChannelCount();

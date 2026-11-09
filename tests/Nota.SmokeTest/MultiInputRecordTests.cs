@@ -29,6 +29,28 @@ internal static class MultiInputRecordTests
         foreach (var r in SkippedTracks()) yield return r;
         foreach (var r in InputSetupPickers()) yield return r;
         foreach (var r in SwitchedOffInputSkipped()) yield return r;
+        foreach (var r in SetupKeyIsTheOpenedDevice()) yield return r;
+    }
+
+    // Input names and switches belong to the device the config opens: "System default" and a
+    // device that isn't connected both mean the system's default input — never a shared
+    // "default" entry, never the missing device's names on another one.
+    private static IEnumerable<(bool, string)> SetupKeyIsTheOpenedDevice()
+    {
+        using var e = new NotaEngine();
+        string saved = e.GetAudioConfig().InputUid;
+        e.SetAudioInputDevice("");
+        string viaDefault = e.EffectiveInputUid();
+        e.SetAudioInputDevice("nota-test-unplugged-input");
+        string viaMissing = e.EffectiveInputUid();
+        var devices = NotaEngine.AudioInputDevices();
+        string? chosen = devices.Count > 0 ? devices[^1].Uid : null;
+        string viaChosen = "";
+        if (chosen is not null) { e.SetAudioInputDevice(chosen); viaChosen = e.EffectiveInputUid(); }
+        e.SetAudioInputDevice(saved);   // staged only: nothing was applied
+        yield return (viaMissing == viaDefault && (devices.Count == 0 || viaDefault.Length > 0),
+            $"System default and a missing device key on the default input ({(viaDefault.Length > 0 ? "a device" : "none")})");
+        yield return (chosen is null || viaChosen == chosen, "a chosen connected device keys on itself");
     }
 
     // Input c carries the constant (c + 1) / 16 on every frame, so a clip says which input it holds.
