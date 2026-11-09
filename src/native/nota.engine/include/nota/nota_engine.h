@@ -1306,6 +1306,9 @@ NOTA_API NotaResult nota_session_remove_scene(NotaEngine* engine, int32_t scene)
  * is cut to whole launch quanta (bars when unquantized), or to the fixed record length. */
 NOTA_API NotaResult nota_session_record_slot(NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_stop_record(NotaEngine* engine);
+/* Stop recording one slot (specs/086): while other slots of the Session audio take still record,
+ * only this track's lands in its slot and loops back; otherwise as nota_session_stop_record. */
+NOTA_API NotaResult nota_session_stop_record_slot(NotaEngine* engine, int32_t track_id);
 /* Move MIDI between Session and Arrangement (M5-6). slot->arrangement returns the
  * new arrangement clip index (or -1); arrangement->slot returns 1/0. */
 NOTA_API int32_t nota_session_slot_to_arrangement(NotaEngine* engine, int32_t track_id, int32_t scene, double start_beat);
@@ -1593,6 +1596,27 @@ NOTA_API NotaResult nota_track_set_input(NotaEngine* engine, int32_t track_id, i
 NOTA_API int32_t    nota_track_get_input(const NotaEngine* engine, int32_t track_id);
 /* 1 when the track's pick exists on the open (or probed) capture device. */
 NOTA_API int32_t    nota_track_input_available(const NotaEngine* engine, int32_t track_id);
+/* An instrument track's MIDI input (specs/086): which live MIDI reaches it when armed, and so
+ * what it records. source -2 = All inputs (the computer keyboard, gamepad and Remote too),
+ * else a hardware source index (nota_midi_source_of_uid; -1 = a device not connected: nothing
+ * from hardware); channel 0 = all, 1-16 one channel. NOTA_ERR_INVALID_ARG for a track that
+ * isn't an instrument track. */
+NOTA_API NotaResult nota_track_set_midi_input(NotaEngine* engine, int32_t track_id, int32_t source, int32_t channel);
+/* Packs (source + 2) | (channel << 8). */
+NOTA_API int32_t    nota_track_get_midi_input(const NotaEngine* engine, int32_t track_id);
+/* The same by device uid ("" or NULL = All inputs): the track keeps the uid and finds its
+ * device again whenever the MIDI inputs re-open (nota_midi_apply); while that device is not
+ * connected the track receives nothing from hardware. get copies the uid ("" = All) into
+ * `out` and returns its length. */
+NOTA_API NotaResult nota_track_set_midi_input_uid(NotaEngine* engine, int32_t track_id, const char* uid, int32_t channel);
+NOTA_API int32_t    nota_track_get_midi_input_uid(const NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
+/* The source index of a connected MIDI input by its uid (nota_midi_input_device_uid);
+ * -1 when it is not connected or switched off. Indices change when the inputs re-open. */
+NOTA_API int32_t    nota_midi_source_of_uid(const NotaEngine* engine, const char* uid);
+/* Tests: feed a channel-voice message as if hardware source `source` sent it (status high
+ * nibble 0x80/0x90/0xA0/0xB0/0xD0/0xE0, channel 0-15). */
+NOTA_API void       nota_engine_push_midi_for_test(NotaEngine* engine, int32_t source, int32_t status, int32_t channel,
+                                                   int32_t d1, int32_t d2);
 /* The capture device's input channels: how many (0 = none open), at most 64, and the UTF-8
  * name the device gives one ("" when it gives none; copied into `out`, returns its length).
  * probe opens the selected device just to read them (closing it again unless a track needs
@@ -1605,6 +1629,9 @@ NOTA_API int32_t    nota_audio_input_probe(NotaEngine* engine);
 NOTA_API void       nota_audio_input_set_disabled(NotaEngine* engine, const int32_t* channels, int32_t count);
 /* Tests: pretend a capture device with `channels` inputs ("Test N") is open; 0 clears it. */
 NOTA_API void       nota_engine_set_test_input_device(NotaEngine* engine, int32_t channels);
+/* Tests: `frames` of `channels`-wide device frames into the capture ring, then drained into
+ * the running take as poll() would. */
+NOTA_API void       nota_engine_feed_input_test(NotaEngine* engine, const float* interleaved, int32_t frames, int32_t channels);
 /* Input monitoring (audio tracks, Monitor "In"): while on, the track plays its record-input
  * source live through its devices + fader instead of its clips. A master source stays
  * silent (it would feed back). push_monitor_frames feeds the hardware-monitor ring without

@@ -138,6 +138,10 @@ public sealed class TrackDto
     public int? InputWidth { get; set; }
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
+    // An instrument track's MIDI input (specs/086): the device's uid (absent = All inputs) and
+    // channel (absent / 0 = all, 1–16).
+    public string? MidiInputUid { get; set; }
+    public int? MidiInputChannel { get; set; }
     public float[] Sends { get; set; } = new float[4];
     public InstrumentDto? Instrument { get; set; }
     public List<MidiDeviceDto> MidiEffects { get; set; } = new();   // MIDI FX chain, before the instrument

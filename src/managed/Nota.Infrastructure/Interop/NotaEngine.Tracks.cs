@@ -562,6 +562,39 @@ public sealed partial class NotaEngine
     public int AudioInputChannelCount()
     { ThrowIfDisposed(); return NativeMethods.AudioInputChannelCount(_handle); }
 
+    /// <summary>Sets an instrument track's MIDI input (specs/086): a device by uid (null = All
+    /// inputs) and a channel (0 = all, 1–16).</summary>
+    public bool SetTrackMidiInput(int trackId, string? uid, int channel)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.TrackSetMidiInputUid(_handle, trackId, string.IsNullOrEmpty(uid) ? null : uid, channel)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>An instrument track's MIDI input: the device uid (null = All inputs), the channel
+    /// (0 = all) and whether that device is connected now (always true for All inputs).</summary>
+    public TrackMidiInput GetTrackMidiInput(int trackId)
+    {
+        ThrowIfDisposed();
+        string uid = ReadNativeString((b, c) => NativeMethods.TrackGetMidiInputUid(_handle, trackId, b, c));
+        int v = NativeMethods.TrackGetMidiInput(_handle, trackId);
+        int source = (v & 0xFF) - 2, channel = (v >> 8) & 0xFF;
+        return new TrackMidiInput(uid.Length == 0 ? null : uid, channel, uid.Length == 0 || source >= 0);
+    }
+
+    /// <summary>Tests: filters a track to hardware source index <paramref name="source"/> (-2 =
+    /// All inputs) without a device to name it by uid.</summary>
+    public bool SetTrackMidiInputSourceForTest(int trackId, int source, int channel)
+    { ThrowIfDisposed(); return NativeMethods.TrackSetMidiInput(_handle, trackId, source, channel) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Tests: feeds a MIDI message as if hardware source <paramref name="source"/> sent it.</summary>
+    public void PushMidiForTest(int source, int status, int channel, int d1, int d2)
+    { ThrowIfDisposed(); NativeMethods.EnginePushMidiForTest(_handle, source, status, channel, d1, d2); }
+
+    /// <summary>The source index of a connected MIDI input (-1 when not connected).</summary>
+    public int MidiSourceOfUid(string uid)
+    { ThrowIfDisposed(); return NativeMethods.MidiSourceOfUid(_handle, uid); }
+
     /// <summary>The name the capture device gives an input channel ("" when it gives none).</summary>
     public string AudioInputChannelName(int index)
     { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioInputChannelName(_handle, index, b, c)); }
@@ -573,6 +606,10 @@ public sealed partial class NotaEngine
     /// <summary>Inputs switched off on the Audio I/O page (0-based): a take skips a track on one.</summary>
     public void SetDisabledInputs(int[] channels)
     { ThrowIfDisposed(); NativeMethods.AudioInputSetDisabled(_handle, channels, channels.Length); }
+
+    /// <summary>Tests: device frames into the capture ring, drained into the running take.</summary>
+    public void FeedInputForTest(float[] interleaved, int frames, int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineFeedInputTest(_handle, interleaved, frames, channels); }
 
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     public void SetTestInputDevice(int channels)

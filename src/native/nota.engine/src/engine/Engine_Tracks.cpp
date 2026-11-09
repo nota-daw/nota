@@ -3677,6 +3677,8 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setInput(src.inputFirst(), src.inputWidth());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
+    nt->setMidiInput(src.midiInputSource(), src.midiInputChannel());
+    nt->midiInputUid = src.midiInputUid;
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
     if (withContent) {
         nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine

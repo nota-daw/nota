@@ -84,6 +84,17 @@ public sealed class MixerTools(IAudioEngine engine, IEngineDispatch dispatch, IA
         return new TrackInputInfo(p.First + 1, p.Width, E.TrackInputAvailable(trackId));
     });
 
+    [McpServerTool(Name = "set_track_midi_input"), Description("Set which live MIDI reaches an instrument track when it is armed, and so what it records: a MIDI input device by uid (from list_midi_devices; omit or null for All inputs — every device plus the computer keyboard, gamepad and Nota Remote) and a channel (0 = all, 1-16). A device that is not connected is kept and receives nothing until it is.")]
+    public Task SetTrackMidiInput(int trackId, string? uid = null, int channel = 0) => Mutate(() =>
+    {
+        if (channel < 0 || channel > 16) throw new ArgumentException($"channel {channel}: 0 (all) or 1-16");
+        if (!E.SetTrackMidiInput(trackId, uid, channel))
+            throw new ArgumentException($"track {trackId} is not an instrument track");
+    });
+
+    [McpServerTool(Name = "get_track_midi_input"), Description("Read an instrument track's MIDI input: device uid (null = All inputs), channel (0 = all) and whether that device is connected.")]
+    public Task<TrackMidiInput> GetTrackMidiInput(int trackId) => Read(() => E.GetTrackMidiInput(trackId));
+
     [McpServerTool(Name = "set_track_monitor"), Description("Turn live input monitoring on/off for an audio track: it plays its record-input source (hardware input, or another track's / return's output) through its devices and fader in real time, in place of its clips.")]
     public Task SetTrackMonitor(int trackId, bool on) => Mutate(() => E.SetTrackMonitor(trackId, on));
 

@@ -283,15 +283,31 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         !transport_.uiIsPlaying() && uiCountIn_.load(std::memory_order_relaxed) <= 0.0 && countInBars() > 0;
     sessionCountIn_ = false;
     sessionCountInFresh_ = false;
+    // Another audio slot while a Session audio take runs: it records along, as a lane of that
+    // take (specs/086), from now — the take is already rolling and counted in.
+    if (t->type() == TrackType::Audio && recordSessionAudio_ && audioRecording_) {
+        if (addSessionAudioLane(trackId, scene)) {
+            if (auto& sp = t->sessionPlayer) // the take replaces what this track was playing (#337)
+                if (sp->playing.load(std::memory_order_relaxed) >= 0 ||
+                    sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone)
+                    sp->requestStopNow();
+        }
+        return;
+    }
+    // Another track's MIDI slot while a Session MIDI take runs: it joins the take (specs/086).
+    if (t->type() == TrackType::Instrument && trackId != recordSessionTrackId_ && addSessionMidiLane(trackId, scene))
+        return;
     // Remember the slot as it was, so the take can be discarded and retried (specs/078).
     openTakeAttempt(true);
     noteTakeTrack(trackId);
     takeAttempt_.sessionTrackId = trackId;
     takeAttempt_.sessionScene = scene;
+    takeAttempt_.sessionSlots.assign(1, {trackId, scene});
 
     // Audio track: capture input into the slot (M5-4). Reuses the M4-3 input
     // pipeline; stopSessionRecord() materialises the take into slot.audio.
     if (t->type() == TrackType::Audio) {
+        publishMidiLanes({}); // the take records no MIDI (specs/086)
         recordSessionTrackId_ = trackId;
         recordSessionScene_ = scene;
         recordSessionAudio_ = true;
@@ -343,6 +359,12 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         sessionCountInUndo_ = undoPushCount_;
     }
 
+    publishMidiLanes({trackId}); // its MIDI input filter decides what reaches the slot (specs/086)
+    midiLanes_[0].scene = scene;
+    midiLanes_[0].growing = recordSessionGrowing_;
+    midiLanes_[0].player = t->sessionPlayer;
+    publishSessionLaneSlots();
+    takeAttempt_.sessionSlots.assign(1, {trackId, scene});
     resetCtlFold();
     recordSessionTrackId_ = trackId;
     recordSessionScene_ = scene;
@@ -368,6 +390,37 @@ void Engine::stopSessionRecord() {
     finalizeSessionRecord(true);
 }
 
+void Engine::stopSessionRecordSlot(int32_t trackId) {
+    // Several slots record (specs/086): this one lands and loops back, the rest keep going.
+    if (recordSessionAudio_ && audioRecording_ && captureLanes_.size() > 1) {
+        if (const CaptureLane* l = captureLaneOf(trackId)) {
+            const int32_t scene = l->scene;
+            finishCaptureLane(trackId);
+            if (takeAttempt_.active) keepTakeTrack(trackId); // landed: a retry leaves it be
+            if (scene >= 0) launchSlot(trackId, scene);
+            return;
+        }
+    }
+    // Several MIDI slots record: this one lands and plays on, the rest keep going.
+    if (recording_.load(std::memory_order_relaxed) && !recordSessionAudio_ && !sessionCountIn_ &&
+        openMidiLaneCount() > 1)
+        if (const int32_t k = midiLaneOf(trackId); k >= 0 && midiLanes_[static_cast<size_t>(k)].scene >= 0) {
+            finishSessionMidiLane(k);
+            return;
+        }
+    finalizeSessionRecord(true);
+}
+
+bool Engine::sessionSlotRecording(int32_t trackId, int32_t scene) const {
+    if (recording_.load(std::memory_order_relaxed) && !recordSessionAudio_) { // a MIDI slot of the take (specs/086)
+        const int32_t k = midiLaneOf(trackId);
+        return k >= 0 && midiLanes_[static_cast<size_t>(k)].scene == scene;
+    }
+    if (!audioRecording_ || !recordSessionAudio_) return false;
+    const CaptureLane* l = captureLaneOf(trackId);
+    return l && l->scene == scene;
+}
+
 // End an in-progress session recording. relaunch=true loops the fresh take back (the UI's
 // "stop recording"); relaunch=false just materialises it and leaves it stopped (a global stop,
 // so the take isn't lost). No-op when nothing is recording into a session slot.
@@ -384,29 +437,22 @@ void Engine::finalizeSessionRecord(bool relaunch) {
     }
     // Audio take: materialise into the slot (reads recordSession* + clears the audio flags).
     if (recordSessionAudio_) {
-        const int32_t tid = recordSessionTrackId_, sc = recordSessionScene_;
+        std::vector<std::pair<int32_t, int32_t>> slots; // every slot the take records (specs/086)
+        for (const auto& l : captureLanes_)
+            if (l.scene >= 0) slots.emplace_back(l.trackId, l.scene);
+        if (slots.empty() && recordSessionTrackId_ > 0 && recordSessionScene_ >= 0)
+            slots.emplace_back(recordSessionTrackId_, recordSessionScene_);
         stopAudioRecording();
-        if (relaunch && tid > 0 && sc >= 0) launchSlot(tid, sc);
+        if (relaunch)
+            for (auto [tid, sc] : slots) launchSlot(tid, sc);
     }
     // The take's last controller points (held back for thinning) go in before the target does.
     if (recordSessionScene_ >= 0 && !recordSessionAudio_) flushCtlTake();
-    // A fresh MIDI take that ran open-ended: cut it to whole launch quanta (a bar when
-    // launching is unquantized) — no undo step of its own, so undo drops the whole take.
-    if (recordSessionGrowing_ && recordSessionScene_ >= 0) {
-        recordSessionGrowing_ = false;
-        const int32_t tid = recordSessionTrackId_, sc = recordSessionScene_;
-        double el = 0.0;
-        if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire))
-            if (sp->playing.load(std::memory_order_relaxed) == sc) el = sp->playedBeats.load(std::memory_order_relaxed);
-        if (auto old = findTrackAuthoring(tid); old && sc < static_cast<int32_t>(old->sessionSlots.size())) {
-            auto nt = cloneTrack(*old);
-            SessionSlot& sl = nt->sessionSlots[sc];
-            const double len = roundedTakeBeats(el);
-            sl.lengthBeats = len;
-            sl.midi.lengthBeats = len;
-            republishWithTrackRaw(tid, nt);
-        }
-    }
+    // A fresh MIDI take that ran open-ended: cut to whole launch quanta, every slot of the take.
+    if (recordSessionScene_ >= 0 && !recordSessionAudio_)
+        for (auto& l : midiLanes_)
+            if (l.scene >= 0) cutGrowingLane(l);
+    recordSessionGrowing_ = false;
     recording_.store(false, std::memory_order_relaxed);
     recordSlotPlayer_.store(nullptr, std::memory_order_release);
     recordSessionScene_ = -1;
@@ -582,6 +628,8 @@ bool Engine::setSessionSlotLength(int32_t trackId, int32_t scene, double lengthB
     // Keep the audio thread's loop length in sync if we're recording into this slot.
     if (recordSessionTrackId_ == trackId && recordSessionScene_ == scene)
         recordSlotLen_.store(lengthBeats, std::memory_order_relaxed);
+    if (const int32_t k = midiLaneOf(trackId); k >= 0 && midiLanes_[static_cast<size_t>(k)].scene == scene)
+        publishSessionLaneSlots(); // a joined slot's clock too (specs/086)
     return true;
 }
 
@@ -605,6 +653,12 @@ bool Engine::setSessionSlotGain(int32_t trackId, int32_t scene, float gain) {
 int32_t Engine::sessionSlotState(int32_t trackId, int32_t scene) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || scene < 0 || scene >= static_cast<int32_t>(t->sessionSlots.size())) return 0;
+    if (sessionSlotRecording(trackId, scene) && !(recordSessionTrackId_ == trackId && recordSessionScene_ == scene)) {
+        // Another slot of the Session take (specs/086); a MIDI one waits for its launch first.
+        if (!recordSessionAudio_ && t->sessionPlayer && t->sessionPlayer->playing.load(std::memory_order_relaxed) != scene)
+            return 5;
+        return 4;
+    }
     if (recording_.load(std::memory_order_relaxed) && recordSessionTrackId_ == trackId && recordSessionScene_ == scene) {
         // Not capturing yet (specs/078): a retried take before the boundary it records from, or a
         // MIDI take whose slot waits for a launch quantum (unquantized, it starts next block).
@@ -970,6 +1024,9 @@ void Engine::remapPlayers(const std::function<int32_t(int32_t)>& map) {
         const int32_t n = map(recordSessionScene_);
         if (n >= 0) recordSessionScene_ = n;
     }
+    for (auto& l : captureLanes_) // every slot a Session audio take records (specs/086)
+        if (l.scene >= 0)
+            if (const int32_t n = map(l.scene); n >= 0) l.scene = n;
     if (sceneFollowScene_ >= 0) sceneFollowScene_ = map(sceneFollowScene_);
 }
 
@@ -1091,6 +1148,16 @@ void Engine::applySceneTempo() {
 void Engine::serviceSessionFollow() {
     if (sceneTempoPending_ && transport_.uiPositionBeats() + 1e-6 >= sceneTempoAt_) applySceneTempo();
     if (sessionRecordLen_ > 0.0) {
+        // Several MIDI slots (specs/086): each stops when its own length is recorded.
+        if (recording_.load(std::memory_order_relaxed) && !recordSessionAudio_ && openMidiLaneCount() > 1) {
+            std::vector<int32_t> done;
+            for (const auto& l : midiLanes_)
+                if (l.trackId >= 0 && l.scene >= 0 && l.player &&
+                    l.player->playing.load(std::memory_order_relaxed) == l.scene &&
+                    l.player->playedBeats.load(std::memory_order_relaxed) >= sessionRecordLen_ - 1e-6)
+                    done.push_back(l.trackId);
+            for (int32_t tid : done) stopSessionRecordSlot(tid);
+        }
         double el = 0.0;
         if (sessionRecordTarget(nullptr, nullptr, &el) && el >= sessionRecordLen_ - 1e-6) stopSessionRecord();
     }

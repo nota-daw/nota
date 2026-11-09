@@ -7,7 +7,7 @@
 | `list_audio_inputs` | → `[{index (1-based), name, deviceName, enabled}]` | names after the Audio I/O setup |
 | `set_track_input` | `trackId, first (1-based), width (1\|2)` | error for odd stereo first / bad width |
 | `get_track_input` | `trackId` → `{first, width, label, available}` | |
-| `list_midi_inputs` | → `[{uid, name, connected}]` | |
+| `list_midi_inputs` | → `[{uid, name, connected}]` | as built: the existing `list_midi_devices` (uid, name, enabled) |
 | `set_track_midi_input` | `trackId, uid? (null = All), channel (0 = All, 1–16)` | |
 | `get_track_midi_input` | `trackId` → `{uid, name, channel}` | |
 

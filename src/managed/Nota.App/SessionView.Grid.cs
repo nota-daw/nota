@@ -389,7 +389,9 @@ public sealed partial class SessionView
 
         private static readonly Rect LaunchZone = new(3, 3, 18, 18);
         private Rect CentreZone => new(Bounds.Width / 2 - 8, Bounds.Height / 2 - 8, 16, 16);
-        private bool Recording => _o._recTrack == _c.TrackId && _o._recScene == _scene;
+        // The take's own slot, or another slot recording along with it (specs/086).
+        private bool Recording => (_o._recTrack == _c.TrackId && _o._recScene == _scene)
+                                  || (_o._recScene >= 0 && _o._engine.SessionSlotState(_c.TrackId, _scene) == 4);
         private int _lastState = -1;
         private bool _lastArmed, _lastDrag;
 
@@ -440,7 +442,7 @@ public sealed partial class SessionView
             if (!pt.Properties.IsLeftButtonPressed) return;
             e.Handled = true;
 
-            if (Recording && LaunchZone.Contains(p)) { _o._engine.StopSessionRecord(); _o.Refresh(); return; }
+            if (Recording && LaunchZone.Contains(p)) { _o._engine.StopSessionRecordSlot(_c.TrackId); _o.Refresh(); return; }
             if (_filled && LaunchZone.Contains(p))
             {
                 _o._engine.LaunchSlotVelocity(_c.TrackId, _scene, 1f);
@@ -594,7 +596,7 @@ public sealed partial class SessionView
             if (!_c.IsInstrument)
             {
                 var buf = new float[44 * 2];
-                int n = _o._engine.AudioRecordPeaks(buf, 44);
+                int n = _o._engine.AudioRecordPeaksOf(_c.TrackId, buf, 44);   // this slot's lane (specs/086)
                 DrawPeaks(ctx, new Rect(7, 25, r.Width - 14, r.Height - 31), buf, n, NotaPalette.DangerBright);
             }
             else DrawRecordingNotes(ctx, new Rect(7, 25, r.Width - 14, r.Height - 31));

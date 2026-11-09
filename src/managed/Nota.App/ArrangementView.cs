@@ -2808,6 +2808,9 @@ public sealed partial class ArrangementView : UserControl
                 () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowAudioPreferences()));
         }
 
+        // MIDI input ▸ (instrument tracks): which device and channel reach the track (specs/086).
+        MenuItem? midiInput = vm is { IsInstrument: true } ? MidiInputPick.Menu(_engine, trackId) : null;
+
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
         // this track's instrument. The current source is ticked and shown on the item.
         MenuItem? midiFrom = null;
@@ -2854,7 +2857,7 @@ public sealed partial class ArrangementView : UserControl
         MenuKit.AddGroups(flyout.Items,
             new Control[] { MenuKit.Header(vm?.Name ?? "", TrackBrush(EffectiveColorIndex(_engine, trackId)), TrackBadge(trackId)) },
             new Control[] { TrackColourRow(one), TrackHeightRow(one) },
-            new Control?[] { rename, recInput, midiFrom }.OfType<Control>(),
+            new Control?[] { rename, recInput, midiInput, midiFrom }.OfType<Control>(),
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,
@@ -2922,15 +2925,21 @@ public sealed partial class ArrangementView : UserControl
         return new MonitorChip { Chip = chip, SetSource = src => { usable = src != -1; Paint(); } };
     }
 
-    // Compact MIDI-input selector for an instrument track header: None, or another instrument
-    // track whose MIDI this one receives ("MIDI In"). Mirrors the record-input picker.
+    // Compact MIDI-input selector for an instrument track header: All inputs, a MIDI device, or
+    // another instrument track whose MIDI this one receives ("MIDI In"). Mirrors the
+    // record-input picker.
     private Control BuildMidiSourceCombo(int trackId)
     {
-        int cur = _engine?.GetTrackMidiSource(trackId) ?? -1;
-        var sources = new List<(string, int)> { (Loc.T("common.none"), -1) };
-        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) sources.Add((v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), v.Id));
-        if (!sources.Exists(x => x.Item2 == cur)) cur = -1;
-        return InPicker(sources, cur, src => _engine?.SetTrackMidiSource(trackId, src));
+        // The live input (All inputs / a device, with its channel) or the track it takes MIDI
+        // from (specs/086); the picker's values are the entries' indices.
+        if (_engine is not { } engine) return InPicker(new() { (Loc.T("midi_input.all_inputs"), 0) }, 0, _ => { });
+        var (entries, cur) = MidiInputPick.Compact(engine, trackId,
+            _tracks.Where(v => v.IsInstrument).Select(v => (v.Id, v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id))));
+        var sources = entries.Select((en, i) => (en.Label, i)).ToList();
+        return InPicker(sources, cur, i =>
+        {
+            if (i >= 0 && i < entries.Count) MidiInputPick.Apply(engine, trackId, entries[i]);
+        });
     }
 
     // The input picker on a track header (style guide): "In" in ink 3, the source in ink 1 and

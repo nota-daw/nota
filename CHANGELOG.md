@@ -56,6 +56,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   device; changes apply at once. A track set to an input you switched off keeps it and records
   nothing from it. While recording several tracks the status line says how many, and which
   armed tracks it skipped and why.
+- **Several Session slots record at once** (#353, specs/086): with a Session audio take
+  running, launching an empty slot on another armed audio track records into it too, in the
+  same take, from that moment. Clicking a recording slot stops that slot alone — its take lands
+  and loops — while the others keep recording; the toolbar's stop ends them all. Each slot
+  keeps its own take and input through save and load. MCP: `stop_session_record_slot`.
+- **Every armed instrument track records, each from its own MIDI input** (#528, specs/086):
+  a take now records a MIDI clip on every armed instrument track (up to 16), each overdubbing
+  its own clip under the playhead, in one undo step — so linked group instrument tracks all
+  record. An instrument track's **MIDI input** (track menu, inspector) is **All inputs** —
+  every device plus the computer keyboard, gamepad and Nota Remote — or one MIDI device, and
+  a channel (all or 1–16): two players on two controllers record onto two tracks at once. A
+  device that isn't connected stays picked, marked "(not connected)", and sends nothing; MPE
+  with a single channel shows a warning. Saved with the project. MCP: `set_track_midi_input`,
+  `get_track_midi_input`. In Session view, launching an empty MIDI slot on another track while
+  a MIDI slot records adds it to the take: each slot records its own input on its own loop,
+  stops on its own, and Discard and Retry restarts them all.
 
 ### Changed
 - **S cards keep their name readable** (#540): on an S card the preset picker is a small list

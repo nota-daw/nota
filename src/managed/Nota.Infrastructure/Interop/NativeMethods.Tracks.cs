@@ -345,11 +345,32 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_name")]
     internal static partial int AudioInputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input_uid", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult TrackSetMidiInputUid(IntPtr engine, int trackId, string? uid, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_input_uid")]
+    internal static partial int TrackGetMidiInputUid(IntPtr engine, int trackId, [Out] byte[] outBuf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input")]
+    internal static partial NotaResult TrackSetMidiInput(IntPtr engine, int trackId, int source, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_input")]
+    internal static partial int TrackGetMidiInput(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_source_of_uid", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int MidiSourceOfUid(IntPtr engine, string uid);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_push_midi_for_test")]
+    internal static partial void EnginePushMidiForTest(IntPtr engine, int source, int status, int channel, int d1, int d2);
+
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_set_disabled")]
     internal static partial void AudioInputSetDisabled(IntPtr engine, int[] channels, int count);
 
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_probe")]
     internal static partial int AudioInputProbe(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_feed_input_test")]
+    internal static partial void EngineFeedInputTest(IntPtr engine, float[] interleaved, int frames, int channels);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_test_input_device")]
     internal static partial void EngineSetTestInputDevice(IntPtr engine, int channels);
