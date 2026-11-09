@@ -418,6 +418,14 @@ if (args.Length >= 1 && args[0] == "--notes")
     Console.WriteLine(failures == 0 ? "NOTES PASSED" : $"NOTES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Piano-roll Draw Mode alone: `--draw`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--draw")
+{
+    Console.WriteLine("-- draw mode --");
+    foreach (var (ok, label) in DrawModeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DRAW PASSED" : $"DRAW FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Several clips in one Clip editor alone: `--multiclip`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--multiclip")
 {
@@ -15580,6 +15588,9 @@ foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- note editing --");
 foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- draw mode --");
+foreach (var (ok, label) in DrawModeTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- multi-clip editing --");
 foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);

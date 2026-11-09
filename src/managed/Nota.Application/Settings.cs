@@ -195,6 +195,10 @@ public sealed class Settings
     public bool PianoRollAudition { get; set; } = true;
     /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
     public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
+    /// <summary>Piano-roll Draw Mode (#554): a plain press on the grid places a note and the held
+    /// drag paints a run of them, instead of a double-click per note. The Draw chip in the clip
+    /// editor's header, and B in the grid; off by default.</summary>
+    public bool PianoRollDrawMode { get; set; }
     /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
     /// the velocity; true — wheel up lowers it.</summary>
     public bool PianoRollVelocityWheelReversed { get; set; }

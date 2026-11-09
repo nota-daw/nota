@@ -22,6 +22,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Draw Mode in the piano roll** (#554): the **Draw** chip in the clip editor's header arms it
+  (so does **B** with the roll focused; **Esc** puts it down), and a plain press then places a
+  note — hold the button down and drag to paint a run, one note per cell on the snap grid, with
+  the cells a fast drag crossed filled in so a diagonal flick leaves no gaps. Cells sit a grid
+  step apart, or the last-touched note's length when that is longer, so a run tiles instead of
+  stacking on one pitch; a press on a note still moves or trims it, ⇧-drag on empty grid still
+  marquees, and the whole run is one undo step. Remembered app-wide, like the speaker chip.
+
 ### Changed
 - **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
   Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one

@@ -66,7 +66,7 @@ public sealed class ClipEditorView : UserControl
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12,
-            Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
+            Children = { DrawControl(), AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
         var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, null, right, out _nameText, out _colorBar, _props, _props.Flow);
         DockPanel.SetDock(header, Dock.Top);
@@ -111,6 +111,23 @@ public sealed class ClipEditorView : UserControl
         };
         if (_envMode) Roll.SetOverlay(_envOverlay);
         PaintFold();   // another track's clip may be folded differently
+    }
+
+    // Draw Mode (#554): the Draw chip. App-wide like the speaker chip below it, so every open
+    // editor's chip follows a flip made in another — and B in the grid flips them all too.
+    private static Control DrawControl()
+    {
+        var b = new ToggleButton
+        {
+            Content = Loc.T("clip_editor.draw"), Padding = new Thickness(10, 0), Classes = { "chip" },
+            IsChecked = PianoRollView.DrawMode,
+        };
+        ToolTip.SetTip(b, Loc.T("clip_editor.draw_mode_b_click_to"));
+        b.Click += (_, _) => PianoRollView.SetDrawMode(b.IsChecked == true);
+        void Sync() => b.IsChecked = PianoRollView.DrawMode;
+        b.AttachedToVisualTree += (_, _) => { Sync(); PianoRollView.DrawModeToggled += Sync; };
+        b.DetachedFromVisualTree += (_, _) => PianoRollView.DrawModeToggled -= Sync;
+        return b;
     }
 
     // Note audition (#46): the speaker chip. One app-wide setting, so every open editor's

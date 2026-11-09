@@ -35,7 +35,7 @@ Read these and reconcile the list against them — do **not** trust the existing
 | Bindings | File |
 |---|---|
 | Transport (Space/Return), global editing (A, R, M, ⌘M, ⌘G/⌘⇧G, ⌘C/X/V, Delete, Tab, Esc) and the **computer-keyboard note map** (`KeyToPitch`) | `src/managed/Nota.App/MainWindow.Input.cs` |
-| Piano-roll note editing (arrows, ⇧ octave, ⌘A/⌘D, ⌘C/X/V, Delete, Esc) | `src/managed/Nota.App/PianoRollView.cs` (its `OnKeyDown`) |
+| Piano-roll note editing (arrows, ⇧ octave, ⌘A/⌘D, ⌘C/X/V, Delete, Esc, B for Draw Mode) | `src/managed/Nota.App/PianoRollView.cs` (its `OnKeyDown`) |
 | Arrangement lane / clip gestures (double-click, drag) | `src/managed/Nota.App/ArrangementView*.cs` |
 | Device reorder drag | `src/managed/Nota.App/DeviceChainView.cs`, `DeviceCards/…` |
 
