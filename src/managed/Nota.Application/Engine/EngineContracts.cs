@@ -340,6 +340,13 @@ public enum InputChannels { Stereo = 0, Mono1 = 1, Mono2 = 2 }
 /// <summary>Why an armed track didn't record (specs/086); matches nota_engine_record_skipped.</summary>
 public enum RecordSkipReason { InputUnavailable = 1, TooMany = 2, SwitchedOff = 3, MixedSources = 4 }
 
+/// <summary>An instrument track's MIDI input (specs/086): the device's uid (null = All inputs)
+/// and channel (0 = all, 1–16); <see cref="Connected"/> is false while that device is away.</summary>
+public readonly record struct TrackMidiInput(string? Uid, int Channel, bool Connected)
+{
+    public static TrackMidiInput All => new(null, 0, true);
+}
+
 /// <summary>An audio track's hardware input (specs/086): device channel <see cref="First"/>
 /// (0-based) alone — a mono source, heard and recorded in the middle — or the stereo pair
 /// First/First+1 (First even).</summary>

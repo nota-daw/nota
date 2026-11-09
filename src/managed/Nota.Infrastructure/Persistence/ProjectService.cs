@@ -120,6 +120,11 @@ public sealed class ProjectService
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
             };
+            if (ti.IsInstrument && engine.GetTrackMidiInput(ti.Id) is var midiIn)   // MIDI input (specs/086)
+            {
+                t.MidiInputUid = midiIn.Uid;
+                t.MidiInputChannel = midiIn.Channel > 0 ? midiIn.Channel : null;
+            }
             for (int b = 0; b < t.Sends.Length; b++) t.Sends[b] = engine.GetTrackSend(ti.Id, b);
 
             if (ti.IsInstrument)
@@ -753,6 +758,8 @@ public sealed class ProjectService
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
             engine.SetTrackInput(id, TrackInputOf(t));
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
+            if (t.MidiInputUid is { Length: > 0 } || t.MidiInputChannel is > 0)    // MIDI input (specs/086)
+                engine.SetTrackMidiInput(id, t.MidiInputUid, t.MidiInputChannel ?? 0);
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
             var ccPaths = new List<(int mi, int chain, int slot)>();   // CC targets inside racks: after the devices

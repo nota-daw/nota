@@ -576,6 +576,10 @@ docks as a panel under any of the three, or floats in its own window — see
   monitoring (in/auto/off). The input is any input of the device alone (**In 3** — mono,
   centred) or a stereo pair (**In 3/4**), named as the device names them; new tracks take
   In 1. MCP `list_audio_inputs`, `set_track_input`, `get_track_input`.
+- **MIDI input per instrument track**: All inputs (every device, the computer keyboard,
+  gamepad and Nota Remote) or one MIDI device, and a channel (all or 1–16); every armed
+  instrument track records its own MIDI clip in one take. MCP `set_track_midi_input`,
+  `get_track_midi_input`.
 - **Several tracks in one pass**: Record records every armed audio track, each its own input,
   aligned, one undo step; a mono input records a mono file.
 - **Inputs setup** (Settings → Audio → Inputs): switch inputs off and name inputs and stereo

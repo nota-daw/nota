@@ -55,7 +55,13 @@ NOTA_API int32_t    nota_track_get_midi_input(const NotaEngine* engine, int32_t 
 NOTA_API int32_t    nota_midi_source_of_uid(const NotaEngine* engine, const char* uid);
 ```
 
-The managed side keeps the uid and re-resolves it after a MIDI device change.
+As built, the engine keeps the uid on the track and re-resolves it whenever the MIDI inputs
+re-open, so undo, duplicate and reconnects keep the pick:
+
+```c
+NOTA_API NotaResult nota_track_set_midi_input_uid(NotaEngine* engine, int32_t track_id, const char* uid, int32_t channel);
+NOTA_API int32_t    nota_track_get_midi_input_uid(const NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
+```
 
 ## Takes
 

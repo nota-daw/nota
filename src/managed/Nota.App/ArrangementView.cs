@@ -2752,6 +2752,9 @@ public sealed partial class ArrangementView : UserControl
                 () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowAudioPreferences()));
         }
 
+        // MIDI input ▸ (instrument tracks): which device and channel reach the track (specs/086).
+        MenuItem? midiInput = vm is { IsInstrument: true } ? MidiInputPick.Menu(_engine, trackId) : null;
+
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
         // this track's instrument. The current source is ticked and shown on the item.
         MenuItem? midiFrom = null;
@@ -2798,7 +2801,7 @@ public sealed partial class ArrangementView : UserControl
         MenuKit.AddGroups(flyout.Items,
             new Control[] { MenuKit.Header(vm?.Name ?? "", TrackBrush(EffectiveColorIndex(_engine, trackId)), TrackBadge(trackId)) },
             new Control[] { TrackColourRow(one), TrackHeightRow(one) },
-            new Control?[] { rename, recInput, midiFrom }.OfType<Control>(),
+            new Control?[] { rename, recInput, midiInput, midiFrom }.OfType<Control>(),
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,

@@ -45,6 +45,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   same take, from that moment. Clicking a recording slot stops that slot alone — its take lands
   and loops — while the others keep recording; the toolbar's stop ends them all. Each slot
   keeps its own take and input through save and load. MCP: `stop_session_record_slot`.
+- **Every armed instrument track records, each from its own MIDI input** (#528, specs/086):
+  a take now records a MIDI clip on every armed instrument track (up to 16), each overdubbing
+  its own clip under the playhead, in one undo step — so linked group instrument tracks all
+  record. An instrument track's **MIDI input** (track menu, inspector) is **All inputs** —
+  every device plus the computer keyboard, gamepad and Nota Remote — or one MIDI device, and
+  a channel (all or 1–16): two players on two controllers record onto two tracks at once. A
+  device that isn't connected stays picked, marked "(not connected)", and sends nothing; MPE
+  with a single channel shows a warning. Saved with the project. MCP: `set_track_midi_input`,
+  `get_track_midi_input`.
 
 ### Changed
 - **An audio track can record any input of the interface** (#353, specs/086): the input

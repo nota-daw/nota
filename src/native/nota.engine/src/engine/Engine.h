@@ -1295,6 +1295,19 @@ class Engine {
     // (layout columns gathered), whatever the taps say.
     void pushInputFramesForTestN(const float* interleaved, int32_t frames, int32_t channels);
     void feedInputForTest(const float* interleaved, int32_t frames, int32_t channels); // push in chunks + drain
+    // MIDI input (specs/086): feed a message as hardware source `source` would; the source
+    // index of a connected input by uid (-1: not connected); an instrument track's filter.
+    void pushMidiForTest(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
+        onMidiMessage(source, status, channel, d1, d2);
+    }
+    int32_t midiSourceOfUid(const std::string& uid) const;
+    bool setTrackMidiInput(int32_t trackId, int32_t source, int32_t channel);
+    // By uid ("" = All inputs): kept on the track, re-resolved when the inputs re-open; a
+    // device not connected leaves the track receiving nothing from hardware until it is.
+    bool setTrackMidiInputUid(int32_t trackId, const std::string& uid, int32_t channel);
+    std::string trackMidiInputUid(int32_t trackId) const;
+    int32_t trackMidiInputSource(int32_t trackId) const;
+    int32_t trackMidiInputChannel(int32_t trackId) const;
     // Input monitoring (audio tracks): hear the record-input source live through the track.
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
@@ -1307,14 +1320,16 @@ class Engine {
     int32_t trackMidiSource(int32_t trackId) const;
     // Live notes (computer keyboard, gamepad, MIDI). Producers on different threads
     // serialize on liveMidiMx_; the audio thread only pops (AR-6).
-    void noteOn(int32_t pitch, float velocity);
-    void noteOff(int32_t pitch, float releaseVelocity = 0.0f); // 0 = none
+    // source/channel (specs/086): a hardware MIDI source index and its channel 0-15; -1 for
+    // the computer keyboard, gamepad, Remote and UI.
+    void noteOn(int32_t pitch, float velocity, int32_t source = -1, int32_t channel = 0);
+    void noteOff(int32_t pitch, float releaseVelocity = 0.0f, int32_t source = -1, int32_t channel = 0); // 0 = none
     // Per-note expression for live notes (MPE, NoteExpression.h): dim = ExprDim, pitch −1 =
     // the whole instrument. Reaches the same tracks as live notes do.
-    void noteExpression(int32_t pitch, int32_t dim, float value);
+    void noteExpression(int32_t pitch, int32_t dim, float value, int32_t source = -1, int32_t channel = 0);
     // Instrument-wide MIDI controller (specs/020, MidiController.h), live: like a note, to the
     // armed / audition tracks (or one track), and recorded when the take records. Any thread.
-    void controller(int32_t ctl, float value);
+    void controller(int32_t ctl, float value, int32_t source = -1, int32_t channel = 0);
     void trackController(int32_t trackId, int32_t ctl, float value);
     // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
     // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
@@ -1614,15 +1629,22 @@ class Engine {
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;
     void openMidiInput(); // (re)connect MIDI sources per midiConfig_
     // MIDI-thread MPE decoding, one per input source (each touched only by its own thread).
+    // One per source (specs/086), so each event carries its source and the channel of the
+    // message being decoded; a source's sink is touched only by that source's thread.
     struct MpeSink final : MpeInput::Sink {
         Engine* e = nullptr;
-        void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity); }
-        void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch); }
-        void mpeNoteOffVelocity(int32_t pitch, float velocity) override { e->noteOff(pitch, velocity); }
-        void mpeExpression(int32_t pitch, int32_t dim, float value) override { e->noteExpression(pitch, dim, value); }
-        void mpeController(int32_t ctl, float value) override { e->controller(ctl, value); }
+        int32_t source = -1, channel = 0;
+        void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity, source, channel); }
+        void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch, 0.0f, source, channel); }
+        void mpeNoteOffVelocity(int32_t pitch, float velocity) override { e->noteOff(pitch, velocity, source, channel); }
+        void mpeExpression(int32_t pitch, int32_t dim, float value) override {
+            e->noteExpression(pitch, dim, value, source, channel);
+        }
+        void mpeController(int32_t ctl, float value) override { e->controller(ctl, value, source, channel); }
     };
-    MpeSink mpeSink_;
+    std::array<MpeSink, MidiInput::kMaxSources> mpeSinks_;
+    void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2); // MIDI thread
+    std::vector<std::string> midiSourceUids_; // source index -> uid of the connected input (message thread)
     std::array<MpeInput, MidiInput::kMaxSources> mpeInputs_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
@@ -1986,6 +2008,32 @@ class Engine {
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
     std::atomic<int32_t> recordTrackRt_{-1}; // recordTrackId_ for the audio thread
+    // MIDI take lanes (specs/086), message thread -> audio thread: lane k records track
+    // midiLaneTrack_[k] (-1: lane closed) through the filter midiLaneSrc_/Ch_. The count is
+    // stored last (release), after the lanes it covers.
+    static constexpr int32_t kMaxMidiTakeLanes = 16;
+    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneTrack_{};
+    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneSrc_{};
+    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneCh_{};
+    std::atomic<int32_t> midiLaneCount_{0};
+    // Message-thread side of a lane: its clip and its share of the take's fold state (the
+    // fold works on takeNotes_ / ctlFold_ / takeCtls_; each lane's are swapped in for it).
+    struct MidiTakeLane {
+        int32_t trackId = -1;
+        int32_t clipIndex = -1;
+        std::vector<TakeNote> takeNotes;
+        std::array<CtlFold, kCtlCount> ctlFold{};
+        std::vector<TakeCtl> takeCtls;
+    };
+    std::vector<MidiTakeLane> midiLanes_;
+    void publishMidiLanes(const std::vector<int32_t>& trackIds); // opens one lane per track
+    void closeMidiLane(int32_t lane);
+    int32_t midiLaneOf(int32_t trackId) const; // message thread
+    int32_t openMidiLaneCount() const;
+    void foldRecordedTake(); // poll(): the take's recorded notes + controllers into their clips
+    bool foldMidiLane(MidiTakeLane& l, int32_t lane, const std::vector<RecordedNote>& batch,
+        const std::vector<RecordedCtl>& ctls, bool stop, int32_t replaceUpTo, bool replacePending);
+    static int32_t exprKey(int32_t lane, int32_t pitch) { return lane * 128 + pitch; } // pendingExpr_ key
     int32_t recordClipIndex_ = -1;
     int32_t recordStartStatus_ = 0; // 0 ok, 1 no armed track, 2 audio input failed
     // When recording auto-starts the transport, stopping the take returns the
@@ -2133,8 +2181,9 @@ class Engine {
     // Pitches to release on one track in the next segment (ReleaseNote command, audio thread):
     // notes a loop record replace removed while they may be sounding. A key the player holds
     // live is skipped.
-    int32_t releaseTrack_ = -1;
-    uint32_t releasePitches_[4] = {};
+    // One entry per track (several MIDI take lanes may replace at once, specs/086); -1 = free.
+    int32_t releaseTrack_[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+    uint32_t releasePitches_[16][4] = {};
     // Tracks whose voices go silent at the next block (TrackNotesOff command, audio thread).
     int32_t notesOffTracks_[8] = {};
     int32_t notesOffCount_ = 0;
@@ -2168,16 +2217,30 @@ class Engine {
 
     // recording capture (audio thread): pending note-ons awaiting note-off.
     bool prevRecording_ = false;
-    bool pendingActive_[128] = {};
-    double pendingStart_[128] = {};
-    float pendingVel_[128] = {};
-    // Note-pairing state for capturing routed-in MIDI into the record track's take
-    // (recording an instrument track fed via "MIDI In"). Separate from the live-input
-    // pending arrays so keyboard input and routed MIDI don't clobber each other.
-    bool recRoutedActive_[128] = {};
-    double recRoutedStart_[128] = {};
-    float recRoutedVel_[128] = {};
-    void captureRoutedNotes(const MidiEv* evs, int n, double blockStart, double spb, double clockOffset);
+    // One per MIDI take lane (specs/086): every armed instrument track records its own notes.
+    // pending*: live-input note-ons awaiting their note-off. recRouted*: the note pairing of
+    // routed-in MIDI ("MIDI In"), apart from the live input so the two don't clobber each other.
+    struct RtMidiLane {
+        int32_t trackId = -1; // the track this state belongs to (a change clears it)
+        bool pendingActive[128] = {};
+        double pendingStart[128] = {};
+        float pendingVel[128] = {};
+        bool recRoutedActive[128] = {};
+        double recRoutedStart[128] = {};
+        float recRoutedVel[128] = {};
+        void clear() {
+            for (int i = 0; i < 128; ++i) {
+                pendingActive[i] = false;
+                recRoutedActive[i] = false;
+            }
+        }
+    };
+    std::array<RtMidiLane, 16> rtMidiLanes_{};
+    int32_t rtMidiLaneCount_ = 0; // this block's lanes (drainLiveMidi)
+    int32_t rtLaneSrc_[16] = {}, rtLaneCh_[16] = {};
+    bool laneTakes(int32_t lane, const MidiEvent& e) const; // audio thread, this block's lanes
+    int32_t midiLaneOfRt(int32_t trackId) const;           // audio thread: lane recording this track, or -1
+    void captureRoutedNotes(int32_t lane, const MidiEv* evs, int n, double blockStart, double spb, double clockOffset);
     void captureLiveExpr(double nowBeat, double slotLen); // recorded MPE (drainLiveMidi)
     // Live keys down, tracked whether or not a take records, so keys already held when
     // Record is pressed join the take from where they started (#56). pressBeat is NaN for a
@@ -2186,6 +2249,7 @@ class Engine {
     double livePressBeat_[128] = {};
     float livePressVel_[128] = {};
     int32_t livePressTrack_[128] = {};
+    int8_t livePressSource_[128] = {}, livePressChannel_[128] = {}; // its input (specs/086)
     // Routed MIDI ("MIDI In") sounding into an armed destination, tracked whether or not a take
     // records, so notes already held on the source when Record is pressed join the take too.
     // routedOwner_ is the destination the arrays describe.
@@ -2368,6 +2432,7 @@ class Engine {
     int liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n);
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
+    bool passesMidiInput(const Track& t, const MidiEvent& e) const;
     // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.
     void applyLiveExpression(Graph* g, const Track& t, Instrument& inst) const;
     std::atomic<int32_t> auditionTrackId_{-1}; // live notes also play this track (pad audition)

@@ -339,6 +339,22 @@ class Track {
     int32_t midiFromTrackId() const { return midiFromTrackId_.load(std::memory_order_relaxed); }
     void setMidiFromTrackId(int32_t id) { midiFromTrackId_.store(id, std::memory_order_relaxed); }
 
+    // MIDI input filter (specs/086): which hardware source (kMidiAllInputs = every input, the
+    // computer keyboard / Remote / UI included) and channel (0 = all, 1-16) reach this track
+    // when it is armed. Read by the audio thread.
+    static constexpr int32_t kMidiAllInputs = -2;
+    int32_t midiInputSource() const { return midiInputSource_.load(std::memory_order_relaxed); }
+    int32_t midiInputChannel() const { return midiInputChannel_.load(std::memory_order_relaxed); }
+    void setMidiInput(int32_t source, int32_t channel) {
+        midiInputSource_.store(source, std::memory_order_relaxed);
+        midiInputChannel_.store(channel, std::memory_order_relaxed);
+    }
+    // An event from `source` (-1: not hardware) on `channel` (0-15) passes the filter.
+    bool acceptsMidiFrom(int32_t source, int32_t channel) const {
+        const int32_t s = midiInputSource(), c = midiInputChannel();
+        return (s == kMidiAllInputs || (source >= 0 && s == source)) && (c == 0 || source < 0 || c == channel + 1);
+    }
+
     // Freeze (M7): when frozen, the render substitutes `frozenBuf` (this track's
     // post-device, PRE-fader audio, captured offline over the whole arrangement) for
     // the live instrument + device chain — the fader/pan/sends/mute/solo still run
@@ -427,6 +443,14 @@ class Track {
     std::atomic<int32_t> inputWidth_{2};
     std::atomic<bool> monitor_{false};                                  // live input monitoring (audio tracks)
     std::atomic<int32_t> midiFromTrackId_{-1};                          // -1 off, >0 forward MIDI to this track id
+    std::atomic<int32_t> midiInputSource_{kMidiAllInputs};              // MIDI input filter (specs/086)
+  public:
+    // The uid of the MIDI input the filter names ("" = All inputs); message thread only. The
+    // source index above is re-resolved from it whenever the MIDI inputs re-open.
+    std::string midiInputUid;
+
+  private:
+    std::atomic<int32_t> midiInputChannel_{0};
     std::atomic<bool> frozen_{false};                                   // M7: play frozenBuf instead of the live chain
 };
 

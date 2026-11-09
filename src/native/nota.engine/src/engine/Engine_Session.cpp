@@ -304,6 +304,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     // Audio track: capture input into the slot (M5-4). Reuses the M4-3 input
     // pipeline; stopSessionRecord() materialises the take into slot.audio.
     if (t->type() == TrackType::Audio) {
+        publishMidiLanes({}); // the take records no MIDI (specs/086)
         recordSessionTrackId_ = trackId;
         recordSessionScene_ = scene;
         recordSessionAudio_ = true;
@@ -355,6 +356,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         sessionCountInUndo_ = undoPushCount_;
     }
 
+    publishMidiLanes({trackId}); // its MIDI input filter decides what reaches the slot (specs/086)
     resetCtlFold();
     recordSessionTrackId_ = trackId;
     recordSessionScene_ = scene;

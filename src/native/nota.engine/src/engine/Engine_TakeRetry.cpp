@@ -134,6 +134,7 @@ void Engine::discardTake() {
     recordTrackId_ = 0;
     recordClipIndex_ = -1;
     recordTrackRt_.store(-1, std::memory_order_relaxed);
+    publishMidiLanes({}); // every MIDI take lane goes with the take (specs/086)
     recordSlotPlayer_.store(nullptr, std::memory_order_release);
     recordSessionScene_ = -1;
     recordSessionTrackId_ = 0;

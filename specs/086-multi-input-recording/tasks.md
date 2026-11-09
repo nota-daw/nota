@@ -212,22 +212,35 @@ phase because they ship in different PRs (plan.md § Delivery slices).
 
 ### Tests
 
-- [ ] T058 [P] [US2] `T/MidiInputFilterTests.cs`: tracks P (All) and Q (source 1, channel 1) armed; push notes source 0 ch 1, source 1 ch 1, source 1 ch 2 via `nota_engine_push_midi_for_test`, computer-keyboard note via `noteOn` → P records 4 notes, Q exactly 1
-- [ ] T059 [P] [US2] Linked group of two instrument tracks, arm one, record → two MIDI clips with the same notes; one `Undo` removes both; overdub into an existing clip under the playhead works per track
-- [ ] T060 [P] [US2] Project round-trip: `MidiInputUid` / `MidiInputChannel` saved and restored; a disconnected uid reads back as "(not connected)" and receives nothing
+- [X] T058 [P] [US2] `T/MidiInputFilterTests.cs`: tracks P (All) and Q (source 1, channel 1) armed; push notes source 0 ch 1, source 1 ch 1, source 1 ch 2 via `nota_engine_push_midi_for_test`, computer-keyboard note via `noteOn` → P records 4 notes, Q exactly 1
+  - `T/MidiInputFilterTests.cs` (`--multi-input` and the full run): P records 60,62,64 and the keyboard's 67; Q only 62.
+- [X] T059 [P] [US2] Linked group of two instrument tracks, arm one, record → two MIDI clips with the same notes; one `Undo` removes both; overdub into an existing clip under the playhead works per track
+  - Same file: both linked tracks record 60,64; one Undo / Redo; one track overdubs its clip while the other opens one.
+- [X] T060 [P] [US2] Project round-trip: `MidiInputUid` / `MidiInputChannel` saved and restored; a disconnected uid reads back as "(not connected)" and receives nothing
+  - Same file: uid + channel 3 round-trip, read back not connected; that track records nothing from hardware or the keyboard.
 
 ### Implementation
 
-- [ ] T061 [US2] `MidiEvent` gains `int8_t source = -1; int8_t channel = 0;` in `E/engine/EngineTypes.h`; the MIDI callback in `E/engine/Engine.cpp:155` and the MPE sink pass them through; computer keyboard / gamepad / Remote / UI keep −1
-- [ ] T062 [US2] `Track` gains atomics `midiInputSource_` (−2 = All, default) and `midiInputChannel_` (0 = all, 1–16) in `E/engine/Track.h`; copied in clone paths (`Engine.cpp:674`, `Engine_Tracks.cpp:3677`)
-- [ ] T063 [US2] Filter in `E/engine/Engine_Render.cpp` (~1287 `takesUntargeted`, ~1606 expression): an untargeted event reaches an armed track only when `(src == All || src == e.source) && (ch == 0 || ch == e.channel + 1)`; `e.source == −1` matches All only
-- [ ] T064 [US2] MIDI take lanes: replace `recordTrackId_`/`recordTrackRt_` with a preallocated `MidiTakeLane[kMaxMidiTakeLanes]` table (per-lane `pendingActive[128]`, `recRoutedActive[128]`, clip index) published to the audio thread as count + ids; `startArrangementTake` opens one lane per armed instrument track (overdub/new clip per track, inside the take's `TakePushScope`); the capture path (~1100–1215) keys state by lane; `poll()` folds recorded notes into each lane's clip; loop-record-replace per lane; >16 armed → skipped reason 2
+- [X] T061 [US2] `MidiEvent` gains `int8_t source = -1; int8_t channel = 0;` in `E/engine/EngineTypes.h`; the MIDI callback in `E/engine/Engine.cpp:155` and the MPE sink pass them through; computer keyboard / gamepad / Remote / UI keep −1
+  - As built: per-source `MpeSink` (`mpeSinks_`, set up on first use too) carries source + the message's channel; `Engine::onMidiMessage` is the one entry (callback and test push). Live expression coalesces per input.
+- [X] T062 [US2] `Track` gains atomics `midiInputSource_` (−2 = All, default) and `midiInputChannel_` (0 = all, 1–16) in `E/engine/Track.h`; copied in clone paths (`Engine.cpp:674`, `Engine_Tracks.cpp:3677`)
+  - Plus `Track::midiInputUid` (message thread), copied in both clone paths.
+- [X] T063 [US2] Filter in `E/engine/Engine_Render.cpp` (~1287 `takesUntargeted`, ~1606 expression): an untargeted event reaches an armed track only when `(src == All || src == e.source) && (ch == 0 || ch == e.channel + 1)`; `e.source == −1` matches All only
+  - `Engine::passesMidiInput` in `liveNotesFor`, `takesLiveEvent` (expression) and the Session slot monitor path; the audition target takes everything.
+- [X] T064 [US2] MIDI take lanes: replace `recordTrackId_`/`recordTrackRt_` with a preallocated `MidiTakeLane[kMaxMidiTakeLanes]` table (per-lane `pendingActive[128]`, `recRoutedActive[128]`, clip index) published to the audio thread as count + ids; `startArrangementTake` opens one lane per armed instrument track (overdub/new clip per track, inside the take's `TakePushScope`); the capture path (~1100–1215) keys state by lane; `poll()` folds recorded notes into each lane's clip; loop-record-replace per lane; >16 armed → skipped reason 2
+  - As built: audio thread `RtMidiLane rtMidiLanes_[16]` (pending + routed pairing per lane) fed by `midiLaneTrack_/Src_/Ch_` atomics + `midiLaneCount_`; `RecordedNote/Expr/Ctl.lane`; `foldRecordedTake()` (the old `poll()` tail) folds each lane via `foldMidiLane`, swapping the lane's `takeNotes/ctlFold/takeCtls` in; release-note table per track; new clips in one undo group; disarming one lane folds and closes it while the rest record.
 - [ ] T065 [US2] Session MIDI slots record per lane like T054–T055 (`E/engine/Engine_Session.cpp`)
-- [ ] T066 [US2] ABI: `nota_track_set_midi_input`, `nota_track_get_midi_input`, `nota_midi_source_of_uid`, `nota_engine_push_midi_for_test` in `H` + `E/abi/` shims; source index ↔ uid map rebuilt on `openMidiInput`
-- [ ] T067 [US2] Managed: `IAudioEngine.SetTrackMidiInput(int trackId, string? uid, int channel)` / `GetTrackMidiInput`; re-resolve uids after a MIDI device change; `TrackModel.MidiInputUid string?` (null = All) + `MidiInputChannel int?` (null/0 = All) saved/loaded in `ProjectService.cs`
+  - Open: a Session MIDI take is one lane (its track's filter applies); a second MIDI slot launched meanwhile does not join it.
+- [X] T066 [US2] ABI: `nota_track_set_midi_input`, `nota_track_get_midi_input`, `nota_midi_source_of_uid`, `nota_engine_push_midi_for_test` in `H` + `E/abi/` shims; source index ↔ uid map rebuilt on `openMidiInput`
+  - As built: plus `nota_track_set_midi_input_uid` / `nota_track_get_midi_input_uid` — the engine keeps the uid on the track and re-resolves it in `openMidiInput`, so undo, duplicate and reconnects keep the pick (contracts/c-abi.md updated).
+- [X] T067 [US2] Managed: `IAudioEngine.SetTrackMidiInput(int trackId, string? uid, int channel)` / `GetTrackMidiInput`; re-resolve uids after a MIDI device change; `TrackModel.MidiInputUid string?` (null = All) + `MidiInputChannel int?` (null/0 = All) saved/loaded in `ProjectService.cs`
+  - As built: `SetTrackMidiInput(trackId, uid, channel)` / `GetTrackMidiInput` → `TrackMidiInput(Uid, Channel, Connected)`; project fields `MidiInputUid` / `MidiInputChannel`; no managed uid map (the engine keeps it).
 - [ ] T068 [US2] MIDI input menu on instrument tracks (header, mixer, Session I/O, detail panel) per contracts/mcp-and-ui.md: All inputs / devices / Channel ▸ / From track ▸; disconnected device greyed "(not connected)"; MPE device + single channel → warning line
-- [ ] T069 [P] [US2] MCP `list_midi_inputs`, `set_track_midi_input`, `get_track_midi_input` in `M/Nota.Mcp/Tools/MixerTools.cs`
+  - As built: `MidiInputPick` — **MIDI input ▸** in the track menu (devices, Channel ▸, MPE warning) and Device / Channel rows in the inspector. Open: the header box, mixer and Session I/O rows still show MIDI from only.
+- [X] T069 [P] [US2] MCP `list_midi_inputs`, `set_track_midi_input`, `get_track_midi_input` in `M/Nota.Mcp/Tools/MixerTools.cs`
+  - As built: `set_track_midi_input`, `get_track_midi_input`; the device list is the existing `list_midi_devices` (uid, name, enabled), so no `list_midi_inputs`.
 - [ ] T070 [P] [US2] Localisation keys for the MIDI input menu and warning (`en.json` + Russian)
+  - `en.json` `midi_input.*`. Open: Russian lives in the nota-translations repo.
 
 **Checkpoint (PR 5 ready)**: #528 fixed for instrument groups; quickstart 11–12 pass.
 

@@ -51,6 +51,7 @@ MidiInput::~MidiInput() {
 
 bool MidiInput::open(MessageCallback cb, const std::vector<std::string>& disabledUids) {
     impl_->cb = std::move(cb);
+    uids_.clear();
     try {
         RtMidiIn scanner(RtMidi::UNSPECIFIED, "Nota-scan");
         const unsigned int n = scanner.getPortCount();
@@ -65,6 +66,7 @@ bool MidiInput::open(MessageCallback cb, const std::vector<std::string>& disable
             auto tag = std::make_unique<PortTag>();
             tag->cb = &impl_->cb;
             tag->source = std::min<int32_t>(static_cast<int32_t>(impl_->ports.size()), kMaxSources - 1);
+            if (static_cast<int32_t>(uids_.size()) < kMaxSources) uids_.push_back(uid);
             port->setCallback(&onMidiMessage, tag.get());
             impl_->tags.push_back(std::move(tag));
             impl_->ports.push_back(std::move(port));

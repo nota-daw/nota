@@ -358,6 +358,12 @@ public interface IAudioEngine : IDisposable
     InputPick GetTrackInput(int trackId);
     /// <summary>Whether the track's input exists on the open (or probed) capture device.</summary>
     bool TrackInputAvailable(int trackId);
+    /// <summary>An instrument track's MIDI input (specs/086): which live MIDI reaches it when
+    /// armed, and so what it records — a device by uid (null = All inputs, the computer keyboard
+    /// too) and a channel (0 = all, 1–16). The track keeps the uid; while that device is not
+    /// connected it receives nothing from hardware. False for a non-instrument track.</summary>
+    bool SetTrackMidiInput(int trackId, string? uid, int channel);
+    TrackMidiInput GetTrackMidiInput(int trackId);
     /// <summary>The capture device's input channels (0 when none is open) and their names
     /// ("" where the device gives none).</summary>
     int AudioInputChannelCount();
