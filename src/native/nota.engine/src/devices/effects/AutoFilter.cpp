@@ -479,7 +479,7 @@ float AutoFilter::getParam(int32_t i) const {
 }
 
 void AutoFilter::setParam(int32_t i, float v) {
-    if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
+    if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, paramMax(i)), std::memory_order_relaxed);
     wake();
 }
 

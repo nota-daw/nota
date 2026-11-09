@@ -158,7 +158,7 @@ public sealed partial class DeviceChainView : UserControl
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
-    public void ForgetCardState() => _cardExtra.Clear();
+    public void ForgetCardState() { _cardExtra.Clear(); CloseDeviceWindows(); }
 
     /// <summary>Forgets the instrument card's remembered preset label + A/B slots on a
     /// track (its instrument was just swapped in place, possibly for one of the same kind).</summary>
@@ -251,6 +251,7 @@ public sealed partial class DeviceChainView : UserControl
         string name = _engine.DeviceName(_trackId, index);
         if (_engine.DeviceFolded(_trackId, index)) return FoldedStrip(ChainKind.Effect, index, name, bypassable: true, bypassed);   // built-in or plug-in
         if (index == _xlIndex) return XlPlaceholder(index, count, kind, name, bypassed);   // its editor is in the XL panel (specs/085)
+        if (kind >= 0 && InWindow(index)) return WindowPlaceholder(index, count, kind, name, bypassed);   // ... or in its own window
 
         Control body;
         double width;
@@ -271,6 +272,8 @@ public sealed partial class DeviceChainView : UserControl
             body = strategy.Build(bodyCtx, index);
             width = strategy.AutoWidth ? double.NaN : strategy.WidthFor(_engine, _trackId, index);   // NaN → card sizes to content
             headerExtra = strategy.HeaderAccessory(bodyCtx, index);
+            // A device that opens in XL also opens in its own window: the pop-out key after the size.
+            if (strategy.SupportsXl) headerExtra = HeaderKeys(headerExtra, PopOutKey(index));
             fullBleed = strategy.FullBleed;
             if (strategy.Subtitle is { } sub) tag = sub;
         }

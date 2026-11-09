@@ -113,6 +113,7 @@ public sealed partial class DeviceChainView
     private void RemapExtras(int t, ChainKind k, Func<int, int> map)
     {
         if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(t, k == ChainKind.Midi, map);
+        if (k == ChainKind.Effect) RemapWindows(t, map);
         if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(t, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);
@@ -164,7 +165,7 @@ public sealed partial class DeviceChainView
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
         bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
         Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null,
-        CardPresets? Presets = null, Control? HeaderExtra = null, bool Compact = false,   // Compact: a mini card — no type badge, a narrower preset picker
+        CardPresets? Presets = null, Control? HeaderExtra = null, bool Compact = false,   // Compact: a mini card — no type badge, the preset picker as a small key
         bool Utility = false,    // Utility: not a device (Sends) — the same header, without the device menu, selection or presets
         double Height = DeviceCardKit.CardH,
         bool Xl = false,         // Xl: the XL panel above the chain (specs/085) — stretches, no drag or fold
@@ -263,7 +264,7 @@ public sealed partial class DeviceChainView
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Star : GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Auto : GridLength.Star));
-        name.MaxWidth = s.Compact && !s.Placeholder ? 90 : 220;
+        name.MaxWidth = 220;   // a mini card's preset is a small key (#540): the name takes the room left
         headerGrid.Children.Add(name);
         Grid.SetColumn(right, 2); headerGrid.Children.Add(right);
         var headerBar = new Border
@@ -379,12 +380,21 @@ public sealed partial class DeviceChainView
             if (resetToInit != null && (next < 0 || next >= n)) ApplyInit();
             else ApplyPreset((next % n + n) % n);
         }
-        // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
+        // A compact (mini) card keeps the same list and current preset behind a small key (#540):
         // the preset belongs to the device, not to the card size.
         // The picker has its own slot after the name: the badges' live voice count changes width
         // (Consort's "Duo 1/2" → "Poly 12/16") without moving it.
         Control? picker = null;
-        if ((presets.Count > 0 || ownTagged) && !s.Placeholder)
+        if ((presets.Count > 0 || ownTagged) && !s.Placeholder && s.Compact)
+        {
+            // A mini card has no room for the field beside its name: a small key opens the list (#540).
+            picker = PresetKey(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+                init: resetToInit != null ? ApplyInit : null,
+                modified: tagged || ownTagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
+                addLive: _deviceLiveRefreshers.Add);
+            badges.Children.Insert(0, picker);
+        }
+        else if ((presets.Count > 0 || ownTagged) && !s.Placeholder)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
                 // A step smaller than the window's picker, so it sits inside the header with an inset (#531).

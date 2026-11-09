@@ -863,7 +863,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   an Instrument Rack chain or a Drum Rack pad, with the same editor.
 
 ### Audio effects
-- **Nota EQ-8** (kind 0) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the graph with the selected band's Freq, Gain, Q and Output; XL moves the whole editor into a large panel above the device chain, graph stretched, one per track, following the selected track) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
+- **Nota EQ-8** (kind 0) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the graph with the selected band's Freq, Gain, Q and Output; XL moves the whole editor into a large panel above the device chain, graph stretched, one per track, following the selected track, its height set with the Devices panel's splitter; the header's pop-out key opens it in its own resizable window instead) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
   Notch / High shelf / High cut, frequency, gain, Q (resonance on the cuts), a 12 / 24 / 48 dB/oct
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
@@ -917,7 +917,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   (f … 7f, THD, aliasing, drag for Gain), each with its knobs beside it, and a right panel that
   follows them (Tone · Cabinet · Output) over Gain, Mix and Output.
   31 factory presets. MCP: `read_valve`.
-- **Nota Auto Filter** (7) — in two sizes (L 700 / S 260, S·L toggle; S is the response over
+- **Nota Auto Filter** (7) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle and the pop-out window, as EQ-8; S is the response over
   Freq, Res, Drive and Dry/wet) — LP/BP/HP/Notch with morph, 12/24 slope, Clean/Analog, drive;
   an envelope follower (attack, release, timed or infinite hold, on the input or a sidechain
   key) and an LFO (5 waves, morph, free or tempo-synced, start phase, stereo phase, Retrig on
@@ -1037,7 +1037,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   band gain and solo. Amount scales every ratio; Peak/RMS detection, lookahead (PDC), a
   band-split external sidechain with Listen, auto makeup, Mix, output gain and a −0.3 dBFS soft
   clip. Transfer curve with drag handles, detector-envelope trace, per-band GR meters.
-- **Nota Lens** (22) — in two sizes (L 700 / S 260, S·L toggle; S is the spectrum over Smooth, Decay, Tilt, Floor) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
+- **Nota Lens** (22) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the spectrum over Smooth, Decay, Tilt, Floor) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
   passing the audio through untouched. *Spectrum*: FFT 512–16384, Hann / Blackman-Harris /
   flat-top window, frame averaging, fractional-octave smoothing, fall time, pink tilt, peak
   hold, and a pointer cursor reading frequency, note, cents and level. *Scope*: the trace is
@@ -1047,7 +1047,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   *Waterfall*: a 4 / 12 / 60-second spectrogram with gain, floor, contrast and FFT overlap.
   **Sync** lines the scope up with the song: a Span from a quarter beat to four bars, beat and
   bar lines and a sweep at the playhead. A sidechain **Key** track is drawn in teal over the
-  trace or **Stacked** under it, with its own gain; Lens also opens in its own resizable window.
+  trace or **Stacked** under it, with its own gain; Lens also opens in XL above the chain or in its own resizable window.
   Freeze, a note grid, a linear or log frequency axis, an L+R / L / R source that can read
   Mid/Side, and peak, crest and momentary LUFS read-outs under the spectrum. Readable from MCP with `read_analyzer`.
 - **Nota Flanger** (23) — in two sizes (L 700 / S 260, S·L toggle) — a comb filter on a short LFO-swept delay: Delay 0.1–8 ms, Depth,

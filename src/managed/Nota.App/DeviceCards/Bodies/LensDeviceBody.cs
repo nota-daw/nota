@@ -65,15 +65,12 @@ internal sealed class LensDeviceBody : IDeviceBody
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
 
-    private readonly bool _popout;
-
-    /// <summary><paramref name="popout"/>: built for <see cref="LensWindow"/>, which gives the
-    /// graph the room and has no expand button of its own.</summary>
-    public LensDeviceBody(bool popout = false) => _popout = popout;
-
     public double Width => 700;
-    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => _popout ? Width : CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
-    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => _popout ? null : CardLayout.SizeToggle(ctx, deviceIndex);
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex, xl: true);
+    // XL (specs/085): the L body stretched in the panel above the chain; the pop-out key in the
+    // header opens it in its own window (the chain view adds it, as for every XL device).
+    public bool SupportsXl => true;
     public bool FullBleed => true;
     public string? Subtitle => "Analyzer";
 
@@ -387,7 +384,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             CardLayout.ReadoutBox(wfNote.Ctl),
             LogNote()));
 
-        bool mini = !_popout && CardLayout.IsMini(ctx, di);
+        bool mini = CardLayout.IsMini(ctx, di);
         int centreTab = mini ? 0 : Sel(GraphP, 3);
         // ---- assembly -----------------------------------------------------------------
         var freezeToggle = Switch("Freeze", () => On(FreezeP), () => SetP(FreezeP, On(FreezeP) ? 0f : 1f), out var freezeSync);
@@ -398,20 +395,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         var headNote = Mono("", 7, MutedC);
         var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
             Children = { Seg(SourceP, new[] { "L+R", "L", "R" }), freezeToggle, headNote } };
-        // Expand: the same body in its own resizable window (specs/050). Top-level chain only —
-        // a rack chain's Lens has no window to follow.
-        if (!_popout && engine is not System.Reflection.DispatchProxy)
-        {
-            var pop = new Border
-            {
-                Background = Brushes.Transparent, Padding = new Thickness(3), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-                Child = new Glyph(GlyphKind.PopOut, 10) { Foreground = MutedC },
-            };
-            ToolTip.SetTip(pop, Loc.T("device.lens.open_lens_in_its_own"));
-            pop.PointerReleased += (_, e) => { LensWindow.Open(ctx, di, pop); e.Handled = true; };
-            pop.PointerPressed += (_, e) => e.Handled = true;
-            extras.Children.Add(pop);
-        }
+        // The pop-out window (specs/050) is the header's pop-out key now, shared by every XL device (specs/085).
 
         Action<int>? selectCentre = null;
         Control root = mini

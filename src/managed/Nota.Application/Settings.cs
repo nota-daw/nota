@@ -218,6 +218,9 @@ public sealed class Settings
     /// Detail panel, as before #308. Off by default — a selection only follows an open panel and
     /// a double-click opens it. Settings → Appearance.</summary>
     public bool OpenDetailOnSelect { get; set; }
+    /// <summary>The XL panel's height above the device chain (specs/085, #540): the Devices
+    /// panel's splitter sizes it while a device is in XL. 0 = the default (460).</summary>
+    public double XlPanelHeight { get; set; }
 
     /// <summary>Label every note of the piano-roll keyboard: the keys column
     /// shows all note names (C, C#, D …) instead of only C. Off by default; a beginner aid

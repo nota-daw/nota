@@ -23,11 +23,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
-- **XL for Nota EQ-8 and Dynamic EQ-8** (#540): the card's size toggle gains XL, which moves
+- **XL for Nota EQ-8, Dynamic EQ-8, Lens and Auto Filter** (#540): the card's size toggle gains XL, which moves
   the whole editor into a large panel above the device chain, as wide as the chain, with the
   graph stretched to fill it. The card in the chain stays as a small 260 × 260 one that says
   the editor is in XL. A track has one XL device. The panel follows the selected track and
   comes back with the project. Shrink in the panel's header or Esc returns the device to L.
+  The panel's header has no Remove ×, so it can't be mistaken for closing the panel. While
+  XL is open the Devices panel's splitter resizes the XL panel, and the height is remembered.
+- **Open a device in its own window** (#540): the devices that have XL also have a pop-out key
+  in the header. It opens the editor in a resizable window with the device's presets and
+  bypass, and the card in the chain shows where the editor went. Nota Lens's own expand
+  button is replaced by this key.
 - **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
   text in the app a point smaller or up to two points larger, live, without changing the
   layout (Interface scale still scales everything). Device cards keep their text size.
@@ -52,6 +58,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   armed tracks it skipped and why.
 
 ### Changed
+- **S cards keep their name readable** (#540): on an S card the preset picker is a small list
+  key in the header (Previous / Next, Init and the presets in its menu), so it no longer crowds
+  the device name.
 - **A new filter graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
   Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin draw their filter
   response the same way, over the knobs they already had. The spectrum of what the instrument

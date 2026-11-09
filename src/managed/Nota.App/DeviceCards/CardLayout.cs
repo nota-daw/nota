@@ -57,7 +57,8 @@ internal static class CardLayout
         DeviceView.SetSize(engine, trackId, deviceIndex, size);
     }
 
-    public static bool IsMini(DeviceCardContext ctx, int deviceIndex) => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex);
+    /// <summary>True when the body lays out at S: the card is set to S and the body is not in its own window.</summary>
+    public static bool IsMini(DeviceCardContext ctx, int deviceIndex) => !ctx.Popout && DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex);
 
     // ---- centre views ----------------------------------------------------------------------
     /// <summary>A column of knob cells beside the graph, stacked with an even gap and centred

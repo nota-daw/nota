@@ -1262,7 +1262,9 @@ What the guide changes inside a card:
   hosted plug-ins, and the Sends card (a `Utility` card with no device menu, selection or
   presets). Never build a header of your own.
 - The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step through them,
-  wrapping. A/B, move and delete live in the header's right-click menu; drag the card by
+  wrapping. An S (260) card has no room for it beside the name: there the presets sit behind
+  an 18 × 18 `List` key at the start of the header's right side (`PresetKey`), whose menu holds
+  Previous / Next, Init and the list, and whose tooltip names the current preset. A/B, move and delete live in the header's right-click menu; drag the card by
   its whole header; Delete removes it.
 - A **bypassed** card keeps its layout and takes the unavailable look via `Inactive`.
 - A **selected** card carries a 1.5 px orange ring outside its outline.
@@ -1272,14 +1274,21 @@ What the guide changes inside a card:
 - **The chain** sits tight in the Devices panel: a 6 px inset all round and 6 px between
   cards (`DeviceChainView.ChainInset`, room for the selection ring), and the panel opens at
   exactly the cards' height (seam + 32 px toolbar + insets + 260).
-- **The XL panel** (specs/085): a device that opts in (Nota EQ-8, Dynamic EQ-8) shows
+- **The XL panel** (specs/085): a device that opts in (Nota EQ-8, Dynamic EQ-8, Lens, Auto Filter) shows
   `S / L / XL` in its header. XL moves its whole editor into a panel above the chain. The panel
-  uses the same shell, as wide as the Devices panel, 460 tall (at least 180 in a short window, then the Devices area scrolls).
+  uses the same shell, as wide as the Devices panel, 460 tall by default (at least 180 in a short window, then the Devices area scrolls).
+  While it is open the Devices panel keeps its splitter: a drag resizes the XL panel only, and the height is a preference.
   The L body stretches in it: the graph takes the room, and the controls keep their sizes. The
   card stays in the chain at 260 × 260, with no preset picker and a caption, "Open in XL
-  above". The panel's header leaves XL with a `Shrink` key, never a second ×. The panel has no
+  above". The panel's header leaves XL with a `Shrink` key and carries no Remove × at all
+  (beside the panel's edge it read as "close" — the card keeps it). The panel has no
   drag or fold. A track has one XL device, and the panel follows the selected track. The
   Devices panel grows by the panel's height while it is open.
+- **A device in its own window** (specs/085): every XL device also has a `PopOut` key after
+  its size toggle (in the card and the panel). It opens the L body in the resizable device
+  window (title bar: name · track, presets, bypass), stretched to it. While the window is
+  open the card is a 260 placeholder, "Open in its own window", whose click brings the window
+  forward — an editor is never shown twice.
 - **Hosted plug-ins** (VST3 / AU / CLAP) use the same shell and keep their own parameter
   list: S 260 wide names it over *Open editor* and *Save preset*; L 700 adds the parameters
   as a paged, filterable grid.

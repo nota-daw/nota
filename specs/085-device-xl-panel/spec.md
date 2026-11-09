@@ -13,6 +13,15 @@
 - Q: What happens to the XL panel when the selected track changes? → A: It follows the selected track: it shows that track's XL device, if any, and hides otherwise. Devices keep their XL size.
 - Q: What stays in the chain while a device is in XL? → A: A 260 × 260 card that says the device is open in XL; all controls move to the panel and stretch.
 
+### Session 2026-11-09 (hand-test feedback)
+
+- Q: The × in the XL panel's header removed the device, but users read it as "close the panel". → A: The panel's header has no Remove ×; the card in the chain keeps it. Shrink and Esc close the panel.
+- Q: How does a device open in its own window? → A: Every device that opens in XL also has a pop-out key in its header that opens its L body in a real, resizable window (the device window rack devices already use). While the window is open, the card in the chain is a 260 × 260 placeholder — the editor is never shown twice. A device in XL leaves the panel for the window.
+- Q: What about Nota Lens, which had its own pop-out window (specs/050)? → A: Lens opts in to XL (`S / L / XL`), and its old expand button in the tab bar goes: the shared pop-out key in the header replaces it.
+- Q: Which device opts in next? → A: Nota Auto Filter (S / L / XL, the pop-out key).
+- Q: The XL panel has a fixed height. → A: While a device is in XL, the Devices panel has its splitter: dragging it resizes the XL panel (the chain keeps its card height), and the height is remembered (a preference).
+- Q: An S card's name is crowded by the preset picker. → A: On an S card the preset picker becomes a small list key in the header; its menu holds Previous / Next, Init and the presets, its tooltip names the current one.
+
 **Issue**: [#540](https://github.com/nota-daw/nota/issues/540) (approved)
 
 **Input**: User description: "XL card size for device cards (issue #540). Next to the existing S/L toggle, devices that opt in get a third size, XL. Choosing XL moves the device's whole editor (all controls) into a separate panel docked above the device chain, at the chain's full width and taller than a card; the controls stretch to fill the panel. The device's card in the chain stays in place, becomes 260×260 and shows that the device is open in XL, with a way back to S/L. Only one XL panel at a time — opening XL on another device moves the panel to it. The panel header has the device name, the S/L/XL toggle and close. The chosen size is saved with the project per device, like S/L. UI only: no engine or param changes; automation and MCP tools unaffected. First devices: Nota EQ-8 and Nota Dynamic EQ-8; the mechanism is generic so other devices can opt in later. Open question: what happens to the panel when the selected track changes. Out of scope: XL for instruments and other effects, floating/detachable windows."
@@ -177,8 +186,8 @@ and check that the panel hides and comes back with the track.
 
 - **FR-001**: Devices that opt in MUST show a three-way size toggle `S / L / XL` in the
   card header. Devices that don't opt in keep their current toggle (S/L or none).
-- **FR-002**: In this feature exactly two devices MUST opt in: Nota EQ-8 and Nota Dynamic
-  EQ-8. Opting in another device later MUST need no change to the panel itself, only the
+- **FR-002**: In this feature three devices MUST opt in: Nota EQ-8, Nota Dynamic
+  EQ-8, and (since 2026-11-09, FR-020 / FR-022) Nota Lens and Nota Auto Filter. Opting in another device later MUST need no change to the panel itself, only the
   device's own large layout.
 - **FR-003**: Choosing XL MUST open a panel docked above the device chain, spanning the
   device area's full width and taller than a device card.
@@ -215,6 +224,26 @@ and check that the panel hides and comes back with the track.
 - **FR-015**: The panel MUST follow the selected track: it shows that track's XL device
   if it has one and hides otherwise. Switching tracks MUST NOT change any device's size.
 - **FR-016**: Removing the XL device MUST close the panel.
+- **FR-017**: The panel header MUST NOT carry the Remove × (it read as "close the panel");
+  the card in the chain keeps it.
+- **FR-018**: Every device that opts in to XL MUST also show a pop-out key in its card
+  header (and in the panel's header) that opens its L body in its own resizable window. The
+  window carries the device name, the track, the presets and the bypass, and follows its
+  device when the chain is reordered; it closes when the device is removed or replaced, or a
+  project is opened. A second press brings the open window forward.
+- **FR-019**: While a device's window is open, its card in the chain MUST be a 260 × 260
+  placeholder that says so (a click brings the window forward); the editor is never built
+  twice. Opening the window for a device in XL MUST return it to L first.
+- **FR-020**: Nota Lens MUST opt in to XL; its own pop-out button (specs/050) is replaced by
+  the shared pop-out key.
+- **FR-022**: Nota Auto Filter MUST opt in to XL (and so to the pop-out window).
+- **FR-023**: While the shown track has a device in XL, the Devices panel MUST be resizable
+  with its splitter; the XL panel takes the change (not below its minimum), the chain keeps
+  its card height, and the XL height MUST be remembered across tracks and sessions. The
+  device window's title names the device's track as the track list does (an unnamed track
+  too).
+- **FR-021**: On an S card the preset picker MUST be a small key in the header that opens
+  the same list (Previous / Next, Init, the presets), so the device name keeps the room.
 
 ### Key Entities
 

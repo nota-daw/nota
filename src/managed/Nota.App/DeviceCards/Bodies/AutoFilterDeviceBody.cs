@@ -51,11 +51,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
     private static readonly string[] NoteNames = { "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B" };
 
     public double Width => 700;
-    // S / L (#531): the size is the device's View param (DeviceView); S is a 260 card.
-    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => DeviceView.IsMini(engine, trackId, deviceIndex) ? 260 : Width;
-    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex)
-        => DeviceView.Index(ctx.Engine, ctx.TrackId, deviceIndex) < 0 ? null
-            : MidiCardHeader.SizeToggle(ctx, () => DeviceView.IsMini(ctx.Engine, ctx.TrackId, deviceIndex), m => DeviceView.SetMini(ctx.Engine, ctx.TrackId, deviceIndex, m));
+    // S / L / XL (#531, #540): the size is the device's View param (DeviceView); S is a 260 card,
+    // XL the L body stretched in the panel above the chain (or the pop-out window).
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex, xl: true);
+    public bool SupportsXl => true;
     public bool FullBleed => true;
     public string? Subtitle => "Filter";
 
@@ -424,13 +424,16 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return sw;
         }
 
-        // Rows spread evenly down the panel; a 1px rule keeps its height.
+        // Rows spread evenly down the L panel; a 1px rule keeps its height. Stretched (XL, the
+        // pop-out window) the panel is tall: there each row is at most 26, together at the top.
+        bool tall = ctx.Popout || DeviceView.Size(engine, track, di) == CardSize.XL;
         Control Rows(params Control[] rows)
         {
-            var grid = new Grid { RowSpacing = 2 };
+            var grid = new Grid { RowSpacing = 2, VerticalAlignment = tall ? VerticalAlignment.Top : VerticalAlignment.Stretch };
             for (int r = 0; r < rows.Length; r++)
             {
-                grid.RowDefinitions.Add(new RowDefinition(rows[r] is Border { Height: 1 } ? GridLength.Auto : GridLength.Star));
+                grid.RowDefinitions.Add(rows[r] is Border { Height: 1 } ? new RowDefinition(GridLength.Auto)
+                    : tall ? new RowDefinition(new GridLength(26)) : new RowDefinition(GridLength.Star));
                 grid.Children.Add(GRow(rows[r], r));
             }
             return new Border { Padding = new Thickness(8, 4, 8, 5), Child = grid };
@@ -580,7 +583,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = body } };
         }
 
-        Control root = DeviceView.IsMini(engine, track, di) ? MiniBody() : LargeBody();
+        Control root = CardLayout.IsMini(ctx, di) ? MiniBody() : LargeBody();
 
         // ======================================================================
         // L: tab frame + the panel that follows it

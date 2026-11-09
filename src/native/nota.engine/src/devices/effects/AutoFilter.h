@@ -52,7 +52,7 @@ class AutoFilter : public Device {
         ModSmooth,   // slew on the modulation: 120·v² ms (0 = none)
         LfoOffset,   // LFO start phase (0..360°)
         LfoRetrig,   // restart the LFO on each input onset and at play (>=0.5)
-        View,        // card size, not sound: 0 = L, 1 = S (#531); presets skip it
+        View,        // card size, not sound: 0 = L, 1 = S (#531), 2 = XL (#540); presets skip it
         kNumParams
     };
     // Scope telemetry layout (read by the card and MCP).
@@ -118,7 +118,7 @@ class AutoFilter : public Device {
     int32_t paramCount() const override { return kNumParams; }
     const char* paramName(int32_t i) const override;
     float paramMin(int32_t /*i*/) const override { return 0.0f; }
-    float paramMax(int32_t /*i*/) const override { return 1.0f; }
+    float paramMax(int32_t i) const override { return i == View ? 2.0f : 1.0f; } // View: 0 = L, 1 = S, 2 = XL (#540)
     float getParam(int32_t i) const override;
     void setParam(int32_t i, float v) override;
 

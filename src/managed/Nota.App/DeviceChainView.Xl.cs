@@ -28,6 +28,28 @@ public sealed partial class DeviceChainView
     /// shrinks to in a short window (the chain under it keeps its card height).</summary>
     internal const double XlHeight = 460, XlMinHeight = 180;
 
+    private double _xlHeight = XlHeight;
+
+    /// <summary>True while the shown track has a device in XL (the panel is up).</summary>
+    public bool XlOpen => _xlIndex >= 0;
+
+    /// <summary>The XL panel's height (the Devices panel's splitter sets it; at least
+    /// <see cref="XlMinHeight"/>). Changing it refits <see cref="PreferredHeight"/>.</summary>
+    public double XlPanelHeight
+    {
+        get => _xlHeight;
+        set
+        {
+            double h = Math.Max(XlMinHeight, double.IsFinite(value) && value > 0 ? value : XlHeight);
+            if (Math.Abs(h - _xlHeight) < 0.5) return;
+            _xlHeight = h;
+            UpdatePreferredHeight();
+        }
+    }
+
+    /// <summary>The chain's own height under the XL panel: the card row and its insets, plus the gap above.</summary>
+    internal const double XlChainPart = 3 * ChainInset + CardH;
+
     private readonly Border _xlHost = new() { IsVisible = false, Margin = new Thickness(ChainInset, ChainInset, ChainInset, 0) };
     private int _xlIndex = -1;   // the shown track's device in the panel, or -1
     private double _preferredHeight = 2 * ChainInset + CardH;
@@ -83,7 +105,12 @@ public sealed partial class DeviceChainView
         rows[0].MinHeight = _xlIndex >= 0 ? XlMinHeight : 0;
         rows[1].Height = _xlIndex >= 0 ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
         FitLayoutHeight();
-        double h = 2 * ChainInset + CardH + (_xlIndex >= 0 ? XlHeight + ChainInset : 0);
+        UpdatePreferredHeight();
+    }
+
+    private void UpdatePreferredHeight()
+    {
+        double h = 2 * ChainInset + CardH + (_xlIndex >= 0 ? _xlHeight + ChainInset : 0);
         if (Math.Abs(h - _preferredHeight) > 0.5) { _preferredHeight = h; PreferredHeightChanged?.Invoke(); }
     }
 
@@ -103,14 +130,16 @@ public sealed partial class DeviceChainView
         var strategy = _cardFactory.Resolve(kind);
         var ctx = NewCardContext();
         var body = strategy.Build(ctx, index);
-        // Shrink, not ×: the header's × beside it removes the device.
+        // Shrink closes the panel. The panel has no Remove ×: by the panel's edge it read as
+        // "close" and removed the device; the card in the chain keeps it.
         var close = IconKey(GlyphKind.Shrink, Loc.T("device.xl.close_the_xl_panel_the"), () => CloseXl(index));
         var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         if (strategy.HeaderAccessory(ctx, index) is { } toggle) extras.Children.Add(toggle);
+        extras.Children.Add(PopOutKey(index));
         extras.Children.Add(close);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, index), Subtitle: strategy.Subtitle ?? "BUILT-IN", DeviceIndex: index, Count: count,
-            Bypassed: _engine.DeviceBypassed(_trackId, index), Bypassable: true, CanMove: true, CanDelete: true, PresetKind: kind,
+            Bypassed: _engine.DeviceBypassed(_trackId, index), Bypassable: true, CanMove: true, CanDelete: false, PresetKind: kind,
             IsInstrument: false, Width: double.NaN, Kind: ChainKind.Effect, HeaderExtra: extras, Height: double.NaN, Xl: true);
         var card = BuildCardShell(spec, strategy.FullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
         // Esc in the panel (a text box that takes it keeps it) closes it.
@@ -147,7 +176,7 @@ public sealed partial class DeviceChainView
         var spec = new ShellSpec(
             Name: name, Subtitle: strategy.Subtitle ?? "BUILT-IN", DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
             CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: CardLayout.MiniWidth, Kind: ChainKind.Effect,
-            HeaderExtra: strategy.HeaderAccessory(ctx, index), Compact: true, Placeholder: true);
+            HeaderExtra: HeaderKeys(strategy.HeaderAccessory(ctx, index), PopOutKey(index)), Compact: true, Placeholder: true);
         return BuildCardShell(spec, new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
     }
 

@@ -137,3 +137,16 @@ MVP = Phase 2 + Phase 3 (both devices are P1 and share all the code). Then one p
 - [X] T034 In `DeviceChainView.DeviceTransferred`, return a device moved or copied onto a track that already has another XL device to L, per Spec Edge case "moved onto a track with XL" (partial)
 - [X] T035 Make a click on the XL placeholder bring the panel into view (`_xlHost.BringIntoView()`) as well as select the device, in `src/managed/Nota.App/DeviceChainView.Xl.cs`, per FR-006 (partial)
 - [ ] T036 Real-app spot check (quickstart § 4): add EQ-8, pick XL, drag a band, Esc. This is a manual check by the user, because GUI launch is not available to the agent, per quickstart § 4 (partial)
+
+## Phase 10: Hand-test feedback (2026-11-09)
+
+- [X] T037 Drop the Remove × from the XL panel's header (`CanDelete: false` in `DeviceChainView.Xl.cs`), per FR-017
+- [X] T038 Give `DeviceWindow` a resizable mode (the body stretched to the window) and open a track's XL-capable device in it from a pop-out key in the card and panel headers (`DeviceChainView.Window.cs`); the window follows `RemapExtras`, checks its device's signature and closes on project open, per FR-018
+- [X] T039 Show a 260 placeholder for a device whose window is open, and return a device in XL to L when its window opens, per FR-019
+- [X] T040 `DeviceCardContext.Popout`: a body built for the window lays out at L (`CardLayout.IsMini`), per FR-018
+- [X] T041 Nota Lens opts in to XL: `Lens::paramMax(View)` = 2 and `setParam` clamps to it; `LensDeviceBody.SupportsXl`, `SizeToggle(xl: true)`; `LensWindow` and its tab-bar button removed, per FR-020
+- [X] T042 S cards: the preset picker as a small list key (`DeviceCardKit.PresetKey`), per FR-021
+- [X] T044 Nota Auto Filter opts in to XL: `AutoFilter::paramMax(View)` = 2, `setParam` clamps to it; `AutoFilterDeviceBody.SupportsXl`, `CardLayout.WidthFor` / `SizeToggle(xl: true)` / `IsMini(ctx)`, per FR-022
+- [X] T045 Resizable XL panel: `DeviceChainView.XlPanelHeight` / `XlOpen`; the Devices panel shows its splitter while XL is open and a drag stores the XL height (`Settings.XlPanelHeight`), per FR-023
+- [X] T046 The device window names its track with `TrackNames.Of` (unnamed tracks too), per FR-023
+- [ ] T043 Real-app spot check: the pop-out window for EQ-8 and Lens, the placeholder, Lens in XL, an S card's preset key (manual, by the user)

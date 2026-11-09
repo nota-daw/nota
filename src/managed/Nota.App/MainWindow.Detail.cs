@@ -455,7 +455,22 @@ public partial class MainWindow
         // Devices: exactly the cards' height — the 1px seam, the 32px toolbar, the chain inset
         // above and below a card, and the XL panel over the chain when one is open (specs/085).
         // Nothing floats under the chain.
-        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: false);
+        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: XlResizable);
+    }
+
+    // With a device in XL the Devices panel gets its splitter: the XL panel takes what it gives
+    // (specs/085, #540). Without one the cards have a fixed height and the panel no splitter.
+    private bool XlResizable => _deviceChain?.XlOpen == true;
+
+    // The splitter was dragged on the Devices tab with XL open: the XL panel keeps the new height.
+    private void OnDevicesSplitterDragged()
+    {
+        if (_deviceChain is not { XlOpen: true } chain || DetailFloating || DetailDevicesBtn.IsChecked != true
+            || !ReferenceEquals(DeviceHost.Content, chain)) return;
+        chain.XlPanelHeight = _detailRow.ActualHeight - 1 - 32 - DeviceChainView.XlChainPart;
+        if (_vm is null) return;
+        _vm.Settings.Current.XlPanelHeight = chain.XlPanelHeight;
+        _vm.Settings.Save();
     }
 
     private double DevicesPanelHeight => 1 + 32 + (_deviceChain?.PreferredHeight ?? 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH);
@@ -465,7 +480,7 @@ public partial class MainWindow
     private void FitDevicesPanel()
     {
         if (DetailFloating || !DetailPanel.IsVisible || !ReferenceEquals(DeviceHost.Content, _deviceChain) || DetailDevicesBtn.IsChecked != true) return;
-        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: false);
+        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: XlResizable);
     }
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
@@ -1154,7 +1169,7 @@ public partial class MainWindow
         LayoutBottomPanels();
         BodyGrid.SizeChanged += (_, e) => { if (e.HeightChanged) FitBottomPanels(); };
         MixerSplitter.DragCompleted += (_, _) => OnMixerHeightDragged();
-        DetailSplitter.DragCompleted += (_, _) => { if (!_mixerDocked) _detailWanted = _detailRow.ActualHeight; };
+        DetailSplitter.DragCompleted += (_, _) => { if (!_mixerDocked) _detailWanted = _detailRow.ActualHeight; OnDevicesSplitterDragged(); };
         // However the Detail panel is hidden or shown (close, pop-out, a tab, a menu), the
         // Mixer takes back or gives up the room; and the edge follows the splitter.
         DetailPanel.PropertyChanged += (_, e) =>
