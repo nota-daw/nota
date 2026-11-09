@@ -20,6 +20,8 @@ class AsioInput final : public AudioInput {
     void stop() override;
     bool isRunning() const override;
     double sampleRate() const override;
+    int32_t channelCount() const override;
+    std::string channelName(int32_t index) const override;
 
   private:
     // Registered by address while running. Heap-held: if unregistering finds a buffer switch

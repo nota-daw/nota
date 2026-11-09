@@ -923,24 +923,18 @@ public sealed partial class MixerView : UserControl
             FontSize = 8, Height = 16, MinHeight = 0, Padding = new Thickness(5, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
-        var sources = new List<int>();
-        void Add(string label, int src)
-        {
-            cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
-            sources.Add(src);
-        }
-        Add(Loc.T("common.none"), -1);
-        int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
-            if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument && ti.Id != id)
-                Add(TrackNames.Of(_engine, ti), ti.Id);
-        int cur = _engine.GetTrackMidiSource(id);
-        int sel = sources.IndexOf(cur);
-        cb.SelectedIndex = sel >= 0 ? sel : 0;
+        // The live input (All inputs / a device) or the track it takes MIDI from (specs/086).
+        var instruments = new List<(int, string)>();
+        for (int i = 0; i < _engine.TrackCount; i++)
+            if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument) instruments.Add((ti.Id, TrackNames.Of(_engine, ti)));
+        var (entries, cur) = MidiInputPick.Compact(_engine, id, instruments);
+        foreach (var en in entries)
+            cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = en.Label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
+        cb.SelectedIndex = cur;
         cb.SelectionChanged += (_, _) =>
         {
-            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < sources.Count)
-                _engine.SetTrackMidiSource(id, sources[cb.SelectedIndex]);
+            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < entries.Count)
+                MidiInputPick.Apply(_engine, id, entries[cb.SelectedIndex]);
         };
         if (compact)   // one line: the selector alone, its label in the tooltip (specs/070)
         {

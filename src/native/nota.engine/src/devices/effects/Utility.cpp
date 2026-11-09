@@ -34,6 +34,7 @@ Utility::Utility() {
     p_[Meter].store(0.0f); // LUFS-S
     p_[TpLimit].store(0.0f);
     p_[TpCeiling].store(-1.0f);
+    p_[View].store(0.0f); // L
     clearHistory();
 }
 
@@ -360,7 +361,7 @@ int32_t Utility::scopeRead(float* out, int32_t maxSamples) const {
 const char* Utility::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Gain", "Balance", "Width", "Channel Mode", "Mono Freq", "Mono Below", "Mute",
         "Invert L", "Invert R", "Width Mode", "Mono Slope", "Auto Match", "Match To", "Target", "Meter", "TP Limit",
-        "TP Ceiling"};
+        "TP Ceiling", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

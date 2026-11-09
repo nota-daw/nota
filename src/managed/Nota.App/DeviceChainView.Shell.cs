@@ -40,6 +40,7 @@ public sealed partial class DeviceChainView
     // don't collide. Sig ties an entry to the device it was made for: when that slot now
     // holds a different device (swapped, removed behind our back, undo), the card starts fresh.
     private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; public PluginCard.ViewState Plugin = new();
+        public bool XlOwner;          // this device held the track's XL panel last (specs/085)
         public CardExtra? Wrapped;   // a rack's: the extra of the device ⌘G put in it, back when it comes out
         public List<CardExtra>? WrappedMany; } // a rack's: those of several devices grouped into it (specs/044)
     private readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<int, CardExtra>> _cardExtra = new();   // trackId → key → extra
@@ -112,6 +113,7 @@ public sealed partial class DeviceChainView
     private void RemapExtras(int t, ChainKind k, Func<int, int> map)
     {
         if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(t, k == ChainKind.Midi, map);
+        if (k == ChainKind.Effect) RemapWindows(t, map);
         if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(t, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);
@@ -132,7 +134,8 @@ public sealed partial class DeviceChainView
     private void ApplyParams(ChainKind k, int di, float[] p)
     {
         int n = Math.Min(p.Length, ParamCount(k, di));
-        int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId) : -1;   // A/B keeps the card size
+        int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId)
+            : k == ChainKind.Effect ? Nota.Application.DeviceView.Index(_engine, _trackId, di) : -1;   // A/B keeps the card size
         // One undo step for the whole switch (specs/016).
         var targets = new List<MixTarget>(n);
         for (int i = 0; i < n; i++)
@@ -162,8 +165,11 @@ public sealed partial class DeviceChainView
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
         bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
         Func<Nota.Application.IAudioEngine, int, int, string?>? VoiceLabel = null,
-        CardPresets? Presets = null, Control? HeaderExtra = null, bool Compact = false,   // Compact: a mini card — no type badge, a narrower preset picker
-        bool Utility = false);   // Utility: not a device (Sends) — the same header, without the device menu, selection or presets
+        CardPresets? Presets = null, Control? HeaderExtra = null, bool Compact = false,   // Compact: a mini card — no type badge, the preset picker as a small key
+        bool Utility = false,    // Utility: not a device (Sends) — the same header, without the device menu, selection or presets
+        double Height = DeviceCardKit.CardH,
+        bool Xl = false,         // Xl: the XL panel above the chain (specs/085) — stretches, no drag or fold
+        bool Placeholder = false);   // the card of a device in XL: its presets are on the panel, so no picker here
 
     /// <summary>A card's own preset list, in place of the factory presets for its kind — the
     /// Drum Rack's kits, which load pads rather than set parameters. <paramref name="Current"/>
@@ -258,7 +264,7 @@ public sealed partial class DeviceChainView
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Star : GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Auto : GridLength.Star));
-        name.MaxWidth = s.Compact ? 90 : 220;
+        name.MaxWidth = 220;   // a mini card's preset is a small key (#540): the name takes the room left
         headerGrid.Children.Add(name);
         Grid.SetColumn(right, 2); headerGrid.Children.Add(right);
         var headerBar = new Border
@@ -374,15 +380,25 @@ public sealed partial class DeviceChainView
             if (resetToInit != null && (next < 0 || next >= n)) ApplyInit();
             else ApplyPreset((next % n + n) % n);
         }
-        // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
+        // A compact (mini) card keeps the same list and current preset behind a small key (#540):
         // the preset belongs to the device, not to the card size.
         // The picker has its own slot after the name: the badges' live voice count changes width
         // (Consort's "Duo 1/2" → "Poly 12/16") without moving it.
         Control? picker = null;
-        if (presets.Count > 0 || ownTagged)
+        if ((presets.Count > 0 || ownTagged) && !s.Placeholder && s.Compact)
+        {
+            // A mini card has no room for the field beside its name: a small key opens the list (#540).
+            picker = PresetKey(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+                init: resetToInit != null ? ApplyInit : null,
+                modified: tagged || ownTagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
+                addLive: _deviceLiveRefreshers.Add);
+            badges.Children.Insert(0, picker);
+        }
+        else if ((presets.Count > 0 || ownTagged) && !s.Placeholder)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-                nameWidth: s.Compact ? 74 : 132, height: 20, init: resetToInit != null ? ApplyInit : null,
+                // A step smaller than the window's picker, so it sits inside the header with an inset (#531).
+                nameWidth: s.Compact ? 70 : 120, height: 18, fontSize: NotaType.Caption, init: resetToInit != null ? ApplyInit : null,
                 modified: tagged || ownTagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
                 addLive: _deviceLiveRefreshers.Add);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
@@ -466,7 +482,7 @@ public sealed partial class DeviceChainView
             // A double-click on the header itself (not its picker, switch or accessories) folds
             // the card into a strip (specs/022). ClickCount, not DoubleTapped: the first click
             // selects and rebuilds the row, so the second lands on a new header.
-            if (e.ClickCount == 2 && !Within(e.Source, picker) && !Within(e.Source, power) && !Within(e.Source, s.HeaderExtra))
+            if (e.ClickCount == 2 && !s.Xl && !Within(e.Source, picker) && !Within(e.Source, power) && !Within(e.Source, s.HeaderExtra))
             { e.Handled = true; SetFolded(s.Kind, di, true); return; }
             SelectDevice(s.Kind, di, e.KeyModifiers);   // Shift: a range, ⌘/Ctrl: toggle (specs/044)
         };
@@ -497,15 +513,15 @@ public sealed partial class DeviceChainView
         shell.BindResource(Border.BoxShadowProperty, "Shadow.Card");
         var card = new Border
         {
-            Width = s.Width, Height = CardH,
+            Width = s.Width, Height = s.Height,
             Child = new Panel { Children = { shell, selRing } },
         };
         ValueEntry.SetScope(card, true);   // Tab in a value box walks this card's parameters
-        NotaTextSize.SetFixed(card, true);   // a fixed 700 × 260 layout: its text keeps its size
+        NotaTextSize.SetFixed(card, true);   // a fixed layout (700 × 260; the XL panel keeps the body's own sizes): its text keeps its size
         // Bypassed: the body takes the inactive look but stays playable (no opacity for state).
         if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);
         // The whole header drags the card to a new slot within its domain (audio FX / MIDI FX).
-        if ((s.CanMove || s.IsInstrument) && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);   // the instrument drags onto other tracks only
+        if (!s.Xl && (s.CanMove || s.IsInstrument) && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);   // the instrument drags onto other tracks only
         return card;
     }
 

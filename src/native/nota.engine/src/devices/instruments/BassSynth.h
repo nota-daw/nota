@@ -39,6 +39,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 
 #include <algorithm>
 #include <atomic>
@@ -95,6 +96,13 @@ class BassSynth final : public Instrument {
         ModWheel,
         OutPan,
         Legato,
+        // ---- appended (v3, #531): the envelope shapes — 0.5 = straight, Exp off ----
+        DCurve,
+        RCurve,
+        EnvExp,
+        FDCurve,
+        FRCurve,
+        FEnvExp,
         kNumParams
     };
 
@@ -106,6 +114,11 @@ class BassSynth final : public Instrument {
     // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
     void controller(int32_t ctl, float value) override;
     void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    // Envelope telemetry for the editor's graphs: the newest sounding voice's amp-env stage
+    // and progress, then the filter env's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
+    int32_t scopeRead(float* out, int32_t maxN) const override {
+        return out && maxN > 0 ? readEnvTele(envTele_, 2 * kEnvTeleFloats, out, maxN) : 0;
+    }
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -155,6 +168,7 @@ class BassSynth final : public Instrument {
         double phM = 0.0, phMu = 0.0, phS = 0.0; // main / unison / sub phase
         float vel = 0.0f, aEnv = 0.0f, fEnv = 0.0f;
         Stage aStage = Stage::Attack, fStage = Stage::Attack;
+        EnvShapeState aShape, fShape; // the curve of each envelope's current stage
         double s1[2] = {0, 0}, s2[2] = {0, 0}; // SVF integrator state (two cascaded stages)
         double a1 = 0, a2 = 0, a3 = 0;
         int32_t modCount = 0;
@@ -173,7 +187,6 @@ class BassSynth final : public Instrument {
     void startVoice(Voice& v);
     static void release(Voice& v);
 
-    static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
 
     void setSvf(double& a1, double& a2, double& a3, double fc, double k) const;
     // TPT SVF (Cytomic). type: 0 LP, 1 HP, 2 BP, 3 Notch. state[0]=ic1, state[1]=ic2.
@@ -209,6 +222,8 @@ class BassSynth final : public Instrument {
     uint32_t noteSeq_ = 0;
     uint32_t rng_ = 0x9E3779B9u;
     std::atomic<float> pn_[kNumParams];
+    int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
+    std::atomic<float> envTele_[4]; // amp stage, amp progress, filter stage, filter progress
     bool idle_ = false; // sleep flag: set when no voice sounds
 };
 

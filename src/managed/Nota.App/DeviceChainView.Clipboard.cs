@@ -483,6 +483,10 @@ public sealed partial class DeviceChainView
         if (mod && e.Key == Key.V && CanPaste) { PasteDevice(); e.Handled = true; return; }
         if (mod && e.Key == Key.D && HasEffectSelection) { DuplicateSelectedDevice(); e.Handled = true; return; }
         if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && HasDeviceSelection) { DeleteSelectedDevice(); e.Handled = true; return; }
+        // Esc with the XL device selected (a click on the panel's header or its placeholder
+        // selects it and focuses the chain) closes the panel, as Esc inside the panel does.
+        if (!mod && e.Key == Key.Escape && _xlIndex >= 0 && SingleSelection is { Section: DeviceSection.Audio } xs && xs.Index == _xlIndex)
+        { CloseXl(_xlIndex); e.Handled = true; return; }
         if (!mod && e.Key == Key.Escape && HasDeviceSelection) { ClearDeviceSelection(); Rebuild(); e.Handled = true; return; }
         base.OnKeyDown(e);
     }

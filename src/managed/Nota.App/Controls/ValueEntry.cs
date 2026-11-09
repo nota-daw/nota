@@ -323,7 +323,7 @@ internal static partial class ValueEntry
     private static void ShowMenu(Control control, ValueField field, Action open, IReadOnlyList<ValueField>? all = null)
     {
         var fly = new MenuFlyout();
-        fly.Items.Add(MenuKit.Header(field.Name, null, Loc.T("control.value_entry.parameter")));
+        fly.Items.Add(MenuKit.Header(field.NameNow?.Invoke() ?? field.Name, null, Loc.T("control.value_entry.parameter")));
         fly.Items.Add(new Separator());
         foreach (var c in MenuItems(field, open, all)) fly.Items.Add(c);
         fly.ShowAt(control, showAtPointer: true);

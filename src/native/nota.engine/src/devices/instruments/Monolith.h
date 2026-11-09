@@ -30,6 +30,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 
 #include <algorithm>
 #include <atomic>
@@ -104,6 +105,13 @@ class Monolith final : public Instrument {
         AAttack,
         ADecay,
         ASustain,
+        // --- appended (#531): each contour's shape — 0.5 = straight, Exp off ---
+        FDCurve,
+        FRCurve,
+        FEnvExp,
+        ADCurve,
+        ARCurve,
+        AEnvExp,
         kNumParams
     };
 
@@ -153,6 +161,11 @@ class Monolith final : public Instrument {
     // render loop writes exact silence despite always running.
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
+    // Contour telemetry for the editor's graphs: the filter contour's stage and progress,
+    // then the loudness contour's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
+    int32_t scopeRead(float* out, int32_t maxN) const override {
+        return out && maxN > 0 ? readEnvTele(envTele_, 2 * kEnvTeleFloats, out, maxN) : 0;
+    }
     void wake() override;
 
     void render(float* out, int32_t frames) override;
@@ -177,13 +190,14 @@ class Monolith final : public Instrument {
     void retrigger() {
         aStage_ = Stage::Attack;
         fStage_ = Stage::Attack;
+        aShape_ = {};
+        fShape_ = {};
     }
 
     void pushHeld(int pitch);
     void removeHeld(int pitch);
     int selectPitch() const;
 
-    static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
 
     // ---- oscillators ------------------------------------------------------
     // Osc1/Osc2 waveforms: 0 tri, 1 shark-tooth, 2 saw, 3 square, 4 wide pulse, 5 narrow pulse.
@@ -216,6 +230,8 @@ class Monolith final : public Instrument {
 
     float aEnv_ = 0.0f, fEnv_ = 0.0f;
     Stage aStage_ = Stage::Off, fStage_ = Stage::Off;
+    EnvShapeState aShape_, fShape_; // the curve of each contour's current stage
+    std::atomic<float> envTele_[4]; // filter contour stage, progress, loudness contour stage, progress
 
     double ph1_[kUni] = {0}, ph2_[kUni] = {0}, ph3_[1] = {0};
     float pinkState_ = 0.0f;

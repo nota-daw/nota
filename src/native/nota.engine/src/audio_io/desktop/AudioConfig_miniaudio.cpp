@@ -79,6 +79,18 @@ uint32_t resolveAudioDeviceId(const std::string& uid, bool inputScope) {
     return 0; // saved device gone -> fall back to default
 }
 
+std::string effectiveAudioDeviceUid(const std::string& uid, bool inputScope) {
+    std::vector<ma_device_info> infos;
+    if (!enumerate(inputScope, infos)) return {};
+    for (const auto& info : infos)
+        if (!uid.empty() && idToUid(info.id) == uid) return uid;
+    for (const auto& info : infos)
+        if (info.isDefault) return idToUid(info.id); // empty or gone -> the system default
+    // A backend that flags no default (ALSA on some machines): the first device it lists, so
+    // "System default" still names a device.
+    return infos.empty() ? std::string{} : idToUid(infos.front().id);
+}
+
 bool notaMiniaudioDeviceIdForIndex(bool inputScope, uint32_t oneBasedIndex, ma_device_id& out) {
     if (oneBasedIndex == 0) return false;
     std::vector<ma_device_info> infos;

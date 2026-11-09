@@ -21,7 +21,7 @@
 //               MPE slide.
 //     Rail: VOICES — Poly N (its popover: polyphony, what the voices are doing, the stealing
 //     order, strikes per key, old-voice fade) / Mono / Choke, volume, pan, glide, the pedal,
-//     output, Vel → Vol and the meter. States take the rail over: the SFZ import report, the
+//     volume (the output), Vel → Vol. States take the rail over: the SFZ import report, the
 //     memory while samples load, the source of a missing pack.
 //   • S 260 × 260 — the name, the mini map, zones · layers and the RAM; a loading bar.
 //
@@ -99,7 +99,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
     /// <summary>Raised when the card asks to install a registry sample pack (Settings → Downloads).</summary>
     internal static event Action<string>? InstallPackRequested;
 
-    private const double RailW = 186, TabH = 20, StatusH = 18;
+    private const double RailW = 186, TabH = 20;
     private static readonly string[] TabNames = { "Zones", "Sample", "Groups", "Pitch", "Env", "Filter" };
 
     private static string SourceTagOf(MosaicProgram p) => p.SourceKind switch
@@ -371,11 +371,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         map.KeyDown += k => engine.TrackNoteOn(track, k, 0.75f);
         map.KeyUp += k => engine.TrackNoteOff(track, k);
 
-        // ---- status / meta ------------------------------------------------------------------------
-        var statusText = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
-        double esr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-        string Rate() => NotaNum.Unit(esr / 1000, "0.#", "kHz");
         int Poly() => MosaicModel.Poly(G("polyphony"));
 
         if (mini) return BuildMini();
@@ -727,25 +722,32 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             (new Panel(), "*"), (detectBtn, "Auto"));
 
         // ======================= Env tab =========================================================
-        var env = new SamplerEnvView();
+        // The shared envelope graph (#531): drag the breakpoints, bend decay and release by their
+        // diamonds, ⌥-click to type; the dot is the loudest voice.
+        var env = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         ToolTip.SetTip(env, MenuKit.Keys(Loc.T("device.mosaic.drag_the_nodes_attack_decay")));
-        env.DragBegin += Begin;
-        env.DragEnd += End;
-        env.Changed += (id, v) => { SetP(id, v); Refresh(); };
-        env.Reset += id => { Write(id, Def(id)); Refresh(); };
-        string EnvTl() => $"{NotaNum.Time(MosaicModel.AttackSec(G("attack")))} · {NotaNum.Time(MosaicModel.DecaySec(G("decay")))} · {DbLin(G("sustain"))} · {NotaNum.Time(MosaicModel.ReleaseSec(G("release")))}";
-        readouts.Add(() => env.Set(G("attack"), G("decay"), G("sustain"), G("release"), samSnap, EnvTl(), ""));
+        (int, string) EP(string id) => (I(id), id);
+        env.Target("ENV", EP("attack"), EP("decay"), EP("sustain"), EP("release"));
+        env.Shape(EP("dcurve"), EP("rcurve"), EP("envexp"));
+        env.Format = (k, n) => k switch
+        {
+            0 => NotaNum.Time(MosaicModel.AttackSec((float)n)), 1 => NotaNum.Time(MosaicModel.DecaySec((float)n)),
+            2 => DbLin((float)n), _ => NotaNum.Time(MosaicModel.ReleaseSec((float)n)),
+        };
+        env.Seconds = (k, n) => k switch { 0 => MosaicModel.AttackSec((float)n), 1 => MosaicModel.DecaySec((float)n), _ => MosaicModel.ReleaseSec((float)n) };
+        readouts.Add(() => { env.SetPlay(snap.EnvStage, snap.EnvProgress); env.Refresh(); });
         var envRow = Row(12,
             (PKnob("attack", "Attack", v => NotaNum.Time(MosaicModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "Decay", v => NotaNum.Time(MosaicModel.DecaySec(v))), "Auto"),
             (PKnob("sustain", "Sustain", DbLin, NotaSize.KnobMain, 56), "Auto"),
             (PKnob("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
+            (Field(Loc.T("device.env.curve_caps"), Chips("envexp", new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") }, padX: 6)), "Auto"),
             (PKnob("velcurve", "Vel curve", v => { int c = MosaicModel.VelCurve(v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }, arc: Teal, tip: Loc.T("device.mosaic.velocity_level_curve")), "Auto"),
             (PKnob("mpepressure", "Pressure", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_pressure_aftertouch_level")), "Auto"));
 
         // ======================= Filter tab ======================================================
-        var filt = new SamplerFilterView();
+        var filt = new SamplerFilterView { Spectrum = new FilterSpectrum(engine, track) };
         ToolTip.SetTip(filt, MenuKit.Keys(Loc.T("device.mosaic.drag_left_right_for_the")));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
@@ -754,10 +756,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         // ⌥-click a node / the filter window to type it (specs/035).
         ValueField PF(string id, string name, Func<float, string> fmt) => new(name, () => G(id), v => fmt((float)v), v => SetP(id, v),
             () => Begin(id), () => End(id), I(id) >= 0 ? Def(id) : null) { After = Refresh };
-        ValueEntry.AttachHandles(env,
-            [PF("attack", "Attack", v => NotaNum.Time(MosaicModel.AttackSec(v)))],
-            [PF("decay", "Decay", v => NotaNum.Time(MosaicModel.DecaySec(v))), PF("sustain", "Sustain", DbLin)],
-            [PF("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v)))]);
         ValueEntry.AttachAll(filt, PF("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v))), PF("resonance", "Resonance", v => NotaNum.Pct(v)));
         string FiltTl()
         {
@@ -767,14 +765,47 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1), Loc.T("device.mosaic.let_the_amp_envelope_open"), on: () => G("envcutoff") >= 0.5f);
-        var filterRow = Row(10,
-            (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)), "Auto"),
-            (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.KnobMain, 56), "Auto"),
-            (PKnob("resonance", "Reso", v => NotaNum.Pct(v)), "Auto"),
-            (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.the_cutoff_follows_the_key")), "Auto"),
-            (new Panel(), "*"), (envBtn, "Auto"),
-            (PKnob("envamount", "Env", v => NotaNum.Unit(MosaicModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct"), arc: Teal), "Auto"),
-            (PKnob("mpeslide", "Slide", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_slide_cc74_cutoff")), "Auto"));
+        // The filter's controls in a column at the graph's right (#531), as on Nota Volt: the type
+        // over a grid of knobs, the envelope switch under them.
+        static Control SideGrid(params Control[] cells)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowSpacing = 4 };
+            for (int k = 0; k < cells.Length; k++)
+            {
+                if (k % 2 == 0) g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                cells[k].HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(cells[k], k % 2); Grid.SetRow(cells[k], k / 2); g.Children.Add(cells[k]);
+            }
+            return g;
+        }
+        static Control SidePage(Control view, Control side)
+        {
+            var host = new Border
+            {
+                Width = 150, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),
+                Padding = new Thickness(8, 0, 0, 0), Child = side,
+            };
+            var page = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(7, 5, 7, 5) };
+            page.Children.Add(view);
+            Grid.SetColumn(host, 1); page.Children.Add(host);
+            return page;
+        }
+        envBtn.HorizontalAlignment = HorizontalAlignment.Center;
+        var filterSide = new StackPanel
+        {
+            Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)),
+                SideGrid(
+                    PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.KnobSecondary, 54),
+                    PKnob("resonance", "Reso", v => NotaNum.Pct(v)),
+                    PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.the_cutoff_follows_the_key")),
+                    PKnob("envamount", "Env", v => NotaNum.Unit(MosaicModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct"), arc: Teal),
+                    PKnob("mpeslide", "Slide", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.mosaic.mpe_slide_cc74_cutoff")),
+                    envBtn),
+            },
+        };
 
         // ======================= the tab panel ===================================================
         const double RowH = 62;
@@ -793,7 +824,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Page(groupTable, groupBottom, 66),
             Page(keysView, pitchRow),
             Page(env, envRow),
-            Page(filt, filterRow),
+            SidePage(filt, filterSide),
         };
         var tabCells = new Border[TabNames.Length];
         var tabTexts = new TextBlock[TabNames.Length];
@@ -1023,7 +1054,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Spacing = 6,
                 Children =
                 {
-                    Slider("Volume", "volume", () => DbLin(G("volume"))),
+                    Slider("Level", "volume", () => DbLin(G("volume"))),
                     Slider("Pan", "pan", () => PanS(G("pan") * 2 - 1), bipolar: true),
                     Slider("Glide", "glide", () => GlideText(G("glide")), tip: Loc.T("device.mosaic.slide_from_the_last_note")),
                 },
@@ -1056,15 +1087,14 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Grid.SetColumn(voicesTxt, 2); pedalRow.Children.Add(voicesTxt);
             sliders.Children.Add(pedalRow);
 
-            var outKnob = PKnob("output", "Output", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.mosaic.the_level_after_everything"));
-            var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: Loc.T("device.mosaic.how_much_velocity_sets_the"));
-            var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-            ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-            var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
-            outRow.Children.Add(outKnob);
-            Grid.SetColumn(velKnob, 1); outRow.Children.Add(velKnob);
-            meter.HorizontalAlignment = HorizontalAlignment.Right; meter.Margin = new Thickness(0, 2, 0, 2);
-            Grid.SetColumn(meter, 2); outRow.Children.Add(meter);
+            // Volume · Vel → Vol centred — the track meter already shows the level.
+            var outKnob = PKnob("output", "Volume", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.mosaic.the_level_after_everything"));
+            var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), NotaSize.KnobRegular, 50, arc: Teal, tip: Loc.T("device.mosaic.how_much_velocity_sets_the"));
+            var outRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
+                Children = { outKnob, velKnob },
+            };
             var outHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = outRow };
             var body = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 6 };
             body.Children.Add(sliders);
@@ -1176,59 +1206,11 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Refresh();
         };
 
-        // ======================= status ==========================================================
-        string Summary()
-        {
-            if (AllMissing() && prog.Zones.Count > 0) return Loc.T("device.mosaic.samples_unavailable_notes_muted");
-            if (Loading()) return Loc.F("device.mosaic.loading_notes_muted", NotaNum.Bytes(status.RamBytes), NotaNum.Bytes(RamEstimate()));
-            if (prog.IsEmpty) return Loc.T("device.mosaic.empty_drop_samples_a_folder_or_sfz");
-            string name = prog.Name.Length > 0 ? prog.Name + " · " : "";
-            switch (tab)
-            {
-                case 0 when ui.ReleaseView:
-                {
-                    int sounding = snap.Zones.Count(z => z.Zone >= 0 && z.Zone < prog.Zones.Count && prog.Zones[z.Zone].Release);
-                    return $"Release · {sounding} sounding · {NotaNum.Db(MosaicModel.RelVolDb(G("relvol")), signed: true)} · {NotaNum.Db(MosaicModel.RelLenDb(G("rellen")), signed: true)} after 2 s hold";
-                }
-                case 0:
-                case 1:
-                case 3:
-                {
-                    string pedal = snap.Pedal ? " · pedal down" : "";
-                    string missing = status.Missing > 0 ? Loc.F("device.mosaic.missing", status.Missing) : "";
-                    return $"{name}{prog.Summary()}{pedal}{missing}";
-                }
-                case 2:
-                {
-                    string rel = G("relon") >= 0.5f ? $"release {NotaNum.Db(MosaicModel.RelVolDb(G("relvol")), signed: true)}" : "release off";
-                    var rrg = prog.Groups.FirstOrDefault(g => g.SeqLen > 1);
-                    string rr = rrg is null ? Loc.T("device.mosaic.no_round_robin") : $"rr {rrg.SeqLen} {MosaicProgram.RrNames[rrg.RrMode].ToLowerInvariant()}";
-                    return Loc.F("device.mosaic.groups", prog.Groups.Count, rr, rel);
-                }
-                case 4: return $"Env {EnvTl()} · vel {NotaNum.Pct(G("velamount"))} · curve {VelCurveWord()}";
-                default:
-                {
-                    int t = Sel("filtertype", 4);
-                    if (t == 0) return Loc.T("device.mosaic.filter_off_the_samples_pass");
-                    return $"Filter {MosaicModel.FilterNames[t]} · cutoff {NotaNum.Hz(MosaicModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
-                }
-            }
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(statusText);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Background = NotaPalette.SurfaceAbyss,
-            Padding = new Thickness(8, 0), Child = statusBar,
-        };
-
         // ======================= assembly ========================================================
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap, Margin = new Thickness(NotaSpace.DeviceGap) };
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
         HookDrop(root, dropLayer);
 
         bool lastLoading = Loading(), lastMissing = AllMissing();
@@ -1251,8 +1233,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         refresh = () =>
         {
             foreach (var r in readouts) r();
-            statusText.Text = Summary();
-            statusText.Foreground = AllMissing() && prog.Zones.Count > 0 ? NotaPalette.DangerBright : Loading() ? AccentBright : TextSecondary;
             bool ld = Loading();
             loadLayer.IsVisible = ld;
             zoneRow.IsVisible = !ld; loadRow.IsVisible = ld;
@@ -1275,7 +1255,6 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             samSnap.Note = snap.Note; samSnap.CutoffHz = snap.CutoffHz; samSnap.PlayPos = snap.Pos;
             map.SetSounding(snap.Zones, snap.Keys);
             if (tab == 1) wave.SetPlayhead(snap.Live && snap.Zone == ui.Zone ? snap.Pos : -1);
-            meta.Text = $"{Rate()} · {snap.Voices}/{Poly()} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             bool ld = Loading(), miss = AllMissing();
             if (ld != lastLoading || miss != lastMissing)
             {

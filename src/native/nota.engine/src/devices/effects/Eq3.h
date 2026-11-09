@@ -39,6 +39,7 @@ class Eq3 : public Device {
         Slope,    // 0 = 24 dB/oct (LR4), 1 = 48 dB/oct (LR8)
         Gain,     // output gain (0.5 = 0 dB, ±24 dB)
         Range,    // fader law: 0 = Classic ±15 dB, 1 = Isolator −24 … +6 dB (appended)
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     static constexpr int kLegacyParams = 10; // the layout before Range

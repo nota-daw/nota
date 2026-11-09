@@ -67,6 +67,11 @@ picker filter is `*.wav;*.flac;*.mp3`.
 (`AuroraInstrumentCard.cs:423-442, 480-487`) and the single 128 px `tableWindow` (`:534`).
 `Hint()` and `Summary()` stop naming "the picked oscillator".
 
+After the merge with `ui/style-guide` (#531, one home per control): the Global rail's
+`POS 1`, `CUTOFF` and `UNISON` sliders go, being second copies of the Osc tab's Osc 1
+Position, the Filter tab's Freq and the unison Detune; the rail keeps Voices, Bend, Volume
+and Pan. `Summary()` and the status strip are already gone with #531.
+
 ## At 1050 (only if FR-005 is answered "Wide")
 
 - Columns are about 391 px.
