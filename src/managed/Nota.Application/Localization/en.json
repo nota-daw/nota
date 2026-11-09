@@ -269,6 +269,7 @@
     "articulations.manager.lead_tip": "Send the switch this long before the note; the note doesn't move",
     "articulations.manager.make_default": "Default articulation",
     "articulations.manager.maps": "Maps",
+    "articulations.manager.meta_differs": "{0} · this project's version (differs from your library)",
     "articulations.manager.meta_project": "{0} · in this project only",
     "articulations.manager.momentary": "Momentary",
     "articulations.manager.name": "Name",

@@ -70,7 +70,7 @@ public sealed class ArticulationMapManager : NotaWindow
     private readonly IArticulationLibrary? _lib;
     private readonly Func<int> _selectedTrack;
 
-    private List<(ArticulationMap Map, bool OnlyInProject)> _catalog = new();
+    private List<(ArticulationMap Map, bool OnlyInProject, bool DiffersFromLibrary)> _catalog = new();
     private int _mapIndex = -1;
     private ArticulationMap? _work;        // the open map, being edited
     private string? _savedJson;            // what it was when opened or last saved
@@ -186,6 +186,8 @@ public sealed class ArticulationMapManager : NotaWindow
 
     private bool Dirty => _work is not null && _savedJson != ArticulationMapFile.Write(_work);
     private bool OnlyInProject => _mapIndex >= 0 && _mapIndex < _catalog.Count && _catalog[_mapIndex].OnlyInProject;
+    // The project's copy differs from the library's: Save writes the project's into the library.
+    private bool DiffersFromLibrary => _mapIndex >= 0 && _mapIndex < _catalog.Count && _catalog[_mapIndex].DiffersFromLibrary;
     private Articulation? Selected => _work?.Find(_artId);
 
     // The map of the selected track, to open on.
@@ -206,7 +208,7 @@ public sealed class ArticulationMapManager : NotaWindow
         if (k < 0 && _catalog.Count > 0) k = Math.Clamp(_mapIndex, 0, _catalog.Count - 1);
         _building = true;
         _maps.Items.Clear();
-        foreach (var (m, onlyInProject) in _catalog) _maps.Items.Add(MapRow(m, onlyInProject));
+        foreach (var (m, onlyInProject, differs) in _catalog) _maps.Items.Add(MapRow(m, onlyInProject, differs));
         _maps.SelectedIndex = k;
         _building = false;
         _mapsEmpty.IsVisible = _catalog.Count == 0;
@@ -278,9 +280,11 @@ public sealed class ArticulationMapManager : NotaWindow
 
     // ---- maps ----------------------------------------------------------------------------------
 
-    private static Control MapRow(ArticulationMap m, bool onlyInProject)
+    private static Control MapRow(ArticulationMap m, bool onlyInProject, bool differs)
     {
-        string meta = onlyInProject ? Loc.F("articulations.manager.meta_project", ArticulationText.Count(m)) : ArticulationText.Count(m);
+        string meta = onlyInProject ? Loc.F("articulations.manager.meta_project", ArticulationText.Count(m))
+            : differs ? Loc.F("articulations.manager.meta_differs", ArticulationText.Count(m))
+            : ArticulationText.Count(m);
         return new StackPanel
         {
             Spacing = 1, Margin = new Thickness(0, 2),
@@ -769,7 +773,7 @@ public sealed class ArticulationMapManager : NotaWindow
             : _flash ?? (dirty ? Loc.T("articulations.manager.unsaved")
                 : Loc.Plural("articulations.manager.used_on", ArticulationMapUsage.TracksUsing(_engine, _work!.Id).Count));
         _export.IsEnabled = open && problems.Count == 0;
-        _save.IsEnabled = open && problems.Count == 0 && (dirty || OnlyInProject) && _lib is not null;
+        _save.IsEnabled = open && problems.Count == 0 && (dirty || OnlyInProject || DiffersFromLibrary) && _lib is not null;
         _revert.IsEnabled = open && dirty;
         int track = InstrumentTrack();
         _assign.IsEnabled = open && !dirty && problems.Count == 0 && track > 0;

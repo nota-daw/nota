@@ -49,16 +49,27 @@ public static class ArticulationMapUsage
         return n;
     }
 
-    /// <summary>The library's maps plus every map a project track holds that the library doesn't
-    /// (flagged), by name.</summary>
-    public static List<(ArticulationMap Map, bool OnlyInProject)> Catalog(IAudioEngine engine, IArticulationLibrary? library)
+    /// <summary>The maps the manager lists, by name: the library's, and every map a project track
+    /// holds. When the project's copy of a map differs from the library's (the library was saved
+    /// after an edit that was then undone, or on another machine), the project's copy is listed —
+    /// it is what the tracks play, and saving an edit of it must not overwrite them with the
+    /// library's version — flagged <c>DiffersFromLibrary</c>. A map no library holds is flagged
+    /// <c>OnlyInProject</c>. Several tracks with different copies of one map: the first track's.</summary>
+    public static List<(ArticulationMap Map, bool OnlyInProject, bool DiffersFromLibrary)> Catalog(IAudioEngine engine, IArticulationLibrary? library)
     {
-        var list = (library?.List() ?? Array.Empty<ArticulationMap>()).Select(m => (m, false)).ToList();
-        var known = list.Select(x => x.m.Id).ToHashSet();
+        var lib = (library?.List() ?? Array.Empty<ArticulationMap>()).ToDictionary(m => m.Id, StringComparer.Ordinal);
+        var list = new List<(ArticulationMap Map, bool OnlyInProject, bool DiffersFromLibrary)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < engine.TrackCount; i++)
             if (engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument
-                && ArticulationMapAssignment.Read(engine, ti.Id) is { } m && known.Add(m.Id))
-                list.Add((m, true));
-        return list.OrderBy(x => x.Item1.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(x => x.Item1.Id, StringComparer.Ordinal).ToList();
+                && ArticulationMapAssignment.Read(engine, ti.Id) is { } m && seen.Add(m.Id))
+            {
+                if (!lib.TryGetValue(m.Id, out var saved)) list.Add((m, true, false));
+                else if (ArticulationMapFile.Write(saved) != ArticulationMapFile.Write(m)) list.Add((m, false, true));
+                else list.Add((saved, false, false));
+            }
+        foreach (var m in lib.Values)
+            if (!seen.Contains(m.Id)) list.Add((m, false, false));
+        return list.OrderBy(x => x.Map.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(x => x.Map.Id, StringComparer.Ordinal).ToList();
     }
 }

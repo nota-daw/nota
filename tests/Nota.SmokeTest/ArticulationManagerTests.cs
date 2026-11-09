@@ -108,6 +108,25 @@ internal static class ArticulationManagerTests
             yield return (cat.Count == 2 && cat.Single(x => x.Map.Id == shared.Id).OnlyInProject == false
                           && cat.Single(x => x.Map.Id == other.Id).OnlyInProject,
                 "articulations: the manager lists library maps once and flags a map only the project holds");
+
+            // The library got a newer version (saved, then undone on the tracks): the manager lists
+            // what the tracks play, flagged, so saving an edit can't put the library's version on them.
+            var newer = ArticulationMapFile.Read(ArticulationMapFile.Write(shared), "").Map!;
+            newer.Find(2)!.NoteOffsetMs = -321;
+            lib.Save(newer);
+            ArticulationMapUsage.ApplyEverywhere(e, newer);
+            e.Undo();
+            var cat2 = ArticulationMapUsage.Catalog(e, lib);
+            var listed = cat2.Single(x => x.Map.Id == shared.Id);
+            yield return (cat2.Count == 2 && listed.DiffersFromLibrary && !listed.OnlyInProject
+                          && ArticulationMapFile.Write(listed.Map) == ArticulationMapFile.Write(ArticulationMapAssignment.Read(e, t1)!),
+                "articulations: when the project's copy differs from the library's, the manager lists the project's, flagged");
+            listed.Map.Name = "Restored project map";
+            lib.Save(listed.Map);
+            int restored = ArticulationMapUsage.ApplyEverywhere(e, listed.Map);
+            yield return (restored == 2 && OffsetOn(t1) == -150.5 && OffsetOn(t2) == -150.5
+                          && !ArticulationMapUsage.Catalog(e, lib).Single(x => x.Map.Id == shared.Id).DiffersFromLibrary,
+                "articulations: saving a small edit after undo preserves the restored project offsets on every track");
         }
         finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch (IOException) { } }
 
