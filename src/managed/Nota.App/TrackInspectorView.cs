@@ -20,8 +20,10 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Articulations;
 using Nota.Application.Localization;
 
 namespace Nota.App;
@@ -41,6 +43,7 @@ internal sealed class TrackInspectorView : UserControl
     private int _trackId = -1;
     private string _shown = "";
     private TextBox? _nameBox;
+    private TextBox? _offsetBox;   // the MIDI offset being typed (specs/085) must survive the poll too
 
     public TrackInspectorView(IAudioEngine engine, ArrangementView timeline, Func<int, IReadOnlyList<FreezeEntry>> freezeEntries,
         Func<bool> engineSuspended)
@@ -82,7 +85,7 @@ internal sealed class TrackInspectorView : UserControl
         if (_engineSuspended()) return;
         // A folded browser keeps the tab attached but hidden; a name being typed must not be
         // swept away by a rebuild.
-        if (!IsEffectivelyVisible || _nameBox?.IsFocused == true) return;
+        if (!IsEffectivelyVisible || _nameBox?.IsFocused == true || _offsetBox?.IsFocused == true) return;
         if (Snapshot() != _shown) Rebuild();
     }
 
@@ -125,6 +128,10 @@ internal sealed class TrackInspectorView : UserControl
             if (src > 0) sb.Append(TrackNames.Of(_engine, src));
             foreach (var c in _timeline.MidiSourceChoices(id))
                 sb.Append('|').Append(c.Id).Append('=').Append(c.Name);
+            // The articulation map (specs/085): an undo, the MCP or another view can change it.
+            var map = _engine.GetTrackArticulationMapJson(id);
+            sb.Append("|art:").Append(map?.Length ?? -1).Append(':').Append(map?.GetHashCode() ?? 0)
+              .Append("|off:").Append(_engine.GetTrackMidiOffsetMs(id));
         }
         foreach (var f in _freezeEntries(id)) sb.Append('|').Append(f.Label).Append(f.Switch);
         return sb.ToString();
@@ -135,6 +142,7 @@ internal sealed class TrackInspectorView : UserControl
         if (_engineSuspended()) return;
         _shown = Snapshot();
         _nameBox = null;
+        _offsetBox = null;
         var s = new StackPanel { Spacing = 18, Margin = new Thickness(12, 12, 12, 16) };
         if (IsMaster) BuildMaster(s);
         else if (_trackId > 0 && TryInfo(out var ti)) BuildTrack(s, ti);
@@ -183,6 +191,7 @@ internal sealed class TrackInspectorView : UserControl
 
         if (audio) s.Children.Add(Section(Loc.T("common.input"), InputRows(id)));
         if (ti.IsInstrument) s.Children.Add(Section(Loc.T("common.input"), MidiFromRow(id)));
+        if (ti.IsInstrument) s.Children.Add(Section(Loc.T("articulations.inspector.head"), ArticulationsBody(id)));
 
         s.Children.Add(Section(Loc.T("track_inspector.color"), Swatches(id)));
 
@@ -261,6 +270,169 @@ internal sealed class TrackInspectorView : UserControl
             SessionView.Pick(a, choices.Select(c => (c.Id, c.Name)), v => v == cur, v => { _engine.SetTrackMidiSource(id, v); Edited(); }));
         ToolTip.SetTip(chip, Loc.T("track_inspector.play_another_instrument_tracks_midi"));
         return SessionView.Row(Loc.T("track_inspector.midi_from"), chip);
+    }
+
+    // ---- articulations (specs/085, US1) -------------------------------------------------------
+
+    private static IArticulationLibrary? Library => App.Services?.GetService(typeof(IArticulationLibrary)) as IArticulationLibrary;
+
+    // The track's map (name and size, a pick from the library), Import… and Remove. Files dropped
+    // from Explorer onto the section import like the picker does: decided by content, previewed first.
+    private Control ArticulationsBody(int id)
+    {
+        var map = ArticulationMapAssignment.Read(_engine, id);
+        var rows = new StackPanel { Spacing = 8 };
+
+        var lib = Library;
+        var saved = lib?.List() ?? (IReadOnlyList<ArticulationMap>)Array.Empty<ArticulationMap>();
+        var choices = new List<(string Id, string Name)> { ("", Loc.T("common.none")) };
+        choices.AddRange(saved.Select(m => (m.Id, m.Name)));
+        if (map is not null && saved.All(m => m.Id != map.Id)) choices.Insert(1, (map.Id, map.Name));   // the project's own copy
+        var chip = SessionView.Chip(map?.Name ?? Loc.T("common.none"), false, a =>
+            SessionView.Pick(a, choices, v => v == (map?.Id ?? ""), v =>
+            {
+                if (v.Length == 0) { if (map is not null) _engine.ClearTrackArticulationMap(id); }
+                else if (v != map?.Id && lib?.Get(v) is { } chosen) ArticulationMapAssignment.Assign(_engine, id, chosen);
+                Edited();
+            }));
+        ToolTip.SetTip(chip, Loc.T("articulations.inspector.map_tip"));
+        rows.Children.Add(SessionView.Row(Loc.T("articulations.inspector.map"), chip));
+        if (map is not null) rows.Children.Add(Note(ArticulationText.Count(map)));
+        rows.Children.Add(SessionView.Row(Loc.T("articulations.inspector.midi_offset"), MidiOffsetBox(id)));
+        // FR-018: what each articulation with an offset of its own adds up to on this track.
+        if (map is not null)
+        {
+            double trackMs = _engine.GetTrackMidiOffsetMs(id);
+            foreach (var (name, total) in ArticulationText.EffectiveOffsets(map, trackMs))
+                rows.Children.Add(Note(Loc.F("articulations.inspector.effective", name, OffsetText(total), OffsetText(trackMs), OffsetText(total - trackMs))));
+        }
+
+        var import = new Button { Height = NotaSize.Shell, Padding = new Thickness(10, 0), Content = Loc.T("articulations.inspector.import") };
+        ToolTip.SetTip(import, Loc.T("articulations.inspector.import_tip"));
+        import.Click += async (_, _) => await PickAndImport(id);
+        var buttons = new WrapPanel { Orientation = Orientation.Horizontal, Children = { import } };
+        var manage = new Button { Height = NotaSize.Shell, Padding = new Thickness(10, 0), Margin = new Thickness(6, 0, 0, 0), Content = Loc.T("articulations.inspector.edit_maps") };
+        ToolTip.SetTip(manage, Loc.T("articulations.inspector.edit_maps_tip"));
+        manage.Click += (_, _) =>
+            ((Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow)?.ShowArticulationMaps();
+        buttons.Children.Add(manage);
+        if (map is not null)
+        {
+            var remove = new Button { Height = NotaSize.Shell, Padding = new Thickness(10, 0), Margin = new Thickness(6, 0, 0, 0), Content = Loc.T("articulations.inspector.remove") };
+            ToolTip.SetTip(remove, Loc.T("articulations.inspector.remove_tip"));
+            remove.Click += (_, _) => { _engine.ClearTrackArticulationMap(id); Edited(); };
+            buttons.Children.Add(remove);
+        }
+        rows.Children.Add(buttons);
+        rows.Children.Add(Note(Loc.T("articulations.inspector.drop_hint")));
+
+        var host = new Border
+        {
+            Child = rows, Padding = new Thickness(6), Margin = new Thickness(-6), CornerRadius = NotaRadius.Control,
+            BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Background = Brushes.Transparent,
+        };
+        HookArticulationDrop(host, id);
+        return host;
+    }
+
+    // The track's MIDI playback offset (specs/085, T052): typed in milliseconds ("−80", "-80 ms",
+    // "−0.08 s"), shown in the display culture. Enter or leaving the box sets it (one undo step);
+    // Esc puts it back; text that isn't a time is ignored.
+    private const double OffsetRangeMs = 2000;
+    private static string OffsetText(double ms) => NotaNum.Unit(Math.Round(ms), "0", "ms");
+
+    private Control MidiOffsetBox(int id)
+    {
+        double cur = _engine.GetTrackMidiOffsetMs(id);
+        string shown = OffsetText(cur);
+        var box = new TextBox
+        {
+            Text = shown, FontSize = 11, Height = NotaSize.Shell, MinHeight = 0, Width = 96,
+            VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Right,
+        };
+        ToolTip.SetTip(box, Loc.T("articulations.inspector.midi_offset_tip"));
+        void Commit()
+        {
+            string text = (box.Text ?? "").Trim();
+            if (text == shown) return;
+            double? pos = ValueText.Solve(text, shown, p => OffsetText(-OffsetRangeMs + 2 * OffsetRangeMs * p));
+            if (pos is not double p) { box.Text = shown; return; }
+            double ms = Math.Round(-OffsetRangeMs + 2 * OffsetRangeMs * p);
+            Dispatcher.UIThread.Post(() =>   // after a rebuild that dropped the box has finished, like the name
+            {
+                if (ms != cur) _engine.SetTrackMidiOffsetMs(id, ms);
+                Edited();
+            });
+        }
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Escape)) return;
+            if (e.Key == Key.Escape) box.Text = shown;
+            e.Handled = true;
+            TopLevel.GetTopLevel(box)?.FocusManager?.Focus(null);
+        };
+        box.LostFocus += (_, _) => Commit();
+        _offsetBox = box;
+        return box;
+    }
+
+    private async System.Threading.Tasks.Task PickAndImport(int id)
+    {
+        if (TopLevel.GetTopLevel(this) is not { } top) return;
+        var files = await top.PickFilesAsync(new FilePickerOpenOptions
+        {
+            Title = Loc.T("articulations.preview.title"),
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Loc.T("articulations.inspector.file_type")) { Patterns = ArticulationImport.PickerExtensions.Select(x => "*" + x).ToArray() },
+                new FilePickerFileType(Loc.T("articulations.inspector.all_files")) { Patterns = new[] { "*" } },
+            },
+        });
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { Length: > 0 } path) await ImportFromFile(id, path);
+    }
+
+    // Import → preview → (accepted) keep in the library and give the track. The file is only read.
+    private async System.Threading.Tasks.Task ImportFromFile(int id, string path)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+        var result = ArticulationImport.ImportFile(path);
+        bool ok = await new ArticulationImportPreview(System.IO.Path.GetFileName(path), result).ShowDialog<bool>(owner);
+        if (!ok || result.Map is not { } map) return;
+        try { Library?.Save(map); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Still assign it: the project keeps its own copy. Say the library didn't take it.
+            await new ConfirmWindow(Loc.T("articulations.preview.title"), Loc.F("articulations.inspector.library_failed", ex.Message), Loc.T("common.close"), null).ShowDialog<bool>(owner);
+        }
+        if (!ArticulationMapAssignment.Assign(_engine, id, map))
+            await new ConfirmWindow(Loc.T("articulations.preview.title"), Loc.T("articulations.inspector.assign_failed"), Loc.T("common.close"), null).ShowDialog<bool>(owner);
+        Edited();
+    }
+
+    // Explorer → section. A drag is accepted on sight (reading files at drag-over would stall the
+    // pointer); the drop takes the first file and decides by its content, like the picker.
+    private void HookArticulationDrop(Border target, int id)
+    {
+        DragDrop.SetAllowDrop(target, true);
+        void Glow(bool on) => target.BorderBrush = on ? NotaPalette.Accent : Brushes.Transparent;
+        DragDrop.AddDragOverHandler(target, (_, e) =>
+        {
+            if (BrowserView.CurrentDrag is not null || !BrowserView.IsAcceptableDrag(e)) { e.DragEffects = DragDropEffects.None; return; }
+            e.DragEffects = DragDropEffects.Copy;
+            e.Handled = true;
+            Glow(true);
+        });
+        DragDrop.AddDragLeaveHandler(target, (_, _) => Glow(false));
+        DragDrop.AddDropHandler(target, (_, e) =>
+        {
+            Glow(false);
+            if (BrowserView.CurrentDrag is not null) return;
+            var file = BrowserView.ExternalPaths(e).FirstOrDefault(System.IO.File.Exists);
+            if (file is null) return;
+            e.Handled = true;
+            Dispatcher.UIThread.Post(() => _ = ImportFromFile(id, file));   // after the drop returns: the dialog is modal
+        });
     }
 
     // The track palette — each base in its normal, light and dark shade — and Auto, the

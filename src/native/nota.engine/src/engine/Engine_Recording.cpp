@@ -212,6 +212,22 @@ void Engine::setTrackMidiSource(int32_t trackId, int32_t sourceTrackId) {
     if (sourceTrackId == trackId) sourceTrackId = -1; // no self-routing
     if (auto t = findTrackAuthoring(trackId)) t->setMidiFromTrackId(sourceTrackId);
 }
+// One undo step (specs/085, T051), like every other edit of a track: a new track with the offset,
+// published with the graph. The audio thread reads the new track's atomic; nothing is written to
+// the track it may be rendering. An unchanged value is no step at all.
+void Engine::setTrackMidiOffsetMs(int32_t trackId, double ms) {
+    if (!std::isfinite(ms)) ms = 0.0;
+    ms = std::clamp(ms, -2000.0, 2000.0);
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->midiOffsetMs() == ms) return;
+    auto nt = cloneTrack(*old);
+    nt->setMidiOffsetMs(ms);
+    republishWithTrack(trackId, nt);
+}
+double Engine::trackMidiOffsetMs(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? t->midiOffsetMs() : 0.0;
+}
 int32_t Engine::trackMidiSource(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->midiFromTrackId() : -1;

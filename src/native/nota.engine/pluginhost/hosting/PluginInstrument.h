@@ -42,6 +42,8 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     void allNotesOff() override;
     void noteExpression(int32_t pitch, int32_t dim, float value) override;
     void controller(int32_t ctl, float value) override;
+    void programChange(int32_t program) override;
+    bool takesArticulations() const override { return true; } // Kontakt & co. switch on keyswitches (specs/085)
 
     void render(float* out, int32_t frames) override;
     void setTransportInfo(const nota::TransportInfo& ti) override { playHead_.info = ti; }
@@ -79,6 +81,13 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     std::shared_ptr<nota::Instrument> clone() const override;
 
     static int u7(float v) { return juce::jlimit(0, 127, (int)std::lround(v * 127.0f)); }
+    // The MIDI channel (1..16) of the event being sent: the articulation's explicit one, else 1.
+    // Remembers it, so allNotesOff reaches every channel used and only those. Audio thread only.
+    int chan() {
+        const int c = eventChannel >= 1 && eventChannel <= 16 ? eventChannel : 1;
+        usedChannels_ |= 1u << (c - 1);
+        return c;
+    }
 
   private:
     void audioProcessorParameterChanged(juce::AudioProcessor*, int index, float) override;
@@ -91,6 +100,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
 
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_;
+    uint32_t usedChannels_ = 1u; // bit c-1 = channel c has been sent on (chan()); audio thread only
     juce::AudioBuffer<float> storage_;
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)

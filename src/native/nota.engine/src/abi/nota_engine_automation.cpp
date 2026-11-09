@@ -29,6 +29,9 @@ int32_t nota_engine_rack_device_selftest(NotaEngine* e) {
 int32_t nota_engine_timed_events_selftest(NotaEngine* e) {
     return (e && ENG(e)->timedEventsSelfTest()) ? 1 : 0;
 }
+int32_t nota_engine_articulation_selftest(NotaEngine* e) {
+    return e ? ENG(e)->articulationSelfTest() : -1;
+}
 int32_t nota_engine_drum_rack_selftest(NotaEngine* e) {
     return (e && ENG(e)->drumRackSelfTest()) ? 1 : 0;
 }

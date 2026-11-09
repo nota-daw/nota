@@ -22,6 +22,30 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Articulation maps** (specs/085): an instrument track can hold a map of the playing techniques
+  of a sample library (Long, Staccato, Legato…) and the MIDI that selects each one. Import a Cubase
+  `.expressionmap`, a Studio One `.keyswitch` list or Nota's own `.notamap` — from the Track
+  inspector's Articulations section or by dropping the file on it — and a preview shows every
+  articulation and everything the file couldn't carry over before the map is used. Right-click
+  notes in the piano roll ▸ Articulation to choose one per note; playback sends the keyswitches,
+  controllers and program changes to the hosted plug-in just ahead of the notes, once per phrase
+  for a latching articulation and held with the note for a momentary one, and re-sends what is in
+  force after a seek or a loop wrap. Built-in instruments are left alone. A note whose articulation
+  was removed from the map plays the default and is marked. Studio One `.soundvariation` files are
+  not supported yet.
+- **Articulation map manager** (View ▸ Articulation maps…, or Edit maps… in the inspector): create,
+  import, duplicate, delete and export maps; add, copy, remove and reorder articulations; edit
+  their names, colour, group, latching or momentary trigger, MIDI actions and channels, note
+  offset, trigger lead, enabled state and the default. Save updates every track using the map as
+  one undo step and says how many.
+- **Track MIDI offset** (specs/085): a track's notes can play earlier (negative) or later, to make
+  up for a slow attack, without moving them; each articulation can add an offset of its own, and a
+  trigger lead sends its switch ahead of the note. The inspector and the manager show when each
+  articulation's notes actually play. Saved with the project.
+- **Notes coloured by articulation** (specs/085): the palette chip in the clip editor header draws
+  notes in their articulation's colour instead of the track's.
+
 ### Changed
 - **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
   Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one

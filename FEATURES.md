@@ -424,6 +424,33 @@ docks as a panel under any of the three, or floats in its own window — see
     as several clips at once. Selecting a clip of the track makes it active and scrolls to it;
     a clip on another track opens that track; new clips on the track join. The mode is
     remembered.
+- **Articulation maps** — an instrument track can hold a map of a sample library's playing
+  techniques (Long, Staccato, Legato…) and the MIDI that selects each: keyswitch notes,
+  controllers, program changes and bank select, each on the note's channel or one of its own.
+  - **Import** a Cubase `.expressionmap`, a Studio One `.keyswitch` list or a Nota `.notamap`
+    from the Track inspector (Import…, a pick from the library, or a file dropped on it); the
+    file is recognised by its content, and a preview lists every articulation with what the file
+    couldn't carry over (Cubase stores palette indices, not colours; neither format stores
+    latching or momentary). Studio One `.soundvariation` files are not read.
+  - **Per-note articulations**: right-click notes → **Articulation** sets the selection's, as one
+    undo step; a note without one plays the map's default. Playback sends a **latching**
+    articulation once per phrase (its keyswitch released 20 ms later) and holds a **momentary**
+    one with its note, ahead of the note at the same position, in Session slots too; after a
+    seek or a loop wrap it re-sends what is in force. Only hosted plug-ins (and racks holding
+    one) receive it. A note whose articulation was removed plays the default and carries a
+    warning mark.
+  - **MIDI offset** (Track inspector, ±2000 ms): the track's notes play earlier or later without
+    moving; each articulation adds a **note offset** of its own and a **trigger lead** that sends
+    its switch ahead of the note. The inspector and the manager say when each articulation's
+    notes play.
+  - **Map manager** (View → **Articulation maps…**, or **Edit maps…** in the inspector): the
+    library's maps and any a project track holds; create, import, duplicate, delete, export
+    `.notamap`; add, copy, remove and reorder articulations and edit their names, colour, group,
+    trigger, actions, offsets, enabled state and the default. **Save** updates every track using
+    the map in one undo step.
+  - **Note colours**: the palette chip in the clip editor header colours notes by articulation.
+  - Maps, offsets and note articulations are saved with the project, which opens without the
+    library.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
@@ -1202,7 +1229,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   separates the device tabs from the library tabs, and the active one carries an orange edge.
 - **Track inspector**: the last rail tab shows the track the Devices panel shows — its name
   (type to rename), Mute / Solo / Arm, record input and input monitoring (audio tracks) or
-  MIDI from (instrument tracks), colour, row height and the freeze commands (Freeze, Live
+  MIDI from and **Articulations** — the map, its import, MIDI offset and Edit maps…
+  (instrument tracks), colour, row height and the freeze commands (Freeze, Live
   freeze, Unfreeze, Flatten, and Edit source / Done / Discard on a live-freeze link). A
   return shows its name, Mute and colour; the master its name. Changes made from the
   header, the track menu or undo show in it straight away.

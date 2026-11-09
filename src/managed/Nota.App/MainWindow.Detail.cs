@@ -715,6 +715,7 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            ArticulationMapOf = t => Nota.Application.Articulations.ArticulationMapAssignment.Read(Engine, t),   // specs/085
             // The controller lane edits the active clip (specs/063); a clip gone since is left alone.
             ControllersInClip = () => Engine.GetMidiClipControllers(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex),
             GetController = ctl => Engine.GetMidiClipController(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex, ctl),
@@ -1412,6 +1413,8 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            // A Session slot keeps its notes' articulations; they play in the slot from T042 on (specs/085).
+            ArticulationMapOf = _ => Nota.Application.Articulations.ArticulationMapAssignment.Read(Engine, trackId),
             ControllersInClip = () => Engine.GetSessionControllers(trackId, scene),
             GetController = ctl => Engine.GetSessionController(trackId, scene, ctl),
             SetController = (ctl, pts) =>

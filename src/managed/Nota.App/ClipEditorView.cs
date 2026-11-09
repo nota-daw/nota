@@ -66,7 +66,7 @@ public sealed class ClipEditorView : UserControl
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12,
-            Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
+            Children = { AuditionControl(), NoteColourControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
         var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, null, right, out _nameText, out _colorBar, _props, _props.Flow);
         DockPanel.SetDock(header, Dock.Top);
@@ -127,6 +127,23 @@ public sealed class ClipEditorView : UserControl
         void Sync() => b.IsChecked = PianoRollView.AuditionEnabled;
         b.AttachedToVisualTree += (_, _) => { Sync(); PianoRollView.AuditionToggled += Sync; };
         b.DetachedFromVisualTree += (_, _) => PianoRollView.AuditionToggled -= Sync;
+        return b;
+    }
+
+    // Note colour by articulation (specs/085, FR-015): the palette chip. App-wide like the speaker,
+    // so every open editor's chip follows a flip made in another.
+    private static Control NoteColourControl()
+    {
+        var b = new ToggleButton
+        {
+            Content = new Glyph(GlyphKind.Palette, 14), Padding = new Thickness(8, 0), Classes = { "chip" },
+            IsChecked = PianoRollView.NoteColorByArticulation,
+        };
+        ToolTip.SetTip(b, Loc.T("articulations.colour.chip_tip"));
+        b.Click += (_, _) => PianoRollView.SetNoteColorByArticulation(b.IsChecked == true);
+        void Sync() => b.IsChecked = PianoRollView.NoteColorByArticulation;
+        b.AttachedToVisualTree += (_, _) => { Sync(); PianoRollView.NoteColorModeChanged += Sync; };
+        b.DetachedFromVisualTree += (_, _) => PianoRollView.NoteColorModeChanged -= Sync;
         return b;
     }
 

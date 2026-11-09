@@ -397,6 +397,10 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        // …and whether notes take their articulation's colour (specs/085, FR-015).
+        PianoRollView.NoteColorByArticulation = vm.Settings.Current.PianoRollNoteColorByArticulation;
+        PianoRollView.NoteColorModeChanged -= OnNoteColorModeChanged;
+        PianoRollView.NoteColorModeChanged += OnNoteColorModeChanged;
         PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
         PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
         // The piano roll's key labels (every note, not just C) persist the same way.
@@ -895,6 +899,13 @@ public partial class MainWindow : Window
     }
 
     private NativeMenuItem? _followMenuItem;
+
+    private void OnNoteColorModeChanged()
+    {
+        if (_vm is null) return;
+        _vm.Settings.Current.PianoRollNoteColorByArticulation = PianoRollView.NoteColorByArticulation;
+        _vm.Settings.Save();
+    }
 
     private void OnAuditionToggled()
     {
