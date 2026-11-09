@@ -22,6 +22,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Nota.Application;
 using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
@@ -42,6 +43,27 @@ internal sealed class StrataDeviceBody : IDeviceBody
     public double Width => 700;
     public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
     public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
+
+    // Set tempo from loop (#372): the song takes the loop's tempo when the first pass closes,
+    // whether or not the card is on screen then. Watched here, apart from any one card.
+    private static readonly HashSet<(IAudioEngine, int, int)> TempoWatch = new();
+
+    private static void WatchTempo(IAudioEngine engine, int track, int di)
+    {
+        if (!TempoWatch.Add((engine, track, di))) return;
+        var sc = new float[S_Pending + 1];
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        timer.Tick += (_, _) =>
+        {
+            int n = engine.DeviceScope(track, di, sc, sc.Length);
+            if (n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0) return;   // still on the first pass
+            timer.Stop();
+            TempoWatch.Remove((engine, track, di));
+            float lb = n > S_LoopBpm && sc[3] > 0 ? sc[S_LoopBpm] : 0f;            // closed (not cleared or gone)
+            if (lb >= 20 && lb <= 300 && engine.DeviceGetParam(track, di, SetTempo) > 0.5f) engine.SetBpm(Math.Round(lb, 2));
+        };
+        timer.Start();
+    }
 
     public string? Subtitle => "Looper";   // the processing type, shown as the header badge
     public bool FullBleed => true;
@@ -246,6 +268,11 @@ internal sealed class StrataDeviceBody : IDeviceBody
         // unmuted layers at their level, older ones sunk by Feedback.
         async void ExportWav()
         {
+            try { await ExportWavAsync(); }
+            catch (Exception ex) { ctx.Status(Loc.F("main.files.export_failed", ex.Message)); }   // a full disk, a locked file
+        }
+        async System.Threading.Tasks.Task ExportWavAsync()
+        {
             var top = root is null ? null : TopLevel.GetTopLevel(root);
             if (top is null) return;
             var blob = engine.DeviceGetState(track, di);
@@ -262,10 +289,27 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 float db = F(); bool muted = I() != 0; I();
                 gain[k] = muted ? 0f : MathF.Pow(10f, db / 20f) * MathF.Pow(fb, lc - 1 - k);
             }
-            var mix = new float[len * 2];
+            var sum = new float[len * 2];
             for (int k = 0; k < lc; k++)
             {
-                for (int i = 0; i < len * 2; i++) mix[i] += F() * gain[k];
+                for (int i = 0; i < len * 2; i++) sum[i] += F() * gain[k];
+            }
+            // One cycle as Strata plays it: at its speed, backwards when reversed, between samples
+            // read as the engine reads them (linear).
+            double speed = Math.Clamp(P(Speed), 0.25f, 4f);
+            bool reverse = On(Reverse);
+            int frames = Math.Max(1, (int)Math.Round(len / speed));
+            var mix = new float[frames * 2];
+            double pos = 0;
+            for (int i = 0; i < frames; i++)
+            {
+                int p0 = (int)pos, p1 = p0 + 1 >= len ? 0 : p0 + 1;
+                float fr = (float)(pos - p0);
+                mix[i * 2] = sum[p0 * 2] + fr * (sum[p1 * 2] - sum[p0 * 2]);
+                mix[i * 2 + 1] = sum[p0 * 2 + 1] + fr * (sum[p1 * 2 + 1] - sum[p0 * 2 + 1]);
+                pos += reverse ? -speed : speed;
+                if (pos >= len) pos -= len;
+                if (pos < 0) pos += len;
             }
             var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
             {
@@ -277,11 +321,10 @@ internal sealed class StrataDeviceBody : IDeviceBody
             string? path = file?.TryGetLocalPath();
             if (path is null) return;
             using var w = new Nota.Infrastructure.WavWriter(path, sr > 0 ? sr : 44100, 2, WavBitDepth.Float32);
-            w.WriteFrames(mix, len);
+            w.WriteFrames(mix, frames);
         }
 
         // ---------- live refresh ----------
-        bool wasFirstPass = false;
         void Refresh()
         {
             scN = engine.DeviceScope(track, di, scope, scope.Length);
@@ -296,9 +339,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             int quant = Math.Clamp((int)Math.Round(P(Quantize)), 0, 2);
 
             // Set tempo from loop: when the first pass closes, the song takes the loop's tempo.
-            if (wasFirstPass && closed && On(SetTempo) && Sc(S_LoopBpm) is var lb && lb >= 20 && lb <= 300)
-                engine.SetBpm(Math.Round(lb, 2));
-            wasFirstPass = firstPass;
+            if (firstPass && On(SetTempo)) WatchTempo(engine, track, di);
 
             // Counter + beat ticks (a tick per beat, or per bar for a long loop).
             if (counting) barNum.Text = NotaNum.F($"−{countIn}");

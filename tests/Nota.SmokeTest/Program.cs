@@ -5775,6 +5775,9 @@ Console.WriteLine("-- Nota Strata --");
     se.DeviceAction(st, sd, 0, 0, 0); se.RenderOffline(rb, 4096);
     se.DeviceScope(st, sd, sx, sx.Length);
     Check((int)sx[0] == 1 && sx[30] >= 1f, $"Count-in counts down before recording (mode {(int)sx[0]}, {sx[30]:0} beats left)");
+    se.DeviceAction(st, sd, 2, 0, 0); se.RenderOffline(rb, 1024);   // Play is dimmed during a count-in
+    se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[0] == 1 && sx[30] >= 1f, $"…a dimmed button pressed during it leaves it counting (mode {(int)sx[0]}, {sx[30]:0} beats left)");
     se.DeviceAction(st, sd, 3, 0, 0); se.RenderOffline(rb, 1024);
     se.DeviceScope(st, sd, sx, sx.Length);
     Check((int)sx[0] == 0 && (int)sx[3] == 0 && sx[30] == 0f, $"Stop cancels a count-in (mode {(int)sx[0]}, layers {(int)sx[3]})");

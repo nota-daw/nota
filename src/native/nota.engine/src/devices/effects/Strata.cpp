@@ -423,9 +423,9 @@ void Strata::applyCommand(int cmd, int64_t len) {
     int mode = mode_.load(), lc = layerCount_.load();
     const bool firstPass = mode == M_Rec && loopLen_.load() <= 0;
     if (firstPass && countLeft_ > 0.0) { // still counting in: nothing recorded yet
+        if (cmd != C_Stop && cmd != C_Undo && cmd != C_Clear) return; // dropped; the count-in carries on
         countLeft_ = 0;
-        if (cmd == C_Stop || cmd == C_Undo || cmd == C_Clear) cmd = C_Clear;
-        else return;
+        cmd = C_Clear;
     }
     switch (cmd) {
     case C_Record:
