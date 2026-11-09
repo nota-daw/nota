@@ -22,6 +22,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
+  Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
+  for Russian, and the English one otherwise. The choice used to follow the OS language, so a
+  French interface got the English manual and a Russian OS with an English interface got the
+  Russian one.
+
+## [0.59.2] — 2026-11-08
+
 ### Added
 - **XL for Nota EQ-8, Dynamic EQ-8, Lens and Auto Filter** (#540): the card's size toggle gains XL, which moves
   the whole editor into a large panel above the device chain, as wide as the chain, with the
