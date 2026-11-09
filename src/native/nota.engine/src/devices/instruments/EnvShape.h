@@ -175,52 +175,76 @@ inline bool rcEnvNative(const EnvShapeParams& p) {
     return p.exp >= 0.5f && p.decayCurve == 0.5f && p.releaseCurve == 0.5f;
 }
 
-inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, const RcEnvCoefs& c, const EnvShapeParams& p) {
+// The progress through an RC envelope's stage. The generator's own step leaves sh.p at −1
+// (it doesn't need it), and the progress is worked out here when the graphs or the shaped
+// step ask, instead of on every sample.
+inline float rcEnvProgress(float env, const EnvShapeState& sh, float sus) {
+    if (sh.p >= 0.0f) return sh.p;
+    switch (sh.last) {
+    case 0: return sh.from < 1.0f ? std::clamp((env - sh.from) / (1.0f - sh.from), 0.0f, 1.0f) : 1.0f;
+    case 1:
+    case 2: return sh.from - sus > 1e-6f ? std::clamp((sh.from - env) / (sh.from - sus), 0.0f, 1.0f) : 1.0f;
+    case 3: return sh.from > 1e-6f ? std::clamp((sh.from - env) / sh.from, 0.0f, 1.0f) : 1.0f;
+    default: return 0.0f;
+    }
+}
+
+// `native` is rcEnvNative(p), which callers can work out once per block.
+inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, const RcEnvCoefs& c, const EnvShapeParams& p,
+    bool native) {
     enum class S { Attack, Decay, Sustain, Release, Off };
-    if (rcEnvNative(p)) {
-        const int code = st == 1 ? 0 : st == 2 ? (sh.last == 2 ? 2 : 1) : st == 3 ? 3 : 4;
-        if (code != sh.last) {
+    if (native) {
+        // A new stage starts from where the level is (stage codes as the graphs read them).
+        auto enter = [&](int code) {
             sh.last = code;
-            sh.p = 0.0f;
             sh.from = env;
-        }
+        };
+        sh.p = -1.0f;
         switch (st) {
         case 1:
+            if (sh.last != 0) enter(0);
             env += (c.aTgt - env) * c.aC;
             if (env >= 1.0f) {
                 env = 1.0f;
                 st = 2;
             }
-            sh.p = sh.from < 1.0f ? std::clamp((env - sh.from) / (1.0f - sh.from), 0.0f, 1.0f) : 1.0f;
             break;
         case 2:
+            if (sh.last != 1 && sh.last != 2) enter(1);
             env += (sus - env) * c.dC;
-            sh.p = sh.from - sus > 1e-6f ? std::clamp((sh.from - env) / (sh.from - sus), 0.0f, 1.0f) : 1.0f;
             if (sh.last == 1 && std::fabs(env - sus) < 1e-3f) sh.last = 2; // the graph's sustain
             break;
         case 3:
+            if (sh.last != 3) enter(3);
             env -= env * c.rC;
             if (env < c.offFloor) {
                 env = 0.0f;
                 st = 0;
             }
-            sh.p = sh.from > 1e-6f ? std::clamp((sh.from - env) / sh.from, 0.0f, 1.0f) : 1.0f;
             break;
-        default: break;
+        default:
+            if (sh.last != 4) enter(4);
+            break;
         }
         return;
     }
+    if (sh.p < 0.0f) sh.p = rcEnvProgress(env, sh, sus); // carry on from where the generator was
     S s = st == 1 ? S::Attack : st == 2 ? (sh.last == 2 ? S::Sustain : S::Decay) : st == 3 ? S::Release : S::Off;
     advanceShapedEnv(env, s, sh, c.atkRate, c.decRate, sus, c.relRate, envBends(p));
     if (s == S::Sustain) sh.last = 2;
     st = s == S::Attack ? 1 : (s == S::Decay || s == S::Sustain) ? 2 : s == S::Release ? 3 : 0;
 }
 
-// The telemetry stage of an RC envelope (EnvShape.h's code: 0 A · 1 D · 2 S · 3 R · 4 none).
-inline void publishRcEnvTele(std::atomic<float>* out, bool sounding, int st, const EnvShapeState& sh) {
+inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, const RcEnvCoefs& c, const EnvShapeParams& p) {
+    advanceRcEnv(env, st, sh, sus, c, p, rcEnvNative(p));
+}
+
+// The telemetry stage of an RC envelope (EnvShape.h's code: 0 A · 1 D · 2 S · 3 R · 4 none)
+// and its progress; `env` and `sus` are the envelope's level and sustain.
+inline void publishRcEnvTele(std::atomic<float>* out, bool sounding, int st, const EnvShapeState& sh, float env, float sus) {
     const int code = !sounding || st == 0 ? 4 : st == 1 ? 0 : st == 2 ? (sh.last == 2 ? 2 : 1) : 3;
     out[0].store(static_cast<float>(code), std::memory_order_relaxed);
-    out[1].store(code == 4 ? 0.0f : sh.p, std::memory_order_relaxed);
+    out[1].store(code == 4 ? 0.0f : rcEnvProgress(env, sh, sus), std::memory_order_relaxed);
 }
 
 } // namespace nota
