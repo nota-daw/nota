@@ -1595,6 +1595,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
 
     MidiEv evs[1024];
     int n = 0;
+    ExprEv xev[kMaxBlockExpr];
+    int xn = 0;
     const long i0 = static_cast<long>(std::floor(p / L));
     const float velGain = sp.gain;
     // The track's MIDI offset and each note's articulation offset (specs/085, T049), as in the
@@ -1628,19 +1630,9 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
                     static_cast<float>(note.lengthBeats)};
             if (offIn && n < 1024)
                 evs[n++] = {static_cast<int32_t>((offAbs - p) * spb + shiftS), false, note.pitch, 0.0f};
-        }
-    }
-    // Recorded MPE of the slot's notes sounding in this block (a note may have started a pass
-    // earlier, so look one iteration back).
-    ExprEv xev[kMaxBlockExpr];
-    int xn = 0;
-    for (long it = std::max(0L, i0 - 1); it <= i0 + 1; ++it) {
-        if (!s.loop && it > 0) break;
-        for (const Note& note : s.midi.notes) {
-            if (!note.expr || note.startBeat < 0.0 || note.startBeat >= L) continue;
-            const double onAbs = it * L + note.startBeat;
-            noteExprEvents(
-                note, (onAbs - p) * spb, (onAbs + note.lengthBeats - p) * spb, frames, spb, xev, xn, kMaxBlockExpr);
+            if (note.expr)
+                noteExprEvents(note, (onAbs - p) * spb + shiftS, (offAbs - p) * spb + shiftS, frames, spb, xev, xn,
+                    kMaxBlockExpr);
         }
     }
     // The slot clip's controllers, per loop iteration: a release at each iteration's end, then
@@ -3549,6 +3541,20 @@ int32_t Engine::articulationSelfTest() {
     expr->dim[ExprPressure] = {{0.0f, 0.25f}, {0.25f, 0.75f}};
     note.expr = expr;
     slot.midi.notes = {note};
+    // 32: both positive and negative track + articulation offsets move opening expression with
+    // its note. It starts at 0.25 pressure at the note-on, never partway through the curve.
+    for (double offset : {-100.0, 100.0}) {
+        const ArticulationEntry entry{1, ArticulationTrigger::Latching, offset, 0, 0, 0};
+        track.articulationTable = ArticulationTable::build(0, &entry, 1, nullptr, 0);
+        track.setMidiOffsetMs(offset);
+        track.sessionPlayer->localBeats = offset < 0 ? 0.09375 : 0.890625;
+        probe->events.clear();
+        slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+        const int32_t at = offset < 0 ? 150 : 225;
+        const E5 on{1, 60, 102, at, 0}, pressure{4, 60, 32, at, 0};
+        if (std::find(probe->events.begin(), probe->events.end(), on) == probe->events.end() ||
+            std::find(probe->events.begin(), probe->events.end(), pressure) == probe->events.end()) return 32;
+    }
     // 33: a note release more than one pass after its start must still reach the instrument.
     track.articulationTable.reset();
     track.setMidiOffsetMs(0);
