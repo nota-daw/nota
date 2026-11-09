@@ -265,6 +265,8 @@ class Engine {
     bool pluginAutomationSelfTest(); // device-free structural check
     int32_t pluginParamCount(int32_t trackId, int32_t deviceIndex) const;
     std::string pluginParamId(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    // A param index saved before a built-in's layout grew (Nota Twin, #531), as it is today.
+    int32_t pluginParamIndexFromV1(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
@@ -1401,7 +1403,8 @@ class Engine {
     bool takeRecordTest(int32_t trackId, const float* interleavedStereo, int32_t frames, double startBeat);
     // The same through the multi-channel ring: `channels`-wide device frames, the track's own pick.
     bool takeRecordTestN(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat);
-    int32_t takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat);
+    int32_t takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat,
+        int32_t disarmTrackId = 0, int32_t disarmAtFrame = -1);
     bool takeRecordTestImpl(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat,
         int32_t first, int32_t width);
 

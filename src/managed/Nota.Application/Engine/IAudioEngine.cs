@@ -1376,6 +1376,8 @@ public interface IAudioEngine : IDisposable
     // identified by a stable string paramID.
     int PluginParamCount(int trackId, int deviceIndex);
     string PluginParamId(int trackId, int deviceIndex, int paramIndex);
+    // A param index saved before Nota Twin's layout grew (#531), as it is today; others unchanged.
+    int PluginParamIndexFromV1(int trackId, int deviceIndex, int paramIndex);
     string PluginParamName(int trackId, int deviceIndex, int paramIndex);
     float PluginParamGet(int trackId, int deviceIndex, int paramIndex);
     /// <summary>The plugin's own text for a param's current value ("−12.0 dB"), or "" when it has none.</summary>

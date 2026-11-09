@@ -22,15 +22,6 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
-### Changed
-- **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
-  Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
-  for Russian, and the English one otherwise. The choice used to follow the OS language, so a
-  French interface got the English manual and a Russian OS with an English interface got the
-  Russian one.
-
-## [0.59.2] — 2026-11-08
-
 ### Added
 - **XL for Nota EQ-8, Dynamic EQ-8, Lens and Auto Filter** (#540): the card's size toggle gains XL, which moves
   the whole editor into a large panel above the device chain, as wide as the chain, with the
@@ -83,6 +74,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   stops on its own, and Discard and Retry restarts them all.
 
 ### Changed
+- **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
+  Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
+  for Russian, and the English one otherwise. The choice used to follow the OS language, so a
+  French interface got the English manual and a Russian OS with an English interface got the
+  Russian one.
 - **S cards keep their name readable** (#540): on an S card the preset picker is a small list
   key in the header (Previous / Next, Init and the presets in its menu), so it no longer crowds
   the device name.
@@ -395,6 +391,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Twin MIDI mappings keep their controls** (#531): Nota Twin's envelope shapes grew its
+  parameter list, so a knob mapped in a 0.59 project would have moved a different control. Mappings
+  now save the parameter's id and find it again on load, and older projects' Twin mappings move
+  with the new layout.
+- **Disarming one of several recording tracks** (specs/086): disarming the first-armed audio track
+  no longer stops the other tracks' recording, and an instrument track disarmed while others record
+  keeps its controller moves (mod wheel, pedal) up to the moment it left.
 - **Tabs at the top of a card section keep its rounded corner** (nota-daw/nota#531): a selected
   tab such as Global on a built-in instrument's rail painted over the section's corner. A
   section now clips what it holds to its rounded edge.

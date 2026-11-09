@@ -216,6 +216,10 @@ internal static class TwinTests
             bool shapes = G(me, nt, "lo.a.fenvexp") == 1f && G(me, nt, "up.b.menvrcurve") == 0.5f;
             yield return (shapeIds && sameVals && shapes && G(me, nt, "up.b.o1wave") == 0.66f && laneMoved,
                 $"a Twin state from before the envelope shapes loads value for value, motion lanes on their own params (kept {keep.Count} of {count}, lane {laneThere}/{laneMoved})");
+            // A MIDI mapping saved then (midimap.json, by index) finds the same control today.
+            int moved = Enumerable.Range(0, keep.Count).Count(o => me.PluginParamIndexFromV1(mt, -1, o) != keep[o]);
+            yield return (moved == 0 && me.PluginParamIndexFromV1(mt, -1, count) == count,
+                $"a MIDI mapping's Twin index from before the envelope shapes points at its own control again ({moved} of {keep.Count} off)");
         }
         yield return (e.PluginParamName(t, -1, Pi(e, t, "up.b.ldcut")) == "Upper B · Ladder Cutoff",
             $"twin names carry part and side (got '{e.PluginParamName(t, -1, Pi(e, t, "up.b.ldcut"))}')");

@@ -483,7 +483,9 @@ bool Engine::takeRecordTestImpl(int32_t trackId, const float* interleaved, int32
 // Tests (specs/086): one take on every armed audio track through the real lane set-up — picks,
 // skips, layout — fed `channels`-wide device frames, drained and stopped like poll() would.
 // The take starts at start_beat with the transport treated as rolling. Returns the lanes.
-int32_t Engine::takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat) {
+// With disarmAtFrame >= 0, disarmTrackId is disarmed once that many frames are in (it leaves mid-take).
+int32_t Engine::takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat,
+    int32_t disarmTrackId, int32_t disarmAtFrame) {
     if (!interleaved || channels <= 0 || frames <= 0 || audioRecording_ || !authoring_) return 0;
     std::vector<int32_t> ids;
     for (auto& t : authoring_->tracks)
@@ -502,6 +504,10 @@ int32_t Engine::takeRecordTestArmed(const float* interleaved, int32_t channels, 
     const int32_t lanes = static_cast<int32_t>(captureLanes_.size());
     constexpr int32_t kChunk = 1024;
     for (int32_t at = 0; at < frames; at += kChunk) {
+        if (disarmAtFrame >= 0 && at >= disarmAtFrame) {
+            setTrackArmed(disarmTrackId, false);
+            disarmAtFrame = -1;
+        }
         pushInputFramesForTestN(interleaved + static_cast<size_t>(at) * static_cast<size_t>(channels),
             std::min(kChunk, frames - at), channels);
         drainInputQueue();

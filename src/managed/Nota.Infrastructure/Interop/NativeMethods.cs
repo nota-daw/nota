@@ -207,6 +207,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_take_record_test_armed")]
     internal static partial int TakeRecordTestArmed(IntPtr engine, float[] interleaved, int channels, int frames, double startBeat);
 
+    [LibraryImport(Lib, EntryPoint = "nota_take_record_test_armed_disarm")]
+    internal static partial int TakeRecordTestArmedDisarm(IntPtr engine, float[] interleaved, int channels, int frames, double startBeat, int disarmTrackId, int disarmAtFrame);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_record_held_notes")]
     internal static partial int RecordHeldNotes(IntPtr engine, [Out] NotaRecordHeldNote[] outNotes, int maxN,
                                                 out int trackId, out int sessionScene, out double nowBeat);

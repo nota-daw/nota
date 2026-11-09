@@ -507,6 +507,10 @@ public sealed partial class NotaEngine
     // --- hosted-plugin parameters (M9-B). deviceIndex < 0 = the instrument. ---
     public int PluginParamCount(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.PluginParamCount(_handle, trackId, deviceIndex); }
+    /// <summary>Where a param index saved before Nota Twin's layout grew (#531) sits today;
+    /// any other device's index comes back unchanged.</summary>
+    public int PluginParamIndexFromV1(int trackId, int deviceIndex, int paramIndex)
+    { ThrowIfDisposed(); return NativeMethods.PluginParamIndexFromV1(_handle, trackId, deviceIndex, paramIndex); }
     public string PluginParamId(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamId(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
     public string PluginParamName(int trackId, int deviceIndex, int paramIndex)

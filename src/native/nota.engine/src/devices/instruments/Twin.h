@@ -224,6 +224,15 @@ constexpr int kNumParamsV1 = kGlobalN + kParts * (kPartN + kSides * kSideNv1);
 constexpr int globalIdx(int g) { return g; }
 constexpr int partIdx(int part, int p) { return kGlobalN + part * kPartBlock + p; }
 constexpr int sideIdx(int part, int side, int s) { return kGlobalN + part * kPartBlock + kPartN + side * kSideN + s; }
+// Where a param index saved before the envelope shapes (#531, kNumParamsV1) sits today: the
+// side blocks grew, so every index past the first part's first side moved.
+constexpr int paramFromV1(int i) {
+    if (i < kGlobalN || i >= kNumParamsV1) return i;
+    constexpr int oldBlock = kPartN + kSides * kSideNv1;
+    const int part = (i - kGlobalN) / oldBlock, r = (i - kGlobalN) % oldBlock;
+    if (r < kPartN) return partIdx(part, r);
+    return sideIdx(part, (r - kPartN) / kSideNv1, (r - kPartN) % kSideNv1);
+}
 
 struct ParamInfo {
     std::string id;   // stable: "mode", "lo.morph", "lo.a.ldcut", "up.b.m12amt"

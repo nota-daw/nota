@@ -1603,13 +1603,7 @@ void Twin::setState(const uint8_t* data, int32_t size) {
     // A state from before the envelope shapes (#531) has shorter side blocks: each value goes
     // to its place in today's layout, and the shapes keep their defaults.
     const bool v1 = count == static_cast<uint32_t>(twin::kNumParamsV1);
-    auto slotOf = [v1](int i) {
-        if (!v1 || i < twin::kGlobalN) return i;
-        constexpr int oldBlock = twin::kPartN + twin::kSides * twin::kSideNv1;
-        const int part = (i - twin::kGlobalN) / oldBlock, r = (i - twin::kGlobalN) % oldBlock;
-        if (r < twin::kPartN) return twin::partIdx(part, r);
-        return twin::sideIdx(part, (r - twin::kPartN) / twin::kSideNv1, (r - twin::kPartN) % twin::kSideNv1);
-    };
+    auto slotOf = [v1](int i) { return v1 ? twin::paramFromV1(i) : i; };
     if (v1) {
         const auto& t = twin::paramTable();
         for (int i = 0; i < kNumParams; ++i) pn_[i].store(t[static_cast<size_t>(i)].def, std::memory_order_relaxed);
