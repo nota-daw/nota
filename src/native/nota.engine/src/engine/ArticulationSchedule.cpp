@@ -349,15 +349,32 @@ int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool l
     }
     const Window win{b.blockStart, b.blockStart + b.frames};
     const Ctx c = makeCtx(table, b);
+    // The passes whose events can fall in this block: a pass's events lie between its start plus
+    // the earliest trigger and its end plus the latest note shift and the hold — on a short loop
+    // with a large offset, several passes away. No neighboring-pass limit: even a very short
+    // loop must retain all passes whose events reach this block.
     const double loopS = loopBeats * b.spb;
-    const long now = static_cast<long>(std::floor(win.start / loopS));
-    const long lo = std::max(0L, now - 1);
-    const long hi = loop ? now + 1 : 0;
+    double maxShift = c.trackShift;
+    for (const ArticulationEntry& e : table.entries()) maxShift = std::max(maxShift, c.trackShift + e.offsetMs * c.msToS);
+    double tail = 0.0;
+    for (const Note& note : slotClip.notes)
+        if (note.startBeat >= 0.0 && note.startBeat < loopBeats)
+            tail = std::max(tail, (note.startBeat + note.lengthBeats - loopBeats) * b.spb);
+    const double late = std::max(0.0, maxShift) + std::max(c.hold, tail);
+    const double early = c.trackShift + c.lo; // the earliest trigger relative to its note's grid time
+    long lo = std::max(0L, static_cast<long>(std::floor((win.start - late) / loopS)) - 1);
+    long hi = static_cast<long>(std::floor((win.end - std::min(0.0, early)) / loopS));
+    if (!loop) hi = std::min(hi, 0L); // one-shot: a single pass
+    if (hi < lo) {
+        if (dropped) *dropped = 0;
+        return 0;
+    }
     auto passes = [&](long from) {
         return [&slotClip, loopS, loopBeats, from, hi](auto&& f) {
-            for (long k = from; k <= hi; ++k) f(Placement{&slotClip, k * loopS, loopBeats, k});
+            for (long k = from; k <= hi; ++k) f(Placement{&slotClip, k * loopS, loopBeats, k, false});
         };
     };
+    // Decisions look one pass further back, so a pass's first point knows what the pass before left in force.
     scheduleAll(w, c, win, passes(lo), passes(std::max(0L, lo - 1)));
     return finish(w, out, dropped);
 }

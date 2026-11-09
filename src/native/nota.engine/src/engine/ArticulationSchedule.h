@@ -73,6 +73,7 @@ int scheduleArticulations(const std::vector<MidiClip>& clips, const Articulation
 // A Session slot (specs/085, T042): the slot's clip looped every `loopBeats` on the slot's own clock.
 // In `b`, blockStart is the slot's local position in samples (localBeats × spb); a pass k starts at
 // k × loopBeats. A one-shot slot plays pass 0 only. A slot launches at its start.
+// Every pass whose events can reach the block is read, however far the offsets move them.
 int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool loop, const ArticulationTable& table,
     const ArticulationBlock& b, ArtEv* out, int cap, int* dropped = nullptr);
 

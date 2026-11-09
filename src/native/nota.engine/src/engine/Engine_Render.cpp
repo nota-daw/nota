@@ -1603,15 +1603,18 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     // so a slot with no offset plays exactly as before.
     const double msToS = transport_.sampleRate() / 1000.0;
     const ArticulationTable* artTable = t.articulationTable.get();
-    bool anyLate = t.midiOffsetMs() > 0.0;
-    if (artTable)
-        for (const auto& e : artTable->entries()) anyLate |= t.midiOffsetMs() + e.offsetMs > 0.0;
-    for (long it = anyLate ? std::max(0L, i0 - 1) : i0; it <= i0 + 1; ++it) {
-        if (!s.loop && it > 0) break; // one-shot: a single pass
-        for (const Note& note : s.midi.notes) {
-            if (note.startBeat < 0.0 || note.startBeat >= L) continue;
-            const double shiftS = (t.midiOffsetMs() + articulationOffsetMs(artTable, note.articulation)) * msToS;
-            if (it < i0 && shiftS <= 0.0) continue; // the previous pass is read for late notes only
+    const double trackMs = t.midiOffsetMs();
+    for (const Note& note : s.midi.notes) {
+        if (note.startBeat < 0.0 || note.startBeat >= L) continue;
+        const double shiftS = artTable ? (trackMs + articulationOffsetMs(artTable, note.articulation)) * msToS : trackMs * msToS;
+        const double shiftBeats = shiftS / spb;
+        // This note's on, off, or expression can reach the block from any pass whose shifted
+        // lifetime overlaps it. Derive both bounds per note: offsets and long tails can span
+        // arbitrarily many short loops, and the block itself may cross several loops.
+        const long itLo = std::max(0L, static_cast<long>(std::floor((p - shiftBeats - note.startBeat - note.lengthBeats) / L)));
+        long itHi = static_cast<long>(std::floor((p + db - shiftBeats - note.startBeat) / L));
+        if (!s.loop) itHi = std::min(itHi, 0L);
+        for (long it = itLo; it <= itHi; ++it) {
             const double onAbs = it * L + note.startBeat;
             const double offAbs = onAbs + note.lengthBeats;
             // Unshifted: the block test in beats, as always — the next block starts at exactly p + db,
@@ -3321,13 +3324,18 @@ int32_t Engine::articulationSelfTest() {
     // ---- delivery: ahead of the note at the same offset, on its channel, channel reset after ----
     struct Probe final : Instrument {
         std::vector<std::array<int32_t, 5>> events; // kind (1 on, 0 off, 2 cc, 3 program), d1, d2, offset, channel
+        bool articulations = false;
         bool takesTimedEvents() const override { return true; }
+        bool takesArticulations() const override { return articulations; }
         void setSampleRate(double) override {}
         void noteOn(int32_t p, float v) override { events.push_back({1, p, (int32_t)std::lround(v * 127.0f), eventOffset, eventChannel}); }
         void noteOff(int32_t p) override { events.push_back({0, p, 0, eventOffset, eventChannel}); }
         void allNotesOff() override {}
         void controller(int32_t c, float v) override { events.push_back({2, c, (int32_t)std::lround(v * 127.0f), eventOffset, eventChannel}); }
         void programChange(int32_t p) override { events.push_back({3, p, 0, eventOffset, eventChannel}); }
+        void noteExpression(int32_t p, int32_t, float v) override {
+            events.push_back({4, p, (int32_t)std::lround(v * 127.0f), eventOffset, eventChannel});
+        }
         void render(float*, int32_t) override {}
     };
     Probe p;
@@ -3461,6 +3469,46 @@ int32_t Engine::articulationSelfTest() {
         if (earlyOff != 0 || finalOff != 1) return 28;
     }
 
+    // 29: a short slot with a large offset: a one-beat loop (24000 samples = 500 ms) with a +1500 ms
+    // momentary articulation — each pass's switch lands three passes later and must not be lost.
+    {
+        const ArticulationAction late[] = {{AK::Keyswitch, 0, 40, 100}};
+        const ArticulationEntry lateE[] = {{1, ArticulationTrigger::Momentary, 1500.0, 0.0, 0, 1}};
+        auto lateTable = ArticulationTable::build(0, lateE, 1, late, 1);
+        if (!lateTable) return 29;
+        MidiClip slot;
+        slot.lengthBeats = 1.0;
+        Note n;
+        n.pitch = 60;
+        n.startBeat = 0.0;
+        n.lengthBeats = 0.25;
+        n.articulation = 1;
+        slot.notes.push_back(n);
+        slot.articulations = buildArticulationTimeline(slot, lateTable);
+        std::vector<double> ons;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 6 * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, false, false, 0.0};
+            const int cnt = scheduleSlotArticulations(slot, 1.0, true, *lateTable, b, buf, kMaxBlockArt);
+            for (int i = 0; i < cnt; ++i)
+                if (buf[i].kind == ArtEvKind::KeyOn && s + buf[i].off < 6 * spb) ons.push_back(s + buf[i].off);
+        }
+        // Passes 0, 1, 2 land at 72000, 96000, 120000; pass 3 would land at 144000, past the window.
+        if (ons != std::vector<double>{72000.0, 96000.0, 120000.0}) return 29;
+
+        // 30: a 31.25 ms loop requires looking 48 passes back for this same offset. Its release
+        // must also survive. Read just the block containing the first on, then the first off.
+        slot.lengthBeats = 0.0625;
+        slot.notes[0].lengthBeats = 0.03125;
+        slot.articulations = buildArticulationTimeline(slot, lateTable);
+        for (bool release : {false, true}) {
+            const double due = 72000.0 + (release ? 750.0 : 0.0);
+            ArticulationBlock b{B, due - 100, spb, sr, 0.0, false, false, 0.0};
+            const int cnt = scheduleSlotArticulations(slot, 0.0625, true, *lateTable, b, buf, kMaxBlockArt);
+            if (cnt != 1 || buf[0].off != 100 || buf[0].kind != (release ? ArtEvKind::KeyOff : ArtEvKind::KeyOn)) return 30;
+        }
+    }
+
     // 31: different momentary articulations in separate clips can hold the same explicit key.
     {
         ArticulationAction keys[] = {{AK::Keyswitch, 2, 30, 100}, {AK::Keyswitch, 2, 30, 100}};
@@ -3481,6 +3529,36 @@ int32_t Engine::articulationSelfTest() {
             if (cnt != 1 || buf[0].off != 100 || buf[0].kind != ArtEvKind::KeyOff || buf[0].channel != keys[0].channel) return 31;
         }
     }
+
+    // Exercise Session rendering itself, capturing the events delivered to a timed instrument.
+    auto slotEngine = std::make_unique<Engine>();
+    slotEngine->transport_.setSampleRate(sr);
+    Track track(1, TrackType::Instrument);
+    auto probe = std::make_shared<Probe>();
+    track.instrument = probe;
+    track.sessionSlots.resize(1);
+    track.sessionPlayer->playing.store(0);
+    auto& slot = track.sessionSlots[0];
+    slot.hasClip = true;
+    slot.lengthBeats = 1.0;
+    Note note;
+    note.startBeat = 0.5;
+    note.lengthBeats = 0.25;
+    note.articulation = 1;
+    auto expr = std::make_shared<NoteExpr>();
+    expr->dim[ExprPressure] = {{0.0f, 0.25f}, {0.25f, 0.75f}};
+    note.expr = expr;
+    slot.midi.notes = {note};
+    // 33: a note release more than one pass after its start must still reach the instrument.
+    track.articulationTable.reset();
+    track.setMidiOffsetMs(0);
+    slot.midi.notes[0].expr.reset();
+    slot.midi.notes[0].startBeat = 0;
+    slot.midi.notes[0].lengthBeats = 3;
+    track.sessionPlayer->localBeats = 3.0 - 0.015625;
+    probe->events.clear();
+    slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+    if (std::find(probe->events.begin(), probe->events.end(), E5{0, 60, 0, 375, 0}) == probe->events.end()) return 33;
 
     // 34: even one-frame render segments preserve the full chased-key hold.
     {

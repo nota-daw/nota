@@ -214,6 +214,15 @@ internal static class ArticulationEngineTests
         yield return (slot0 > 0 && slotEarly > 0 && slotLate > 0
                       && Math.Abs((slot0 - slotEarly) - Rate / 10) <= 64 && Math.Abs((slotLate - slot0) - Rate / 10) <= 64,
             $"articulations: a Session slot's note moves with the track offset (−100 ms: {slot0 - slotEarly}, +100 ms: {slotLate - slot0} samples, want {Rate / 10})");
+
+        // A short loop with a large offset: +1500 ms on a 500 ms loop moves each pass's note three
+        // passes on. It must still sound, 1.5 s after launch, not be lost between passes.
+        int short0 = OnsetInShortSlot(0), shortLate = OnsetInShortSlot(1500);
+        yield return (short0 >= 0 && shortLate > 0 && Math.Abs((shortLate - short0) - Rate * 3 / 2) <= 64,
+            $"articulations: a +1500 ms offset on a 500 ms Session loop plays the note 1.5 s after launch ({shortLate - short0} samples, want {Rate * 3 / 2})");
+        int tiny0 = OnsetInShortSlot(0, 0.0625), tinyLate = OnsetInShortSlot(1500, 0.0625);
+        yield return (tiny0 >= 0 && tinyLate > 0 && Math.Abs((tinyLate - tiny0) - Rate * 3 / 2) <= 64,
+            $"articulations: a +1500 ms offset survives 48 passes of a 31.25 ms Session loop ({tinyLate - tiny0} samples, want {Rate * 3 / 2})");
     }
 
     /// <summary>Where a Session slot's note on beat 1 starts sounding after the slot is launched, with a
@@ -232,6 +241,24 @@ internal static class ArticulationEngineTests
         e.StopTransport(); e.Seek(0); e.Play();
         e.LaunchSlot(t, 0);
         return Onset(Render(e, 94));   // ~1 s: beat 1 is at 0.5 s
+    }
+
+    /// <summary>Where a one-beat Session slot's note on beat 0 first sounds after launch, with a track
+    /// offset that can move it several passes (a 500 ms loop at 120 BPM).</summary>
+    private static int OnsetInShortSlot(double trackMs, double loopBeats = 1.0)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetLaunchQuant(0.0);
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 0);
+        e.AddSessionMidiClip(t, 0, loopBeats);
+        e.SetSessionNotes(t, 0, new[] { new NotaNote(57, 0.0, loopBeats / 4, 0.9f) });
+        e.SetTrackMidiOffsetMs(t, trackMs);
+        Render(e, 2);
+        e.StopTransport(); e.Seek(0); e.Play();
+        e.LaunchSlot(t, 0);
+        return Onset(Render(e, 200));   // ~2.1 s
     }
 
     /// <summary>Where a note on beat 2 with articulation 2 starts sounding (built-in synth: it gets
