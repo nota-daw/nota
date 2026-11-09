@@ -1624,7 +1624,20 @@ void Twin::setState(const uint8_t* data, int32_t size) {
     const size_t at = 8 + static_cast<size_t>(count) * sizeof(float);
     if (static_cast<size_t>(size) >= at + 4) {
         const uint32_t bytes = getU32(data + at);
-        if (static_cast<size_t>(size) >= at + 4 + bytes) setEditState(data + at + 4, static_cast<int32_t>(bytes));
+        if (static_cast<size_t>(size) >= at + 4 + bytes) {
+            auto next = std::make_shared<twin::PatternSet>();
+            if (twin::deserializePatterns(data + at + 4, static_cast<int32_t>(bytes), *next)) {
+                // Motion lanes name their control by param index: an old state's lanes move
+                // with the values, or they would drive whatever sits at the old index now.
+                if (v1)
+                    for (auto& P : next->pat)
+                        for (auto& L : P.lane)
+                            if (L.target >= 0 && L.target < twin::kNumParamsV1)
+                                L.target = static_cast<int16_t>(slotOf(L.target));
+                patAuth_ = next;
+                publishPatterns();
+            }
+        }
     }
 }
 

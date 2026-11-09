@@ -353,8 +353,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         (Control, Control) ScopePanel()
         {
             var host = new ContentControl();
-            Control? traces = null, cursors = null;
-            Control Traces() => traces ??= CardLayout.Rows(
+            Control Traces() => CardLayout.Rows(
                 Row("HOLDOFF", HoldoffP, v => Inv($"{v * 200:0} ms")),
                 KeyRow(),
                 Tip(Row("Key Gain", KeyGainP, v => Inv($"{KeyDb(v):+0.#;−0.#;0}\u2009dB")), Loc.T("device.lens.key_gain_scales_only_the")),
@@ -362,7 +361,7 @@ internal sealed class LensDeviceBody : IDeviceBody
                 Row("TRACES", TracesP, v => Inv($"{1 + v * 7:0}")),
                 Row("BRIGHT", BrightP, v => Pc(v)),
                 captureBox.Box);
-            Control Cursors() => cursors ??= CardLayout.Rows(
+            Control Cursors() => CardLayout.Rows(
                 measureBox.Box,
                 Row("A POS", CursorAP, v => Ms(v * TimeDiv() * 8)),
                 Row("B POS", CursorBP, v => Ms(v * TimeDiv() * 8)),
@@ -370,8 +369,12 @@ internal sealed class LensDeviceBody : IDeviceBody
                     Button("Re-arm", Loc.T("device.lens.arm_the_next_single_capture"), () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }),
                     Button(Loc.T("device.lens.export_wav"), Loc.T("device.lens.write_the_captured_scope_window"), ExportWav)),
                 Toggle(CursorSnapP, Loc.T("device.lens.snap_to_peaks")));
-            readouts.Add(() => { var want = On(CursorsP) ? Cursors() : Traces(); if (!ReferenceEquals(host.Content, want)) host.Content = want; });
-            host.Content = On(CursorsP) ? Cursors() : Traces();
+            // Both panels are built here: their rows register readouts, and a refresh that built
+            // the other one lazily would add to `readouts` while walking it.
+            var tracesPanel = Traces();
+            var cursorsPanel = Cursors();
+            readouts.Add(() => { var want = On(CursorsP) ? cursorsPanel : tracesPanel; if (!ReferenceEquals(host.Content, want)) host.Content = want; });
+            host.Content = On(CursorsP) ? cursorsPanel : tracesPanel;
             return (CardLayout.Head(Toggle(CursorsP, "Cursors"), Seg(LayoutP, new[] { "Overlay", "Stacked" })), host);
         }
 

@@ -184,8 +184,10 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
     double beat, double spb, bool rolling, Live&& live) {
     const bool off = inst.bypassed();
     if (!off) inst.offSettled.store(false, std::memory_order_relaxed);
-    else if (inst.offSettled.load(std::memory_order_relaxed))
+    else if (inst.offSettled.load(std::memory_order_relaxed)) {
+        inst.tapSilence(frames); // the filter graph shows the silence, not the last sound
         return;
+    }
     if (off) n = xn = 0; // nothing new starts on the way out
     if (inst.takesBlockMidi()) inst.blockMidi(evs, n, frames, beat, spb, rolling); // a rack's chain MIDI effects (#329)
     int32_t cursor = 0;
@@ -1255,16 +1257,19 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     // Recorded controllers (specs/020): the block's coalesced instrument-wide controllers that
     // reach the take, on the capture clock. A take starts with every controller already away
     // from rest (a pedal held down when Record is pressed), at the record start.
+    // Each lane from the inputs its track listens to: a pedal held on one keyboard doesn't seed
+    // the take of a track that plays from another (specs/086).
     if (rec && takeStarted) {
         for (int32_t c = 0; c < kCtlCount; ++c) {
-            const float v = liveCtl_[c].load(std::memory_order_relaxed);
-            if (v == kCtlRest || ctlIsReserved(c)) continue;
-            for (int32_t k = 0; k < rtMidiLaneCount_; ++k)
-                if (rtMidiLanes_[static_cast<size_t>(k)].trackId >= 0 && rtLaneLive_[k]) {
-                    RecordedCtl x{c, rtLaneSlot_[k] ? rtLaneNow_[k] : blockStartBeat, v, recordPass_};
-                    x.lane = k;
-                    pushRecordedCtl(x);
-                }
+            if (ctlIsReserved(c) || liveCtlTouch_[c].load(std::memory_order_relaxed) == 0) continue; // never moved
+            for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
+                if (rtMidiLanes_[static_cast<size_t>(k)].trackId < 0 || !rtLaneLive_[k]) continue;
+                const float v = laneStartCtl(k, c);
+                if (v == kCtlRest) continue;
+                RecordedCtl x{c, rtLaneSlot_[k] ? rtLaneNow_[k] : blockStartBeat, v, recordPass_};
+                x.lane = k;
+                pushRecordedCtl(x);
+            }
         }
     }
     if (rec && timed)
@@ -1288,6 +1293,29 @@ bool Engine::laneTakes(int32_t lane, const MidiEvent& e) const {
     if (e.trackId >= 0) return e.trackId == tid;
     const int32_t s = rtLaneSrc_[lane], c = rtLaneCh_[lane];
     return (s == Track::kMidiAllInputs || (e.source >= 0 && s == e.source)) && (c == 0 || e.source < 0 || c == e.channel + 1);
+}
+
+float Engine::laneStartCtl(int32_t lane, int32_t ctl) const {
+    const int32_t tid = rtMidiLanes_[static_cast<size_t>(lane)].trackId;
+    const int32_t s = rtLaneSrc_[lane], c = rtLaneCh_[lane];
+    uint32_t best = 0;
+    float v = kCtlRest;
+    auto take = [&](const LiveCtlIn& in) {
+        const uint32_t st = in.stamp.load(std::memory_order_relaxed);
+        if (st <= best) return;
+        best = st;
+        v = in.value.load(std::memory_order_relaxed);
+    };
+    if (liveCtlTrack_[ctl].channel.load(std::memory_order_relaxed) == tid) take(liveCtlTrack_[ctl]);
+    for (int32_t i = 0; i < kCtlInputs; ++i) {
+        const int32_t src = i - 1; // as laneTakes: no device passes the all-inputs filter only
+        const LiveCtlIn& in = liveCtlIn_[i][ctl];
+        if (in.stamp.load(std::memory_order_relaxed) <= best) continue;
+        if (s != Track::kMidiAllInputs && (src < 0 || s != src)) continue;
+        if (c != 0 && src >= 0 && c != in.channel.load(std::memory_order_relaxed) + 1) continue;
+        take(in);
+    }
+    return v;
 }
 
 int32_t Engine::midiLaneOfRt(int32_t trackId) const {
@@ -1651,8 +1679,10 @@ void Engine::renderInstrumentRaw(
                     for (int k = 0; k < rs_->blockExprN[j]; ++k) {
                         const ExprEv& x = rs_->blockExpr[j][k];
                         if (x.dim < kCtlDimBase) continue;
-                        pushRecordedCtl(RecordedCtl{x.dim - kCtlDimBase,
-                            (blockStart + x.off) / spb + countInClockOffset(), x.value, recordPass_});
+                        RecordedCtl rc{x.dim - kCtlDimBase, (blockStart + x.off) / spb + countInClockOffset(),
+                            x.value, recordPass_};
+                        rc.lane = recLane; // this destination's clip, as its notes (specs/086)
+                        pushRecordedCtl(rc);
                     }
             }
         }

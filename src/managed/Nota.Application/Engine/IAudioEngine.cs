@@ -1220,6 +1220,9 @@ public interface IAudioEngine : IDisposable
     /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
     bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);
+    /// <summary>Which audio effect sits in the slot (#540): the same while it is edited, moved or
+    /// brought back by undo; another for a new, pasted or duplicated one. 0 = none. Compare only.</summary>
+    long TrackDeviceId(int trackId, int deviceIndex);
     string TrackInstrumentPluginId(int trackId);
     string TrackDevicePluginId(int trackId, int deviceIndex);
 

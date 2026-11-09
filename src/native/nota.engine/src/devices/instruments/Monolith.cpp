@@ -253,9 +253,11 @@ void Monolith::render(float* out, int32_t frames) {
 
     for (int32_t i = 0; i < frames; ++i) {
         advanceShapedEnv(aEnv_, aStage_, aShape_, aA, aD, aS, aRel, aBend);
-        if (aStage_ == Stage::Off && heldN_ == 0) { /* silent */
-        }
         advanceShapedEnv(fEnv_, fStage_, fShape_, fA, fD, fS, fRel, fBend);
+        // A held note follows the Sustain knobs live (automation included), as Monolith's
+        // own envelope always did; the shared step leaves the sustain level alone.
+        if (aStage_ == Stage::Sustain) aEnv_ = aS;
+        if (fStage_ == Stage::Sustain) fEnv_ = fS;
 
         // Slow drift update.
         driftPhase_ += driftInc;

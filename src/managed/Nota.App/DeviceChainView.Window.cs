@@ -6,8 +6,8 @@
 // header: it opens the device's L body in a resizable DeviceWindow, with the graph taking the
 // room. The editor lives in one place at a time, so while the window is open the card in the
 // chain is a 260 placeholder (and a device in XL goes back to L first). The window follows its
-// device when this view moves or removes devices, and closes when the device is gone, its slot
-// holds another device, or a project is opened.
+// device (by its engine id) when this view moves devices or an undo puts them elsewhere, and
+// closes when the device is gone or a project is opened.
 
 using System;
 using System.Collections.Generic;
@@ -30,7 +30,7 @@ public sealed partial class DeviceChainView
     private sealed class WindowSlot
     {
         public int Track, Index;
-        public string Sig = "";
+        public long Id;   // the device's engine id: survives edits, moves and undo
         public DeviceWindow? Window;
     }
 
@@ -86,17 +86,26 @@ public sealed partial class DeviceChainView
         // The editor lives in one place: a device in XL leaves the panel for the window.
         if (DeviceView.Size(_engine, _trackId, index) == CardSize.XL) DeviceView.SetSize(_engine, _trackId, index, CardSize.L);
 
-        var slot = new WindowSlot { Track = _trackId, Index = index, Sig = CardSig(_trackId, ChainKind.Effect, index) };
+        var slot = new WindowSlot { Track = _trackId, Index = index, Id = _engine.TrackDeviceId(_trackId, index) };
         DeviceWindow win = null!;
         int checkTick = 0;
         win = new DeviceWindow(_engine.DeviceName(_trackId, index), TrackNames.Of(_engine, _trackId), strategy.Subtitle ?? "", tickReg =>
         {
             int t = slot.Track, di = slot.Index;
-            // Gone, or another device took the slot (an undo, an edit from elsewhere): close.
+            // Another device in the slot (an undo, an edit from elsewhere): follow the window's own
+            // device to where it went, or close when it is gone. By id, not by kind and name: two
+            // EQ-8s look the same.
             tickReg(() =>
             {
-                if (++checkTick % 15 != 0) return;
-                if (di >= _engine.TrackDeviceCount(t) || CardSig(t, ChainKind.Effect, di) != slot.Sig) win.Close();
+                if (++checkTick % 15 != 0 || slot.Index != di) return;   // moved: a refill is on its way
+                if (_engine.TrackDeviceId(t, di) == slot.Id && slot.Id != 0) return;
+                int n = _engine.TrackDeviceCount(t), ni = -1;
+                for (int i = 0; i < n && slot.Id != 0; i++)
+                    if (_engine.TrackDeviceId(t, i) == slot.Id) { ni = i; break; }
+                if (ni < 0) { win.Close(); return; }
+                slot.Index = ni;
+                Dispatcher.UIThread.Post(win.Refill);   // the body's closures hold the old index
+                if (_trackId == t) Rebuild();             // the placeholder moves with it
             });
             var ctx = new DeviceCardContext(_engine, t, tickReg, () => Changed?.Invoke(), (_, _, _, _) => { }, _ => { },
                 i => PresetSaveRequested?.Invoke(i), () => 0, _ => { }, tickReg, () => { },

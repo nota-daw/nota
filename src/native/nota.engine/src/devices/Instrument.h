@@ -144,6 +144,15 @@ class Instrument {
                 std::memory_order_relaxed);
         tapW_.store(w + static_cast<uint32_t>(frames), std::memory_order_release);
     }
+    // A block the instrument doesn't render (switched off): silence, so a reader doesn't
+    // take the last sound before the switch for fresh output.
+    void tapSilence(int32_t frames) {
+        if (tapBlocks_.load(std::memory_order_relaxed) <= 0) return;
+        tapBlocks_.fetch_sub(1, std::memory_order_relaxed);
+        const uint32_t w = tapW_.load(std::memory_order_relaxed);
+        for (int32_t i = 0; i < frames; ++i) tap_[(w + static_cast<uint32_t>(i)) & (kTapLen - 1)].store(0.0f, std::memory_order_relaxed);
+        tapW_.store(w + static_cast<uint32_t>(frames), std::memory_order_release);
+    }
     // The newest `maxN` output samples, oldest first (message thread); keeps the tap on.
     int32_t readOutput(float* out, int32_t maxN) const {
         if (!out || maxN <= 0) return 0;

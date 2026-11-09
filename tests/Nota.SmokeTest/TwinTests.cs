@@ -186,6 +186,8 @@ internal static class TwinTests
         {
             int mt = me.AddTwinTrack();
             P(me, mt, "lo.b.ldcut", 0.83f); P(me, mt, "up.a.m3amt", 0.21f); P(me, mt, "up.b.o1wave", 0.66f);
+            int laneParam = Pi(me, mt, "up.a.m3amt");
+            TwinPatterns.Do(me, mt, TwinPatterns.Act.MotionTarget, 0 << 16 | laneParam);
             var full = me.GetPluginState(mt, -1);
             int count = BitConverter.ToInt32(full, 4);
             var keep = new List<int>();
@@ -199,13 +201,21 @@ internal static class TwinTests
             old.AddRange(BitConverter.GetBytes(keep.Count));
             foreach (int i in keep) old.AddRange(full.AsSpan(8 + i * 4, 4).ToArray());
             old.AddRange(full.AsSpan(8 + count * 4).ToArray());   // the pattern block
+            // Its motion lanes named the old index too. Pattern 0's lane 0 target follows the
+            // block's byte count (4), its magic (4), the length (1) and 64 steps of 9 bytes.
+            int laneAt = 8 + keep.Count * 4 + 4 + 4 + 1 + 64 * 9;
+            var oldBytes = old.ToArray();
+            bool laneThere = BitConverter.ToUInt16(oldBytes, laneAt) == laneParam;
+            BitConverter.GetBytes((ushort)keep.IndexOf(laneParam)).CopyTo(oldBytes, laneAt);
             int nt = me.AddTwinTrack();
             P(me, nt, "lo.a.fenvexp", 0f);
-            me.SetPluginState(nt, -1, old.ToArray());
+            me.SetPluginState(nt, -1, oldBytes);
+            bool laneMoved = laneThere && keep.IndexOf(laneParam) != laneParam
+                             && TwinPatterns.FromState(me.GetPluginState(nt, -1))?[0].Lanes[0].Target == laneParam;
             bool sameVals = keep.All(i => me.PluginParamGet(nt, -1, i) == me.PluginParamGet(mt, -1, i));
             bool shapes = G(me, nt, "lo.a.fenvexp") == 1f && G(me, nt, "up.b.menvrcurve") == 0.5f;
-            yield return (shapeIds && sameVals && shapes && G(me, nt, "up.b.o1wave") == 0.66f,
-                $"a Twin state from before the envelope shapes loads value for value (kept {keep.Count} of {count})");
+            yield return (shapeIds && sameVals && shapes && G(me, nt, "up.b.o1wave") == 0.66f && laneMoved,
+                $"a Twin state from before the envelope shapes loads value for value, motion lanes on their own params (kept {keep.Count} of {count}, lane {laneThere}/{laneMoved})");
         }
         yield return (e.PluginParamName(t, -1, Pi(e, t, "up.b.ldcut")) == "Upper B · Ladder Cutoff",
             $"twin names carry part and side (got '{e.PluginParamName(t, -1, Pi(e, t, "up.b.ldcut"))}')");
@@ -1418,6 +1428,22 @@ internal static class TwinTests
             var pts = e.GetAutomationPoints(t, e.AddPluginAutomationLane(t, -1, "lo.a.ldcut"));
             bool knob = pts.Any(p => Math.Abs(p.Beat - 0.25) < 1e-9 && Math.Abs(p.Value - 0.6f) < 1e-4);
             yield return (knob, $"To clip holds the knob's value on an empty motion step ({pts.Length} points)");
+        }
+
+        // To clip: a swung full gate that rings into the next step playing the same note ends at
+        // that onset, as the live sequencer retriggers it there.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            TwinPatterns.WritePattern(e, t, 0, new[] { "C3", "C3:100:100%", "C3", "." });
+            P(e, t, "seq.swing", 1f);
+            int clip = TwinPatterns.ToClip(e, t, 0, 0);
+            var ns = clip >= 0 ? e.GetClipNotes(t, clip).OrderBy(n => n.StartBeat).ToArray() : Array.Empty<NotaNote>();
+            // Step 1 is swung to 0.375 with a 100 % gate (to 0.625); step 2 plays C3 again at 0.5.
+            bool trimmed = ns.Length == 3 && Math.Abs(ns[1].StartBeat - 0.375) < 1e-9
+                           && Math.Abs(ns[1].StartBeat + ns[1].LengthBeats - 0.5) < 1e-9
+                           && ns.Zip(ns.Skip(1)).All(z => z.First.StartBeat + z.First.LengthBeats <= z.Second.StartBeat + 1e-9);
+            yield return (trimmed, $"To clip ends a swung note at the next onset of the same pitch ({string.Join(" ", ns.Select(n => $"{n.StartBeat:0.###}+{n.LengthBeats:0.###}"))})");
         }
 
         // Transport stopped: a held key runs the sequencer on its own clock (Seq from step 1, Arp over

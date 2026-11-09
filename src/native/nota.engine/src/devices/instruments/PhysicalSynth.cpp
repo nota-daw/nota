@@ -266,6 +266,12 @@ void PhysicalSynth::render(float* out, int32_t frames) {
             }
             if (v.nStage != Stage::Off) {
                 advanceShapedEnv(v.nEnv, v.nStage, v.nShape, nA, nD, nS, nR, nBend);
+                // A burst with no sustain ends at the end of its decay, so a quiet voice
+                // can be freed (noteOff never moves the noise stage on).
+                if (v.nStage == Stage::Sustain && nS <= 1.0e-4f) {
+                    v.nEnv = 0.0f;
+                    v.nStage = Stage::Off;
+                }
                 const double cut =
                     std::clamp(noiseBase * std::exp2(noiseEnvAmt * 3.0 * v.nEnv), 20.0, sampleRate_ * 0.49);
                 const float nf = svf(v.nIc1, v.nIc2, cut, noiseK, noise(), noiseType);

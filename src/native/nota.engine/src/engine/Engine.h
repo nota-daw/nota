@@ -694,6 +694,7 @@ class Engine {
     // Built-in device kind for save (see Device::builtinKind), or -1 for a
     // hosted plugin. Message thread only.
     int32_t trackDeviceBuiltinKind(int32_t trackId, int32_t deviceIndex) const;
+    int64_t trackDeviceId(int32_t trackId, int32_t deviceIndex) const; // nota_track_device_id (#540)
     // Stable plugin identifier of a track's instrument / effect (M7-6c), or ""
     // if it isn't a hosted plugin. Message thread only.
     std::string trackInstrumentPluginId(int32_t trackId) const;
@@ -2470,10 +2471,33 @@ class Engine {
     // writes from it). Values start at rest.
     std::atomic<float> liveCtl_[kCtlCount]{};
     std::atomic<uint32_t> liveCtlTouch_[kCtlCount]{};
-    void noteLiveController(int32_t ctl, float value) {
+    // The same per input, for seeding a take (specs/086): each lane starts from the controllers
+    // of the inputs its track listens to only. Input 0 is no device (the computer keyboard, an
+    // untargeted remote), 1 + s is MIDI source s; a value keeps the channel it came on and a
+    // stamp, so the newest input a lane takes wins. A track-addressed controller (Nota Remote)
+    // seeds its own track's lane only.
+    struct LiveCtlIn {
+        std::atomic<float> value{kCtlRest};
+        std::atomic<int32_t> channel{0}; // 0-based, as MidiEvent::channel
+        std::atomic<uint32_t> stamp{0};  // 0 = never moved
+    };
+    static constexpr int kCtlInputs = MidiInput::kMaxSources + 1;
+    LiveCtlIn liveCtlIn_[kCtlInputs][kCtlCount];
+    LiveCtlIn liveCtlTrack_[kCtlCount];            // its channel field holds the track id
+    std::atomic<uint32_t> liveCtlStamp_{0};
+    void noteLiveController(int32_t ctl, float value, int32_t source, int32_t channel, int32_t trackId = -1) {
         liveCtl_[ctl].store(value, std::memory_order_relaxed);
         liveCtlTouch_[ctl].fetch_add(1, std::memory_order_relaxed);
+        LiveCtlIn& in = trackId >= 0                                   ? liveCtlTrack_[ctl]
+                        : (source >= 0 && source < MidiInput::kMaxSources) ? liveCtlIn_[1 + source][ctl]
+                                                                       : liveCtlIn_[0][ctl];
+        in.value.store(value, std::memory_order_relaxed);
+        in.channel.store(trackId >= 0 ? trackId : std::clamp(channel, 0, 15), std::memory_order_relaxed);
+        in.stamp.store(liveCtlStamp_.fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     }
+    // A take's starting value of controller `ctl` on lane `lane` (audio thread): the newest of
+    // the inputs the lane's track listens to, or rest.
+    float laneStartCtl(int32_t lane, int32_t ctl) const;
 
     // instrument render scratch (pre-allocated, big enough for any device block).
     static constexpr int32_t kMaxBlock = 16384;

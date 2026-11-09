@@ -125,6 +125,11 @@ bool Engine::removeScene(int32_t scene) {
     if (scene < 0 || scene >= authoring_->sceneCount) return false;
     // Removing a row shifts every later slot up: a take recording into the row ends first,
     // players on the row stop, players below it follow their slot up.
+    // A slot that joined the take in that row (specs/086) lands what it has and leaves it.
+    // (The slot carrying the take ends it below.)
+    for (size_t k = 0; k < midiLanes_.size(); ++k)
+        if (midiLanes_[k].trackId >= 0 && midiLanes_[k].scene == scene && midiLanes_[k].trackId != recordSessionTrackId_)
+            finishSessionMidiLane(static_cast<int32_t>(k));
     if (recordSessionScene_ == scene) finalizeSessionRecord(false);
     auto g = rebuildScenes(authoring_->sceneCount - 1, [scene](std::vector<SessionSlot>& slots) {
         if (scene < static_cast<int32_t>(slots.size())) slots.erase(slots.begin() + scene);
@@ -1027,6 +1032,21 @@ void Engine::remapPlayers(const std::function<int32_t(int32_t)>& map) {
     for (auto& l : captureLanes_) // every slot a Session audio take records (specs/086)
         if (l.scene >= 0)
             if (const int32_t n = map(l.scene); n >= 0) l.scene = n;
+    // Every slot a Session MIDI take records follows its row too, or its notes would land in
+    // the slot that moved into the old one (specs/086); the audio thread's lane clocks with it.
+    bool lanesMoved = false;
+    for (auto& l : midiLanes_)
+        if (l.scene >= 0)
+            if (const int32_t n = map(l.scene); n >= 0 && n != l.scene) {
+                l.scene = n;
+                lanesMoved = true;
+            }
+    if (lanesMoved) publishSessionLaneSlots();
+    if (takeAttempt_.sessionScene >= 0)
+        if (const int32_t n = map(takeAttempt_.sessionScene); n >= 0) takeAttempt_.sessionScene = n;
+    for (auto& [tid, sc] : takeAttempt_.sessionSlots) // a retry relaunches the slots where they are now
+        if (sc >= 0)
+            if (const int32_t n = map(sc); n >= 0) sc = n;
     if (sceneFollowScene_ >= 0) sceneFollowScene_ = map(sceneFollowScene_);
 }
 

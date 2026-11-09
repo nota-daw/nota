@@ -433,7 +433,7 @@ void Engine::trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, fl
 void Engine::controller(int32_t ctl, float value, int32_t source, int32_t channel) {
     if (ctlIsReserved(ctl) || !std::isfinite(value)) return;
     value = ctlClamp(ctl, value);
-    noteLiveController(ctl, value);
+    noteLiveController(ctl, value, source, channel);
     std::lock_guard<std::mutex> lk(liveMidiMx_);
     liveMidi_.push(liveEvent(false, -1, value, kCtlDimBase + ctl, source, channel));
 }
@@ -612,7 +612,7 @@ int32_t Engine::trackMidiInputChannel(int32_t trackId) const {
 void Engine::trackController(int32_t trackId, int32_t ctl, float value) {
     if (ctlIsReserved(ctl) || !std::isfinite(value)) return;
     value = ctlClamp(ctl, value);
-    noteLiveController(ctl, value);
+    noteLiveController(ctl, value, -1, 0, trackId);
     std::lock_guard<std::mutex> lk(remoteMidiMx_);
     remoteMidi_.push(MidiEvent{false, -1, value, trackId, kCtlDimBase + ctl});
 }

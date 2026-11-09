@@ -28,6 +28,8 @@ internal static class MidiInputFilterTests
         foreach (var r in SessionSlotsTogether()) yield return r;
         foreach (var r in SessionSlotsRetry()) yield return r;
         foreach (var r in SessionFirstSlotStops()) yield return r;
+        foreach (var r in PedalSeedsItsOwnTrack()) yield return r;
+        foreach (var r in SessionSceneInsertFollows()) yield return r;
     }
 
     private static NotaEngine Engine()
@@ -279,6 +281,49 @@ internal static class MidiInputFilterTests
         var pb = SlotPitches(e, b, 0);
         yield return (!e.IsRecording && pa.SequenceEqual(new[] { 60 }) && pb.SequenceEqual(new[] { 60, 64 }),
             $"…which then ends the take, each slot with its notes ({string.Join(",", pa)} / {string.Join(",", pb)})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+    // A pedal already down when Record is pressed starts the take only on the tracks that
+    // listen to the keyboard it came from (#536 review).
+    private static IEnumerable<(bool, string)> PedalSeedsItsOwnTrack()
+    {
+        using var e = Engine();
+        int p = Instrument(e), q = Instrument(e);
+        e.SetTrackMidiInputSourceForTest(q, 1, 0);   // q: source 1 only
+        e.SetTrackArmed(p, true);
+        e.SetTrackArmed(q, true);
+        e.PushMidiForTest(0, 0xB0, 0, MidiController.Sustain, 127);   // the pedal on source 0
+        Beats(e, 0.05);
+        Record(e, () => { HwTap(e, 0, 0, 60); HwTap(e, 1, 0, 62); });
+        bool pHas = e.GetMidiClipControllers(p, 0).Contains(MidiController.Sustain);
+        bool qHas = ClipCount(e, q) > 0 && e.GetMidiClipControllers(q, 0).Contains(MidiController.Sustain);
+        yield return (pHas && !qHas, $"a pedal held on one keyboard seeds only the take of the track that listens to it (p {pHas}, q {qHas})");
+    }
+
+    // A scene row inserted above the slots while they record: their notes follow them to the
+    // row they moved to (#536 review).
+    private static IEnumerable<(bool, string)> SessionSceneInsertFollows()
+    {
+        using var e = Engine();
+        e.SetLaunchQuant(0.0);
+        int a = Instrument(e), b = Instrument(e);
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 0.1);
+        e.RecordSessionSlot(b, 0);
+        Beats(e, 0.1);
+        KeyTap(e, 60);
+        e.InsertScene(0);
+        Beats(e, 0.1);
+        KeyTap(e, 62);
+        e.StopSessionRecord();
+        e.Poll();
+        var a1 = SlotPitches(e, a, 1); var b1 = SlotPitches(e, b, 1);
+        bool rowEmpty = e.GetSessionNotes(a, 0).Length == 0 && e.GetSessionNotes(b, 0).Length == 0;
+        yield return (rowEmpty && a1.SequenceEqual(new[] { 60, 62 }) && b1.SequenceEqual(new[] { 60, 62 }),
+            $"a scene inserted above recording slots: the notes follow the slots to their new row ({string.Join(",", a1)} / {string.Join(",", b1)}, new row empty {rowEmpty})");
         e.StopAllSession();
         e.StopTransport();
     }

@@ -1168,6 +1168,10 @@ NOTA_API int32_t nota_track_instrument_supports_mpe(const NotaEngine* engine, in
  * hosted plugin. */
 NOTA_API int32_t nota_track_device_builtin_kind(const NotaEngine* engine, int32_t track_id,
                                                 int32_t device_index);
+/* Which audio effect sits in the track's slot `device_index`: the same value while it is edited,
+ * moved along the chain or brought back by undo; a new, pasted or duplicated effect has another
+ * (#540). 0 = no device there. Compare it, don't decode it. */
+NOTA_API int64_t nota_track_device_id(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* ---- Audio persistence (M7-6b) ------------------------------------------- */
 /* Full geometry of an audio clip; returns 1 if the clip is audio, else 0. */
