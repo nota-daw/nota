@@ -81,9 +81,9 @@ A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised li
   Macro / Math, patched onto any parameter).
 - **Tracks & mixer** — audio, MIDI, group (nestable), return and master tracks; sends;
   MIDI routing between tracks; peak/RMS and true-peak meters.
-- **MIDI** — piano roll with quantize and velocity; play from a MIDI keyboard, the computer
-  keyboard, a **gamepad** (macOS) or your **phone**; drag in `.mid` files; turn audio into
-  MIDI (melody / harmony / drums / slice).
+- **MIDI** — piano roll with a draw mode, quantize and velocity; play from a MIDI keyboard, the
+  computer keyboard, a **gamepad** (macOS) or your **phone**; drag in `.mid` files; turn audio
+  into MIDI (melody / harmony / drums / slice).
 - **Audio** — record from inputs and internal buses; import WAV/AIFF/FLAC/MP3; fades, gain
   and per-clip envelopes; **warp / time-stretch**.
 - **Automation & MIDI Learn** — draw or record automation on any parameter; map hardware

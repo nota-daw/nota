@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Draw Mode in the piano roll** (#554): the **Draw** chip in the clip editor's header arms it
+  (so does **B** with the roll focused; **Esc** puts it down), and a plain press then places a
+  note — hold the button down and drag to paint a run, one note per cell on the snap grid, with
+  the cells a fast drag crossed filled in so a diagonal flick leaves no gaps. Cells sit a grid
+  step apart, or the last-touched note's length when that is longer, so a run tiles instead of
+  stacking on one pitch; a press on a note still moves or trims it, ⇧-drag on empty grid still
+  marquees, and the whole run is one undo step. Remembered app-wide, like the speaker chip.
 - **Preview a translation**: **Load file…** in Settings → Appearance → Language runs Nota in a
   language file from your disk after a restart and lists the entries it cannot use;
   `NOTA_UI_LANGUAGE=/path/to/file.json` does the same for one run.
