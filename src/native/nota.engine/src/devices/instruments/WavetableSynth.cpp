@@ -458,13 +458,22 @@ void WavetableSynth::render(float* out, int32_t frames) {
 
     const double invSr = 1.0 / sampleRate_;
 
+    // Once the eased cutoffs and resonances have reached their targets (the usual case: no
+    // knob moving), they land there and the per-sample easing and its exp2s are skipped.
+    const bool settled = std::fabs(f1tgt - f1Sm_) < 1e-7 && std::fabs(f2tgt - f2Sm_) < 1e-7 &&
+                         std::fabs(r1tgt - r1Sm_) < 1e-7 && std::fabs(r2tgt - r2Sm_) < 1e-7;
+    if (settled) { f1Sm_ = f1tgt; f2Sm_ = f2tgt; r1Sm_ = r1tgt; r2Sm_ = r2tgt; }
+    double f1base = std::exp2(f1Sm_), f2base = std::exp2(f2Sm_), reso1 = r1Sm_, reso2 = r2Sm_;
+
     float peak = 0.0f;
     for (int32_t i = 0; i < frames; ++i) {
-        f1Sm_ += (f1tgt - f1Sm_) * fSm;
-        f2Sm_ += (f2tgt - f2Sm_) * fSm;
-        r1Sm_ += (r1tgt - r1Sm_) * fSm;
-        r2Sm_ += (r2tgt - r2Sm_) * fSm;
-        const double f1base = std::exp2(f1Sm_), f2base = std::exp2(f2Sm_), reso1 = r1Sm_, reso2 = r2Sm_;
+        if (!settled) {
+            f1Sm_ += (f1tgt - f1Sm_) * fSm;
+            f2Sm_ += (f2tgt - f2Sm_) * fSm;
+            r1Sm_ += (r1tgt - r1Sm_) * fSm;
+            r2Sm_ += (r2tgt - r2Sm_) * fSm;
+            f1base = std::exp2(f1Sm_); f2base = std::exp2(f2Sm_); reso1 = r1Sm_; reso2 = r2Sm_;
+        }
         if (lfoPhase1_ >= 1.0) {
             lfoPhase1_ -= 1.0;
             lfoSh1_ = frand() * 2.0f - 1.0f;

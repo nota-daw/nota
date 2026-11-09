@@ -238,11 +238,17 @@ void OperatorSynth::render(float* out, int32_t frames) {
     // note, so each voice gets its own pair; without it they all land on the same one.
     // They are targets: each voice eases its g and k toward them per sample (~5 ms), so a
     // cutoff turned quickly sweeps instead of stepping at each block (an audible click).
-    double fgV[kVoices];
+    double fgV[kVoices], fa1V[kVoices];
+    bool settledV[kVoices];
     for (int vi = 0; vi < kVoices; ++vi) {
         const double cut = keyTrk > 0.0 ? fbase * std::exp2(keyTrk * (voices_[vi].pitch - 60) / 12.0) : fbase;
         fgV[vi] = std::tan(kPi * std::clamp(cut, 20.0, sampleRate_ * 0.49) * invSr);
-        if (voices_[vi].fgSm < 0.0) { voices_[vi].fgSm = fgV[vi]; voices_[vi].fkSm = fk; }
+        Voice& v = voices_[vi];
+        if (v.fgSm < 0.0) { v.fgSm = fgV[vi]; v.fkSm = fk; }
+        // Arrived (no knob moving): land on the target and skip the per-sample easing.
+        settledV[vi] = std::fabs(fgV[vi] - v.fgSm) < 1e-9 && std::fabs(fk - v.fkSm) < 1e-9;
+        if (settledV[vi]) { v.fgSm = fgV[vi]; v.fkSm = fk; }
+        fa1V[vi] = 1.0 / (1.0 + v.fgSm * (v.fgSm + v.fkSm));
     }
     const double fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
 
@@ -253,9 +259,12 @@ void OperatorSynth::render(float* out, int32_t frames) {
         for (int vi = 0; vi < kVoices; ++vi) {
             Voice& v = voices_[vi];
             if (!v.active) continue;
-            v.fgSm += (fgV[vi] - v.fgSm) * fSm;
-            v.fkSm += (fk - v.fkSm) * fSm;
-            const double fg = v.fgSm, fa1 = 1.0 / (1.0 + fg * (fg + v.fkSm));
+            if (!settledV[vi]) {
+                v.fgSm += (fgV[vi] - v.fgSm) * fSm;
+                v.fkSm += (fk - v.fkSm) * fSm;
+                fa1V[vi] = 1.0 / (1.0 + v.fgSm * (v.fgSm + v.fkSm));
+            }
+            const double fg = v.fgSm, fa1 = fa1V[vi];
             // Advance glide toward the target pitch.
             v.curFreq += (v.freq - v.curFreq) * gCoef;
             v.ex.tick(exAdd, exprCoef_);
