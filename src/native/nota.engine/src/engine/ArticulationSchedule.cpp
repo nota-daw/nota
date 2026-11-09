@@ -6,17 +6,28 @@
 // gatherInstrumentNotes uses for the notes themselves, so a switch and its note agree on whether
 // the note plays at all: a note at or past the clip end doesn't, one before the clip start sounds
 // from the clip start, and a note's end is cut at the clip end.
+//
+// A clip "placement" is a clip at its place on this clock: an arrangement clip at its position, or
+// one loop pass of a Session slot. The plug-in's selected articulation is one state for the whole
+// track, so whether a latching point sends its switch is decided across every placement: it sends
+// when the point that triggers just before it (by trigger time, then placement, then order in the
+// clip) selects something else. That makes overlapping clips, per-articulation offsets that
+// reorder the triggers, and a chase after a seek all agree with straight playback.
 
 #include "ArticulationSchedule.h"
 
 #include "MidiClip.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
+#include <limits>
 
 namespace nota {
 
 namespace {
+
+constexpr double kInf = std::numeric_limits<double>::infinity();
 
 struct Writer {
     ArtEv* out;
@@ -72,80 +83,172 @@ bool hasKeys(const ArticulationTable& table, const ArticulationEntry& e) {
     return false;
 }
 
-} // namespace
+// A clip at its place on this block's clock.
+struct Placement {
+    const MidiClip* clip;
+    double start;       // samples
+    double lengthBeats; // notes at or past it don't play
+    long order;         // clip index or loop pass, for a total order of triggers
+    bool trimEnd = true; // arrangement trims tails; Session notes may outlast a loop pass
+};
 
-double articulationOffsetMs(const ArticulationTable* table, int32_t noteArticulation) {
-    if (!table) return 0.0;
-    const ArticulationEntry* e = table->resolve(noteArticulation);
-    return e ? e->offsetMs : 0.0;
+// Everything a block's decisions share.
+struct Ctx {
+    const ArticulationTable& table;
+    const ArticulationBlock& b;
+    double msToS, trackShift, hold;
+    double lo, hi; // the smallest and largest (offset − lead) over the table, in samples
+};
+
+Ctx makeCtx(const ArticulationTable& table, const ArticulationBlock& b) {
+    Ctx c{table, b, b.sampleRate / 1000.0, 0.0, 0.0, kInf, -kInf};
+    c.trackShift = b.trackOffsetMs * c.msToS;
+    c.hold = kKeyswitchHoldMs * c.msToS;
+    for (const ArticulationEntry& e : table.entries()) {
+        const double d = (e.offsetMs - e.leadMs) * c.msToS;
+        c.lo = std::min(c.lo, d);
+        c.hi = std::max(c.hi, d);
+    }
+    if (c.lo > c.hi) c.lo = c.hi = 0.0; // an empty table
+    return c;
 }
 
-namespace {
+// Where a note at clip-local `beat` sounds before its articulation's own offset.
+double noteTime(const Ctx& c, const Placement& p, double beat) { return p.start + std::max(0.0, beat) * c.b.spb + c.trackShift; }
 
-// One pass of one clip: the clip's notes and timeline placed at `clipStart` (samples) and played
-// for `lengthBeats` — the arrangement's own position, or one loop pass of a Session slot.
-void scheduleClip(Writer& w, const MidiClip& clip, const ArticulationTable& table, const ArticulationBlock& b,
-    const Window& win, double clipStart, double lengthBeats) {
-    const double msToS = b.sampleRate / 1000.0;
-    const double trackShift = b.trackOffsetMs * msToS;
-    const double hold = kKeyswitchHoldMs * msToS;
-    const double clipEnd = clipStart + lengthBeats * b.spb;
-    {
-        // ---- latching: the clip's change points ----
-        if (const ArticulationTimeline* tl = clip.articulations.get()) {
-            auto trigOf = [&](const ArticulationChange& c, const ArticulationEntry& e) {
-                const double eff = clipStart + std::max(0.0, c.beat) * b.spb + trackShift + e.offsetMs * msToS;
-                return eff - e.leadMs * msToS;
-            };
-            // Chase first, so a change due in this block still wins: the state in force where
-            // playback lands (the last change already past), unless the clip is over or a change
-            // lands right on the block's first sample anyway.
-            if (b.chase && win.start < clipEnd) {
-                const ArticulationEntry* chased = nullptr;
-                bool landsOnStart = false;
-                for (const ArticulationChange& c : tl->changes) {
-                    if (c.beat >= lengthBeats) break;
-                    const ArticulationEntry* e = table.find(c.entryId);
-                    if (!e) continue;
-                    const double trig = trigOf(c, *e);
-                    if (trig < win.start) chased = e;
-                    else if (trig < win.start + 1.0) landsOnStart = true;
-                }
-                if (chased && !landsOnStart) {
-                    sendActions(w, table, *chased, win.start, win);
-                    releaseKeys(w, table, *chased, win.start + hold, win);
-                }
-            }
-            for (const ArticulationChange& c : tl->changes) {
-                if (c.beat >= lengthBeats) break; // sorted: the rest are past the clip end too
-                const ArticulationEntry* e = table.find(c.entryId);
-                if (!e) continue;
-                const double trig = trigOf(c, *e);
-                sendActions(w, table, *e, trig, win);
-                releaseKeys(w, table, *e, trig + hold, win);
-                // A key pressed before a loop seam and due for release after it: let go now.
-                if (b.seamOffs && trig < b.seamEnd && trig + hold >= b.seamEnd) releaseKeys(w, table, *e, win.start, win);
+double trigOf(const Ctx& c, const Placement& p, const ArticulationChange& x, const ArticulationEntry& e) {
+    return noteTime(c, p, x.beat) + (e.offsetMs - e.leadMs) * c.msToS;
+}
+
+struct Key {
+    double trig;
+    long order;
+    int32_t idx;
+};
+
+bool before(const Key& a, const Key& k) {
+    if (a.trig != k.trig) return a.trig < k.trig;
+    if (a.order != k.order) return a.order < k.order;
+    return a.idx < k.idx;
+}
+
+// Index of the first timeline point whose note time can reach `t` (samples) in placement `p`.
+size_t firstFrom(const Ctx& c, const Placement& p, const std::vector<ArticulationChange>& ch, double t) {
+    const double beat = (t - p.start - c.trackShift) / c.b.spb;
+    if (beat <= 0.0) return 0; // notes before the clip start sound from it
+    return static_cast<size_t>(std::lower_bound(ch.begin(), ch.end(), beat,
+                                   [](const ArticulationChange& x, double v) { return x.beat < v; }) -
+                               ch.begin());
+}
+
+// The latching articulation in force just before key `k`: the entry of the point that triggers
+// last before it, over every placement `all` gives; 0 when nothing has triggered yet.
+template <class All> int32_t inForceBefore(const Ctx& c, const All& all, const Key& k) {
+    Key best{-kInf, LONG_MIN, INT32_MIN};
+    int32_t id = 0;
+    bool found = false;
+    all([&](const Placement& p) {
+        const ArticulationTimeline* tl = p.clip->articulations.get();
+        if (!tl) return;
+        const auto& ch = tl->changes;
+        // A point triggers no later than its note time + hi and no earlier than + lo: only the
+        // ones whose note time is at most k − lo can be before k; scanning back, stop once even
+        // + hi can't beat the best found.
+        size_t i = firstFrom(c, p, ch, k.trig - c.lo + 1.0);
+        while (i < ch.size() && noteTime(c, p, ch[i].beat) + c.lo <= k.trig) ++i;
+        while (i-- > 0) {
+            const ArticulationChange& x = ch[i];
+            if (found && noteTime(c, p, x.beat) + c.hi < best.trig) break;
+            if (x.beat >= p.lengthBeats) continue;
+            const ArticulationEntry* e = c.table.find(x.entryId);
+            if (!e) continue;
+            const Key kx{trigOf(c, p, x, *e), p.order, static_cast<int32_t>(i)};
+            if (!before(kx, k)) continue;
+            if (!found || before(best, kx)) {
+                best = kx;
+                id = x.entryId;
+                found = true;
             }
         }
+    });
+    return id;
+}
 
-        // ---- momentary: per note, held while the note sounds ----
-        for (const Note& note : clip.notes) {
-            if (note.startBeat >= lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
-            const ArticulationEntry* e = table.resolve(note.articulation);
-            if (!e || e->trigger != ArticulationTrigger::Momentary) continue;
-            const double shift = trackShift + e->offsetMs * msToS;
-            const double onS = clipStart + std::max(0.0, note.startBeat) * b.spb + shift;
-            const double offS = std::min(clipEnd, clipStart + (note.startBeat + note.lengthBeats) * b.spb) + shift;
-            const double trig = onS - e->leadMs * msToS;
-            sendActions(w, table, *e, trig, win);
-            if (hasKeys(table, *e)) {
-                releaseKeys(w, table, *e, offS, win);
-                if (b.seamOffs && trig < b.seamEnd && offS >= b.seamEnd) releaseKeys(w, table, *e, win.start, win);
+// The block's events for the placements `emit` gives, deciding against every placement `all`
+// gives (a superset: for a slot, the pass before too). `chase` re-sends what is in force at the
+// block's start; `covered` says whether any placement is still playing there.
+template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const Window& win, const Emit& emit, const All& all) {
+    const ArticulationBlock& b = c.b;
+    bool landingSent = false; // a switch already lands on the block's first sample
+    bool covered = false;
+
+    // ---- latching: each point sends when it changes what is in force ----
+    emit([&](const Placement& p) {
+        const double end = p.start + p.lengthBeats * b.spb;
+        if (win.start < end) covered = true;
+        const ArticulationTimeline* tl = p.clip->articulations.get();
+        if (!tl) return;
+        const auto& ch = tl->changes;
+        // Points that can act in this block: triggered in it, or released (hold later) in it.
+        for (size_t i = firstFrom(c, p, ch, win.start - c.hold - c.hi); i < ch.size(); ++i) {
+            const ArticulationChange& x = ch[i];
+            if (x.beat >= p.lengthBeats) break; // sorted: the rest are past the clip end too
+            if (noteTime(c, p, x.beat) + c.lo >= win.end) break;
+            const ArticulationEntry* e = c.table.find(x.entryId);
+            if (!e) continue;
+            const double trig = trigOf(c, p, x, *e);
+            if (trig + c.hold < win.start || trig >= win.end) continue;
+            if (inForceBefore(c, all, Key{trig, p.order, static_cast<int32_t>(i)}) == x.entryId) continue; // already selected
+            if (win.contains(trig) && trig < win.start + 1.0) landingSent = true;
+            sendActions(w, c.table, *e, trig, win);
+            releaseKeys(w, c.table, *e, trig + c.hold, win);
+        }
+        // A loop seam just passed: a key pressed before it and due for release after it (its
+        // release would have come past the loop end) lets go now. Those points sit at the seam,
+        // not in this block.
+        if (b.seamOffs) {
+            for (size_t i = firstFrom(c, p, ch, b.seamEnd - c.hold - c.hi); i < ch.size(); ++i) {
+                const ArticulationChange& x = ch[i];
+                if (x.beat >= p.lengthBeats || noteTime(c, p, x.beat) + c.lo >= b.seamEnd) break;
+                const ArticulationEntry* e = c.table.find(x.entryId);
+                if (!e) continue;
+                const double trig = trigOf(c, p, x, *e);
+                if (trig >= b.seamEnd || trig + c.hold < b.seamEnd) continue;
+                if (inForceBefore(c, all, Key{trig, p.order, static_cast<int32_t>(i)}) == x.entryId) continue; // never sent
+                releaseKeys(w, c.table, *e, win.start, win);
             }
-            // A note already held where playback lands is chased by the note scheduler; its switch goes with it.
-            if (b.chase && trig < win.start && offS > win.start) sendActions(w, table, *e, win.start, win);
+        }
+    });
+
+    // ---- chase: restore the track's last trigger at the landing point ----
+    if (b.chase && covered && !landingSent) {
+        if (const ArticulationEntry* e = c.table.find(inForceBefore(c, all, Key{win.start, LONG_MIN, INT32_MIN}))) {
+            sendActions(w, c.table, *e, win.start, win);
+            releaseKeys(w, c.table, *e, win.start + c.hold, win);
         }
     }
+
+    // ---- momentary: per note, held while the note sounds ----
+    emit([&](const Placement& p) {
+        const double end = p.start + p.lengthBeats * b.spb;
+        for (const Note& note : p.clip->notes) {
+            if (note.startBeat >= p.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
+            const ArticulationEntry* e = c.table.resolve(note.articulation);
+            if (!e || e->trigger != ArticulationTrigger::Momentary) continue;
+            const double shift = c.trackShift + e->offsetMs * c.msToS;
+            const double onS = p.start + std::max(0.0, note.startBeat) * b.spb + shift;
+            const double noteEnd = p.start + (note.startBeat + note.lengthBeats) * b.spb;
+            const double offS = (p.trimEnd ? std::min(end, noteEnd) : noteEnd) + shift;
+            const double trig = onS - e->leadMs * c.msToS;
+            sendActions(w, c.table, *e, trig, win);
+            if (hasKeys(c.table, *e)) {
+                releaseKeys(w, c.table, *e, offS, win);
+                if (b.seamOffs && trig < b.seamEnd && offS >= b.seamEnd) releaseKeys(w, c.table, *e, win.start, win);
+            }
+            // A note already held where playback lands is chased by the note scheduler; its switch goes with it.
+            if (b.chase && trig < win.start && offS > win.start) sendActions(w, c.table, *e, win.start, win);
+        }
+    });
 }
 
 int finish(Writer& w, ArtEv* out, int* dropped) {
@@ -161,28 +264,52 @@ int finish(Writer& w, ArtEv* out, int* dropped) {
 
 } // namespace
 
+double articulationOffsetMs(const ArticulationTable* table, int32_t noteArticulation) {
+    if (!table) return 0.0;
+    const ArticulationEntry* e = table->resolve(noteArticulation);
+    return e ? e->offsetMs : 0.0;
+}
+
 int scheduleArticulations(const std::vector<MidiClip>& clips, const ArticulationTable& table, const ArticulationBlock& b,
     ArtEv* out, int cap, int* dropped) {
     Writer w{out, cap};
-    if (b.frames <= 0 || b.spb <= 0.0 || b.sampleRate <= 0.0) return 0;
+    if (b.frames <= 0 || b.spb <= 0.0 || b.sampleRate <= 0.0) {
+        if (dropped) *dropped = 0;
+        return 0;
+    }
     const Window win{b.blockStart, b.blockStart + b.frames};
-    for (const MidiClip& clip : clips)
-        if (clip.active) scheduleClip(w, clip, table, b, win, clip.startBeat * b.spb, clip.lengthBeats);
+    const Ctx c = makeCtx(table, b);
+    // Every active clip of the track, in its order.
+    auto active = [&](auto&& f) {
+        long i = 0;
+        for (const MidiClip& clip : clips) {
+            if (clip.active) f(Placement{&clip, clip.startBeat * b.spb, clip.lengthBeats, i});
+            ++i;
+        }
+    };
+    scheduleAll(w, c, win, active, active);
     return finish(w, out, dropped);
 }
 
 int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool loop, const ArticulationTable& table,
     const ArticulationBlock& b, ArtEv* out, int cap, int* dropped) {
     Writer w{out, cap};
-    if (b.frames <= 0 || b.spb <= 0.0 || b.sampleRate <= 0.0 || loopBeats <= 0.0) return 0;
-    const Window win{b.blockStart, b.blockStart + b.frames};
-    // The pass playing now, the one before (a release or a held note running into this block) and
-    // the next (a negative offset or a lead reaching back across the loop end into this block).
-    const long now = static_cast<long>(std::floor(b.blockStart / (loopBeats * b.spb)));
-    for (long it = std::max(0L, now - 1); it <= now + 1; ++it) {
-        if (!loop && it > 0) break; // one-shot: a single pass
-        scheduleClip(w, slotClip, table, b, win, it * loopBeats * b.spb, loopBeats);
+    if (b.frames <= 0 || b.spb <= 0.0 || b.sampleRate <= 0.0 || loopBeats <= 0.0) {
+        if (dropped) *dropped = 0;
+        return 0;
     }
+    const Window win{b.blockStart, b.blockStart + b.frames};
+    const Ctx c = makeCtx(table, b);
+    const double loopS = loopBeats * b.spb;
+    const long now = static_cast<long>(std::floor(win.start / loopS));
+    const long lo = std::max(0L, now - 1);
+    const long hi = loop ? now + 1 : 0;
+    auto passes = [&](long from) {
+        return [&slotClip, loopS, loopBeats, from, hi](auto&& f) {
+            for (long k = from; k <= hi; ++k) f(Placement{&slotClip, k * loopS, loopBeats, k});
+        };
+    };
+    scheduleAll(w, c, win, passes(lo), passes(std::max(0L, lo - 1)));
     return finish(w, out, dropped);
 }
 

@@ -111,12 +111,13 @@ std::shared_ptr<const ArticulationTimeline> buildArticulationTimeline(
         return a->startBeat < b->startBeat || (a->startBeat == b->startBeat && a->pitch < b->pitch);
     });
 
-    int32_t latched = 0; // none yet
+    // Every latching note is a point; whether it sends is decided at playback across the whole
+    // track (another clip may change the articulation in between). Only a repeat at the same beat
+    // (a chord's notes) is folded here: nothing can come between them.
     for (const Note* n : order) {
         const ArticulationEntry* e = table->resolve(n->articulation);
         if (!e || e->trigger != ArticulationTrigger::Latching) continue; // momentary: per note, latch untouched
-        if (e->id == latched) continue;                                  // still in force: no new point
-        latched = e->id;
+        if (!tl->changes.empty() && tl->changes.back().beat == n->startBeat && tl->changes.back().entryId == e->id) continue;
         tl->changes.push_back({n->startBeat, e->id, n->pitch});
     }
     return tl;

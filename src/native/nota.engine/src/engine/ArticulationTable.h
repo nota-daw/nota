@@ -77,10 +77,11 @@ class ArticulationTable {
     std::vector<ArticulationAction> actions_;
 };
 
-// Where a clip's latching articulation changes, in clip-local beats, sorted by beat. One point
-// per change: consecutive notes (in start order) that resolve to the same latching articulation
-// share the first one's point, so a phrase sends its keyswitch once. Momentary articulations are
-// not here — they are sent per note — and do not change the latched state.
+// The latching articulation each note of a clip asks for, in clip-local beats, sorted by beat (at a
+// shared beat, by ascending pitch; a repeat at the same beat is folded). The scheduler sends a
+// point's switch only when it changes what is in force across the whole track — so a phrase sends
+// its keyswitch once, and an overlapping clip's switch in between is respected. Momentary
+// articulations are not here — they are sent per note — and do not change the latched state.
 struct ArticulationChange {
     double beat = 0.0;     // the start of the note that brings the change
     int32_t entryId = 0;   // the resolved articulation (an entry id in the table)

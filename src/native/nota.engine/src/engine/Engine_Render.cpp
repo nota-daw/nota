@@ -3378,9 +3378,8 @@ int32_t Engine::articulationSelfTest() {
         std::vector<Abs> once;
         playSlot(false, 0.0, 3 * L * spb, once);
         if (count(once, ArtEvKind::KeyOn, 24) != 1 || count(once, ArtEvKind::Control, 58) != 2) return 24;
-        // 25: an early switch reaches back across the loop end: Legato on beat 0 of each pass after the
-        // first goes out at the end of the pass before (the first pass's can't: it is before launch).
-        MidiClip early = makeClip({{0.0, 2}});
+        // 25: alternating phrases preserve the early switch across each loop boundary.
+        MidiClip early = makeClip({{0.0, 2}, {1.0, 1}});
         std::vector<Abs> back;
         ArtEv buf[kMaxBlockArt];
         for (double s = 0.0; s < 2 * L * spb; s += B) {
@@ -3389,8 +3388,35 @@ int32_t Engine::articulationSelfTest() {
             for (int i = 0; i < n; ++i)
                 if (s + buf[i].off < 2 * L * spb) back.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
         }
-        if (back.size() != 2 || back[0].at != L * spb - 8640.0 || back[1].at != 2 * L * spb - 8640.0) return 25;
+        std::vector<double> legatoAt, longAt;
+        for (auto& e : back) {
+            if (e.kind == ArtEvKind::Control && e.d2 == 76) legatoAt.push_back(e.at);
+            if (e.kind == ArtEvKind::KeyOn && e.d1 == 24) longAt.push_back(e.at);
+        }
+        if (legatoAt != std::vector<double>{L * spb - 8640.0, 2 * L * spb - 8640.0} ||
+            longAt != std::vector<double>{24000.0, L * spb + 24000.0})
+            return 25;
     }
+
+    // 27: overlapping clips share the instrument's state. Clip A: Long at beats 0 and 2; clip B:
+    // Legato at beat 1. Beat 2's Long must be sent again — B changed the articulation in between.
+    {
+        std::vector<MidiClip> overlap{makeClip({{0.0, 1}, {2.0, 1}}), makeClip({{1.0, 2}})};
+        std::vector<Abs> got;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 3 * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, s == 0.0, false, 0.0};
+            const int n = scheduleArticulations(overlap, *table, b, buf, kMaxBlockArt);
+            for (int i = 0; i < n; ++i) got.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        }
+        int longs = 0, legatos = 0;
+        for (auto& e : got) {
+            longs += e.kind == ArtEvKind::Control && e.d2 == 81;
+            legatos += e.kind == ArtEvKind::Control && e.d2 == 76;
+        }
+        if (longs != 2 || legatos != 1 || at(got, ArtEvKind::Control, 58, 81) != 0.0) return 27;
+    }
+
     return 0;
 }
 
