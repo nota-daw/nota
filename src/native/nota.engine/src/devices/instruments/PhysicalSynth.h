@@ -32,6 +32,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 #include "engine/NoteExpression.h"
 
 #include <algorithm>
@@ -90,6 +91,10 @@ class PhysicalSynth final : public Instrument {
         Volume,
         Mono,
         ResMix, // v2 (redesign): voice mode, Res 1 / Res 2 balance in 1+2
+        // ---- appended (v3, #531): the noise envelope's shape — 0.5 = straight, Exp off ----
+        NoiseDCurve,
+        NoiseRCurve,
+        NoiseEnvExp,
         kNumParams
     };
 
@@ -138,9 +143,11 @@ class PhysicalSynth final : public Instrument {
     //   [0] sounding voices · [1] mono (0/1) · [2] last struck fundamental in Hz (0 = none
     //   yet) · [3] output peak (linear, held ~300 ms) · then per bank (1, 2) three rows of
     //   kModes: the partial's frequency ratio to the note (bank Tune included), its struck
-    //   amplitude, and its ring time in seconds (e-folding) — what buildBank freezes.
+    //   amplitude, and its ring time in seconds (e-folding) — what buildBank freezes —
+    //   then the noise envelope's stage and progress of the newest voice (EnvShape.h).
     static constexpr int kScopeHead = 4;
-    static constexpr int kScopeLen = kScopeHead + 2 * 3 * kModes;
+    static constexpr int kScopeEnv = kScopeHead + 2 * 3 * kModes;
+    static constexpr int kScopeLen = kScopeEnv + kEnvTeleFloats;
     int32_t scopeRead(float* out, int32_t maxN) const override;
 
     // ---- note events ------------------------------------------------------
@@ -190,6 +197,7 @@ class PhysicalSynth final : public Instrument {
         // Noise burst.
         Stage nStage = Stage::Off;
         float nEnv = 0.0f;
+        EnvShapeState nShape; // the curve of the noise envelope's current stage
         double nIc1 = 0.0, nIc2 = 0.0;
         Bank r1, r2;
         VoiceExpr ex;                                      // MPE bend / pressure / slide
@@ -218,7 +226,6 @@ class PhysicalSynth final : public Instrument {
         return (rng_ & 0xFFFFFF) / 8388608.0f - 1.0f;
     }
 
-    static void advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel);
 
     // TPT state-variable filter for the noise exciter. type: 0 LP, 1 BP, 2 HP.
     float svf(double& ic1, double& ic2, double fc, double k, double in, int type) const;
@@ -252,6 +259,8 @@ class PhysicalSynth final : public Instrument {
     GlobalExpr gexpr_; // pitch wheel / channel pressure (pitch −1)
     uint32_t rng_ = 0x2545F491u;
     std::atomic<float> pn_[kNumParams];
+    int lastVoice_ = -1;            // the voice struck last — the one the envelope graph follows
+    std::atomic<float> envTele_[2]; // noise env stage, progress
     std::atomic<int32_t> activeVoices_{0};
     std::atomic<float> lastF0_{0.0f}, outPeak_{0.0f};
 

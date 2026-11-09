@@ -109,11 +109,14 @@ internal static class NotaGraph
     }
 
     /// <summary>The graph title: sentence case, top-left, inside the window.</summary>
-    public static void Title(DrawingContext ctx, Rect r, string title)
+    /// Returns where the text went (for a title that is also a control).
+    public static Rect Title(DrawingContext ctx, Rect r, string title, IBrush? ink = null)
     {
         var ft = new NotaFormattedText(NotaText.Label(title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansMedium, TitleSize, TitleInk, NotaTextSize.InCard) { };
-        ctx.DrawText(ft, new Point(r.X + 6, r.Y + 4));
+            NotaFonts.SansMedium, TitleSize, ink ?? TitleInk, NotaTextSize.InCard) { };
+        var at = new Point(r.X + 6, r.Y + 4);
+        ctx.DrawText(ft, at);
+        return new Rect(at, new Size(ft.Width, ft.Height));
     }
 
     /// <summary>A curve node: 7px, ringed in the ground colour so the curve does not cut it.</summary>

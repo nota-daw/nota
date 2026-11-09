@@ -68,6 +68,12 @@ Consort::Consort() {
     set(ADecay, 0.45f);
     set(ASustain, 0.85f);
     set(ARelease, 0.35f);
+    set(FDCurve, 0.5f);
+    set(FRCurve, 0.5f);
+    set(FEnvExp, 1.0f);
+    set(ADCurve, 0.5f);
+    set(ARCurve, 0.5f);
+    set(AEnvExp, 1.0f); // straight + Exp: the RC generator, as before
     set(LfoWave, 0.0f);
     set(LfoRate, 0.5f);
     set(LfoSync, 0.0f);
@@ -147,6 +153,7 @@ const std::vector<std::string>& Consort::idTable() {
             v.push_back("c" + n + "dst");
             v.push_back("c" + n + "amt");
         }
+        for (const char* id : {"fdcurve", "frcurve", "fenvexp", "adcurve", "arcurve", "aenvexp"}) v.push_back(id);
         return v;
     }();
     return t;
@@ -178,6 +185,9 @@ const std::vector<std::string>& Consort::nameTable() {
             v.push_back("Patch-Dest Cable-" + n);
             v.push_back("Patch-Depth Cable-" + n);
         }
+        for (const char* nm : {"Filter Env Decay Curve", "Filter Env Release Curve", "Filter Env Exp", "Amp Env Decay Curve",
+                 "Amp Env Release Curve", "Amp Env Exp"})
+            v.push_back(nm);
         return v;
     }();
     return t;
@@ -953,6 +963,14 @@ void Consort::renderSpan(float* out, int n) {
     c.aR = decaySecOf(P[ARelease]) * 0.25f;
     c.fS = P[FSustain];
     c.aS = P[ASustain];
+    c.fASec = attackSecOf(P[FAttack]);
+    c.fDSec = decaySecOf(P[FDecay]);
+    c.fRSec = decaySecOf(P[FRelease]);
+    c.aASec = attackSecOf(P[AAttack]);
+    c.aDSec = decaySecOf(P[ADecay]);
+    c.aRSec = decaySecOf(P[ARelease]);
+    c.fShape = {P[FDCurve], P[FRCurve], P[FEnvExp]};
+    c.aShape = {P[ADCurve], P[ARCurve], P[AEnvExp]};
     const float gT = glideSecOf(P[Glide]);
     c.glideC = gT > 0.0f ? 1.0f - static_cast<float>(std::exp(-1.0 / (gT / 3.0 * sr))) : 1.0f;
     c.walkC = 1.0f - static_cast<float>(std::exp(-1.0 / (0.8 * sr)));
@@ -1065,6 +1083,10 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
     const double sr = c.sr;
     const float fA = coefOf(c.fA, sr), fD = coefOf(c.fD, sr), fR = coefOf(c.fR, sr);
     const float aA = coefOf(c.aA, sr), aD = coefOf(c.aD, sr), aR = coefOf(c.aR, sr);
+    auto rate = [sr](float sec) { return static_cast<float>(1.0 / (std::max(1e-4f, sec) * sr)); };
+    const RcEnvCoefs fRc{fA, 1.3f, fD, fR, 1e-6f, rate(c.fASec), rate(c.fDSec), rate(c.fRSec)};
+    const RcEnvCoefs aRc{aA, 1.3f, aD, aR, 3e-5f, rate(c.aASec), rate(c.aDSec), rate(c.aRSec)};
+    const bool fNative = rcEnvNative(c.fShape), aNative = rcEnvNative(c.aShape);
     const float velA = (1.0f - c.velVca * 0.85f * (1.0f - V.vel)) * c.voiceGain;
     const int os = c.os;
     const float kPiF = static_cast<float>(kPi);
@@ -1101,61 +1123,27 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
         if (V.retrig) {
             V.retrig = false;
             if (V.gate) {
-                if (!g1p) V.fst = 1;
-                if (!g2p) V.ast = 1;
+                if (!g1p) V.fst = 1, V.fsh.last = -1;
+                if (!g2p) V.ast = 1, V.ash.last = -1;
             }
         }
         if (g1p) {
             const bool g = V.gate && V.gIn1 > 0.25f;
-            if (g && !V.g1s) V.fst = 1;
+            if (g && !V.g1s) V.fst = 1, V.fsh.last = -1;
             else if (!g && V.g1s && V.fst && V.fst != 3)
                 V.fst = 3;
             V.g1s = g;
         }
         if (g2p) {
             const bool g = V.gate && V.gIn2 > 0.25f;
-            if (g && !V.g2s) V.ast = 1;
+            if (g && !V.g2s) V.ast = 1, V.ash.last = -1;
             else if (!g && V.g2s && V.ast && V.ast != 3)
                 V.ast = 3;
             V.g2s = g;
         }
-        // -- envelopes (RC curves; the attack aims past 1 like the analog charge) --
-        switch (V.fst) {
-        case 1:
-            V.fenv += (1.3f - V.fenv) * fA;
-            if (V.fenv >= 1.0f) {
-                V.fenv = 1.0f;
-                V.fst = 2;
-            }
-            break;
-        case 2: V.fenv += (c.fS - V.fenv) * fD; break;
-        case 3:
-            V.fenv -= V.fenv * fR;
-            if (V.fenv < 1e-6f) {
-                V.fenv = 0.0f;
-                V.fst = 0;
-            }
-            break;
-        default: break;
-        }
-        switch (V.ast) {
-        case 1:
-            V.aenv += (1.3f - V.aenv) * aA;
-            if (V.aenv >= 1.0f) {
-                V.aenv = 1.0f;
-                V.ast = 2;
-            }
-            break;
-        case 2: V.aenv += (c.aS - V.aenv) * aD; break;
-        case 3:
-            V.aenv -= V.aenv * aR;
-            if (V.aenv < 3e-5f) {
-                V.aenv = 0.0f;
-                V.ast = 0;
-            }
-            break;
-        default: break;
-        }
+        // -- envelopes (RC curves; the attack aims past 1 like the analog charge — or shaped, #531) --
+        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, fNative);
+        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, aNative);
         if (V.ast == 0 && !V.gate && V.fade == 0 && !V.retrig) { // asleep: stop computing this voice
             V.active = false;
             V.fst = 0;
@@ -1428,6 +1416,9 @@ void Consort::publishTelemetry() {
     const Voice& F = voices_[focus_];
     tele_[ScEnv1].store(F.active ? F.fenv : 0.0f, std::memory_order_relaxed);
     tele_[ScEnv2].store(F.active ? F.aenv : 0.0f, std::memory_order_relaxed);
+    publishRcEnvTele(tele_ + ScEnvTele, F.active, F.fst, F.fsh, F.fenv, pn_[FSustain].load(std::memory_order_relaxed));
+    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, F.active, F.ast, F.ash, F.aenv,
+        pn_[ASustain].load(std::memory_order_relaxed));
     if (st == 3) { // the four most recent sounding voices
         int idx[kOsc] = {-1, -1, -1, -1};
         for (int v = 0; v < kMaxVoices; ++v) {

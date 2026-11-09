@@ -34,6 +34,9 @@ class MidiInput {
     // An empty list connects every source (M7-2).
     bool open(MessageCallback cb, const std::vector<std::string>& disabledUids = {});
     void close();
+    // The uid of each connected source by its index (specs/086), filled by open(). Sources
+    // past kMaxSources share the last index; that index then names the first of them.
+    const std::vector<std::string>& sourceUids() const { return uids_; }
 
     // Data bytes that follow a channel-voice status (0 = not one we report).
     static int dataBytes(int status) {
@@ -53,6 +56,7 @@ class MidiInput {
 
   private:
     Impl* impl_ = nullptr;
+    std::vector<std::string> uids_;
 };
 
 } // namespace nota

@@ -60,6 +60,7 @@ class Amp : public Device {
         AutoComp,     // output level follows the input's
         Bright,       // bright cap: treble lift before the preamp, strongest at low gain
         Deep,         // low resonance boost after the tone stack
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 

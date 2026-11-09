@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Draft
+**Status**: Revised 2026-11-10 — merged onto the #531 card layout (see the last section)
 
 **Input**: Egor's review of nota-daw/nota#296: "Reverb, Delay, Chamber: the visualization is
 not informative. It might be worth considering a redesign." Chris picked the approach on
@@ -93,3 +93,36 @@ narrower than the last. The wow depth and rate are shown as the pitch wobble the
 - **SC-002** Every graph shows something that comes from the audio playing now.
 - **SC-003** The build and smoke test pass; the Reverb and Delay output is bit-identical to
   before for the same input (the history only reads).
+
+## Revision 2026-11-10: on the #531 card layout
+
+While this branch waited, `ui/style-guide` took nota-daw/nota#536 (#531): every built-in
+effect card now follows `CardLayout` (DESIGN.md § Card layout) — centre tabs, each one graph
+with the knobs it draws beside it and its choices under it; a right panel with no tabs of its
+own that follows the centre tab; Dry · Dry/wet · Out under it; no Output tab, no status line,
+no output meters (the track meter shows the level); S and L sizes. It also redrew Reverb's
+tail (the decay in dB with Pre and Decay handles) and Delay's repeats (two lanes in dB with
+draggable first echoes, and a Filter tab on the shared filter graph).
+
+The merge keeps that layout and those graphs and brings the audio of this spec into them:
+
+- **FR-003 (replaced)** The cards follow `CardLayout`. The right panel holds no Output tab
+  and no L / R output meters; the WET meter stays in Reverb's Space panel and Delay's Loop
+  panel.
+- **US1 / FR-004** Reverb's Space graph is #531's decay window. Under the set line it draws
+  your audio after the latest hit of the input: the input as a grey wash and the measured tail
+  as a grey line, each against its own peak, so a tail that dies faster or slower than the
+  setting shows at once. The Pre and Decay handles stay #531's. This replaces #531's looping
+  "played stretch" animation, which came from the wall clock, not the audio.
+- **US2** The Tone · Mod tab draws this spec's decay across frequency (`ReverbToneView`).
+  The knobs it draws sit beside it: Low cut, High cut and HF damp (HF damp moves there from
+  the Space panel). Width moves to the Mod panel.
+- **US3 (revised)** Delay's Time and Loop · Wow tabs keep #531's lanes, timed from the hit
+  rather than the song. Behind the stems runs the measured echo level after the latest hit,
+  in dB against that hit, and the lit repeat is counted from that hit instead of the wall
+  clock. The transport beat and playing flag (`S_Beat`, `S_Playing`) are not needed and are
+  not added: the Delay scope keeps its 11 values, then the history.
+- **US4 (replaced)** The per-repeat response graph is dropped. #531's Filter tab on the
+  shared filter graph covers the loop filter; the echo spectrum from the history runs behind
+  its curve (`FilterSpectrum.Feed`, as Auto Filter does).
+- **SC-001** is dropped: the graph sizes are #531's.

@@ -45,9 +45,22 @@ internal sealed class RuleSection : Decorator
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        Child?.Arrange(new Rect(finalSize).Deflate(Padding + Inset));
+        if (Child is not { } c) return finalSize;
+        var pad = Padding + Inset;
+        c.Arrange(new Rect(finalSize).Deflate(pad));
+        // Clip the child to the section's rounded inner edge, not its square bounds: a tab strip
+        // or a well that paints its own background would otherwise fill the corners (#531).
+        var key = (finalSize, pad);
+        if (_clipKey != key || c.Clip is null)
+        {
+            _clipKey = key;
+            double rad = Math.Max(0, NotaRadius.GroupValue - Inset.Left);
+            var inner = new Rect(finalSize).Deflate(Inset).Translate(new Vector(-pad.Left, -pad.Top));
+            c.Clip = new RectangleGeometry(inner, rad, rad);
+        }
         return finalSize;
     }
+    private (Size, Thickness)? _clipKey;
 
     public override void Render(DrawingContext context)
     {

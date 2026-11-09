@@ -26,7 +26,7 @@ Engine::Engine()
     authoring_->masterTrack = std::make_shared<Track>(kMasterTrackId, TrackType::Audio);
     scratch_.assign(kMaxBlock * 2, 0.0f);
     mixTmp_.assign(kMaxBlock * 2, 0.0f);
-    monitorHwBuf_.assign(kMaxBlock * 2, 0.0f);
+    monitorHwBuf_.assign(static_cast<size_t>(kMaxBlock) * kMaxInputChannels, 0.0f); // every carried column (specs/086)
     clipEnvScratch_.assign(kMaxBlock * 2, 0.0f);
     for (auto& b : returnBus_) b.assign(kMaxBlock * 2, 0.0f); // M6-1 send buses
     for (auto& b : groupBus_) b.assign(kMaxBlock * 2, 0.0f);  // group submix buses
@@ -150,19 +150,39 @@ void Engine::propagateSampleRate(double sr) {
 // its own MPE decoder (channel state is per controller); notes and expression go into the
 // live queue, CC + note-on also to MIDI learn.
 void Engine::openMidiInput() {
-    mpeSink_.e = this;
+    for (int32_t i = 0; i < MidiInput::kMaxSources; ++i) {
+        mpeSinks_[static_cast<size_t>(i)].e = this;
+        mpeSinks_[static_cast<size_t>(i)].source = i;
+    }
     for (auto& m : mpeInputs_) m.configure(midiConfig_.mpe, midiConfig_.mpeBendRange);
-    midiInput_->open(
-        [this](int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
-            mpeInputs_[static_cast<size_t>(std::clamp(source, 0, MidiInput::kMaxSources - 1))].message(
-                status, channel, d1, d2, mpeSink_);
-            // Surface CC + note-on to the UI for MIDI-learn (drop silently if the queue
-            // is full — learn is best-effort and must never block the MIDI thread).
-            if (status == 0xB0) midiControl_.push({0, channel, d1, d2});
-            else if (status == 0x90 && d2 > 0)
-                midiControl_.push({1, channel, d1, d2});
-        },
+    midiInput_->open([this](int32_t source, int32_t status, int32_t channel, int32_t d1,
+                         int32_t d2) { onMidiMessage(source, status, channel, d1, d2); },
         midiConfig_.disabledInputUids);
+    midiSourceUids_ = midiInput_->sourceUids(); // tracks filter by source index (specs/086)
+    // Indices move when inputs come and go: every track picks its input up again by uid.
+    if (authoring_)
+        for (auto& t : authoring_->tracks)
+            if (t && !t->midiInputUid.empty()) setTrackMidiInputUid(t->id(), t->midiInputUid, t->midiInputChannel());
+}
+
+void Engine::onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
+    const size_t s = static_cast<size_t>(std::clamp(source, 0, MidiInput::kMaxSources - 1));
+    mpeSinks_[s].e = this; // also before the inputs were ever opened (tests, offline engines)
+    mpeSinks_[s].source = static_cast<int32_t>(s);
+    mpeSinks_[s].channel = std::clamp(channel, 0, 15);
+    mpeInputs_[s].message(status, channel, d1, d2, mpeSinks_[s]);
+    // Surface CC + note-on to the UI for MIDI-learn (drop silently if the queue
+    // is full — learn is best-effort and must never block the MIDI thread).
+    if (status == 0xB0) midiControl_.push({0, channel, d1, d2});
+    else if (status == 0x90 && d2 > 0)
+        midiControl_.push({1, channel, d1, d2});
+}
+
+int32_t Engine::midiSourceOfUid(const std::string& uid) const {
+    if (uid.empty()) return -1;
+    for (size_t i = 0; i < midiSourceUids_.size(); ++i)
+        if (midiSourceUids_[i] == uid) return static_cast<int32_t>(i);
+    return -1;
 }
 
 int32_t Engine::pollControlEvents(ControlEvent* out, int32_t max) {
@@ -256,6 +276,7 @@ bool Engine::applyAudioConfig() {
     stop();
     // Drop the cached input unit so the next capture re-opens the chosen device.
     if (input_) input_.reset();
+    forgetInputChannels(); // the input device (or its system) may have changed
     const bool ok = start();
     // A rate the ASIO driver refused isn't kept: the driver's own rate runs, and the saved
     // config says "device default" so the next launch doesn't ask again (FR-007).
@@ -671,9 +692,11 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setReturnIndex(t.returnIndex());                             // M6-1
     nt->setGroupId(t.groupId());                                     // group membership
     nt->setRecordInputSource(t.recordInputSource());                 // internal record routing
-    nt->setInputChannels(t.inputChannels());                         // mono / stereo hardware input
+    nt->setInput(t.inputFirst(), t.inputWidth());                    // hardware input pick
     nt->setMonitor(t.monitor());                                     // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
+    nt->setMidiInput(t.midiInputSource(), t.midiInputChannel());      // MIDI input filter (specs/086)
+    nt->midiInputUid = t.midiInputUid;
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
     nt->clips = t.clips;
     nt->takes = t.takes; // take lanes (specs/067) — buffers shared

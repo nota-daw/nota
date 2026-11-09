@@ -135,48 +135,57 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
     // Pairs: an out-of-range pair falls back to the first; a missing second channel = mono.
     outL_ = (opt.outputPair >= 0 && opt.outputPair < outs) ? opt.outputPair : 0;
     outR_ = outL_ + 1 < outs ? outL_ + 1 : -1;
-    inL_ = ins > 0 ? ((opt.inputPair >= 0 && opt.inputPair < ins) ? opt.inputPair : 0) : -1;
-    inR_ = (inL_ >= 0 && inL_ + 1 < ins) ? inL_ + 1 : -1;
+    // Inputs: every one the engine can address (specs/086); the saved pair is the fallback
+    // when a driver refuses that many buffers.
+    inPair_ = ins > 0 ? ((opt.inputPair >= 0 && opt.inputPair < ins) ? opt.inputPair : 0) : -1;
+    inCount_ = std::min(ins, kMaxInputChannels);
 
     auto unsupported = [&](const ChannelInfo& c) { return !isSupported(c.type); };
     for (int32_t ch : {outL_, outR_})
         if (ch >= 0 && unsupported(outChannels_[ch]))
             return failOpen(Failure::UnsupportedFormat, sampleTypeName(outChannels_[ch].type));
-    for (int32_t ch : {inL_, inR_})
-        if (ch >= 0 && unsupported(inChannels_[ch]))
-            return failOpen(Failure::UnsupportedFormat, sampleTypeName(inChannels_[ch].type));
 
     // Buffers for every output (so the unused ones can be held at zero, FR-006) and the
-    // chosen input pair.
-    io_ = std::make_unique<Io>();
-    Io& io = *io_;
-    io.driver = driver_.get();
-    io.frames = bufferFrames_;
-    for (int32_t i = 0; i < outs; ++i) {
-        io.buffers.push_back(BufferInfo{false, i, {nullptr, nullptr}});
-        io.outTypes.push_back(outChannels_[i].type);
-    }
-    io.outL = outL_;
-    io.outR = outR_;
-    if (inL_ >= 0) {
-        io.inLBuf = static_cast<int32_t>(io.buffers.size());
-        io.inLType = inChannels_[inL_].type;
-        io.buffers.push_back(BufferInfo{true, inL_, {nullptr, nullptr}});
-    }
-    if (inR_ >= 0) {
-        io.inRBuf = static_cast<int32_t>(io.buffers.size());
-        io.inRType = inChannels_[inR_].type;
-        io.buffers.push_back(BufferInfo{true, inR_, {nullptr, nullptr}});
-    }
-    io.interleaved.assign(static_cast<size_t>(bufferFrames_) * 2, 0.0f);
+    // inputs: all of them, or only the saved pair. An input in a sample format we can't read
+    // gets no buffer and reads as silence.
+    auto buildIo = [&](bool allInputs) {
+        io_ = std::make_unique<Io>();
+        Io& io = *io_;
+        io.driver = driver_.get();
+        io.frames = bufferFrames_;
+        for (int32_t i = 0; i < outs; ++i) {
+            io.buffers.push_back(BufferInfo{false, i, {nullptr, nullptr}});
+            io.outTypes.push_back(outChannels_[i].type);
+        }
+        io.outL = outL_;
+        io.outR = outR_;
+        io.inCount = inCount_;
+        io.inBufs.assign(static_cast<size_t>(inCount_), -1);
+        io.inTypes.assign(static_cast<size_t>(inCount_), SampleType::Float32LSB);
+        for (int32_t c = 0; c < inCount_; ++c) {
+            const bool wanted = allInputs || c == inPair_ || c == inPair_ + 1;
+            if (!wanted || unsupported(inChannels_[static_cast<size_t>(c)])) continue;
+            io.inBufs[static_cast<size_t>(c)] = static_cast<int32_t>(io.buffers.size());
+            io.inTypes[static_cast<size_t>(c)] = inChannels_[static_cast<size_t>(c)].type;
+            io.buffers.push_back(BufferInfo{true, c, {nullptr, nullptr}});
+        }
+        io.interleaved.assign(static_cast<size_t>(bufferFrames_) * 2, 0.0f);
+        io.inInterleaved.assign(static_cast<size_t>(bufferFrames_) * static_cast<size_t>(std::max(inCount_, 1)), 0.0f);
+    };
 
     g_active.store(this, std::memory_order_release); // the driver may message during createBuffers
     Callbacks cb;
     cb.bufferSwitch = &onBufferSwitch;
     cb.sampleRateDidChange = &onSampleRateDidChange;
     cb.message = &onMessage;
-    if (!driver_->createBuffers(io.buffers.data(), static_cast<int32_t>(io.buffers.size()), bufferFrames_, cb))
-        return failOpen(Failure::InitFailed, driver_->errorMessage());
+    buildIo(true);
+    bool created = driver_->createBuffers(io_->buffers.data(), static_cast<int32_t>(io_->buffers.size()), bufferFrames_, cb);
+    if (!created && inCount_ > 2) { // too many buffers for this driver: the saved pair only
+        buildIo(false);
+        created = driver_->createBuffers(io_->buffers.data(), static_cast<int32_t>(io_->buffers.size()), bufferFrames_, cb);
+    }
+    if (!created) return failOpen(Failure::InitFailed, driver_->errorMessage());
+    Io& io = *io_;
     buffersCreated_ = true;
     for (const auto& b : io.buffers)
         if (!b.isInput)
@@ -240,7 +249,8 @@ void AsioSession::releaseDriver() {
     g_active.compare_exchange_strong(self, nullptr, std::memory_order_acq_rel);
     inChannels_.clear();
     outChannels_.clear();
-    outL_ = outR_ = inL_ = inR_ = -1;
+    outL_ = outR_ = inPair_ = -1;
+    inCount_ = 0;
     sampleRate_ = 0.0;
     bufferFrames_ = 0;
     inputLatency_ = outputLatency_ = 0;
@@ -321,12 +331,15 @@ void AsioSession::bufferSwitch(int32_t index, int64_t pos) {
 
     float* io = s.interleaved.data();
     // Input first, so the engine's input rings hold block n before block n renders (R2).
-    if (const InputCallback* in = input_.load(std::memory_order_seq_cst); in && s.inLBuf >= 0) {
-        toFloat(s.buffers[static_cast<size_t>(s.inLBuf)].buffers[index], s.inLType, io, n, 2);
-        if (s.inRBuf >= 0) toFloat(s.buffers[static_cast<size_t>(s.inRBuf)].buffers[index], s.inRType, io + 1, n, 2);
-        else
-            for (int32_t i = 0; i < n; ++i) io[i * 2 + 1] = io[i * 2]; // mono input: both sides
-        (*in)(io, n);
+    if (const InputCallback* in = input_.load(std::memory_order_seq_cst); in && s.inCount > 0) {
+        float* ins = s.inInterleaved.data(); // every input channel, interleaved (specs/086)
+        for (int32_t c = 0; c < s.inCount; ++c) {
+            const int32_t b = s.inBufs[static_cast<size_t>(c)];
+            if (b >= 0) toFloat(s.buffers[static_cast<size_t>(b)].buffers[index], s.inTypes[static_cast<size_t>(c)], ins + c, n, s.inCount);
+            else
+                for (int32_t i = 0; i < n; ++i) ins[static_cast<size_t>(i) * static_cast<size_t>(s.inCount) + static_cast<size_t>(c)] = 0.0f;
+        }
+        (*in)(ins, n, s.inCount);
     }
 
     if (s.render) s.render(io, n);

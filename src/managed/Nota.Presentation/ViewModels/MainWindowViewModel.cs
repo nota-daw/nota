@@ -38,6 +38,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// the status bar changed the buffer: an open Settings ▸ Audio pane re-reads the driver's
     /// buffer, latency and channels.</summary>
     public event Action? AudioDeviceRestarted;
+    /// <summary>The backend restarted through <see cref="ApplyAudioSettings"/>, by any path (Settings,
+    /// the buffer menu, a driver event): the device it opened may be another one (a new system
+    /// default), so the app re-reads that device's input setup (specs/086).</summary>
+    public event Action? AudioApplied;
 
     /// <summary>Turns version history on or off and persists it. Turning it off (the caller has
     /// confirmed) erases the open project's history; other projects lose theirs on their next save.</summary>
@@ -222,6 +226,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             SuspendEnginePolling = false;
         }
+        AudioApplied?.Invoke();
 
         // The engine drops a rate the ASIO driver refused (back to device default). Remember
         // it here, so Settings can say why — also when the apply waited for the driver's panel.

@@ -198,6 +198,9 @@ public sealed class Settings
     public bool PianoRollAudition { get; set; } = true;
     /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
     public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
+    /// <summary>Audio I/O setup per capture device (specs/086): switched-off inputs and their
+    /// names, keyed by <see cref="InputSetups.KeyOf"/>. A device never set up has no entry.</summary>
+    public Dictionary<string, InputSetup> InputSetups { get; set; } = new();
     /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
     /// the velocity; true — wheel up lowers it.</summary>
     public bool PianoRollVelocityWheelReversed { get; set; }
@@ -215,6 +218,9 @@ public sealed class Settings
     /// Detail panel, as before #308. Off by default — a selection only follows an open panel and
     /// a double-click opens it. Settings → Appearance.</summary>
     public bool OpenDetailOnSelect { get; set; }
+    /// <summary>The XL panel's height above the device chain (specs/085, #540): the Devices
+    /// panel's splitter sizes it while a device is in XL. 0 = the default (460).</summary>
+    public double XlPanelHeight { get; set; }
 
     /// <summary>Label every note of the piano-roll keyboard: the keys column
     /// shows all note names (C, C#, D …) instead of only C. Off by default; a beginner aid

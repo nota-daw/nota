@@ -496,6 +496,7 @@ public sealed partial class NotaEngine
 
     /// <summary>Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a plugin.</summary>
     public int TrackDeviceBuiltinKind(int trackId, int deviceIndex) { ThrowIfDisposed(); return NativeMethods.TrackDeviceBuiltinKind(_handle, trackId, deviceIndex); }
+    public long TrackDeviceId(int trackId, int deviceIndex) { ThrowIfDisposed(); return NativeMethods.TrackDeviceId(_handle, trackId, deviceIndex); }
 
     /// <summary>Stable identifier of a track's plugin instrument (empty if it isn't a plugin, M7-6c).</summary>
     public string TrackInstrumentPluginId(int trackId) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.TrackInstrumentPluginId(_handle, trackId)) ?? ""; }
@@ -506,6 +507,10 @@ public sealed partial class NotaEngine
     // --- hosted-plugin parameters (M9-B). deviceIndex < 0 = the instrument. ---
     public int PluginParamCount(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.PluginParamCount(_handle, trackId, deviceIndex); }
+    /// <summary>Where a param index saved before Nota Twin's layout grew (#531) sits today;
+    /// any other device's index comes back unchanged.</summary>
+    public int PluginParamIndexFromV1(int trackId, int deviceIndex, int paramIndex)
+    { ThrowIfDisposed(); return NativeMethods.PluginParamIndexFromV1(_handle, trackId, deviceIndex, paramIndex); }
     public string PluginParamId(int trackId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.PluginParamId(_handle, trackId, deviceIndex, paramIndex)) ?? ""; }
     public string PluginParamName(int trackId, int deviceIndex, int paramIndex)

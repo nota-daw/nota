@@ -15,7 +15,7 @@
 //               Mod    — the amp and filter envelopes drawn and draggable, and the LFO
 //                        with its two destinations and the velocity amounts.
 //   Rail 186    Global: voice mode, glide, unison, output drive, bend range, legato,
-//               volume, pan and the track's meter.
+//               volume and pan.
 //
 // Neutral ink is the parameter itself; teal is modulation and what receives it. Everything is a
 // plugin param → automation / persist / clone, and the card follows automation live.
@@ -100,18 +100,17 @@ internal sealed class BassInstrumentCard : IInstrumentCard
 
         var filtGraph = new VoltFilter(engine, track)
         {
+            Spectrum = new FilterSpectrum(engine, track),
             FreqRange = (30.0, 18000.0), VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50,
         };
         var ampEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };
-        var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50, Accent = DeviceCardKit.ModInkBright };
+        var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };
         var hint = new TextBlock
         {
             FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
         Action showTab = () => { };
 
         void Refresh()
@@ -120,8 +119,6 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             filtGraph.Refresh(); ampEnv.Refresh(); filtEnv.Refresh();
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
 
         // ---- shared builders --------------------------------------------------
@@ -423,43 +420,16 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         var signalBody = new Border { Padding = new Thickness(7, 0, 7, 4), Child = signalGrid };
 
         // ---- Mod tab ----------------------------------------------------------
-        Control EnvPanel(string title, string route, VoltEnv view, string[] ids)
-        {
-            view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
-            string[] stage = { "A", "D", "S", "R" };
-            Func<float, string>[] fmt =
-            {
-                v => Secs(v, 0.001, 2.0), v => Secs(v, 0.002, 4.0), Pct, v => Secs(v, 0.002, 5.0),
-            };
-            view.Format = (k, n) => fmt[k]((float)n);   // ⌥-click a breakpoint to type it
-            var cells = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
-            for (int k = 0; k < 4; k++)
-            {
-                string id = ids[k];
-                var fk = fmt[k];
-                var v = Mono(fk(G(id)), TextPrimary, NotaType.KnobValue);
-                v.HorizontalAlignment = HorizontalAlignment.Center;
-                readouts.Add(() => v.Text = fk(G(id)));
-                if (view.Field(k) is { } vf) ValueEntry.Attach(v, vf);   // double-click the read-out to type
-                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Center;
-                var cell = new Border
-                {
-                    Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(1, 1),
-                    Child = new StackPanel { Children = { cap, v } },
-                };
-                if (I(id) is var pi and >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), title + " · " + stage[k]);
-                Grid.SetColumn(cell, k); cells.Children.Add(cell);
-            }
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Height = 11, Children = { Cap(title), Mono(route, Teal, NotaType.Axis) } };
-            var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 4 };
-            g.Children.Add(head);
-            Grid.SetRow(view, 1); g.Children.Add(view);
-            Grid.SetRow(cells, 2); g.Children.Add(cells);
-            return g;
-        }
-        var ampPanel = EnvPanel("AMP ENV", "→ level", ampEnv, new[] { "attack", "decay", "sustain", "release" });
-        var filtEnvPanel = EnvPanel("FILTER ENV", "→ cutoff", filtEnv, new[] { "fattack", "fdecay", "fsustain", "frelease" });
+        // The amp and filter envelopes on one time scale (#531), then the LFO.
+        var envScale = new EnvTimeScale();
+        Control EnvKnobCell(string id, string label, string learn, Func<float, string> fmt) => PKnob(id, label, learn, fmt, 22, 34);
+        var ampPanel = EnvPanel.Build(ampEnv, new EnvPanel.Spec("AMP ENV", new[] { "attack", "decay", "sustain", "release" },
+                new[] { "dcurve", "rcurve", "envexp" }, (0.001, 2.0), (0.002, 4.0), (0.002, 5.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), Mono(Loc.T("device.bass.to_level"), Teal, NotaType.Axis), envScale);
+        var filtEnvPanel = EnvPanel.Build(filtEnv, new EnvPanel.Spec("FILTER ENV", new[] { "fattack", "fdecay", "fsustain", "frelease" },
+                new[] { "fdcurve", "frcurve", "fenvexp" }, (0.001, 2.0), (0.002, 4.0), (0.002, 5.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), Mono(Loc.T("device.bass.to_cutoff"), Teal, NotaType.Axis), envScale);
+        EnvPanel.FollowVoice(ctx, 0, () => tab == 1, ampEnv, filtEnv);
 
         // LFO: shape, rate and where it lands — cutoff and pitch — then the velocity amounts.
         var lfoDest = Mono("", Teal, NotaType.Axis);
@@ -575,32 +545,17 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         Grid.SetColumn(bendChips, 1); bendRow.Children.Add(bendChips);
         Grid.SetColumn(legato, 2); bendRow.Children.Add(legato);
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid
+        // Volume · Pan centred in the rail — the track meter already shows the level.
+        var globalBottom = new StackPanel
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 48),
+                PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 44),
+            },
         };
-        for (int i = 0; i < 3; i++)
-        {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 48);
-        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 44);
-        globalBottom.Children.Add(volCell);
-        Grid.SetColumn(panCell, 1); globalBottom.Children.Add(panCell);
-        Grid.SetColumn(meterBlock, 2); globalBottom.Children.Add(meterBlock);
 
         var globalTop = new StackPanel
         {
@@ -629,39 +584,15 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string Shape() => ShapeWords[ShapeBand(G("oscshape"))];
         string SubOct() => G("suboctave") >= 0.5f ? "−2" : "−1";
         string FilterWord() => $"{FilterNames[Sel("filtype", 4)]} {(G("filslope") >= 0.5f ? "24" : "12")}";
-        string AdsrSum(string a, string d, string s, string r)
-            => $"{Secs(G(a), 0.001, 2.0)} · {Secs(G(d), 0.002, 4.0)} · {Pct(G(s))} · {Secs(G(r), 0.002, 5.0)}";
 
         // The line at the right of the tab strip: what this tab holds, in three words.
         string Hint() => tab switch
         {
             0 => $"{Shape()} · {SubWords[Sel("subwave", 3)]} {SubOct()} · {FilterWord()}",
             _ => $"amp · flt · lfo {LfoNames[Sel("lfowave", 5)].ToLowerInvariant()}",
-        };
-        string Summary() => tab switch
-        {
-            0 => $"Osc {Shape()} {Pct(G("osclevel"))} · sub {SubWords[Sel("subwave", 3)]} {SubOct()} oct {Pct(G("sublevel"))} → "
-               + $"{FilterWord()} dB/oct {Hz(G("filfreq"))} · env {Bip(G("filenv"))} · drive {Pct(G("fildrive"))}",
-            _ => $"Amp env {AdsrSum("attack", "decay", "sustain", "release")} → level · "
-               + $"filter env {AdsrSum("fattack", "fdecay", "fsustain", "frelease")} → cutoff · "
-               + $"LFO {LfoNames[Sel("lfowave", 5)].ToLowerInvariant()} {SlowHz(ExpMap(G("lforate"), 0.05, 30))} → flt {Bip(G("fillfo"))} · pit {LfoPitch(G("lfopitch"))}",
-        };
-        string Meta()
-        {
-            string mode = IsMono() ? (G("legato") >= 0.5f ? "MONO LEGATO" : "MONO") : "POLY 16";
-            return $"{mode} · ±{BendRange(G("bendrange"))} ST · VOL {Pct(G("volume"))}";
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
         };
 
         // ---- assembly ---------------------------------------------------------
@@ -674,12 +605,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         Grid.SetColumn(tabPanel, 1); body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(Refresh);
         showTab();
@@ -695,18 +621,4 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

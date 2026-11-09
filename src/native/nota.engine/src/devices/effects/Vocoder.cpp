@@ -27,6 +27,7 @@ Vocoder::Vocoder() {
     p_[Mix].store(1.0f);
     p_[Gain].store(0.5f); // 0 dB
     p_[Hold].store(0.0f);
+    p_[View].store(0.0f); // L
     setSidechainTapPre(1); // a carrier track is taken before its effects
     setSampleRate(44100.0, 0);
 }
@@ -249,7 +250,7 @@ std::string Vocoder::deviceText(int32_t id) const {
 
 const char* Vocoder::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Bands", "Low", "High", "Q", "Formant", "Attack", "Release", "Mod gain",
-        "Carrier", "Tilt", "Pitch", "Unvoiced", "Mix", "Gain", "Hold"};
+        "Carrier", "Tilt", "Pitch", "Unvoiced", "Mix", "Gain", "Hold", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

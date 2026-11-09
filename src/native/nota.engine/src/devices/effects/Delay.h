@@ -51,6 +51,7 @@ class Delay : public Device {
         BassMono,
         WetOnly,
         LatencyComp,
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     // Scope telemetry layout (read by the card). After the kScope values comes the level
@@ -67,8 +68,6 @@ class Delay : public Device {
         S_MsL,
         S_MsR,
         S_Latency,
-        S_Beat,    // the transport's beat at the end of the last block (aligns the card's beat grid)
-        S_Playing, // 1 while the transport rolls
         kScope
     };
     // deviceAction ids.
@@ -149,8 +148,7 @@ class Delay : public Device {
     double delaySamples(int timeParam, int divParam, bool sync) const;
     void wipe();
 
-    double sr_ = 44100.0, spb_ = 0.0, wowPhase_ = 0.0, beat_ = 0.0;
-    bool playing_ = false;
+    double sr_ = 44100.0, spb_ = 0.0, wowPhase_ = 0.0;
     double curL_ = 0.0, curR_ = 0.0, oldL_ = 0.0, oldR_ = 0.0;
     int fadeLen_ = 1024, fadePos_ = 1024;
     dsp::DelayLine bufL_, bufR_;
@@ -165,8 +163,7 @@ class Delay : public Device {
     float loopPk_ = 0.0f; // peak loop-feed push (blocks sleep while the tail rings)
 
     std::atomic<bool> clear_{false}, reset_{false};
-    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0},
-        beatA_{0}, playA_{0};
+    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0};
     std::atomic<float> p_[kNumParams] = {};
 };
 

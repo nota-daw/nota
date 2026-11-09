@@ -39,6 +39,7 @@ Reverb::Reverb() {
     set(BassMono, 0.0f);
     set(WetOnly, 0.0f);
     set(LatencyComp, 1.0f);
+    set(View, 0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -297,7 +298,7 @@ void Reverb::process(float* buf, int32_t frames) {
 const char* Reverb::paramName(int32_t i) const {
     static const char* nm[] = {"Decay", "HF Damp", "Pre-Delay", "Size", "Diffusion", "Low Cut", "High Cut", "Width",
         "Mod Rate", "Mod Depth", "Algorithm", "Freeze", "Dry/Wet", "Output", "Dry Level", "Early Refl", "Mod on Tail",
-        "Vintage", "Bass Mono", "Wet Only", "Latency Comp"};
+        "Vintage", "Bass Mono", "Wet Only", "Latency Comp", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

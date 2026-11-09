@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The live graphs of Nota Reverb and Nota Delay. Each draws the level history the engine
-// appends to the device scope (dsp::LevelHistory: input dB and wet dB at 4 ms a point for
-// 6.1 s, then the latest 2048 wet samples) with the settings drawn over it, so what you see
-// is your audio and what the settings make of it:
+// Your audio in the Nota Reverb and Nota Delay graphs (#377). Both devices append a level
+// history to their scope (dsp::LevelHistory: input dB and wet dB at 4 ms a point for 6.1 s,
+// then the latest 2048 wet samples), and the #531 card graphs lay it over the settings:
 //
-//   ReverbSpaceView  — the tail of your audio, and the RT60 guide falling from its last peak
-//   ReverbToneView   — decay time across frequency (HF Damp), the cut filters, the tail spectrum
-//   DelayEchoView    — the echoes of your audio on the beat grid, and where the repeats will land
-//   DelayRepeatsView — each repeat's response through the loop filter, and the echo spectrum
+//   ReverbTailView  — the measured tail after the latest hit, under the set decay line
+//   ReverbToneView  — decay time across frequency (HF damp), the cut filters, the tail spectrum
+//   DelayTaps       — the measured echoes after the latest hit, behind the repeat stems
+//   DelayBandCurve  — the echo spectrum behind the feedback filter (FilterSpectrum.Feed)
 //
-// They draw what the card hands them and own no engine state.
+// This file holds the shared helpers and the Tone graph; the views draw what the card hands
+// them and own no engine state.
 
 using System;
 using System.Collections.Generic;
@@ -23,57 +23,44 @@ using Nota.Application.Localization;
 
 namespace Nota.App;
 
-/// <summary>Where the level history sits in a scope, and the helpers the four graphs share.</summary>
+/// <summary>Where the level history sits in a scope, and the helpers the graphs share.</summary>
 internal static class SpaceDraw
 {
     public const int Points = 1536, SpecN = 2048, Floats = 2 * Points + SpecN;
     public const double PointSec = 0.004;
-    public const double HistorySec = Points * PointSec;
     public const double FMin = 20, FMax = 20000;
 
-    public static IBrush InputWash => NotaPalette.Wash(NotaPalette.TextTertiary, 0x40);
     public static IBrush CutWash => NotaPalette.Wash(NotaPalette.TextPrimary, 0x0A);
 
-    /// <summary>The newest <paramref name="n"/> points of a ring (oldest first at <paramref name="off"/>),
-    /// one point per column, each column keeping its loudest point.</summary>
-    public static List<Point> Trace(float[] s, int off, int n, double x0, double x1, Func<double, double> y)
+    /// <summary>The latest hit of the input history at <paramref name="off"/>: a jump of 9 dB within
+    /// 12 ms, above −50 dB, walked back to the start of its rise. The point index, or −1 for none.</summary>
+    public static int LatestHit(float[] s, int off)
     {
-        n = Math.Clamp(n, 2, Points);
-        int cols = Math.Max(2, (int)(x1 - x0));
-        var pts = new List<Point>(cols);
-        int start = off + Points - n;
-        for (int c = 0; c < cols; c++)
+        if (s.Length < off + Points) return -1;
+        for (int k = Points - 1; k >= 3; k--)
         {
-            int a = start + (int)((long)c * n / cols), b = start + (int)((long)(c + 1) * n / cols);
-            if (b <= a) b = a + 1;
-            double m = -120;
-            for (int k = a; k < b && k < off + Points; k++) m = Math.Max(m, s[k]);
-            pts.Add(new Point(x0 + (double)c / (cols - 1) * (x1 - x0), y(m)));
+            float v = s[off + k];
+            if (v > -50 && v - s[off + k - 3] > 9 && v >= s[off + k - 1])
+            {
+                while (k > 3 && s[off + k - 1] - s[off + k - 4] > 9) k--;
+                return k;
+            }
         }
-        return pts;
+        return -1;
     }
 
-    /// <summary>A trace drawn as a filled area down to <paramref name="floor"/>.</summary>
-    public static void Area(DrawingContext ctx, IBrush fill, List<Point> pts, double floor)
+    /// <summary>A history ring from point <paramref name="from"/> on, as (seconds after it, dB)
+    /// pairs, one per <paramref name="stride"/> points with each keeping its loudest point.</summary>
+    public static List<(double Sec, double Db)> Since(float[] s, int off, int from, int stride = 2)
     {
-        if (pts.Count < 2) return;
-        var geo = new StreamGeometry();
-        using (var g = geo.Open())
+        var list = new List<(double, double)>((Points - from) / Math.Max(1, stride) + 1);
+        for (int k = Math.Max(0, from); k < Points; k += stride)
         {
-            g.BeginFigure(new Point(pts[0].X, floor), true);
-            foreach (var p in pts) g.LineTo(p);
-            g.LineTo(new Point(pts[^1].X, floor));
-            g.EndFigure(true);
+            float m = -120;
+            for (int j = k; j < k + stride && j < Points; j++) m = Math.Max(m, s[off + j]);
+            list.Add(((k - from) * PointSec, m));
         }
-        ctx.DrawGeometry(fill, null, geo);
-    }
-
-    /// <summary>The loudest point in the newest <paramref name="n"/> points of a ring.</summary>
-    public static float Max(float[] s, int off, int n)
-    {
-        float m = -120;
-        for (int k = off + Points - Math.Clamp(n, 1, Points); k < off + Points; k++) m = Math.Max(m, s[k]);
-        return m;
+        return list;
     }
 
     public static double LogX(double hz, double x0, double x1)
@@ -91,15 +78,6 @@ internal static class SpaceDraw
             var ft = NotaGraph.AxisText(hz >= 1000 ? NotaNum.F($"{hz / 1000:0}k") : NotaNum.F($"{hz:0}"));
             ctx.DrawText(ft, new Point(x - ft.Width / 2, r.Bottom - ft.Height - 3));
         }
-    }
-
-    public static FormattedText Text(string t, IBrush ink) => CompDraw.Text(t, ink);
-
-    /// <summary>A hint in the middle of an empty window.</summary>
-    public static void Hint(DrawingContext ctx, Rect r, string text)
-    {
-        var ft = Text(text, NotaPalette.TextTertiary);
-        ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
     }
 }
 
@@ -269,240 +247,6 @@ internal abstract class CutHandleGraph : Control, IValueHandles
 }
 
 // ============================================================================
-// Reverb — Space: the tail of your audio
-// ============================================================================
-/// <summary>The last six seconds of the input (grey area) and the reverb's tail before the mix
-/// (the curve), dB against time, now at the right. A dashed guide falls from the tail's latest
-/// peak at the set RT60, so a tail that rings longer or shorter than the setting shows at once.
-/// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The grey
-/// pre-delay marker stands where the tail starts: the pre-delay after the latest hit of the input, on
-/// the graph's time scale; with no hit on screen it falls back to its own scale (0 … 200 ms between 3 %
-/// and 33 % of the width), so it can always be dragged. Drag it for the pre-delay (a third of
-/// the width spans 0 … 200 ms, so it moves finer than the pointer), double-click it to reset. ⌥-click
-/// the marker to type the pre-delay, anywhere else to type the decay (the owner supplies the fields,
-/// specs/035).</summary>
-internal sealed class ReverbSpaceView : Control, IValueHandles
-{
-    private const double PreLo = 0.03, PreSpan = 0.30;
-    private float[] _s = Array.Empty<float>();
-    private int _off;
-    private bool _has, _freeze;
-    private double _rt60 = 2, _preNorm = 0.1, _preMs = 20;
-    private bool _drag, _dragPre, _hoverPre;
-    private double _dragX, _dragY, _dragV;
-    private double _hitAge = -1;   // seconds since the latest hit of the input, −1 = none on screen
-
-    public event Action<double>? Changed;   // the Decay param, normalised
-    public event Action? GestureBegin;
-    public event Action? GestureEnd;
-    public event Action? Reset;
-    public event Action<double>? PreChanged;   // the Pre-delay param, normalised
-    public event Action? PreGestureBegin;
-    public event Action? PreGestureEnd;
-    public event Action? PreReset;
-    public Func<double>? DecayValue { get; set; }
-    public bool Dragging => _drag || _dragPre;
-
-    public ReverbSpaceView()
-    {
-        ClipToBounds = true;
-        MinHeight = 40;
-        Cursor = new Cursor(StandardCursorType.SizeWestEast);
-    }
-
-    /// <summary>The scope (history at <paramref name="off"/>, or <paramref name="has"/> false), the RT60 in
-    /// seconds and whether the tail is frozen.</summary>
-    public void Set(float[] scope, int off, bool has, double rt60, bool freeze)
-    {
-        _s = scope; _off = off; _has = has && scope.Length >= off + SpaceDraw.Floats; _rt60 = rt60; _freeze = freeze;
-        _hitAge = HitAge();
-        InvalidateVisual();
-    }
-
-    // The latest hit of the input: a jump of 9 dB within 12 ms, above −50 dB (as the Delay's repeats).
-    private double HitAge()
-    {
-        if (!_has) return -1;
-        for (int k = SpaceDraw.Points - 1; k >= 3; k--)
-        {
-            float v = _s[_off + k];
-            if (v > -50 && v - _s[_off + k - 3] > 9 && v >= _s[_off + k - 1])
-            {
-                while (k > 3 && _s[_off + k - 1] - _s[_off + k - 4] > 9) k--;   // back to the start of the rise
-                return (SpaceDraw.Points - 1 - k) * SpaceDraw.PointSec;
-            }
-        }
-        return -1;
-    }
-
-    /// <summary>The pre-delay: normalised (where the marker sits) and in ms (its label).</summary>
-    public void SetPre(double preNorm, double preMs)
-    {
-        if (_dragPre) return;
-        _preNorm = Math.Clamp(preNorm, 0, 1); _preMs = preMs;
-        InvalidateVisual();
-    }
-
-    private (double x0, double x1) Span() => (6, Bounds.Width - 6);
-    // The hit, then the pre-delay on the graph's time scale (now at the right); with no hit on
-    // screen, the marker's own 0 … 200 ms scale, so the pre-delay can still be dragged.
-    private double PreX()
-    {
-        var (x0, x1) = Span();
-        if (_hitAge < 0) return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0);
-        return x1 - Math.Max(0, _hitAge - _preMs / 1000) / SpaceDraw.HistorySec * (x1 - x0);
-    }
-    private bool OnPre(Point p) => Math.Abs(p.X - PreX()) <= 6;
-
-    // Typed entry: handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
-    public int HandleAt(Point p) => OnPre(p) ? 1 : 0;
-    public Rect HandleRect(int handle)
-    {
-        var (x0, x1) = Span();
-        return ValueEntry.Near(new Point(handle == 1 ? PreX() : (x0 + x1) / 2, NotaGraph.PlotTop), Bounds.Size);
-    }
-    private void ApplyPre(Point p)
-    {
-        var (x0, x1) = Span();
-        if (x1 <= x0) return;
-        _preNorm = Math.Clamp(_dragV + (p.X - _dragX) / (PreSpan * (x1 - x0)), 0, 1);
-        _preMs = _preNorm * 200;
-        PreChanged?.Invoke(_preNorm);
-        InvalidateVisual();
-    }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        var p = e.GetPosition(this);
-        bool pre = OnPre(p);
-        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)
-        {
-            if (pre) PreReset?.Invoke(); else Reset?.Invoke();   // as CutHandleGraph
-            e.Pointer.Capture(null); e.Handled = true; return;
-        }
-        if (pre)
-        {
-            _dragPre = true; _dragX = p.X; _dragV = _preNorm; PreGestureBegin?.Invoke();
-            e.Pointer.Capture(this); e.Handled = true; return;
-        }
-        _drag = true; _dragX = p.X; _dragY = p.Y; _dragV = DecayValue?.Invoke() ?? 0.5;
-        GestureBegin?.Invoke();
-        e.Pointer.Capture(this);
-        e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        base.OnPointerMoved(e);
-        var p = e.GetPosition(this);
-        if (_dragPre) { ApplyPre(p); return; }
-        bool hover = OnPre(p);
-        if (hover != _hoverPre) { _hoverPre = hover; InvalidateVisual(); }
-        if (!_drag) return;
-        double w = Math.Max(40, Bounds.Width), h = Math.Max(40, Bounds.Height);
-        Changed?.Invoke(Math.Clamp(_dragV + (p.X - _dragX) / w - (p.Y - _dragY) / h * 0.5, 0, 1));
-    }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (ReferenceEquals(e.Pointer.Captured, this)) e.Pointer.Capture(null);
-        if (_dragPre) { _dragPre = false; PreGestureEnd?.Invoke(); InvalidateVisual(); }
-        if (!_drag) return;
-        _drag = false; GestureEnd?.Invoke();
-    }
-    protected override void OnPointerExited(PointerEventArgs e)
-    { base.OnPointerExited(e); if (_hoverPre) { _hoverPre = false; InvalidateVisual(); } }
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        if (_dragPre) { _dragPre = false; PreGestureEnd?.Invoke(); InvalidateVisual(); }
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
-        base.OnPointerCaptureLost(e);
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 40 || h < 40) return;
-        var rect = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, rect);
-        if (_freeze)
-        {
-            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Accent, 0x0D), rect);
-            ctx.DrawRectangle(null, new Pen(NotaPalette.BorderBrass, 1), new RoundedRect(rect.Deflate(0.5), NotaGraph.Radius));
-        }
-        double x0 = 6, x1 = w - 6, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, span = bot - top;
-        if (span < 8) return;
-        double Y(double db) => bot - Math.Clamp((db + 60) / 60, 0, 1) * span;
-        double XAge(double sec) => x1 - sec / SpaceDraw.HistorySec * (x1 - x0);
-
-        // One line a second, and −20 / −40 dB.
-        for (int s = 1; s < 6; s++) ctx.DrawLine(NotaGraph.GridPen, new Point(XAge(s), top), new Point(XAge(s), bot));
-        foreach (double db in new[] { -20.0, -40 }) ctx.DrawLine(NotaGraph.GridPen, new Point(x0, Y(db)), new Point(x1, Y(db)));
-
-        bool any = _has && Math.Max(SpaceDraw.Max(_s, _off, SpaceDraw.Points), SpaceDraw.Max(_s, _off + SpaceDraw.Points, SpaceDraw.Points)) > -90;
-        if (any)
-        {
-            SpaceDraw.Area(ctx, SpaceDraw.InputWash, SpaceDraw.Trace(_s, _off, SpaceDraw.Points, x0, x1, Y), bot);
-            var wet = SpaceDraw.Trace(_s, _off + SpaceDraw.Points, SpaceDraw.Points, x0, x1, Y);
-            CompDraw.Polyline(ctx, NotaGraph.PrimaryPen, wet);
-            DrawGuide(ctx, x0, x1, top, bot, Y, XAge);
-        }
-        else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), Loc.T("control.space_graphs.play_audio_to_see_its_tail"));
-
-        // The pre-delay marker (grey, orange in the hand), where the tail starts after the latest hit: drag it, double-click resets.
-        {
-            double px = PreX();
-            bool hot = _hoverPre || _dragPre;
-            ctx.DrawLine(new Pen(hot ? NotaPalette.Accent : NotaPalette.TextSecondary, hot ? 1.2 : 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(px, top), new Point(px, bot));
-            NotaGraph.Node(ctx, new Point(px, top + 4), hot);
-            var lbl = SpaceDraw.Text(NotaNum.F($"pre {_preMs:0} ms"), hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-            // Left of the marker, over the quiet before the hit, so the tail's peak never runs under it;
-            // right of it only when the hit is too close to the left edge (and its "0 dB").
-            double lx = px - 6 - lbl.Width >= x0 + 34 ? px - 6 - lbl.Width : px + 6;
-            ctx.DrawText(lbl, new Point(lx, top + 4 - lbl.Height / 2));
-        }
-
-        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("control.space_graphs.tail_held_no_decay"), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
-        else NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.tail"));
-        NotaGraph.Legend(ctx, x1 - 2, 4, ("tail", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area),
-            (_freeze ? Loc.T("control.space_graphs.rt60_infinite") : NotaNum.F($"RT60 {_rt60:0.00} s"), NotaPalette.Accent, NotaGraph.Mark.Dashed));
-        NotaGraph.EdgeLabels(ctx, rect, false, (Y(0) + 6, "0 dB"), (Y(-20), "−20"), (Y(-40), "−40"));
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, NotaNum.F($"−{SpaceDraw.HistorySec:0} s"));
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, "now");
-    }
-
-    // The RT60 the knob names, drawn from the tail's latest peak: a straight fall of 60 dB in RT60.
-    private void DrawGuide(DrawingContext ctx, double x0, double x1, double top, double bot, Func<double, double> Y, Func<double, double> XAge)
-    {
-        // The latest peak within 12 dB of the loudest point on screen: walk back from now to the first
-        // point that loud, then up its slope to the top.
-        int wetOff = _off + SpaceDraw.Points, pk = -1;
-        float loud = SpaceDraw.Max(_s, wetOff, SpaceDraw.Points);
-        if (loud < -54) return;
-        for (int k = SpaceDraw.Points - 1; k >= 0; k--)
-            if (_s[wetOff + k] >= loud - 12) { pk = k; break; }
-        if (pk < 0) return;
-        while (pk > 0 && _s[wetOff + pk - 1] >= _s[wetOff + pk]) pk--;
-        for (int k = pk - 1; k >= Math.Max(0, pk - 25); k--) if (_s[wetOff + k] > _s[wetOff + pk]) pk = k;   // ride over small dips
-        float pkDb = _s[wetOff + pk];
-        double age = (SpaceDraw.Points - 1 - pk) * SpaceDraw.PointSec;
-        double xs = XAge(age), ys = Y(pkDb);
-        double xe, ye;
-        if (_freeze) { xe = x1; ye = ys; }
-        else
-        {
-            double toFloor = (pkDb + 60) / 60 * _rt60;          // seconds until the guide reaches −60 dB
-            double sec = Math.Min(toFloor, age);
-            xe = XAge(age - sec); ye = Y(pkDb - 60 * sec / Math.Max(0.05, _rt60));
-        }
-        ctx.DrawLine(new Pen(NotaPalette.Accent, 1.2, new DashStyle(new double[] { 3, 3 }, 0)), new Point(xs, ys), new Point(xe, ye));
-        ctx.DrawEllipse(NotaPalette.Accent, null, new Point(xs, ys), 2.5, 2.5);
-    }
-}
-
-// ============================================================================
 // Reverb — Tone: decay across frequency
 // ============================================================================
 /// <summary>How long the tail rings at each frequency (the curve, seconds up the left): HF Damp makes
@@ -589,239 +333,4 @@ internal sealed class ReverbToneView : CutHandleGraph
     }
 
     private static string Secs(double s) => s < 1 ? NotaNum.F($"{s * 1000:0} ms") : NotaNum.F($"{s:0.#} s");
-}
-
-// ============================================================================
-// Delay — Time: the echoes of your audio
-// ============================================================================
-/// <summary>The input (grey area) and the echoes before the mix (the curve) over the last few seconds,
-/// now at the right; in Sync, on the project's beat grid while the transport rolls. Dots mark where
-/// the repeats of the latest hit land and how loud the feedback leaves them (L in the viz ink, R in
-/// grey when its time differs), joined by the dashed decay the feedback sets.</summary>
-internal sealed class DelayEchoView : Control
-{
-    private float[] _s = Array.Empty<float>();
-    private int _off;
-    private bool _has, _freeze, _grid;
-    private double _windowSec = 2, _msL = 500, _msR = 500, _fb = 0.4, _beat, _bpm = 120;
-    private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1), BarPen = new Pen(NotaPalette.GridBar, 1);
-
-    public DelayEchoView()
-    {
-        ClipToBounds = true;
-        MinHeight = 40;
-    }
-
-    /// <summary>The scope and the settings: the window (≤ 6.1 s), the tap times, the feedback, and the
-    /// beat grid (the transport's beat now and the tempo; <paramref name="grid"/> false hides it).</summary>
-    public void Set(float[] scope, int off, bool has, double windowSec, double msL, double msR, double feedback, bool freeze,
-        bool grid, double beatNow, double bpm)
-    {
-        _s = scope; _off = off; _has = has && scope.Length >= off + SpaceDraw.Floats;
-        _windowSec = Math.Clamp(windowSec, 0.2, SpaceDraw.HistorySec); _msL = msL; _msR = msR; _fb = feedback; _freeze = freeze;
-        _grid = grid && bpm > 1; _beat = beatNow; _bpm = bpm;
-        InvalidateVisual();
-    }
-
-    // The latest hit whose first repeat has already come round: a jump of 9 dB within 12 ms, above −50 dB.
-    // The hit whose repeats to mark: the latest one old enough for a few of the longer channel's
-    // repeats to fit (up to most of the window), or failing that the latest with one in the past.
-    private int Onset(int n, double firstMs, double lastMs)
-    {
-        double want = Math.Max(firstMs, Math.Min(3 * lastMs, n * SpaceDraw.PointSec * 1000 * 0.6));
-        foreach (double ms in want > firstMs ? new[] { want, firstMs } : new[] { firstMs })
-        {
-            int minAge = (int)(ms / 1000 / SpaceDraw.PointSec);
-            for (int k = SpaceDraw.Points - 1 - minAge; k >= Math.Max(3, SpaceDraw.Points - n); k--)
-            {
-                float v = _s[_off + k];
-                if (v > -50 && v - _s[_off + k - 3] > 9 && v >= _s[_off + k - 1]) return k;
-            }
-        }
-        return -1;
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 40 || h < 40) return;
-        var rect = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, rect);
-        if (_freeze)
-        {
-            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Accent, 0x0D), rect);
-            ctx.DrawRectangle(null, new Pen(NotaPalette.BorderBrass, 1), new RoundedRect(rect.Deflate(0.5), NotaGraph.Radius));
-        }
-        double x0 = 6, x1 = w - 6, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, span = bot - top;
-        if (span < 8) return;
-        int n = Math.Clamp((int)Math.Round(_windowSec / SpaceDraw.PointSec), 10, SpaceDraw.Points);
-        double win = n * SpaceDraw.PointSec;
-        double Y(double db) => bot - Math.Clamp((db + 60) / 60, 0, 1) * span;
-        double XAge(double sec) => x1 - sec / win * (x1 - x0);
-
-        // Grid: the project's beats (every fourth a little stronger), drawn over the input so a
-        // beat that lands on a hit still shows; without them, four even divisions.
-        void BeatGrid()
-        {
-            double beatSec = 60.0 / _bpm, frac = _beat - Math.Floor(_beat);
-            long b0 = (long)Math.Floor(_beat);
-            for (int j = 0; ; j++)
-            {
-                double age = (frac + j) * beatSec;
-                if (age > win) break;
-                bool bar = (b0 - j) % 4 == 0;
-                ctx.DrawLine(bar ? BarPen : BeatPen, new Point(XAge(age), top), new Point(XAge(age), bot));
-            }
-        }
-        if (!_grid) for (int i = 1; i < 4; i++) ctx.DrawLine(NotaGraph.GridPen, new Point(XAge(win * i / 4), top), new Point(XAge(win * i / 4), bot));
-        foreach (double db in new[] { -20.0, -40 }) ctx.DrawLine(NotaGraph.GridPen, new Point(x0, Y(db)), new Point(x1, Y(db)));
-
-        bool any = _has && Math.Max(SpaceDraw.Max(_s, _off, n), SpaceDraw.Max(_s, _off + SpaceDraw.Points, n)) > -90;
-        if (any)
-        {
-            SpaceDraw.Area(ctx, SpaceDraw.InputWash, SpaceDraw.Trace(_s, _off, n, x0, x1, Y), bot);
-            if (_grid) BeatGrid();
-            CompDraw.Polyline(ctx, NotaGraph.PrimaryPen, SpaceDraw.Trace(_s, _off + SpaceDraw.Points, n, x0, x1, Y));
-            if (!_freeze) DrawRepeats(ctx, n, x0, x1, Y, XAge);
-        }
-        else
-        {
-            if (_grid) BeatGrid();
-            SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), Loc.T("control.space_graphs.play_audio_to_see_its_echoes"));
-        }
-
-        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("control.space_graphs.loop_held_no_decay"), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
-        else NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.echoes"));
-        NotaGraph.Legend(ctx, x1 - 2, 4, ("echoes", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area),
-            ("repeats", NotaPalette.Accent, NotaGraph.Mark.Dashed));
-        NotaGraph.EdgeLabels(ctx, rect, false, (Y(0) + 6, "0 dB"), (Y(-20), "−20"), (Y(-40), "−40"));
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, win >= 1 ? NotaNum.F($"−{win:0.#} s") : NotaNum.F($"−{win * 1000:0} ms"));
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, "now");
-    }
-
-    private void DrawRepeats(DrawingContext ctx, int n, double x0, double x1, Func<double, double> Y, Func<double, double> XAge)
-    {
-        double first = Math.Min(_msL, _msR);
-        if (first < 5) return;
-        int k0 = Onset(n, first, Math.Max(_msL, _msR));
-        if (k0 < 0) return;
-        float pk = -120;
-        for (int k = k0; k < Math.Min(SpaceDraw.Points, k0 + 5); k++) pk = Math.Max(pk, _s[_off + k]);
-        double onsetAge = (SpaceDraw.Points - 1 - k0) * SpaceDraw.PointSec;
-        double stepDb = 20 * Math.Log10(Math.Clamp(_fb, 1e-4, 0.999));
-        var dash = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0xA0), 1, new DashStyle(new double[] { 3, 3 }, 0));
-        bool both = Math.Abs(_msL - _msR) > 1;
-        foreach (var (ms, ink) in both ? new[] { (_msL, (IBrush)NotaPalette.Accent), (_msR, NotaPalette.TextSecondary) } : new[] { (_msL, (IBrush)NotaPalette.Accent) })
-        {
-            Point? last = new Point(XAge(onsetAge), Y(pk));
-            for (int r = 1; r < 64; r++)
-            {
-                double age = onsetAge - r * ms / 1000;
-                double db = pk + (r - 1) * stepDb;
-                if (age < 0 || db < -60) break;
-                var p = new Point(XAge(age), Y(db));
-                if (last is { } l) ctx.DrawLine(dash, l, p);
-                ctx.DrawEllipse(ink, new Pen(NotaGraph.Ground, 1.5), p, 3, 3);
-                last = p;
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Delay — Loop · Wow: how the repeats change
-// ============================================================================
-/// <summary>The response of the first six repeats: each goes round the loop once more, through the low
-/// cut, the high cut and (in Tape mode) the head loss, and loses the feedback each time — so each curve
-/// sits lower and narrower than the last. The echoes' live spectrum runs underneath. Drag a handle to
-/// move a cut, double-click it to open it.</summary>
-internal sealed class DelayRepeatsView : CutHandleGraph
-{
-    private const int Repeats = 6;
-    private readonly WetSpectrum _spec = new();
-    private double _fb = 0.4, _sr = 48000;
-    private bool _tape, _freeze, _specLive;
-
-    public DelayRepeatsView() { LowLo = 20; LowHi = 2000; HighLo = 200; HighHi = 20000; }
-
-    public void Set(double feedback, double lowHz, double highHz, bool lowOn, bool highOn, bool tape, bool freeze,
-        float[] scope, int specOff, bool has, double sampleRate)
-    {
-        _fb = feedback; LowHz = lowHz; HighHz = highHz; LowOn = lowOn; HighOn = highOn; _tape = tape; _freeze = freeze;
-        _sr = sampleRate > 1000 ? sampleRate : 48000;
-        _specLive = has && scope.Length >= specOff + SpaceDraw.SpecN;
-        if (_specLive) _spec.Feed(scope, specOff);
-        InvalidateVisual();
-    }
-
-    private double OnePole(double fc) => 1 - Math.Exp(-2 * Math.PI * Math.Clamp(fc, 5, _sr * 0.45) / _sr);
-
-    /// <summary>One pass through the loop filter at <paramref name="hz"/>, in dB (Delay.cpp's one-poles).</summary>
-    public double PassDb(double hz)
-    {
-        if (_freeze) return 0;
-        double wv = 2 * Math.PI * hz / _sr, cos = Math.Cos(wv), mag = 1;
-        double Den(double a) => Math.Sqrt(1 - 2 * a * cos + a * a);
-        if (LowOn) { double a = 1 - OnePole(LowHz); mag *= a * Math.Sqrt(2 - 2 * cos) / Den(a); }
-        if (HighOn) { double c = OnePole(HighHz); mag *= c / Den(1 - c); }
-        if (_tape) { double c = OnePole(8000); mag *= c / Den(1 - c); }
-        return mag > 1e-9 ? 20 * Math.Log10(mag) : -180;
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 40 || h < 40) return;
-        var rect = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, rect);
-        var (x0, x1, top, bot) = Geo();
-        double span = bot - top;
-        if (span < 8 || x1 <= x0) return;
-        SpaceDraw.FreqGrid(ctx, rect, x0, x1, top, bot);
-        const double floorDb = -48;
-        double Y(double db) => top + Math.Clamp(-db / -floorDb, 0, 1) * span;
-        foreach (double db in new[] { -12.0, -24, -36 }) ctx.DrawLine(NotaGraph.GridPen, new Point(x0, Y(db)), new Point(x1, Y(db)));
-
-        if (_specLive || _spec.Live)
-        {
-            int cols = Math.Max(2, (int)(x1 - x0));
-            var db = _spec.Columns(cols, _sr);
-            var pts = new List<Point>(cols);
-            for (int c = 0; c < cols; c++) pts.Add(new Point(x0 + (double)c / (cols - 1) * (x1 - x0), bot - Math.Clamp((db[c] + 96) / 96, 0, 1) * span));
-            CompDraw.Polyline(ctx, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), pts);
-        }
-
-        double stepDb = _freeze ? 0 : 20 * Math.Log10(Math.Clamp(_fb, 1e-4, 1));
-        DrawCuts(ctx, top, bot, x => Y(PassDb(SpaceDraw.HzAt(x, x0, x1))));
-        for (int r = Repeats; r >= 1; r--)
-        {
-            var pts = new List<Point>();
-            double best = -999;
-            for (double x = x0; x <= x1 + 0.1; x += 2)
-            {
-                double xx = Math.Min(x, x1), db = (r - 1) * stepDb + r * PassDb(SpaceDraw.HzAt(xx, x0, x1));
-                pts.Add(new Point(xx, Y(db)));
-                best = Math.Max(best, db);
-            }
-            // Each repeat's number sits over the middle of the band the cuts leave.
-            double midHz = Math.Sqrt((LowOn ? LowHz : SpaceDraw.FMin) * (HighOn ? HighHz : SpaceDraw.FMax));
-            double bestX = SpaceDraw.LogX(midHz, x0, x1);
-            best = (r - 1) * stepDb + r * PassDb(midHz);
-            if (best < floorDb) continue;
-            IPen pen = r == 1 ? NotaGraph.PrimaryPen : new Pen(NotaPalette.Wash(NotaPalette.VizInk, (byte)(0xC0 - r * 0x18)), 1.2, lineJoin: PenLineJoin.Round);
-            CompDraw.Polyline(ctx, pen, pts);
-            if (_freeze) break;   // a held loop: every repeat the same, one line
-            var num = SpaceDraw.Text(NotaNum.F($"{r}"), r == 1 ? NotaPalette.TextSecondary : NotaPalette.TextTertiary);
-            double ny = Y(best) - num.Height - 1;
-            if (ny > top - 4) ctx.DrawText(num, new Point(Math.Clamp(bestX - num.Width / 2, x0 + 2, x1 - num.Width - 2), ny));
-        }
-
-        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("control.space_graphs.loop_held_filters_bypassed"), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
-        else NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.repeats"));
-        NotaGraph.Legend(ctx, x1 - 2, 4, (_freeze ? Loc.T("control.space_graphs.every_repeat") : NotaNum.F($"repeats 1–{Repeats}"), NotaPalette.VizInk, NotaGraph.Mark.Line),
-            (Loc.T("control.space_graphs.echo_spectrum"), NotaPalette.TextTertiary, NotaGraph.Mark.Line));
-        NotaGraph.EdgeLabels(ctx, rect, false, (Y(0) + 6, "0 dB"), (Y(-24), "−24"));
-    }
 }

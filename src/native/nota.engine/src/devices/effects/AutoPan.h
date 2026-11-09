@@ -51,7 +51,7 @@ namespace nota {
 class AutoPan : public Device {
   public:
     // Param layout — order is the persisted/automation layout. APPEND ONLY.
-    enum { Rate = 0, Amount, Waveform, Shape, Phase, Mix, Sync, Division, kNumParams };
+    enum { Rate = 0, Amount, Waveform, Shape, Phase, Mix, Sync, Division, View /* card size, not sound: 0 = L, 1 = S (#531) */, kNumParams };
 
     // Telemetry slots (scopeRead).
     enum {

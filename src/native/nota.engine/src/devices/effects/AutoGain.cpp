@@ -24,6 +24,7 @@ AutoGain::AutoGain() {
     p_[Safe].store(1.0f);
     p_[Ceiling].store(0.833f); // −1 dBTP
     p_[Gain].store(0.5f);      // 0 dB
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -412,7 +413,7 @@ void AutoGain::process(float* buf, int32_t frames) {
 
 const char* AutoGain::paramName(int32_t i) const {
     static const char* nm[] = {
-        "Target", "Scale", "Auto", "Trim", "Response", "Window", "Max Gain", "Safe", "Ceiling", "Gain"};
+        "Target", "Scale", "Auto", "Trim", "Response", "Window", "Max Gain", "Safe", "Ceiling", "Gain", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

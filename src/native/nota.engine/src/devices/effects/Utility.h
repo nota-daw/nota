@@ -71,6 +71,7 @@ class Utility : public Device {
         Meter,     // 0 LUFS-S, 1 Peak, 2 RMS
         TpLimit,   // true-peak safety limiter at TP Ceiling
         TpCeiling, // −6..0 dBTP
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 

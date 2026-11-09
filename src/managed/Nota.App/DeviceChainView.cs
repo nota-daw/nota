@@ -55,6 +55,8 @@ public sealed partial class DeviceChainView : UserControl
     internal const double ChainInset = 6;
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = ChainInset, Margin = new Thickness(ChainInset) };
     private int _trackId = -1;
+    private readonly Grid _layout;
+    private readonly ScrollViewer _outer;
 
     /// <summary>Raised after a change that affects track headers (remove/reorder).</summary>
     public event Action? Changed;
@@ -136,7 +138,19 @@ public sealed partial class DeviceChainView : UserControl
             if (e.Source is ScrollViewer or Avalonia.Controls.Presenters.ScrollContentPresenter || ReferenceEquals(e.Source, _row))
             { ClearDeviceSelection(); Rebuild(); }
         };
-        Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        // The XL panel (specs/085) sits over the chain; without one the chain fills the view.
+        var chain = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        Grid.SetRow(chain, 1);
+        _layout = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Children = { _xlHost, chain } };
+        // In a window too short for the panel's minimum and the chain, the view scrolls instead of
+        // clipping the chain: the grid is at least that tall, and otherwise exactly the viewport.
+        _outer = new ScrollViewer
+        {
+            Content = _layout, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        _outer.SizeChanged += (_, _) => FitLayoutHeight();
+        Content = _outer;
         HookBrowserDrop();
     }
 
@@ -144,7 +158,7 @@ public sealed partial class DeviceChainView : UserControl
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
-    public void ForgetCardState() => _cardExtra.Clear();
+    public void ForgetCardState() { _cardExtra.Clear(); CloseDeviceWindows(); }
 
     /// <summary>Forgets the instrument card's remembered preset label + A/B slots on a
     /// track (its instrument was just swapped in place, possibly for one of the same kind).</summary>
@@ -207,6 +221,9 @@ public sealed partial class DeviceChainView : UserControl
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
+        int devCount = _trackId > 0 ? _engine.TrackDeviceCount(_trackId) : 0;
+        _xlIndex = ResolveXl();
+        BuildXl(devCount);
         if (_trackId <= 0) { _row.Children.Add(Hint(Loc.T("device_chain.select_a_track"))); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).
@@ -233,10 +250,13 @@ public sealed partial class DeviceChainView : UserControl
         bool bypassed = _engine.DeviceBypassed(_trackId, index);
         string name = _engine.DeviceName(_trackId, index);
         if (_engine.DeviceFolded(_trackId, index)) return FoldedStrip(ChainKind.Effect, index, name, bypassable: true, bypassed);   // built-in or plug-in
+        if (index == _xlIndex) return XlPlaceholder(index, count, kind, name, bypassed);   // its editor is in the XL panel (specs/085)
+        if (kind >= 0 && InWindow(index)) return WindowPlaceholder(index, count, kind, name, bypassed);   // ... or in its own window
 
         Control body;
         double width;
         bool fullBleed = false;
+        Control? headerExtra = null;
         string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
         if (kind == -1) return PluginCardFor(ChainKind.Effect, index, count);   // hosted VST3 / AU
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
@@ -248,8 +268,12 @@ public sealed partial class DeviceChainView : UserControl
         else
         {
             var strategy = _cardFactory.Resolve(kind);
-            body = strategy.Build(NewCardContext(), index);
-            width = strategy.AutoWidth ? double.NaN : strategy.Width;   // NaN → card sizes to content
+            var bodyCtx = NewCardContext();
+            body = strategy.Build(bodyCtx, index);
+            width = strategy.AutoWidth ? double.NaN : strategy.WidthFor(_engine, _trackId, index);   // NaN → card sizes to content
+            headerExtra = strategy.HeaderAccessory(bodyCtx, index);
+            // A device that opens in XL also opens in its own window: the pop-out key after the size.
+            if (strategy.SupportsXl) headerExtra = HeaderKeys(headerExtra, PopOutKey(index));
             fullBleed = strategy.FullBleed;
             if (strategy.Subtitle is { } sub) tag = sub;
         }
@@ -257,7 +281,8 @@ public sealed partial class DeviceChainView : UserControl
         // almanac body inset (6).
         var spec = new ShellSpec(
             Name: name, Subtitle: tag, DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
-            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect);
+            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect,
+            HeaderExtra: headerExtra, Compact: width < 300);
         return BuildCardShell(spec, fullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
     }
 
@@ -278,7 +303,8 @@ public sealed partial class DeviceChainView : UserControl
                s => StatusMessage?.Invoke(s),
                () => _rackSel,
                SelectRackDevice,
-               RackCopied);
+               RackCopied,
+               canXl: true);
 
     // ---- instrument / sends / add ----------------------------------------
 

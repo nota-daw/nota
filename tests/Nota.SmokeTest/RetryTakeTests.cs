@@ -42,6 +42,7 @@ internal static class RetryTakeTests
         foreach (var r in SessionToggleSlot()) yield return r;
         foreach (var r in SessionAudioTempoChange()) yield return r;
         foreach (var r in DisarmOneOfTwo()) yield return r;
+        foreach (var r in DisarmOneOfTwoMidiKeepsControllers()) yield return r;
         foreach (var r in StoppedWhilePending()) yield return r;
         foreach (var r in NoEmptyUndoAfterPartialKeep()) yield return r;
     }
@@ -98,6 +99,36 @@ internal static class RetryTakeTests
         Beats(e, 0.01);
         yield return (audio == 1 && r == RetryTakeResult.Arrangement && AudioClips(e, rec) == 1 && Notes(e, t).Count == 0,
             $"retry after disarming one of two: the kept audio stays, the MIDI is retried ({r}, audio clips {AudioClips(e, rec)}, notes {Notes(e, t).Count})");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // Two instrument tracks record; one disarmed mid-move keeps its controller up to the last
+    // move, as disarming a lone track does (specs/020, specs/086).
+    private static IEnumerable<(bool, string)> DisarmOneOfTwoMidiKeepsControllers()
+    {
+        const int Mod = 1;
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetCountIn(0);
+        int a = e.AddInstrumentTrack(), b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a, 0);
+        e.SetTrackBuiltinInstrument(b, 0);
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.StopTransport();
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.2);
+        Tap(e, 60, 0.2);
+        for (int k = 0; k <= 20; k++) { e.SendTrackController(a, Mod, k / 20f); Beats(e, 0.1); }
+        e.SetTrackArmed(a, false);              // b records on
+        e.Poll();
+        var mod = e.TryGetClipInfo(a, 0, out _) ? e.GetMidiClipController(a, 0, Mod) : Array.Empty<AutomationPoint>();
+        yield return (mod.Length >= 2 && Math.Abs(mod[^1].Value - 1f) < 0.03f,
+            $"disarming one of two recording instrument tracks keeps its controllers up to the last move ({string.Join(" ", mod.Select(p => $"{p.Beat:F2}:{p.Value:F2}"))})");
         e.SetRecording(false);
         e.StopTransport();
     }

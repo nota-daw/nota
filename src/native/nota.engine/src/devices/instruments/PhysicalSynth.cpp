@@ -52,6 +52,9 @@ PhysicalSynth::PhysicalSynth() {
     // project saved before these two params existed sounds the same.
     set(Mono, 0.0f);
     set(ResMix, 0.5f);
+    set(NoiseDCurve, 0.5f);
+    set(NoiseRCurve, 0.5f);
+    set(NoiseEnvExp, 0.0f); // straight, Lin: old projects keep their noise burst
 }
 
 void PhysicalSynth::noteExpression(int32_t pitch, int32_t dim, float value) {
@@ -70,7 +73,7 @@ std::string PhysicalSynth::pluginParamId(int32_t i) const {
         "noisetype", "noisefreq", "noisereso", "noisea", "noised", "noises", "noiser", "r1type", "r1decay",
         "r1material", "r1bright", "r1inharm", "r1ratio", "r1hit", "r1tune", "r2on", "r2type", "r2decay", "r2material",
         "r2bright", "r2inharm", "r2ratio", "r2hit", "r2tune", "structure", "tune", "fine", "noteoff", "pan", "volume",
-        "mono", "resmix"};
+        "mono", "resmix", "noisedcurve", "noisercurve", "noiseenvexp"};
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
 }
 
@@ -80,7 +83,7 @@ std::string PhysicalSynth::pluginParamName(int32_t i) const {
         "Noise Release", "Res1 Type", "Res1 Decay", "Res1 Material", "Res1 Bright", "Res1 Inharm", "Res1 Ratio",
         "Res1 Hit", "Res1 Tune", "Res2 On", "Res2 Type", "Res2 Decay", "Res2 Material", "Res2 Bright", "Res2 Inharm",
         "Res2 Ratio", "Res2 Hit", "Res2 Tune", "Res Structure", "Tune", "Fine", "Note Off", "Pan", "Volume", "Mono",
-        "Res Mix"};
+        "Res Mix", "Noise Decay Curve", "Noise Release Curve", "Noise Env Exp"};
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
 }
 
@@ -133,6 +136,7 @@ int32_t PhysicalSynth::scopeRead(float* out, int32_t maxN) const {
             row[2 * kModes + m] = static_cast<float>(md.tau);
         }
     }
+    readEnvTele(envTele_, kEnvTeleFloats, buf + kScopeEnv, kEnvTeleFloats);
     const int n = std::min<int>(maxN, kScopeLen);
     std::memcpy(out, buf, n * sizeof(float));
     return n;
@@ -178,6 +182,8 @@ void PhysicalSynth::noteOn(int32_t pitch, float velocity) {
     // Noise burst envelope reset.
     v->nEnv = 0.0f;
     v->nStage = get(NoiseVol) > 0.0001f ? Stage::Attack : Stage::Off;
+    v->nShape = {};
+    lastVoice_ = static_cast<int>(v - voices_);
     v->nIc1 = v->nIc2 = 0.0;
 
     buildBank(v->r1, f0 * std::exp2((get(R1Tune) - 0.5) * 4.0), typeOf(R1Type), get(R1Decay), get(R1Material),
@@ -210,6 +216,7 @@ void PhysicalSynth::render(float* out, int32_t frames) {
     const double noiseBase = expMap(get(NoiseFreq), 60.0, 12000.0);
     const double noiseK = std::clamp(2.0 - 1.9 * get(NoiseRes), 0.05, 2.0);
     const float nA = rate(NoiseA, 0.001, 2.0), nD = rate(NoiseD, 0.002, 4.0), nR = rate(NoiseR, 0.002, 5.0);
+    const EnvBends nBend = envBends({get(NoiseDCurve), get(NoiseRCurve), get(NoiseEnvExp)});
     const float nS = get(NoiseS);
     const bool r2on = get(R2On) >= 0.5f;
     const bool serial = get(Structure) < 0.5f; // 0 = 1>2 (serial), 1 = 1+2 (parallel)
@@ -258,7 +265,13 @@ void PhysicalSynth::render(float* out, int32_t frames) {
                 if (v.mEnv < 1.0e-4f) v.mActive = false;
             }
             if (v.nStage != Stage::Off) {
-                advanceEnv(v.nEnv, v.nStage, nA, nD, nS, nR);
+                advanceShapedEnv(v.nEnv, v.nStage, v.nShape, nA, nD, nS, nR, nBend);
+                // A burst with no sustain ends at the end of its decay, so a quiet voice
+                // can be freed (noteOff never moves the noise stage on).
+                if (v.nStage == Stage::Sustain && nS <= 1.0e-4f) {
+                    v.nEnv = 0.0f;
+                    v.nStage = Stage::Off;
+                }
                 const double cut =
                     std::clamp(noiseBase * std::exp2(noiseEnvAmt * 3.0 * v.nEnv), 20.0, sampleRate_ * 0.49);
                 const float nf = svf(v.nIc1, v.nIc2, cut, noiseK, noise(), noiseType);
@@ -309,6 +322,11 @@ void PhysicalSynth::render(float* out, int32_t frames) {
     for (const auto& v : voices_)
         if (v.active && !v.choke) ++n;
     activeVoices_.store(n, std::memory_order_relaxed);
+    {
+        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        const bool on = lv && lv->active;
+        publishEnvTele(envTele_, on, on ? lv->nStage : Stage::Off, on ? lv->nShape : EnvShapeState{});
+    }
     // Peak hold for the telemetry: ~300 ms fall.
     const float fall = static_cast<float>(std::exp(-static_cast<double>(frames) / (0.3 * sampleRate_)));
     outPeak_.store(std::max(peak, outPeak_.load(std::memory_order_relaxed) * fall), std::memory_order_relaxed);
@@ -336,33 +354,6 @@ void PhysicalSynth::retune(Bank& b, double mul, double ring) const {
     }
 }
 
-void PhysicalSynth::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
-    switch (st) {
-    case Stage::Attack:
-        env += atk;
-        if (env >= 1.0f) {
-            env = 1.0f;
-            st = Stage::Decay;
-        }
-        break;
-    case Stage::Decay:
-        env -= dec;
-        if (env <= sus) {
-            env = sus;
-            st = (sus <= 1.0e-4f ? Stage::Off : Stage::Sustain);
-        }
-        break;
-    case Stage::Sustain: break;
-    case Stage::Release:
-        env -= rel;
-        if (env <= 0.0f) {
-            env = 0.0f;
-            st = Stage::Off;
-        }
-        break;
-    case Stage::Off: break;
-    }
-}
 
 float PhysicalSynth::svf(double& ic1, double& ic2, double fc, double k, double in, int type) const {
     const double g = std::tan(kPi * fc / sampleRate_);

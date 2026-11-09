@@ -354,7 +354,7 @@ internal static partial class DesignTokenCheck
         {
             var rel = RelManaged(root, f);
             var source = File.ReadAllText(f);
-            if ((source.Contains("CurrentUICulture") || source.Contains("InstalledUICulture")) && rel != "Nota.App/NotaDocs.cs") osLanguage.Add(rel);
+            if ((source.Contains("CurrentUICulture") || source.Contains("InstalledUICulture"))) osLanguage.Add(rel);
             bool writesWork = rel.StartsWith("Nota.Domain/") || rel.StartsWith("Nota.Infrastructure/Settings/")
                 || Regex.IsMatch(rel, @"^Nota\.Infrastructure/Persistence/(Project(Model|Service|Store|Template|Migrations)|Recovery|PresetModel|PresetStore|PresetLibrary|AudioClipState)\w*\.cs$");
             if (writesWork && source.Contains("Loc.")) persistedText.Add(rel);

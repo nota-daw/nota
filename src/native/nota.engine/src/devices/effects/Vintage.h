@@ -63,6 +63,7 @@ class Vintage : public Device {
         StereoDrift,  // right channel wow/flutter a quarter-cycle apart, own crackle
         OutputStage,  // 0 off, 0.5 Tube, 1 Analog
         EvenOnly,     // saturation adds even harmonics only
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 

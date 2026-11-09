@@ -384,6 +384,8 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         TrackArming.OthersChanged -= OnArmsChanged;
         TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
+        InputSetups.Changed -= OnArmsChanged;
+        InputSetups.Changed += OnArmsChanged;          // inputs renamed / switched off (specs/086): pickers relabel
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
@@ -450,6 +452,8 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.PreferredHeightChanged += FitDevicesPanel;   // the XL panel opened, closed or resized (specs/085)
+        if (_vm?.Settings.Current.XlPanelHeight is > 0 and var xlh) _deviceChain.XlPanelHeight = xlh;
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;

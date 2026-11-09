@@ -55,6 +55,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 #include "Pentad.h"                     // pentad:: band-limited oscillator core + fast math, hiir decimators
 #include "dsp/core/ScopedNoDenormals.h" // unified denormal guard (replaces the local FtzGuard)
 
@@ -370,7 +371,14 @@ class Consort final : public Instrument {
         Atten2,
         // --- 12 cables × (source, destination, depth) (109..144) ---
         Cable0,
-        kNumParams = Cable0 + kCables * 3
+        // --- appended (#531): the envelope shapes — straight curves, Exp on (the RC generator) ---
+        FDCurve = Cable0 + kCables * 3,
+        FRCurve,
+        FEnvExp,
+        ADCurve,
+        ARCurve,
+        AEnvExp,
+        kNumParams
     };
 
     // Scope telemetry layout (scopeRead): see publishTelemetry().
@@ -394,7 +402,8 @@ class Consort final : public Instrument {
         ScDlyL,
         ScDlyR,
         ScSeqNote,
-        kScopeN
+        ScEnvTele, // the focused voice's filter env stage, progress, then the amp env's (EnvShape.h)
+        kScopeN = ScEnvTele + 2 * kEnvTeleFloats
     };
 
     Consort();
@@ -526,6 +535,7 @@ class Consort final : public Instrument {
         // envelopes: stage 0 idle, 1 attack, 2 decay/sustain, 3 release
         float fenv = 0.0f, aenv = 0.0f;
         int fst = 0, ast = 0;
+        EnvShapeState fsh, ash; // the curve of each envelope's current stage
         bool g1s = false, g2s = false; // patched gate-in state (edge detection)
         pentad::Osc osc[kOsc];
         consort::Ladder fa, fb;
@@ -703,6 +713,8 @@ class Consort final : public Instrument {
         float comp, kbd, velVca, atCut;
         bool drive;
         float fA, fD, fR, aA, aD, aR, fS, aS;
+        float fASec, fDSec, fRSec, aASec, aDSec, aRSec; // nominal stage lengths, for a shaped envelope
+        EnvShapeParams fShape, aShape;
         float glideC, walkC, invFade, fadeC, cutMax;
         float voiceGain;
         Cable cab[kCables];
