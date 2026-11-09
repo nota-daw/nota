@@ -199,7 +199,10 @@ inline constexpr int kMaxReturns = 4;
 
 class Track {
   public:
-    explicit Track(int32_t id, TrackType type = TrackType::Audio) : id_(id), type_(type) {}
+    explicit Track(int32_t id, TrackType type = TrackType::Audio)
+        : Track(id, type, std::make_shared<SessionPlayer>()) {}
+    Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player)
+        : sessionPlayer(player), id_(id), type_(type) {}
 
     int32_t id() const { return id_; }
     TrackType type() const { return type_; }
@@ -389,7 +392,7 @@ class Track {
     std::shared_ptr<dsp::CompensationDelay> pdc = std::make_shared<dsp::CompensationDelay>();
 
     // Session playback (M5-2). Shared across snapshots (position/state persists).
-    std::shared_ptr<SessionPlayer> sessionPlayer = std::make_shared<SessionPlayer>();
+    std::shared_ptr<SessionPlayer> sessionPlayer; // constructor accepts the existing player for graph clones
 
     // Freeze buffer (M7): interleaved stereo PCM (null = not frozen), captured at
     // `frozenSpb` samples-per-beat. Shared across snapshots; only replaced on a

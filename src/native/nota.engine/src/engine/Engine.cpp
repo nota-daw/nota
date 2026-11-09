@@ -662,7 +662,9 @@ std::shared_ptr<Track> Engine::findTrackAuthoring(int32_t id) const {
 }
 
 std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
-    auto nt = std::make_shared<Track>(t.id(), t.type());
+    // Reuse playback state at construction: allocating a fresh player here only to replace it
+    // later wastes its fixed release storage on every clip edit and undo.
+    auto nt = std::make_shared<Track>(t.id(), t.type(), t.sessionPlayer);
     nt->setVolume(t.volume());
     nt->setPan(t.pan());
     nt->setMute(t.mute());
@@ -691,7 +693,6 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
-    nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->liveHeld = t.liveHeld;           // shared — held live notes (#366) and effect tail (#449) persist
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
