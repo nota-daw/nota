@@ -12,7 +12,7 @@
 // across all of the track's clips, by trigger time — so a phrase sends its keyswitch once and an
 // overlapping clip's switch in between is honoured; a keyswitch note is released kKeyswitchHoldMs
 // later. Momentary ones are sent with each note and their keyswitch held until the last note
-// holding that key ends. On a chase (start, seek, loop wrap) the latching
+// holding that key ends. On a chase (start, seek, loop wrap, a slot's launch) the latching
 // articulation in force at the block start is sent at offset 0 and released 20 ms later, and
 // a held momentary note's switch goes with it. Audio thread: reads published, immutable data only
 // and writes into the caller's fixed array — no allocation, no locks (AR-6).
@@ -72,7 +72,7 @@ int scheduleArticulations(const std::vector<MidiClip>& clips, const Articulation
 
 // A Session slot (specs/085, T042): the slot's clip looped every `loopBeats` on the slot's own clock.
 // In `b`, blockStart is the slot's local position in samples (localBeats × spb); a pass k starts at
-// k × loopBeats. A one-shot slot plays pass 0 only. A slot launches at its start.
+// k × loopBeats. A one-shot slot plays pass 0 only. Set chase on the first block after a launch.
 // Every pass whose events can reach the block is read, however far the offsets move them.
 int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool loop, const ArticulationTable& table,
     const ArticulationBlock& b, ArtEv* out, int cap, int* dropped = nullptr);

@@ -1678,7 +1678,12 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         ab.spb = spb;
         ab.sampleRate = transport_.sampleRate();
         ab.trackOffsetMs = t.midiOffsetMs();
-        ab.chase = false; // a slot launches at its start
+        // The first block after a launch (playedBeats resets at launch): what is in force where the
+        // slot starts — its start, or the outgoing position for a legato launch — goes out, so a
+        // switch whose lead falls before the launch isn't lost.
+        ab.chase = sp.playedBeats.load(std::memory_order_relaxed) == 0.0;
+        if (ab.chase) sp.articulationChaseStart = ab.blockStart;
+        ab.chaseStart = sp.articulationChaseStart;
         ab.seamOffs = false;
         ab.seamEnd = 0.0;
         an = scheduleSlotArticulations(s.midi, L, s.loop, *artTable, ab, aev, kMaxBlockArt);
@@ -3381,12 +3386,15 @@ int32_t Engine::articulationSelfTest() {
         std::vector<Abs> once;
         playSlot(false, 0.0, 3 * L * spb, once);
         if (count(once, ArtEvKind::KeyOn, 24) != 1 || count(once, ArtEvKind::Control, 58) != 2) return 24;
-        // 25: alternating phrases preserve the early switch across each loop boundary.
+        // 25: a launch sends the switch whose lead falls before it, and an early switch reaches back
+        // across the loop end. Legato on beat 0 (−150 ms, lead 30 ms) and Long on beat 1 of each pass:
+        // the launch block's chase sends Legato at 0; after that, each pass's Legato goes out at the
+        // end of the pass before (k·48000 − 8640) and its Long at k·48000 + 24000.
         MidiClip early = makeClip({{0.0, 2}, {1.0, 1}});
         std::vector<Abs> back;
         ArtEv buf[kMaxBlockArt];
         for (double s = 0.0; s < 2 * L * spb; s += B) {
-            ArticulationBlock b{B, s, spb, sr, 0.0, false, false, 0.0};
+            ArticulationBlock b{B, s, spb, sr, 0.0, s == 0.0, false, 0.0};
             const int n = scheduleSlotArticulations(early, L, true, *table, b, buf, kMaxBlockArt);
             for (int i = 0; i < n; ++i)
                 if (s + buf[i].off < 2 * L * spb) back.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
@@ -3396,7 +3404,7 @@ int32_t Engine::articulationSelfTest() {
             if (e.kind == ArtEvKind::Control && e.d2 == 76) legatoAt.push_back(e.at);
             if (e.kind == ArtEvKind::KeyOn && e.d1 == 24) longAt.push_back(e.at);
         }
-        if (legatoAt != std::vector<double>{L * spb - 8640.0, 2 * L * spb - 8640.0} ||
+        if (legatoAt != std::vector<double>{0.0, L * spb - 8640.0, 2 * L * spb - 8640.0} ||
             longAt != std::vector<double>{24000.0, L * spb + 24000.0})
             return 25;
     }
@@ -3577,6 +3585,28 @@ int32_t Engine::articulationSelfTest() {
         b.blockStart = land + 960;
         const int cnt = scheduleArticulations(clips, *table, b, buf, kMaxBlockArt);
         if (cnt != 2 || buf[0].kind != ArtEvKind::KeyOff || buf[0].off != 0 || buf[1].kind != ArtEvKind::KeyOff) return 34;
+    }
+    // 35: launch and legato launch restore a pre-launch switch through the real Session renderer,
+    // and its release reaches the next block rather than being shortened to this block.
+    {
+        const ArticulationAction key{AK::Keyswitch, 0, 24, 100};
+        const ArticulationEntry entry{1, ArticulationTrigger::Latching, 0, 30, 0, 1};
+        track.articulationTable = ArticulationTable::build(0, &entry, 1, &key, 1);
+        slot.midi.notes[0].lengthBeats = 1;
+        slot.midi.articulations = buildArticulationTimeline(slot.midi, track.articulationTable);
+        probe->articulations = true;
+        for (bool legato : {false, true}) {
+            track.sessionPlayer->localBeats = legato ? 0.5 : 0.0;
+            track.sessionPlayer->requestLaunch(0, 0, legato);
+            if (!track.sessionPlayer->maybeApply(0, B / spb, 0)) return 35;
+            probe->events.clear();
+            slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+            if (std::find(probe->events.begin(), probe->events.end(), E5{1, 24, 100, 0, 0}) == probe->events.end()) return 35;
+            track.sessionPlayer->publish(B / spb);
+            probe->events.clear();
+            slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+            if (std::find(probe->events.begin(), probe->events.end(), E5{0, 24, 0, 448, 0}) == probe->events.end()) return 35;
+        }
     }
     return 0;
 }
