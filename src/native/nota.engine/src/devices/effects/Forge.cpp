@@ -29,6 +29,7 @@ Forge::Forge() {
     setStage(1, 1, 0.3f, 0.5f, 0.0f, 0.0f); // Diode, off
     setStage(2, 4, 0.2f, 0.5f, 0.0f, 0.0f); // Digital, off
     p_[Oversampling].store(0.0f);
+    p_[View].store(0.0f); // L
     for (int s = 0; s < kStages; ++s) {
         p_[S1Bias + s * 3].store(0.5f);
         p_[S1Tone + s * 3].store(0.5f);
@@ -266,6 +267,7 @@ const char* Forge::paramName(int32_t i) const {
     case S3Bias: return "S3 Bias";
     case S3Tone: return "S3 Tone";
     case S3Width: return "S3 Width";
+    case View: return "View";
     default: return "";
     }
 }

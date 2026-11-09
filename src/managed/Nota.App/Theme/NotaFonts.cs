@@ -89,7 +89,7 @@ internal static class NotaType
 
     // Device scale — 7 is the floor (plot tick labels only); a label is 8 or more. Switch
     // words and captions are 8, a value on a button or in the header 11, a tab inside a device 9.
-    public const double DeviceName = 12, DeviceSection = 10.5, RowLabel = 9, KnobLabel = 8,
+    public const double DeviceName = 11, DeviceSection = 10.5, RowLabel = 9, KnobLabel = 8,
                         KnobValue = 8, Axis = 7.5,
                         DeviceCaption = 8, DeviceBody = 9, DeviceValue = 11, DeviceTab = 9;
     public const double DeviceSectionTracking = 0, RowLabelTracking = 0, KnobLabelTracking = 0;

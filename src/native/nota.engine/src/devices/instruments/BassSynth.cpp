@@ -55,6 +55,12 @@ BassSynth::BassSynth() {
     set(ModWheel, 0.0f);
     set(OutPan, 0.5f); // centre
     set(Legato, 0.0f); // every note retriggers
+    set(DCurve, 0.5f);
+    set(RCurve, 0.5f);
+    set(EnvExp, 0.0f);
+    set(FDCurve, 0.5f);
+    set(FRCurve, 0.5f);
+    set(FEnvExp, 0.0f); // straight, Lin: old projects keep their envelopes
 }
 
 void BassSynth::controller(int32_t ctl, float value) {
@@ -68,7 +74,7 @@ std::string BassSynth::pluginParamId(int32_t i) const {
         "sublevel", "filtype", "filslope", "filfreq", "filreso", "fildrive", "filenv", "filkey", "fillfo", "fattack",
         "fdecay", "fsustain", "frelease", "attack", "decay", "sustain", "release", "lforate", "lfowave", "lfopitch",
         "glide", "unison", "drive", "volume", "velamp", "velfilter", "mono", "bend", "bendrange", "modwheel", "outpan",
-        "legato"};
+        "legato", "dcurve", "rcurve", "envexp", "fdcurve", "frcurve", "fenvexp"};
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
 }
 
@@ -77,7 +83,8 @@ std::string BassSynth::pluginParamName(int32_t i) const {
         "Sub Octave", "Sub Level", "Filter Type", "Filter Slope", "Filter Freq", "Filter Reso", "Filter Drive",
         "Filter Env", "Filter Key", "Filter LFO", "Filter Attack", "Filter Decay", "Filter Sustain", "Filter Release",
         "Attack", "Decay", "Sustain", "Release", "LFO Rate", "LFO Wave", "LFO →Pitch", "Glide", "Unison", "Drive",
-        "Volume", "Vel→Amp", "Vel→Filter", "Mono", "Pitch Bend", "Bend Range", "Mod Wheel", "Out Pan", "Legato"};
+        "Volume", "Vel→Amp", "Vel→Filter", "Mono", "Pitch Bend", "Bend Range", "Mod Wheel", "Out Pan", "Legato",
+        "Decay Curve", "Release Curve", "Env Exp", "Filter Decay Curve", "Filter Release Curve", "Filter Env Exp"};
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
 }
 
@@ -225,6 +232,8 @@ void BassSynth::render(float* out, int32_t frames) {
     const float fA = rateOf(FAttack, 0.001, 2.0), fD = rateOf(FDecay, 0.002, 4.0), fR = rateOf(FRelease, 0.002, 5.0);
     const float fS = get(FSustain);
     const float aA = rateOf(Attack, 0.001, 2.0), aD = rateOf(Decay, 0.002, 4.0), aR = rateOf(Release, 0.002, 5.0);
+    const EnvBends aBend = envBends({get(DCurve), get(RCurve), get(EnvExp)});
+    const EnvBends fBend = envBends({get(FDCurve), get(FRCurve), get(FEnvExp)});
     const float aS = get(Sustain);
 
     const double lfoInc = expMap(get(LfoRate), 0.05, 30.0) / sampleRate_;
@@ -263,12 +272,12 @@ void BassSynth::render(float* out, int32_t frames) {
         float mono = 0.0f;
         for (auto& v : voices_) {
             if (!v.active) continue;
-            advanceEnv(v.aEnv, v.aStage, aA, aD, aS, aR);
+            advanceShapedEnv(v.aEnv, v.aStage, v.aShape, aA, aD, aS, aR, aBend);
             if (v.aStage == Stage::Off) {
                 v.active = false;
                 continue;
             }
-            advanceEnv(v.fEnv, v.fStage, fA, fD, fS, fR);
+            advanceShapedEnv(v.fEnv, v.fStage, v.fShape, fA, fD, fS, fR, fBend);
 
             if (glideCoef < 1.0) v.freqCur += (v.freqTarget - v.freqCur) * glideCoef;
             else
@@ -312,6 +321,12 @@ void BassSynth::render(float* out, int32_t frames) {
         out[i * 2] += o * panL;
         out[i * 2 + 1] += o * panR;
     }
+    {
+        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        const bool on = lv && lv->active;
+        publishEnvTele(envTele_, on, on ? lv->aStage : Stage::Off, on ? lv->aShape : EnvShapeState{});
+        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->fStage : Stage::Off, on ? lv->fShape : EnvShapeState{});
+    }
     // Sleep: with no sounding voice the loop above accumulated exact zeros.
     idle_ = true;
     for (const auto& v : voices_)
@@ -337,6 +352,9 @@ void BassSynth::startVoice(Voice& v) {
     }
     v.aStage = Stage::Attack;
     v.fStage = Stage::Attack;
+    v.aShape = {};
+    v.fShape = {};
+    lastVoice_ = static_cast<int>(&v - voices_);
     v.modCount = 0;
 }
 
@@ -346,33 +364,6 @@ void BassSynth::release(Voice& v) {
     v.fStage = Stage::Release;
 }
 
-void BassSynth::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
-    switch (st) {
-    case Stage::Attack:
-        env += atk;
-        if (env >= 1.0f) {
-            env = 1.0f;
-            st = Stage::Decay;
-        }
-        break;
-    case Stage::Decay:
-        env -= dec;
-        if (env <= sus) {
-            env = sus;
-            st = Stage::Sustain;
-        }
-        break;
-    case Stage::Sustain: break;
-    case Stage::Release:
-        env -= rel;
-        if (env <= 0.0f) {
-            env = 0.0f;
-            st = Stage::Off;
-        }
-        break;
-    case Stage::Off: break;
-    }
-}
 
 void BassSynth::setSvf(double& a1, double& a2, double& a3, double fc, double k) const {
     const double g = std::tan(kPi * fc / sampleRate_);

@@ -26,6 +26,10 @@ struct MidiEvent {
     float velocity;
     int32_t trackId = -1;
     int32_t expr = -1;
+    // Where it came from (specs/086): a hardware MIDI source index and its channel (0-15);
+    // -1 = computer keyboard, gamepad, Nota Remote or the UI — those reach "All inputs" only.
+    int8_t source = -1;
+    int8_t channel = 0;
 };
 using MidiQueue = SpscRingBuffer<MidiEvent, 1024>;
 
@@ -39,6 +43,7 @@ struct RecordedNote {
     float velocity;
     int32_t pass = 0;
     uint32_t epoch = 0; // take attempt it belongs to (specs/078): stamped by the audio thread
+    int32_t lane = 0;   // the MIDI take lane (track) it records into (specs/086)
 };
 using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
 // A recorded note's expression sample (audio -> message): the note is identified by its pitch
@@ -50,6 +55,7 @@ struct RecordedExpr {
     float beat;
     float value;
     uint32_t epoch = 0; // take attempt (specs/078)
+    int32_t lane = 0;   // MIDI take lane (specs/086)
 };
 using RecordedExprQueue = SpscRingBuffer<RecordedExpr, 1u << 14>;
 // A recorded controller sample (audio -> message): at an absolute beat of the take (a Session
@@ -61,6 +67,7 @@ struct RecordedCtl {
     float value;
     int32_t pass;
     uint32_t epoch = 0; // take attempt (specs/078)
+    int32_t lane = 0;   // MIDI take lane (specs/086)
 };
 using RecordedCtlQueue = SpscRingBuffer<RecordedCtl, 1u << 14>;
 // A clip note's expression at a sample offset of the block (the render pass replays these).

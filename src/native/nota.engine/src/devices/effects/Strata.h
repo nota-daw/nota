@@ -35,7 +35,7 @@ namespace nota {
 
 class Strata : public Device {
   public:
-    enum { Feedback = 0, InputGain, Speed, Quantize, CountIn, SetTempo, Reverse, kNumParams };
+    enum { Feedback = 0, InputGain, Speed, Quantize, CountIn, SetTempo, Reverse, View /* card size, not sound: 0 = L, 1 = S (#531) */, kNumParams };
     enum { M_Empty = 0, M_Rec, M_Play, M_Over, M_Stop };               // transport mode
     enum { LS_Play = 0, LS_Mute, LS_Rec };                             // per-layer state (UI)
     enum { C_Record = 0, C_Overdub, C_Play, C_Stop, C_Undo, C_Clear }; // deviceAction ids

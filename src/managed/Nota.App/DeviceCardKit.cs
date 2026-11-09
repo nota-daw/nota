@@ -378,12 +378,12 @@ internal static class DeviceCardKit
     // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
         Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null,
-        Func<bool>? modified = null, Action<Action>? addLive = null)
+        Func<bool>? modified = null, Action<Action>? addLive = null, double fontSize = NotaType.DeviceValue)
     {
-        double H = height;   // 22: a card header and the device window's title bar
+        double H = height;   // 22: the device window's title bar; 18 in a card header (#531)
         var label = new TextBlock
         {
-            Text = string.IsNullOrEmpty(current) ? Loc.T("device.card.init") : current, FontSize = NotaType.DeviceValue,
+            Text = string.IsNullOrEmpty(current) ? Loc.T("device.card.init") : current, FontSize = fontSize,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var chevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
@@ -463,14 +463,68 @@ internal static class DeviceCardKit
         static Control At(Control c, int col) { Grid.SetColumn(c, col); return c; }
     }
 
+    /// <summary>The preset picker of a mini (S) card header (#540): a small list key in place of
+    /// the "‹ Name ⌄ ›" field, so the device name keeps the room. Its menu holds Previous / Next,
+    /// Init and the list; its tooltip names the current preset (with " *" once it changed).</summary>
+    internal static Border PresetKey(IReadOnlyList<string> presets, int cur, string current,
+        Action<int> apply, Action<int> step, Action? init = null, Func<bool>? modified = null, Action<Action>? addLive = null)
+    {
+        string name = string.IsNullOrEmpty(current) ? Loc.T("device.card.init") : current;
+        Border key = null!;
+        key = IconKey(GlyphKind.List, Loc.F("device_chain.shell.preset", name), () =>
+        {
+            var flyout = new MenuFlyout();
+            var prev = new MenuItem { Header = Loc.T("device.card.previous_preset"), Icon = MenuKit.Icon(GlyphKind.ChevronLeft) };
+            prev.Click += (_, _) => step(-1);
+            var next = new MenuItem { Header = Loc.T("device.card.next_preset"), Icon = MenuKit.Icon(GlyphKind.ChevronRight) };
+            next.Click += (_, _) => step(+1);
+            flyout.Items.Add(prev); flyout.Items.Add(next); flyout.Items.Add(new Separator());
+            if (init != null)
+            {
+                var mi = new MenuItem { Header = Loc.T("device.card.init"), ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 && string.IsNullOrEmpty(current) };
+                mi.Click += (_, _) => init();
+                flyout.Items.Add(mi);
+                flyout.Items.Add(new Separator());
+            }
+            for (int i = 0; i < presets.Count; i++)
+            {
+                int iv = i;
+                var mi = new MenuItem { Header = presets[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                mi.Click += (_, _) => apply(iv);
+                flyout.Items.Add(mi);
+            }
+            flyout.ShowAt(key);
+        });
+        if (modified != null && !string.IsNullOrEmpty(current))
+        {
+            bool shown = false;
+            void Mark()
+            {
+                bool m = modified();
+                if (m == shown) return;
+                shown = m;
+                string tip = Loc.F("device_chain.shell.preset", m ? current + " *" : current);
+                ToolTip.SetTip(key, tip);
+                Avalonia.Automation.AutomationProperties.SetName(key, tip);
+            }
+            Mark();
+            addLive?.Invoke(Mark);
+        }
+        return key;
+    }
+
     /// <summary>The Remove control on a device header or folded strip (#110, specs/043): an 18 × 18
     /// × in muted ink that brightens on hover and shows a seam ring while focused. Not red —
     /// red means overload in Nota; a destructive key says what it does (DESIGN.md). Click, Enter
     /// or Space runs <paramref name="onRemove"/>; the press never reaches the header (no drag,
     /// no selection, no fold).</summary>
-    internal static Border RemoveButton(string tip, Action onRemove)
+    internal static Border RemoveButton(string tip, Action onRemove) => IconKey(GlyphKind.Close, tip, onRemove);
+
+    /// <summary>A header key like <see cref="RemoveButton"/> with another glyph — the XL panel's
+    /// Shrink (specs/085), so it never reads as the Remove × beside it.</summary>
+    internal static Border IconKey(GlyphKind kind, string tip, Action onRemove)
     {
-        var glyph = new Glyph(GlyphKind.Close, 8) { Foreground = TextTertiary, IsHitTestVisible = false };
+        var glyph = new Glyph(kind, 8) { Foreground = TextTertiary, IsHitTestVisible = false };
         var b = new Border
         {
             Width = 18, Height = 18, CornerRadius = NotaRadius.Field, Background = Brushes.Transparent,

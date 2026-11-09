@@ -1222,15 +1222,15 @@ public sealed partial class ArrangementView
             }
 
             // In-progress audio take (M-fix): audio clips only materialise on stop,
-            // so draw a growing red region on the armed track from the take start to
-            // the playhead — otherwise recording gives no feedback on the timeline.
-            if (_o._engine is { } re)
+            // so draw a growing red region on every track the take records (specs/086) from
+            // the take start to the playhead — otherwise recording gives no feedback.
+            if (_o._engine is { } re && re.AudioRecordTrackId > 0)
             {
-                int rt = re.AudioRecordTrackId;
-                if (rt > 0)
-                    for (int i = rLo; i <= rHi; i++)
+                var recording = re.RecordingTracks();
+                for (int i = rLo; i <= rHi; i++)
                     {
-                        if (_o._tracks[i].Id != rt) continue;
+                        int rt = _o._tracks[i].Id;
+                        if (Array.IndexOf(recording, rt) < 0) continue;
                         double ry = RowTop(i), rh = RowH(i);
                         // Loop recording punches the loop region → draw a stable box over it.
                         // Otherwise the box grows by the actual captured length (monotonic),
@@ -1244,13 +1244,13 @@ public sealed partial class ArrangementView
                         else
                         {
                             rx0 = _o.BeatToX(re.AudioRecordStartBeat);
-                            rx1 = Math.Max(rx0, _o.BeatToX(re.AudioRecordStartBeat + re.AudioRecordLengthBeats));
+                            rx1 = Math.Max(rx0, _o.BeatToX(re.AudioRecordStartBeat + re.AudioRecordLengthBeatsOf(rt)));
                         }
                         var rr = new Rect(rx0, ry + 2, Math.Max(2, rx1 - rx0), rh - 4);
                         ctx.DrawRectangle(RecFill, RecBorder, rr, 4, 4);
                         // Live waveform of what's being captured, so the take shows real
                         // signal rather than an empty box (clips only materialise on stop).
-                        DrawRecPeaks(ctx, re, rr);
+                        DrawRecPeaks(ctx, re, rr, rt);
                         if (rr.Width > 34)
                         {
                             var ft = new NotaFormattedText(Loc.T("arrangement.lane_control.rec"), CultureInfo.InvariantCulture,
@@ -1258,7 +1258,6 @@ public sealed partial class ArrangementView
                             Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
                             ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
                         }
-                        break;
                     }
             }
 
@@ -1453,11 +1452,11 @@ public sealed partial class ArrangementView
 
         // Live waveform for the in-progress take: fetch min/max peaks over the capture
         // buffer sized to the region width, and draw them like a normal clip waveform.
-        private void DrawRecPeaks(DrawingContext ctx, IAudioEngine eng, Rect r)
+        private void DrawRecPeaks(DrawingContext ctx, IAudioEngine eng, Rect r, int trackId)
         {
             if (r.Width < 2 || r.Height <= 4) return;
             int want = Math.Clamp((int)r.Width, 1, 512);
-            int n = eng.AudioRecordPeaks(_recPeaks, want);
+            int n = eng.AudioRecordPeaksOf(trackId, _recPeaks, want);
             if (n <= 0) return;
             double mid = r.Y + r.Height / 2;
             double amp = r.Height / 2 - 2;

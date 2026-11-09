@@ -84,6 +84,7 @@ bool MidiInput::open(MessageCallback cb, const std::vector<std::string>& disable
     if (MIDIInputPortCreate(impl_->client, CFSTR("Nota In"), readProc, impl_, &impl_->port) != noErr) return false;
 
     std::fill(std::begin(impl_->running), std::end(impl_->running), Byte{0});
+    uids_.clear();
     const ItemCount n = MIDIGetNumberOfSources();
     intptr_t index = 0;
     for (ItemCount i = 0; i < n; ++i) {
@@ -94,6 +95,7 @@ bool MidiInput::open(MessageCallback cb, const std::vector<std::string>& disable
         if (!uid.empty() && std::find(disabledUids.begin(), disabledUids.end(), uid) != disabledUids.end()) continue;
         // The source's index rides along as the connection refCon (readProc's srcConn);
         // past kMaxSources they share the last slot.
+        if (index < MidiInput::kMaxSources) uids_.push_back(uid);
         MIDIPortConnectSource(
             impl_->port, src, reinterpret_cast<void*>(std::min<intptr_t>(index++, MidiInput::kMaxSources - 1)));
     }

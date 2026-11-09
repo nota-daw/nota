@@ -76,7 +76,8 @@ public static class PresetService
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             doc.NamedParams = new Dictionary<string, float>(pc);
             for (int i = 0; i < pc; i++)
-                doc.NamedParams[engine.DeviceParamName(trackId, deviceIndex, i)] = engine.DeviceGetParam(trackId, deviceIndex, i);
+                if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))   // the card size is editor state (#531)
+                    doc.NamedParams[pn] = engine.DeviceGetParam(trackId, deviceIndex, i);
             if (bk == EqKind) doc.BandText = CaptureBandText(engine, trackId, deviceIndex);
             return doc;
         }
@@ -197,6 +198,21 @@ public static class PresetService
         engine.MidiEffectSetParam(trackId, index, 7, engine.MidiEffectGetParam(trackId, index, 3) > 0f ? 1f : 0f);
     }
 
+    private const int LensKind = 22; // Nota Lens
+
+    // An effect preset's named params as today's device names them. Nota Lens called its graph
+    // "View" until the card got an S / L size (#531), which took that name: an older Lens
+    // preset's "View" is its graph, and it never sets the card size.
+    private static System.Collections.Generic.Dictionary<string, float>? EffectNamed(PresetDocument doc, int kind)
+    {
+        var named = doc.NamedParams;
+        if (kind != LensKind || named is null || named.ContainsKey("Graph") || !named.TryGetValue("View", out var graph)) return named;
+        var moved = new System.Collections.Generic.Dictionary<string, float>(named);
+        moved.Remove("View");
+        moved["Graph"] = graph;
+        return moved;
+    }
+
     private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
@@ -213,11 +229,11 @@ public static class PresetService
                 if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int di = engine.AddBuiltinDevice(targetTrackId, doc.BuiltinKind);
                 if (di < 0) return Loc.T("persistence.preset.failed_to_add_device");
-                if (doc.NamedParams is { Count: > 0 })
+                if (EffectNamed(doc, doc.BuiltinKind) is { Count: > 0 } named)
                 {
                     int pc = engine.DeviceParamCount(targetTrackId, di);
                     for (int i = 0; i < pc; i++)
-                        if (doc.NamedParams.TryGetValue(engine.DeviceParamName(targetTrackId, di, i), out var v))
+                        if (named.TryGetValue(engine.DeviceParamName(targetTrackId, di, i), out var v))
                             engine.DeviceSetParam(targetTrackId, di, i, v);
                 }
                 else
@@ -356,7 +372,8 @@ public static class PresetService
         {
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             for (int i = 0; i < pc; i++)
-                engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
+                if (!DeviceView.IsViewParam(engine.DeviceParamName(trackId, deviceIndex, i)))   // the card size (S / L / XL) stays
+                    engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
             if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == EqKind) ApplyBandText(null, engine, trackId, deviceIndex);
         }
         return "";
@@ -433,14 +450,15 @@ public static class PresetService
             {
                 if (deviceIndex < 0) return Loc.T("persistence.preset.not_an_effect");
                 int pc = engine.DeviceParamCount(trackId, deviceIndex);
-                if (doc.NamedParams is { Count: > 0 })
+                if (EffectNamed(doc, engine.TrackDeviceBuiltinKind(trackId, deviceIndex)) is { Count: > 0 } named)
                 {
                     // A param the preset doesn't name goes back to its default (like instruments),
                     // so switching presets never inherits leftovers from the previous one.
+                    // The card size (View, #531) is editor state: the card keeps its S / L size.
                     for (int i = 0; i < pc; i++)
-                        engine.DeviceSetParam(trackId, deviceIndex, i,
-                            doc.NamedParams.TryGetValue(engine.DeviceParamName(trackId, deviceIndex, i), out var v)
-                                ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
+                        if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))
+                            engine.DeviceSetParam(trackId, deviceIndex, i,
+                                named.TryGetValue(pn, out var v) ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
                 }
                 else
                 {

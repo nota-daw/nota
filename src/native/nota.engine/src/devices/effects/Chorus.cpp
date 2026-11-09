@@ -30,6 +30,7 @@ Chorus::Chorus() {
     p_[Width].store(0.5f);    // 100 %
     p_[Warmth].store(0.0f);
     p_[Mix].store(0.50f);
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -331,6 +332,7 @@ const char* Chorus::paramName(int32_t i) const {
     case Width: return "Width";
     case Warmth: return "Warmth";
     case Mix: return "Mix";
+    case View: return "View";
     default: return "";
     }
 }

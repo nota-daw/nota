@@ -98,6 +98,7 @@ class AutoShift : public Device {
         MidiGlide,
         MidiBendRange,
         MidiBend,
+        View,        // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 

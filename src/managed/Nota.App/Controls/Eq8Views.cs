@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota EQ-8 (device kind 0) response graph, a build of the "Nota EQ-8" mockup. The window
-// draws the analyzer behind everything (specs/046: the output spectrum as a low-contrast filled
-// area with the input as a dim line over it — Pre fills the input alone, Off draws neither — and
-// with Peak on a thin line at each frequency's recent top, over the Range's 60 / 90 / 120 dB
-// below 0 dBFS), the selected band's own curve
-// as a faint accent line, the Side path as a teal line when any band works on the Side, and
-// the main response (stereo — or the Mid when the Side has its own curve) as the neutral primary
-// curve. Every band is a numbered node at its effective gain (Scale applied) — selected accent,
-// a Side band teal, the rest Ink 3, an off band Ink 6; a Mid band wears a neutral ring and a
-// left / right band a rose one. A tooltip beside the selected node reads the band.
+// Nota EQ-8 (device kind 0) response graph, drawn like the shared filter graph (FilterGraphBase,
+// #531). The window draws the analyzer behind everything (specs/046: the output spectrum as a
+// low-contrast filled area with the input as a dim line over it — Pre fills the input alone, Off
+// draws neither — and with Peak on a thin line at each frequency's recent top, over the Range's
+// 60 / 90 / 120 dB below 0 dBFS), the selected band's own curve as a dashed grey line, the Side
+// path as a grey line when any band works on the Side, and the main response (stereo — or the
+// Mid when the Side has its own curve) as the accent curve with a light fill to 0 dB. Every band
+// is a numbered node at its effective gain (Scale applied) — selected accent, a Side band a darker
+// grey, the rest light grey, an off band dark grey; a Mid band wears a ring and a left / right
+// band a dashed one. The selected band reads on the scale, not over the plot: its frequency,
+// gain, Q (and a cut's slope) lit on the frequency strip under the window.
 //
 // Drag a node — frequency and gain; the wheel over a node — Q (Shift for fine); ⌥-click a node
 // types its frequency, gain and Q (Tab between them); double-click a node turns the band on /
@@ -113,13 +114,11 @@ internal static class Eq8
 public sealed class Eq8Curve : Control, IValueEntryHost
 {
     private const int Pts = 150;
-    private const double NodeD = 13, HitR = 9;
+    private const double NodeD = 13, HitR = 9, AxisH = FilterAxis.H;
 
-    private static readonly IPen GridFaint = new Pen(NotaPalette.GridSubBeat, 1);
-    private static readonly IPen GridMid = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.TrackOff, 1);
     private static readonly IPen PreDimPen = new Pen(NotaPalette.Wash(NotaPalette.TextAxis, 0x66), 1);
-    private static readonly IPen SelPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x5A), 1);
+    private static readonly IPen SelPen = new Pen(NotaPalette.TextSecondary, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
     private static readonly IPen SidePen = new Pen(NotaPalette.TextTertiary, NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round);
     private static readonly IPen OffSelPen = new Pen(NotaPalette.Accent, 1.5);
     private static readonly IPen RingPen = new Pen(NotaPalette.BgSunken, 2);
@@ -262,9 +261,10 @@ public sealed class Eq8Curve : Control, IValueEntryHost
         return -1;
     }
 
-    // ---- geometry: the plot is the whole control ----
+    // ---- geometry: the plot is the control over the frequency strip ----
+    private double PlotH => Math.Max(1, Bounds.Height - AxisH);
     private double X(double f) => Eq8.FreqToN(f) * Bounds.Width;
-    private double Y(double db) => Eq8.GainToN(db) * Bounds.Height;
+    private double Y(double db) => Eq8.GainToN(db) * PlotH;
     // A node at 20 Hz or 20 kHz stays whole inside the window.
     private Point NodeAt(int b) => new(Math.Clamp(X(P(b, Eq8.FreqF)), NodeD / 2 + 2, Math.Max(NodeD / 2 + 2, Bounds.Width - NodeD / 2 - 2)),
         Y(Eq8.HasGain(BandType(b)) ? P(b, Eq8.GainF) * ScaleK : 0));
@@ -288,7 +288,7 @@ public sealed class Eq8Curve : Control, IValueEntryHost
     // The node sits at gain × Scale; dragging it asks for the gain that lands it there.
     private double GainAtY(double y)
     {
-        double g = Eq8.NToGain(y / Math.Max(1, Bounds.Height)), s = ScaleK;
+        double g = Eq8.NToGain(y / PlotH), s = ScaleK;
         return s > 0.01 ? Math.Clamp(g / s, -18, 18) : 0;
     }
 
@@ -466,17 +466,16 @@ public sealed class Eq8Curve : Control, IValueEntryHost
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height, sr = Sr;
-        if (w <= 0 || h <= 0) return;
+        double w = Bounds.Width, h = PlotH, sr = Sr;
+        if (w <= 0 || Bounds.Height <= AxisH + 4) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        using var clip = ctx.PushClip(new RoundedRect(frame.Deflate(1), NotaGraph.Radius));
+        var clip = ctx.PushClip(new RoundedRect(frame.Deflate(1), NotaGraph.Radius));
 
-        // grid: 100 Hz · 1 kHz (stronger) · 10 kHz; ±6 / ±12 dB, 0 dB stronger
-        foreach (var f in new[] { 100.0, 10000.0 }) ctx.DrawLine(GridFaint, new Point(X(f), 0), new Point(X(f), h));
-        ctx.DrawLine(GridMid, new Point(X(1000), 0), new Point(X(1000), h));
-        foreach (var db in new[] { -12.0, -6.0, 6.0, 12.0 }) ctx.DrawLine(GridFaint, new Point(0, Y(db)), new Point(w, Y(db)));
-        ctx.DrawLine(ZeroPen, new Point(0, Y(0)), new Point(w, Y(0)));
+        // grid: the decades; 0 dB and ±12 dB
+        foreach (var f in new[] { 100.0, 1000.0, 10000.0 }) ctx.DrawLine(NotaGraph.GridPen, new Point(X(f), 1), new Point(X(f), h - 1));
+        foreach (var db in new[] { -12.0, 12.0 }) ctx.DrawLine(NotaGraph.GridPen, new Point(1, Y(db)), new Point(w - 1, Y(db)));
+        ctx.DrawLine(ZeroPen, new Point(1, Y(0)), new Point(w - 1, Y(0)));
 
         // analyzer: Pre — the input filled; Post — the output filled under a dim input line; Off —
         // neither. Its points sit on the graph's own 20 Hz – 20 kHz axis.
@@ -505,11 +504,15 @@ public sealed class Eq8Curve : Control, IValueEntryHost
         }
         int sel = _selected;
 
-        // curves: main (all but Side bands), side (all but Mid bands), the selected band alone
-        var gm = new StreamGeometry(); var gs = new StreamGeometry(); var gx = new StreamGeometry();
+        // curves: main (all but Side bands) with its fill to 0 dB, side (all but Mid bands), the
+        // selected band alone
+        var gm = new StreamGeometry(); var gf = new StreamGeometry(); var gs = new StreamGeometry(); var gx = new StreamGeometry();
+        double y0 = Y(0);
         using (var cm = gm.Open())
+        using (var cf = gf.Open())
         using (var cs = gs.Open())
         using (var cx = gx.Open())
+        {
             for (int i = 0; i < Pts; i++)
             {
                 double n = i / (double)(Pts - 1), x = n * w;
@@ -525,27 +528,20 @@ public sealed class Eq8Curve : Control, IValueEntryHost
                 var pm = new Point(x, Math.Clamp(Y(m), -2, h + 2));
                 var ps = new Point(x, Math.Clamp(Y(s), -2, h + 2));
                 var px = new Point(x, Math.Clamp(Y(Eq8.MagDb(secs.AsSpan(sel * 4, 4), nSec[sel], wv)), -2, h + 2));
-                if (i == 0) { cm.BeginFigure(pm, false); cs.BeginFigure(ps, false); cx.BeginFigure(px, false); }
+                if (i == 0) { cm.BeginFigure(pm, false); cf.BeginFigure(new Point(x, y0), true); cs.BeginFigure(ps, false); cx.BeginFigure(px, false); }
                 else { cm.LineTo(pm); cs.LineTo(ps); cx.LineTo(px); }
+                cf.LineTo(pm);
             }
+            cf.LineTo(new Point(w, y0)); cf.EndFigure(true);
+        }
+        ctx.DrawGeometry(FilterAxis.ResponseFill, null, gf);
         if (BandOn(sel)) ctx.DrawGeometry(null, SelPen, gx);
         if (anySide) ctx.DrawGeometry(null, SidePen, gs);
-        ctx.DrawGeometry(null, NotaGraph.PrimaryPen, gm);
-
-        // axis labels
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "20");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "20k Hz");
-        var k1 = NotaGraph.AxisText("1k");
-        ctx.DrawText(k1, new Point(X(1000) + 3, h - 4 - k1.Height + 1));
-        var p12 = NotaGraph.AxisText("+12"); var m12 = NotaGraph.AxisText("−12");
-        ctx.DrawText(p12, new Point(w - 5 - p12.Width, Y(12) - p12.Height - 1));
-        ctx.DrawText(m12, new Point(w - 5 - m12.Width, Y(-12) + 1));
+        ctx.DrawGeometry(null, MainPen, gm);
 
         // legend (the ANALYZER selector sits over the top-left corner, placed by the card)
         if (anySide)
-            NotaGraph.Legend(ctx, w - 5, 2, ("mid", NotaPalette.VizInk, NotaGraph.Mark.Line), ("side", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
-        else
-            NotaGraph.Legend(ctx, w - 5, 2, ("stereo", NotaPalette.VizInk, NotaGraph.Mark.Line));
+            NotaGraph.Legend(ctx, w - 5, 2, ("mid", NotaPalette.AccentBright, NotaGraph.Mark.Line), ("side", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
 
         // nodes (selected last, on top)
         for (int k = 1; k <= Eq8.Bands; k++)
@@ -559,6 +555,7 @@ public sealed class Eq8Curve : Control, IValueEntryHost
             // The number takes ink derived from its own node, so it reads on all of them.
             IBrush num = bOn && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : isSel ? NotaPalette.AccentBright : NotaPalette.TextTertiary;
             double r = NodeD / 2;
+            if (isSel && _drag == b) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, c, r + 5, r + 5);
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
             if (!bOn && isSel) ctx.DrawEllipse(null, OffSelPen, c, r, r);
             else if (bOn && ch[b] != Eq8.St && Eq8.ChannelInk(ch[b]) is { } ring)   // a mark for a band on one channel
@@ -567,9 +564,20 @@ public sealed class Eq8Curve : Control, IValueEntryHost
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }
 
-        var tip = DrawTip(ctx, w, h);
-        DrawLabels(ctx, w, h, tip);
+        FilterAxis.DbMarks(ctx, frame, Y, default, 12, 0, -12);
+        DrawLabels(ctx, w, h, default);
+        clip.Dispose();
+
+        // The selected band on the frequency strip: its frequency, gain, Q and slope.
+        int sty = BandType(sel);
+        bool sOn = BandOn(sel), hot = _drag == sel;
+        string ft = Eq8.Hz(P(sel, Eq8.FreqF)) + (Eq8.HasGain(sty) ? " · " + Eq8.Db(P(sel, Eq8.GainF)) + "\u2009dB" : "")
+            + NotaNum.F($" · Q {P(sel, Eq8.QF):0.00}")
+            + (Eq8.IsCut(sty) ? NotaNum.F($" · {Eq8.SlopeDb(Slope(sel))}\u2009dB/oct") : "") + (sOn ? "" : " · off");
+        FilterAxis.Draw(ctx, frame, w, X, Eq8.Fmin, Eq8.Fmax, FilterAxis.Lit(P(sel, Eq8.FreqF), ft, hot, !sOn));
     }
+
+    private static readonly IPen MainPen = new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 
     // ---- band labels (specs/049) ----
     private const double LabelH = 13, NoteDot = 4;
@@ -593,7 +601,8 @@ public sealed class Eq8Curve : Control, IValueEntryHost
         for (int b = 0; b < Eq8.Bands; b++)
             if (Label(b).Length > 0 || HasNote(b)) order.Add((b, NodeAt(b).X));
         order.Sort((a, c) => a.X.CompareTo(c.X));
-        var placed = new List<Rect> { tip, Reserved };
+        var placed = new List<Rect> { Reserved };
+        if (tip.Width > 0) placed.Add(tip);
         var chips = new List<(int B, Rect Box, FormattedText? Ft, bool Note, bool On, Point N, double R)>();
         foreach (var (b, _) in order)
         {
@@ -663,26 +672,5 @@ public sealed class Eq8Curve : Control, IValueEntryHost
             if (ft.Width <= maxW) return ft;
         }
         return ft;
-    }
-
-    // The selected band's reading beside its node, clear of the node and inside the window.
-    private Rect DrawTip(DrawingContext ctx, double w, double h)
-    {
-        int b = _selected, ty = BandType(b), chn = Chan(b);
-        bool bOn = BandOn(b), g = Eq8.HasGain(ty);
-        var a = Text(NotaNum.F($"B{b + 1} {Eq8.TypeNames[ty]}") + (chn != Eq8.St ? " · " + Eq8.ChannelShort[chn] : "") + (bOn ? "" : " · off"),
-            NotaPalette.TextPrimary, 11, bold: true, mono: false);
-        var l2 = Text(Eq8.Hz(P(b, Eq8.FreqF)) + (g ? " · " + Eq8.Db(P(b, Eq8.GainF)) + " dB" : "") + NotaNum.F($" · Q {P(b, Eq8.QF):0.00}")
-            + (Eq8.IsCut(ty) ? NotaNum.F($" · {Eq8.SlopeDb(Slope(b))}\u2009dB/oct") : ""), NotaPalette.TextSecondary, 10.5);
-        double tw = Math.Max(a.Width, l2.Width) + 16, th = a.Height + l2.Height + 10;
-        var n = NodeAt(b);
-        double x = n.X > w * 0.62 ? n.X - 14 - tw : n.X + 14;
-        double y = n.Y < h * 0.34 ? n.Y + 8 : n.Y - 8 - th;
-        x = Math.Clamp(x, 3, Math.Max(3, w - tw - 3)); y = Math.Clamp(y, 3, Math.Max(3, h - th - 3));
-        var box = new Rect(x, y, tw, th);
-        ctx.DrawRectangle(NotaPalette.SurfaceHover, null, new RoundedRect(box, NotaRadius.CellValue));
-        ctx.DrawText(a, new Point(x + 8, y + 5));
-        ctx.DrawText(l2, new Point(x + 8, y + 5 + a.Height));
-        return box;
     }
 }

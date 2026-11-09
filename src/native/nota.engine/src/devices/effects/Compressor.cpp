@@ -34,6 +34,7 @@ Compressor::Compressor() {
     set(ScQ, 0.7071f);
     set(External, 1.0f);
     set(StereoLink, 1.0f);
+    set(View, 0.0f); // L
     std::fill(std::begin(envRing_), std::end(envRing_), -120.0f);
     setSampleRate(44100.0, 0);
 }
@@ -342,7 +343,7 @@ std::string Compressor::deviceText(int32_t id) const {
 const char* Compressor::paramName(int32_t i) const {
     static const char* nm[] = {"Thresh", "Ratio", "Attack", "Release", "Makeup", "Knee", "Mix", "Lookahead",
         "Detection", "AutoRelease", "AutoGain", "Range", "Character", "SC HP", "SC LP", "SC Listen", "SC Gain", "Hold",
-        "SC Q", "External Key", "Stereo Link"};
+        "SC Q", "External Key", "Stereo Link", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

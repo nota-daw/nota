@@ -36,6 +36,9 @@ Sampler::Sampler() {
     pn_[EnvCutoff].store(0.0f);
     pn_[EnvAmount].store(0.75f);
     pn_[Output].store(1.0f); // env → cutoff off (+3 oct when on)
+    pn_[DCurve].store(0.5f);
+    pn_[RCurve].store(0.5f);
+    pn_[EnvExp].store(0.0f); // straight, Lin: old projects keep their envelope
 }
 
 int32_t Sampler::scopeRead(float* out, int32_t maxN) const {
@@ -69,7 +72,7 @@ std::string Sampler::pluginParamId(int32_t i) const {
     static const char* ids[] = {"volume", "pan", "transpose", "detune", "start", "end", "reverse", "loopmode",
         "loopstart", "loopend", "attack", "decay", "sustain", "release", "filtertype", "cutoff", "resonance",
         "voicemode", "loopxfade", "keytrack", "velamount", "gain", "glide", "pitchtrack", "envcutoff", "envamount",
-        "output"};
+        "output", "dcurve", "rcurve", "envexp"};
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
 }
 
@@ -80,7 +83,7 @@ std::string Sampler::pluginParamName(int32_t i) const {
         "Sample Reverse", "Loop Mode", "Loop Start", "Loop End", "Env Attack", "Env Decay", "Env Sustain",
         "Env Release", "Filter Type", "Filter Cutoff", "Filter Resonance", "Voice Mode", "Loop Crossfade",
         "Filter Keytrack", "Voice Velocity", "Sample Gain", "Voice Glide", "Pitch Keytrack", "Filter Env On",
-        "Filter Env Amount", "Out Level"};
+        "Filter Env Amount", "Out Level", "Env Decay Curve", "Env Release Curve", "Env Exp"};
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
 }
 
@@ -113,6 +116,7 @@ void Sampler::noteOn(int32_t pitch, float velocity) {
     const bool rev = pn_[Reverse].load(std::memory_order_relaxed) > 0.5f;
     v->active = true;
     v->stage = Stage::Attack;
+    v->shape = {};
     v->keyUp = false;
     v->env = 0.0f;
     v->pitch = pitch;
@@ -194,6 +198,8 @@ void Sampler::render(float* out, int32_t frames) {
     const float decRate = static_cast<float>(1.0 / (secOf(Decay, 0.002, 6.0) * sampleRate_));
     const float relRate = static_cast<float>(1.0 / (secOf(Release, 0.002, 6.0) * sampleRate_));
     const float sustain = pn_[Sustain].load(std::memory_order_relaxed);
+    const EnvBends bend = envBends({pn_[DCurve].load(std::memory_order_relaxed), pn_[RCurve].load(std::memory_order_relaxed),
+        pn_[EnvExp].load(std::memory_order_relaxed)});
     const float velAmt = pn_[VelAmount].load(std::memory_order_relaxed); // 1 = full velocity→volume, 0 = flat
 
     // Glide: a one-pole slide of the voice's note toward its key (time ≈ to 63 %).
@@ -236,30 +242,8 @@ void Sampler::render(float* out, int32_t frames) {
                 }
             }
             // envelope
-            switch (v.stage) {
-            case Stage::Attack:
-                v.env += atkRate;
-                if (v.env >= 1.0f) {
-                    v.env = 1.0f;
-                    v.stage = Stage::Decay;
-                }
-                break;
-            case Stage::Decay:
-                v.env -= decRate;
-                if (v.env <= sustain) {
-                    v.env = sustain;
-                    v.stage = Stage::Sustain;
-                }
-                break;
-            case Stage::Sustain: break;
-            case Stage::Release:
-                v.env -= relRate;
-                if (v.env <= 0.0f) {
-                    v.env = 0.0f;
-                    v.active = false;
-                }
-                break;
-            }
+            advanceShapedEnv(v.env, v.stage, v.shape, atkRate, decRate, sustain, relRate, bend);
+            if (v.stage == Stage::Off) v.active = false;
             if (!v.active) break;
 
             float ls, rs;
@@ -326,6 +310,7 @@ void Sampler::render(float* out, int32_t frames) {
     tele_[5].store(best && fType > 0 ? static_cast<float>(best->cutoff) : -1.0f, std::memory_order_relaxed);
     if (peak > tele_[6].load(std::memory_order_relaxed)) tele_[6].store(peak, std::memory_order_relaxed);
     tele_[7].store(static_cast<float>(heldN_), std::memory_order_relaxed);
+    publishEnvTele(tele_ + 8, best != nullptr, best ? best->stage : Stage::Off, best ? best->shape : EnvShapeState{});
 
     // Auto-sleep: a looping voice stays active until note-off, so no active voice plus
     // our own silent block means every tail (incl. release) has fully decayed.

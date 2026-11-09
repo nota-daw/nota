@@ -35,6 +35,7 @@ Amp::Amp() {
     p_[MidFreq].store(kMidFreqDefault);
     p_[MicDistance].store(kDistDefault);
     p_[HighCut].store(1.0f); // open
+    p_[View].store(0.0f); // L
 }
 
 void Amp::setSampleRate(double sr, int32_t maxBlock) {
@@ -278,7 +279,7 @@ int32_t Amp::scopeRead(float* out, int32_t maxSamples) const {
 const char* Amp::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Model", "Gain", "Bass", "Middle", "Treble", "Presence", "Output", "Mix",
         "Cab On", "Cabinet", "Mic", "Axis", "Gate", "Oversampling", "Mid Freq", "Mic Distance", "Mic Position",
-        "Low Cut", "High Cut", "Even Only", "Auto Comp", "Bright", "Deep"};
+        "Low Cut", "High Cut", "Even Only", "Auto Comp", "Bright", "Deep", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

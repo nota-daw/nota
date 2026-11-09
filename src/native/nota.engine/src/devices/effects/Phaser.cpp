@@ -28,6 +28,7 @@ Phaser::Phaser() {
     p_[Division].store((float)kDefaultDiv / (kDivs - 1));
     p_[Stereo].store(0.5f);  // 90°
     p_[Stages].store(0.25f); // 4 stages
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -277,6 +278,7 @@ const char* Phaser::paramName(int32_t i) const {
     case Division: return "Division";
     case Stereo: return "Stereo";
     case Stages: return "Stages";
+    case View: return "View";
     default: return "";
     }
 }

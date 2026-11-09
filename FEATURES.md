@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.59.1** (plus changes in development on `main`). This document describes what is
+**0.59.2** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -576,8 +576,17 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Audio: recording, clips, warp
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
-  monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
-  (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
+  monitoring (in/auto/off). The input is any input of the device alone (**In 3** — mono,
+  centred) or a stereo pair (**In 3/4**), named as the device names them; new tracks take
+  In 1. MCP `list_audio_inputs`, `set_track_input`, `get_track_input`.
+- **MIDI input per instrument track**: All inputs (every device, the computer keyboard,
+  gamepad and Nota Remote) or one MIDI device, and a channel (all or 1–16); every armed
+  instrument track records its own MIDI clip in one take. MCP `set_track_midi_input`,
+  `get_track_midi_input`.
+- **Several tracks in one pass**: Record records every armed audio track, each its own input,
+  aligned, one undo step; a mono input records a mono file.
+- **Inputs setup** (Settings → Audio → Inputs): switch inputs off and name inputs and stereo
+  pairs per device; track input menus follow.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
   **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
@@ -697,6 +706,13 @@ and hosted plug-ins) have the same on/off switch as effects: off silences the in
 audio effects after it keep running and keep their settings; saved with the project.
 
 ### Instruments
+- **Envelopes (built-in instruments)** — one envelope graph across Volt, Aurora, Operator, Bass,
+  Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin: drag the breakpoints, bend the
+  decay and release by their diamonds, Lin / Exp per envelope, a held sustain zone with its level,
+  a segment bar, one time scale per card and a dot on the sounding voice.
+- **Filter graph (built-in instruments)** — one filter response view across Volt, Aurora,
+  Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin: the post-filter spectrum
+  behind the curve, a hover marker with frequency, note and gain, and the cutoff lit on the axis.
 - **Nota Synth** — *no longer offered for new tracks: Nota Volt covers it and carries its
   presets (specs/026); saved tracks still load and play.* Subtractive synthesizer (the basic one): one oscillator
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
@@ -731,6 +747,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   8 macros over 12 destinations, unison (one detuned partner, or a 2/4/7-voice stack with
   stereo spread), output drive, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
   modulation wheels, VEL→AMP, VEL→FILTER, Poly/Mono/Legato (Mono falls back to a held key).
+  The card comes in two sizes, switched in its header: L, the full 700 × 260 editor, and S, a
+  260 × 260 mini card (Filter 1's response, Cutoff · Reso · Attack · Release).
   74 factory presets: its own 25 plus the Nota Synth and Nota Bass libraries.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
@@ -761,18 +779,18 @@ audio effects after it keep running and keep their settings; saved with the proj
   decay, material, brightness, inharmonicity, ratio, hit position and tune), in series
   (1→2) or parallel (1+2) with a Res 1 / Res 2 mix; the partials drawn as the engine tunes
   them (drag for ratio and brightness), Poly (8 voices) / Mono, tune, fine, note-off
-  damping, volume, pan and a meter. 32 factory presets. MCP: `read_physical`.
+  damping, volume and pan. 32 factory presets. MCP: `read_physical`.
 - **Nota Flux** — vector-morphing analog synth: an XY pad with four "timbre worlds"
   (WARM/GLASS/MOOG/GRAIN) whose resonance, drive and unison the vector blends, **React**
   (sidechain modulation from another track: Filter/Pitch/Space/Vector, with a live scope of
   its envelope, transients and tilt, and transients per bar), 5 macro knobs
-  (Age/Motion/Filter/Env/Space), glide, tune and gain. 25 factory presets.
+  (Age/Motion/Filter/Env/Space), glide, tune and volume. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
   banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
   **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
   Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
-  contour or sample region, Perform rail with an output meter, a full-width step strip with
+  contour or sample region, Perform rail (Swing, Humanize, Accent, Volume, Glue), a full-width step strip with
   a velocity lane. Each voice has its own **FX** chain of built-in effects (the voice's FX
   tab). Its kits are the 25 factory drum kits it shares with the Drum Rack — samples and
   per-voice effects — from the card's kit picker or the browser. Eight **macros** (the
@@ -849,7 +867,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   an Instrument Rack chain or a Drum Rack pad, with the same editor.
 
 ### Audio effects
-- **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
+- **Nota EQ-8** (kind 0) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the graph with the selected band's Freq, Gain, Q and Output; XL moves the whole editor into a large panel above the device chain, graph stretched, one per track, following the selected track, its height set with the Devices panel's splitter; the header's pop-out key opens it in its own resizable window instead) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
   Notch / High shelf / High cut, frequency, gain, Q (resonance on the cuts), a 12 / 24 / 48 dB/oct
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
@@ -860,93 +878,107 @@ audio effects after it keep running and keep their settings; saved with the proj
   (with a **Label** shown next to its node — **Labels** hides them — and a multiline **Note**),
   Scale and Output in one narrow column at the right that folds away; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
-- **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
+- **Nota Compressor** (1) — in two sizes (L 700 / S 260, S·L toggle) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
   auto-gain, Range, MIX; a sidechain key (internal, another track or one pad / chain / voice
   of it, pre/post tap, External key switch) through 2-pole HP/LP filters with Q and SC Gain, Listen, Stereo link on/off.
   Tabs: Curve (draggable transfer curve + gain-reduction history, crest in → out) / Motion
   (reduction envelope against the input, measured transient and recovery) / Sidechain (key
-  spectrum under draggable filters), and Dynamics / Output, with a LEVEL column and a status
-  strip. 31 factory presets. MCP: `read_dynamics`, `set_device_sidechain` /
+  spectrum under draggable filters), each with its knobs beside it, and a right panel that
+  follows them (Dynamics · Timing · Key) over Mix and Makeup. 31 factory presets. MCP: `read_dynamics`, `set_device_sidechain` /
   `get_device_sidechain`.
-- **Nota Reverb** (2) — Hall/Room/Plate/Chamber, a decay calibrated as a true RT60, HF damp,
+- **Nota Reverb** (2) — in two sizes (L 700 / S 260, S·L toggle) — Hall/Room/Plate/Chamber, a decay calibrated as a true RT60, HF damp,
   pre-delay, size, diffusion (input diffuser + tail allpasses), early reflections spaced by
   the algorithm and size, low/high cut, width, modulation on the tail or on the early part
   only, Vintage (band-limited, 12-bit colour); Freeze (tail held, input muted) and Kill
   tail; output stage with dry level, bass mono, wet only and latency compensation for the
-  diffuser. Tabs: Space / Tone · Mod and Levels / Output, over a live decay-tail window
-  (drag the pre-delay marker or the tail). 30 factory presets.
-- **Nota Delay** (3) — independent L/R times (ms or tempo-synced 1/16…1/2 with triplets
+  diffuser. Tabs: Space / Tone · Mod over a live decay-tail window (drag the pre-delay marker or
+  the tail) with their knobs beside it, and a right panel that follows them (Space · Mod) over
+  Dry, Mix and Out. 30 factory presets.
+- **Nota Delay** (3) — in two sizes (L 700 / S 260, S·L toggle) — independent L/R times (ms or tempo-synced 1/16…1/2 with triplets
   and dotted values), Link, feedback, spread, ping-pong; a tone stage in the loop (low cut,
   high cut, allpass diffusion, tape saturation) with tape WOW modulation; Freeze (loop held,
   input muted) and Clear loop; a time change either crossfades (Fade on change) or glides,
   bending the pitch tape-style; output stage with dry level, width, bass mono, wet only and
-  latency compensation for the diffuser. Tabs: Time / Loop · Wow and Levels / Output, over a
-  live repeat window that lights the repeat sounding now. Tap tempo. 29 factory presets.
-- **Nota Utility** (4) — gain, L/R balance, stereo width 0–400 % with an L/R or M/S law, channel
+  latency compensation for the diffuser. Tabs: Time / Loop · Wow over a live repeat window that
+  lights the repeat sounding now, with their knobs beside it, and a right panel that follows them
+  (Stereo · Loop) over Dry, Mix and Out. Tap tempo. 29 factory presets.
+- **Nota Utility** (4) — in two sizes (L 700 / S 260, S·L toggle) — gain, L/R balance, stereo width 0–400 % with an L/R or M/S law, channel
   mode (Stereo / Left / Right / Swap), mono below a cutoff at 6 / 12 / 24 dB/oct, mute, phase
   invert per side; Gain match and continuous Level match to the input or a Target (LUFS-S / peak /
   RMS), a zero-latency true-peak limiter. Tabs: Field (the stereo field by frequency, drag balance /
   width) / Mono (width over frequency, drag the cutoff) / Levels (in and out over 8 s against the
-  target) and Routing / Output, with a LEVEL column, correlation and a status strip. 30 factory
+  target), each with its knobs beside it, and a right panel that follows them (Phase · Mono · Match)
+  over Gain, with correlation. 30 factory
   presets. MCP: `read_utility`.
-- **Nota Valve** (6, formerly Amplifier) — guitar amp: 7 models (Clean / Boost / Blues /
+- **Nota Valve** (6, formerly Amplifier) — in two sizes (L 700 / S 260, S·L toggle) — guitar amp: 7 models (Clean / Boost / Blues /
   Rock / Lead / Heavy / Bass), gain, a Bass / Middle / Treble / Presence tone stack with a
   sweepable middle, Bright and Deep, an even-harmonics-only preamp; a cabinet (Match / 1×12 /
   2×12 / 4×12 / 1×15 with their resonance and presence peak) heard through a Dynamic /
   Condenser / Ribbon mic at a distance, off axis, at the cap or the edge; low / high cut,
   noise gate, auto gain compensation, mix, output, oversampling. Tabs: Amp (the tone stack's
   response, drag the middle) / Cab (the cabinet against on-axis, drag the mic) / Harmonics
-  (f … 7f, THD, aliasing) and Cabinet / Output, with a STAGE column and a status strip.
+  (f … 7f, THD, aliasing, drag for Gain), each with its knobs beside it, and a right panel that
+  follows them (Tone · Cabinet · Output) over Gain, Mix and Output.
   31 factory presets. MCP: `read_valve`.
-- **Nota Auto Filter** (7) — LP/BP/HP/Notch with morph, 12/24 slope, Clean/Analog, drive;
+- **Nota Auto Filter** (7) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle and the pop-out window, as EQ-8; S is the response over
+  Freq, Res, Drive and Dry/wet) — LP/BP/HP/Notch with morph, 12/24 slope, Clean/Analog, drive;
   an envelope follower (attack, release, timed or infinite hold, on the input or a sidechain
   key) and an LFO (5 waves, morph, free or tempo-synced, start phase, stereo phase, Retrig on
   onsets) driving the cutoff, the resonance or both, with Smooth. Tabs: Filter (draggable
-  response over the spectrum, modulation range) / Envelope (cutoff over time) / LFO (motion
-  over two bars) and Mod / Output, with a SHAPE column and a status strip. 30 factory
-  presets. MCP: `read_filter_motion`.
-- **Nota Auto Shift** (10) — real-time vocal pitch correction: an FFT NSDF pitch tracker
+  response over the incoming spectrum with the modulation range, the cutoff on the axis and a
+  hover marker, Freq, Res and Morph knobs on its right,
+  the type, slope and circuit under it) / Envelope (cutoff over time) / LFO (motion over two
+  bars), whose titles pick the modulation target; the right panel follows the centre tab
+  (modulation on Filter, the Envelope or LFO controls on theirs) over Drive, Dry/wet and Gain
+  knobs. 30 factory presets. MCP: `read_filter_motion`.
+- **Nota Auto Shift** (10) — in two sizes (L 700 / S 260, S·L toggle; S is the trace over Key, Scale, Amount, Speed, Human and Dry/wet) — real-time vocal pitch correction: an FFT NSDF pitch tracker
   with a detection range (voice-type presets), sensitivity and sibilant detection; Key +
   Scale (5 scales, 8 modes, a Custom 12-note set), Auto key and one-shot Learn (Krumhansl
   key profiles over the sung-note histogram), Follow scale device, or a MIDI target from
   another track's notes (Note / Scale, Latch, Oct lock, Glide within a bend range); Amount,
   Speed, Range, Human (keeps vibrato); a PSOLA shifter with Shift, Fine, Preserve formants
-  and Formant shift, Skip sibilants, Mix, latency compensated. Trace / Scale / MIDI graphs, a
-  PITCH column, Shift / Detect panel; 34 factory presets; MCP `read_auto_shift`.
-- **Nota Vintage** (8) — degradation and saturation: 6 era characters
+  and Formant shift, Skip sibilants, Mix, latency compensated. Trace / Scale / MIDI graphs with
+  their knobs beside them, a right panel that follows them (Detect · Key · MIDI) over Shift,
+  Dry/wet and Formant knobs; 34 factory presets; MCP `read_auto_shift`.
+- **Nota Vintage** (8) — in two sizes (L 700 / S 260, S·L toggle) — degradation and saturation: 6 era characters
   (Vinyl/Cassette/Reel/VHS/Tube/Analog, with the voicing switchable off), drive, tone with a
   Warm / Flat / Dark model and low / high shelves, wow (free or tempo-synced) and flutter with
   their rates, noise with a hiss high-pass, crackle, wear, wear that follows the input, stereo
   drift, a Tube / Analog output stage, even-harmonics-only saturation, auto gain compensation,
   mix, output, oversampling. Tabs: Curve (the transfer curve, the input on it) / Wear (pitch
-  drift over 4 s in cents) / Output (harmonics against the hiss floor) and Tone / Output, with
-  a STATE column and a status strip. 30 factory presets. MCP: `read_vintage`.
-- **Nota Beat Repeat** (11) — tempo-synced repeater: Interval (1/8 … 4 bars, bars follow the
+  drift over 4 s in cents) / Output (harmonics against the hiss floor), each with its knobs beside
+  it, and a right panel that follows them (Character · Wear · Output) over Mix and Output.
+  30 factory presets. MCP: `read_vintage`.
+- **Nota Beat Repeat** (11) — in two sizes (L 700 / S 260, S·L toggle; S is the timeline over Interval, Repeat, Chance, Gate, Decay and Dry/wet) — tempo-synced repeater: Interval (1/8 … 4 bars, bars follow the
   time signature), Offset, Grid with Triplet, Variation, Chance, Gate; Mix / Insert / Gate
   modes; Pitch and Pitch Decay, Decay, Volume; a repeat filter (LP / BP / HP, width in
   octaves, optionally narrowing with each repeat); Repeat (hold or Latch) and Mix. Timeline /
-  Slices / Filter graphs (drag the offset, the gate and the filter), a REPEAT column, a state
-  box and meters; 31 factory presets; MCP `read_beat_repeat`.
-- **Nota Orbit** (9, formerly Auto Pan) — auto-pan and tremolo on one LFO: L/R phase (0° =
+  Slices / Filter graphs (drag the offset, the gate and the filter) with their knobs beside
+  them, a right panel that follows them (Repeat · Capture · Filter) over Decay, Dry/wet and
+  Volume knobs; 31 factory presets; MCP `read_beat_repeat`.
+- **Nota Orbit** (9, formerly Auto Pan) — in two sizes (L 700 / S 260, S·L toggle) — auto-pan and tremolo on one LFO: L/R phase (0° =
   tremolo … 180° = pan, with 0° / 90° / 180° buttons), Sine / Tri / Saw / Sqr / S&H, Shape
   (Glide on S&H), Amount, Mix; rate free (0.01–40 Hz) or synced (4/1 … 1/32 with dotted and
-  triplet values, locked to the bar). A gain graph over two cycles (drag Amount and Phase),
-  the pan line with its swing, OUT L / R meters and a status strip; 31 factory presets; MCP
+  triplet values, locked to the bar). A gain graph over two cycles (drag Amount and Phase)
+  with the pan line, Amount and Phase beside it; the LFO panel (rate, Shape, OUT L / R meters)
+  over Mix; 31 factory presets; MCP
   `read_orbit`.
-- **Nota Crush** (12) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
+- **Nota Crush** (12) — in two sizes (L 700 / S 260, S·L toggle) — bit crusher: Bits (1–24), Rate (fractional sample and hold), Drive,
   Wet; Digital / Analog / Fold modes; Anti-alias (4th order); GRIT (Dither / Jitter / Noise);
   a post filter, output gain, Auto gain and a DC filter. Quantiser / Spectrum (engine FFT:
   signal, added content, images above the Nyquist) / Transfer graphs (drag Bits and Rate, the
-  Nyquist and the filter, Drive), a CRUSH in/out column, Grit / Output panels; 33 factory
+  Nyquist and the filter, Drive) with their knobs beside them, a right panel that follows them
+  (Grit · Output) over Filter, Dry/wet and Gain; 33 factory
   presets; MCP `read_crush`.
-- **Nota Ceiling** (14) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
+- **Nota Ceiling** (14) — in two sizes (L 700 / S 260, S·L toggle; S is the level graph over the character, Gain, Ceiling and Release) — look-ahead brick-wall limiter: Gain, Ceiling, Release (with a
   program-dependent auto stage), Clean / Punch / Glue characters, look-ahead, stereo link,
   True Peak (4× inter-sample detection), Delta (hear what it removes), a key high-pass and an
   external key; a BS.1770 / R128 loudness meter (LUFS M / S / I, LRA, PLR, true peak) against
-  a Target. Level / Reduction / Loudness graphs (drag the ceiling and the target), a LIMIT
-  column, Meters / Detector panels; 32 factory presets; MCP `read_ceiling`.
-- **Nota Dynamic EQ-8** (13) — 8-band parametric with dynamics: each band Static / Duck
+  a Target. Level / Reduction / Loudness graphs (drag the ceiling and the target),
+  a right panel that follows them (Meters · Detector · Target, with their meter boxes) over
+  Gain, Ceiling and Release knobs; 32 factory presets; MCP `read_ceiling`.
+- **Nota Dynamic EQ-8** (13) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle, as EQ-8) — 8-band parametric with dynamics: each band Static / Duck
   (above the threshold) / Lift (below it), threshold, signed range (cut or boost — upward and
   downward expansion too), attack / release and its own key (Self or a key track); a Dynamic
   master switch, Solo, output. A full-width response graph (live curve, static curve while
@@ -955,56 +987,61 @@ audio effects after it keep running and keep their settings; saved with the proj
   the graph (number, filter shape, frequency, each band's activity), the selected band's
   settings in a panel at the right with the band's level on the threshold, which folds to a
   strip with the band's Freq, Gain and Q; 33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
-- **Nota Strata** (15) — multi-layer overdub looper: layers with waveform, level and mute;
+- **Nota Strata** (15) — in two sizes (L 700 / S 260, S·L toggle; S is the counter over the transport and Feedback, Input, Speed) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
   count-in, set-tempo, Export; audio layers persist into the project.
-- **Nota Forge** (17) — multi-stage saturator: 3 stages (Tube/Tape/Diode/Fuzz/Fold/Digital),
+- **Nota Forge** (17) — in two sizes (L 700 / S 260, S·L toggle; S is the curve and harmonics over Amount, Wet, Out) — multi-stage saturator: 3 stages (Tube/Tape/Diode/Fuzz/Fold/Digital),
   each with drive, output trim, feedback and its own Bias / Tone / Width; Serial / Parallel /
   Mid-Side (Mid · Side · M+S) / Multiband (< 180 Hz · mids · > 2.4 kHz) routings; Amount /
   Wet / Out; LFO→Drive (free or synced) and Env→Tone; a transfer curve (whole device or the
   selected stage, each stage faint, the modulated curve, the live input) and harmonics 2–9
   with THD from the engine; **OVERSAMPLE** (Off/2×/4×/8×) with an aliasing warning; 32 factory
   presets; MCP `read_forge`, `set_forge`, `set_forge_stage`.
-- **Nota EQ-3** (16) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
+- **Nota EQ-3** (16) — in two sizes (L 700 / S 260, S·L toggle; S is the response over Low, Mid, High and Output knobs) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
   Classic ±15 dB range) with a 0 dB detent and KILL buttons, two crossovers, 24 / 48 dB/oct
   Linkwitz-Riley slopes (phase-aligned, flat at unity), output gain. A response graph with each
   band's curve, the brass sum and the output spectrum (the same filled analyzer as EQ-8) — drag the crossover handles,
-  or ride a band's gain in its zone; a status strip; 30 factory presets; MCP `read_eq3`,
+  or ride a band's gain in its zone; 30 factory presets; MCP `read_eq3`,
   `set_eq3`.
-- **Nota Level** (18) — loudness leveler (BS.1770 LUFS): Auto rides the gain to a Target
+- **Nota Level** (18) — in two sizes (L 700 / S 260, S·L toggle) — loudness leveler (BS.1770 LUFS): Auto rides the gain to a Target
   (−36 … 0 LUFS, standards menu) over Window (Fast / Slow), Manual holds a draggable fader and
   MATCH sets it to the distance to the target; Momentary / Short-term / Integrated (gated)
   scales; Max Gain, Trim; holds the gain in silence and release tails; True-peak safe
   look-ahead limiter (5 / 20 ms, PDC) with a Ceiling; match to a reference track (sidechain).
-  An 8 s loudness graph (drag the target), IN / OUT / TP / correction meters and a status
-  strip; 30 factory presets; MCP `read_level`, `set_level`, `level_match`.
-- **Nota Shutter** (19) — noise gate and ducker: Threshold/Return (hysteresis),
+  Loudness (an 8 s graph, drag the target) / Meters (IN / OUT / TP / correction) tabs and a
+  right panel that follows them (Correction · Response) over Trim;
+  30 factory presets; MCP `read_level`, `set_level`, `level_match`.
+- **Nota Shutter** (19) — in two sizes (L 700 / S 260, S·L toggle; S is the Signal graph over Threshold, Attack, Release, Floor) — noise gate and ducker: Threshold/Return (hysteresis),
   Attack/Hold/Release with a Linear / Log / Snap shape, Floor (range), Lookahead, Flip
   (ducker), Retrigger (trigger mode), a 12 dB/oct detector band-pass (switchable) with Listen,
   Peak hold, internal or external key; Signal / Envelope / Sidechain graphs (drag the
-  threshold, the envelope nodes and the key filter), a STATE column, a state box, meters
+  threshold, the envelope nodes and the key filter), a state box, meters
   with peak GR and openings per bar; a Pattern tab — a tempo-synced rhythmic gate: an 8 / 16 / 32
   step grid at 4 / 8 / 16 levels drawn with Draw / Line / Erase / Flip, pattern shapes, a
   Complexity-weighted dice, Smooth and Swing on the gain curve, Rate (1/4 … 4 bars in Sync,
   4 … 0.25 Hz in Free), Depth, Copy / Paste / Clear, MIDI-note retrigger, Gated (pattern × gate)
   and a Volume or Map target (Map drives the Pattern Out CV source instead of the audio), every
   step automatable; 45 factory presets (15 pattern); MCP `read_shutter`.
-- **Nota Chamber** (20) — hybrid reverb: a zero-latency convolution engine (16 synthesised
+- **Nota Chamber** (20) — in two sizes (L 700 / S 260, S·L toggle) — hybrid reverb: a zero-latency convolution engine (16 synthesised
   IRs — halls, rooms, plates, spring, spaces, FX — or your own WAV/FLAC/MP3, mono / stereo /
-  4-ch true stereo, dropped on the IR view) with Start/Decay trims, Attack, Size, Reverse,
+  4-ch true stereo, dropped on the IR view) with Start/End trims, Attack, Size, Reverse,
   True Stereo, and an algorithmic engine (Dark Hall / Plate / Quartz / Shimmer) with
   per-band decay, diffusion, damping, modulation, Freeze + Hold in, Vintage and a pitch
   shifter; Blend (parallel or serial), separate free/synced pre-delays, a 4-band EQ at the
   input / tail / output, ducking, width + bass mono, Dry/Wet, wet-only send mode. IR edits
-  morph the tail without clicks; user IRs persist in the project.
-- **Nota Prism** (21) — three-band dynamics (multiband compressor / expander): Linkwitz-Riley
+  morph the tail without clicks; user IRs persist in the project. Convolution (the IR as a clip,
+  faded and trimmed as heard) / Algorithm (decay time by frequency, a handle per band and the
+  Damping line) / EQ · Mod (the tail EQ on the shared filter graph) / Mix (a clickable
+  signal-flow diagram) views with their knobs beside them and a right panel that follows them
+  over Dry, Dry/Wet and Output.
+- **Nota Prism** (21) — in two sizes (L 700 / S 260, S·L toggle; S is the spectrum over Amount, Dry/wet, Output) — three-band dynamics (multiband compressor / expander): Linkwitz-Riley
   crossovers dragged on a live input/output spectrum, 3 / 2 / 1-band modes; per band a
   compressor above one threshold (ratio to ∞:1, knee) and an expander or upward compressor
   below another (limited by Floor), each with its own attack/release (auto release above), plus
   band gain and solo. Amount scales every ratio; Peak/RMS detection, lookahead (PDC), a
   band-split external sidechain with Listen, auto makeup, Mix, output gain and a −0.3 dBFS soft
   clip. Transfer curve with drag handles, detector-envelope trace, per-band GR meters.
-- **Nota Lens** (22) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
+- **Nota Lens** (22) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the spectrum over Smooth, Decay, Tilt, Floor) — analyzer: spectrum, triggered oscilloscope and waterfall in one card,
   passing the audio through untouched. *Spectrum*: FFT 512–16384, Hann / Blackman-Harris /
   flat-top window, frame averaging, fractional-octave smoothing, fall time, pink tilt, peak
   hold, and a pointer cursor reading frequency, note, cents and level. *Scope*: the trace is
@@ -1014,31 +1051,33 @@ audio effects after it keep running and keep their settings; saved with the proj
   *Waterfall*: a 4 / 12 / 60-second spectrogram with gain, floor, contrast and FFT overlap.
   **Sync** lines the scope up with the song: a Span from a quarter beat to four bars, beat and
   bar lines and a sweep at the playhead. A sidechain **Key** track is drawn in teal over the
-  trace or **Stacked** under it, with its own gain; Lens also opens in its own resizable window.
-  A permanent SCALE rail, Freeze, a note grid, a linear or log frequency axis, an L+R / L / R
-  source that can read Mid/Side, and a status line with peak, crest, momentary LUFS and L/R
-  correlation. Readable from MCP with `read_analyzer`.
-- **Nota Flanger** (23) — a comb filter on a short LFO-swept delay: Delay 0.1–8 ms, Depth,
+  trace or **Stacked** under it, with its own gain; Lens also opens in XL above the chain or in its own resizable window.
+  Freeze, a note grid, a linear or log frequency axis, an L+R / L / R source that can read
+  Mid/Side, and peak, crest and momentary LUFS read-outs under the spectrum. Readable from MCP with `read_analyzer`.
+- **Nota Flanger** (23) — in two sizes (L 700 / S 260, S·L toggle) — a comb filter on a short LFO-swept delay: Delay 0.1–8 ms, Depth,
   bipolar Feedback ±95 % (positive = jet; negative flips the wet polarity so the comb mirrors
   into a hollow tone; − / 0 / + snaps), Mix; Sine / Tri / Saw LFO, free (0.02–8 Hz) or synced
   (2/1 … 1/16 with dotted and triplet values, locked to the bar), Stereo offset 0–180°. A live
   comb-response graph of L and R (drag the notch for Delay, up / down for Feedback), the delay
-  of both channels over two cycles, the first notch's sweep and null depth, and a status
-  strip; 31 factory presets; MCP `read_flanger` / `set_flanger`.
-- **Nota Phaser** (24) — 2 / 4 / 6 / 8 / 12 LFO-swept all-pass stages (half as many notches) with
+  of both channels over two cycles, with Delay, Feedback and Depth beside it; an LFO panel (the
+  rate, Stereo, the first notch's sweep and null depth) over Mix;
+  31 factory presets; MCP `read_flanger` / `set_flanger`.
+- **Nota Phaser** (24) — in two sizes (L 700 / S 260, S·L toggle) — 2 / 4 / 6 / 8 / 12 LFO-swept all-pass stages (half as many notches) with
   delay-free feedback: Center 50 Hz – 5 kHz, Depth ±3 oct, bipolar Feedback ±95 % (negative flips
   the wet polarity: the notches move and widen), Mix; Sine / Tri / Saw LFO, free (0.02–8 Hz) or
   synced (4/1 … 1/16 with dotted and triplet values, locked to the bar), Stereo offset 0–180°. A
   live all-pass response of L and R with the notches ticked (drag for Center, up / down for
-  Feedback), the corner of both channels over two cycles, the sweep and null depth, and a status
-  strip; 35 factory presets; MCP `read_phaser` / `set_phaser`.
-- **Nota Chorus** (25) — modulated delay voices: Classic (2 voices L / R, 8 ± 5 ms), Ensemble
+  Feedback), the corner of both channels over two cycles, with Center, Feedback and Depth beside
+  it; an LFO panel (the rate, Stereo, the sweep and null depth) over Mix;
+  35 factory presets; MCP `read_phaser` / `set_phaser`.
+- **Nota Chorus** (25) — in two sizes (L 700 / S 260, S·L toggle) — modulated delay voices: Classic (2 voices L / R, 8 ± 5 ms), Ensemble
   (3 voices 120° apart, 12 ± 6 ms) and Vibrato (3 ± 2.5 ms, wet only); sine LFO free (0.02–8 Hz) or
   synced (4/1 … 1/16 with triplets, locked to the bar), Offset 0–180°, a wet HPF (off / 20 Hz – 2 kHz),
   Amount, bipolar Feedback ±90 %, Width 0–200 %, Warmth (dark, saturated BBD line), Mix. Every voice's
-  delay or detune over two cycles (drag for Amount), the voices' stereo field, the detune and delay
-  ranges, and a status strip; 34 factory presets; MCP `read_chorus` / `set_chorus`.
-- **Nota Vocoder** (26) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
+  delay or detune over two cycles (drag for Amount) over the voices' stereo field, with Amount, Rate
+  and Offset beside it; a Voice panel (Feedback, Width, Warmth, HPF, the detune and delay ranges)
+  over Mix; 34 factory presets; MCP `read_chorus` / `set_chorus`.
+- **Nota Vocoder** (26) — in two sizes (L 700 / S 260, S·L toggle; S is the band graph over Bands, Formant, Dry/wet, Gain) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
   key meter); the carrier is an internal Saw (at a Pitch, C0–C7 — a robot voice by default), Noise,
   or another track picked on the card with its colour (Pre / Post tap; keeps feeding while muted),
   with a Tilt. 8–32 bands between Low and High, Q, Formant ±12 st, Attack, Release; Unvoiced noise
@@ -1098,7 +1137,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   **Select** (drag zone edges; hover the keyboard strip to see which chains a note plays) and
   **Macros** tabs (rename, curve Lin/Exp/Log/S — "Mixed" when targets differ — and each
   target's range, min above max inverts); a **Chain** panel (Volume, Pan or Transpose, zones,
-  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line. **Map** works in
+  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line on the effect racks. **Map** works in
   place: click parameters on the chain's devices to add or remove them; Esc ends it. A chain's
   devices drag by their header to a new place in their section (a drop bar shows where) or
   onto another chain's row to move there with their macro mappings; click one to select it
@@ -1187,6 +1226,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   window that opens on top and focused, and closes when the device is removed). Adding a
   plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in
   window on insert, on by default); loading a project, undo and paste don't.
+- **Multi-core rendering**: independent VST3 instrument and effect tracks render in
+  parallel on the engine's worker threads, keeping half of each buffer free for playing;
+  other formats, plug-ins inside racks and armed tracks render on the audio thread.
 - **State save and restore** in the project, and **bypass**.
 - **PDC** — plugin delay compensation (including a toggle in the Audio Effect Rack).
 - **Transport sync** — plugins receive tempo, position, play state and loop boundaries
@@ -1271,7 +1313,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   them — a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and
   bells, a held chord for Pendulum / Consort. **Drum Rack and Nota Rhythm kits** play a
   groove on their own pads (gain, pan, choke groups and pad effects as when loaded) at a
-  tempo that fits the kit. MIDI effects play a phrase that shows what they do into a plain
+  tempo that fits the kit. A preset plays its own state: a Nota Twin preset with a sequence
+  plays its pattern. MIDI effects play a phrase that shows what they do into a plain
   keys patch. Audio effects process a **demo track**: Drums / Keys / Bass parts, or genre
   loops (Pop, House, Techno, Hip-Hop, Trap, Drum & Bass, Synthwave, Ambient) built from
   Nota's factory kits and presets and levelled alike. A track that suits the effect is
@@ -1446,7 +1489,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
-- **Library**: library folders.
+- **Library**: library folders. Without an explicit choice, the Projects and Samples folders
+  sit in the system's Documents and Music locations (Known Folders on Windows and macOS,
+  `user-dirs.dirs` on Linux), relocated or translated ones included.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for

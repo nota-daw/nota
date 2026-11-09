@@ -148,7 +148,7 @@ internal static class VocoderTests
                 $"Nota Vocoder adds as builtin kind 26 ('{e.DeviceName(voice, di)}')");
             int pc = e.DeviceParamCount(voice, di);
             var names = Enumerable.Range(0, pc).Select(i => e.DeviceParamName(voice, di, i)).ToArray();
-            yield return (pc == 15 && names.SequenceEqual(Names), $"15 params in the contract order ({string.Join(",", names)})");
+            yield return (pc == 16 && names.Take(15).SequenceEqual(Names) && names[15] == "View", $"15 params in the contract order, then View (the card size, #531) ({string.Join(",", names)})");
             var bad = Enumerable.Range(0, Math.Min(pc, 15)).Where(i => Math.Abs(e.DeviceParamDefault(voice, di, i) - Defaults[i]) > 1e-3f).ToArray();
             yield return (bad.Length == 0, $"defaults match the contract — Carrier Saw ({(bad.Length == 0 ? "all" : "off: " + string.Join(",", bad.Select(i => Names[i])))})");
             var snap = Enumerable.Range(0, pc).Select(i => e.DeviceGetParam(voice, di, i)).ToArray();

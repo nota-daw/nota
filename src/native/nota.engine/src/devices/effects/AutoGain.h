@@ -35,6 +35,7 @@ class AutoGain : public Device {
         Safe,       // >= 0.5 look-ahead true-peak limiter on the output
         Ceiling,    // limiter ceiling (0..1 → −6..0 dBTP)
         Gain,       // manual gain (bipolar, ±24 dB, limited to ±Max Gain) — appended
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     // Packed scope telemetry (scopeRead). 0..8 are the original layout.

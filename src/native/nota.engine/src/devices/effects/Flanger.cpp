@@ -28,6 +28,7 @@ Flanger::Flanger() {
     p_[Sync].store(0.0f);     // Free (Hz)
     p_[Division].store((float)kDefaultDiv / (kDivs - 1));
     p_[Stereo].store(0.5f); // 90°
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -268,6 +269,7 @@ const char* Flanger::paramName(int32_t i) const {
     case Sync: return "Sync";
     case Division: return "Division";
     case Stereo: return "Stereo";
+    case View: return "View";
     default: return "";
     }
 }

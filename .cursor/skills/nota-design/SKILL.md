@@ -134,8 +134,9 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
 ## Device cards
 
 - **Every device keeps its 0.57 layout and size**: 700 × 260 (`DeviceCardKit.CardH`,
-  `IDeviceBody.Width`), the same sections in the same places, its status line inside the
-  body. The style guide restyles the elements, never the layout; repacking a card, growing
+  `IDeviceBody.Width`), the same sections in the same places. Built-in instruments, effects
+  and MIDI effects have no status line under the body and no side column of upright faders
+  or meters (#531); the racks keep their status line. The style guide restyles the elements, never the layout; repacking a card, growing
   its width or its text is a separate decision for Chris (a full redraw was reverted on
   Oct 26 for making the cards cramped and too large). Corner 9, raised.
 - **Header 22** (`BuildCardShell` in `DeviceChainView.Shell.cs` — every card uses it,
@@ -150,6 +151,12 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   `NotaGraph` (no fills under curves, orange only on the selected node).
 - A bypassed card keeps its layout and takes the unavailable look; a selected card has a
   1.5 px orange ring outside its outline.
+- **Laying out a card with a graph** (a new card, or a card's own layout change): DESIGN.md §
+  Devices › Card layout: graph, tabs and output — one home per parameter; the graph fills
+  the centre panel with one knob column (≤ 3, only what it draws) on its right; centre tabs
+  are views, the right panel has no tabs and follows them (switch + mode in its title bar);
+  output knobs Drive · **Dry/wet 44** · Gain at the bottom of the right panel on every tab.
+  Reference: Nota Auto Filter. The `nota-instrument` skill has the code shape.
 
 ## Adding a control
 

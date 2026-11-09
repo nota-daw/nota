@@ -90,6 +90,9 @@ void voiceControl(Voice& V, const PartCtl& c, double sr) {
     V.fenv.setTimes(c.fA * ef, c.fD * ef, c.fS, c.fR * ef, c.fCurve, sr, false);
     V.aenv.setTimes(c.aA * ef, c.aD * ef, c.aS, c.aR * ef, c.aCurve, sr, false);
     V.menv.setTimes(c.mA, c.mD, c.mS, c.mR, 0.5f, sr, c.mLoop);
+    V.fenv.shape = c.fShape;
+    V.aenv.shape = c.aShape;
+    V.menv.shape = c.mShape;
     V.glideC = c.glideSec > 0.0f ? static_cast<float>(1.0 - std::exp(-4.6 / (c.glideSec * sr))) : 1.0f;
     V.mm.setReso(c.mmRes);
     V.mm.setMode(c.mmMode);

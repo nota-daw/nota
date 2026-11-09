@@ -13,8 +13,7 @@
 //                           (1→2 serial, 1+2 parallel); the bank's partials as the engine
 //                           tunes them (drag: ↔ ratio, ↕ bright) beside its seven knobs
 //                           and the 1+2 mix.
-//   Rail 186    Output: Poly / Mono, tune, fine and note-off rows, volume, pan and the
-//               track's meter.
+//   Rail 186    Output: Poly / Mono, tune, fine and note-off rows, volume and pan.
 //
 // Neutral ink is the parameter itself; teal is modulation. Everything is a plugin param →
 // automation / persist / clone, and the card follows automation live.
@@ -92,6 +91,11 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             0 => Secs(PhysicalModel.NoiseAttack((float)n)), 1 => Secs(PhysicalModel.NoiseDecay((float)n)),
             2 => Pct((float)n), _ => Secs(PhysicalModel.NoiseRelease((float)n)),
         };
+        noiseEnv.Shape(P("noisedcurve"), P("noisercurve"), P("noiseenvexp"));
+        noiseEnv.Seconds = (k, n) => k switch
+        {
+            0 => PhysicalModel.NoiseAttack((float)n), 1 => PhysicalModel.NoiseDecay((float)n), _ => PhysicalModel.NoiseRelease((float)n),
+        };
         var partials = new PhysPartialsView { VerticalAlignment = VerticalAlignment.Stretch };
         ToolTip.SetTip(partials, Loc.T("device.physical.partials_as_the_engine_tunes"));
 
@@ -110,8 +114,6 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var hint = Mono("", TextTertiary, NotaType.Axis);
         hint.HorizontalAlignment = HorizontalAlignment.Right; hint.Margin = new Thickness(0, 0, 8, 0);
         hint.TextTrimming = TextTrimming.CharacterEllipsis;
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary);
         Action showTab = () => { };
 
         // The partial window: the selected bank's modes from the engine's scope, the other
@@ -122,6 +124,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             var s = scope.AsSpan(0, Math.Max(0, n));
             var mine = PhysicalModel.Bank(s, bank);
             var other = PhysicalModel.Bank(s, 1 - bank);
+            if (n >= PhysicalModel.ScopeLength) noiseEnv.SetPlay((int)scope[PhysicalModel.ScopeEnv], scope[PhysicalModel.ScopeEnv + 1]);
             bool r2 = R2On();
             double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
             double f0 = n > 2 && scope[2] > 0 ? scope[2] : 261.63;
@@ -137,7 +140,6 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             foreach (var r in readouts) r();
             RefreshPartials();
             hint.Text = Hint();
-            status.Text = Summary();
         }
 
         // ---- shared builders --------------------------------------------------
@@ -226,29 +228,17 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
                 double oct = PhysicalModel.NoiseEnvOct(G("noiseenv"));
                 envCap.Text = Math.Abs(oct) < 0.05 ? Loc.T("device.physical.env_freq_off") : "env → freq " + NotaNum.Unit(oct, "+0.0;−0.0;0", "oct");
             });
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5 };
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5 };
             var typeChips = Chips("noisetype", PhysicalModel.NoiseTypes);
+            var curveChips = Chips("noiseenvexp", new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") });
             head.Children.Add(Cap("NOISE"));
             Grid.SetColumn(typeChips, 1); head.Children.Add(typeChips);
             Grid.SetColumn(envCap, 2); head.Children.Add(envCap);
+            Grid.SetColumn(curveChips, 3); head.Children.Add(curveChips);
 
-            // The ADSR editor with its stage times along the bottom edge — each one typeable
-            // (double-click it, specs/035), since no A/D/S/R knobs sit beside the graph.
-            var envTimes = new StackPanel
-            {
-                Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 1),
-            };
-            for (int k = 0; k < 4; k++)
-            {
-                int stage = k;
-                if (k > 0) envTimes.Children.Add(Mono(" · ", NotaPalette.TextAxis, NotaType.Axis));
-                var tv = Mono("", NotaPalette.TextAxis, NotaType.Axis);
-                readouts.Add(() => tv.Text = noiseEnv.Field(stage) is { } f ? f.TextAt(f.Get()) : "");
-                if (noiseEnv.Field(stage) is { } vf) ValueEntry.Attach(tv, vf);
-                envTimes.Children.Add(tv);
-            }
-            var envHost = new Panel { Children = { noiseEnv, envTimes } };
+            // The ADSR editor (#531): drag a breakpoint for its value, ⌥-click to type it, bend
+            // decay and release by their diamonds; Lin / Exp sits in the header.
+            var envHost = new Panel { Children = { noiseEnv } };
 
             var knobs = KnobGrid(2,
                 PKnob("noisevol", "VOLUME", Pct, cellW: 46),
@@ -426,28 +416,13 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             },
         };
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid { VerticalAlignment = VerticalAlignment.Stretch, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
-        for (int i = 0; i < 3; i++)
+        // Volume · Pan centred in the rail — the track meter already shows the level.
+        var outBottom = new StackPanel
         {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children = { PKnob("volume", "VOLUME", Pct, NotaSize.KnobMain, 48), PKnob("pan", "PAN", PanText, NotaSize.KnobRegular, 42) },
         };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var outBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", Pct, NotaSize.KnobMain, 48);
-        var panCell = PKnob("pan", "PAN", PanText, NotaSize.KnobSecondary, 42);
-        outBottom.Children.Add(volCell);
-        Grid.SetColumn(panCell, 1); outBottom.Children.Add(panCell);
-        Grid.SetColumn(meterBlock, 2); outBottom.Children.Add(meterBlock);
 
         var outGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         outGrid.Children.Add(outTop);
@@ -464,7 +439,6 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string Exciters()
         {
             var parts = new List<string>();
@@ -481,45 +455,10 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             0 => $"{Exciters()} → {TypeWord("r1")}",
             _ => $"{StructWord()} · {TypeWord(BankOf())} · decay {Secs(PhysicalModel.DecaySeconds(G(BankOf() + "decay")))}",
         };
-        string Summary()
-        {
-            if (tab == 0)
-            {
-                var s = G("malletvol") > 0.001f
-                    ? $"Mallet {Pct(G("malletvol"))} · stiff {Pct(G("malletstiff"))} ({NotaNum.Unit(PhysicalModel.ContactMs(G("malletstiff")), "0.0", "ms")})"
-                    : "Mallet off";
-                s += G("noisevol") > 0.001f
-                    ? $" · noise {Pct(G("noisevol"))} {PhysicalModel.NoiseTypes[Sel("noisetype", 3)]} {NotaNum.Hz(PhysicalModel.NoiseFreqHz(G("noisefreq")))} · env → freq {NotaNum.Unit(PhysicalModel.NoiseEnvOct(G("noiseenv")), "+0.0;−0.0;0", "oct")}"
-                    : " · noise off";
-                return s + $" → resonator {TypeWord("r1")}";
-            }
-            string pre = BankOf();
-            bool on = bank == 0 || R2On();
-            var line = $"Resonator {bank + 1} {TypeWord(pre)} {(on ? "on" : "off")} · decay {Secs(PhysicalModel.DecaySeconds(G(pre + "decay")))} · "
-                + $"bright {Pct(G(pre + "bright"))} · inharm {Pct(G(pre + "inharm"))} · structure {StructWord()}";
-            if (R2On())
-            {
-                var (g1, g2) = PhysicalModel.MixGains(G("resmix"));
-                line += $" · mix {NotaNum.Str(g1 * 100, "0")} / {NotaNum.Str(g2 * 100, "0")}";
-            }
-            return line;
-        }
         ctx.AddDeviceRefresher(() =>
         {
-            int v = Math.Max(0, engine.InstrumentVoiceCount(track));
-            string mode = IsMono() ? "MONO" : $"POLY {v}/{PhysicalModel.Voices}";
-            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{mode} · NOTE OFF {Secs(PhysicalModel.NoteOffSeconds(G("noteoff")))} · {NotaNum.Unit(sr / 1000, "0.#", "kHz")}";
             RefreshPartials();   // follows the struck note (the partials' reach under Nyquist)
         });
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly ---------------------------------------------------------
         var body = new Grid
@@ -530,8 +469,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(Refresh);
         showTab();
@@ -547,18 +485,4 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

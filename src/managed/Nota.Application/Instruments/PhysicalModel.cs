@@ -21,7 +21,9 @@ public static class PhysicalModel
 
     // scopeRead layout: 4 head floats, then per bank 3 rows of Modes (ratio, amp, ring s).
     public const int ScopeHead = 4;
-    public const int ScopeLength = ScopeHead + 2 * 3 * Modes;
+    // …then the noise envelope's stage and progress (EnvShape.h, #531).
+    public const int ScopeEnv = ScopeHead + 2 * 3 * Modes;
+    public const int ScopeLength = ScopeEnv + 2;
 
     public static readonly string[] TypeNames = { "Beam", "Marimba", "String", "Membrane", "Plate", "Pipe" };
     public static readonly string[] NoiseTypes = { "LP", "BP", "HP" };

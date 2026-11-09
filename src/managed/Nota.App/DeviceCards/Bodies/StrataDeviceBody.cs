@@ -8,12 +8,15 @@
 // name, its own waveform, PLAY/MUTED/REC state, level and mute) | a LOOP rail
 // (Feedback teal · Input gain · Speed · Quantize · count-in / set-tempo / reverse
 // switches · Undo / Export / Clear). Transport + editing go through the device
-// command channel; state and per-layer waveforms come from the device scope.
+// command channel; state and per-layer waveforms come from the device scope. S (260, #531):
+// the bar counter and the cycle ticks over the four transport actions and Feedback · Input gain
+// · Speed knobs.
 
 using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -39,6 +42,8 @@ internal sealed class StrataDeviceBody : IDeviceBody
     };
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
 
     public string? Subtitle => "Looper";   // the processing type, shown as the header badge
     public bool FullBleed => true;
@@ -262,6 +267,38 @@ internal sealed class StrataDeviceBody : IDeviceBody
         }
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
+
+        // ---------- S (#531): the bar counter and the cycle ticks over the four transport actions
+        // and Feedback · Input gain · Speed ----------
+        if (CardLayout.IsMini(ctx, di))
+        {
+            Control MiniKnob(int p, string name, Func<double, string> fmt, bool log)
+            {
+                double mn = Mn(p), mx = Mx(p);
+                double lmn = log ? Math.Log(mn) : mn, lspan = (log ? Math.Log(mx) : mx) - lmn;
+                double NormOf(double v) { double x = log ? Math.Log(Math.Clamp(v, mn, mx)) : Math.Clamp(v, mn, mx); return (x - lmn) / Math.Max(1e-9, lspan); }
+                double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
+                var val = new TextBlock { FontSize = 7, Foreground = TextPrimary };
+                var knob = new Knob(NormOf(P(p)), 1.0) { Accent = true, Default = NormOf(engine.DeviceParamDefault(track, di, p)), Width = 34, Height = 34 };
+                knob.ValueChanged += n => { SetR(p, (float)ValOf(n)); val.Text = fmt(P(p)); };
+                knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
+                knob.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
+                MidiLearn.Bind(knob, MidiTarget.DeviceParam(track, di, p), name);
+                readouts.Add(() => { if (!knob.Dragging) { double c = NormOf(P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+                return KnobCell(name, knob, val, 60);
+            }
+            actRow.Children.Clear();
+            if (barNum.Parent is Panel livePanel) livePanel.Children.Clear();   // the counter moves from the live strip
+            var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var b in actBtn) { b.Margin = new Thickness(2); b.HorizontalAlignment = HorizontalAlignment.Stretch; grid.Children.Add(b); }
+            var counter = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Children = { barNum, ofBars } };
+            var knobs = new UniformGrid { Rows = 1, Margin = new Thickness(0, 6, 0, 0), Children = {
+                MiniKnob(Feedback, "FEEDBACK", PctF, false), MiniKnob(InputGain, "INPUT", DbF, false), MiniKnob(Speed, "SPEED", SpeedF, true) } };
+            var mini = new StackPanel { Margin = new Thickness(8), Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = {
+                counter, new Border { HorizontalAlignment = HorizontalAlignment.Center, Child = tickRow }, grid, knobs } };
+            foreach (var a in readouts) a();
+            return new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = mini } };
+        }
 
         DockPanel.SetDock(live, Dock.Top);
         return new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
