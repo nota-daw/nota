@@ -2254,6 +2254,7 @@ class Engine {
         bool pendingActive[128] = {};
         double pendingStart[128] = {};
         float pendingVel[128] = {};
+        int8_t pendingSource[128] = {}, pendingChannel[128] = {}; // where the note came from (its off must too)
         bool recRoutedActive[128] = {};
         double recRoutedStart[128] = {};
         float recRoutedVel[128] = {};

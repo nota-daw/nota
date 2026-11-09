@@ -1215,13 +1215,18 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
         if (rec && timed && valid)
             for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
                 RtMidiLane& L = rtMidiLanes_[static_cast<size_t>(k)];
-                // A note the lane holds ends on its off even if the lane's input changed since.
-                if (!laneTakes(k, e) && (e.on || !L.pendingActive[e.pitch])) continue;
+                // A note the lane holds ends on its off from the input that played it, even if the
+                // lane's input changed since.
+                if (!laneTakes(k, e) && (e.on || !L.pendingActive[e.pitch] || L.pendingSource[e.pitch] != e.source ||
+                                            L.pendingChannel[e.pitch] != e.channel))
+                    continue;
                 if (e.on) {
                     if (!rtLaneLive_[k]) continue; // its slot hasn't started yet
                     L.pendingActive[e.pitch] = true;
                     L.pendingStart[e.pitch] = rtLaneNow_[k];
                     L.pendingVel[e.pitch] = e.velocity;
+                    L.pendingSource[e.pitch] = e.source;
+                    L.pendingChannel[e.pitch] = e.channel;
                     if (!rtLaneSlot_[k]) triggerPassReplace();
                 } else if (L.pendingActive[e.pitch]) {
                     double len = rtLaneNow_[k] - L.pendingStart[e.pitch];
@@ -1251,6 +1256,8 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
                 L.pendingStart[p] =
                     (rtLaneSlot_[k] || restarted || std::isnan(livePressBeat_[p])) ? rtLaneNow_[k] : livePressBeat_[p];
                 L.pendingVel[p] = livePressVel_[p];
+                L.pendingSource[p] = held.source;
+                L.pendingChannel[p] = held.channel;
             }
         }
     if (rec && timed && liveExprCount_ > 0) captureLiveExpr(); // on each lane's clock
@@ -1479,17 +1486,24 @@ int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool st
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
         // A note it is holding still ends after its MIDI input changed (specs/086): the off
-        // comes from the old input, which the new filter would turn away.
+        // comes from the old input, which the new filter would turn away. Only that input's
+        // off, though: the same key released on another keyboard isn't this note's.
         const bool heldOff = !le.on && held && le.pitch >= 0 && le.pitch < 128 &&
-                             ((held->bits[le.pitch >> 6] >> (le.pitch & 63)) & 1u);
+                             ((held->bits[le.pitch >> 6] >> (le.pitch & 63)) & 1u) &&
+                             held->source[le.pitch] == le.source && held->channel[le.pitch] == le.channel;
         if (le.trackId >= 0 ? !targeted || le.trackId != t.id()
                             : !untargeted || (!passesMidiInput(t, le) && !heldOff))
             continue;
         evs[n++] = {0, le.on, le.pitch, le.velocity};
         if (!held || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
         const uint64_t bit = 1ull << (le.pitch & 63);
-        if (le.on) held->bits[le.pitch >> 6] |= bit;
-        else held->bits[le.pitch >> 6] &= ~bit;
+        if (le.on) {
+            held->bits[le.pitch >> 6] |= bit;
+            held->source[le.pitch] = le.source;
+            held->channel[le.pitch] = le.channel;
+        } else {
+            held->bits[le.pitch >> 6] &= ~bit;
+        }
     }
     // Disarmed with keys down (#366): release the live notes it was given, unless it takes
     // live input again (re-armed, or the audition target).
