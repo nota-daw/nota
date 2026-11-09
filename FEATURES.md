@@ -352,6 +352,14 @@ docks as a panel under any of the three, or floats in its own window — see
     drag — the new note moves (pitch and time, on the grid, ⌥ free); hold ⇧ to drag its
     end and set the length, ⌘ (Ctrl) to drag up / down for velocity. The modifier can change
     mid-drag.
+  - **Draw Mode** (#554): the **Draw** chip in the header, or **B** while the roll has focus,
+    arms it — a plain press then places a note and holding the button down paints a run of
+    them, one per cell on the snap grid, including a fast diagonal flick with no gaps. Cells
+    sit a grid step apart, or the last-touched note's length when that is longer, so a run
+    tiles instead of stacking same-pitch notes on itself. A press on a note still selects,
+    moves or resizes it, and ⇧-drag on empty grid still marquees. **B** or **Esc** puts it
+    down; the chip and the key read the same app-wide setting, so it stays on across clips
+    and restarts.
   - **Note audition** (the speaker switch in the header, on by default): a note sounds while
     it is placed, clicked or dragged, re-sounding at each new pitch. Nothing is auditioned
     while a take is recording.

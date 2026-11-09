@@ -1532,6 +1532,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Delete", Loc.T("preferences.delete_the_selected_notes")),
             (Loc.T("preferences.double_click_empty_grid"), Loc.T("preferences.add_a_note_with_the")),
             (Loc.T("preferences.double_click_and_hold_drag"), Loc.T("preferences.shape_the_new_note_move")),
+            ("B", Loc.T("preferences.draw_mode_click_to_place")),
             (Loc.T("preferences.drag_note_edge"), Loc.T("preferences.change_the_notes_start_or")),
             (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag_2")),
             (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead_on_the")),

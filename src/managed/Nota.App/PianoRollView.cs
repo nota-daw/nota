@@ -66,6 +66,21 @@ public sealed partial class PianoRollView : UserControl
         AuditionToggled?.Invoke();
     }
 
+    /// <summary>Draw Mode (#554): a plain press on the note grid places a note and the held drag
+    /// paints a run of them, instead of a double-click per note. App-wide like the speaker chip,
+    /// off by default, seeded from and saved to Settings by the host; flipped by the clip editor's
+    /// Draw chip and by B in the grid. Notes under the pointer still select, move and resize, and
+    /// ⇧ on empty grid is still a marquee — the mode only takes over the plain press.</summary>
+    public static bool DrawMode { get; set; }
+    /// <summary>Fired when the Draw chip or B flips <see cref="DrawMode"/>.</summary>
+    public static event Action? DrawModeToggled;
+    public static void SetDrawMode(bool on)
+    {
+        if (DrawMode == on) return;
+        DrawMode = on;
+        DrawModeToggled?.Invoke();
+    }
+
     /// <summary>Label every note of the keys column, not just C: a beginner aid
     /// seeded from and saved to Settings by the host (cf. <see cref="AuditionEnabled"/>).
     /// Off by default; folded rows and Drum Rack pads are always labelled either way.</summary>
@@ -2040,7 +2055,8 @@ public sealed partial class PianoRollView : UserControl
         // PlayheadPending: pressed on the playhead line over empty space — a drag scrubs the
         // transport (Scrub), a click without movement stays an ordinary empty-space click.
         // Place: the button is still down after the double-click that added a note (#45).
-        private enum Mode { None, Move, Resize, ResizeLeft, Marquee, PlayheadPending, Scrub, Place }
+        // Paint: the button is still down after the press that drew one in Draw Mode (#554).
+        private enum Mode { None, Move, Resize, ResizeLeft, Marquee, PlayheadPending, Scrub, Place, Paint }
         private double _pressX;
         private const double PlayheadGrabPx = 3, ScrubSlop = 3;
         private Mode _drag = Mode.None;
@@ -2061,6 +2077,13 @@ public sealed partial class PianoRollView : UserControl
         private double _velY;
         private float _velAnchor;
 
+        // Paint (Draw Mode, #554): the cell the gesture started in, the spacing painted cells sit
+        // on (the grid step or the last note's length, whichever is wider), and the cell the
+        // pointer was last in — so a fast drag fills the cells it crossed between two samples.
+        private double _paintAnchorBeat;
+        private double _paintStep;
+        private int _paintCol, _paintRow;
+
         // Marquee (grid coords) + the selection to union with when additive.
         private Point _marqueeA, _marqueeB;
         private bool _marqueeAdd;
@@ -2075,6 +2098,7 @@ public sealed partial class PianoRollView : UserControl
         private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast);
         private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
         private static readonly Cursor VelocityCursor = new(StandardCursorType.SizeNorthSouth);
+        private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
         private const double EdgePx = 6;
 
         // Live drag (feature): the pre-drag note list (to seed one undo entry) + whether the
@@ -2327,8 +2351,10 @@ public sealed partial class PianoRollView : UserControl
             bool keepsSelection = e.ClickCount != 2 && !shift && hit >= 0 && _o._selection.Contains(hit);
             if (!keepsSelection && _o.SettlePlacement()) hit = HitTest(p, out edge);
 
-            // Double-click: add a note on empty space, delete one under the cursor.
-            if (e.ClickCount == 2)
+            // Double-click: add a note on empty space, delete one under the cursor. In Draw Mode a
+            // single press already places notes (#554), so only the delete half survives there —
+            // otherwise the second click of a fast pair would place then remove.
+            if (e.ClickCount == 2 && (!PianoRollView.DrawMode || hit >= 0))
             {
                 if (hit >= 0) { _o.RemoveNoteAt(hit); _o._selection.Clear(); }
                 else
@@ -2353,6 +2379,16 @@ public sealed partial class PianoRollView : UserControl
                     _lastGrid = p;
                 }
                 _o.Invalidate(); _o.CommitNotes(); _o.Changed?.Invoke();
+                e.Handled = true;
+                return;
+            }
+
+            // Draw Mode (#554): a plain press on empty grid places a note, and the button staying
+            // down paints a run. Notes under the pointer still select, move and resize, and ⇧ on
+            // empty grid still marquees, so the mode never takes the selection away from you.
+            if (hit < 0 && !shift && PianoRollView.DrawMode && BeginPaint(p))
+            {
+                e.Pointer.Capture(this);
                 e.Handled = true;
                 return;
             }
@@ -2414,6 +2450,75 @@ public sealed partial class PianoRollView : UserControl
             e.Handled = true;
         }
 
+        // ---- Draw Mode (#554) -----------------------------------------------------------
+        // A press places the first note and seeds ONE undo step for the whole run; every cell the
+        // drag crosses streams on the live path (no further undo), as the place drag does. The
+        // painted notes stay selected and pending, so they overwrite the same-pitch notes they
+        // land on the way a drawn note does — on release, not while the run is still growing.
+
+        private int RowAtY(double y) => Math.Max(0, (int)Math.Floor(y / RowH));
+
+        // Returns false when no open clip of the active track holds the beat: the press is then
+        // someone else's (the playhead line, an empty click), and no gesture starts.
+        private bool BeginPaint(Point p)
+        {
+            double at = Math.Max(0, Snap(XToBeat(p.X)));
+            int slot = _o.DrawTarget(at);
+            if (slot < 0) return false;
+            var n = new NotaNote(YToPitch(p.Y), at, _o.NewNoteLen(at, slot), s_lastVel);
+            _o.AddNote(n, slot);
+            _primary = _o._notes.Count - 1;
+            _o._selection.Clear(); _o._selection.Add(_primary);
+            _o._placementPending = true;   // a painted note overwrites what it lands on
+            _o.Audition(n.Pitch, n.Velocity, slot: slot);
+            _paintAnchorBeat = at;
+            // Cells sit a grid step apart — or the note's own length, when that is wider, so a
+            // longer note tiles the run instead of stacking same-pitch notes on itself.
+            _paintStep = NotePaint.Step(_o.SnapStep, n.LengthBeats);
+            _paintCol = 0; _paintRow = RowAtY(p.Y);
+            _drag = Mode.Paint;
+            _dragMoved = false;
+            _liveStarted = true;
+            _o.Invalidate();
+            _o.CommitNotes();   // the run's one undo step: the clip as it was plus this note
+            _o.Changed?.Invoke();
+            return true;
+        }
+
+        // Fill every cell the pointer crossed since the last sample, so a fast drag paints a
+        // continuous run rather than one note per frame.
+        private void PaintTo(Point p)
+        {
+            int col = NotePaint.Column(XToBeat(p.X), _paintAnchorBeat, _paintStep);
+            int row = RowAtY(p.Y);
+            foreach (var (c, r) in NotePaint.Line((_paintCol, _paintRow), (col, row)))
+                PaintCell(_paintAnchorBeat + c * _paintStep, r);
+            _paintCol = col; _paintRow = row;
+        }
+
+        // One cell: a note on that row's pitch, unless the cell already holds one (the pointer can
+        // come back over cells it painted) or the beat falls outside every open clip of the track.
+        private void PaintCell(double beat, int row)
+        {
+            if (beat < -1e-9) return;
+            beat = Math.Max(0, beat);
+            int slot = _o.DrawTarget(beat);
+            if (slot < 0) return;
+            int pitch = _o._rows.PitchAt(row);
+            for (int i = 0; i < _o._notes.Count; i++)
+                if (_o._owner[i] == slot && _o._notes[i].Pitch == pitch && Math.Abs(_o._notes[i].StartBeat - beat) < 1e-6)
+                    return;
+            var n = new NotaNote(pitch, beat, _o.NewNoteLen(beat, slot), s_lastVel);
+            _o.AddNote(n, slot);
+            _o._selection.Add(_o._notes.Count - 1);
+            _o._placementPending = true;
+            _o.Audition(pitch, n.Velocity, slot: slot);
+            _dragMoved = true;
+            if (_o.HasLivePath) _o.PushLive(_o._notes, _o._owner);
+            _o.Invalidate();
+            _o.Changed?.Invoke();
+        }
+
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             var p = e.GetPosition(this);
@@ -2424,7 +2529,7 @@ public sealed partial class PianoRollView : UserControl
             if (_drag is Mode.PlayheadPending or Mode.Scrub) return;
             // Capture can already be gone (released outside the window): a later hover must not
             // keep shaping the note.
-            if (_drag == Mode.Place && !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            if (_drag is Mode.Place or Mode.Paint && !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
                 EndDrag();
                 return;
@@ -2435,7 +2540,7 @@ public sealed partial class PianoRollView : UserControl
                 if (kind != _placeKind) AnchorPlace(p, kind);
             }
             _lastGrid = p;
-            DragUpdate(p);
+            if (_drag == Mode.Paint) PaintTo(p); else DragUpdate(p);
             if (_drag == Mode.Place && _placeKind == PlaceDragKind.Velocity) StopAutoScroll();
             else EvaluateAutoScroll(p);
         }
@@ -2598,9 +2703,16 @@ public sealed partial class PianoRollView : UserControl
         private void UpdateHover(Point p)
         {
             int hit = HitTest(p, out int edge);
-            // 0 arrow, 1 resize edge (also the draggable playhead line), 2 move body
-            int kind = hit < 0 ? (_o.OnPlayheadLine(p.X, PlayheadGrabPx) ? 1 : 0) : edge != 0 ? 1 : 2;
-            if (kind != _cursorKind) { _cursorKind = kind; Cursor = kind == 1 ? ResizeCursor : kind == 2 ? MoveCursor : ArrowCursor; }
+            // 0 arrow, 1 resize edge (also the draggable playhead line), 2 move body, 4 draw — a
+            // cross over the empty grid in Draw Mode, where the plain press places a note (#554).
+            int kind = hit < 0
+                ? PianoRollView.DrawMode ? 4 : _o.OnPlayheadLine(p.X, PlayheadGrabPx) ? 1 : 0
+                : edge != 0 ? 1 : 2;
+            if (kind != _cursorKind)
+            {
+                _cursorKind = kind;
+                Cursor = kind == 1 ? ResizeCursor : kind == 2 ? MoveCursor : kind == 4 ? CrossCursor : ArrowCursor;
+            }
             int hn = kind == 1 ? hit : -1;   // the bright trim-edge affordance shows only on the edge
             bool left = edge < 0;
             if (hn != _hoverNote || left != _hoverLeft) { _hoverNote = hn; _hoverLeft = left; _o.Invalidate(); }
@@ -2612,7 +2724,7 @@ public sealed partial class PianoRollView : UserControl
             _o.StopAudition();
             // A placement drag must not survive the capture: the button is up, and the next
             // hover would otherwise keep moving the note.
-            if (_drag == Mode.Place) EndDrag();
+            if (_drag is Mode.Place or Mode.Paint) EndDrag();
             else if (_drag is Mode.PlayheadPending or Mode.Scrub) _drag = Mode.None;
             base.OnPointerCaptureLost(e);
         }
@@ -2648,7 +2760,7 @@ public sealed partial class PianoRollView : UserControl
                 return;
             }
             _orig.Clear();
-            if (was is Mode.Resize or Mode.ResizeLeft or Mode.Place && _dragMoved) _o.Remember(_primary);
+            if (was is Mode.Resize or Mode.ResizeLeft or Mode.Place or Mode.Paint && _dragMoved) _o.Remember(_primary);
             if (was != Mode.Marquee && _dragMoved)
             {
                 _o._placementPending = true;   // overwrites once the selection is let go
@@ -2737,6 +2849,21 @@ public sealed partial class PianoRollView : UserControl
         {
             bool meta = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            // B (#554): Draw Mode on / off. The grid keeps the key while it has focus, and B is not
+            // one of the window's computer-keyboard note keys, so nothing sounds under it.
+            if (!meta && !shift && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key == Key.B)
+            {
+                PianoRollView.SetDrawMode(!PianoRollView.DrawMode);
+                e.Handled = true;
+                return;
+            }
+            // Esc puts Draw Mode down the way B picked it up (a second Esc clears the selection).
+            if (!meta && e.Key == Key.Escape && PianoRollView.DrawMode)
+            {
+                PianoRollView.SetDrawMode(false);
+                e.Handled = true;
+                return;
+            }
             if (!meta && (e.Key == Key.Delete || e.Key == Key.Back)) { if (_o.DeleteSelection()) e.Handled = true; return; }
             // ⇧F: Fit to notes. Handled here, the window's computer-keyboard note map never
             // sees it, so no F sounds.

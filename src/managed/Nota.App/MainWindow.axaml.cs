@@ -392,6 +392,10 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        // As does its Draw Mode (#554), which B in the grid flips as well as the chip.
+        PianoRollView.SetDrawMode(vm.Settings.Current.PianoRollDrawMode);
+        PianoRollView.DrawModeToggled -= OnDrawModeToggled;
+        PianoRollView.DrawModeToggled += OnDrawModeToggled;
         PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
         PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
         // The piano roll's key labels (every note, not just C) persist the same way.
@@ -895,6 +899,15 @@ public partial class MainWindow : Window
         _vm.Settings.Current.PianoRollAudition = PianoRollView.AuditionEnabled;
         _vm.Settings.Save();
         _vm.StatusText = PianoRollView.AuditionEnabled ? Loc.T("main.note_audition_on") : Loc.T("main.note_audition_off");
+    }
+
+    // Draw Mode (#554) persists and says so in the status line, like the speaker chip above.
+    private void OnDrawModeToggled()
+    {
+        if (_vm is null) return;
+        _vm.Settings.Current.PianoRollDrawMode = PianoRollView.DrawMode;
+        _vm.Settings.Save();
+        _vm.StatusText = PianoRollView.DrawMode ? Loc.T("main.draw_mode_on") : Loc.T("main.draw_mode_off");
     }
 
     // Show playhead (#105, P / View menu / the ruler's off-screen arrow): a one-shot scroll
