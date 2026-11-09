@@ -1214,8 +1214,9 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
         }
         if (rec && timed && valid)
             for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
-                if (!laneTakes(k, e)) continue;
                 RtMidiLane& L = rtMidiLanes_[static_cast<size_t>(k)];
+                // A note the lane holds ends on its off even if the lane's input changed since.
+                if (!laneTakes(k, e) && (e.on || !L.pendingActive[e.pitch])) continue;
                 if (e.on) {
                     if (!rtLaneLive_[k]) continue; // its slot hasn't started yet
                     L.pendingActive[e.pitch] = true;
@@ -1477,7 +1478,13 @@ int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool st
     Track::LiveHeld* held = t.liveHeld.get();
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
-        if (le.trackId >= 0 ? !targeted || le.trackId != t.id() : !untargeted || !passesMidiInput(t, le)) continue;
+        // A note it is holding still ends after its MIDI input changed (specs/086): the off
+        // comes from the old input, which the new filter would turn away.
+        const bool heldOff = !le.on && held && le.pitch >= 0 && le.pitch < 128 &&
+                             ((held->bits[le.pitch >> 6] >> (le.pitch & 63)) & 1u);
+        if (le.trackId >= 0 ? !targeted || le.trackId != t.id()
+                            : !untargeted || (!passesMidiInput(t, le) && !heldOff))
+            continue;
         evs[n++] = {0, le.on, le.pitch, le.velocity};
         if (!held || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
         const uint64_t bit = 1ull << (le.pitch & 63);

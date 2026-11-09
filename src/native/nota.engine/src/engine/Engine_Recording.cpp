@@ -1271,7 +1271,9 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
     // quantum after it, so what came before that boundary goes.
     // The boundary frame was noted as the capture crossed it (drainInputQueue); stopped before
     // that, nothing of the retried take is kept.
-    if (recordSessionAudio_ && !std::isnan(retryStartBeat_)) {
+    // A slot lane (lane.scene), not recordSessionAudio_: the first slot landed clears that flag,
+    // and every slot of a multi-slot retry needs the same trim.
+    if (lane.scene >= 0 && !std::isnan(retryStartBeat_)) {
         const size_t have = lane.buf.size() / ch;
         const size_t keep = retryKeepFrom_ < 0 ? have + lane.offset : static_cast<size_t>(retryKeepFrom_);
         const size_t drop = std::min(have, keep > lane.offset ? keep - lane.offset : 0); // in the lane's frames
