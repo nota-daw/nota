@@ -58,6 +58,72 @@ internal sealed class StrataDeviceBody : IDeviceBody
         return n > S_Id ? sc[S_Id] : 0f;
     }
 
+    // One cycle of a Strata state blob as Strata plays it, written as a 32-bit float WAV: the
+    // layers mixed at their gains and the feedback's fade (the layer being recorded is unfinished
+    // and left out, as Strata plays it), at its speed, backwards when reversed, between samples
+    // read as the engine reads them (linear).
+    private static void WriteLoopWav(byte[] blob, float fb, double speed, bool reverse, string path)
+    {
+        int off = 0;
+        int I() { int v = BitConverter.ToInt32(blob, off); off += 4; return v; }
+        float F() { float v = BitConverter.ToSingle(blob, off); off += 4; return v; }
+        I(); int sr = I(), len = I(); I(); int lc = Math.Clamp(I(), 0, MaxLayers);
+        if (len <= 0 || lc <= 0 || blob.Length < 20 + lc * 12 + (long)lc * len * 8) return;
+        var gain = new float[lc];
+        for (int k = 0; k < lc; k++)
+        {
+            float db = F(); bool muted = I() != 0; bool recording = I() == LayerRecording;
+            gain[k] = muted || recording ? 0f : MathF.Pow(10f, db / 20f) * MathF.Pow(fb, lc - 1 - k);
+        }
+        var sum = new float[len * 2];
+        for (int k = 0; k < lc; k++)
+        {
+            for (int i = 0; i < len * 2; i++) sum[i] += F() * gain[k];
+        }
+        int frames = Math.Max(1, (int)Math.Round(len / speed));
+        var mix = new float[frames * 2];
+        double pos = 0;
+        for (int i = 0; i < frames; i++)
+        {
+            int p0 = (int)pos, p1 = p0 + 1 >= len ? 0 : p0 + 1;
+            float fr = (float)(pos - p0);
+            mix[i * 2] = sum[p0 * 2] + fr * (sum[p1 * 2] - sum[p0 * 2]);
+            mix[i * 2 + 1] = sum[p0 * 2 + 1] + fr * (sum[p1 * 2 + 1] - sum[p0 * 2 + 1]);
+            pos += reverse ? -speed : speed;
+            if (pos >= len) pos -= len;
+            if (pos < 0) pos += len;
+        }
+        using var w = new Nota.Infrastructure.WavWriter(path, sr > 0 ? sr : 44100, 2, WavBitDepth.Float32);
+        w.WriteFrames(mix, frames);
+    }
+
+    // The watch starts for any Strata on its first pass with Set tempo on, on any track, shown
+    // or not (a loop started from the assistant or on a track that isn't selected).
+    private static DispatcherTimer? _tempoScan;
+
+    public static void StartTempoScan(IAudioEngine engine)
+    {
+        if (_tempoScan is not null) return;
+        var sc = new float[S_Id + 1];
+        _tempoScan = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _tempoScan.Tick += (_, _) =>
+        {
+            for (int i = 0; i < engine.TrackCount; i++)
+            {
+                if (!engine.TryGetTrackInfo(i, out var ti)) continue;
+                int count = engine.TrackDeviceCount(ti.Id);
+                for (int di = 0; di < count; di++)
+                {
+                    if (engine.TrackDeviceBuiltinKind(ti.Id, di) != StrataKind) continue;
+                    int n = engine.DeviceScope(ti.Id, di, sc, sc.Length);
+                    if (n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0 && engine.DeviceGetParam(ti.Id, di, SetTempo) > 0.5f)
+                        WatchTempo(engine, ti.Id, di);
+                }
+            }
+        };
+        _tempoScan.Start();
+    }
+
     private static void WatchTempo(IAudioEngine engine, int track, int di)
     {
         var sc = new float[S_Id + 1];
@@ -292,42 +358,13 @@ internal sealed class StrataDeviceBody : IDeviceBody
         {
             var top = root is null ? null : TopLevel.GetTopLevel(root);
             if (top is null) return;
+            // The loop as it is when Export is pressed; the mix and the file are made off the UI
+            // thread (a long loop at a high rate is hundreds of MB of audio).
             var blob = engine.DeviceGetState(track, di);
-            if (blob.Length < 20) return;
-            int off = 0;
-            int I() { int v = BitConverter.ToInt32(blob, off); off += 4; return v; }
-            float F() { float v = BitConverter.ToSingle(blob, off); off += 4; return v; }
-            I(); int sr = I(), len = I(); I(); int lc = Math.Clamp(I(), 0, MaxLayers);
-            if (len <= 0 || lc <= 0 || blob.Length < 20 + lc * 12 + (long)lc * len * 8) return;
-            var gain = new float[lc];   // the layer being recorded is unfinished: left out, as Strata plays it
+            if (blob.Length < 20 || BitConverter.ToInt32(blob, 8) <= 0 || BitConverter.ToInt32(blob, 16) <= 0) return;   // nothing recorded
             float fb = Math.Clamp(P(Feedback) * 0.01f, 0f, 1f);
-            for (int k = 0; k < lc; k++)
-            {
-                float db = F(); bool muted = I() != 0; bool recording = I() == LayerRecording;
-                gain[k] = muted || recording ? 0f : MathF.Pow(10f, db / 20f) * MathF.Pow(fb, lc - 1 - k);
-            }
-            var sum = new float[len * 2];
-            for (int k = 0; k < lc; k++)
-            {
-                for (int i = 0; i < len * 2; i++) sum[i] += F() * gain[k];
-            }
-            // One cycle as Strata plays it: at its speed, backwards when reversed, between samples
-            // read as the engine reads them (linear).
             double speed = Math.Clamp(P(Speed), 0.25f, 4f);
             bool reverse = On(Reverse);
-            int frames = Math.Max(1, (int)Math.Round(len / speed));
-            var mix = new float[frames * 2];
-            double pos = 0;
-            for (int i = 0; i < frames; i++)
-            {
-                int p0 = (int)pos, p1 = p0 + 1 >= len ? 0 : p0 + 1;
-                float fr = (float)(pos - p0);
-                mix[i * 2] = sum[p0 * 2] + fr * (sum[p1 * 2] - sum[p0 * 2]);
-                mix[i * 2 + 1] = sum[p0 * 2 + 1] + fr * (sum[p1 * 2 + 1] - sum[p0 * 2 + 1]);
-                pos += reverse ? -speed : speed;
-                if (pos >= len) pos -= len;
-                if (pos < 0) pos += len;
-            }
             var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
             {
                 Title = Loc.T("device.strata.export_the_strata_loop_to"),
@@ -337,8 +374,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             });
             string? path = file?.TryGetLocalPath();
             if (path is null) return;
-            using var w = new Nota.Infrastructure.WavWriter(path, sr > 0 ? sr : 44100, 2, WavBitDepth.Float32);
-            w.WriteFrames(mix, frames);
+            await System.Threading.Tasks.Task.Run(() => WriteLoopWav(blob, fb, speed, reverse, path));
         }
 
         // ---------- live refresh ----------
