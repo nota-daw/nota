@@ -471,36 +471,16 @@ void Engine::foldRecordedTake() {
     const bool replacePending = replaceUpTo > appliedReplaceUpTo_ && recordSessionScene_ < 0;
     if (batch.empty() && !replacePending && !ctlWork) return;
 
-    // Session-slot recording (M5-4): notes are already loop-local; append into the slot.
-    if (recordSessionScene_ >= 0 && recordSessionTrackId_ > 0) {
+    // Session-slot recording (M5-4): notes are already loop-local; each lane appends into its
+    // slot (several slots record at once, specs/086).
+    if (!midiLanes_.empty() && midiLanes_[0].scene >= 0) {
         if (batch.empty() && !ctlWork) return;
-        auto st = findTrackAuthoring(recordSessionTrackId_);
-        if (!st || recordSessionScene_ >= static_cast<int32_t>(st->sessionSlots.size())) return;
-        auto nt = cloneTrack(*st);
-        SessionSlot& s = nt->sessionSlots[recordSessionScene_];
-        const double L = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
-        for (auto& r : batch) {
-            Note n;
-            n.pitch = r.pitch;
-            n.startBeat = std::fmod(r.startBeat < 0 ? 0 : r.startBeat, L);
-            n.lengthBeats = r.lengthBeats > 0.0 ? r.lengthBeats : 0.1;
-            // Played on the count-in (#158): a slot has nothing before its start, so a note
-            // released before the take began is dropped and one held into it starts there.
-            if (r.startBeat < 0.0) {
-                const double end = r.startBeat + r.lengthBeats;
-                if (end <= 1e-9) {
-                    Note gone;
-                    attachRecordedExpr(gone, exprKey(r.lane, r.pitch), r.startBeat);
-                    continue;
-                }
-                n.lengthBeats = end;
-            }
-            n.velocity = r.velocity;
-            attachRecordedExpr(n, exprKey(r.lane, r.pitch), r.startBeat);
-            s.midi.notes.push_back(n);
-        }
-        foldRecordedCtl(s.midi, L);
-        republishWithTrackRaw(recordSessionTrackId_, nt); // grows the live take, not a new undo step
+        std::vector<RecordedCtl> ctls = std::move(ctlBatch_);
+        ctlBatch_.clear();
+        const bool stop = ctlStopPending_;
+        ctlStopPending_ = false;
+        for (size_t k = 0; k < midiLanes_.size(); ++k)
+            foldSessionLane(midiLanes_[k], static_cast<int32_t>(k), batch, ctls, stop);
         return;
     }
 
@@ -513,6 +493,64 @@ void Engine::foldRecordedTake() {
     for (size_t k = 0; k < midiLanes_.size(); ++k)
         foldMidiLane(midiLanes_[k], static_cast<int32_t>(k), batch, ctls, stop, replaceUpTo, replacePending);
     if (replacePending) appliedReplaceUpTo_ = replaceUpTo;
+}
+
+// A Session lane's share of a poll: its loop-local notes and controllers into its slot.
+bool Engine::foldSessionLane(MidiTakeLane& l, int32_t lane, const std::vector<RecordedNote>& batch,
+    const std::vector<RecordedCtl>& ctls, bool stop) {
+    bool mine = stop;
+    for (const auto& r : batch) mine = mine || r.lane == lane;
+    for (const auto& x : ctls) mine = mine || x.lane == lane;
+    auto st = l.trackId >= 0 && l.scene >= 0 && mine ? findTrackAuthoring(l.trackId) : nullptr;
+    if (!st || l.scene >= static_cast<int32_t>(st->sessionSlots.size())) {
+        for (const auto& r : batch)
+            if (r.lane == lane) {
+                Note gone;
+                attachRecordedExpr(gone, exprKey(lane, r.pitch), r.startBeat);
+            }
+        return false;
+    }
+    std::swap(ctlFold_, l.ctlFold);
+    std::swap(takeCtls_, l.takeCtls);
+    struct SwapBack {
+        Engine& e;
+        MidiTakeLane& l;
+        ~SwapBack() {
+            std::swap(e.ctlFold_, l.ctlFold);
+            std::swap(e.takeCtls_, l.takeCtls);
+        }
+    } swapBack{*this, l};
+    for (const auto& x : ctls)
+        if (x.lane == lane) ctlBatch_.push_back(x);
+    ctlStopPending_ = stop;
+    auto nt = cloneTrack(*st);
+    SessionSlot& s = nt->sessionSlots[l.scene];
+    const double L = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
+    for (auto& r : batch) {
+        if (r.lane != lane) continue;
+        Note n;
+        n.pitch = r.pitch;
+        n.startBeat = std::fmod(r.startBeat < 0 ? 0 : r.startBeat, L);
+        n.lengthBeats = r.lengthBeats > 0.0 ? r.lengthBeats : 0.1;
+        // Played on the count-in (#158): a slot has nothing before its start, so a note
+        // released before the take began is dropped and one held into it starts there.
+        if (r.startBeat < 0.0) {
+            const double end = r.startBeat + r.lengthBeats;
+            if (end <= 1e-9) {
+                Note gone;
+                attachRecordedExpr(gone, exprKey(lane, r.pitch), r.startBeat);
+                continue;
+            }
+            n.lengthBeats = end;
+        }
+        n.velocity = r.velocity;
+        attachRecordedExpr(n, exprKey(lane, r.pitch), r.startBeat);
+        s.midi.notes.push_back(n);
+    }
+    foldRecordedCtl(s.midi, L);
+    ctlStopPending_ = false;
+    republishWithTrackRaw(l.trackId, nt); // grows the live take, not a new undo step
+    return true;
 }
 
 // One lane's share of a poll: its notes, its controllers (and a pending stop) into its clip.
@@ -829,14 +867,12 @@ void Engine::flushCtlTake() {
     }
     ctlStopPending_ = true;
     ctlStopAt_ = transport_.uiPositionBeats();
-    if (recordSessionScene_ >= 0 && recordSessionTrackId_ > 0) {
-        auto st = findTrackAuthoring(recordSessionTrackId_);
-        if (st && recordSessionScene_ < static_cast<int32_t>(st->sessionSlots.size())) {
-            auto nt = cloneTrack(*st);
-            SessionSlot& s = nt->sessionSlots[recordSessionScene_];
-            if (foldRecordedCtl(s.midi, s.lengthBeats > 0 ? s.lengthBeats : 4.0))
-                republishWithTrackRaw(recordSessionTrackId_, nt);
-        }
+    if (!midiLanes_.empty() && midiLanes_[0].scene >= 0) { // every Session slot of the take (specs/086)
+        std::vector<RecordedCtl> ctls = std::move(ctlBatch_);
+        ctlBatch_.clear();
+        ctlStopPending_ = false;
+        for (size_t k = 0; k < midiLanes_.size(); ++k)
+            foldSessionLane(midiLanes_[k], static_cast<int32_t>(k), {}, ctls, true);
     } else if (!midiLanes_.empty()) { // every MIDI take lane (specs/086)
         std::vector<RecordedCtl> ctls = std::move(ctlBatch_);
         ctlBatch_.clear();
@@ -1080,6 +1116,21 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
         }
         rtLaneSrc_[k] = midiLaneSrc_[static_cast<size_t>(k)].load(std::memory_order_relaxed);
         rtLaneCh_[k] = midiLaneCh_[static_cast<size_t>(k)].load(std::memory_order_relaxed);
+        // The lane's clock: the take's (the first slot, or the transport); a Session slot that
+        // joined the take (specs/086) times on its own loop and records once it plays.
+        rtLaneNow_[k] = nowBeat;
+        rtLaneSlotLen_[k] = slotLen;
+        rtLaneSlot_[k] = slot != nullptr;
+        rtLaneLive_[k] = true;
+        const SessionLaneSlots* ls = laneSlotsHist_.live();
+        SessionPlayer* lp = ls ? ls->player[static_cast<size_t>(k)] : nullptr;
+        if (k > 0 && lp && lp != slot) {
+            const double len = ls->len[static_cast<size_t>(k)];
+            rtLaneSlot_[k] = true;
+            rtLaneSlotLen_[k] = len;
+            rtLaneLive_[k] = lp->playing.load(std::memory_order_relaxed) == ls->scene[static_cast<size_t>(k)];
+            rtLaneNow_[k] = len > 0.0 ? std::fmod(lp->localBeats, len) : lp->localBeats;
+        }
     }
     // A retried Session MIDI take begins when its slot has relaunched: until then what is
     // played carries the old epoch and stays out (specs/078).
@@ -1163,13 +1214,14 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
                 if (!laneTakes(k, e)) continue;
                 RtMidiLane& L = rtMidiLanes_[static_cast<size_t>(k)];
                 if (e.on) {
+                    if (!rtLaneLive_[k]) continue; // its slot hasn't started yet
                     L.pendingActive[e.pitch] = true;
-                    L.pendingStart[e.pitch] = nowBeat;
+                    L.pendingStart[e.pitch] = rtLaneNow_[k];
                     L.pendingVel[e.pitch] = e.velocity;
-                    if (!slot) triggerPassReplace();
+                    if (!rtLaneSlot_[k]) triggerPassReplace();
                 } else if (L.pendingActive[e.pitch]) {
-                    double len = nowBeat - L.pendingStart[e.pitch];
-                    if (slot && len < 0.0) len += slotLen; // wrapped past the loop end
+                    double len = rtLaneNow_[k] - L.pendingStart[e.pitch];
+                    if (rtLaneSlot_[k] && len < 0.0) len += rtLaneSlotLen_[k]; // wrapped past the loop end
                     RecordedNote rn{e.pitch, L.pendingStart[e.pitch], len, L.pendingVel[e.pitch], recordPass_};
                     rn.lane = k;
                     pushRecorded(rn);
@@ -1190,25 +1242,25 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             held.channel = livePressChannel_[p];
             for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
                 RtMidiLane& L = rtMidiLanes_[static_cast<size_t>(k)];
-                if (L.pendingActive[p] || !laneTakes(k, held)) continue;
+                if (L.pendingActive[p] || !rtLaneLive_[k] || !laneTakes(k, held)) continue;
                 L.pendingActive[p] = true;
-                L.pendingStart[p] = (slot || restarted || std::isnan(livePressBeat_[p])) ? nowBeat : livePressBeat_[p];
+                L.pendingStart[p] =
+                    (rtLaneSlot_[k] || restarted || std::isnan(livePressBeat_[p])) ? rtLaneNow_[k] : livePressBeat_[p];
                 L.pendingVel[p] = livePressVel_[p];
             }
         }
-    if (rec && timed && liveExprCount_ > 0) captureLiveExpr(nowBeat, slot ? slotLen : 0.0);
+    if (rec && timed && liveExprCount_ > 0) captureLiveExpr(); // on each lane's clock
 
     // Recorded controllers (specs/020): the block's coalesced instrument-wide controllers that
     // reach the take, on the capture clock. A take starts with every controller already away
     // from rest (a pedal held down when Record is pressed), at the record start.
     if (rec && takeStarted) {
-        const double seedAt = slot ? nowBeat : blockStartBeat;
         for (int32_t c = 0; c < kCtlCount; ++c) {
             const float v = liveCtl_[c].load(std::memory_order_relaxed);
             if (v == kCtlRest || ctlIsReserved(c)) continue;
             for (int32_t k = 0; k < rtMidiLaneCount_; ++k)
-                if (rtMidiLanes_[static_cast<size_t>(k)].trackId >= 0) {
-                    RecordedCtl x{c, seedAt, v, recordPass_};
+                if (rtMidiLanes_[static_cast<size_t>(k)].trackId >= 0 && rtLaneLive_[k]) {
+                    RecordedCtl x{c, rtLaneSlot_[k] ? rtLaneNow_[k] : blockStartBeat, v, recordPass_};
                     x.lane = k;
                     pushRecordedCtl(x);
                 }
@@ -1219,8 +1271,8 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             const MidiEvent& e = liveExpr_[i];
             if (e.expr < kCtlDimBase) continue;
             for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
-                if (!laneTakes(k, e)) continue;
-                RecordedCtl x{e.expr - kCtlDimBase, nowBeat, e.velocity, recordPass_};
+                if (!rtLaneLive_[k] || !laneTakes(k, e)) continue;
+                RecordedCtl x{e.expr - kCtlDimBase, rtLaneNow_[k], e.velocity, recordPass_};
                 x.lane = k;
                 pushRecordedCtl(x);
             }
@@ -1248,7 +1300,7 @@ int32_t Engine::midiLaneOfRt(int32_t trackId) const {
 // Recorded MPE: the block's (coalesced) live expression for a note being recorded becomes a
 // point on that note's curve, timed from its start. Notes still held keep growing theirs; the
 // message thread pairs them with the RecordedNote at note-off (poll). Audio thread.
-void Engine::captureLiveExpr(double nowBeat, double slotLen) {
+void Engine::captureLiveExpr() {
     for (int i = 0; i < liveExprCount_; ++i) {
         const MidiEvent& e = liveExpr_[i];
         if (e.pitch < 0 || e.pitch > 127 || e.expr < 0 || e.expr >= kExprDims)
@@ -1256,8 +1308,8 @@ void Engine::captureLiveExpr(double nowBeat, double slotLen) {
         for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
             const RtMidiLane& L = rtMidiLanes_[static_cast<size_t>(k)];
             if (!L.pendingActive[e.pitch] || !laneTakes(k, e)) continue;
-            double off = nowBeat - L.pendingStart[e.pitch];
-            if (slotLen > 0.0 && off < 0.0) off += slotLen; // a Session take wrapped past its loop end
+            double off = rtLaneNow_[k] - L.pendingStart[e.pitch];
+            if (rtLaneSlot_[k] && rtLaneSlotLen_[k] > 0.0 && off < 0.0) off += rtLaneSlotLen_[k]; // wrapped past the loop end
             RecordedExpr x{e.pitch, L.pendingStart[e.pitch], e.expr, static_cast<float>(std::max(0.0, off)), e.velocity};
             x.lane = k;
             pushRecordedExpr(x);
@@ -1694,7 +1746,10 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     std::stable_sort(xev, xev + xn, [](const ExprEv& a, const ExprEv& b) { return a.off < b.off; });
 
     // Live monitoring while overdub-recording into this slot (M5-4).
-    const bool monitoring = recordSlotPlayer_.load(std::memory_order_acquire) == &sp;
+    bool monitoring = recordSlotPlayer_.load(std::memory_order_acquire) == &sp;
+    if (!monitoring && recording_.load(std::memory_order_relaxed)) // a slot that joined the take (specs/086)
+        if (const SessionLaneSlots* ls = laneSlotsHist_.live())
+            for (SessionPlayer* lp : ls->player) monitoring = monitoring || lp == &sp;
     // A phone plays only its own track.
     n = liveNotesFor(t, monitoring, monitoring, monitoring && t.armed(), evs, n);
 
@@ -2001,6 +2056,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
     // live MIDI, capture), so this scope keeps the player it points at alive.
     const SnapshotHistory<SessionPlayer>::RenderScope recordSlotScope(recordSlotHist_);
+    const SnapshotHistory<SessionLaneSlots>::RenderScope laneSlotScope(laneSlotsHist_); // specs/086
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
 

@@ -295,7 +295,7 @@ int32_t Engine::retryTake() {
             Retrying r(*this);
             forceSlotLaunch_ = true;
             recordSessionSlot(tid, sc);
-            if (audio && isRecording())
+            if (isRecording())
                 for (auto [otid, osc] : others) recordSessionSlot(otid, osc); // joins as a lane
             forceSlotLaunch_ = false;
         }

@@ -2021,11 +2021,34 @@ class Engine {
     struct MidiTakeLane {
         int32_t trackId = -1;
         int32_t clipIndex = -1;
+        // A Session take's lane records into a slot on that slot's own loop clock (specs/086).
+        int32_t scene = -1;
+        bool growing = false; // a fresh take with no fixed length: cut to whole quanta at its stop
+        std::shared_ptr<SessionPlayer> player;
         std::vector<TakeNote> takeNotes;
         std::array<CtlFold, kCtlCount> ctlFold{};
         std::vector<TakeCtl> takeCtls;
     };
     std::vector<MidiTakeLane> midiLanes_;
+    // The Session lanes' slots for the audio thread: an immutable table swapped whole, kept alive
+    // (with the players it names) until no render can still read it.
+    struct SessionLaneSlots {
+        std::array<SessionPlayer*, 16> player{};
+        std::array<int32_t, 16> scene{};
+        std::array<double, 16> len{};
+        std::vector<std::shared_ptr<SessionPlayer>> keep;
+    };
+    SnapshotHistory<SessionLaneSlots> laneSlotsHist_;
+    void publishSessionLaneSlots();
+    // Another MIDI slot joins the running Session MIDI take as a lane of its own (specs/086).
+    bool addSessionMidiLane(int32_t trackId, int32_t scene);
+    void finishSessionMidiLane(int32_t lane); // that slot stops; the take goes on with the rest
+    void cutGrowingLane(MidiTakeLane& l);     // a fresh open-ended take: its loop to whole quanta
+    bool foldSessionLane(MidiTakeLane& l, int32_t lane, const std::vector<RecordedNote>& batch,
+        const std::vector<RecordedCtl>& ctls, bool stop);
+    // This block's per-lane capture clock (audio thread, drainLiveMidi).
+    double rtLaneNow_[16] = {}, rtLaneSlotLen_[16] = {};
+    bool rtLaneSlot_[16] = {}, rtLaneLive_[16] = {};
     void publishMidiLanes(const std::vector<int32_t>& trackIds); // opens one lane per track
     void closeMidiLane(int32_t lane);
     int32_t midiLaneOf(int32_t trackId) const; // message thread
@@ -2241,7 +2264,7 @@ class Engine {
     bool laneTakes(int32_t lane, const MidiEvent& e) const; // audio thread, this block's lanes
     int32_t midiLaneOfRt(int32_t trackId) const;           // audio thread: lane recording this track, or -1
     void captureRoutedNotes(int32_t lane, const MidiEv* evs, int n, double blockStart, double spb, double clockOffset);
-    void captureLiveExpr(double nowBeat, double slotLen); // recorded MPE (drainLiveMidi)
+    void captureLiveExpr(); // recorded MPE (drainLiveMidi), on each lane's clock
     // Live keys down, tracked whether or not a take records, so keys already held when
     // Record is pressed join the take from where they started (#56). pressBeat is NaN for a
     // key pressed while stopped (no timeline position).

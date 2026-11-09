@@ -25,6 +25,9 @@ internal static class MidiInputFilterTests
         foreach (var r in LinkedGroupRecordsBoth()) yield return r;
         foreach (var r in OverdubPerTrack()) yield return r;
         foreach (var r in SavedAndDisconnected()) yield return r;
+        foreach (var r in SessionSlotsTogether()) yield return r;
+        foreach (var r in SessionSlotsRetry()) yield return r;
+        foreach (var r in SessionFirstSlotStops()) yield return r;
     }
 
     private static NotaEngine Engine()
@@ -184,5 +187,99 @@ internal static class MidiInputFilterTests
             yield return (got.Count == 0, $"a track on a device that isn't connected records nothing ({got.Count} notes)");
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    private static int[] SlotPitches(NotaEngine e, int track, int scene)
+        => e.GetSessionNotes(track, scene).Select(n => n.Pitch).OrderBy(p => p).ToArray();
+
+    // T065: two MIDI slots in one Session take, each through its own input; one stops early.
+    private static IEnumerable<(bool, string)> SessionSlotsTogether()
+    {
+        using var e = Engine();
+        e.SetLaunchQuant(0.0);
+        int a = Instrument(e), b = Instrument(e);
+        e.SetTrackMidiInputSourceForTest(b, 1, 0);   // b: source 1 only
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 0.1);
+        e.RecordSessionSlot(b, 0);
+        Beats(e, 0.1);
+        yield return (e.SessionSlotState(a, 0) == 4 && e.SessionSlotState(b, 0) == 4,
+            $"two MIDI slots record at once (states {e.SessionSlotState(a, 0)}, {e.SessionSlotState(b, 0)})");
+        KeyTap(e, 60);           // All inputs: a only (b listens to source 1)
+        HwTap(e, 1, 0, 62);      // source 1: both
+        e.StopSessionRecordSlot(b);
+        Beats(e, 0.1);
+        yield return (e.SessionSlotState(a, 0) == 4 && e.SessionSlotState(b, 0) == 3,
+            $"stopping one slot leaves the other recording, the stopped one plays (states {e.SessionSlotState(a, 0)}, {e.SessionSlotState(b, 0)})");
+        HwTap(e, 1, 0, 64);
+        e.StopSessionRecord();
+        e.Poll();
+        var pa = SlotPitches(e, a, 0);
+        var pb = SlotPitches(e, b, 0);
+        yield return (pa.SequenceEqual(new[] { 60, 62, 64 }) && pb.SequenceEqual(new[] { 62 }),
+            $"each slot holds what its input played while it recorded ({string.Join(",", pa)} / {string.Join(",", pb)})");
+        yield return (e.SessionSlotLength(a, 0) == 4.0 && e.SessionSlotLength(b, 0) == 4.0,
+            $"open-ended takes are cut to whole bars ({e.SessionSlotLength(a, 0)}, {e.SessionSlotLength(b, 0)})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // Discard and Retry drops and restarts every MIDI slot still recording.
+    private static IEnumerable<(bool, string)> SessionSlotsRetry()
+    {
+        using var e = Engine();
+        e.SetLaunchQuant(0.0);
+        int a = Instrument(e), b = Instrument(e);
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 0.1);
+        e.RecordSessionSlot(b, 0);
+        Beats(e, 0.1);
+        KeyTap(e, 60);
+        var r = e.RetryTake();
+        Beats(e, 0.1);
+        yield return (r == RetryTakeResult.Session && e.SessionSlotState(a, 0) == 4 && e.SessionSlotState(b, 0) == 4
+                      && e.GetSessionNotes(a, 0).Length == 0 && e.GetSessionNotes(b, 0).Length == 0,
+            $"retry empties and restarts both MIDI slots ({r}, states {e.SessionSlotState(a, 0)}, {e.SessionSlotState(b, 0)})");
+        KeyTap(e, 67);
+        e.StopSessionRecord();
+        e.Poll();
+        var pa = SlotPitches(e, a, 0);
+        var pb = SlotPitches(e, b, 0);
+        yield return (pa.SequenceEqual(new[] { 67 }) && pb.SequenceEqual(new[] { 67 }),
+            $"…and both keep only what followed ({string.Join(",", pa)} / {string.Join(",", pb)})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // The take's first slot stops: the second carries the take on (its clock, its stop).
+    private static IEnumerable<(bool, string)> SessionFirstSlotStops()
+    {
+        using var e = Engine();
+        e.SetLaunchQuant(0.0);
+        int a = Instrument(e), b = Instrument(e);
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 0.1);
+        e.RecordSessionSlot(b, 0);
+        Beats(e, 0.1);
+        KeyTap(e, 60);
+        e.StopSessionRecordSlot(a);
+        Beats(e, 0.1);
+        yield return (e.SessionSlotState(a, 0) == 3 && e.SessionSlotState(b, 0) == 4 && e.IsRecording,
+            $"stopping the first slot leaves the second recording (states {e.SessionSlotState(a, 0)}, {e.SessionSlotState(b, 0)})");
+        KeyTap(e, 64);
+        e.StopSessionRecordSlot(b);
+        e.Poll();
+        var pa = SlotPitches(e, a, 0);
+        var pb = SlotPitches(e, b, 0);
+        yield return (!e.IsRecording && pa.SequenceEqual(new[] { 60 }) && pb.SequenceEqual(new[] { 60, 64 }),
+            $"…which then ends the take, each slot with its notes ({string.Join(",", pa)} / {string.Join(",", pb)})");
+        e.StopAllSession();
+        e.StopTransport();
     }
 }

@@ -53,7 +53,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   a channel (all or 1–16): two players on two controllers record onto two tracks at once. A
   device that isn't connected stays picked, marked "(not connected)", and sends nothing; MPE
   with a single channel shows a warning. Saved with the project. MCP: `set_track_midi_input`,
-  `get_track_midi_input`.
+  `get_track_midi_input`. In Session view, launching an empty MIDI slot on another track while
+  a MIDI slot records adds it to the take: each slot records its own input on its own loop,
+  stops on its own, and Discard and Retry restarts them all.
 
 ### Changed
 - **An audio track can record any input of the interface** (#353, specs/086): the input
