@@ -415,7 +415,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(Freeze))
-                return NotaNum.F($"Freeze: tail held, input muted · damp {Pct(P(HFDamp))}");
+                return Loc.F("device.reverb.freeze_tail_held_input_muted", Pct(P(HFDamp)));
             string rt = NotaNum.F($"{Algo()} · RT60 {Secs(Rt60(P(Decay)))}");
             string vin = On(Vintage) ? " · vintage" : "";
             return centreTab == 0
@@ -430,7 +430,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             // How much of the diffuser delay the pre-delay could actually absorb.
             double preSmp = P(PreDelay) * 0.2 * sr;
             string comp = diff < 1 ? "" : On(LatencyComp)
-                ? NotaNum.F($" · diffuser −{Math.Min(diff, preSmp):0} smp compensated")
+                ? Loc.F("device.reverb.diffuser_smp_compensated", Math.Min(diff, preSmp))
                 : NotaNum.F($" · diffuser +{diff:0} smp");
             statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
         });

@@ -632,8 +632,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             return;
         }
         string mode = OperatingSystem.IsWindows() && _main.Engine.AudioExclusiveFallback
-            ? " · exclusive refused → shared"
-            : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · exclusive" : "";
+            ? " · " + Loc.T("preferences.exclusive_refused_shared")
+            : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · " + Loc.T("preferences.exclusive") : "";
         string rate = NotaNum.Unit(sr / 1000, "0.#", "kHz");
         (_latencyValue.Text, _latencyDetail.Text) = sr <= 0
             ? ("", Loc.T("preferences.audio_device_not_running"))
@@ -1099,8 +1099,8 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private static TextBlock ModeLabel() => new() { FontSize = 11, Margin = new Thickness(0, 4, 0, -4) };
 
-    // A miniature Nota window in one theme's own colours, whichever theme is live, so each
-    // card previews itself: title bar, transport with the view keys, browser, arrangement
+    // A miniature Nota window in one theme's own colours (with the chosen accent), whichever
+    // theme is live, so each card previews itself: title bar, transport with the view keys, browser, arrangement
     // lanes with clips in the first track colours and the playhead, and the device panel.
     private sealed class ThemePreview : Control
     {
@@ -1108,7 +1108,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         private readonly NotaColourTheme _theme;
         public ThemePreview(NotaColourTheme theme) { _theme = theme; Width = W; Height = H; }
 
-        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, _theme));
+        // The theme as it is worn with the chosen accent (spec 084), so the card previews the pair.
+        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, NotaThemeService.Worn(_theme)));
 
         public override void Render(DrawingContext ctx)
         {
@@ -1358,12 +1359,24 @@ public sealed partial class PreferencesWindow : NotaWindow
             settings.Save();
         });
 
+        var splitFades = SwitchRow(Loc.T("preferences.fade_audio_clips_when_splitting"), settings?.Current.SplitFades ?? true, on =>
+        {
+            if (settings is null) return;
+            settings.Current.SplitFades = on;
+            settings.Save();
+            _main.Engine.SplitFades = on;
+        });
+
         return Sections(
             Section("UI", 10,
                 TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
                 Row("", Caption(Loc.T("preferences.themes_change_colours_only_follow"))),
+                TopRow(Loc.T("preferences.accent"), AccentPicker()),
+                Row("", Caption(Loc.T("preferences.accent_caption"))),
                 Row(Loc.T("preferences.waveform"), WaveformPicker()),
                 Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+                Row("", splitFades),
+                Row("", Caption(Loc.T("preferences.splitting_an_audio_clip_adds"))),
                 Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
                 Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
                 Row(Loc.T("preferences.interface_scale"), ScalePicker()),
@@ -1420,6 +1433,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⇧Space", Loc.T("preferences.play_pause_the_playhead_stays")),
             ("Return", Loc.T("preferences.stop_again_back_to_the")),
             ("⌘R", Loc.T("common.record")),
+            ("⌘.", Loc.T("preferences.discard_the_take_and_record")),
             ("⌘M", Loc.T("common.metronome")),
             ("⌘L", Loc.T("preferences.loop_on_off_loop_the")),
             (Loc.T("preferences.double_click_loop_brace"), Loc.T("preferences.loop_on_off_in_the")),
@@ -1459,8 +1473,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘3", Loc.T("preferences.triplet_grid_on_off")),
             ("⌘4", Loc.T("preferences.snap_to_grid_on_off")),
             ("⌘5", Loc.T("preferences.switch_between_the_adaptive_auto")),
-            ("⌥ while dragging", Loc.T("preferences.move_freely_ignoring_the_grid")),
-            (Loc.T("preferences.audio_clip_editor_on_adsr"), "⌘1–⌘5 act on the Arrangement · that view follows no grid"),
+            (Loc.T("preferences.alt_while_dragging"), Loc.T("preferences.move_freely_ignoring_the_grid")),
+            (Loc.T("preferences.audio_clip_editor_on_adsr"), Loc.T("preferences.cmd_1_5_act_on_the_arrangement")),
         }),
         (Loc.T("preferences.tracks_after_a_click_in"), new[]
         {
@@ -1542,11 +1556,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.drag_in_the_bend_pres"), Loc.T("preferences.draw_the_selected_notes_mpe")),
             (Loc.T("preferences.double_click_in_an_mpe"), Loc.T("preferences.add_a_point_on_a")),
             (Loc.T("preferences.click_the_bend_lanes_range"), Loc.T("preferences.pick_how_far_the_bend")),
-            (Loc.T("preferences.click_the_controller_tab"), Loc.T("preferences.show_a_midi_controller_under")),
+            (Loc.T("preferences.click_the_controller_tab"), Loc.T("preferences.show_primary_controller_lane")),
+            (Loc.T("preferences.click_lane_controller_dropdown"), Loc.T("preferences.choose_lane_controller")),
+            (Loc.T("preferences.controller_lane_buttons"), Loc.T("preferences.manage_controller_lanes")),
             (Loc.T("preferences.drag_in_the_sustain_lane"), Loc.T("preferences.draw_a_pedal_block_on")),
             (Loc.T("preferences.drag_in_a_controller_lane"), Loc.T("preferences.draw_the_controllers_curve_draws")),
+            (Loc.T("preferences.drag_lane_divider"), Loc.T("preferences.resize_lane_remember_height")),
             (Loc.T("preferences.click_a_clip_in_the"), Loc.T("preferences.make_it_the_active_clip")),
-            ("⌘⌥ + wheel", Loc.T("preferences.zoom_rows_vertical_zoom")),
+            (Loc.T("preferences.cmd_alt_wheel"), Loc.T("preferences.zoom_rows_vertical_zoom")),
             (Loc.T("preferences.click_a_key"), Loc.T("preferences.play_it_on_the_tracks")),
             (Loc.T("preferences.drag_on_the_keys"), Loc.T("preferences.zoom_rows_down_taller_up")),
             ("⌥ + pinch", Loc.T("preferences.zoom_rows_trackpad")),
@@ -1576,7 +1593,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.click_waveform"), Loc.T("preferences.play_from_that_point")),
             (Loc.T("preferences.click_wave_spec"), Loc.T("preferences.switch_the_well_between_the")),
             (Loc.T("preferences.scroll_on_the_track_button"), Loc.T("preferences.step_through_the_demo_tracks")),
-            ("⌥-click volume", Loc.T("preferences.type_the_preview_volume_double")),
+            (Loc.T("preferences.alt_click_volume"), Loc.T("preferences.type_the_preview_volume_double")),
         }),
         (Loc.T("preferences.gamepad_macos"), new[]
         {
@@ -1592,7 +1609,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.double_click_clip"), Loc.T("preferences.open_in_the_clip_editor")),
             (Loc.T("preferences.double_click_a_track_header"), Loc.T("preferences.open_its_devices_in_the")),
             (Loc.T("preferences.double_click_a_browser_instrument"), Loc.T("preferences.swap_it_onto_the_selected")),
-            ("⌥ + double-click a browser instrument", Loc.T("preferences.always_start_a_new_track")),
+            (Loc.T("preferences.alt_double_click_a_browser"), Loc.T("preferences.always_start_a_new_track")),
             (Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_play_record")),
             (Loc.T("preferences.drag_an_audio_clips_adsr"), Loc.T("preferences.shape_attack_decay_sustain_release")),
             (Loc.T("preferences.click_track_header"), Loc.T("preferences.add_the_track_to_the")),

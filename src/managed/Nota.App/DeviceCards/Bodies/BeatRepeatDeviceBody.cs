@@ -651,7 +651,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             double ib = IntervalBeats();
             if (centreTab == 0 && timeline is not null)
                 timeline.Set(scope, kCellAt, full ? kCells : 0, ib * 2, ib, GridBeats(), BarBeats(), OffSteps() / 16.0,
-                    Sc(S_WinPhase), Sc(S_Playing) > 0.5, State() == 2 ? NotaNum.F($"Capture and repeat · {RepeatNo()}") : Loc.T("device.beat_repeat.capture_and_repeat"));
+                    Sc(S_WinPhase), Sc(S_Playing) > 0.5, State() == 2 ? Loc.F("device.beat_repeat.capture_and_repeat_pass", RepeatNo()) : Loc.T("device.beat_repeat.capture_and_repeat"));
             if (centreTab == 1 && slices is not null)
             {
                 double sliceBeats = Sc(S_SliceBeats) > 0 && State() > 0 ? Sc(S_SliceBeats) : GridBeats();

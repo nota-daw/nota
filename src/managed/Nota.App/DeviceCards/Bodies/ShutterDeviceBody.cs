@@ -455,7 +455,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 K(Release, "RELEASE", RelF),
                 K(Floor, "FLOOR", FloorF, Teal, tip: Loc.T("device.shutter.floor_the_level_when_closed")),
             },
-            () => P(Floor) <= 0.001f ? (Duck() ? Loc.T("device.shutter.ducks_to_silence") : Loc.T("device.shutter.closes_to_silence")) : NotaNum.F($"floor {FloorDb():0.0}\u2009dB instead of silence"),
+            () => P(Floor) <= 0.001f ? (Duck() ? Loc.T("device.shutter.ducks_to_silence") : Loc.T("device.shutter.closes_to_silence")) : Loc.F("device.shutter.floor_db_instead_of_silence", FloorDb()),
             () => NotaNum.F($"openings {Sc(S_TrigPerBar):0} / bar · {GrText()}"));
             return TabBody(head, envView, knobs);
         }

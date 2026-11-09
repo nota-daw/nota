@@ -38,6 +38,7 @@ struct RecordedNote {
     double lengthBeats;
     float velocity;
     int32_t pass = 0;
+    uint32_t epoch = 0; // take attempt it belongs to (specs/078): stamped by the audio thread
 };
 using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
 // A recorded note's expression sample (audio -> message): the note is identified by its pitch
@@ -48,6 +49,7 @@ struct RecordedExpr {
     int32_t dim;
     float beat;
     float value;
+    uint32_t epoch = 0; // take attempt (specs/078)
 };
 using RecordedExprQueue = SpscRingBuffer<RecordedExpr, 1u << 14>;
 // A recorded controller sample (audio -> message): at an absolute beat of the take (a Session
@@ -58,6 +60,7 @@ struct RecordedCtl {
     double beat;
     float value;
     int32_t pass;
+    uint32_t epoch = 0; // take attempt (specs/078)
 };
 using RecordedCtlQueue = SpscRingBuffer<RecordedCtl, 1u << 14>;
 // A clip note's expression at a sample offset of the block (the render pass replays these).
@@ -87,11 +90,12 @@ struct ControlEvent {
     int32_t value;
 };
 
-// Value undo (specs/009, specs/016): volume / pan / sends / master volume live in atomics outside the
+// Value undo (specs/009, specs/016): volume / pan / master volume live in atomics outside the
 // graph, and device parameters live in Device objects that cloned tracks share — restoring
 // an older graph restores neither. Their undo steps carry values instead of a snapshot. They
 // share one history with the structural snapshots (UndoEntry), which keeps the order of all
-// edits. Parameter kinds address (track, device index, parameter index): DeviceParam an audio
+// edits. Send levels live in the same atomics and are not an undo step (specs/069). Parameter
+// kinds address (track, device index, parameter index): DeviceParam an audio
 // effect, MidiDeviceParam a MIDI effect, PluginParam a normalized hosted-plugin / built-in
 // instrument parameter (deviceIndex -1 = the instrument).
 enum class MixKind : int32_t {
@@ -103,7 +107,10 @@ enum class MixKind : int32_t {
     PluginParam = 5,
     PresetTag = 6,  // a device's preset tag (specs/048): deviceIndex as above, paramIndex = the surface
     DeviceNotes = 7, // an EQ-8's band labels and notes (specs/049): the value indexes Engine::noteStates_
-    TrackSend = 8    // a track's send level (specs/072): deviceIndex = the return bus
+    TrackSend = 8,    // rejected (specs/069): a send level is not an undo step. deviceIndex would be the bus.
+    InstrumentEdit = 9, // a track instrument's edit state (Instrument::editState): the value indexes Engine::noteStates_
+    InstrumentState = 10 // a rack chain instrument's whole state (params too, which have no undo target of their
+                         // own there): the value indexes Engine::noteStates_; deviceIndex the rack, paramIndex the chain
 };
 struct MixTarget {
     MixKind kind;
@@ -122,6 +129,8 @@ struct MixChange {
 struct UndoEntry {
     std::shared_ptr<Graph> graph; // the state to restore; null for a mix-only step
     std::vector<MixChange> mix;   // empty for a structural step; one change per target
+    bool take = false;            // a take's own checkpoint (specs/078): a retry drops its graph
+    bool wasTake = false;         // was one, until part of the take was kept (a track disarmed)
 };
 using ControlEventQueue = SpscRingBuffer<ControlEvent, 1024>;
 

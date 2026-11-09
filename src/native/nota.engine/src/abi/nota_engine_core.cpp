@@ -248,6 +248,11 @@ NotaResult nota_engine_note_off(NotaEngine* e, int32_t pitch) {
     ENG(e)->noteOff(pitch);
     return NOTA_OK;
 }
+NotaResult nota_engine_note_off_velocity(NotaEngine* e, int32_t pitch, float release_velocity) {
+    if (!e || pitch < 0 || pitch > 127) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->noteOff(pitch, release_velocity);
+    return NOTA_OK;
+}
 NotaResult nota_track_note_on(NotaEngine* e, int32_t track_id, int32_t pitch, float velocity) {
     if (!e || pitch < 0 || pitch > 127) return NOTA_ERR_INVALID_ARG;
     ENG(e)->trackNoteOn(track_id, pitch, velocity);
@@ -256,6 +261,11 @@ NotaResult nota_track_note_on(NotaEngine* e, int32_t track_id, int32_t pitch, fl
 NotaResult nota_track_note_off(NotaEngine* e, int32_t track_id, int32_t pitch) {
     if (!e || pitch < 0 || pitch > 127) return NOTA_ERR_INVALID_ARG;
     ENG(e)->trackNoteOff(track_id, pitch);
+    return NOTA_OK;
+}
+NotaResult nota_track_note_off_velocity(NotaEngine* e, int32_t track_id, int32_t pitch, float release_velocity) {
+    if (!e || pitch < 0 || pitch > 127) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->trackNoteOff(track_id, pitch, release_velocity);
     return NOTA_OK;
 }
 NotaResult nota_engine_note_expression(NotaEngine* e, int32_t pitch, int32_t dim, float value) {
@@ -294,6 +304,9 @@ NotaResult nota_engine_set_recording(NotaEngine* e, int32_t enabled) {
 }
 int32_t nota_engine_is_recording(const NotaEngine* e) {
     return (e && CENG(e)->isRecording()) ? 1 : 0;
+}
+int32_t nota_engine_retry_take(NotaEngine* e) {
+    return e ? ENG(e)->retryTake() : 0;
 }
 int32_t nota_engine_record_start_status(const NotaEngine* e) {
     return e ? CENG(e)->recordStartStatus() : 0;

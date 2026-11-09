@@ -354,7 +354,7 @@ internal static partial class DesignTokenCheck
         {
             var rel = RelManaged(root, f);
             var source = File.ReadAllText(f);
-            if ((source.Contains("CurrentUICulture") || source.Contains("InstalledUICulture")) && rel != "Nota.App/NotaDocs.cs") osLanguage.Add(rel);
+            if ((source.Contains("CurrentUICulture") || source.Contains("InstalledUICulture"))) osLanguage.Add(rel);
             bool writesWork = rel.StartsWith("Nota.Domain/") || rel.StartsWith("Nota.Infrastructure/Settings/")
                 || Regex.IsMatch(rel, @"^Nota\.Infrastructure/Persistence/(Project(Model|Service|Store|Template|Migrations)|Recovery|PresetModel|PresetStore|PresetLibrary|AudioClipState)\w*\.cs$");
             if (writesWork && source.Contains("Loc.")) persistedText.Add(rel);
@@ -518,8 +518,15 @@ internal static partial class DesignTokenCheck
         // A leading space, symbol or opening mark does not make it code: " Nota never shows …", "⇧ + wheel …".
         var s = text.TrimStart(" \t·—–-+⇧⌘⌥⌃↑↓←→(“\"'‘".ToCharArray());
         if (Regex.IsMatch(s, @"^[A-Z][A-Za-z ]") && (s.Contains(' ') || Regex.IsMatch(s, @"^[A-Z][a-z]{2,}(?:-[a-z]+)?[….:]?$"))) return true;
-        // Lower-case prose: three or more plain words ("close to the limit", "plenty of headroom").
-        return Regex.IsMatch(s, @"^[a-z]+(?: [a-z’']+){2,}");
+        // Lower-case prose: three or more words, hyphenated ones included ("close to the limit",
+        // "double-click or drop a file").
+        if (Regex.IsMatch(s, @"^[a-z][a-z’'-]*(?: [a-z’'-]+){2,}")) return true;
+        // Short lower-case captions that no capital gives away: a status that trails off ("measuring…",
+        // "building…"), two plain words ("no signal", "low confidence"), or a word glued to a number or
+        // a name by a leading space or dot (" beats", " · frozen") — each reads as a sentence once the
+        // part around it is added.
+        return Regex.IsMatch(s, @"^[a-z][a-z ’'-]*…$") || Regex.IsMatch(s, @"^[a-z]{2,} [a-z]{2,}$")
+            || Regex.IsMatch(text, @"^ ?·? ?[a-z]{3,}(?: [a-z]+)?$") && text.StartsWith(' ');
     }
 
     private static void WriteLocBaseline(string path, List<Hit> raw)

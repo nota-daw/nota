@@ -131,13 +131,17 @@ public partial class MainWindow
     // switching back to Clip restores the persisted size. The Devices tab also can't be
     // resized at all (no splitter): its cards have a fixed layout, so extra height is wasted
     // and less clips them.
+    // MIDI needs both headers, the roll's lane controls and a usable note viewport,
+    // including the multi-clip strip and horizontal scrollbar at the smallest size.
+    private double DetailMinimumHeight => DetailBody.Content is ClipEditorView ? 300 : 120;
+
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
         // A selection only follows the panel; it opens a closed one only with the
         // "Open Detail panel on select" preference (#308). Hosts and tabs are already updated,
         // so the panel shows the current selection when it is opened later.
         if (_followOnly > 0 && !DetailPanel.IsVisible && !OpenDetailOnSelect) return;
-        _detailDefault = height;
+        _detailDefault = Math.Max(height, DetailMinimumHeight);
         // Filling the window, a clip tab keeps it; Devices goes back to the split.
         if (_detailMaximized && resizable)
         {
@@ -147,8 +151,8 @@ public partial class MainWindow
         SetDetailMaximized(false);
         DetailMaximizeBtn.IsVisible = resizable;
         var row = _detailRow;
-        row.MinHeight = 120;
-        double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
+        row.MinHeight = DetailMinimumHeight;
+        double h = Math.Max(row.MinHeight, honorPersist && _detailHeight > 120 ? _detailHeight : height);
         row.Height = new GridLength(h);
         DetailSplitter.IsVisible = resizable;
         DetailPanel.IsVisible = true;
@@ -679,6 +683,7 @@ public partial class MainWindow
         PianoRollView roll = null!;
         roll = new PianoRollView
         {
+            LaneSettings = _vm.Settings,
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             // Each clip whose notes changed, as one undo step. The roll can outlive a clip: the
             // track/clip may have been removed, shifted by a lower-index delete, undone, or
@@ -848,6 +853,24 @@ public partial class MainWindow
         DetailDevicesBtn.IsChecked = false;
         DetailPatternBtn.IsChecked = false;
         ShowDetail(250, honorPersist: true);
+    }
+
+    // The time signature's numerator changed (typed, a project load, a launched scene): every
+    // view that counts bars re-counts (#405). The roll takes its bar length as a property; the
+    // audio editor, the step grid and the readouts read Meter as they draw, so a reload repaints
+    // them.
+    private void ApplyMeter(int numerator)
+    {
+        int was = Meter.BeatsPerBar;
+        Meter.Set(numerator);
+        int bpb = Meter.BeatsPerBar;
+        if (bpb != was) _session?.Refresh();   // its slot lengths and inspector fields count bars
+        if (Timeline.BeatsPerBar != bpb) Timeline.BeatsPerBar = bpb;
+        _patternView?.Reload();
+        _audioEditor?.Reload();
+        if (_editorRoll is not { } roll) return;
+        roll.BeatsPerBar = bpb;
+        _clipEditor?.RecountBars(roll.ActiveClip.StartBeat);   // its Start / Length read-outs
     }
 
     // A clip was trimmed / stretched / moved in the arrangement. Both clip editors snapshot the
@@ -1107,10 +1130,12 @@ public partial class MainWindow
     private bool _mixerDocked;      // the Mixer is shown in MixerPanel
     private double _mixerWanted;    // its height before fitting into the window
     private double _detailWanted;   // the Detail panel's, likewise
+    private double _baseWindowMinHeight;
     private double _edgeStartY, _edgeStartH;   // a DetailEdge drag in progress
 
     private void InitBottomPanels()
     {
+        _baseWindowMinHeight = MinHeight;
         var rows = BodyGrid.RowDefinitions;
         _mainRow = rows[0];
         _detailSplitRow = rows[1];
@@ -1214,8 +1239,8 @@ public partial class MainWindow
             return;
         }
         if (Height(_detailRow) > 0) return;   // ShowDetail sized it already
-        _detailRow.MinHeight = 120;
-        _detailRow.Height = new GridLength(_detailWanted > 120 ? _detailWanted : 240);
+        _detailRow.MinHeight = DetailMinimumHeight;
+        _detailRow.Height = new GridLength(Math.Max(_detailRow.MinHeight, _detailWanted > 120 ? _detailWanted : 240));
         DetailSplitter.IsVisible = _detailSplitterWasVisible;
     }
 
@@ -1297,11 +1322,21 @@ public partial class MainWindow
     // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
     private void FitBottomPanels()
     {
-        if (_detailMaximized) return;   // the Detail row is all there is
+        if (_detailMaximized) { SetWindowDesignMinHeight(_baseWindowMinHeight); return; }   // the Detail row is all there is
         double total = BodyGrid.Bounds.Height;
         double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
         if (total > 0)
         {
+            // The visible panels' minima must fit as a whole. In particular, the MIDI
+            // editor must not be pushed below the window by a docked Mixer.
+            double minimumBody = _mainRow.MinHeight
+                + (DetailPanel.IsVisible ? _detailRow.MinHeight + _detailSplitRow.ActualHeight : 0)
+                + (_mixerDocked ? _mixerRow.MinHeight + _mixerSplitRow.ActualHeight : 0);
+            // BodyGrid and its rows measure in design units, the window's frame in screen units:
+            // bring the frame back to design units and let NotaUiScale scale the minimum, so
+            // it stays right at any interface scale and after the scale changes.
+            double chrome = ClientSize.Height / NotaUiScale.Factor - total;
+            SetWindowDesignMinHeight(Math.Max(_baseWindowMinHeight, chrome + minimumBody));
             double room = total - _mainRow.MinHeight;
             double detail = !DetailPanel.IsVisible ? 0 : _detailWanted > 0 ? Math.Max(_detailWanted, _detailRow.MinHeight) : Height(_detailRow);
             double over = mixer + detail - room;
@@ -1317,6 +1352,17 @@ public partial class MainWindow
         }
         if (_mixerDocked) _mixerRow.Height = new GridLength(Math.Round(mixer));
 
+    }
+
+    // The window's minimum height in design units; applied only when it changes, since the
+    // panels refit on every resize.
+    private double _windowDesignMinHeight = double.NaN;
+    private void SetWindowDesignMinHeight(double height)
+    {
+        height = Math.Round(height);
+        if (height == _windowDesignMinHeight) return;
+        _windowDesignMinHeight = height;
+        NotaUiScale.SetDesignMinHeight(this, height);
     }
 
     private void CloseDetail()
@@ -1353,6 +1399,7 @@ public partial class MainWindow
         _editorRoll?.SettlePlacement();
         var roll = new PianoRollView
         {
+            LaneSettings = _vm.Settings,
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {

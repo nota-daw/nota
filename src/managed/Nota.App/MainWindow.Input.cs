@@ -209,6 +209,14 @@ public partial class MainWindow
             e.Handled = true;   // an auto-repeat is swallowed, not passed on to the menu
             return;
         }
+        // ⌘. / ⌃.: discard the take and record it again (#185). Held down it retries once,
+        // not on every auto-repeat.
+        if (plainMod && e.Key == Key.OemPeriod)
+        {
+            if (_heldKeys.Add(e.Key)) _commands.Run("transport.retryTake");
+            e.Handled = true;
+            return;
+        }
         // ⌘⇧R / ⌃⇧R: loop record mode, Overdub ↔ Replace.
         if (mod && e.Key == Key.R && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {

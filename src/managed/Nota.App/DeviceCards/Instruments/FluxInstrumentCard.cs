@@ -201,7 +201,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             vecReadout.Foreground = VectorPulled() ? NotaPalette.TealBright : TextSecondary;   // teal: the reaction pulls it
             bool pulled = VectorPulled();
             vecFoot.Text = pulled ? Loc.T("device.flux.dashed_where_the_reaction_pulls")
-                : Ghost() ? "dashed — where motion drifts" : "four timbres · drag the point";
+                : Ghost() ? Loc.T("device.flux.dashed_where_motion_drifts") : Loc.T("device.flux.four_timbres_drag_the_point");
             vecFoot.Foreground = pulled ? NotaPalette.TealBright : TextTertiary;
         });
 

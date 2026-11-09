@@ -116,7 +116,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 Height = 15, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), ClipToBounds = true,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = inner,
             };
-            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it, double-click to switch it on / off"));
+            ToolTip.SetTip(chip, Loc.F("device.eq.band_click_to_edit_it", b + 1));
             chip.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
@@ -145,7 +145,7 @@ internal sealed class EqDeviceBody : IDeviceBody
         var chipStrip = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = chipRow };
         DockPanel.SetDock(chipStrip, Dock.Top);
         curve.DefaultTip = Loc.T("device.eq.drag_a_node_frequency_and")
-            + "double-click empty space — a new bell there · right-click a node — type, slope, channel · click a label — its note";
+            + Loc.T("device.eq.double_click_empty_space_a");
         ToolTip.SetTip(curve, curve.DefaultTip);
 
         // ANALYZER Pre / Post / Off over the graph's top-left corner.

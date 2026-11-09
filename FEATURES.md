@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.58.1** (plus changes in development on `main`). This document describes what is
+**0.59.2** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -49,11 +49,11 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ## Project and transport
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
-  operation — including volume, pan, send and master-volume moves and the parameters of effects,
+  operation — including volume, pan and master-volume moves and the parameters of effects,
   MIDI effects, instruments and plug-ins, from any source (device cards, Mixer, track
   headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move,
   and every arrangement section edit; a recorded automation pass undoes with its value.
-  Mute, solo and devices inside racks are not in the history; automation playback,
+  Mute, solo, sends and devices inside racks are not in the history; automation playback,
   opening a project and freezing add no steps.
 - **New project template**: a new project (and the workspace Nota opens with) starts with an
   instrument track (Nota Volt), an audio track and two returns — **Reverb** (Nota Reverb)
@@ -101,6 +101,11 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
+- **Discard and retry take** (⌘. / Ctrl+., Transport menu, palette, MCP `retry_take`): drops
+  the take being recorded — audio, loop passes, notes, controllers, automation, with no undo
+  step — and records again. The Arrangement goes back to where the transport was started
+  (the take's start with the count-in again, or the Play position for a punch-in); a Session
+  slot records again from the next launch quantum, shown as waiting, while other clips play on.
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
@@ -162,10 +167,11 @@ docks as a panel under any of the three, or floats in its own window — see
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
     of their own when tall. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
-  - **Sends in the track headers** — a large row, or a standard one from 88 px, shows one
+  - **Sends in the track headers** — a track at the Large height (128 px) or taller shows one
     small knob per return (A–D) under volume and pan with its level; hover names the
-    return, double-click turns the send off, ⌥-click types a value. The **Sends** key at
-    the top of the header column shows or hides them on every track (saved with the project).
+    return, double-click turns the send off, ⌥-click types a value. The level is the same
+    one the Mixer and the Sends card show, and it is not an undo step. A shorter row has no
+    knobs.
   - **Track headers left or right** — View ▸ Track headers on the right (or Settings →
     Appearance → Track headers) moves the header column, the return / master headers and
     the header strips to the right edge, so the timeline starts at the left; remembered
@@ -233,7 +239,10 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Tracks and mixer
 
 - **Track types**: Audio, MIDI/Instrument, Return, Master, **Group** (nestable submixes —
-  ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
+  ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup: on a group it dissolves the group, on a
+  track inside one it takes just that track out, after the group). Dragging a header above
+  the first row or below the last takes the track out of its group; clicking a group's lane
+  selects the group.
 - **Linked groups** — a group's **Link** key (a chain link on its header, its Mixer and
   Session strip, and **Link tracks** in its menu) ties the tracks below it together, nested
   groups included. Arming one arms them all; clicking a clip also selects the clips with the
@@ -486,8 +495,14 @@ docks as a panel under any of the three, or floats in its own window — see
   Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
   (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
   MCP `get_clip_controllers` / `set_clip_controller`.
+  - **Multiple controller lanes in the piano roll** — **+ lane** below the sidebar entries
+    adds independent CC lanes. Each lane has a controller-name/CC-number dropdown and
+    adjacent **×** to hide it while preserving data, plus a **127 / 64 / 0** value scale.
+    Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+    Stacked clips scroll in their strip to keep notes visible. Drag the divider above Velocity
+    or a CC lane to resize it; heights return across editor reopening and restarts.
   - **Controller lane in the piano roll** — the fifth tab of the lane under the notes edits
-    any controller: click the active tab for a picker (the clip's controllers first, then
+    any controller: use its in-lane dropdown (the clip's controllers first, then
     Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and **Other CC**).
     Pedals (CC64–69) are on/off blocks — drag to draw, move or resize one on the grid (⌘ free),
     double-click or Delete removes it; other controllers are a curve — drag to draw (⌥ for a
@@ -524,7 +539,7 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
-  Studio look — one orange accent for what is live or chosen, semantic mute / solo / arm
+  Studio look — one accent (Nota's chosen accent) for what is live or chosen, semantic mute / solo / arm
   colours, sentence-case labels — and a returning phone paints in its last theme at once.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
@@ -601,8 +616,13 @@ docks as a panel under any of the three, or floats in its own window — see
   SUSTAIN / RELEASE sliders. The waveform is drawn shaped the way it sounds. By default the
   sample plays its full length at full level; double-click a handle to reset its stage.
   Editing in either place updates the other, each edit is one undo step, split keeps the
-  attack on the left piece and the release on the right, and the shape is saved with the
-  project.
+  attack on the left piece and the release on the right, and — unless Settings → Appearance →
+  **Fade audio clips when splitting** is off — also writes a 4 ms fade at the cut (release on
+  the left, attack on the right) so the cut does not click. Drag those corner handles to make
+  it longer or shorter. **Fade at splits** (command palette, or an audio clip's menu; no
+  shortcut) writes that fade onto a join where the selected clips already touch, without
+  shortening a longer one, in one undo step. MIDI clips are left alone. The shape is saved
+  with the project.
 - **Separate Stems** (right-click an audio clip): the **htdemucs** AI model (Demucs v4)
   splits the clip into Drums, Bass, Other and Vocals — a group of four audio tracks under the
   clip's track. Each stem clip copies the original's shape exactly (region, warp markers, trim,
@@ -633,8 +653,7 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Automation
 
 - **Automation lanes** on tracks and returns, with curved segments (Alt+drag) and points
-  (double-click to add, double-click a point to remove). A track lane drives Volume, Pan, a
-  send (**Send A · Reverb** … one per return; deleting a return drops its send lanes) or a
+  (double-click to add, double-click a point to remove). A track lane drives Volume, Pan or a
   device parameter. A return's lane (Volume, Pan or a
   device on its chain) is edited in its footer row, the master's volume in the Master row.
 - **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
@@ -776,6 +795,25 @@ audio effects after it keep running and keep their settings; saved with the proj
   Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
   (seeded per-voice spread — a render is identical for the same seed, so freezing is
   exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
+- **Nota Twin** — morphing analog poly, 4–12 voices: every sound control has a **side A and a
+  side B**, and **Morph** sweeps the whole sound between them, effects and modulation depths
+  included. Two oscillators running triangle → saw → square with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes, three LFOs (per voice or global); Poly / Mono / Legato /
+  Unison, glide, seeded drift. Poly aftertouch and MPE per note (pressure routed to Morph
+  morphs only that note), an X · Y · Z expression pad. A 64-route matrix per part as a source ×
+  destination grid (29 sources incl. 8 macros and Random → Morph, pitch, vibrato or any
+  control), a depth per side. Per
+  part: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb. Own sequencer, played from a held key
+  or locked to the transport (8 patterns × 64 steps of up to six notes, tie, swing, transpose, latch, step record, four motion
+  lanes, **To clip**) and arpeggiator (six modes, 1–4 octaves, hold). **Split / Layer**: Lower
+  and Upper parts sharing the voices (2 + 10 … 10 + 2), a learnable split key, per-part octave,
+  volume and pan; **Parts** copies, swaps or loads a factory or saved sound into one part. The A / B
+  switch picks the side knobs, automation and MIDI learn write to; **A → B**, **B → A**,
+  **Swap**. Card tabs Osc, Filter, Env, LFO, Matrix, FX, Seq, Voice; S size shows Morph, the
+  pad and four knobs. 117 factory presets in 11 folders; MCP `read_twin`, `set_twin_morph_side`,
+  `copy_twin_side`, `copy_twin_part`, `set_twin_route`, `get_twin_pattern`, `set_twin_pattern`,
+  `twin_pattern_to_clip`.
 - **Nota Consort** — paraphonic semi-modular synth: four oscillators (tri / saw / square /
   pulse, sync 2→1 and 4→3), a mixer with noise, drive and a feedback-normalled EXT input, dual
   ladder filters (HP→LP series, LP/LP or HP/LP parallel stereo with spacing), two ADSRs,
@@ -1151,6 +1189,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   window that opens on top and focused, and closes when the device is removed). Adding a
   plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in
   window on insert, on by default); loading a project, undo and paste don't.
+- **Multi-core rendering**: independent VST3 instrument and effect tracks render in
+  parallel on the engine's worker threads, keeping half of each buffer free for playing;
+  other formats, plug-ins inside racks and armed tracks render on the audio thread.
 - **State save and restore** in the project, and **bypass**.
 - **PDC** — plugin delay compensation (including a toggle in the Audio Effect Rack).
 - **Transport sync** — plugins receive tempo, position, play state and loop boundaries
@@ -1235,7 +1276,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   them — a chord for pads, a riff for basses, a line for leads, an arpeggio for plucks and
   bells, a held chord for Pendulum / Consort. **Drum Rack and Nota Rhythm kits** play a
   groove on their own pads (gain, pan, choke groups and pad effects as when loaded) at a
-  tempo that fits the kit. MIDI effects play a phrase that shows what they do into a plain
+  tempo that fits the kit. A preset plays its own state: a Nota Twin preset with a sequence
+  plays its pattern. MIDI effects play a phrase that shows what they do into a plain
   keys patch. Audio effects process a **demo track**: Drums / Keys / Bass parts, or genre
   loops (Pop, House, Techno, Hip-Hop, Trap, Drum & Bass, Synthwave, Ambient) built from
   Nota's factory kits and presets and levelled alike. A track that suits the effect is
@@ -1305,8 +1347,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   orange accent; the default, and what a DAW wants for long sessions in a dark room),
   **Studio Light** (the same system in light greys, the orange a shade deeper), and
   **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
-  A theme changes colours only — track colours included — never the layout. Panels dock edge
-  to edge on thin seams; orange marks only what is playing, selected or switched on, and a
+  A theme changes colours only — track colours included — never the layout; the accent
+  colour is a separate choice (see [Preferences](#preferences)). Panels dock edge
+  to edge on thin seams; orange (or the chosen accent) marks only what is playing, selected or switched on, and a
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
@@ -1384,8 +1427,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   pads, crossovers, thresholds, trim and loop markers, the Stereo Map dots), envelope nodes
   (instrument envelopes and audio clips' ADSR handles) and mod-matrix cells (double-click
   or **Clear** removes a route); Tab moves to the handle's next value.
-- **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
-  opens it in the system language, the start window links to the first-track tutorial, and
+- **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
+  opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
 - **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
   Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
@@ -1409,17 +1452,28 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
-- **Library**: library folders.
+- **Library**: library folders. Without an explicit choice, the Projects and Samples folders
+  sit in the system's Documents and Music locations (Known Folders on Windows and macOS,
+  `user-dirs.dirs` on Linux), relocated or translated ones included.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  live and is remembered. **Accent** — the colour of what is live or chosen: seven presets
+  (Orange — the default — Lime, Aqua, Sky, Violet, Magenta, Pink) or **Custom**, a colour
+  picker (saturation/brightness area, hue strip, hex field) that previews the colour in all
+  four themes. One accent for every theme, tuned to each so it stays readable; a grey or a
+  colour too close to the record red, mute, solo or the meter green is refused with the
+  reason. Applied live, Esc in the picker puts the previous one back. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. **Waveform** —
-  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Track
+  remembered; timeline, piano roll and audio editor zoom work on top of it.   **Waveform** —
+  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Fade audio
+  clips when splitting** — on by default; a split then writes a 4 ms fade at the cut, which
+  the corner handles can drag longer or shorter. **Track
   headers** — Left / Right side of the arrangement's track list. **Open the detail panel
-  when you select a track or clip** (off by default: a double-click opens it). Also
+  when you select a track or clip** (off by default: a double-click opens it). **Label every
+  note in the piano roll** — the keys column names every note instead of only C (off by
+  default; very short rows keep C only). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Language** (Appearance): the interface language. Nota ships in **English**; every other
@@ -1453,7 +1507,8 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
-  (`set_loop_record_mode`; `get_transport` reports it).
+  (`set_loop_record_mode`; `get_transport` reports it), discard and retry the take being
+  recorded (`retry_take`).
 - **Project**: `get_overview` (a full snapshot); the arrangement's sections
   (`list_sections`, `set_sections`) and rearranging the song by them (`move_section`,
   `duplicate_section_with_content`, `delete_section_with_content`); version history — `list_versions` (with what
@@ -1463,15 +1518,17 @@ Coverage:
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in
-  musical terms (`read_keys`, `set_keys`).
+  musical terms (`read_keys`, `set_keys`); Nota Twin's sides, parts, matrix and patterns
+  (`read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`, `set_twin_route`,
+  `get_twin_pattern`, `set_twin_pattern`, `twin_pattern_to_clip`).
 - **Moving devices**: `move_device_to_track` moves or copies an audio effect, a MIDI effect or
   the instrument to another track, with its automation.
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split; read and write a clip's controller curves (sustain, wheels, any CC).
-- **Automation**: create a lane (volume, pan, a send, a device or instrument parameter),
-  read and write points.
+- **Automation**: create a lane (volume, pan, a device or instrument parameter),
+  read and write points. A send is not a lane target.
 - **MIDI effects** and engine status.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch

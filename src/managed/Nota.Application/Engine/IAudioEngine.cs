@@ -95,6 +95,8 @@ public interface IAudioEngine : IDisposable
     int AddScene();
     /// <summary>Removes a scene row (always keeps at least one). False if it couldn't.</summary>
     bool RemoveScene(int scene);
+    /// <summary>0 empty, 1 filled, 2 queued, 3 playing, 4 recording, 5 record pending (the take
+    /// starts capturing on the next launch quantum, specs/078).</summary>
     int SessionSlotState(int trackId, int scene);
     double SessionSlotLength(int trackId, int scene);
     void SetSessionSlotLength(int trackId, int scene, double lengthBeats);
@@ -259,6 +261,14 @@ public interface IAudioEngine : IDisposable
     /// <summary>Splits the given tracks' clips at both [start] and [end] (keeping all content) so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False = nothing changed.</summary>
     bool SplitClipsInRange(int[] trackIds, double start, double end);
+    /// <summary>When true (the default), splitting an audio clip writes a short fade at the cut
+    /// — release on the left piece, attack on the right — so the corner handles show it and
+    /// the user can drag them. MIDI splits are unchanged. An app preference, not project data.</summary>
+    bool SplitFades { get; set; }
+    /// <summary>Raises that short fade on both sides of every join where two audio clips abut
+    /// and at least one of the listed clips is in the pair. Does not shorten a longer fade.
+    /// One undo step. False when nothing changed. Runs even when <see cref="SplitFades"/> is off.</summary>
+    bool FadeSplits(int[] trackIds, int[] clipIndices);
     /// <summary>Consolidate: replaces each given track's content in [start,end) with ONE clip
     /// spanning the range — MIDI notes merged, audio clips rendered (gain/pitch/warp/fades/clip
     /// envelopes baked) into a new sample. Parts of clips outside the range survive. One undo
@@ -416,6 +426,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Adds an instrument track with the built-in Nota Mosaic multisample instrument (kind 17),
     /// empty until a program is set.</summary>
     int AddMosaicTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Twin two-part morphing analog poly (kind 18).</summary>
+    int AddTwinTrack();
     /// <summary>Sets a Nota Mosaic's program (MosaicProgram text) and starts loading its samples in
     /// the background. <paramref name="undoable"/>: one undo step (sounding notes stop); false edits
     /// the live instrument in place (a drag in progress). False when the track isn't a Mosaic.</summary>
@@ -428,6 +440,9 @@ public interface IAudioEngine : IDisposable
     long MosaicZoneSampleId(int trackId, int zone);
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
+    /// <summary>Loads a state blob into the track's instrument and records what it changed in the
+    /// instrument's edit state (a Nota Twin's patterns) as an undo step. False when not applied.</summary>
+    bool SetInstrumentStateUndoable(int trackId, byte[] data);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>
     bool SetTrackGrainSample(int trackId, string path, int rootNote = 60);
     /// <summary>Sets a Nota Grain's root note — the key that plays the sample at its own pitch.</summary>
@@ -748,6 +763,9 @@ public interface IAudioEngine : IDisposable
     int RackChainInstrumentVoiceCount(int trackId, int chain);
     int RackChainInstrumentHeldNotes(int trackId, int chain, int[] outNotes);
     void RackChainInstrumentAction(int trackId, int chain, int id, int iarg, float farg);
+    bool RackSetChainInstrumentStateUndoable(int trackId, int chain, byte[] data);
+    /// <summary>After param writes to a chain instrument: one undo step from <paramref name="before"/> (its state read first) to now.</summary>
+    bool RackChainInstrumentRecordStateUndo(int trackId, int chain, byte[] before);
     /// <summary>Built-in Sampler settings for a chain instrument. False if it isn't a Sampler.</summary>
     bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info);
     /// <summary>Sets a chain Sampler's root note (lock-free). False if the chain isn't a Sampler.</summary>
@@ -914,6 +932,8 @@ public interface IAudioEngine : IDisposable
     int RackDevChainInstrumentVoiceCount(int trackId, int deviceIndex, int chain);
     int RackDevChainInstrumentHeldNotes(int trackId, int deviceIndex, int chain, int[] outNotes);
     void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg);
+    bool RackDevSetChainInstrumentStateUndoable(int trackId, int deviceIndex, int chain, byte[] data);
+    bool RackDevChainInstrumentRecordStateUndo(int trackId, int deviceIndex, int chain, byte[] before);
     void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain);
     string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain);
     byte[] RackDevGetChainInstrumentState(int trackId, int deviceIndex, int chain);
@@ -1071,6 +1091,11 @@ public interface IAudioEngine : IDisposable
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
     bool IsRecording { get; }
+    /// <summary>Discard the take in progress and record it again (#185, specs/078): nothing of
+    /// it stays, not even an undo step. The Arrangement goes back to where the transport was
+    /// started and counts in again if the take did; a Session slot records again from the next
+    /// launch quantum while everything else keeps playing.</summary>
+    RetryTakeResult RetryTake();
     int RecordStartStatus { get; }
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }
@@ -1176,6 +1201,12 @@ public interface IAudioEngine : IDisposable
     int RestoreTake(int trackId, string path, int number, int group, double originBeat, double sourceOffsetFrames, long lengthFrames);
     /// <summary>Project load (no undo entry): tag a restored clip as a section of a restored take.</summary>
     void SetClipTakeId(int trackId, int clipIndex, int takeId);
+    /// <summary>The ends of an arrangement audio clip that play at full level (1 head, 2 tail):
+    /// a take join, or one a flatten kept. 0 = both ends fade.</summary>
+    int ClipJoinedEdges(int trackId, int clipIndex);
+    /// <summary>Project load (no undo entry): the saved <see cref="ClipJoinedEdges"/> of the track's
+    /// first clips. A join is kept only where both clips still meet.</summary>
+    void RestoreJoinedEdges(int trackId, int[] edges);
     bool TryGetSampleInfo(long sampleId, out NotaSampleInfo info);
     float[] ReadSample(long sampleId);
     bool TryGetSamplerInfo(int trackId, out NotaSamplerInfo info);

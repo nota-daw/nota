@@ -1506,10 +1506,41 @@ AudioClip audioSlice(const AudioClip& c, double ns, double ne, double spb, doubl
     if (!c.panEnvelope.points.empty()) r.panEnvelope.points = laneSliceExact(c.panEnvelope, a - cs, b - cs);
     return r;
 }
+
+// A split fade (issue #286) is a short ADSR edge at a cut. Clips on one track cannot
+// overlap, so it is a fade-out on the left piece and a fade-in on the right — the same
+// handles the user can drag — not a hidden declick and not an overlapping crossfade.
+// Only raises an edge that is shorter than `fadeBeats`; a longer fade stays as the user
+// left it. Each edge is capped at half the piece and at the room the other stages leave.
+constexpr double kSplitFadeSeconds = 0.004;
+
+bool raiseSplitEdge(AudioClip& clip, bool fadeIn, bool fadeOut, double fadeBeats, double lenBeats) {
+    if (!(fadeBeats > 0.0) || !(lenBeats > 1e-9)) return false;
+    bool changed = false;
+    if (fadeIn && clip.adsr.attack + 1e-9 < fadeBeats) {
+        const double cap = std::min(lenBeats * 0.5, std::max(0.0, lenBeats - clip.adsr.decay - clip.adsr.release));
+        const double v = std::min(fadeBeats, cap);
+        if (v > clip.adsr.attack + 1e-12) {
+            clip.adsr.attack = v;
+            changed = true;
+        }
+    }
+    if (fadeOut && clip.adsr.release + 1e-9 < fadeBeats) {
+        const double cap = std::min(lenBeats * 0.5, std::max(0.0, lenBeats - clip.adsr.attack - clip.adsr.decay));
+        const double v = std::min(fadeBeats, cap);
+        if (v > clip.adsr.release + 1e-12) {
+            clip.adsr.release = v;
+            changed = true;
+        }
+    }
+    return changed;
+}
 } // namespace
 
-void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne) {
-    audioOverwriteRange(clips, ns, ne, transport_.samplesPerBeat(), transport_.sampleRate());
+void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb) {
+    // The caller measured ns/ne with `spb`. Comp and a loop take use the authoring tempo;
+    // a recording that just stopped uses the same clock as the clip it is about to place.
+    audioOverwriteRange(clips, ns, ne, spb, transport_.sampleRate());
 }
 
 int32_t Engine::pasteAudioFrames(
@@ -1921,17 +1952,87 @@ bool Engine::splitClipsAtRange(const std::vector<int32_t>& trackIds, double star
                     out.push_back(c);
                     continue;
                 }
+                const double fadeBeats = splitFades_ ? splitFadeBeats() : 0.0;
                 double a = cs;
+                auto pushPiece = [&](double from, double to) {
+                    AudioClip piece = audioSlice(c, from, to, spb, devSR);
+                    if (fadeBeats > 0.0)
+                        raiseSplitEdge(piece, from > cs + eps, to < ce - eps, fadeBeats, to - from);
+                    out.push_back(std::move(piece));
+                };
                 for (int i = 0; i < nc; ++i) {
-                    out.push_back(audioSlice(c, a, cuts[i], spb, devSR));
+                    pushPiece(a, cuts[i]);
                     a = cuts[i];
                 }
-                out.push_back(audioSlice(c, a, ce, spb, devSR));
+                pushPiece(a, ce);
                 split = true;
             }
             if (split) nt->clips.swap(out);
         }
         if (split) {
+            g->tracks.push_back(nt);
+            any = true;
+        } else
+            g->tracks.push_back(t);
+    }
+    if (!any) return false;
+    pushUndo();
+    publishRaw(std::move(g));
+    return true;
+}
+
+double Engine::splitFadeBeats() const {
+    double bpm = authoringBpm_;
+    if (!(bpm > 0.0)) bpm = 120.0;
+    return kSplitFadeSeconds * bpm / 60.0;
+}
+
+bool Engine::fadeTouchingSplits(const std::vector<std::pair<int32_t, int32_t>>& sel) {
+    if (sel.empty() || !authoring_) return false;
+    const double fade = splitFadeBeats();
+    if (!(fade > 0.0)) return false;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    constexpr double join = 1e-4;
+    auto picked = [&](int32_t trackId, int32_t clipIndex) {
+        for (const auto& s : sel)
+            if (s.first == trackId && s.second == clipIndex) return true;
+        return false;
+    };
+    auto trackPicked = [&](int32_t trackId) {
+        for (const auto& s : sel)
+            if (s.first == trackId) return true;
+        return false;
+    };
+    bool any = false;
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        if (t->type() != TrackType::Audio || !trackPicked(t->id())) {
+            g->tracks.push_back(t);
+            continue;
+        }
+        auto nt = cloneTrack(*t);
+        const int n = static_cast<int>(nt->clips.size());
+        std::vector<int> order(n);
+        for (int i = 0; i < n; ++i) order[i] = i;
+        std::sort(order.begin(), order.end(), [&](int a, int b) {
+            const double ds = nt->clips[a].startBeat - nt->clips[b].startBeat;
+            return ds < 0.0 || (ds == 0.0 && a < b);
+        });
+        bool changed = false;
+        for (int i = 0; i + 1 < n; ++i) {
+            const int li = order[i], ri = order[i + 1];
+            if (!picked(t->id(), li) && !picked(t->id(), ri)) continue;
+            AudioClip& left = nt->clips[li];
+            AudioClip& right = nt->clips[ri];
+            const double llen = audioDisplayLenBeats(left, spb, devSR);
+            const double rlen = audioDisplayLenBeats(right, spb, devSR);
+            if (std::abs((left.startBeat + llen) - right.startBeat) > join) continue;
+            if (raiseSplitEdge(left, false, true, fade, llen)) changed = true;
+            if (raiseSplitEdge(right, true, false, fade, rlen)) changed = true;
+        }
+        if (changed) {
             g->tracks.push_back(nt);
             any = true;
         } else
@@ -2451,13 +2552,15 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
     g->masterVolume = authoring_->masterVolume;
     laneDuplicate(g->masterVolume, a, b);
     // Take lanes: later ones move with the song; one starting in the section gets a copy (a new
-    // id and number) under the copied section, and the copied comp clips point at it so the
+    // id, number and recording group) under the copied section, and the copied comp clips point at it so the
     // copy can be comped on its own (specs/067).
     auto takeStart = [](const AudioTake& k) { return k.originBeat + k.sourceOffsetFrames * k.beatsPerFrame; };
     for (auto& t : g->tracks) {
         if (t->takes.empty()) continue;
         auto nt = cloneTrack(*t);
         std::map<int32_t, int32_t> copied; // old take id -> its copy's
+        std::map<int32_t, int32_t> groups; // old recording group -> its copy's: Flatten reads a
+                                           // group's origin from its first take
         int32_t number = 0;
         for (const auto& k : nt->takes) number = std::max(number, k.number);
         std::vector<AudioTake> copies;
@@ -2469,6 +2572,9 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
                 c.id = ++nextTakeId_;
                 c.number = ++number;
                 c.originBeat += len;
+                auto [git, fresh] = groups.try_emplace(k.group, 0);
+                if (fresh) git->second = ++nextTakeGroup_;
+                c.group = git->second;
                 copied[k.id] = c.id;
                 copies.push_back(std::move(c));
             }
@@ -2878,8 +2984,16 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
         // split over the beat window (not lengthFrames, which warp ignores) and a reversed
         // clip's halves keep the audio each one sounded. Each warped half also gets its own
         // stretch cache, since the stretcher's seek state is per-clip.
-        nt->clips[clipIndex] = audioCarveLeft(src, local, spb, devSR);
-        nt->clips.insert(nt->clips.begin() + clipIndex + 1, audioCarveRight(src, local, spb, devSR));
+        const double display = audioDisplayLenBeats(src, spb, devSR);
+        AudioClip left = audioCarveLeft(src, local, spb, devSR);
+        AudioClip right = audioCarveRight(src, local, spb, devSR);
+        if (splitFades_) {
+            const double fade = splitFadeBeats();
+            raiseSplitEdge(left, false, true, fade, local);
+            raiseSplitEdge(right, true, false, fade, display - local);
+        }
+        nt->clips[clipIndex] = std::move(left);
+        nt->clips.insert(nt->clips.begin() + clipIndex + 1, std::move(right));
     }
     republishWithTrack(trackId, nt);
     return clipIndex + 1;

@@ -1,9 +1,9 @@
 # Bug Fix: high CPU and dropouts with four Kontakt instances
 
 - **Slug**: kontakt-cpu-dropouts
-- **Fixed**: 2026-11-02
+- **Fixed**: 2026-11-02 (round 3 — step 2 — completed 2026-11-06, see below)
 - **Assessment**: ./assessment.md
-- **Status**: partial (steps 1 and 2 applied — step 2 as workgroup join for pool workers and AUs, plug-ins still serial; step 3 follow-up; built-in Consort storm in demo21 still open)
+- **Status**: step 1 + step 2 complete; step 3 follow-up; built-in Consort storm in demo21 still open
 
 ## Summary
 
@@ -110,10 +110,70 @@ that is not a fair test of this.
 
 ## Follow-ups
 
-- Step 2: let plug-in tracks render on the pool (one thread per instance per block), with the
-  pool workers joined to the device's `os_workgroup` / RT policy. Measure with the same bench.
 - Step 3: check `NOTA_DEBUG_PLUGIN_BUSES=1` for Kontakt's enabled outputs; enable only the main
   bus unless something routes another.
 - Racks: a `PluginInstrument` inside an Instrument Rack chain is still driven by the rack in
   segments — the rack could pass timed events through too.
 - Pre-existing flaky `RenderPoolTests` overload checks on this Mac.
+
+## Round 3: hosted tracks render on the pool (2026-11-06)
+
+Remediation step 2, filed as [nota-daw/nota#532](https://github.com/nota-daw/nota/issues/532)
+(the same bug class reproduced on Windows: DSP usage reaching 100 % with several SWAM/Kontakt
+instances, dropouts on a Ryzen 9 7900X). Independent audited adapters opt in per instance:
+`Device::supportsParallelRender()` / `Instrument::supportsParallelRender()` → hosted
+instrument/effect leaves dispatch on the render pool with exclusive per-instance/per-block
+ownership (instance-local MIDI, channel storage and playhead state; the engine joins the pool
+before the next block; lifecycle and editor work stay on the message thread). Only VST3 opts
+in by format decision made once in each adapter's constructor; unknown hosted formats and
+rack-nested chains keep the serial fallback. Helpers sizing reserves `kRtSizeLoad` 0.50 of the
+period (was 0.85) and adds a list-scheduling bound on the largest indivisible track job
+(`leafPeakNs_`, EMA 1/16), so indivisible heavy jobs cannot under-size the wake count.
+
+Changes: `src/devices/{Device,Instrument}.h` (contract, default `!hostsPlugin()`),
+`pluginhost/hosting/PluginInstrument.{h,cpp}` and `PluginEffect.{h,cpp}` (`parallelRender_`),
+`src/engine/Engine.h` (`leafPeakNs_`, `kRtSizeLoad = 0.50`), `src/engine/Engine_Render.cpp`
+(eligibility comment + checks, helper sizing, peak EMA), `CMakeLists.txt`
+(`NOTA_BUILD_RENDER_PROBE`, deterministic `nota-render-probe` VST3),
+`pluginhost/tests/RenderProbe.cpp` (new), `tests/Nota.SmokeTest/HostedRenderPoolTests.cs` and
+`HostedPluginProfile.cs` (new guards + profile; wired into `RenderPoolTests.Run()` and
+`Program.cs` via `--hosted-render-pool`, `--profile-hosted`, `--profile-project`).
+
+Guards (`--hosted-render-pool`, deterministic probe, 128 frames / 48 kHz):
+
+- four heavy VST3 instrument tracks, device path: median 5.847 → 1.810 ms, late blocks
+  100/100 → 0/100; offline: 2.912 → 0.749 ms;
+- new independent VST3 sessions render sample-identically with helpers on/off, on instrument
+  and insert/sidechain paths, through bypass / removal / replacement / undo edits;
+- light per-instance load keeps helpers parked (0.0 ms worker CPU); rack-nested chains stay
+  serial and audible.
+
+Bench (`--profile-hosted`, same probe with per-instance load ≈ 1.47 ms, paced like a device,
+200-block rounds, alternating builds, Windows 11, Ryzen 9 7900X 12c/24t):
+
+| round | build | 4 instances median | p95 | late (of 200) |
+|---|---|---|---|---|
+| 1 | develop | 5.823 ms | 5.909 | 200 |
+| 1 | fix | 1.658 ms | 1.850 | 0 |
+| 2 | develop | 5.815 ms | 5.844 | 200 |
+| 2 | fix | 1.686 ms | 1.888 | 0 |
+| 3 | develop | 5.823 ms | 5.855 | 200 |
+| 3 | fix | 1.576 ms | 1.882 | 0 |
+
+One instance ≈ 1.47 ms on both builds (unchanged); helpers forced off reads 5.82 ms on both
+builds (the serial path is untouched). Worker CPU on the fix build ≈ 0.9–1.0 s per round: the
+same work spread over the pool instead of piling on the audio thread. The probe is a
+deterministic synthetic (no commercial dependency); its per-instance cost was matched to the
+reported overloading shape, and the machine is the same model as the reporter's (7900X).
+
+## Follow-ups (round 3)
+- Real Kontakt/SWAM were not installed on the bench machine; measured with the deterministic
+  probe through the same mechanism the guards use.
+- macOS `os_workgroup` join of pool workers landed in #436 (round 2) and is unchanged here.
+- Review fixes (Greptile, PR #534): pool sizing uses every available worker when the largest
+  indivisible job alone overflows the target (no bound is reachable there; extra workers still
+  lower the list-scheduling bound); `HostedRenderPoolTests.RunIsolated()` times the child out
+  at 10 minutes and kills its tree instead of stalling the smoke suite on a native hang; the
+  four-instance deadline gate calibrates one probe instance's cost first and skips the
+  late-block comparison on machines where a single instance cannot meet the period.
+

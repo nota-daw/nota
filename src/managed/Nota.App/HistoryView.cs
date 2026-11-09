@@ -154,8 +154,7 @@ internal sealed class HistoryView : UserControl
                  .ToList()
             : all;
         _list.ItemsSource = rows;
-        for (int i = 0; i < rows.Count; i++)
-            if (keep.Contains(rows[i].Version.Id)) _list.Selection.Select(i);
+        foreach (int i in HistoryGraph.KeptSelection(rows, keep)) _list.Selection.Select(i);
         ShowSelection();
 
         _empty.Text = problem
@@ -404,17 +403,15 @@ internal sealed class HistoryView : UserControl
         var menu = new MenuFlyout();
         menu.Items.Add(MenuKit.Header(Loc.Plural("history.versions_n", rows.Count), null, ""));
         menu.Items.Add(new Separator());
-        var del = new MenuItem { Header = DeleteManyLabel(deletable.Count), Icon = MenuKit.Icon(GlyphKind.Trash), IsEnabled = deletable.Count > 0 };
-        del.Classes.Add("danger");
+        var del = MenuKit.Danger(DeleteManyLabel(deletable.Count), GlyphKind.Trash, () => _ = DeleteSelected(deletable),
+            enabled: deletable.Count > 0);
         if (deletable.Count < rows.Count) ToolTip.SetTip(del, Loc.T("history.the_current_version_stays"));
-        del.Click += (_, _) => _ = DeleteSelected(deletable);
         menu.Items.Add(del);
         return menu;
     }
 
     // Every selected version but the current one, which can't be deleted.
-    private static List<ProjectVersion> Deletable(IEnumerable<HistoryRow> rows)
-        => rows.Where(r => !r.IsHead).Select(r => r.Version).ToList();
+    private static List<ProjectVersion> Deletable(IEnumerable<HistoryRow> rows) => HistoryGraph.Deletable(rows);
 
     private static string DeleteManyLabel(int count) => count == 1 ? Loc.T("history.delete_version_2") : Loc.Plural("history.delete_versions_n", count);
 
@@ -452,8 +449,9 @@ internal sealed class HistoryView : UserControl
             Loc.T("common.delete"), Loc.T("common.cancel")).ShowDialog<bool>(owner);
         if (!ok) return;
         long freed = 0;
-        Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList()));
-        _host.ReportStatus(Loc.F("history.freed", Loc.Plural("history.deleted_versions", versions.Count), NotaNum.Bytes(freed)));
+        // A failed delete keeps Apply's error on the status line instead of claiming success.
+        if (Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList())))
+            _host.ReportStatus(Loc.F("history.freed", Loc.Plural("history.deleted_versions", versions.Count), NotaNum.Bytes(freed)));
     }
 
     private async Task DeleteSelected(IReadOnlyList<ProjectVersion> versions)
@@ -465,8 +463,9 @@ internal sealed class HistoryView : UserControl
             Loc.T("common.delete"), Loc.T("common.cancel")).ShowDialog<bool>(owner);
         if (!ok) return;
         long freed = 0;
-        Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList()));
-        _host.ReportStatus(Loc.F("history.freed", Loc.Plural("history.deleted_versions", versions.Count), NotaNum.Bytes(freed)));
+        // A failed delete keeps Apply's error on the status line instead of claiming success.
+        if (Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList())))
+            _host.ReportStatus(Loc.F("history.freed", Loc.Plural("history.deleted_versions", versions.Count), NotaNum.Bytes(freed)));
     }
 
     private async Task Prompt(string title, string prompt, string? initial, Action<string> apply)
@@ -485,16 +484,20 @@ internal sealed class HistoryView : UserControl
         if (ok) Apply(() => _history.Delete(_dir, v.Id));
     }
 
-    // Runs a history edit, reporting a failure on the status line, then rebuilds.
-    private void Apply(Action edit)
+    // Runs a history edit, reporting a failure on the status line, then rebuilds. True when
+    // the edit went through.
+    private bool Apply(Action edit)
     {
-        if (_dir is null) return;
+        if (_dir is null) return false;
+        bool ok = true;
         try { edit(); }
         catch (Exception ex) when (ex is ProjectHistoryException or System.IO.IOException or UnauthorizedAccessException)
         {
+            ok = false;
             _host.ReportStatus(Loc.F("history.couldnt_change_the_version", ex.Message));
         }
         Refresh();
+        return ok;
     }
 
     // --- text ----------------------------------------------------------------

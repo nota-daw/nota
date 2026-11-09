@@ -286,7 +286,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             ToolTip.SetTip(spectrum, MenuKit.Keys(Loc.T("device.crush.the_output_spectrum_neutral_ink")));
             ValueEntry.AttachHandles(spectrum, [F(Rate, "Rate", RateF)], [F(PostFilter, "Post filter", FiltF)]);
             var knobs = KnobRow(
-                () => Sc(S_Analysed) < 0.5 ? "no signal" : ScDb(S_Images) <= -119 ? NotaNum.F($"no images above {KHz(Sc(S_Nyquist))}")
+                () => Sc(S_Analysed) < 0.5 ? Loc.T("common.no_signal") : ScDb(S_Images) <= -119 ? NotaNum.F($"no images above {KHz(Sc(S_Nyquist))}")
                     : NotaNum.F($"images above {KHz(Sc(S_Nyquist))} {ScDb(S_Images):0}\u2009dB"),
                 () => Sc(S_Analysed) < 0.5 ? "THD+N —" : NotaNum.F($"THD+N {Sc(S_ThdN) * 100:0.0}\u2009%"));
             return TabBody(ModeHead(), spectrum, knobs);

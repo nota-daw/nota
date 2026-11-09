@@ -37,6 +37,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_set_take_id")]
     internal static partial NotaResult ClipSetTakeId(IntPtr engine, int trackId, int clipIndex, int takeId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_clip_joined_edges")]
+    internal static partial int ClipJoinedEdges(IntPtr engine, int trackId, int clipIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_restore_joined_edges")]
+    internal static partial NotaResult TrackRestoreJoinedEdges(IntPtr engine, int trackId, int[] edges, int count);
+
     [LibraryImport(Lib, EntryPoint = "nota_take_record_test")]
     internal static partial int TakeRecordTest(IntPtr engine, int trackId, float[] interleavedStereo, int frames, double startBeat);
 }

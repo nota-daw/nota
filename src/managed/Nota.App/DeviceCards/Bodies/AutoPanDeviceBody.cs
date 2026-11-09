@@ -319,7 +319,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
                 double mn = Sc(S_PanMin), mx = Sc(S_PanMax);
                 foot = "Swing " + (mn < -0.02 ? PanF(mn) : "C") + " → " + (mx > 0.02 ? PanF(mx) : "C") + " · period " + Ms(PeriodMs());
             }
-            else foot = NotaNum.F($"Phase {Deg():0}°: the channels are offset, the pan moves unevenly");
+            else foot = Loc.F("device.auto_pan.phase_the_channels_are_offset", Deg());
             statusLeft.Text = foot;
             statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
             double sr = Sc(S_SampleRate);

@@ -31,6 +31,24 @@ static float MonoRms(float[] buf)
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
 
+if (args.Length >= 2 && args[0] == "--profile-project")
+{
+    HostedPluginProfile.RunProject(args[1], args.Length > 2 ? int.Parse(args[2]) : 128,
+        args.Length > 3 ? int.Parse(args[3]) : 48000, args.Length > 4 ? args[4] : null);
+    return 0;
+}
+if (args.Length >= 2 && args[0] == "--profile-hosted")
+{
+    HostedPluginProfile.Run(args[1], args.Length > 2 ? int.Parse(args[2]) : 128,
+        args.Length > 3 ? int.Parse(args[3]) : 48000);
+    return 0;
+}
+if (args.Contains("--hosted-render-pool"))
+{
+    foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused
 // references, so a forbidden name appearing in an assembly's referenced set means
@@ -83,6 +101,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: accent --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAccent()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
     Console.WriteLine("-- localization: language --");
@@ -132,6 +152,12 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     eng.Stop();
     Console.WriteLine(f == 0 ? "AUDIOCHECK PASSED" : $"AUDIOCHECK FAILED ({f})");
     return f == 0 ? 0 : 1;
+}
+
+if (args.Length >= 1 && args[0] == "--midi-lane-heights")
+{
+    foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
 }
 
 // Design and localization checks alone, without the engine tests: `--localization`.
@@ -320,6 +346,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Controller-stroke shaping alone: `--controller-stroke`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-stroke")
+{
+    Console.WriteLine("-- controller stroke --");
+    foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER STROKE PASSED" : $"CONTROLLER STROKE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Piano-roll velocity wheel alone: `--velocity-wheel`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--velocity-wheel")
 {
@@ -427,7 +461,16 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
-// Sends as undoable, automatable mix values alone: `--sends` (specs/072). Also part of the full run.
+// OS user-folder defaults alone: `--user-dirs` (#522). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--user-dirs")
+{
+    Console.WriteLine("-- user dirs --");
+    foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "USER DIRS PASSED" : $"USER DIRS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Sends stay out of undo and automation: `--sends` (specs/069). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--sends")
 {
     Console.WriteLine("-- sends --");
@@ -500,6 +543,14 @@ if (args.Length >= 1 && args[0] == "--device-undo")
     Console.WriteLine(failures == 0 ? "DEVICE UNDO PASSED" : $"DEVICE UNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Audio split fades alone: `--split-fades`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--split-fades")
+{
+    Console.WriteLine("-- split fades --");
+    foreach (var (ok, label) in SplitFadeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SPLIT FADES PASSED" : $"SPLIT FADES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Warped clip split / range cut alone: `--warp-split`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--warp-split")
 {
@@ -548,6 +599,22 @@ if (args.Length >= 1 && args[0] == "--instrument-chain")
     Console.WriteLine("-- instrument chain --");
     foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "INSTRUMENT CHAIN PASSED" : $"INSTRUMENT CHAIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Audio-track effect tails after Stop (#449) alone: `--audio-tails`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--audio-tails")
+{
+    Console.WriteLine("-- audio-track tails after Stop --");
+    foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AUDIO TAILS PASSED" : $"AUDIO TAILS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
+if (args.Length >= 3 && args[0] == "--hosted-plugin")
+{
+    Console.WriteLine("-- hosted plug-ins: copies + long blocks --");
+    foreach (var (ok, label) in HostedPluginTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HOSTED PLUGIN PASSED" : $"HOSTED PLUGIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
@@ -696,6 +763,14 @@ if (args.Length >= 1 && args[0] == "--keys")
     Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Nota Twin alone (fast iteration): `--twin`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--twin")
+{
+    Console.WriteLine("-- nota twin --");
+    foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--vocoder")
 {
@@ -726,6 +801,14 @@ if (args.Length >= 1 && args[0] == "--group-link")
     Console.WriteLine("-- group link --");
     foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "GROUP LINK PASSED" : $"GROUP LINK FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Discard and retry a take alone (fast iteration): `--retry-take`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--retry-take")
+{
+    Console.WriteLine("-- retry take --");
+    foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
@@ -1684,12 +1767,16 @@ Console.WriteLine("-- clip ADSR --");
     Check(ae.GetClipAdsr(at, ac).IsIdentity, "ADSR: redo re-applies");
     ae.Undo();
 
-    // Split: the left piece keeps attack/decay (no release at the cut), the right keeps the release.
+    // Split: the left piece keeps attack/decay. Those two stages already fill the left piece,
+    // so the automatic cut fade has no room and the release stays 0. The right piece keeps
+    // the release and gains a short fade-in at the cut.
     Check(ae.SplitClip(at, ac, 2.0) == ac + 1, "ADSR: split");
     var la = ae.GetClipAdsr(at, ac); var ra = ae.GetClipAdsr(at, ac + 1);
-    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0, "ADSR split: left keeps attack + decay, drops release");
-    Check(ra.AttackBeats == 0 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99 && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
-          "ADSR split: right keeps sustain + release, drops attack/decay");
+    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0,
+          "ADSR split: left keeps attack + decay; the cut fade has no room beside them");
+    Check(ra.AttackBeats > 0 && ra.AttackBeats < 0.05 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99
+          && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
+          "ADSR split: right keeps sustain + release and gains a short fade-in");
     ae.Undo();
 
     // Warped clips shape the stretched output the same way.
@@ -15399,6 +15486,10 @@ foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
 Console.WriteLine("-- app: What's New release notes --");
 foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
 
+// --- app: the manual opens in the interface language ---
+Console.WriteLine("-- app: manual language --");
+foreach (var (ok, label) in ManualLanguageTests.Run()) Check(ok, label);
+
 // --- app: typed value entry (parser + read-out search) ---
 Console.WriteLine("-- typed value entry --");
 foreach (var (ok, label) in ValueEntryTests.Run()) Check(ok, label);
@@ -15425,6 +15516,8 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+Console.WriteLine("-- retry take --");
+foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");
@@ -15439,10 +15532,16 @@ Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- group link --");
 foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
+Console.WriteLine("-- group membership --");
+foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- meter --");
+foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota twin --");
+foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
@@ -15464,8 +15563,13 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 Console.WriteLine("-- transport display --");
 foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- MIDI lane heights --");
+foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- controller stroke --");
+foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
 Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");
@@ -15511,6 +15615,9 @@ foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- linux desktop --");
 foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- user dirs --");
+foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- range clipboard --");
 foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);
@@ -15561,6 +15668,8 @@ Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+Console.WriteLine("-- audio-track tails after Stop --");
+foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
@@ -15577,6 +15686,8 @@ foreach (var (ok, label) in PadAndWarpTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- stereo map --");
 foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+Console.WriteLine("-- split fades --");
+foreach (var (ok, label) in SplitFadeTests.Run()) Check(ok, label);
 Console.WriteLine("-- warp split --");
 foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
 

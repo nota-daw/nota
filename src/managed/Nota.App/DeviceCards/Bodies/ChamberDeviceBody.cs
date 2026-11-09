@@ -633,7 +633,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             {
                 case 1:
                     string mode = Modes[Sel(AlgoMode, 4)];
-                    if (On(Freeze)) return On(FreezeIn) ? NotaNum.F($"Freeze + hold in: the tail layers the input · {mode}") : NotaNum.F($"Freeze: tail held, input muted · {mode} {Secs(RtMid())}");
+                    if (On(Freeze)) return On(FreezeIn) ? Loc.F("device.chamber.freeze_hold_in_the_tail", mode) : Loc.F("device.chamber.freeze_tail_held_input_muted", mode, Secs(RtMid()));
                     return NotaNum.F($"{mode} · decay {Secs(RtMid())} · size {Exp(P(AlgoSize), 0.4, 2.5) * 100:0}\u2009% · predelay {Pre(AlgoPredelay, AlgoSync)}{(On(Routing) ? " · serial" : "")}");
                 case 2:
                     string eqS = NotaNum.F($"tail EQ {LowCutF(P(EqLowCut))} — {HighCutF(P(EqHighCut))}");
@@ -641,7 +641,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                     return NotaNum.F($"{(On(WetOnly) ? "Wet only · " : "")}{eqS}{shimS}");
                 default:
                     int ir = Sel(IrSelect, IrCount);
-                    string name = ir < irList.Count ? irList[ir].Name : engine.DeviceText(track, di, 2) is { Length: > 0 } u ? u : "no user IR";
+                    string name = ir < irList.Count ? irList[ir].Name : engine.DeviceText(track, di, 2) is { Length: > 0 } u ? u : Loc.T("device.chamber.no_user_ir");
                     return NotaNum.F($"{name} · {blend} · predelay {Pre(ConvPredelay, ConvSync)}");
             }
         }
@@ -650,7 +650,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             statusLeft.Text = StatusText();
             statusLeft.Foreground = centreTab == 1 && On(Freeze) ? AmberLit : Txt2;
             double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
-            string latS = lat > 0 ? NotaNum.F($"conv +{lat:0}\u2009smp (in predelay)") : "latency 0\u2009smp";
+            string latS = lat > 0 ? Loc.F("device.chamber.conv_smp_in_predelay", lat) : "latency 0\u2009smp";
             statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · {latS} · CPU {Sc(S_Cpu) * 100:0}\u2009%") : "";
         });
         var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };

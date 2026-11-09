@@ -193,6 +193,9 @@ int32_t nota_engine_add_keys_track(NotaEngine* e) {
 int32_t nota_engine_add_mosaic_track(NotaEngine* e) {
     return e ? ENG(e)->addMosaicTrack() : 0;
 }
+int32_t nota_engine_add_twin_track(NotaEngine* e) {
+    return e ? ENG(e)->addTwinTrack() : 0;
+}
 int32_t nota_track_mosaic_set_program(NotaEngine* e, int32_t track_id, const char* text, int32_t checkpoint) {
     return e && text && ENG(e)->mosaicSetProgram(track_id, std::string(text), checkpoint != 0) ? 1 : 0;
 }
@@ -213,6 +216,9 @@ void nota_path_root_set(const char* name, const char* path) {
 }
 void nota_track_instrument_action(NotaEngine* e, int32_t track_id, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->instrumentAction(track_id, id, iarg, farg);
+}
+int32_t nota_track_instrument_set_state_undoable(NotaEngine* e, int32_t track_id, const uint8_t* data, int32_t size) {
+    return e && ENG(e)->instrumentSetStateUndoable(track_id, -1, -1, data, size) ? 1 : 0;
 }
 int32_t nota_track_rhythm_set_voice_sample(NotaEngine* e, int32_t track_id, int32_t voice, const char* path) {
     if (!e || !path) return 0;
@@ -528,6 +534,12 @@ int32_t nota_clip_get_warp_markers(
 int32_t nota_clip_split(NotaEngine* e, int32_t track_id, int32_t clip_index, double at_beat) {
     return e ? ENG(e)->splitClip(track_id, clip_index, at_beat) : -1;
 }
+void nota_engine_set_split_fades(NotaEngine* e, int32_t on) {
+    if (e) ENG(e)->setSplitFades(on != 0);
+}
+int32_t nota_engine_split_fades(const NotaEngine* e) {
+    return (e && CENG(e)->splitFades()) ? 1 : 0;
+}
 int32_t nota_clip_duplicate(NotaEngine* e, int32_t track_id, int32_t clip_index) {
     return e ? ENG(e)->duplicateClip(track_id, clip_index) : -1;
 }
@@ -562,6 +574,10 @@ std::vector<std::pair<int32_t, int32_t>> makeSel(const int32_t* track_ids, const
 }
 } // namespace
 
+NotaResult nota_clips_fade_splits(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices, int32_t n) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->fadeTouchingSplits(makeSel(track_ids, clip_indices, n)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clips_block_copy(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices, int32_t n) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->copyClipBlock(makeSel(track_ids, clip_indices, n)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
@@ -867,6 +883,13 @@ int32_t nota_track_restore_take(NotaEngine* e, int32_t track_id, const char* pat
 NotaResult nota_clip_set_take_id(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t take_id) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipTakeId(track_id, clip_index, take_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_clip_joined_edges(const NotaEngine* e, int32_t track_id, int32_t clip_index) {
+    return e ? CENG(e)->clipJoinedEdges(track_id, clip_index) : 0;
+}
+NotaResult nota_track_restore_joined_edges(NotaEngine* e, int32_t track_id, const int32_t* edges, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->restoreJoinedEdges(track_id, edges, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 int32_t nota_take_record_test(NotaEngine* e, int32_t track_id, const float* interleaved_stereo, int32_t frames,
     double start_beat) {

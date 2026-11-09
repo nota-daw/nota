@@ -31,6 +31,13 @@ public sealed class Settings
     public string SystemDarkTheme { get; set; } = Appearance.StudioDark;
     /// <summary>Theme worn while following the OS and it is in light mode (a light theme).</summary>
     public string SystemLightTheme { get; set; } = Appearance.StudioLight;
+    /// <summary>The accent colour (spec 084, Settings → Appearance): empty for Orange, a preset
+    /// id, or "custom" for <see cref="CustomAccent"/>. One choice, worn in every theme. An
+    /// unknown value reads as Orange (<see cref="Nota.Application.Accent.Resolve"/>).</summary>
+    public string Accent { get; set; } = "";
+    /// <summary>The last custom accent, #RRGGBB — kept while a preset is worn, so Custom
+    /// offers it again.</summary>
+    public string CustomAccent { get; set; } = "";
     /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
     /// folding it gives the clip grid its width back on small windows.</summary>
     public bool SessionInspectorOpen { get; set; } = true;
@@ -172,6 +179,10 @@ public sealed class Settings
     /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced
     /// peak strokes.</summary>
     public int ArrangementWaveform { get; set; }
+    /// <summary>Splitting an audio clip writes a short fade at the cut (issue #286). On by
+    /// default; a missing key in an older settings file stays on. MIDI clips are left alone.
+    /// The command palette and the clip menu can still fade a join when this is off.</summary>
+    public bool SplitFades { get; set; } = true;
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
     public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;
@@ -182,6 +193,8 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
+    public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
     /// <summary>Piano-roll Draw Mode (#554): a plain press on the grid places a note and the held
     /// drag paints a run of them, instead of a double-click per note. The Draw chip in the clip
     /// editor's header, and B in the grid; off by default.</summary>

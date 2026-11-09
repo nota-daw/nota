@@ -116,9 +116,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         double FromTarget() => Sc(S_LufsI) - P(Target);
         string TargetWords()
         {
-            if (!HaveI()) return "measuring…";
+            if (!HaveI()) return Loc.T("device.ceiling.measuring");
             double d = FromTarget();
-            return Math.Abs(d) <= 1 ? "on target" : d > 0 ? NotaNum.F($"{d:0.0}\u2009LU loud") : NotaNum.F($"{-d:0.0}\u2009LU quiet");
+            return Math.Abs(d) <= 1 ? Loc.T("device.ceiling.on_target") : d > 0 ? NotaNum.F($"{d:0.0}\u2009LU loud") : NotaNum.F($"{-d:0.0}\u2009LU quiet");
         }
 
         // ---- small builders ---------------------------------------------------------
@@ -353,8 +353,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         string ClipText()
         {
             int n = (int)Sc(S_Clips);
-            string times = n == 1 ? "time" : "times";
-            return CharI() == 1 ? NotaNum.F($"attack passed to the clip · {n} {times}") : NotaNum.F($"reached the clip · {n} {times}");
+            return CharI() == 1 ? Loc.Plural("device.ceiling.attack_passed_to_the_clip", n) : Loc.Plural("device.ceiling.reached_the_clip_times", n);
         }
 
         // ======================================================================
@@ -406,8 +405,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             ToolTip.SetTip(level, MenuKit.Keys(Loc.T("device.ceiling.the_last_4_s_the")));
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
-                () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
-                () => NotaNum.F($"over {Sc(S_OverPct) * 100:0} % of the time"));
+                () => ScDb(S_WinInPeak) <= -119 ? Loc.T("common.no_signal") : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
+                () => Loc.F("device.ceiling.over_of_the_time", Sc(S_OverPct) * 100));
             return TabBody(head, level, knobs);
         }
 
@@ -428,7 +427,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             WireDrag(loudness, Target, "Target", TargetF);
             ToolTip.SetTip(loudness, MenuKit.Keys(Loc.T("device.ceiling.momentary_teal_short_term_neutral")));
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
-                Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
+                Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : Loc.T("device.ceiling.measuring")));
             var knobs = KnobRow(
                 () => NotaNum.F($"LRA {Sc(S_Lra):0.0}\u2009LU · PLR {(HaveI() ? NotaNum.F($"{Sc(S_Plr):0.0}") : "—")}"),
                 () => NotaNum.F($"GR on average {GrF(Sc(S_AvgGr))}\u2009dB"));

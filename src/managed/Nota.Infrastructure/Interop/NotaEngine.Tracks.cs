@@ -333,6 +333,19 @@ public sealed partial class NotaEngine
     public bool SplitClipsInRange(int[] trackIds, double start, double end)
     { ThrowIfDisposed(); return NativeMethods.ClipsSplitRange(_handle, trackIds, trackIds.Length, start, end) == NativeMethods.NotaResult.Ok; }
 
+    public bool SplitFades
+    {
+        get { ThrowIfDisposed(); return NativeMethods.EngineSplitFades(_handle) != 0; }
+        set { ThrowIfDisposed(); NativeMethods.EngineSetSplitFades(_handle, value ? 1 : 0); }
+    }
+
+    public bool FadeSplits(int[] trackIds, int[] clipIndices)
+    {
+        ThrowIfDisposed();
+        if (trackIds.Length == 0 || trackIds.Length != clipIndices.Length) return false;
+        return NativeMethods.ClipsFadeSplits(_handle, trackIds, clipIndices, trackIds.Length) == NativeMethods.NotaResult.Ok;
+    }
+
     /// <summary>Consolidate: replaces each given track's content in [start,end) with one clip
     /// spanning the range (MIDI merged, audio rendered to a new sample). One undo step; the new
     /// clips are reported by <see cref="LastPlacedClips"/>. False when no track had content.</summary>
@@ -932,6 +945,15 @@ public sealed partial class NotaEngine
         return id;
     }
 
+    /// <summary>Adds an instrument track with the built-in Nota Twin morphing poly. Returns its id.</summary>
+    public int AddTwinTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddTwinTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Twin track.");
+        return id;
+    }
+
     public bool MosaicSetProgram(int trackId, string text, bool undoable = true)
     { ThrowIfDisposed(); return NativeMethods.MosaicSetProgram(_handle, trackId, text ?? "", undoable ? 1 : 0) != 0; }
 
@@ -970,6 +992,9 @@ public sealed partial class NotaEngine
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }
+
+    public bool SetInstrumentStateUndoable(int trackId, byte[] data)
+    { ThrowIfDisposed(); return NativeMethods.InstrumentSetStateUndoable(_handle, trackId, data, data.Length) != 0; }
 
     public bool SetTrackGrainSample(int trackId, string path, int rootNote = 60)
     { ThrowIfDisposed(); return NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0; }

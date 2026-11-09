@@ -242,6 +242,8 @@ public sealed class ProjectService
                     dto.Sample = rel;
                     int take = engine.ClipTakeId(ti.Id, c);
                     if (take != 0) dto.TakeId = take;
+                    int joined = engine.ClipJoinedEdges(ti.Id, c);
+                    if (joined != 0) dto.JoinedEdges = joined;
                     t.AudioClips.Add(dto);
                 }
                 for (int k = 0; k < engine.TakeCount(ti.Id); k++)
@@ -684,6 +686,7 @@ public sealed class ProjectService
                         { Kind: 15 } => engine.AddConsortTrack(),        // Nota Consort
                         { Kind: 16 } => engine.AddKeysTrack(),           // Nota Keys
                         { Kind: 17 } => engine.AddMosaicTrack(),         // Nota Mosaic (its program rides the state blob)
+                        { Kind: 18 } => engine.AddTwinTrack(),           // Nota Twin
                         _ => engine.AddInstrumentTrack(),                // Nota Synth
                     };
                     if (t.Instrument?.State is { } synthState)
@@ -816,13 +819,22 @@ public sealed class ProjectService
                         }
                 }
 
+            var joinedEdges = new List<(int Clip, int Edges)>();
             foreach (var ac in t.AudioClips)
             {
                 int ci = AudioClipState.Restore(engine, id, ac, ResolveInBundle(bundleDir, ac.Sample));
                 if (ci < 0) { warnings.Add($"Couldn't reload audio clip \"{ac.Sample}\"."); continue; }
                 if (ac.TakeId is int oldTake && takeIds.TryGetValue(oldTake, out int newTake))
                     engine.SetClipTakeId(id, ci, newTake);
+                if (ac.JoinedEdges is int je && je != 0) joinedEdges.Add((ci, je));
                 if (engine.TryGetAudioClipInfo(id, ci, out var lci)) BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
+            }
+            // After every clip is in: a join is kept only where both of its clips are there.
+            if (joinedEdges.Count > 0)
+            {
+                var edges = new int[joinedEdges.Max(j => j.Clip) + 1];
+                foreach (var (clip, e) in joinedEdges) edges[clip] = e;
+                engine.RestoreJoinedEdges(id, edges);
             }
 
             // Freeze (M7): restore the frozen-audio buffer so the track re-opens frozen

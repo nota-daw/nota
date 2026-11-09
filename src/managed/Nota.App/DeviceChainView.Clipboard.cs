@@ -378,14 +378,14 @@ public sealed partial class DeviceChainView
             {
                 int a = shape.FxFirst, c = shape.FxCount;
                 RemapExtras(ChainKind.Effect, i => i < a ? i : i < a + c ? -1 : i - c + 1);
-                rackKind = ChainKind.Effect; rackIdx = a; rackName = "an Audio Effect Rack";
+                rackKind = ChainKind.Effect; rackIdx = a; rackName = Loc.T("device_chain.clipboard.an_audio_effect_rack");
                 break;
             }
             case GroupShapeKind.MidiRack:
             {
                 int a = shape.MidiFirst, c = shape.MidiCount;
                 RemapExtras(ChainKind.Midi, i => i < a ? i : i < a + c ? -1 : i - c + 1);
-                rackKind = ChainKind.Midi; rackIdx = a; rackName = "a MIDI Effect Rack";
+                rackKind = ChainKind.Midi; rackIdx = a; rackName = Loc.T("device_chain.clipboard.a_midi_effect_rack");
                 break;
             }
             default:
@@ -394,7 +394,7 @@ public sealed partial class DeviceChainView
                 if (shape.MidiCount > 0) RemapExtras(ChainKind.Midi, i => i >= mf ? -1 : i);
                 if (fc > 0) RemapExtras(ChainKind.Effect, i => i < fc ? -1 : i - fc);
                 ForgetInstrumentState(_trackId);
-                rackKind = ChainKind.Instrument; rackIdx = -1; rackName = "an Instrument Rack";
+                rackKind = ChainKind.Instrument; rackIdx = -1; rackName = Loc.T("device_chain.clipboard.an_instrument_rack");
                 break;
             }
         }

@@ -166,7 +166,7 @@ internal sealed class TrackInspectorView : UserControl
         bool frozen = (audio || ti.IsInstrument) && _engine.IsTrackFrozen(id);
         string kind = ti.IsReturn ? Loc.T("common.return") : ti.IsGroup ? Loc.T("common.group") : ti.IsInstrument ? Loc.T("track_inspector.midi_track") : Loc.T("track_inspector.audio_track");
         s.Children.Add(Title(ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, id)), TrackNames.Of(_engine, ti),
-            NotaText.Label(frozen ? kind + " · frozen" : kind)));
+            NotaText.Label(frozen ? Loc.F("track_inspector.frozen", kind) : kind)));
 
         s.Children.Add(Section(Loc.T("track_inspector.name"), NameBox(ti)));
 

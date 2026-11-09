@@ -351,7 +351,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
 
         // ======================= the zone map (Zones tab, and S) =================================
         var map = new MosaicZoneMap { Mini = mini, Interactive = !mini };
-        string EmptyText() => mini ? "Empty" : Loc.T("device.mosaic.drop_samples_or_a_folder");
+        string EmptyText() => mini ? "Empty" : Loc.T("device.mosaic.drop_samples_a_folder_or_sfz");
         void SetMap() => map.Set(prog.Zones, ui.ReleaseView, ui.Zone, EmptyText());
         SetMap();
         map.Selected += i => { ui.Zone = i; if (i >= 0 && i < prog.Zones.Count) ui.Group = prog.Zones[i].Group; Refresh(); };
@@ -387,7 +387,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Background = NotaPalette.AccentSubtle, Padding = new Thickness(7, 2), VerticalAlignment = VerticalAlignment.Center,
             Child = Mono("", AccentBright, 9),
         };
-        readouts.Add(() => ((TextBlock)zoneChip.Child!).Text = Zsel() is { } z ? ZoneChip(z) : "no zone");
+        readouts.Add(() => ((TextBlock)zoneChip.Child!).Text = Zsel() is { } z ? ZoneChip(z) : Loc.T("device.mosaic.no_zone"));
         var zKeys = ReadField("Keys", () => Zsel() is { } z ? Keys(z) : "—");
         var zVel = ReadField("Vel", () => Zsel() is { } z ? $"{z.VelLo}–{z.VelHi}" : "—");
         var zXf = ReadField("Xf vel", () => Zsel() is { } z && z.XVelInHi > z.XVelInLo ? NotaNum.Str(z.XVelInHi - z.XVelInLo, "0") : "—");
@@ -559,7 +559,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 double dur = wsr > 0 ? wframes / wsr : 0;
                 wave.Set(s, e, ls, le, z.LoopMode, z.Crossfade,
                     wframes > 1 ? $"{prog.FileName(z.File)} · {NotaNum.Unit(wsr / 1000, "0.#", "k")} · {NotaNum.Unit(dur, "0.00", "s")} · root {MosaicNames.NoteName(z.Root)}" : prog.FileName(z.File),
-                    z.LoopMode == 0 ? "no loop" : $"{MosaicModel.LoopNames[z.LoopMode].ToLowerInvariant()} {NotaNum.Str(ls * dur, "0.00")} – {NotaNum.Unit(le * dur, "0.00", "s")}");
+                    z.LoopMode == 0 ? Loc.T("device.mosaic.no_loop") : $"{MosaicModel.LoopNames[z.LoopMode].ToLowerInvariant()} {NotaNum.Str(ls * dur, "0.00")} – {NotaNum.Unit(le * dur, "0.00", "s")}");
             }
         });
         var loopSeg = Segments(MosaicModel.LoopNames, () => Zsel()?.LoopMode ?? 0, iv => { if (Zsel() is { } z) { z.LoopMode = iv; Commit(); } Refresh(); }, out var loopSync, padX: 7, fontSize: 8);
@@ -762,7 +762,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         string FiltTl()
         {
             int t = Sel("filtertype", 4);
-            if (t == 0) return "off · the samples pass untouched";
+            if (t == 0) return Loc.T("device.mosaic.off_the_samples_pass_untouched");
             return $"{MosaicModel.FilterNames[t]} 12 dB/oct · {NotaNum.Hz(MosaicModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
@@ -1181,7 +1181,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             if (AllMissing() && prog.Zones.Count > 0) return Loc.T("device.mosaic.samples_unavailable_notes_muted");
             if (Loading()) return Loc.F("device.mosaic.loading_notes_muted", NotaNum.Bytes(status.RamBytes), NotaNum.Bytes(RamEstimate()));
-            if (prog.IsEmpty) return Loc.T("device.mosaic.empty_drop_samples_or_a");
+            if (prog.IsEmpty) return Loc.T("device.mosaic.empty_drop_samples_a_folder_or_sfz");
             string name = prog.Name.Length > 0 ? prog.Name + " · " : "";
             switch (tab)
             {
@@ -1202,7 +1202,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 {
                     string rel = G("relon") >= 0.5f ? $"release {NotaNum.Db(MosaicModel.RelVolDb(G("relvol")), signed: true)}" : "release off";
                     var rrg = prog.Groups.FirstOrDefault(g => g.SeqLen > 1);
-                    string rr = rrg is null ? "no round-robin" : $"rr {rrg.SeqLen} {MosaicProgram.RrNames[rrg.RrMode].ToLowerInvariant()}";
+                    string rr = rrg is null ? Loc.T("device.mosaic.no_round_robin") : $"rr {rrg.SeqLen} {MosaicProgram.RrNames[rrg.RrMode].ToLowerInvariant()}";
                     return Loc.F("device.mosaic.groups", prog.Groups.Count, rr, rel);
                 }
                 case 4: return $"Env {EnvTl()} · vel {NotaNum.Pct(G("velamount"))} · curve {VelCurveWord()}";
@@ -1297,7 +1297,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             var title = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center };
             var line = new TextBlock { FontSize = 8.5, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center };
-            var hint = new TextBlock { FontSize = 7.5, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Text = Loc.T("device.mosaic.opens_the_mapping_preview_a") };
+            string multiHint = Loc.T("device.mosaic.opens_the_mapping_preview_a");
+            var hint = new TextBlock { FontSize = 7.5, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Text = multiHint };
             var dash = new Rectangle
             {
                 Stroke = AccentBright, StrokeThickness = 1.2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 },
@@ -1308,18 +1309,44 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Margin = new Thickness(5), IsVisible = false, IsHitTestVisible = false,
                 Children = { dash, new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { title, line, hint } } },
             };
-            box.Tag = (Action<string, string>)((t, l) => { title.Text = t; line.Text = l; });
+            box.Tag = (Action<string, string, string?>)((t, l, h) => { title.Text = t; line.Text = l; hint.Text = h ?? multiHint; });
             return box;
+        }
+
+        // An SFZ dropped on the card (#349): its zones become the program, the report shows
+        // what it couldn't take, and its controllers' articulations are offered.
+        void LoadSfz(string sfz)
+        {
+            var packs = App.Services?.GetService(typeof(IMosaicPacks)) as IMosaicPacks;
+            SfzResult res;
+            try { res = SfzImporter.Import(sfz, null, packs is null ? null : packs.ToRef); }
+            catch (Exception ex) { ctx.Status(Loc.F("device.mosaic.couldnt_read_sfz", Path.GetFileName(sfz), ex.Message)); return; }
+            if (res.Program.Zones.Count == 0)
+            {
+                ctx.Status(Loc.F("device.mosaic.sfz_has_no_playable_zones", Path.GetFileName(sfz), res.Report.Summary()));
+                return;
+            }
+            res.Program.SourceRef = packs?.ToRef(sfz) ?? sfz;
+            prog = res.Program;
+            ui.Zone = 0;
+            SetImportReport(track, res.Report);
+            Commit(rebuild: true);
+            // Its envelope, bend range and filter, as an installed pack's SFZ preset sets them.
+            // After the commit, so they land on the new instrument it published: undo brings
+            // back the old one with its own settings.
+            foreach (var (id, v) in SfzImporter.ParamsFrom(res.Report)) SetP(id, v);
         }
 
         void HookDrop(Control target, Control overlay)
         {
             DragDrop.SetAllowDrop(target, true);
-            void Show(bool on, string t = "", string l = "")
+            void Show(bool on, string t = "", string l = "", string? h = null)
             {
                 overlay.IsVisible = on;
-                if (on && overlay.Tag is Action<string, string> set) set(t, l);
+                if (on && overlay.Tag is Action<string, string, string?> set) set(t, l, h);
             }
+            // Whether a drag carries an SFZ (#349) is checked without reading any file; which
+            // program a folder holds is worked out once, on the drop.
             DragDrop.AddDragOverHandler(target, (_, e) =>
             {
                 var item = BrowserView.CurrentDrag;
@@ -1334,6 +1361,11 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 else
                 {
                     var paths = folder ? new List<string> { item!.Path } : DroppedPaths(e);
+                    if (SfzImporter.HasSfz(paths))
+                    {
+                        Show(true, Loc.T("device.mosaic.release_to_load_the_sfz"), Path.GetFileName(paths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), Loc.T("device.mosaic.its_zones_replace_the_instruments"));
+                        return;
+                    }
                     var audio = ExpandAudio(paths);
                     if (audio.Count == 1) Show(true, Loc.T("device.mosaic.release_to_load_the_sample"), Path.GetFileName(audio[0]));
                     else
@@ -1354,6 +1386,12 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 else if (item is { Kind: BrowserItemKind.Folder } && Directory.Exists(item.Path)) paths = new List<string> { item.Path };
                 else if (item is null) paths = DroppedPaths(e);
                 else return;
+                if (SfzImporter.ProgramIn(paths) is { } sfz)
+                {
+                    e.Handled = true;
+                    LoadSfz(sfz);
+                    return;
+                }
                 var audio = ExpandAudio(paths);
                 if (audio.Count == 0) return;
                 e.Handled = true;

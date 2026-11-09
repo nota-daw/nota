@@ -189,6 +189,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_split")]
     internal static partial int ClipSplit(IntPtr engine, int trackId, int clipIndex, double atBeat);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_split_fades")]
+    internal static partial void EngineSetSplitFades(IntPtr engine, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_split_fades")]
+    internal static partial int EngineSplitFades(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clips_fade_splits")]
+    internal static partial NotaResult ClipsFadeSplits(IntPtr engine, [In] int[] trackIds, [In] int[] clipIndices, int count);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_duplicate")]
     internal static partial int ClipDuplicate(IntPtr engine, int trackId, int clipIndex);
 
@@ -431,6 +440,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_mosaic_track")]
     internal static partial int AddMosaicTrack(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_twin_track")]
+    internal static partial int AddTwinTrack(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_mosaic_set_program", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int MosaicSetProgram(IntPtr engine, int trackId, string text, int checkpoint);
 
@@ -451,6 +463,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_action")]
     internal static partial void InstrumentAction(IntPtr engine, int trackId, int id, int iarg, float farg);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_set_state_undoable")]
+    internal static partial int InstrumentSetStateUndoable(IntPtr engine, int trackId, byte[] data, int size);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_set_grain_sample", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int SetTrackGrainSample(IntPtr engine, int trackId, string path, int rootNote);

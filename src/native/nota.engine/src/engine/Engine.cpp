@@ -689,7 +689,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
-    nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
+    nt->liveHeld = t.liveHeld;           // shared — held live notes (#366) and effect tail (#449) persist
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
@@ -725,7 +725,31 @@ bool Engine::setRenderThreads(int n) {
     return true;
 }
 
-void Engine::publishRaw(std::shared_ptr<Graph> g) {
+void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
+    // Fade flags are derived, not stored. A track this graph shares with the one still
+    // playing is the audio thread's — leave it. Any other one an edit just cloned is
+    // settled in place. A restored track (undo, redo, take retry) was published before and
+    // a render may still be walking it, so it is cloned when its fades would change.
+    // Every take id comes from nextTakeId_; until one does (or a load restores a kept join),
+    // no clip can join, and this runs on every edit, undo and redo (perf-gate edit-warp-split).
+    if (g && authoring_ && (nextTakeId_ > 0 || joinedEdgesRestored_)) {
+        auto shared = [&](const std::shared_ptr<Track>& t) {
+            for (const auto& old : authoring_->tracks)
+                if (old == t) return true;
+            return authoring_->masterTrack && authoring_->masterTrack == t;
+        };
+        auto settle = [&](std::shared_ptr<Track>& t) {
+            if (!t || !mayHaveTakeJoins(*t) || shared(t)) return;
+            if (!restored) {
+                settleTakeJoins(*t);
+            } else if (!takeJoinsSettled(*t)) {
+                t = cloneTrack(*t);
+                settleTakeJoins(*t);
+            }
+        };
+        for (auto& t : g->tracks) settle(t);
+        settle(g->masterTrack);
+    }
     // Ensure every track has a session slot per scene (M5). Only grows freshly
     // added tracks (already-sized tracks are a no-op), so no race with audio.
     for (auto& t : g->tracks)
@@ -758,11 +782,14 @@ void Engine::pushUndo() {
                 return;
             }
     }
-    undoStack_.push_back({authoring_, {}}); // authoring_ is immutable after publish
+    // authoring_ is immutable after publish. A take's own checkpoint is marked so a retry can
+    // take it out without touching the user's edits made meanwhile (specs/078).
+    undoStack_.push_back({authoring_, {}, takePushing_ && takeAttempt_.active});
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_; // keep the group's anchor
+        if (takeAttempt_.active && takeAttempt_.undoBase > 0) --takeAttempt_.undoBase; // specs/078
     }
     redoStack_.clear(); // a new edit invalidates the redo branch
 }
@@ -778,7 +805,10 @@ void Engine::endUndoGroup() {
     if (undoStack_.size() > undoGroupBase_ + 1) {
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());
@@ -817,7 +847,8 @@ bool Engine::undo() {
         // Restore without a new checkpoint; the restored chains may add or drop a latent
         // device (a removed look-ahead coming back, #109), so compensation follows them.
         if (e.graph) {
-            publishRaw(std::move(e.graph));
+            if (authoring_) keepLiveSends(*e.graph, *authoring_);
+            publishRaw(std::move(e.graph), true);
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
@@ -828,6 +859,48 @@ bool Engine::undo() {
         if (applied) return true;
     }
     return false;
+}
+
+// specs/069. Message thread, before the restored graph is published. A shared track object
+// already holds the live levels, so it is left alone (the audio thread may be reading it).
+void Engine::keepLiveSends(Graph& restored, const Graph& live) const {
+    // No allocations: this runs on every undo/redo (perf-gate edit-warp-split).
+    const auto busOf = [](const std::shared_ptr<Track>& t) {
+        return t && t->type() == TrackType::Return && t->returnIndex() >= 0 && t->returnIndex() < kMaxReturns
+                   ? t->returnIndex()
+                   : -1;
+    };
+    // The track with `id` in `g`: track lists rarely reorder, so try the same index first.
+    const auto findById = [](const Graph& g, size_t hint, int32_t id) -> const Track* {
+        if (hint < g.tracks.size() && g.tracks[hint] && g.tracks[hint]->id() == id) return g.tracks[hint].get();
+        for (const auto& t : g.tracks)
+            if (t && t->id() == id) return t.get();
+        return nullptr;
+    };
+
+    // A return edit remaps buses. Copying a live slot onto the restored graph would put
+    // that level on a different return. The snapshot already has the levels for its buses.
+    // Same buses = the same (return id, bus) pairs on both sides; ids are unique.
+    size_t liveReturns = 0, oldReturns = 0;
+    for (const auto& t : restored.tracks)
+        if (busOf(t) >= 0) ++oldReturns;
+    for (size_t i = 0; i < live.tracks.size(); ++i) {
+        const int32_t bus = busOf(live.tracks[i]);
+        if (bus < 0) continue;
+        ++liveReturns;
+        const Track* old = findById(restored, i, live.tracks[i]->id());
+        if (!old || old->type() != TrackType::Return || old->returnIndex() != bus) return;
+    }
+    if (liveReturns != oldReturns) return;
+
+    for (size_t i = 0; i < restored.tracks.size(); ++i) {
+        auto& t = restored.tracks[i];
+        if (!t || t->type() == TrackType::Return) continue;
+        const Track* src = findById(live, i, t->id());
+        if (!src || src == t.get()) continue;
+        for (int b = 0; b < kMaxReturns; ++b)
+            if (t->send(b) != src->send(b)) t->setSend(b, src->send(b));
+    }
 }
 
 // The restored racks drive their mapped targets again: the children they share with the
@@ -853,7 +926,8 @@ bool Engine::redo() {
         bool applied = false;
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {
-            publishRaw(std::move(e.graph));
+            if (authoring_) keepLiveSends(*e.graph, *authoring_);
+            publishRaw(std::move(e.graph), true);
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
@@ -921,11 +995,7 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
     }
     auto tr = findTrackAuthoring(t.trackId);
     if (!tr) return false;
-    if (t.kind == MixKind::TrackSend) { // specs/072: a bus that can't exist has no value
-        if (t.deviceIndex < 0 || t.deviceIndex >= kMaxReturns) return false;
-        v = tr->send(t.deviceIndex);
-        return true;
-    }
+    if (t.kind == MixKind::TrackSend) return false; // specs/069: a send is not an undo step
     v = t.kind == MixKind::TrackVolume ? tr->volume() : tr->pan();
     return true;
 }
@@ -940,6 +1010,22 @@ bool Engine::applyMix(const MixChange& c, bool after) {
         if (!eq || at >= noteStates_.size()) return false; // gone (or no longer an EQ-8): skip
         const auto& st = noteStates_[at];
         eq->setState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
+    if (c.kind == MixKind::InstrumentEdit) { // an instrument's edit state (sequencer patterns)
+        Instrument* inst = editStateInstrument(c.trackId, c.deviceIndex, c.paramIndex);
+        const auto at = static_cast<size_t>(v);
+        if (!inst || at >= noteStates_.size()) return false; // gone: skip
+        const auto& st = noteStates_[at];
+        inst->setEditState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
+    if (c.kind == MixKind::InstrumentState) { // a rack chain instrument's whole state
+        Instrument* inst = editStateInstrument(c.trackId, c.deviceIndex, c.paramIndex);
+        const auto at = static_cast<size_t>(v);
+        if (!inst || at >= noteStates_.size()) return false; // gone: skip
+        const auto& st = noteStates_[at];
+        inst->setState(st.data(), static_cast<int32_t>(st.size()));
         return true;
     }
     if (c.kind == MixKind::MasterVolume) {
@@ -957,11 +1043,7 @@ bool Engine::applyMix(const MixChange& c, bool after) {
     }
     auto tr = findTrackAuthoring(c.trackId);
     if (!tr) return false; // the track is gone: skip quietly
-    if (c.kind == MixKind::TrackSend) {
-        if (c.deviceIndex < 0 || c.deviceIndex >= kMaxReturns) return false;
-        tr->setSend(c.deviceIndex, v);
-        return true;
-    }
+    if (c.kind == MixKind::TrackSend) return false; // specs/069: nothing to restore
     if (c.kind == MixKind::TrackVolume) tr->setVolume(v);
     else
         tr->setPan(v);
@@ -1069,7 +1151,10 @@ void Engine::endMixGesture(int32_t handle) {
         const size_t base = std::min(g.stackSizeAtBegin, undoStack_.size() - 1);
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(base);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());
@@ -1148,6 +1233,7 @@ void Engine::clearUndoHistory() {
     // them here frees nothing the audio thread can still be reading.
     undoStack_.clear();
     redoStack_.clear();
+    compactNoteStates(true); // nothing refers to the saved states any more
     mixGestures_.clear(); // a gesture can't outlive the history it would land in
     touchGestures_.clear();
     undoGroupDepth_ = 0;

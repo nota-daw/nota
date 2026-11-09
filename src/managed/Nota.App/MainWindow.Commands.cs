@@ -54,6 +54,7 @@ public partial class MainWindow
         B("edit.redo", () => OnMenuRedo(this, e));
         B("edit.duplicate", () => OnMenuDuplicate(this, e));
         B("edit.split", () => OnMenuSplit(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, Loc.T("main.commands.select_a_clip_or_a")));
+        B("edit.fadeSplits", () => OnMenuFadeSplits(this, e), c => Need(c.SelectedClips > 0, Loc.T("main.commands.select_audio_clips_that")));
         B("edit.consolidate", () => OnMenuConsolidate(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, Loc.T("main.commands.select_clips_or_a_range")));
         B("edit.duplicateTime", () => OnMenuDuplicateTime(this, e), c => Need(c.HasTimeSelection, Loc.T("main.commands.select_a_time_range_first")));
         B("edit.insertSilence", () => OnMenuInsertSilence(this, e), c => Need(c.HasTimeSelection, Loc.T("main.commands.select_a_time_range_first")));
@@ -108,6 +109,7 @@ public partial class MainWindow
         B("transport.playPause", () => _vm?.Transport.PlayPauseCommand.Execute(null));
         B("transport.stop", () => _vm?.Transport.StopCommand.Execute(null));
         B("transport.record", () => OnMenuRecord(this, e));
+        B("transport.retryTake", () => { _vm?.Transport.RetryTakeCommand.Execute(null); _session?.Refresh(); });
         B("transport.armOnSelect", ToggleArmOnSelect);
         B("transport.loop", () => OnMenuLoop(this, e));
         B("transport.metronome", () => OnMenuMetronome(this, e));

@@ -678,7 +678,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             statusLeft.Text = StatusText();
             statusLeft.Foreground = (centreTab == 1 && Sel(Solo, 4) - 1 == band) || On(ScListen) ? AmberLit : Txt2;
             double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
-            string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#}\u2009ms") : "no lookahead";
+            string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#}\u2009ms") : Loc.T("device.prism.no_lookahead");
             string sc = Sc(S_ScActive) > 0.5 ? " · SC" : "";
             statusRight.Text = sr > 0 ? Loc.F("device.prism.khz_cpu", sr / 1000, la, sc, Sc(S_Cpu) * 100) : "";
         });

@@ -580,11 +580,13 @@ public sealed partial class SessionView
 
         private void RenderRecording(DrawingContext ctx, Rect r)
         {
-            bool waiting = _o._recElapsed <= 0;
+            // Waiting for the take to begin: a fresh take before its launch quantum, or a retried
+            // one (⌘., specs/078) before the boundary it records from — slot state 5.
+            bool waiting = _o._recElapsed <= 0 || _o._engine.SessionSlotState(_c.TrackId, _scene) == 5;
             FillCell(ctx, r, NotaPalette.Wash(NotaPalette.Record, 0x33), NotaPalette.Record);
             var lc = LaunchZone.Center;
             ctx.DrawEllipse(waiting && !_o._blinkOn ? NotaPalette.Wash(NotaPalette.Record, 0x66) : NotaPalette.Record, null, lc, 4.5, 4.5);
-            var lenFt = Ft(FormatDuration(_o._recElapsed), NotaFonts.Mono, 9, NotaPalette.DangerBright);
+            var lenFt = Ft(FormatDuration(waiting ? 0 : _o._recElapsed), NotaFonts.Mono, 9, NotaPalette.DangerBright);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
             var nameFt = Ft(waiting ? Loc.T("session.grid.rec_in") : Loc.T("session.recording"), NotaFonts.SansMedium, 11, NotaPalette.TextHeading, lenX - 31);

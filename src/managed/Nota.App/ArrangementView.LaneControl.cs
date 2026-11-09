@@ -259,10 +259,18 @@ public sealed partial class ArrangementView
 
             if (hit is not { } hh)
             {
-                // Double-click empty space on an instrument track's lane → new MIDI clip there.
+                // Double-click empty space on an instrument track's lane → new MIDI clip there;
+                // on a group's lane → the group's devices in the Detail panel, as on its header (#490).
                 if (e.ClickCount == 2)
                 {
                     int ti = _o.RowAtY(pt.Position.Y);
+                    if (ti >= 0 && _o._tracks[ti].IsGroup)
+                    {
+                        int gid = _o._tracks[ti].Id;
+                        if (_o.SelTrackId != gid) _o.Select(gid, -1);
+                        _o.TrackDevicesRequested?.Invoke(gid);
+                        return;
+                    }
                     if (ti >= 0 && _o._tracks[ti].IsInstrument)
                     {
                         _o.AddMidiClipAt(_o._tracks[ti].Id, beat);
@@ -651,10 +659,12 @@ public sealed partial class ArrangementView
                     else
                     {
                         // Plain click on empty space: clear everything and move the playhead
-                        // (except during playback — scrub from the ruler, not the grid).
-                        _o.Select(-1, -1);
-                        _o.ClearTimeSelection();
+                        // (except during playback — scrub from the ruler, not the grid). A group's
+                        // lane holds no clips of its own, so a click there selects the group (#490).
                         int row = _o.RowAtY(_marqueePress.Y);
+                        bool groupLane = row >= 0 && row < _o._tracks.Count && _o._tracks[row].IsGroup;
+                        _o.Select(groupLane ? _o._tracks[row].Id : -1, -1);
+                        _o.ClearTimeSelection();
                         if (row >= 0 && row < _o._tracks.Count) _o.FocusTrackId = _o._tracks[row].Id;
                         if (_o._engine is not { IsPlaying: true })
                             _o.SeekTo(_o._scrollBeats + _marqueePress.X / _o._pixelsPerBeat);
@@ -1034,6 +1044,14 @@ public sealed partial class ArrangementView
             {
                 MenuKit.Item(Loc.T("arrangement.lane_control.split_here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at)) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
             };
+            if (!clip.IsMidi)
+                edits.Add(MenuKit.Item(Loc.T("arrangement.lane_control.fade_at_splits"), GlyphKind.Split, () =>
+                {
+                    EnsureSelected();
+                    _o.StatusMessage?.Invoke(_o.FadeSelectedSplits()
+                        ? Loc.T("arrangement.lane_control.faded_the_splits")
+                        : Loc.T("arrangement.lane_control.select_audio_clips_that"));
+                }));
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
                 edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : Loc.T("common.reverse"), GlyphKind.Reverse,

@@ -30,9 +30,11 @@ namespace nota {
 
 // Per-clip ADSR amplitude shape for audio clips, in PLAYED time (clip-local beats, so it
 // follows trims/reverse the way the ear hears the clip). Attack ramps 0→1 from the clip
-// start, decay falls 1→sustain, sustain holds, and release fades to 0 over the last
-// `release` beats before the clip end. The release multiplies the ADS stage, so on a clip
-// shorter than A+D+R the stages overlap smoothly instead of jumping. The default
+// start when a decay follows, and straight to the sustain level when decay is 0, so a
+// split that cleared the decay does not click. Decay falls 1→sustain, sustain holds, and
+// release fades to 0 over the last `release` beats before the clip end. The release
+// multiplies the ADS stage, so on a clip shorter than A+D+R the stages overlap smoothly
+// instead of jumping. The default
 // (0, 0, 1, 0) is the identity: the sample plays its full length at full level.
 struct ClipAdsr {
     double attack = 0.0;  // beats
@@ -97,6 +99,15 @@ struct AudioClip {
     // The take this clip plays a section of (specs/067), 0 = none. Drives the take lanes'
     // highlight and flatten only; playback never looks at it.
     int32_t takeId = 0;
+    // The ends that join the clip meeting them (bit 1 head, bit 2 tail): take sections of one
+    // recording, or a join that outlived its takes (flatten, delete). Kept while the clips
+    // meet, silent or not, so deactivating a side does not lose it; the project saves it
+    // (nota_clip_joined_edges). Derived when the track is published (settleTakeJoins).
+    uint8_t joinedEdges = 0;
+    // Edge fades (~3 ms) at the played ends: off at a join both sides of which play, so the
+    // comp does not dip to silence there. Derived with joinedEdges, read by playback only.
+    bool fadeHead = true;
+    bool fadeTail = true;
 
     int64_t effectiveLength() const;
     // Played warp window (beats). Default (0/0) is the whole warp [0, warpBeats].
@@ -107,15 +118,16 @@ struct AudioClip {
     double pitchRatio() const { return std::pow(2.0, static_cast<double>(pitchSemitones) / 12.0); }
 };
 
-// The short edge fade (~3 ms) an unwarped clip plays at both ends, so one that starts or ends
-// mid-waveform doesn't click: the gain `into` device frames into a clip `len` device frames
-// long at device rate `sr`. Flatten (specs/067) bakes the same fades into the joins it removes.
-inline double audioClipEdgeGain(double into, double len, double sr) {
+// The short edge fade (~3 ms) an unwarped clip plays at an end that asks for one, so a clip
+// that starts or ends mid-waveform doesn't click: the gain `into` device frames into a clip
+// `len` device frames long at device rate `sr`. A take join turns the shared end off
+// (AudioClip::fadeHead / fadeTail). Flatten (specs/067) bakes the fades the section played with.
+inline double audioClipEdgeGain(double into, double len, double sr, bool fadeHead = true, bool fadeTail = true) {
     const double edge = std::min(3.0 * sr / 1000.0, len * 0.5);
     if (edge <= 1.0) return 1.0;
     double eg = 1.0;
-    if (into < edge) eg = into / edge;
-    else if (into > len - edge)
+    if (fadeHead && into < edge) eg = into / edge;
+    else if (fadeTail && into > len - edge)
         eg = (len - into) / edge;
     return std::clamp(eg, 0.0, 1.0);
 }
@@ -217,6 +229,14 @@ class Track {
     // isn't sent again every block. Audio thread only.
     bool sessionSilentReleased = false;
 
+    // Effects on an audio track ring out after the track stops sounding (#449): -1 when there
+    // is no tail to play, else how long (frames) the chain's output has been silent. Set to 0
+    // by every block the track plays; the chain then runs on silence until its devices have
+    // settled (see Engine::kTailQuietSeconds). Audio thread only; shared by every version of
+    // the track (edits, undo), so an edit while a tail rings doesn't cut it. Kept in LiveHeld
+    // (below) so a clone shares one allocation rather than making a second.
+    int64_t& tailQuiet() { return liveHeld->tailQuiet; }
+
     // The untargeted live notes (keyboard, MIDI) the track was given and not yet the note-off
     // of, and whether it was disarmed with them down (#366): released on its next render.
     // Shared by every version of the track (edits, undo) and with no other track, so it
@@ -224,6 +244,7 @@ class Track {
     struct LiveHeld {
         uint64_t bits[2] = {0, 0};
         bool release = false;
+        int64_t tailQuiet = -1; // see tailQuiet() above
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 

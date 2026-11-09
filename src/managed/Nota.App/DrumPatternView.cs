@@ -28,7 +28,7 @@ namespace Nota.App;
 
 public sealed class DrumPatternView : UserControl
 {
-    private const int BeatsPerBar = 4;     // as everywhere else in the app (transport, props rails)
+    private static int BeatsPerBar => Meter.BeatsPerBar;   // the project's bars, as everywhere else (#405)
     private const int MaxCells = 64;       // steps drawn at once; a longer clip pages in windows
     private const double NameW = 156;
     private const double RowH = 20;
@@ -56,6 +56,8 @@ public sealed class DrumPatternView : UserControl
 
     private int _res = _resPersist;
     private int _steps, _winStart, _win;
+    private int _builtBpb;        // the bar length the ruler and bar shading were built with
+    private int _heldNote = -1;   // the pad name cell being auditioned, so a rebuild can release it
     private int _selRow = -1;
     private int _paint;                    // 0 = idle, 1 = painting hits in, 2 = painting them out
     private bool _dragging;                // a paint / velocity gesture owns the grid
@@ -107,7 +109,7 @@ public sealed class DrumPatternView : UserControl
     {
         if (_dragging) return;   // mid drag: our own writes are already on screen
         var pads = ScanPads();
-        if (StepCount() != _steps || !SamePads(pads)) { Rebuild(); return; }
+        if (StepCount() != _steps || !SamePads(pads) || _builtBpb != BeatsPerBar) { Rebuild(); return; }   // a new meter redraws the bar marks
         ReadNotes();
         MapCells();
         StyleAll();
@@ -226,10 +228,21 @@ public sealed class DrumPatternView : UserControl
 
     // ---- build ------------------------------------------------------------
 
+    // A held pad's cell is thrown away by a rebuild (a new meter, pads or length) before its
+    // release arrives, so the rebuild lets the note go itself.
+    private void ReleaseHeld()
+    {
+        if (_heldNote < 0) return;
+        _e.TrackNoteOff(TrackId, _heldNote);
+        _heldNote = -1;
+    }
+
     private void Rebuild()
     {
+        ReleaseHeld();
         _pads = ScanPads();
         _steps = StepCount();
+        _builtBpb = BeatsPerBar;
         int pages = Math.Max(1, (_steps + MaxCells - 1) / MaxCells);
         _winStart = Math.Clamp(_winStart / MaxCells, 0, pages - 1) * MaxCells;
         _win = Math.Max(1, Math.Min(MaxCells, _steps - _winStart));
@@ -397,10 +410,13 @@ public sealed class DrumPatternView : UserControl
         {
             e.Handled = true;
             SelectRow(r);
+            ReleaseHeld();
             _e.TrackNoteOn(TrackId, pad.Note, 1.0f);   // audition this rack only, as the pad grid does (#307)
+            _heldNote = pad.Note;
             e.Pointer.Capture(cell);
         };
-        cell.PointerReleased += (_, e) => { _e.TrackNoteOff(TrackId, pad.Note); e.Pointer.Capture(null); };
+        cell.PointerReleased += (_, e) => { ReleaseHeld(); e.Pointer.Capture(null); };
+        cell.PointerCaptureLost += (_, _) => ReleaseHeld();
         _nameCells[r] = cell;
         _nameLabels[r] = name;
         return cell;

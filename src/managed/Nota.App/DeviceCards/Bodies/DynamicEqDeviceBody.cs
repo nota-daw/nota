@@ -120,7 +120,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 Height = 15, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), ClipToBounds = true,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = new Grid { Children = { inner, bar } },
             };
-            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it; the bar shows how much of its range the dynamics use now"));
+            ToolTip.SetTip(chip, Loc.F("device.dynamic_eq.band_click_to_edit_it", b + 1));
             chip.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
@@ -147,7 +147,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         var chipStrip = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = chipRow };
         DockPanel.SetDock(chipStrip, Dock.Top);
         ToolTip.SetTip(curve, Loc.T("device.dynamic_eq.drag_a_node_frequency_and")
-            + "double-click empty space — a new bell there · right-click a node — type, mode, solo");
+            + Loc.T("device.dynamic_eq.double_click_empty_space_a"));
         var graphPanel = new RuleSection
         {
             Margin = new Thickness(0, 0, 5, 0),

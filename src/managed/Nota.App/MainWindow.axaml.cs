@@ -281,13 +281,18 @@ public partial class MainWindow : Window
             // mid-drag, where the fader is the one driving.
             else if (e.PropertyName == nameof(vm.Transport.MasterVolume) && !masterVol.Dragging)
                 masterVol.Value = vm.Transport.MasterVolume;
-            else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator)) tsNum.Value = vm.Transport.TimeSigNumerator;
+            else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator))
+            {
+                tsNum.Value = vm.Transport.TimeSigNumerator;
+                ApplyMeter(vm.Transport.TimeSigNumerator);   // bar lines and bar numbers follow (#405)
+            }
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
             else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
             // Every ruler reads in the read-out's unit, bars or time (#275).
             else if (e.PropertyName == nameof(vm.Transport.ShowTimeDisplay)) RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         };
         RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
+        ApplyMeter(vm.Transport.TimeSigNumerator);
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
@@ -413,12 +418,14 @@ public partial class MainWindow : Window
             vm.Settings.Save();
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+        vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
         // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
         vm.Settings.Changed += () =>
         {
             Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+            vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         };
         Browser.SetViewModel(vm.Browser);

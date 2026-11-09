@@ -30,6 +30,7 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     ~PluginEffect() override;
 
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
+    bool supportsParallelRender() const override { return parallelRender_; }
 
     void setSampleRate(double sr, int32_t maxBlock) override;
     int32_t latencySamples() const override;
@@ -80,6 +81,8 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     void audioProcessorParameterChangeGestureEnd(juce::AudioProcessor*, int index) override;
     void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override {}
 
+    void processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames); // frames <= maxBlock_
+
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_;
     std::string name_;
@@ -95,7 +98,8 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer empty_;
     WorkgroupLink workgroup_; // the device workgroup for the plug-in's own threads (#436)
-    int maxBlock_ = 0;
+    int maxBlock_ = 0; // what the plug-in was prepared for: at most kPluginMaxBlock (#447)
+    bool parallelRender_ = false; // immutable format decision, made on the message thread
     bool stereoIn_ = true, stereoOut_ = true; // main buses have a channel 1 (see setSampleRate)
     EditorHost editor_;                       // declared last: destroyed before plugin_
 };

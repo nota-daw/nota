@@ -13,6 +13,10 @@
 
 #include "nota/nota_engine.h"
 
+#if defined(__linux__)
+#include <dlfcn.h>
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -94,6 +98,27 @@ void fillChords6(NotaEngine* e, int track, int transpose, double startBeat, doub
     nota_clip_set_notes(e, track, clip, notes.data(), (int)notes.size());
 }
 
+// Sets a track instrument's param by id (no-op for an unknown id).
+void setParamById(NotaEngine* e, int track, const char* id, float v) {
+    const int n = nota_plugin_param_count(e, track, -1);
+    for (int i = 0; i < n; ++i) {
+        const char* pid = nota_plugin_param_id(e, track, -1, i);
+        if (pid && std::strcmp(pid, id) == 0) {
+            nota_plugin_param_set(e, track, -1, i, v);
+            return;
+        }
+    }
+}
+
+// A held `voices`-note chord for 4 bars, retriggered every bar: a synth at full polyphony.
+void fillFullChord(NotaEngine* e, int track, int voices) {
+    const int clip = nota_track_add_midi_clip(e, track, 0.0, 16.0);
+    std::vector<NotaNoteData> notes;
+    for (int bar = 0; bar < 4; ++bar)
+        for (int k = 0; k < voices; ++k) notes.push_back({36 + k * 4 + (bar & 1), bar * 4.0, 3.9, 0.75f, 0});
+    nota_clip_set_notes(e, track, clip, notes.data(), (int)notes.size());
+}
+
 // An 8 s stereo 48 kHz WAV of a chord with a little noise (so the stretch has real work), in
 // the temp dir; the warp scenarios load it.
 // Each process writes its own file (perf-gate runs scenarios in parallel), removed once
@@ -155,6 +180,7 @@ std::string instrumentName(int kind) {
     case 15: return "Consort";
     case 16: return "Keys";
     case 17: return "Mosaic (no program)";
+    case 18: return "Twin";
     default: return "Instrument kind " + std::to_string(kind);
     }
 }
@@ -193,6 +219,10 @@ std::vector<Scenario> scenarios() {
     s.push_back({"instrument-rack", "Instrument Rack, 2 Synth chains"});
     s.push_back({"effect-base", "Synth alone (effect baseline)"});
     s.push_back({"aurora-supersaw-2x", "Aurora Super Saw x2"});
+    // Full-polyphony synth loads (specs/055 SC-001: Twin at 12 voices against Pentad at 16).
+    s.push_back({"pentad-full-16", "Pentad, 16-voice chord"});
+    s.push_back({"twin-full-12", "Twin, 12-voice chord, both filters, 16 routes, FX"});
+    s.push_back({"twin-layer-6x6", "Twin Layer, 6 + 6 voices, both parts' FX"});
     for (int k = 0; k < kMaxKind; ++k) {
         const std::string name = effectName(k);
         if (name.empty()) continue;
@@ -202,6 +232,9 @@ std::vector<Scenario> scenarios() {
     for (int n : {1, 4, 8, 16, 32}) s.push_back({"mix-" + std::to_string(n), std::to_string(n) + " tracks, all playing"});
     s.push_back({"sparse-32", "32 tracks, 1 in 4 playing"});
     s.push_back({"silent-32", "32 tracks, no clips"});
+    // Stopped after playing: the audio tracks' Reverb + Delay ring out (#449), then must cost
+    // nothing again; this measures the stopped engine once the tails are over.
+    s.push_back({"audio-tails-8", "8 audio tracks with Reverb + Delay, stopped, tails over"});
     s.push_back({"audio-warp-split", "Warped audio clip split in 8, playing"});
     // An edit, not a render: the measured loop splits a warped clip 8 times and undoes it (#299).
     s.push_back({"edit-warp-split", "Split a warped 8 s clip 8x + undo (ms per edit)"});
@@ -260,6 +293,67 @@ bool build(NotaEngine* e, const std::string& id) {
         }
         return true;
     }
+    if (id == "pentad-full-16") {
+        const int t = instrumentTrack(e, 14);
+        if (t < 0) return false;
+        setParamById(e, t, "polyphony", 1.0f); // 16 voices
+        fillFullChord(e, t, 16);
+        return true;
+    }
+    if (id == "twin-full-12") {
+        // Both oscillators and noise into both filters, half series / half parallel, resonant.
+        // and the part's effects on: chorus, delay and reverb.
+        const int t = instrumentTrack(e, 18);
+        if (t < 0) return false;
+        for (auto [pid, v] : {std::pair{"lo.a.o2level", 0.8f}, {"lo.a.noiselevel", 0.2f}, {"lo.a.o1bal", 0.5f},
+                 {"lo.a.o2bal", 0.5f}, {"lo.a.route", 0.5f}, {"lo.a.mmres", 0.4f}, {"lo.a.ldres", 0.4f},
+                 {"lo.a.o1metal", 0.3f}, {"lo.a.drive", 0.3f}, {"lo.a.brute", 0.3f}, {"lo.a.modfxon", 1.0f},
+                 {"lo.a.dlyon", 1.0f}, {"lo.a.revon", 1.0f}})
+            setParamById(e, t, pid, v);
+        // 16 live matrix routes (slots 7..22; 1..6 are Init's expression routes, idle here): LFOs,
+        // envelopes, velocity, key and random onto cutoffs, wave, width, morph and more.
+            setParamById(e, t, "lo.m7.src", 1.0f / 63.0f); setParamById(e, t, "lo.m7.dst", 28.0f / 255.0f); setParamById(e, t, "lo.a.m7amt", 0.6f); setParamById(e, t, "lo.b.m7amt", 0.6f);
+            setParamById(e, t, "lo.m8.src", 2.0f / 63.0f); setParamById(e, t, "lo.m8.dst", 23.0f / 255.0f); setParamById(e, t, "lo.a.m8amt", 0.6f); setParamById(e, t, "lo.b.m8amt", 0.6f);
+            setParamById(e, t, "lo.m9.src", 3.0f / 63.0f); setParamById(e, t, "lo.m9.dst", 6.0f / 255.0f); setParamById(e, t, "lo.a.m9amt", 0.6f); setParamById(e, t, "lo.b.m9amt", 0.6f);
+            setParamById(e, t, "lo.m10.src", 4.0f / 63.0f); setParamById(e, t, "lo.m10.dst", 13.0f / 255.0f); setParamById(e, t, "lo.a.m10amt", 0.6f); setParamById(e, t, "lo.b.m10amt", 0.6f);
+            setParamById(e, t, "lo.m11.src", 6.0f / 63.0f); setParamById(e, t, "lo.m11.dst", 1.0f / 255.0f); setParamById(e, t, "lo.a.m11amt", 0.6f); setParamById(e, t, "lo.b.m11amt", 0.6f);
+            setParamById(e, t, "lo.m12.src", 7.0f / 63.0f); setParamById(e, t, "lo.m12.dst", 33.0f / 255.0f); setParamById(e, t, "lo.a.m12amt", 0.6f); setParamById(e, t, "lo.b.m12amt", 0.6f);
+            setParamById(e, t, "lo.m13.src", 9.0f / 63.0f); setParamById(e, t, "lo.m13.dst", 29.0f / 255.0f); setParamById(e, t, "lo.a.m13amt", 0.6f); setParamById(e, t, "lo.b.m13amt", 0.6f);
+            setParamById(e, t, "lo.m14.src", 18.0f / 63.0f); setParamById(e, t, "lo.m14.dst", 15.0f / 255.0f); setParamById(e, t, "lo.a.m14amt", 0.6f); setParamById(e, t, "lo.b.m14amt", 0.6f);
+            setParamById(e, t, "lo.m15.src", 1.0f / 63.0f); setParamById(e, t, "lo.m15.dst", 67.0f / 255.0f); setParamById(e, t, "lo.a.m15amt", 0.6f); setParamById(e, t, "lo.b.m15amt", 0.6f);
+            setParamById(e, t, "lo.m16.src", 2.0f / 63.0f); setParamById(e, t, "lo.m16.dst", 34.0f / 255.0f); setParamById(e, t, "lo.a.m16amt", 0.6f); setParamById(e, t, "lo.b.m16amt", 0.6f);
+            setParamById(e, t, "lo.m17.src", 3.0f / 63.0f); setParamById(e, t, "lo.m17.dst", 24.0f / 255.0f); setParamById(e, t, "lo.a.m17amt", 0.6f); setParamById(e, t, "lo.b.m17amt", 0.6f);
+            setParamById(e, t, "lo.m18.src", 5.0f / 63.0f); setParamById(e, t, "lo.m18.dst", 20.0f / 255.0f); setParamById(e, t, "lo.a.m18amt", 0.6f); setParamById(e, t, "lo.b.m18amt", 0.6f);
+            setParamById(e, t, "lo.m19.src", 6.0f / 63.0f); setParamById(e, t, "lo.m19.dst", 8.0f / 255.0f); setParamById(e, t, "lo.a.m19amt", 0.6f); setParamById(e, t, "lo.b.m19amt", 0.6f);
+            setParamById(e, t, "lo.m20.src", 2.0f / 63.0f); setParamById(e, t, "lo.m20.dst", 32.0f / 255.0f); setParamById(e, t, "lo.a.m20amt", 0.6f); setParamById(e, t, "lo.b.m20amt", 0.6f);
+            setParamById(e, t, "lo.m21.src", 1.0f / 63.0f); setParamById(e, t, "lo.m21.dst", 16.0f / 255.0f); setParamById(e, t, "lo.a.m21amt", 0.6f); setParamById(e, t, "lo.b.m21amt", 0.6f);
+            setParamById(e, t, "lo.m22.src", 4.0f / 63.0f); setParamById(e, t, "lo.m22.dst", 25.0f / 255.0f); setParamById(e, t, "lo.a.m22amt", 0.6f); setParamById(e, t, "lo.b.m22amt", 0.6f);
+        fillFullChord(e, t, 12);
+        return true;
+    }
+    if (id == "twin-layer-6x6") {
+        // Layer with the voices shared 6 + 6: a 6-note chord sounds on both parts (SC-010).
+        const int t = instrumentTrack(e, 18);
+        if (t < 0) return false;
+        for (auto [pid, v] : {std::pair{"mode", 0.5f}, {"share", 0.5f}, {"lo.a.o2level", 0.8f}, {"up.a.o2level", 0.8f},
+                 {"lo.a.o1bal", 0.5f}, {"up.a.o1bal", 0.5f}, {"lo.a.route", 0.5f}, {"up.a.route", 0.5f},
+                 {"lo.a.modfxon", 1.0f}, {"lo.a.revon", 1.0f}, {"up.a.dlyon", 1.0f}, {"up.a.revon", 1.0f}})
+            setParamById(e, t, pid, v);
+        fillFullChord(e, t, 6);
+        return true;
+    }
+    if (id == "audio-tails-8") {
+        const std::string wav = warpTestWav();
+        bool ok = true;
+        for (int i = 0; i < 8 && ok; ++i) {
+            const int t = nota_engine_add_audio_track(e);
+            ok = t >= 0 && nota_track_add_audio_clip(e, t, wav.c_str(), 0.0) == 0 &&
+                 nota_track_add_builtin_device(e, t, 2) >= 0 && nota_track_add_builtin_device(e, t, 3) >= 0;
+        }
+        std::error_code ec;
+        std::filesystem::remove(wav, ec);
+        return ok;
+    }
     if (id == "audio-warp-split" || id == "edit-warp-split") {
         const int t = warpedClipTrack(e);
         if (t < 0) return false;
@@ -305,6 +399,17 @@ int run(const std::string& id, double seconds) {
         return 2;
     }
     if (id == "edit-warp-split") { // split the last piece 8 times, then undo them
+        // Count the split and the undo, not the 4 ms fade a split now writes. This count
+        // is tiny and already moves by a percent or two when unrelated code is added; the
+        // fade pushed it just over the gate while the wall time stayed 0.00 ms. Playing a
+        // faded split is audio-warp-split. The fade itself is in the smoke test.
+        // Resolved at runtime: this file is also compiled against the base engine, which
+        // does not export the call.
+#if defined(__linux__)
+        using SetSplitFades = void (*)(NotaEngine*, int);
+        if (auto set = reinterpret_cast<SetSplitFades>(dlsym(RTLD_DEFAULT, "nota_engine_set_split_fades")))
+            set(e, 0);
+#endif
         constexpr int kEdits = 8;
         // Warm-up, not measured: one split + undo first, so the counted edits don't include the
         // first-call costs (lazy symbol binding, function-local statics). Those depend on the
@@ -331,6 +436,12 @@ int run(const std::string& id, double seconds) {
     std::vector<float> buf((size_t)kBlock * 2);
     for (int i = 0; i < (int)(0.25 * kSampleRate / kBlock); ++i) // warm-up: voices, caches, pool threads
         nota_engine_render_offline_at(e, buf.data(), kBlock, kSampleRate);
+
+    if (id == "audio-tails-8") { // stop while the clips sound, then let the tails ring out (not measured)
+        nota_transport_stop(e);
+        for (int i = 0; i < (int)(20.0 * kSampleRate / kBlock); ++i)
+            nota_engine_render_offline_at(e, buf.data(), kBlock, kSampleRate);
+    }
 
     const int blocks = std::max(1, (int)(seconds * kSampleRate / kBlock));
     float peak = 0.0f;

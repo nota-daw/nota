@@ -17,6 +17,9 @@ namespace hosting {
 PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock)
     : plugin_(std::move(p)) {
     if (plugin_) name_ = plugin_->getName().toStdString();
+    // Per-instance VST3 buffers/playhead/sidechain data permit an exclusive worker
+    // process call. Initialization, state and editors remain on the message thread.
+    parallelRender_ = plugin_ && plugin_->getPluginDescription().pluginFormatName == "VST3";
     empty_.ensureSize(256);
     setSampleRate(sr, maxBlock);
     if (plugin_) plugin_->addListener(this); // "Learn" (M9-B3)
@@ -29,7 +32,7 @@ PluginEffect::~PluginEffect() {
 }
 
 void PluginEffect::setSampleRate(double sr, int32_t maxBlock) {
-    maxBlock_ = maxBlock;
+    maxBlock_ = juce::jmin(maxBlock, kPluginMaxBlock); // #447: a longer block is played in pieces
     // Prefer stereo main I/O plus a sidechain input bus if the plugin exposes
     // one (input bus index 1, Phase C). Fall back to plain stereo I/O.
     hasSidechain_ = false;
@@ -74,7 +77,25 @@ int32_t PluginEffect::latencySamples() const {
 }
 
 void PluginEffect::process(float* buf, int32_t frames) {
-    if (frames <= 0 || frames > maxBlock_ || plugin_ == nullptr) return;
+    if (frames <= 0 || plugin_ == nullptr) return;
+    const float* sc = scBuf_;
+    const int32_t scFrames = scFrames_;
+    scBuf_ = nullptr; // consume once; the engine re-hands it each block if a source is set
+    if (frames <= maxBlock_) {
+        processPiece(buf, frames, sc, scFrames);
+        return;
+    }
+    // Longer than the plug-in was prepared for (#447): in pieces, the key and the transport
+    // moving along with them.
+    const double sr = plugin_->getSampleRate();
+    for (int32_t off = 0; off < frames; off += maxBlock_) {
+        const int32_t n = juce::jmin(frames - off, maxBlock_);
+        processPiece(buf + (size_t)off * 2, n, sc != nullptr ? sc + (size_t)off * 2 : nullptr, scFrames - off);
+        advanceTransport(playHead_.info, n, sr);
+    }
+}
+
+void PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames) {
     const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
     storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
     float* l = storage_.getWritePointer(0);
@@ -83,21 +104,20 @@ void PluginEffect::process(float* buf, int32_t frames) {
 
     // Feed the sidechain input bus (Phase C) if the engine handed us a source
     // this block; otherwise it stays silent (cleared above).
-    if (hasSidechain_ && scBuf_ != nullptr && scFrames_ >= frames && scChanOffset_ >= 0) {
+    if (hasSidechain_ && scBuf != nullptr && scFrames >= frames && scChanOffset_ >= 0) {
         const float scGain = fast_math::dbToLin(sidechainGainDb()); // Phase D (was std::pow)
         if (scNumChans_ >= 2 && scChanOffset_ + 1 < nc) {
             float* sl = storage_.getWritePointer(scChanOffset_);
             float* sr = storage_.getWritePointer(scChanOffset_ + 1);
             for (int i = 0; i < frames; ++i) {
-                sl[i] = scBuf_[i * 2] * scGain;
-                sr[i] = scBuf_[i * 2 + 1] * scGain;
+                sl[i] = scBuf[i * 2] * scGain;
+                sr[i] = scBuf[i * 2 + 1] * scGain;
             }
         } else if (scNumChans_ == 1 && scChanOffset_ < nc) {
             float* sm = storage_.getWritePointer(scChanOffset_);
-            for (int i = 0; i < frames; ++i) sm[i] = 0.5f * (scBuf_[i * 2] + scBuf_[i * 2 + 1]) * scGain;
+            for (int i = 0; i < frames; ++i) sm[i] = 0.5f * (scBuf[i * 2] + scBuf[i * 2 + 1]) * scGain;
         }
     }
-    scBuf_ = nullptr; // consume once; the engine re-hands it each block if a source is set
 
     float* ptrs[kMaxChans];
     juce::AudioBuffer<float> block(
@@ -185,11 +205,8 @@ void PluginEffect::setSidechain(const float* interleaved, int32_t frames) {
 std::shared_ptr<nota::Device> PluginEffect::clone() const {
     if (!plugin_) return nullptr;
     double sr = plugin_->getSampleRate() > 0 ? plugin_->getSampleRate() : 44100.0;
-    auto inst = createInstance(plugin_->getPluginDescription(), sr, maxBlock_);
+    auto inst = cloneInstance(*plugin_, sr, maxBlock_);
     if (!inst) return nullptr;
-    juce::MemoryBlock mb;
-    plugin_->getStateInformation(mb);
-    inst->setStateInformation(mb.getData(), (int)mb.getSize());
     auto d = std::make_shared<PluginEffect>(std::move(inst), sr, maxBlock_);
     d->setSidechainSourceTrackId(scTrackId_.load(std::memory_order_relaxed));
     return d;

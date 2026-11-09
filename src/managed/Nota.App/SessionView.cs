@@ -724,20 +724,26 @@ public sealed partial class SessionView : UserControl
         return n.Length > 0 ? n : Loc.F("session.scene", scene + 1);
     }
 
+    /// <summary>"1 beat", "0.5 beats", "2.5 beats": a number of beats, fractions allowed.</summary>
+    internal static string BeatsText(double beats)
+        => Math.Abs(beats - 1) < 1e-6 ? Loc.T("session.one_beat") : Loc.F("session.beats", NotaNum.Str(beats, "0.##"));
+
     /// <summary>"2 bars", "3 beats", "2.2 bars" — a clip length as the grid shows it.</summary>
     internal static string FormatLength(double beats)
     {
         if (beats <= 0) return "";
-        if (Math.Abs(beats % 4) < 1e-6) { int n = (int)Math.Round(beats / 4); return Loc.Plural("session.bars", n); }
-        if (beats < 4) return NotaNum.Str(beats, "0.##") + (Math.Abs(beats - 1) < 1e-6 ? " beat" : " beats");
-        return Loc.F("session.bars_n", (int)(beats / 4), NotaNum.Str(beats % 4, "0.##"));
+        int bpb = Meter.BeatsPerBar;
+        if (Math.Abs(beats % bpb) < 1e-6) { int n = (int)Math.Round(beats / bpb); return Loc.Plural("session.bars", n); }
+        if (beats < bpb) return BeatsText(beats);
+        return Loc.F("session.bars_n", (int)(beats / bpb), NotaNum.Str(beats % bpb, "0.##"));
     }
 
     /// <summary>bars.beats.sixteenths, 1-based, the way positions read in the transport.</summary>
     internal static string FormatPosition(double beats)
     {
         beats = Math.Max(0, beats);
-        int bar = (int)(beats / 4) + 1, beat = (int)(beats % 4) + 1, six = (int)(beats % 1 * 4) + 1;
+        int bpb = Meter.BeatsPerBar;
+        int bar = (int)(beats / bpb) + 1, beat = (int)(beats % bpb) + 1, six = (int)(beats % 1 * 4) + 1;
         return $"{bar}.{beat}.{six}";
     }
 
@@ -745,6 +751,7 @@ public sealed partial class SessionView : UserControl
     internal static string FormatDuration(double beats)
     {
         beats = Math.Max(0, beats);
-        return $"{(int)(beats / 4)}.{(int)(beats % 4)}.{(int)Math.Round(beats % 1 * 4)}";
+        int bpb = Meter.BeatsPerBar;
+        return $"{(int)(beats / bpb)}.{(int)(beats % bpb)}.{(int)Math.Round(beats % 1 * 4)}";
     }
 }

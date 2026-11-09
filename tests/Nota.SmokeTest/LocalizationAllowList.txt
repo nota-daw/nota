@@ -22,6 +22,8 @@ Nota.App/App.axaml.cs	Settings…	# data: lookup key for the macOS app menu head
 Nota.App/AppRestart.cs	$"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; Start-Process -FilePath '{target.Replace("	# data: shell and PowerShell command text, not interface text
 Nota.App/AppRestart.cs	-Command	# data: shell and PowerShell command text, not interface text
 Nota.App/AppRestart.cs	Hidden	# data: shell and PowerShell command text, not interface text
+Nota.App/AppRestart.cs	exec open -n \"$2\"	# data: shell command of the relaunch helper, not interface text
+Nota.App/AppRestart.cs	while ps -p \"$1\" >/dev/null 2>&1; do sleep 0.2; done; 	# data: shell command of the relaunch helper, not interface text
 Nota.App/ArrangementView.Automation.cs	$"Shift {s + 1}"	# data: parameter / lane names of the MIDI effects (FR-004: device parameter names stay English)
 Nota.App/ArrangementView.Automation.cs	$"Step {st + 1}"	# data: parameter / lane names of the MIDI effects (FR-004: device parameter names stay English)
 Nota.App/ArrangementView.Automation.cs	Chance	# data: parameter / lane names of the MIDI effects (FR-004: device parameter names stay English)
@@ -93,6 +95,7 @@ Nota.App/Controls/ArpGrid.cs	Velocity	# data: device parameter, port and value n
 Nota.App/Controls/AutoFilterCurve.cs	Response	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/AutoFilterViews.cs	LFO → Freq	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/AutoShiftViews.cs	Sung notes	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/AutoShiftViews.cs	in scale	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/BeatRepeatViews.cs	Captured sound	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/BeatRepeatViews.cs	Repeat filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CeilingViews.cs	Loudness	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -108,6 +111,7 @@ Nota.App/Controls/CompViews.cs	Gain reduction	# data: device parameter, port and
 Nota.App/Controls/CompViews.cs	Reduction envelope	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CompViews.cs	Sidechain key	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CompViews.cs	Transfer	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/CompViews.cs	key filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CompViz.cs	Comp	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ConsortViews.cs	$"{j.Name} · {(j.Out ? "	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ConsortViews.cs	Aftertouch	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -159,6 +163,7 @@ Nota.App/Controls/ConsortViews.cs	Sum out	# data: device parameter, port and val
 Nota.App/Controls/ConsortViews.cs	VCA CV	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ConsortViews.cs	VCA in	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ConsortViews.cs	Velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/ConsortViews.cs	compander on	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CrushViews.cs	Analog	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CrushViews.cs	Curve	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CrushViews.cs	Digital	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -168,6 +173,7 @@ Nota.App/Controls/CrushViews.cs	Nyquist 	# data: device parameter, port and valu
 Nota.App/Controls/CrushViews.cs	Quantiser	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/CrushViews.cs	Spectrum	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DelayViews.cs	Filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/DynamicEqCurve.cs	 · off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	$"Band {b + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	Bell	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	Duck	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -183,6 +189,8 @@ Nota.App/Controls/DynamicEqCurve.cs	Ntch	# data: device parameter, port and valu
 Nota.App/Controls/DynamicEqCurve.cs	Response	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	Solo	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/DynamicEqCurve.cs	Static	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/DynamicEqCurve.cs	dynamics off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/Eq8Views.cs	 · off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/Eq8Views.cs	$"Band {b + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/Eq8Views.cs	Channel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/Eq8Views.cs	Left	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -220,6 +228,7 @@ Nota.App/Controls/KeysViews.cs	Pickup Symmetry	# data: device parameter, port an
 Nota.App/Controls/KeysViews.cs	Pickup distance	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/KeysViews.cs	Pickup symmetry	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/LengthGateViz.cs	$"vel {inp.Vel}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/LensViews.cs	 ·free	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/LensViews.cs	plural by hand: == 1 ? "" : "s"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.App/Controls/LevelViews.cs	Integ	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/LevelViews.cs	Loudness	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -242,6 +251,7 @@ Nota.App/Controls/PrismViews.cs	Detector envelope · 	# data: device parameter, 
 Nota.App/Controls/PrismViews.cs	High	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/PrismViews.cs	Low	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/PrismViews.cs	Mid	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/PrismViews.cs	below off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ReverbViews.cs	Decay tail	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ReverbViews.cs	RT60 ∞	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/RhythmViews.cs	Hit	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -271,9 +281,11 @@ Nota.App/Controls/SynthViz.cs	Triangle	# data: device parameter, port and value 
 Nota.App/Controls/SynthViz.cs	attack	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/SynthViz.cs	cutoff	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/SynthViz.cs	decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/SynthViz.cs	note off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/SynthViz.cs	release	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/SynthViz.cs	resonance	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/SynthViz.cs	sustain	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/TwinViews.cs	$"{NotaNum.Pct((float)rt)} parallel"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/UtilityViews.cs	Stereo field	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ValueBar.cs	Value	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ValueEntry.cs	Scope	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -295,6 +307,7 @@ Nota.App/Controls/VoltFilter.cs	$"{_title} · Reso"	# data: device parameter, po
 Nota.App/Controls/VoltFilter.cs	Cutoff	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/VoltFilter.cs	FILTER 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/VoltFilter.cs	Reso	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	 sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Analog	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Analog model	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoFilterDeviceBody.cs	Both	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -378,7 +391,11 @@ Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Phase	# data: device parameter,
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Shape	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Swing 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	free run	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	offset pan	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	period 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoPanDeviceBody.cs	retrig bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	 · vibrato cut	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	Auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	Blues	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	CORR	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -420,8 +437,13 @@ Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	Voice · bass	# data: device 
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	Voice · soprano	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	Voice · tenor	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	Whole Tone	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	hard correction	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	key source is 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	light correction	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	natural correction	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	oct lock	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	plural by hand: == 1 ? "note" : "notes"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Bodies/AutoShiftDeviceBody.cs	skip sibilants	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	1 Bar	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	2 Bars	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	4 Bars	# data: device parameter and value labels (FR-004)
@@ -451,9 +473,15 @@ Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	Slices	# data: device parame
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	Timeline	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	Triplet	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	Width	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	every bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	filter off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	plural by hand: == 1 ? "repeat" : "repeats"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	plural by hand: == 1 ? "step" : "steps"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	repeat held	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	repeats only	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/BeatRepeatDeviceBody.cs	slice 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	 · auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	 · key	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	Auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	Auto rel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	CHARACTER	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -480,7 +508,11 @@ Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	TARGET	# data: device parameter
 Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	Target	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	The output	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	True peak	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	plural by hand: == 1 ? "time" : "times"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	peak in	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	peak out	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	sample peak	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CeilingDeviceBody.cs	true pk	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	 · serial	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	Algo Mode	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	Algorithm	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	BLEND	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -546,9 +578,13 @@ Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	WET	# data: device parameter, p
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	Wet only · 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	Wood Chamber	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	Zero latency	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	engine input	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	fed by convolution	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	true stereo	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ChamberDeviceBody.cs	wet only	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	 Hz · period 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	 ms delay remains	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	 voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	2 voices	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	3 voices	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	Amount	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -560,6 +596,7 @@ Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	Sync	# data: device parameter, p
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	VOICE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	VOICES	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	period 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ChorusDeviceBody.cs	wet only	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Auto gain	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Auto-release	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -594,6 +631,11 @@ Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Stereo link	# data: device p
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	THR	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Thresh	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	Threshold	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	internal key	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CompressorDeviceBody.cs	key silent	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	 levels	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	 · fold	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	 · soft	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	AA on	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	Anti-alias	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	Auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -615,6 +657,10 @@ Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	Rate	# data: device parameter, po
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	Spectrum	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	THD+N —	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	Transfer	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	auto gain	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	hard truncate	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/CrushDeviceBody.cs	soft clip	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	 · tape	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	0 · 1 bar · 2 bars	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	Delay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	Fade	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -640,6 +686,8 @@ Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	WET	# data: device parameter, por
 Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	WOW DEPTH	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	WOW RATE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	Wet only	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	channels independent	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/DelayDeviceBody.cs	channels linked	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	DYNAMICS	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	Dynamic	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	Dynamic EQ	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -651,6 +699,7 @@ Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	Output	# data: device paramet
 Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	Reso	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	Self	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/DynamicEqDeviceBody.cs	Solo	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	 gain	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	CROSSOVER	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	Fader range — +6: −24 … +6\u2009dB, the isolator throw; ±15: −15 … +15\u2009dB, the classic EQ-3 range. The bands keep their dB.	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	Kill	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -660,6 +709,7 @@ Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	OUT	# data: device parameter, port 
 Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	Output	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	RANGE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/Eq3DeviceBody.cs	SLOPE	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	 auto	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	ANALYZER	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	Auto gain	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/EqDeviceBody.cs	Ctrl+	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -677,13 +727,15 @@ Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	COMB RESPONSE	# data: device pa
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	DELAY LINE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Delay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Feedback 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	LFO	# data: acronym
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Modulation	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Notch sweeps 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	free run	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	period 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	retrig bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	 sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	$"LFO {PctF(P(LfoDrive))} {RateF(P(LfoRate))}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	$"Stage {s + 1} output"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	Amount	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -698,6 +750,7 @@ Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	SHAPE	# data: device parameter, p
 Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	Saturation	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	Serial	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ForgeDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	 · stopped	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	$" · persist {Sec(PersistS())}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	$"FFT {fftN}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	$"Scope · sync {LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {VoltDiv():0.00}/div{(data.KeyOn ? "	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -754,17 +807,21 @@ Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	Trig Lvl	# data: device parameter,
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	WAV audio	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	WINDOW	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/LensDeviceBody.cs	Waterfall	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	 notch	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	 notches	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	ALL-PASS RESPONSE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Center	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Feedback 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	LFO	# data: acronym
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Modulation	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	STAGES	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	free run	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	period 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	plural by hand: == 1 ? " notch" : " notches"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	retrig bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	 solo	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	$" · {PrismInk.Names[solo]} band"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	$"below {ThrB(P(BP(b, BelowThresh))):0;−0}\u2009dB {RatioBF(P(BP(b, BelowRatio))).Replace("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	$"crossover {HzF(XHz(P(XoverLow)))}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -800,8 +857,13 @@ Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	SOLO	# data: device parameter, po
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	Time	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	Transfer · 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	auto release on 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	below off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	fixed release	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	full band	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	own input	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PrismDeviceBody.cs	plural by hand: == 1 ? "band" : "bands"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	 · no early reflections	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	 · vintage	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Chamber	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Early reflections	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -903,7 +965,10 @@ Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	Sync	# data: device parameter, 
 Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	Threshold	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	Trance 16	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	Volume	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	full band	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	peak hold	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	plural by hand: == 1 ? "gain" : "off"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	sc in	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/StrataDeviceBody.cs	$"Layer {i + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/StrataDeviceBody.cs	Bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/StrataDeviceBody.cs	Clear	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -955,6 +1020,13 @@ Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	True-peak limiter	# data: devic
 Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	Utility	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	check in mono	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	corr 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	in phase	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	mono off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	mono risk	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	phase normal	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/UtilityDeviceBody.cs	true peak	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	 · open	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	 · shut	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	1×12 Open	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	1×15 Bass	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	2×12 Combo	# data: device parameter and value labels (FR-004)
@@ -998,7 +1070,13 @@ Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	Rock	# data: device parameter, po
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	STAGE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	THD 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	Tone stack	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	cabinet off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	even dominant	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	even only	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	odd dominant	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ValveDeviceBody.cs	plural by hand: == 1 ? "CABINET" : "MODEL"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	 harmonic	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	 · no hiss	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	1 bar	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	2 bars	# data: device parameter and value labels (FR-004)
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	4 bars	# data: device parameter and value labels (FR-004)
@@ -1037,7 +1115,15 @@ Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	Vinyl	# data: device parameter,
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	Warm	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	Wear	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	Wow	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	analog stage	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	band open	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	drift 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	even dominant	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	even only	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	follows input	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	odd dominant	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	stereo drift	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/VintageDeviceBody.cs	tube stage	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VocoderDeviceBody.cs	Attack	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VocoderDeviceBody.cs	Bands	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/VocoderDeviceBody.cs	Carrier	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1078,7 +1164,7 @@ Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	 Rate	# data: device pa
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	 Semi	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	 Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	 Warp	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	 in the matrix	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	 · off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	$" · depth {Pct(G(pre + "	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	$"Drive {(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	$"Env 1 → amp {AdsrSum("	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1221,6 +1307,9 @@ Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	Sub Level	# data: device 
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	Tri	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	Volume	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	env 	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	 · bass comp	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	 · latched	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	 · normalled	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	$"Arp {new[] { "	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	$"Duo {a}/2"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	$"LFO {LfoNames[Sel("	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1332,8 +1421,15 @@ Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	Voices	# data: device 
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	WHEELS	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	Wheel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	White	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	all osc	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	digital delay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	normals broken at 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	plural by hand: == 1 ? "" : "s"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	ramp down	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	ramp up	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/ConsortInstrumentCard.cs	smooth random	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/FluxInstrumentCard.cs	 · bus	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/FluxInstrumentCard.cs	 · return	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/FluxInstrumentCard.cs	$"MOTION {RateNames[RateIdx()]} · TUNE {Cents(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/FluxInstrumentCard.cs	$"Vector x {Coord(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/FluxInstrumentCard.cs	$"space +{Pct(react * 0.5f)}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1443,6 +1539,10 @@ Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	Tremolo	# data: device pa
 Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	Tune	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	Voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	Volume	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	chorus off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	phaser off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	preamp off	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/KeysInstrumentCard.cs	trem off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	Bass compensation	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	Decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	Drift	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1468,6 +1568,7 @@ Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	Output	# data: device
 Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	Pink	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	White	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MonolithInstrumentCard.cs	master	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	 · pedal down	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	$"+{c} hard"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	$"Env {EnvTl()} · vel {NotaNum.Pct(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	$"Filter {MosaicModel.FilterNames[t]} · cutoff {NotaNum.Hz(MosaicModel.CutoffHz(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1570,6 +1671,7 @@ Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	Xf vel	# data: device p
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	Zone	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	Zones	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	nothing	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	release off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	trig rel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	 Coarse	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	 Fine	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1603,6 +1705,7 @@ Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	Volume	# data: device
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	carrier → out	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	mod → 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	out	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	 · hold	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	$" · humanize {NotaNum.Pct(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	$" · {n} balls → {chord} · sort {(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	$"Root · {PendulumModel.RootNames[curRoot]}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1624,6 +1727,7 @@ Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	Sync	# data: device p
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	Sync 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	Voice	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	rate · phase · note	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	 · bass comp	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	$"Filter env → cutoff {G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	$"Poly {poly}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	$"Unison ×{poly}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1695,6 +1799,7 @@ Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	Voice	# data: device pa
 Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	WHEELS	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	White	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PentadInstrumentCard.cs	plural by hand: == 1 ? "" : "s"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/DeviceCards/Instruments/PhysicalInstrumentCard.cs	 · noise off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PhysicalInstrumentCard.cs	$" · mix {NotaNum.Str(g1 * 100, "	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PhysicalInstrumentCard.cs	$" · noise {Pct(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/PhysicalInstrumentCard.cs	$" → resonator {TypeWord("	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1743,6 +1848,7 @@ Nota.App/DeviceCards/Instruments/RhythmInstrumentCard.cs	Velocity	# data: device
 Nota.App/DeviceCards/Instruments/RhythmInstrumentCard.cs	Voice	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/RhythmInstrumentCard.cs	signal left → right	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/RhythmInstrumentCard.cs	syn/smp	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	 · velocity off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	$" · env {Oct(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	$" · gain {NotaNum.Db(SamplerModel.GainDb(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	$" · now {NotaNum.Hz(snap.CutoffHz)}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1768,6 +1874,7 @@ Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	Resonance	# data: devi
 Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	Sample	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	Start	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	VEL → VOL	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/SamplerInstrumentCard.cs	keytrack off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	$" · pulse {NotaNum.Pct(0.05 + G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	$"Env {Secs(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	$"Filter {FilterNames[Sel("	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1803,6 +1910,139 @@ Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	Triangle	# data: device 
 Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	Vel → Vol	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	Voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/SynthInstrumentCard.cs	Volume	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"A {fmt(a)} · B {fmt(b)} · now {fmt(sounding)}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"Macro {k}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"Osc {n}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"Pattern {EditPat() + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"Pattern {i}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"X {Bip(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"{PartNames[partIx]} part"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"{Pat()?.Length ?? 16} steps"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	$"{n} steps"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	1 bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	2 bars	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	4 bars	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	8 bars	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	All	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Amount	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Amp env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Arp	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	As played	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Attack	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Bend range	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Both	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Brute	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Chord	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Chorus	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Coarse	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Colour	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Curve	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Cutoff	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Damping	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Delay	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Depth	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Detune	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Division	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Down	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Drift	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Drive	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Ensemble	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	FM 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	FM cut	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Fade	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Filter env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Fine	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Flanger	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Gate	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Glide	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Glide only legato	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Global	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Hold	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Key	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	LFO 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	LFO 1 × mod wheel	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	LFO 2	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	LFO 3	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Ladder	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Latch	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Layer	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Legato	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Level	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Loop	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Low	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Lower	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Macros	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Matrix	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Metal	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Mix	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Mod FX	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Mod env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Mode	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Mono	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Morph	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Morphing poly	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Motion	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Multimode	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Noise	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	None	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Octave	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Octaves	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Osc	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Output	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Pad	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Pad X	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Pad Y	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Pad Z	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Pan	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Parts	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Phaser	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Ping-pong	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Plays	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Poly	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Random	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Rate	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Release	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Reso	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Resonance	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Response	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Retrig	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Reverb	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Route	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Saw	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Seq	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Sequencer	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Sequencer Swing	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Sine	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Single	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Size	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Smooth	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Split	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Spread	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Spread by	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Square	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Steps	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Stereo	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Sustain	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Swing	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Symmetry	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Time	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	To filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Transpose	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Tri	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Unison	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Upper	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Vibrato	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Voice	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Volume	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Wave	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/TwinInstrumentCard.cs	Width	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Depth	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Fade	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Fine	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1814,7 +2054,7 @@ Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Rate	# data: device para
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Semi	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Shape	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 in the matrix	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	 by wheel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	$"Amp env {AdsrSum("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	$"FILTER {fsel + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	$"Filter {f + 1} {filtLbl[k]}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1896,6 +2136,7 @@ Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	Wheel → LFO	# data: dev
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	→ Cutoff	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	→ Level	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/VoltInstrumentCard.cs	→ Pitch	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/ArpMidiBody.cs	 · hold	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ArpMidiBody.cs	$"{e.Bpm:0.0} BPM"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ArpMidiBody.cs	As played	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ArpMidiBody.cs	Beat	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1939,8 +2180,11 @@ Nota.App/DeviceCards/Midi/ChordMidiBody.cs	SHIFTS	# data: device parameter, port
 Nota.App/DeviceCards/Midi/ChordMidiBody.cs	TYPE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ChordMidiBody.cs	major	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ChordMidiBody.cs	minor	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/ChordMidiBody.cs	root off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ChordMidiBody.cs	scale	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ChordMidiBody.cs	semitones · interval · velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/LengthMidiBody.cs	 · clip	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/LengthMidiBody.cs	 · legato	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/LengthMidiBody.cs	$"avg {AvgOut()}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/LengthMidiBody.cs	$"from {TrigName()}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/LengthMidiBody.cs	$"{Divs[i]} note"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1961,8 +2205,11 @@ Nota.App/DeviceCards/Midi/LengthMidiBody.cs	Start From	# data: device parameter,
 Nota.App/DeviceCards/Midi/LengthMidiBody.cs	Sync	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/LengthMidiBody.cs	VEL → LEN	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/LengthMidiBody.cs	bypassed	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/LengthMidiBody.cs	of input	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/MidiCardHeader.cs	MIDI learn	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/RandomMidiBody.cs	 locked	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	 · C maj	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/RandomMidiBody.cs	 · held	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	$"bar {ShownBar() + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	$"seed {Seed(G)}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	$"{e.Bpm:0.0} BPM"	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -1993,7 +2240,11 @@ Nota.App/DeviceCards/Midi/RandomMidiBody.cs	bypassed	# data: device parameter, p
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	centre	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	lock	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	locked	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/RandomMidiBody.cs	per bar	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/RandomMidiBody.cs	per note	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/RandomMidiBody.cs	−max	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/ScaleMidiBody.cs	 · follow key	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/ScaleMidiBody.cs	 · learning	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ScaleMidiBody.cs	Chromatic	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ScaleMidiBody.cs	Clear	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/ScaleMidiBody.cs	Custom	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2051,6 +2302,7 @@ Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	TRANSFER	# data: device parameter,
 Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	Value	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	Velocity mode	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	in 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	random off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/PluginCard.cs	Effect	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/PluginCard.cs	Filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/PluginCard.cs	Instrument	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2091,6 +2343,7 @@ Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Nota Operator	# data: device parame
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Nota Pendulum	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Nota Pentad	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Nota Physical	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Nota Twin	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Nota Volt	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Plug	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Solo chain	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2153,6 +2406,7 @@ Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Nota Pendulum	# data: device para
 Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Nota Pentad	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Nota Physical	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Nota Sampler	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Nota Twin	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Nota Volt	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Off	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.Drum.cs	Pad Mute	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2209,6 +2463,7 @@ Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Reverb	# data: device parameter, 
 Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Sampler	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Shutter	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Strata	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Twin	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Utility	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Valve	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCardView.cs	Nota Vintage	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2268,16 +2523,16 @@ Nota.App/MidiLearnService.cs	MIDI learn: gamepad {0} → bound to '{1}'	# data: 
 Nota.App/MidiLearnService.cs	MIDI learn: phone {0} → bound to '{1}'	# data: log text (stays English)
 Nota.App/MidiLearnService.cs	MIDI learn: {0} → bound to '{1}'	# data: log text (stays English)
 Nota.App/MidiLearnService.cs	Note	# data: log text (stays English)
-Nota.App/MixerView.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
-Nota.App/MixerView.cs	Mute	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
-Nota.App/MixerView.cs	Solo	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
-Nota.App/MixerView.cs	Track Pan	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
-Nota.App/MixerView.cs	Track Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.Compact.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.Compact.cs	Mute	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.Compact.cs	Solo	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.Compact.cs	Track Pan	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.Compact.cs	Track Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Mute	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Solo	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Track Pan	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Track Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/ModularView.cs	Env	# data: Modular node name (FR-004)
 Nota.App/ModularView.cs	plural by hand: == 1 ? "Env" : "LFO"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.App/PreferencesWindow.Store.cs	$"{(pr.Fraction * size / 1048576.0).ToString("	# data: numbers and units, or a plug-in name and its architectures
@@ -2301,10 +2556,21 @@ Nota.App/Theme/NotaColourTheme.cs	$"token '{p.Name}' must be opaque"	# data: dia
 Nota.App/Theme/NotaColourTheme.cs	$"unknown token '{p.Name}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: file declares id '{theme.Id}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: no theme file"	# data: diagnostics for people writing a theme file
+Nota.App/Theme/NotaColourTheme.cs	colors missing	# data: technical validation message for a theme file
 Nota.App/Theme/NotaColourTheme.cs	name must be 1–40 characters	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	the file must hold one JSON object	# data: diagnostics for people writing a theme file
 Nota.App/WelcomeWindow.cs	$"  ·  {NotaNum.Unit(p.Fraction * 100, "	# data: numbers and units only
 Nota.App/WelcomeWindow.cs	$"{(p.Fraction * size).ToString("	# data: numbers and units only
+Nota.Application/Accent.cs	$"T3.4 AccentBright/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	$"ΔE Accent/Track{i}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	$"ΔE Accent/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	$"Δab Accent/{s}"	# data: readability-rule diagnostics for the smoke test (spec 084), never shown
+Nota.Application/Accent.cs	Accent	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Mute	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Panel	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Record	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Solo	# data: colour token name (theme-file key, spec 084)
+Nota.Application/Accent.cs	Success	# data: colour token name (theme-file key, spec 084)
 Nota.Application/Editing/SnapGrid.cs	1 bar	# data: note-value names of the snap ladder; the bar steps are shown through Loc in NameOf
 Nota.Application/Editing/SnapGrid.cs	2 bars	# data: note-value names of the snap ladder; the bar steps are shown through Loc in NameOf
 Nota.Application/Editing/SnapGrid.cs	4 bars	# data: note-value names of the snap ladder; the bar steps are shown through Loc in NameOf
@@ -2314,6 +2580,9 @@ Nota.Application/Engine/EngineContracts.cs	Pressure	# data: device parameter and
 Nota.Application/Engine/EngineContracts.cs	Tune	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/EngineContracts.cs	Volume	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/SectionNames.cs	Section 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/KeysModel.cs	 pickup	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/KeysModel.cs	 voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/KeysModel.cs	 · pedal down	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/KeysModel.cs	All values are normalized 0..1 (set_instrument_param_by_id, or set_keys in musical terms). 	# data: instrument tool text for MCP
 Nota.Application/Instruments/KeysModel.cs	Both	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/KeysModel.cs	Case	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2331,11 +2600,15 @@ Nota.Application/Instruments/KeysModel.cs	Tempo	# data: device parameter and val
 Nota.Application/Instruments/KeysModel.cs	Tine	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/KeysModel.cs	Upper	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/KeysModel.cs	Wurli speaker	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/Mosaic/MosaicProgram.cs	 root	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/Mosaic/MosaicProgram.cs	 roots	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/Mosaic/MosaicProgram.cs	 velocity layers	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/Mosaic/MosaicProgram.cs	Group 1	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/Mosaic/MosaicProgram.cs	No repeat	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/Mosaic/MosaicProgram.cs	Random	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/Mosaic/MosaicProgram.cs	Sample	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/Mosaic/MosaicProgram.cs	Sequential	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/Mosaic/MosaicProgram.cs	no zones	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/Mosaic/MosaicProgram.cs	plural by hand: == 1 ? " root" : " roots"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.Application/Instruments/Mosaic/MultisampleMapper.cs	$"Pitch detector on {offs.Count} files ({string.Join("	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/Mosaic/MultisampleMapper.cs	$"Pitch detector on {offs.Count} files agrees with the names."	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2349,7 +2622,7 @@ Nota.Application/Instruments/MosaicModel.cs	$"Poly {Poly(g("	# data: device para
 Nota.Application/Instruments/MosaicModel.cs	$"{(bytes / 1073741824.0).ToString("	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	(velocity layers with a shared gain/tune and a round-robin). Every zone covering the key, the velocity and the 	# data: instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Choke	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
-Nota.Application/Instruments/MosaicModel.cs	Empty · drop samples or a folder, or pick a preset	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/MosaicModel.cs	Empty · drop samples, a folder or an SFZ, or pick a preset	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Fwd	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Mono	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Nota Mosaic plays a multisample: zones (a sample on a key × velocity rectangle, with its root) in groups 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2360,7 +2633,9 @@ Nota.Application/Instruments/MosaicModel.cs	Poly	# data: device parameter and va
 Nota.Application/Instruments/MosaicModel.cs	Quietest	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Released	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Shared controls: amp ADSR, filter (Off/LP/HP/BP, cutoff, reso, key tracking, env → cutoff), glide, Vel → Vol with a 	# data: instrument tool text for MCP
+Nota.Application/Instruments/MosaicModel.cs	group's round-robin step sounds; release zones sound when the key (or the pedal) lets go, quieter the longer the 	# data: guide text read by MCP clients (MCP is out of scope)
 Nota.Application/Instruments/MosaicModel.cs	note was held. Samples load in the background into RAM — notes are silent until the program is in. 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/PendulumModel.cs	 · hold	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/PendulumModel.cs	 · restart on first note	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/PendulumModel.cs	All params are normalized 0..1 (set_instrument_param_by_id). Hold a chord: the balls swing across it and every chord degree a ball 	# data: instrument tool text for MCP
 Nota.Application/Instruments/PendulumModel.cs	Bell	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2395,6 +2670,9 @@ Nota.Application/Instruments/PhysicalModel.cs	Pipe	# data: device parameter and 
 Nota.Application/Instruments/PhysicalModel.cs	Plate	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/PhysicalModel.cs	Poly 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/PhysicalModel.cs	String	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/RhythmModel.cs	 accent	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/RhythmModel.cs	 quiet	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/RhythmModel.cs	 reversed	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/RhythmModel.cs	(voice params or params of a voice's FX devices) across their ranges; a factory kit sets them up.	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/RhythmModel.cs	Clap	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/RhythmModel.cs	Closed Hat	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2406,6 +2684,8 @@ Nota.Application/Instruments/RhythmModel.cs	Rim	# data: device parameter and val
 Nota.Application/Instruments/RhythmModel.cs	Snare	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/RhythmModel.cs	Tom	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/RhythmModel.cs	Voices 0..7: Kick, Snare, Clap, Rim, Closed Hat, Open Hat, Tom, Perc (MIDI 36, 38, 39, 37, 42, 46, 45, 41 play them live). 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/RhythmModel.cs	no steps	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Instruments/SamplerModel.cs	 oct	# data: unit of a parameter value
 Nota.Application/Instruments/SamplerModel.cs	0 every key plays the root. Root note: set_sampler root (not a param).\n	# data: instrument tool text for MCP
 Nota.Application/Instruments/SamplerModel.cs	All params are normalized 0..1 (set_instrument_param_by_id, or set_sampler in real units). The sampler plays one sample, pitched by 	# data: instrument tool text for MCP
 Nota.Application/Instruments/SamplerModel.cs	Choke	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2419,6 +2699,8 @@ Nota.Application/Instruments/SamplerModel.cs	the key relative to the root note.\
 Nota.Application/Instruments/ScopeTrace.cs	$"{bars} bars"	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/ScopeTrace.cs	1 bar	# data: time-division value label
 Nota.Application/Midi/MidiFileReader.cs	Drums	# data: track name taken into the project
+Nota.Application/Midi/MidiGenerators.cs	 deg	# data: unit of a parameter value
+Nota.Application/Midi/MidiGenerators.cs	 oct	# data: unit of a parameter value
 Nota.Application/Midi/MidiScales.cs	Chromatic	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Midi/MidiScales.cs	Dorian	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Midi/MidiScales.cs	Harmonic Minor	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
@@ -2429,6 +2711,7 @@ Nota.Application/Midi/MidiScales.cs	Natural Minor	# data: device parameter and v
 Nota.Application/Midi/MidiScales.cs	Pentatonic Major	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Midi/MidiScales.cs	Pentatonic Minor	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Midi/MidiScales.cs	Phrygian	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Midi/MidiTransforms.cs	 deg	# data: unit of a parameter value
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	808 909 drummachine groovebox	# data: search keywords
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Arp	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Audio Effect Rack	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2474,68 +2757,133 @@ Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Sampler	# data: search key
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Scale	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Shutter	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Strata	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Twin	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Utility	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Valve	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Velocity	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Vintage	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Vocoder	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Volt	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	airy evolving	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	airy wide	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	ambient cinematic	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	arpeggiator steps	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	arpsynth sequencer	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	autofilter wah sweep	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	autotune melodyne tune	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bass lead	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	bell keys bass pluck	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bright aggressive	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	bright airy evolving lush	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	bright metallic glassy	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bus master	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	comp vca opto	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	dark lush wide	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	decimator redux	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	deess repair	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	distortion waveshaper	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	drumrack pads kit	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	drums bass synth	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	drums guitar synth	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	drums keys	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	drums synth	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	drums vocals	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	drums vocals bus bass	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	dynamiceq soothe deesser	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	echo pingpong	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	edm cinematic	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	edm dubstep	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	effectrack chain parallel	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	ensemble dimension	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	epiano e-piano rhodes wurlitzer wurli clavinet clav tine reed suitcase	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	evolving bright	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	evolving lush	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	evolving vintage	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	gain trim volume	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	gain width mono phase	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	gatelength legato	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	glue sidechain parallel	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	granulator cloud	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	gritty aggressive warm	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	guitar bass	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	guitar vocals synth	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	guitaramp tube cabinet	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	harmonizer stack	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	house techno	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	humanize chance	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	jazz funk	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	keylock quantizepitch	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	keys guitar synth	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	keys perc	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	keys strings brass choir	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	keys synth	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	layer split instrumentrack	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	lofi gritty	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	lofi hiphop	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	loop overdub	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	lush aggressive warm evolving	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	lush vintage warm	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	master bus	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	master bus drums	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	maximizer brickwall l2	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	metallic evolving	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	metallic glassy	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	metallic vintage	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	midirack split layer zones	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	minimoog monosynth	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	modal karplus string mallet	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	moog analog poly va init basic supersaw 303 acid tb	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	multisample multisampler sfz soundfont piano grand acoustic orchestral orchestra zones velocity round-robin мультисэмпл пианино рояль	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	noisegate trancegate	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	oscilloscope spectrum meter	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	ott upward multibandcompressor	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	pad bass lead keys pluck	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	pad keys lead brass	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	pad keys lead brass bass	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	pad lead texture	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	pad texture	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	panner tremolo	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	pluck bell keys strings perc	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	polysynth poly morph morphing analog two-filter steiner ladder split layer expressive mpe	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	prophet poly	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	repair transient	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	seq pluck	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	simpler oneshot	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	strings pad choir	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	stutter repeat buffer	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	synth drums bass	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	synth keys	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	synth keys guitar vocals	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	synthwave cinematic	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	synthwave techno	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	synthwave techno acid house	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	synthwave trance	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	talkbox robot choir channel	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	tape tube saturator	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	texture drone pad	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	trap hiphop house	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	trap house techno hiphop	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	trap pop	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	velocitycurve touch	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	verb convolution chamber	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	verb hall room plate	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	vocals bus	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	vocals bus drums	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	vocals master bus	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	vocals master bus drums	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	vocals synth	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	vocals synth guitar	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	warm aggressive deep	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	warm gritty aggressive	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	warm lush vintage	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	warm vintage	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	warm vintage clean bright gritty	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/BuiltinDeviceCatalog.cs	warm vintage lofi	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	wavestation morph	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	wide evolving	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	wide lush	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	widen modulation	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	wt serum	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	Arrangement	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	Return	# data: key name shown on a key cap (the keyboard spells it)
 Nota.Application/Palette/CommandCatalog.cs	Session	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2543,30 +2891,56 @@ Nota.Application/Palette/CommandCatalog.cs	add file wav	# data: search keywords,
 Nota.Application/Palette/CommandCatalog.cs	add instrument track	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	add scene row	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	add send bus aux	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	arm capture	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	arm on select follow selection record keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	auto zoom fixed	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	automation pin	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	back revert	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	bpm beat tap	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	chain detail	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	changelog release notes	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	clips grid launch	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	coarser larger snap	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	copy clone	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	copy rename	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	copy repeat section clips automation ripple at playhead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	create blank empty	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	crossfade declick	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	cut slice	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	cycle repeat	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	default automatic rename section at playhead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	detach float pop out	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	devices clip	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	dock undock float pop out mixer window	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	envelopes lanes	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	faders channels	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	find locate scroll reveal cursor position	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	finer smaller snap	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	fold scale rows drum pads names hide keys	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	folder bus	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	gap space	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	graph patch cv	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	join merge glue	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	key fix	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	library sidebar	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	magnet free	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	manual guide	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	map controller	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	markers locators	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	maximize immersive hide chrome	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	maximize maximise full detail panel piano roll restore split	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	multi clip several open piano roll	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	mute disable	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	overdub replace take pass loop record	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	pitch shift	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	play row	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences controller keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences device driver sample rate buffer	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences folders	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences hotkeys keys keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences joystick controller	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences options	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	preferences phone	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences store models sample packs	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences theme dark light language langue francais english	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences update automatic check version	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2576,13 +2950,20 @@ Nota.Application/Palette/CommandCatalog.cs	rearrange reorder section content lef
 Nota.Application/Palette/CommandCatalog.cs	rearrange reorder section content right after next at playhead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	remote mobile qr	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	remove cut section clips automation ripple close gap at playhead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	remove erase	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	render bounce cpu	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	render bounce mixdown stems	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	render resample	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	repeat range	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	resume continue hold	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	snapshot history commit	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	start pause	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	store write	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/CommandCatalog.cs	timeline linear	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	track list side left right swap mirror ableton	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	track mode whole track all clips every clip piano roll	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	undo history versions snapshots	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	undo restart retry discard take again redo record over punch	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	update upgrade new version download install	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	zoom vertical rows height	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/DeviceCategories.cs	Distortion	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2623,6 +3004,7 @@ Nota.Application/Palette/DeviceCategories.cs	Nota Prism	# data: search keywords,
 Nota.Application/Palette/DeviceCategories.cs	Nota Random	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/DeviceCategories.cs	Nota Shutter	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/DeviceCategories.cs	Nota Strata	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/DeviceCategories.cs	Nota Twin	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/DeviceCategories.cs	Nota Velocity	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/DeviceCategories.cs	Nota Vintage	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/DeviceCategories.cs	Nota Vocoder	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2639,19 +3021,82 @@ Nota.Application/Palette/ModularCatalog.cs	MIDI → CV	# data: search keywords, 
 Nota.Application/Palette/ModularCatalog.cs	Macro	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/ModularCatalog.cs	Math	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/ModularCatalog.cs	Scope	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/ModularCatalog.cs	adsr envelope	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/ModularCatalog.cs	envelope follower env sidechain peak controller ducking duck pump loudness level volume	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/ModularCatalog.cs	lfo oscillator wobble	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/ModularCatalog.cs	macro knob	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/ModularCatalog.cs	math add multiply mixer attenuverter	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/ModularCatalog.cs	midi cv velocity note pitch	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/ModularCatalog.cs	scope oscilloscope monitor	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/PaletteContext.cs	Arrangement	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/PluginDescriptors.cs	bass lead	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/PluginDescriptors.cs	bass lead pad	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/PluginDescriptors.cs	bright aggressive	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/PluginDescriptors.cs	bus drums vocals	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/PluginDescriptors.cs	deess repair	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	drums vocals	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	edm dubstep	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/PluginDescriptors.cs	keys bell bass	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/PluginDescriptors.cs	lush airy	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	master bus	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/PluginDescriptors.cs	master vocals bus	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/PluginDescriptors.cs	pad bass lead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/PluginDescriptors.cs	pitch shift	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	prods deesser	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	punchy aggressive	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	tokyo dawn	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	vintage lofi	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	vocals bass	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	vocals master	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	warm gritty	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	warm soft	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/PluginDescriptors.cs	warm vintage	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Application/Palette/SemanticVocabulary.cs	tape stop	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Ports/ISampleStore.cs	Downloaded	# data: folder name on disk
+Nota.Application/Samples/MusicalKey.cs	 major	# data: key name — musical notation (spec 068 data-model)
+Nota.Application/Samples/MusicalKey.cs	 minor	# data: key name — musical notation (spec 068 data-model)
+Nota.Application/Twin/TwinMatrix.cs	Amp env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Bend	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Filter env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Key	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	LFO 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	LFO 2	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	LFO 3	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 2	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 3	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 4	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 5	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 6	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 7	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Macro 8	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Mod env	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Mod wheel	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Morph	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	None	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Osc 1 pitch	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Osc 2 pitch	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Pad X	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Pad Y	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Pad Z	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Pitch	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Pitch wheel	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Pressure	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Random	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Release velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Seq gate	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Seq step	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Slide	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Velocity	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinMatrix.cs	Vibrato	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.Application/Twin/TwinPatterns.cs	$"gate '{parts[2]}'"	# data: instrument tool text for MCP
+Nota.Application/Twin/TwinPatterns.cs	$"note '{t}'"	# data: instrument tool text for MCP
+Nota.Application/Twin/TwinPatterns.cs	$"row {i + 1}: {err}"	# data: instrument tool text for MCP
+Nota.Application/Twin/TwinPatterns.cs	$"velocity '{parts[1]}'"	# data: instrument tool text for MCP
+Nota.Application/Twin/TwinPatterns.cs	$"{rows.Count} rows — a pattern has 1..{Steps}"	# data: instrument tool text for MCP
 Nota.Presentation/PaletteProviders.cs	Plug-in	# data: identifier compared in code
+Nota.Presentation/PaletteProviders.cs	group folder	# data: search keyword or alias of the palette and the browser, not shown
+Nota.Presentation/PaletteProviders.cs	midi instrument	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Presentation/PaletteProviders.cs	return send bus aux	# data: view / category id or search keyword, not shown
 Nota.Presentation/ViewModels/BrowserViewModel.cs	Audio Effects	# data: identifier compared in code
 Nota.Presentation/ViewModels/BrowserViewModel.cs	Instruments	# data: identifier compared in code

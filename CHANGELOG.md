@@ -30,6 +30,102 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   step apart, or the last-touched note's length when that is longer, so a run tiles instead of
   stacking on one pitch; a press on a note still moves or trims it, ⇧-drag on empty grid still
   marquees, and the whole run is one undo step. Remembered app-wide, like the speaker chip.
+
+### Changed
+- **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
+  Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
+  for Russian, and the English one otherwise. The choice used to follow the OS language, so a
+  French interface got the English manual and a Russian OS with an English interface got the
+  Russian one.
+
+## [0.59.2] — 2026-11-08
+
+### Added
+- **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
+  Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
+  them, including the effects and the depth of each modulation route. The voice has two
+  oscillators that run triangle → saw → square continuously, with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes and three LFOs. The card's A / B switch picks the side the
+  knobs, automation and MIDI learn write to. Each knob marks the other side and where the sound
+  is now. **A → B**, **B → A** and **Swap** are one undo step each.
+  - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
+    time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
+    pressure morphs only the pressed note.
+  - **Matrix**: a source × destination grid, as on Nota Consort — drag a cell for the depth,
+    double-click removes the route. Up to 64 routes per part from 29 sources (LFOs, envelopes,
+    velocity, release velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to
+    Morph, pitch, vibrato or any sound control. A route has a depth per side.
+  - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
+    them morphing. One switch bypasses the section.
+  - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
+    velocity, gate or tie), swing, transpose by a held key, latch and step record. With the
+    transport stopped a held key plays the pattern (or the arpeggio) at the project tempo;
+    with it rolling they keep time with the song. Four motion
+    lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
+    arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
+    Patterns travel with presets and projects; every pattern edit is one undo step.
+  - **Split and Layer**: two parts, Lower and Upper, each a full Twin sound. They split at a key
+    (learnable from a played key) or layer on every key. The 12 voices are shared between the
+    parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
+    or swaps them, or loads a factory or saved sound into one part.
+  - **117 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
+    L and S sizes.
+  - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
+    `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
+- **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
+  playing its pattern.
+- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
+  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
+  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
+  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
+  applies at once, in every theme, tuned to each so it stays readable; a colour that would
+  be confused with the record red, mute, solo or the meter green, or a grey, is explained
+  and not applied. Nota Remote follows. Orange looks exactly as before.
+
+### Fixed
+- **Four plug-in instruments no longer saturate the audio thread** (#532): hosting several
+  Kontakt/SWAM instances — one per instrument track — put every instance's process call on the
+  audio callback, so playback climbed to a 100 % DSP load and dropped out. An audited VST3
+  adapter keeps all its state inside the instance, so independent hosted instrument/effect
+  tracks may now render their work exclusively on a render-pool worker per block; the engine
+  joins the pool before the next block, and lifecycle/editor work stays on the message thread.
+  Unknown hosted formats, rack-nested chains and record-armed/capture-routed tracks keep the
+  serial fallback, and a light load leaves helpers parked. Measured with a deterministic VST3
+  probe: four heavy instances went from 5.82 ms median (218 % of a 2.67 ms callback period,
+  every block late) to 1.58–1.69 ms with zero late blocks on the same machine.
+- **The render pool reserves playback headroom** (#532): when the pool joins the callback, its
+  helper count now keeps half the buffer free for voice attacks and scheduler jitter (the
+  previous boundary left only 15 %), and the sizing accounts for the largest indivisible track
+  job (list scheduling's bound) — heavy plug-in jobs no longer schedule into serial waves while
+  cores idle. Pools under a 512-frame four-instance load keep the per-callback cost at ~93 % of
+  one such instance instead of four.
+- **Default Projects/Samples folders follow the OS locations** (#522): the browser and
+  save dialogs no longer default to hardcoded `~/Documents/Nota Projects` and
+  `~/Music/Nota Samples`. On Linux they read `user-dirs.dirs` (`XDG_DOCUMENTS_DIR`,
+  `XDG_MUSIC_DIR`), on Windows/macOS the Known Folders, so a relocated or translated
+  Documents folder no longer grows an unwanted `~/Documents`. An explicit folder in
+  Settings still always wins.
+- **Nota Remote on iPhone and iPad launches several clips at once** (#512): touching two or
+  more clips on the Scenes screen together launched none of them, or only one — iOS Safari
+  only sends a tap for a single finger. Every clip, scene and Stop button now takes its own
+  finger, and a drag that scrolls the grid still launches nothing.
+- **Nota Remote no longer causes audio dropouts on macOS** (#511): while a phone or browser
+  tab was connected, or the Remote popup was open, the sound dropped out about every
+  10 seconds. Nota started a system helper on that interval to find USB network links; it now
+  reads them directly and only again when the network changes.
+
+## [0.59.1] — 2026-11-05
+
+### Added
+- **Discard and retry take** (#185): ⌘. (Ctrl+. on Windows and Linux) — also in the
+  Transport menu, the command palette and over MCP (`retry_take`) — throws away the take
+  being recorded and records it again in one press. In the Arrangement the playhead goes back
+  to where the transport was started — the take's start, counting in again if it did, or
+  where Play was pressed when you punched in, so the run-up plays again. In the Session view
+  only the recording slot's take goes: the other clips keep playing, and the slot shows it is
+  waiting until it records again from the next launch quantum. Nothing of the discarded take
+  stays — not its audio, loop passes, notes, controllers or automation, and not an undo step.
 - **Preview a translation**: **Load file…** in Settings → Appearance → Language runs Nota in a
   language file from your disk after a restart and lists the entries it cannot use;
   `NOTA_UI_LANGUAGE=/path/to/file.json` does the same for one run.
@@ -40,6 +136,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   duplicating, copying, cutting or deleting it does the same to them, as one undo step; a
   time range drawn on one track spans the whole group. ⌥-click (Alt-click) a clip or an arm
   to act on one track. Saved with the project; MCP `set_group_link` / `get_group_link`.
+- **A short fade when an audio clip is split** (#286): the cut gets a 4 ms fade-out on the
+  left piece and a fade-in on the right, so it does not click. The fades are the clip's
+  corner handles — drag them to make the fade longer or shorter. Settings → Appearance →
+  **Fade audio clips when splitting** turns the automatic fade off (it is on by default).
+  **Fade at splits** in the command palette and on an audio clip's menu writes the same fade
+  onto a join you already have, and does not shorten one you have dragged longer. No shortcut.
+  MIDI clips are left alone. The fade is part of the split's one undo step.
 - **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
   moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
   track and the master, take lanes — to the boundary marked while you drag; the sections in
@@ -65,16 +168,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   controller or Nota Remote first. The lane still widens by itself when a bend on the notes
   needs more than the range picked (a step that would clip one is disabled in the menu), and
   each clip keeps its pick for the session, like its scroll and zoom.
-- **Send levels in the Arrangement's track headers** (#143): a track row tall enough for
-  them — a large row, or a standard one from 88 px — shows a small knob per return track
-  (A, B, …) under volume and pan, with the level beside it; hover names the return,
-  double-click turns the send off and ⌥-click types a value. A **Sends** key at the top of
-  the header column hides or shows them on every track (saved with the project).
-- **Sends are undoable and automatable**: a send change made anywhere — the track header,
-  the Mixer, the Session mixer, the Sends card or the MCP `set_send` tool — is one undo step.
-  The automation lane's target menu lists **Send A · Reverb**-style entries after Pan; draw a
-  send's envelope, or record it by moving a send control with automation record on, as with
-  volume. Deleting a return removes the send automation to it, and later returns keep theirs.
+- **Send levels in the Arrangement's track headers** (#143): a track at the Large height
+  (128 px) or taller shows a small knob per return track (A, B, …) under volume and pan,
+  with the level beside it; hover names the return, double-click turns the send off and
+  ⌥-click types a value. Shorter rows leave the sends in the Mixer. A send move is not an
+  undo step, and a send is not an automation target.
 - **Delete several versions at once** (#228): in the History tab, ⌘-click (Ctrl-click on
   Windows and Linux) adds a version to the selection and Shift-click selects a run. With
   more than one selected, the footer shows how many and when they were saved, and its
@@ -101,6 +199,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   also clicked the stem. A note already at the default is left alone and a locked reference
   clip's notes are never touched. Grabbing a stem by its cap no longer makes it jump to the pixel
   you pressed: it moves from where it is.
+- **Multiple MIDI controller lanes** (#422): **+ lane** below the left sidebar entries
+  adds a CC lane. Each lane has an in-lane dropdown showing its controller name and
+  CC number, with **×** beside it to hide the lane without deleting MIDI data.
+  A **127 / 64 / 0** scale lines up with the curve on the left of each CC lane.
+  Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+  Stacked clips scroll in their own strip when needed to keep notes accessible.
+- **Resizable piano-roll lanes** (#422): drag the divider above Velocity or any CC
+  lane to resize it independently. Heights are remembered when editors reopen and
+  Nota restarts; re-add the corresponding lane/controller to restore its height.
 - **French interface and a Language setting**: Preferences → Appearance → **Language** lists
   English and Français (each in its own name). The choice is saved and applies after a restart;
   the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).
@@ -246,6 +353,64 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Leftovers from the History multi-delete and MIDI CC lane changes** (#496): a failed delete
+  of several versions no longer reports success over its error; drawing a controller curve
+  while recording is no longer cancelled by the recording's refresh, in any lane; the main
+  window's minimum height follows the interface scale again when the clip editor is fitted.
+- **Take one track out of a group** (#488, #489): **Remove from group** in a grouped track's
+  menu, and ⌘⇧G (Ctrl+Shift+G) on it, take just that track out — it lands right after the
+  group, which keeps its other tracks and its effects. Before, **Ungroup** there dissolved the
+  whole group and its effects went with it; on a group, **Ungroup** still does that, and undo
+  brings the group back with its effects. Dragging a header above the first row or below the
+  last one now takes it out of its group too, so a track can leave even when every track is
+  grouped.
+- **Click a group's lane to select it** (#490): a click on a group's row in the Arrangement
+  selects the group and a double-click shows its devices, as on its header.
+- **Reset velocity in the piano roll**: double-clicking the stem of a note already at the default
+  velocity, below its cap, no longer adds an empty undo step, and the right-click **Reset
+  velocity** menu opens at the pointer instead of the middle of the lane.
+- **Bars follow the time signature** (#405): in 3/4, 5/4 or 7/4 the arrangement's bar lines
+  and bar numbers, the clip editors' grids and rulers, the step grid, the transport's position
+  readout, the clip and Session readouts and Export's range fields count the time signature's
+  beats per bar, as the metronome does. Before, every view drew and counted 4/4 bars whatever
+  the signature, so a 3/4 bar line fell in the middle of the second bar.
+- **Drawing a controller no longer changes the rest of the curve** (#169): a stroke in the
+  piano-roll controller lane replaces only the stretch you draw. A shaped curve on either side
+  keeps its bend, and points recorded while the button is down are not replaced by the older
+  copy from when the drag began.
+- **Open an SFZ by dropping it on Nota Mosaic** (#349): drop an `.sfz` file, or the folder of
+  an SFZ library (such as the Salamander Grand Piano), on a Mosaic card and its zones load, with
+  the import report. Before, only installed sample packs could bring an SFZ in, so a library
+  you downloaded yourself couldn't be opened. Controllers an SFZ starts with `set_hdcc` (0–1)
+  now count too, so Salamander's string resonance and hammer noise release layers come along.
+- **Texts that still read in English in another language** (#484): about a hundred interface
+  texts written as plain strings now go through the language files — units and fragments next
+  to a number ("4 beats", "· frozen", "Hide sends", "below −60 dBFS"), the Mosaic window, the
+  hints and Freeze lines on device cards, status words ("no signal", "measuring…", "no
+  loop") and four rows of Settings → Shortcuts. Readouts that spell parameter names and values
+  ("release 120 · auto", "latency 0 smp") stay in English. The check that watches for raw
+  text now also catches short lower-case captions and statuses that trail off.
+- **Effects on an audio track ring out after Stop** (#449): a reverb or delay placed on an
+  audio track used to fall silent the instant the transport stopped, while the same reverb on
+  a return track rang on. The track's effects now keep playing on silence until their output
+  has died away (3 seconds under −100 dB), then the track costs nothing again. Plug-ins on it
+  also get stopped blocks now, so one that acts on Stop (PitchNet finishing a capture) does.
+- **Duplicating a track keeps its plug-ins** (#454): Duplicate track, a copied and pasted
+  plug-in effect and a copied rack now bring their VST3 plug-ins along, with every setting.
+  The copy used to come back without them, because a running plug-in describes itself by the
+  file inside its bundle, which can't be loaded again; the copy now loads the plug-in the way
+  the browser does.
+- **Plug-ins that cap their block size load** (#447): sfizz and other plug-ins with a maximum
+  block size stopped Nota when added, because every plug-in was prepared for 16384-sample
+  blocks. Plug-ins are now prepared for at most 4096; a longer block (an export, a large audio
+  buffer) is played to them in pieces, each with its own notes and transport position.
+- **Take lanes no longer dip, cut on the old tempo, or highlight a moved clip** (#187):
+  where two sections of one loop recording meet, playback stays at full level instead of
+  fading out and back in, including after flatten when one of those sections stays its own
+  clip. Comping a take, or stopping a recording, after a tempo change uses the new tempo
+  even before the next audio block, so the recording covers the beats it will play and does
+  not cut the neighbours short or long. Moving a comp clip no longer lights the wrong part
+  of its take lane, and moving it onto another track fades the edges that used to meet.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged
@@ -281,6 +446,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Windows playback cursor**: the Arrangement playhead now follows display frames,
   interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
   Editing positions and audio timing remain tied to the engine transport.
+- **Docked MIDI clip editors** reserve enough height for notes and all five lane
+  tabs, including when restoring a small saved panel. The window minimum accounts
+  for both panels when the Mixer is also docked (#422).
+- **Resizing the primary piano-roll lane** keeps all five tabs reachable, including
+  after restoring a saved height. Extra CC lanes retain their smaller minimum (#422).
+- **CC lanes added to a folded Drum Rack** use the wider pad-name gutter immediately,
+  keeping their curves and pointer edits aligned with the notes (#422).
 - **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
   track and its meter shows the level coming in (hardware input, or the source track it
   records from) before and during a take, without hearing it. The meter reads the input

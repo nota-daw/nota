@@ -140,6 +140,11 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetTrackArmed(int trackId, bool armed) { ThrowIfDisposed(); Check(NativeMethods.SetTrackArmed(_handle, trackId, armed ? 1 : 0)); }
     public void NoteOn(int pitch, float velocity) { ThrowIfDisposed(); Check(NativeMethods.NoteOn(_handle, pitch, velocity)); }
     public void NoteOff(int pitch) { ThrowIfDisposed(); Check(NativeMethods.NoteOff(_handle, pitch)); }
+    /// <summary>A live note-off with its release velocity (0..1), as a MIDI note-off carries it.</summary>
+    public void NoteOffVelocity(int pitch, float releaseVelocity) { ThrowIfDisposed(); Check(NativeMethods.NoteOffVelocity(_handle, pitch, releaseVelocity)); }
+    /// <summary>A note-off on one track with its release velocity (0..1).</summary>
+    public void TrackNoteOffVelocity(int trackId, int pitch, float releaseVelocity)
+    { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOffVelocity(_handle, trackId, pitch, releaseVelocity)); }
     public void TrackNoteOn(int trackId, int pitch, float velocity) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOn(_handle, trackId, pitch, velocity)); }
     public void TrackNoteOff(int trackId, int pitch) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOff(_handle, trackId, pitch)); }
     public void NoteExpression(int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.NoteExpression(_handle, pitch, (int)dim, value)); }
@@ -152,6 +157,7 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }
+    public RetryTakeResult RetryTake() { ThrowIfDisposed(); return (RetryTakeResult)NativeMethods.RetryTake(_handle); }
     /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.</summary>
     public int RecordStartStatus { get { ThrowIfDisposed(); return NativeMethods.RecordStartStatus(_handle); } }
     /// <summary>Track id of the in-progress audio take (0 when not capturing), for drawing a growing clip.</summary>

@@ -411,8 +411,7 @@ public sealed partial class ArrangementView
                     case AutomationTarget.Pan:
                         key = "PAN"; apply = () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1); break;
                     case AutomationTarget.Send:
-                    { int bus = info.DeviceIndex;
-                      key = $"S:{bus}"; apply = () => SetAutoTarget(t, AutomationTarget.Send, bus, -1); break; }
+                        continue;   // sends are not an automation target (specs/069)
                     case AutomationTarget.PluginParam:
                     { string pid = eA.AutomationLaneParamId(t.Id, i); int dv = info.DeviceIndex;
                       key = $"P:{dv}:{pid}"; apply = () => SetAutoPluginTarget(t, dv, pid); break; }
@@ -437,11 +436,6 @@ public sealed partial class ArrangementView
 
         flyout.Items.Add(Leaf(Loc.T("common.volume"), "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
         flyout.Items.Add(Leaf(Loc.T("common.pan"), "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
-        // One send per return (specs/072); returns themselves send nowhere.
-        if (!t.IsReturn)
-            foreach (var (bus, name) in SendBuses())
-                flyout.Items.Add(Leaf(Loc.F("arrangement.send", SendLetter(bus), name), $"S:{bus}",
-                    () => SetAutoTarget(t, AutomationTarget.Send, bus, -1), automated));
         if (_engine is { } e)
         {
             // An instrument (deviceIndex -1) exposing params — the built-in Nota Synth
@@ -762,35 +756,51 @@ public sealed partial class ArrangementView
 
     // A built-in instrument's params listed directly, grouped by name section (the part
     // before the last space, e.g. "Filter 1"); single-word params (Attack, Volume…) sit
-    // at the top level. Picking one sets a valid PluginParam target (paramId).
+    // at the top level. A name with " · " nests on that first — Nota Twin's
+    // "Lower A · Ladder Cutoff" reads Lower A › Ladder › Cutoff — so ~900 params stay a
+    // short menu. Picking one sets a valid PluginParam target (paramId).
     private MenuItem BuildBuiltinInstrumentAutoMenu(IAudioEngine e, TrackVM t, HashSet<string> automated)
     {
         var root = new MenuItem { Header = e.DeviceName(t.Id, -1) };
-        var groups = new System.Collections.Generic.Dictionary<string, MenuItem>();
+        var tops = new System.Collections.Generic.Dictionary<string, MenuItem>();
+        var groups = new System.Collections.Generic.Dictionary<(string, string), MenuItem>();
         int n = e.PluginParamCount(t.Id, -1);
+        static (string Top, string Tail) Split(string nm)
+        {
+            int dot = nm.IndexOf(" · ", StringComparison.Ordinal);
+            return dot >= 0 ? (nm[..dot], nm[(dot + 3)..]) : ("", nm);
+        }
         // Group by the name's head ("Res1 Decay" → Res1 › Decay); a head only one param has
         // stays a plain entry under its full name ("Note Off", not Note › Off).
         static string Head(string nm) { int sp = nm.LastIndexOf(' '); return sp >= 0 ? nm[..sp] : ""; }
-        var sizes = new System.Collections.Generic.Dictionary<string, int>();
+        var sizes = new System.Collections.Generic.Dictionary<(string, string), int>();
         for (int i = 0; i < n; i++)
         {
-            string h = Head(e.PluginParamName(t.Id, -1, i));
-            sizes[h] = sizes.TryGetValue(h, out var c) ? c + 1 : 1;
+            var (top, rest) = Split(e.PluginParamName(t.Id, -1, i));
+            var key = (top, Head(rest));
+            sizes[key] = sizes.TryGetValue(key, out var c) ? c + 1 : 1;
         }
         for (int i = 0; i < n; i++)
         {
             string id = e.PluginParamId(t.Id, -1, i);
             string nm = e.PluginParamName(t.Id, -1, i);
             if (id.Length == 0 || InstrumentView.IsViewParam(id)) continue;   // the card size isn't sound
-            string grp = Head(nm);
-            if (grp.Length > 0 && sizes[grp] < 2) grp = "";
-            string leaf = grp.Length > 0 ? nm[(grp.Length + 1)..] : nm;
+            var (top, rest) = Split(nm);
+            string grp = Head(rest);
+            if (grp.Length > 0 && sizes[(top, grp)] < 2) grp = "";
+            string leaf = grp.Length > 0 ? rest[(grp.Length + 1)..] : rest;
             string pid = id;
             var item = Leaf(leaf, $"P:-1:{pid}", () => SetAutoPluginTarget(t, -1, pid), automated);
-            if (grp.Length == 0) root.Items.Add(item);
+            MenuItem parent = root;
+            if (top.Length > 0)
+            {
+                if (!tops.TryGetValue(top, out var tm)) { tm = new MenuItem { Header = top }; tops[top] = tm; root.Items.Add(tm); }
+                parent = tm;
+            }
+            if (grp.Length == 0) parent.Items.Add(item);
             else
             {
-                if (!groups.TryGetValue(grp, out var g)) { g = new MenuItem { Header = grp }; groups[grp] = g; root.Items.Add(g); }
+                if (!groups.TryGetValue((top, grp), out var g)) { g = new MenuItem { Header = grp }; groups[(top, grp)] = g; parent.Items.Add(g); }
                 g.Items.Add(item);
             }
         }
