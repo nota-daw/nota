@@ -3429,6 +3429,59 @@ int32_t Engine::articulationSelfTest() {
         if (longs != 2 || legatos != 1 || at(got, ArtEvKind::Control, 58, 81) != 0.0) return 27;
     }
 
+    // 28: two overlapping momentary notes on the same key: the shorter one ending doesn't let go of
+    // the key the longer one still holds. Pizz (key 30, channel 2) 3.0–5.0 and 3.5–3.75 beats.
+    {
+        MidiClip c;
+        c.startBeat = 0.0;
+        c.lengthBeats = 8.0;
+        for (auto [start, len] : {std::pair{3.0, 2.0}, std::pair{3.5, 0.25}}) {
+            Note n;
+            n.pitch = 60;
+            n.startBeat = start;
+            n.lengthBeats = len;
+            n.articulation = 3;
+            c.notes.push_back(n);
+        }
+        c.articulations = buildArticulationTimeline(c, table);
+        std::vector<MidiClip> one{c};
+        std::vector<Abs> got;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 6 * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, false, false, 0.0};
+            const int n = scheduleArticulations(one, *table, b, buf, kMaxBlockArt);
+            for (int i = 0; i < n; ++i) got.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        }
+        int earlyOff = 0, finalOff = 0;
+        for (auto& e : got)
+            if (e.kind == ArtEvKind::KeyOff && e.d1 == 30) {
+                earlyOff += e.at == 3.75 * spb;
+                finalOff += e.at == 5.0 * spb;
+            }
+        if (earlyOff != 0 || finalOff != 1) return 28;
+    }
+
+    // 31: different momentary articulations in separate clips can hold the same explicit key.
+    {
+        ArticulationAction keys[] = {{AK::Keyswitch, 2, 30, 100}, {AK::Keyswitch, 2, 30, 100}};
+        const ArticulationEntry entries[] = {{1, ArticulationTrigger::Momentary, 0, 0, 0, 1},
+            {2, ArticulationTrigger::Momentary, 0, 0, 1, 1}};
+        for (bool defaultChannel : {false, true}) {
+            keys[0].channel = defaultChannel ? 0 : 2;
+            keys[1].channel = defaultChannel ? 1 : 2;
+            auto shared = ArticulationTable::build(0, entries, 2, keys, 2);
+            auto a = makeClip({{0.0, 1}}, 2.0), b = makeClip({{0.5, 2}}, 0.5);
+            a.articulations = buildArticulationTimeline(a, shared);
+            b.articulations = buildArticulationTimeline(b, shared);
+            ArtEv buf[kMaxBlockArt];
+            ArticulationBlock block{B, spb - 100, spb, sr};
+            if (scheduleArticulations({a, b}, *shared, block, buf, kMaxBlockArt) != 0) return 31;
+            block.blockStart = 2 * spb - 100;
+            const int cnt = scheduleArticulations({a, b}, *shared, block, buf, kMaxBlockArt);
+            if (cnt != 1 || buf[0].off != 100 || buf[0].kind != ArtEvKind::KeyOff || buf[0].channel != keys[0].channel) return 31;
+        }
+    }
+
     // 34: even one-frame render segments preserve the full chased-key hold.
     {
         ArtEv buf[kMaxBlockArt];

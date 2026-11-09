@@ -11,7 +11,8 @@
 // A latching articulation is sent where a note asks for one that isn't already in force — decided
 // across all of the track's clips, by trigger time — so a phrase sends its keyswitch once and an
 // overlapping clip's switch in between is honoured; a keyswitch note is released kKeyswitchHoldMs
-// later. Momentary ones are sent with each note and their keyswitch held until its note ends. On a chase (start, seek, loop wrap) the latching
+// later. Momentary ones are sent with each note and their keyswitch held until the last note
+// holding that key ends. On a chase (start, seek, loop wrap) the latching
 // articulation in force at the block start is sent at offset 0 and released 20 ms later, and
 // a held momentary note's switch goes with it. Audio thread: reads published, immutable data only
 // and writes into the caller's fixed array — no allocation, no locks (AR-6).

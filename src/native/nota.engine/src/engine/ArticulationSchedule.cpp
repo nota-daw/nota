@@ -76,6 +76,16 @@ void releaseKeys(Writer& w, const ArticulationTable& table, const ArticulationEn
         if (a[i].kind == ArticulationActionKind::Keyswitch) w.put(off, ArtEvKind::KeyOff, a[i].channel, a[i].data1, 0);
 }
 
+bool hasKey(const ArticulationTable& table, const ArticulationEntry& e, int32_t channel, int32_t pitch) {
+    const ArticulationAction* a = table.actionsOf(e);
+    // Playback notes currently use channel 1; channel 0 means that same note channel.
+    // A default-channel action and an explicit channel-1 action hold the same physical key.
+    for (int32_t i = 0; i < e.actionCount; ++i)
+        if (a[i].kind == ArticulationActionKind::Keyswitch && std::max(1, a[i].channel) == std::max(1, channel) &&
+            a[i].data1 == pitch) return true;
+    return false;
+}
+
 bool hasKeys(const ArticulationTable& table, const ArticulationEntry& e) {
     const ArticulationAction* a = table.actionsOf(e);
     for (int32_t i = 0; i < e.actionCount; ++i)
@@ -174,6 +184,32 @@ template <class All> int32_t inForceBefore(const Ctx& c, const All& all, const K
     return id;
 }
 
+// True when a momentary note other than (`self` in `selfOrder`) holds keyswitch (channel, pitch)
+// down across `at`: pressed at or before it, released after it.
+template <class All>
+bool keyHeldAcross(const Ctx& c, const All& all, int32_t channel, int32_t pitch, double at, const Note* self, long selfOrder) {
+    bool held = false;
+    all([&](const Placement& p) {
+        if (held) return;
+        const double end = p.start + p.lengthBeats * c.b.spb;
+        for (const Note& note : p.clip->notes) {
+            if (&note == self && p.order == selfOrder) continue;
+            if (note.startBeat >= p.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
+            const ArticulationEntry* e = c.table.resolve(note.articulation);
+            if (!e || e->trigger != ArticulationTrigger::Momentary || !hasKey(c.table, *e, channel, pitch)) continue;
+            const double shift = c.trackShift + e->offsetMs * c.msToS;
+            const double on = p.start + std::max(0.0, note.startBeat) * c.b.spb + shift - e->leadMs * c.msToS;
+            const double noteEnd = p.start + (note.startBeat + note.lengthBeats) * c.b.spb;
+            const double off = (p.trimEnd ? std::min(end, noteEnd) : noteEnd) + shift;
+            if (on <= at && off > at) {
+                held = true;
+                return;
+            }
+        }
+    });
+    return held;
+}
+
 // The block's events for the placements `emit` gives, deciding against every placement `all`
 // gives (a superset: for a slot, the pass before too). `chase` re-sends what is in force at the
 // block's start; `covered` says whether any placement is still playing there.
@@ -248,7 +284,14 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
             const double trig = onS - e->leadMs * c.msToS;
             sendActions(w, c.table, *e, trig, win);
             if (hasKeys(c.table, *e)) {
-                releaseKeys(w, c.table, *e, offS, win);
+                // Each key lets go with its note — unless another note still holds the same key.
+                if (win.contains(offS)) {
+                    const ArticulationAction* a = c.table.actionsOf(*e);
+                    for (int32_t k = 0; k < e->actionCount; ++k)
+                        if (a[k].kind == ArticulationActionKind::Keyswitch &&
+                            !keyHeldAcross(c, all, a[k].channel, a[k].data1, offS, &note, p.order))
+                            w.put(win.offsetOf(offS), ArtEvKind::KeyOff, a[k].channel, a[k].data1, 0);
+                }
                 if (b.seamOffs && trig < b.seamEnd && offS >= b.seamEnd) releaseKeys(w, c.table, *e, win.start, win);
             }
             // A note already held where playback lands is chased by the note scheduler; its switch goes with it.
