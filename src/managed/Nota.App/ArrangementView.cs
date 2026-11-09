@@ -2907,9 +2907,9 @@ public sealed partial class ArrangementView : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
-        var sources = new List<int>();
-        // "In" pinned left (faded), the source name pinned right.
-        void Add(string value, int src)
+        // "In" pinned left (faded), the source name pinned right: the live input or the track
+        // it takes MIDI from (specs/086).
+        void Add(string value)
         {
             var inTb = new TextBlock { Text = Loc.T("arrangement.in"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
@@ -2921,18 +2921,18 @@ public sealed partial class ArrangementView : UserControl
             DockPanel.SetDock(inTb, Dock.Left);
             var content = new DockPanel { LastChildFill = true, MinWidth = 84, Children = { inTb, valTb } };
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
-            sources.Add(src);
         }
-        Add(Loc.T("common.none"), -1);
-        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), v.Id);
-        int cur = _engine?.GetTrackMidiSource(trackId) ?? -1;
-        int sel = sources.IndexOf(cur);
-        cb.SelectedIndex = sel >= 0 ? sel : 0;
+        if (_engine is null) return cb;
+        var (entries, cur) = MidiInputPick.Compact(_engine, trackId,
+            _tracks.Where(v => v.IsInstrument).Select(v => (v.Id, v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id))));
+        foreach (var en in entries) Add(en.Label);
+        cb.SelectedIndex = cur;
         cb.SelectionChanged += (_, _) =>
         {
-            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < sources.Count)
-                _engine?.SetTrackMidiSource(trackId, sources[cb.SelectedIndex]);
+            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < entries.Count)
+                MidiInputPick.Apply(_engine, trackId, entries[cb.SelectedIndex]);
         };
+        ToolTip.SetTip(cb, Loc.T("midi_input.tooltip"));
         return cb;
     }
 

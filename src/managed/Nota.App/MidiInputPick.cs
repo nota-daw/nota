@@ -56,6 +56,46 @@ internal static class MidiInputPick
         return list;
     }
 
+    /// <summary>One entry of the compact MIDI selectors (header, mixer, Session I/O): a live
+    /// input — All inputs or a device, keeping the track's channel — or another instrument
+    /// track to take MIDI from (<see cref="FromTrack"/> &gt; 0).</summary>
+    public readonly record struct Entry(string? Uid, int FromTrack, string Label);
+
+    /// <summary>The compact selectors' list: the live inputs (the current one with its channel),
+    /// then "From" each other instrument track; and which entry is current.</summary>
+    public static (List<Entry> Items, int Current) Compact(IAudioEngine engine, int trackId, IEnumerable<(int Id, string Name)> instruments)
+    {
+        var cur = engine.GetTrackMidiInput(trackId);
+        int from = engine.GetTrackMidiSource(trackId);
+        var items = new List<Entry>();
+        int current = 0;
+        foreach (var d in Devices(engine, trackId))
+        {
+            bool isCur = d.Uid == cur.Uid;
+            if (isCur && from <= 0) current = items.Count;
+            items.Add(new Entry(d.Uid, -1, isCur && cur.Channel > 0 ? Loc.F("midi_input.device_channel", d.Label, cur.Channel) : d.Label));
+        }
+        foreach (var (id, name) in instruments)
+        {
+            if (id == trackId) continue;
+            if (id == from) current = items.Count;
+            items.Add(new Entry(cur.Uid, id, Loc.F("midi_input.from_track", name)));
+        }
+        return (items, current);
+    }
+
+    /// <summary>Applies a compact entry: a live input clears MIDI from; a track sets it.</summary>
+    public static void Apply(IAudioEngine engine, int trackId, Entry e)
+    {
+        if (e.FromTrack > 0)
+        {
+            engine.SetTrackMidiSource(trackId, e.FromTrack);
+            return;
+        }
+        engine.SetTrackMidiInput(trackId, e.Uid, engine.GetTrackMidiInput(trackId).Channel);
+        engine.SetTrackMidiSource(trackId, -1);
+    }
+
     /// <summary>MPE input on and the track listening to one channel: an MPE controller plays
     /// each note on its own channel, so most of them would not arrive.</summary>
     public static bool MpeWarning(IAudioEngine engine, int trackId)

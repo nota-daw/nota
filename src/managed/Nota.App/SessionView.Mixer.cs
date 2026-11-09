@@ -313,11 +313,19 @@ public sealed partial class SessionView
         // stereo pairs (#340, specs/086).
         var items = new List<(RecordInputPick Value, string Label)>();
         RecordInputPick cur;
-        if (c.IsInstrument)
+        if (c.IsInstrument) // the live input (All inputs / a device) or a track to take MIDI from (specs/086)
         {
-            items.Add((RecordInputPick.Track(-1), Loc.T("session.mixer.all_ins")));
-            foreach (var n in names.Where(n => n.Instrument)) items.Add((RecordInputPick.Track(n.Id), n.Name));
-            cur = RecordInputPick.Track(_engine.GetTrackMidiSource(c.TrackId));
+            var (entries, curEntry) = MidiInputPick.Compact(_engine, c.TrackId, names.Where(n => n.Instrument).Select(n => (n.Id, n.Name)));
+            var mcb = new ComboBox { Height = IoRowH, FontSize = 10, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
+            foreach (var en in entries) mcb.Items.Add(new ComboBoxItem { Content = en.Label, FontSize = 10 });
+            mcb.SelectedIndex = curEntry;
+            int tid = c.TrackId;
+            mcb.SelectionChanged += (_, _) =>
+            {
+                if (mcb.SelectedIndex >= 0 && mcb.SelectedIndex < entries.Count) MidiInputPick.Apply(_engine, tid, entries[mcb.SelectedIndex]);
+            };
+            ToolTip.SetTip(mcb, Loc.T("session.mixer.midi_input_every_input_or"));
+            return mcb;
         }
         else
         {
