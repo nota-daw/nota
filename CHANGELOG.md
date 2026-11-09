@@ -22,6 +22,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
+  Session launches, and preserves notes, releases and expression when timing offsets span short
+  loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
+  shared switch held until the last note ends. The map manager prefers the project's saved map
+  when the library has a different version, including after undo.
+
 ### Added
 - **Articulation maps** (specs/085): an instrument track can hold a map of the playing techniques
   of a sample library (Long, Staccato, Legato…) and the MIDI that selects each one. Import a Cubase

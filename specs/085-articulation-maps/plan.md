@@ -11,8 +11,10 @@ instrument track (JSON blob for save and undo, compiled immutable table for the 
 published with the graph snapshot (AR-5). The scheduler shifts note times by track offset plus
 articulation offset, and emits articulation MIDI (keyswitch, controller, program, bank) from a
 separate sorted event list, so MIDI effects cannot disturb it. A per-clip articulation timeline,
-built when the clip is published, makes dedupe and state restoration after a seek or loop exact
-without audio-thread state. Importers read the two real file formats seen (Cubase expression map,
+built when the clip is published, retains every latching point; playback resolves deduplication
+across the track by trigger time. The scheduler is a pure function of immutable clips, the table,
+and the block, including the last chase origin so a 20 ms release can reach a later block.
+Importers read the two real file formats seen (Cubase expression map,
 Studio One keyswitch list). UI: map manager, inspector section, note menu, note colours,
 drag and drop. Decisions and evidence: [research.md](research.md).
 
@@ -64,7 +66,7 @@ offline (research R12).
 | Principle | Status |
 |---|---|
 | 0. Approved issue first | Pass: #547, labelled `approved`. (The work started locally before the issue was linked; that waiver is now closed.) |
-| I. Real-time safety | Pass by design (table and timeline immutable and published with the snapshot; scratch pre-sized; no state on the audio thread). To be proven by the engine self-test and a review of every new line in `Engine_Render.cpp`. |
+| I. Real-time safety | Pass by design (table and timeline immutable and published with the snapshot; scratch pre-sized; chase origins are audio-thread-owned scalars). Proven for review fixes by the native scheduler/Session probes and audio-thread code review; Linux instruction-count validation remains pending. |
 | II. Boundary discipline | Pass: only POD structs and `nota_*` C functions cross; no JUCE outside `pluginhost/`. |
 | III. Licensing | Pass: no dependency. Every new file needs the SPDX header (done for the files written so far). |
 | IV. Verification gate | Pending: smoke tests for importers exist; engine tests and the full `build-win.ps1` run need the native build (blocked, R12). |
