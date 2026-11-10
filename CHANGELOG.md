@@ -72,6 +72,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `get_track_midi_input`. In Session view, launching an empty MIDI slot on another track while
   a MIDI slot records adds it to the take: each slot records its own input on its own loop,
   stops on its own, and Discard and Retry restarts them all.
+- **Articulation maps** (specs/085): an instrument track can hold a map of the playing techniques
+  of a sample library (Long, Staccato, Legato…) and the MIDI that selects each one. Import a Cubase
+  `.expressionmap`, a Studio One `.keyswitch` list or Nota's own `.notamap` — from the Track
+  inspector's Articulations section or by dropping the file on it — and a preview shows every
+  articulation and everything the file couldn't carry over before the map is used. Right-click
+  notes in the piano roll ▸ Articulation to choose one per note; playback sends the keyswitches,
+  controllers and program changes to the hosted plug-in just ahead of the notes, once per phrase
+  for a latching articulation and held with the note for a momentary one, and re-sends what is in
+  force after a seek or a loop wrap. Built-in instruments are left alone. A note whose articulation
+  was removed from the map plays the default and is marked. Studio One `.soundvariation` files are
+  not supported yet.
+- **Articulation map manager** (View ▸ Articulation maps…, or Edit maps… in the inspector): create,
+  import, duplicate, delete and export maps; add, copy, remove and reorder articulations; edit
+  their names, colour, group, latching or momentary trigger, MIDI actions and channels, note
+  offset, trigger lead, enabled state and the default. Save updates every track using the map as
+  one undo step and says how many.
+- **Track MIDI offset** (specs/085): a track's notes can play earlier (negative) or later, to make
+  up for a slow attack, without moving them; each articulation can add an offset of its own, and a
+  trigger lead sends its switch ahead of the note. The inspector and the manager show when each
+  articulation's notes actually play. Saved with the project.
+- **Notes coloured by articulation** (specs/085): the palette chip in the clip editor header draws
+  notes in their articulation's colour instead of the track's.
 
 ### Changed
 - **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
@@ -414,6 +436,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- Muting or solo-gating a Session track discards keyswitch releases for the flushed voices,
+  preventing them from cutting a new articulation after unmute. Clip edits reuse the track's
+  Session player directly instead of allocating and discarding temporary playback state.
+- Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
+  files with duplicate IDs no longer prevent the articulation map manager from opening.
+- Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
+  Session launches, and preserves notes, releases and expression when timing offsets span short
+  loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
+  shared switch held until the last note ends. The map manager prefers the project's saved map
+  when the library has a different version, including after undo.
 - **Strata's layer list and beat strip are back as they were** after the restyle: the layer count
   says "· one cycle shown" again, the beat tick strip is on screen before the first loop closes,
   and every layer keeps its own shade of grey (with a matching outline), so all eight can be told

@@ -683,7 +683,9 @@ std::shared_ptr<Track> Engine::findTrackAuthoring(int32_t id) const {
 }
 
 std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
-    auto nt = std::make_shared<Track>(t.id(), t.type());
+    // Reuse playback state at construction: allocating a fresh player here only to replace it
+    // later wastes its fixed release storage on every clip edit and undo.
+    auto nt = std::make_shared<Track>(t.id(), t.type(), t.sessionPlayer);
     nt->setVolume(t.volume());
     nt->setPan(t.pan());
     nt->setMute(t.mute());
@@ -697,6 +699,9 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
     nt->setMidiInput(t.midiInputSource(), t.midiInputChannel());      // MIDI input filter (specs/086)
     nt->midiInputUid = t.midiInputUid;
+    nt->setMidiOffsetMs(t.midiOffsetMs());                           // MIDI playback offset
+    nt->articulationTable = t.articulationTable;                     // articulation map (shared, immutable)
+    nt->articulationMapJson = t.articulationMapJson;
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
     nt->clips = t.clips;
     nt->takes = t.takes; // take lanes (specs/067) — buffers shared
@@ -711,7 +716,6 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
-    nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->liveHeld = t.liveHeld;           // shared — held live notes (#366) and effect tail (#449) persist
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
@@ -721,6 +725,33 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->pianoFold = t.pianoFold;
     nt->editLink = t.editLink;
     return nt;
+}
+
+// Whether every clip of `t` (arrangement and Session) has the articulation timeline its notes
+// and its track's table call for — O(1) per clip on a track without a map. Message thread.
+bool Engine::articulationsCurrent(const Track& t) {
+    if (!t.articulationTable) { // the common case, inline: no map means no timelines
+        for (const auto& c : t.midiClips)
+            if (c.articulations) return false;
+        for (const auto& s : t.sessionSlots)
+            if (s.midi.articulations) return false;
+        return true;
+    }
+    for (const auto& c : t.midiClips)
+        if (!articulationTimelineCurrent(c, t.articulationTable)) return false;
+    for (const auto& s : t.sessionSlots)
+        if (!articulationTimelineCurrent(s.midi, t.articulationTable)) return false;
+    return true;
+}
+
+// Rebuild the stale timelines of `t`, which no render can see yet (a fresh clone). Message thread.
+void Engine::settleArticulations(Track& t) {
+    auto settle = [&](MidiClip& c) {
+        if (articulationTimelineCurrent(c, t.articulationTable)) return;
+        c.articulations = t.articulationTable ? buildArticulationTimeline(c, t.articulationTable) : nullptr;
+    };
+    for (auto& c : t.midiClips) settle(c);
+    for (auto& s : t.sessionSlots) settle(s.midi);
 }
 
 // Message thread: make sure the published render scratch holds `tracks` tracks. Never
@@ -777,6 +808,23 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     // added tracks (already-sized tracks are a no-op), so no race with audio.
     for (auto& t : g->tracks)
         if (static_cast<int32_t>(t->sessionSlots.size()) < g->sceneCount) t->sessionSlots.resize(g->sceneCount);
+    // Articulation timelines (specs/085) follow each clip's notes and its track's table. The same
+    // rule as the take joins above: a track the playing graph shares is the audio thread's and
+    // already current; one an edit just cloned is settled in place; a restored one (undo, redo,
+    // take retry) may still be walked by a render, so it is cloned first if anything would change.
+    if (g) {
+        auto playing = [&](const std::shared_ptr<Track>& t) {
+            if (!authoring_) return false;
+            for (const auto& old : authoring_->tracks)
+                if (old == t) return true;
+            return false;
+        };
+        for (auto& t : g->tracks) {
+            if (!t || articulationsCurrent(*t) || playing(t)) continue; // cheap test first: `playing` scans the graph
+            if (restored) t = cloneTrack(*t);
+            settleArticulations(*t);
+        }
+    }
     authoring_ = g;
     if (g) ensureRenderScratch(g->tracks.size());
     // Fresh track objects only: the audio thread never sees them change. Before any CC target

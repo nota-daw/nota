@@ -631,6 +631,40 @@ public sealed partial class NotaEngine
     public void SetTrackMidiSource(int trackId, int sourceTrackId)
     { ThrowIfDisposed(); NativeMethods.TrackSetMidiSource(_handle, trackId, sourceTrackId); }
 
+    /// <summary>Sets the track's MIDI playback offset in ms (negative = earlier; playback only).</summary>
+    public void SetTrackMidiOffsetMs(int trackId, double ms)
+    { ThrowIfDisposed(); NativeMethods.TrackSetMidiOffsetMs(_handle, trackId, ms); }
+
+    /// <summary>The track's MIDI playback offset in ms (negative = earlier).</summary>
+    public double GetTrackMidiOffsetMs(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackGetMidiOffsetMs(_handle, trackId); }
+
+    /// <inheritdoc/>
+    public bool SetTrackArticulationMap(int trackId, int defaultId, NotaArticulationEntry[] entries, NotaArticulationAction[] actions, string mapJson)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(actions);
+        var json = System.Text.Encoding.UTF8.GetBytes(mapJson ?? "");
+        return NativeMethods.TrackSetArticulationMap(_handle, trackId, defaultId, entries, entries.Length,
+            actions, actions.Length, json, json.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <inheritdoc/>
+    public bool ClearTrackArticulationMap(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackClearArticulationMap(_handle, trackId) == NativeMethods.NotaResult.Ok; }
+
+    /// <inheritdoc/>
+    public string? GetTrackArticulationMapJson(int trackId)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.TrackGetArticulationMapJson(_handle, trackId, null, 0);
+        if (n <= 0) return null;
+        var buf = new byte[n];
+        int got = NativeMethods.TrackGetArticulationMapJson(_handle, trackId, buf, n);
+        return got == n ? System.Text.Encoding.UTF8.GetString(buf) : null;   // changed in between: ask again
+    }
+
     /// <summary>Gets an instrument track's MIDI input source track id (-1 = off).</summary>
     public int GetTrackMidiSource(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackGetMidiSource(_handle, trackId); }

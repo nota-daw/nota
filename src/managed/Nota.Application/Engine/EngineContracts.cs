@@ -36,6 +36,42 @@ public struct NotaNote(int pitch, double startBeat, double lengthBeats, float ve
     /// <summary>The note's recorded MPE in the engine's expression store (0 = none). Copy the
     /// note (don't rebuild it from its fields) and the expression travels with it.</summary>
     public int ExprId;
+    /// <summary>The note's articulation: a stable id in its track's articulation map (0 = none /
+    /// the map's default). Copy the note (don't rebuild it from its fields) and it travels with it.</summary>
+    public int ArticulationId;
+
+    /// <summary>Every field equal. Use this to tell whether an edit changed a note: a comparison
+    /// that lists fields by hand misses the next one added (an articulation-only edit was once
+    /// never sent to the engine for that reason). The smoke test checks it covers every field.</summary>
+    public static bool Same(in NotaNote a, in NotaNote b) =>
+        a.Pitch == b.Pitch && a.StartBeat == b.StartBeat && a.LengthBeats == b.LengthBeats
+        && a.Velocity == b.Velocity && a.ExprId == b.ExprId && a.ArticulationId == b.ArticulationId;
+}
+
+/// <summary>One articulation of a compiled articulation map (specs/085). Matches native
+/// NotaArticulationEntry: ids &gt; 0 and strictly ascending; actions are [ActionStart, ActionStart + ActionCount).</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaArticulationEntry
+{
+    public int Id;
+    /// <summary>0 latching, 1 momentary.</summary>
+    public int TriggerMode;
+    public double OffsetMs;
+    public double LeadMs;
+    public int ActionStart;
+    public int ActionCount;
+}
+
+/// <summary>One MIDI action of a compiled articulation map. Matches native NotaArticulationAction.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaArticulationAction
+{
+    /// <summary>0 keyswitch, 1 control change, 2 program change, 3 bank select MSB, 4 bank select LSB.</summary>
+    public int Kind;
+    /// <summary>0 = the note's own channel, 1..16 explicit.</summary>
+    public int Channel;
+    public int Data1;
+    public int Data2;
 }
 
 /// <summary>One breakpoint of a note's recorded expression (MPE). Matches native NotaExprPoint:

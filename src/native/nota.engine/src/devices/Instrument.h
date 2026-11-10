@@ -52,6 +52,17 @@ class Instrument {
     // sample offset within the next render(). Outside that it stays 0. Audio thread only.
     virtual bool takesTimedEvents() const { return false; }
     int32_t eventOffset = 0;
+    // The MIDI channel of the next event, like eventOffset: 0 = the default (channel 1), 1..16 an
+    // articulation's explicit channel (specs/085). The engine sets it before an articulation action
+    // and puts it back to 0 after. Only a hosted plug-in reads it. Audio thread only.
+    int32_t eventChannel = 0;
+    // A MIDI program change (an articulation action, specs/085), 0..127, at eventOffset on
+    // eventChannel. Built-in instruments have no programs and ignore it.
+    virtual void programChange(int32_t /*program*/) {}
+    // Whether articulation MIDI (keyswitch notes, controllers, programs) is meant for this
+    // instrument (specs/085, FR-024). A built-in would play a keyswitch as a note, so it says no
+    // and the engine sends it nothing; a hosted plug-in, or a rack holding one, says yes.
+    virtual bool takesArticulations() const { return false; }
 
     // Note events (applied at segment boundaries by the engine for sample accuracy, or at
     // eventOffset — see takesTimedEvents).

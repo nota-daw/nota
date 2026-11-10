@@ -3679,6 +3679,9 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setMidiFromTrackId(src.midiFromTrackId());
     nt->setMidiInput(src.midiInputSource(), src.midiInputChannel());
     nt->midiInputUid = src.midiInputUid;
+    nt->setMidiOffsetMs(src.midiOffsetMs());
+    nt->articulationTable = src.articulationTable;   // the map goes with the instrument, content or not
+    nt->articulationMapJson = src.articulationMapJson;
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
     if (withContent) {
         nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
@@ -4193,6 +4196,7 @@ Note Engine::noteFromData(const NotaNoteData& d) const {
     n.startBeat = d.start_beat;
     n.lengthBeats = d.length_beats;
     n.velocity = d.velocity;
+    n.articulation = d.articulation_id > 0 ? d.articulation_id : 0;
     if (d.expr_id > 0) {
         std::lock_guard<std::mutex> lk(exprMx_);
         auto it = exprStore_.find(d.expr_id);
@@ -4210,6 +4214,66 @@ void Engine::noteToData(const Note& n, NotaNoteData& d) {
     d.length_beats = n.lengthBeats;
     d.velocity = n.velocity;
     d.expr_id = n.expr ? n.exprId : 0;
+    d.articulation_id = n.articulation;
+}
+
+// --- articulation maps (specs/085) ---------------------------------------------------------
+
+namespace {
+constexpr int32_t kMaxArticulationJson = 16 * 1024 * 1024; // the map file's own limit
+}
+
+bool Engine::setTrackArticulationMap(int32_t trackId, int32_t defaultId, const NotaArticulationEntry* entries,
+    int32_t entryCount, const NotaArticulationAction* actions, int32_t actionCount, const char* json, int32_t jsonLen) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Instrument) return false;
+    if (jsonLen < 0 || jsonLen > kMaxArticulationJson || (jsonLen > 0 && !json)) return false;
+    // Sizes checked before anything is allocated for them; the rest is ArticulationTable::build's.
+    if (entryCount < 0 || actionCount < 0 || entryCount > kArticulationMaxEntries || actionCount > kArticulationMaxActions)
+        return false;
+    if ((entryCount > 0 && !entries) || (actionCount > 0 && !actions)) return false;
+    std::vector<ArticulationEntry> e(static_cast<size_t>(entryCount));
+    for (int32_t i = 0; i < entryCount; ++i) {
+        const NotaArticulationEntry& s = entries[i];
+        e[i] = {s.id, static_cast<ArticulationTrigger>(s.trigger_mode), s.offset_ms, s.lead_ms, s.action_start, s.action_count};
+    }
+    std::vector<ArticulationAction> a(static_cast<size_t>(actionCount));
+    for (int32_t i = 0; i < actionCount; ++i) {
+        const NotaArticulationAction& s = actions[i];
+        a[i] = {static_cast<ArticulationActionKind>(s.kind), s.channel, s.data1, s.data2};
+    }
+    auto table = ArticulationTable::build(defaultId, e.data(), entryCount, a.data(), actionCount);
+    if (!table) return false;
+    auto nt = cloneTrack(*old);
+    nt->articulationTable = std::move(table);
+    nt->articulationMapJson = std::make_shared<const std::string>(json ? json : "", static_cast<size_t>(jsonLen));
+    republishWithTrack(trackId, nt); // the clips' timelines are rebuilt as it publishes
+    return true;
+}
+
+bool Engine::clearTrackArticulationMap(int32_t trackId) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Instrument) return false;
+    if (!old->articulationTable && !old->articulationMapJson) return true; // nothing to undo
+    auto nt = cloneTrack(*old);
+    nt->articulationTable = nullptr;
+    nt->articulationMapJson = nullptr;
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
+int32_t Engine::trackArticulationMapJson(int32_t trackId, char* out, int32_t maxLen) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->articulationMapJson) return 0;
+    const std::string& s = *t->articulationMapJson;
+    const auto n = static_cast<int32_t>(s.size());
+    if (out && maxLen >= n) std::memcpy(out, s.data(), s.size());
+    return n;
+}
+
+std::shared_ptr<const ArticulationTable> Engine::trackArticulationTable(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? t->articulationTable : nullptr;
 }
 
 int32_t Engine::clipNoteCount(int32_t trackId, int32_t clipIndex) const {

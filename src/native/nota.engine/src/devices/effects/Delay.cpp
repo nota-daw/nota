@@ -176,6 +176,7 @@ void Delay::process(float* buf, int32_t frames) {
     // so the wake-up echo has no timing jump. Sleep engages only after the
     // loop's full flight time (an echo can arrive long after the input and the
     // output both read silent), tracked below via loopPk_/quietSamples_.
+    hist_.begin(); // a gap since the last block (track muted or asleep) scrolls the graph on
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     if (inSilent && !freeze && idle_) {
         wowPhase_ += wowInc * frames;

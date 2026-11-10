@@ -238,7 +238,7 @@ public static class MidiGenerators
             }
 
             for (int i = 0; i < stack.Count; i++)
-                outp.Add(U.Note(stack[i], root.StartBeat, root.LengthBeats, root.Velocity * (1 - falloff * i / Math.Max(1, stack.Count - 1.0))));
+                outp.Add(U.Note(stack[i], root.StartBeat, root.LengthBeats, root.Velocity * (1 - falloff * i / Math.Max(1, stack.Count - 1.0)), root.ArticulationId));
         }
         return U.Deoverlap(U.Tidy(outp, ctx.LengthBeats));
     }

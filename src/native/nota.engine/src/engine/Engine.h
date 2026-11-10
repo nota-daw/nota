@@ -219,6 +219,7 @@ class Engine {
     bool rackSelfTest();       // Instrument Rack: chains sum, macros map, blob round-trips
     bool rackDeviceSelfTest(); // Audio Effect Rack: pass-through, parallel sum, blob round-trips
     bool timedEventsSelfTest(); // #436: a hosted plug-in renders once per block, events at their offsets
+    int32_t articulationSelfTest(); // specs/085: articulation scheduling + delivery; 0 = pass, else the failed check
     bool drumRackSelfTest();   // Drum Rack: notes route only to the matching pad chain
     // Lane CRUD — structural (snapshot + undo). addAutomationLane returns the lane
     // index, reusing an existing lane on the same target. get/set use the ABI point
@@ -1323,6 +1324,17 @@ class Engine {
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
+    // Track-level MIDI playback offset (ms, negative = earlier). Not destructive: note positions
+    // are unchanged; the scheduler shifts them. Clamped to +-2000 ms.
+    void setTrackMidiOffsetMs(int32_t trackId, double ms);
+    double trackMidiOffsetMs(int32_t trackId) const;
+    // Articulation map (specs/085): validated, one undo step each; publishRaw rebuilds the clips'
+    // timelines. False (nothing changed) on any invalid input — see nota_track_set_articulation_map.
+    bool setTrackArticulationMap(int32_t trackId, int32_t defaultId, const NotaArticulationEntry* entries,
+        int32_t entryCount, const NotaArticulationAction* actions, int32_t actionCount, const char* json, int32_t jsonLen);
+    bool clearTrackArticulationMap(int32_t trackId);
+    int32_t trackArticulationMapJson(int32_t trackId, char* out, int32_t maxLen) const;
+    std::shared_ptr<const ArticulationTable> trackArticulationTable(int32_t trackId) const; // tests
     // Live notes (computer keyboard, gamepad, MIDI). Producers on different threads
     // serialize on liveMidiMx_; the audio thread only pops (AR-6).
     // source/channel (specs/086): a hardware MIDI source index and its channel 0-15; -1 for
@@ -1576,6 +1588,9 @@ class Engine {
     void installRackPluginFactory(); // wire RackCore::pluginFactory to the plugin host bridge
     std::shared_ptr<Track> findTrackAuthoring(int32_t id) const;
     std::shared_ptr<Track> cloneTrack(const Track& t) const;
+    // Articulation timelines (specs/085), kept current by publishRaw.
+    static bool articulationsCurrent(const Track& t);
+    static void settleArticulations(Track& t);
     std::shared_ptr<SampleBuffer> findSampleById(int64_t sampleId) const; // M7-6b
     static std::shared_ptr<SampleBuffer> chainSampleById(const RackCore* rack, int64_t sampleId, int depth);
     void publish(std::shared_ptr<Graph> g);                               // checkpoints (undo), then publishRaw
@@ -2202,6 +2217,7 @@ class Engine {
     bool seekedThisBlock_ = false;    // a Seek command was drained this block (audio thread)
     bool seekedWhileRolling_ = false; // ...and it arrived while the transport was rolling
     bool chaseNotes_ = false;         // this segment starts at a discontinuity: re-trigger held clip notes
+    double articulationChaseStart_ = -1.0; // last chase on the arrangement sample clock
     // This segment starts right after a loop wrap: clip notes still sounding at the loop end
     // (seamEndSamples_, the pre-wrap playhead) get their note-off here — a release, not a cut (#29).
     bool seamOffs_ = false;

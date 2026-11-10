@@ -821,6 +821,30 @@ NotaResult nota_track_set_midi_source(NotaEngine* e, int32_t track_id, int32_t s
     ENG(e)->setTrackMidiSource(track_id, source_track_id);
     return NOTA_OK;
 }
+NotaResult nota_track_set_midi_offset_ms(NotaEngine* e, int32_t track_id, double ms) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setTrackMidiOffsetMs(track_id, ms);
+    return NOTA_OK;
+}
+double nota_track_get_midi_offset_ms(NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackMidiOffsetMs(track_id) : 0.0;
+}
+NotaResult nota_track_set_articulation_map(NotaEngine* e, int32_t track_id, int32_t default_id,
+    const NotaArticulationEntry* entries, int32_t entry_count, const NotaArticulationAction* actions, int32_t action_count,
+    const char* map_json, int32_t map_json_len) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackArticulationMap(
+               track_id, default_id, entries, entry_count, actions, action_count, map_json, map_json_len)
+               ? NOTA_OK
+               : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_clear_articulation_map(NotaEngine* e, int32_t track_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->clearTrackArticulationMap(track_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_articulation_map_json(const NotaEngine* e, int32_t track_id, char* out, int32_t max_len) {
+    return e ? CENG(e)->trackArticulationMapJson(track_id, out, max_len) : 0;
+}
 int32_t nota_track_get_midi_source(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackMidiSource(track_id) : -1;
 }

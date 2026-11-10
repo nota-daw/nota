@@ -48,6 +48,8 @@ typedef struct NotaNoteData {
     float   velocity;      /* 0..1 */
     int32_t expr_id;       /* recorded MPE (nota_note_expr_*), 0 = none. Keep it when you move,
                             * copy or resize the note — the expression travels with it. */
+    int32_t articulation_id; /* stable articulation id in the track's articulation map, 0 = none.
+                              * Keep it when you move, copy or resize the note. */
 } NotaNoteData;
 
 /* One breakpoint of a note's recorded expression (MPE). dim: 0 bend (semitones), 1 pressure
@@ -376,6 +378,10 @@ NOTA_API int32_t nota_engine_drum_rack_selftest(NotaEngine* engine);
  * events renders once per block with every event at its sample offset, while a built-in
  * still renders in segments between events. */
 NOTA_API int32_t nota_engine_timed_events_selftest(NotaEngine* engine);
+/* Device-free self-test (specs/085): articulation scheduling block by block (map order, latching
+ * dedupe, offsets and leads, momentary holds, chase on seek and loop wrap, seam releases, overflow)
+ * and delivery ahead of the note on its channel. 0 = pass, else the number of the failed check. */
+NOTA_API int32_t nota_engine_articulation_selftest(NotaEngine* engine);
 /* Plugin-parameter automation (M9-B, target 3). Device-free structural self-test;
  * the plugin-param introspection + lane-add C ABI arrives in B2. */
 NOTA_API int32_t nota_engine_plugin_automation_selftest(NotaEngine* engine);
@@ -1656,6 +1662,43 @@ NOTA_API void       nota_engine_push_monitor_frames(NotaEngine* engine, const fl
  * (source_track_id = -1 turns it off). */
 NOTA_API NotaResult nota_track_set_midi_source(NotaEngine* engine, int32_t track_id, int32_t source_track_id);
 NOTA_API int32_t    nota_track_get_midi_source(NotaEngine* engine, int32_t track_id);
+/* Track-level MIDI playback offset in ms (negative = earlier). Non-destructive; clamped to +-2000. */
+NOTA_API NotaResult nota_track_set_midi_offset_ms(NotaEngine* engine, int32_t track_id, double ms);
+NOTA_API double     nota_track_get_midi_offset_ms(NotaEngine* engine, int32_t track_id);
+
+/* Articulation maps (specs/085). The UI compiles a map into a flat table: articulations sorted
+ * by id, each pointing at a range of an ordered action array. Disabled articulations are left
+ * out (a note asking for one plays the default). */
+typedef struct NotaArticulationEntry {
+    int32_t id;            /* > 0, unique, strictly ascending in the array */
+    int32_t trigger_mode;  /* 0 latching (sent on change, stays in force), 1 momentary (held with each note) */
+    double  offset_ms;     /* added to the track's MIDI offset; within +-2000 */
+    double  lead_ms;       /* the actions go out this long before the (offset) note; 0..2000 */
+    int32_t action_start;  /* first action in the action array */
+    int32_t action_count;
+} NotaArticulationEntry;
+
+typedef struct NotaArticulationAction {
+    int32_t kind;          /* 0 keyswitch, 1 control change, 2 program change, 3 bank select MSB, 4 bank select LSB */
+    int32_t channel;       /* 0 = the note's own, 1..16 explicit */
+    int32_t data1;         /* keyswitch pitch / CC number / program, 0..127 */
+    int32_t data2;         /* keyswitch velocity / CC or bank value, 0..127 */
+} NotaArticulationAction;
+
+/* Gives an instrument track its articulation map: the compiled table plus the map file as opaque
+ * JSON (UTF-8, saved with the project and restored by undo). One undo step. default_id 0 = none.
+ * NOTA_ERR_INVALID_ARG, with nothing changed, for: no such instrument track, ids not > 0 and
+ * strictly ascending, an action range outside the array, a kind/channel/data value out of range,
+ * an offset or lead out of range or not finite, a default_id that is not 0 or an entry's id. */
+NOTA_API NotaResult nota_track_set_articulation_map(NotaEngine* engine, int32_t track_id, int32_t default_id,
+    const NotaArticulationEntry* entries, int32_t entry_count,
+    const NotaArticulationAction* actions, int32_t action_count,
+    const char* map_json, int32_t map_json_len);
+/* Removes the track's map; notes keep their articulation ids. One undo step (none when there was no map). */
+NOTA_API NotaResult nota_track_clear_articulation_map(NotaEngine* engine, int32_t track_id);
+/* Copies the stored map JSON into out (no terminator) and returns its length in bytes; out = NULL or
+ * max_len too small returns the length without copying. 0 = no map. */
+NOTA_API int32_t    nota_track_get_articulation_map_json(const NotaEngine* engine, int32_t track_id, char* out, int32_t max_len);
 
 /* ---- Freeze (M7) ---------------------------------------------------------- */
 /* Bounce a track's post-device, pre-fader audio to a buffer and play it back in
