@@ -1135,6 +1135,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
         if (L.trackId != tid) { // another track's lane now (or closed): start clean
             L.clear();
             L.trackId = tid;
+            rtLaneWasLive_[k] = false;
         }
         rtLaneSrc_[k] = midiLaneSrc_[static_cast<size_t>(k)].load(std::memory_order_relaxed);
         rtLaneCh_[k] = midiLaneCh_[static_cast<size_t>(k)].load(std::memory_order_relaxed);
@@ -1153,6 +1154,8 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             rtLaneLive_[k] = lp->playing.load(std::memory_order_relaxed) == ls->scene[static_cast<size_t>(k)];
             rtLaneNow_[k] = len > 0.0 ? std::fmod(lp->localBeats, len) : lp->localBeats;
         }
+        rtLaneJustLive_[k] = rec && rtLaneLive_[k] && !rtLaneWasLive_[k];
+        rtLaneWasLive_[k] = rec && rtLaneLive_[k];
     }
     // A retried Session MIDI take begins when its slot has relaunched: until then what is
     // played carries the old epoch and stays out (specs/078).
@@ -1262,7 +1265,10 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     // else the take's first moment — the count-in's first beat, or the record start. A slot
     // take starts them at the slot's current position. Seeding after the drain keeps out a
     // key whose release was already queued when Record was pressed.
-    if (takeStarted)
+    // A slot that joined the take picks up the keys held when it starts recording, too.
+    bool laneStarted = false;
+    for (int32_t k = 0; k < rtMidiLaneCount_; ++k) laneStarted |= rtLaneJustLive_[k];
+    if (takeStarted || laneStarted)
         for (int p = 0; p < 128; ++p) {
             if (!liveDown_[p]) continue;
             MidiEvent held{true, p, livePressVel_[p], livePressTrack_[p]};
@@ -1270,7 +1276,8 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             held.channel = livePressChannel_[p];
             for (int32_t k = 0; k < rtMidiLaneCount_; ++k) {
                 RtMidiLane& L = rtMidiLanes_[static_cast<size_t>(k)];
-                if (L.pendingActive[p] || !rtLaneLive_[k] || !laneTakes(k, held)) continue;
+                if (L.pendingActive[p] || !rtLaneLive_[k] || !(takeStarted || rtLaneJustLive_[k]) || !laneTakes(k, held))
+                    continue;
                 L.pendingActive[p] = true;
                 L.pendingStart[p] =
                     (rtLaneSlot_[k] || restarted || std::isnan(livePressBeat_[p])) ? rtLaneNow_[k] : livePressBeat_[p];
