@@ -175,11 +175,16 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             }
             env1.Refresh(); env2.Refresh();
             lfoStrip.Set(Sel("lfo1shape", 4), LfoCycles(0), G("lfo1depth"));
+            // Undim first so the readouts paint over the real colours, not ones saved while the
+            // oscillator was off (a cleared route would come back in its old modulation colour).
+            for (int o = 0; o < 2; o++)
+                foreach (var c in oscDimmed[o]) Inactive.Set(c, false, interactive: true);
             foreach (var r in readouts) r();
             // After the readouts' own paint: an oscillator that is off takes the unavailable
             // look, its controls staying where they are and still usable.
             for (int o = 0; o < 2; o++)
-                foreach (var c in oscDimmed[o]) Inactive.Set(c, G(o == 0 ? "osc1on" : "osc2on") < 0.5f, interactive: true);
+                if (G(o == 0 ? "osc1on" : "osc2on") < 0.5f)
+                    foreach (var c in oscDimmed[o]) Inactive.Set(c, true, interactive: true);
             hint.Text = Hint();
         }
         void Touch() => Refresh(true);
