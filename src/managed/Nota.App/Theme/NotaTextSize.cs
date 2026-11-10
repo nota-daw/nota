@@ -62,6 +62,16 @@ internal static class NotaTextSize
         FixedProperty.Changed.AddClassHandler<TextPresenter>((tp, _) => tp.CoerceValue(TextElement.FontSizeProperty));
     }
 
+    /// <summary>Build and draw with <paramref name="step"/> for the length of <paramref name="run"/>,
+    /// without touching the open windows — the skin previews (spec 087) draw at the default size.</summary>
+    public static void Scoped(int step, Action run)
+    {
+        int live = _step;
+        _step = TextSize.Normalize(step);
+        try { run(); }
+        finally { _step = live; }
+    }
+
     /// <summary>Wear <paramref name="step"/> (normalised) everywhere, live.</summary>
     public static void Set(int step)
     {

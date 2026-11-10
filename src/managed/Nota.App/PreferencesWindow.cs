@@ -30,6 +30,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Localization;
+using Nota.Application.Themes;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -1010,7 +1011,25 @@ public sealed partial class PreferencesWindow : NotaWindow
     // theme, one per row while following the system. Picking a card of the other kind
     // switches mode. Every pick applies at once (NotaThemeService re-tints the palette and
     // repaints every open window) and is saved.
+    //
+    // User themes (spec 087) join the rows after the built-ins. The page re-reads the themes
+    // folder each time it opens and on Reload, and rebuilds itself when the folder or the worn
+    // theme changes from elsewhere (an MCP client), so it always shows what is true.
     private static Control ThemePicker()
+    {
+        if (!NotaThemeService.InScope) NotaThemes.ReloadUser();
+        var host = new ContentControl();
+        Action? show = null;
+        void Build() { var (content, s) = BuildThemePicker(); host.Content = content; show = s; }
+        Build();
+        void OnThemes() => Dispatcher.UIThread.Post(Build);
+        void OnWorn() => Dispatcher.UIThread.Post(() => show?.Invoke());
+        host.AttachedToVisualTree += (_, _) => { NotaThemes.ThemesChanged += OnThemes; NotaThemeService.Changed += OnWorn; };
+        host.DetachedFromVisualTree += (_, _) => { NotaThemes.ThemesChanged -= OnThemes; NotaThemeService.Changed -= OnWorn; };
+        return host;
+    }
+
+    private static (Control Content, Action Show) BuildThemePicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var darkCards = ThemeCards(NotaThemeKind.Dark);
@@ -1028,11 +1047,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
         var segmented = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
 
+        var fallbackNote = new TextBlock { Classes = { "Caption" }, Foreground = NotaPalette.Warning, TextWrapping = TextWrapping.Wrap, MaxWidth = 560 };
+
         bool loading = true;
         void Show()
         {
             loading = true;
             var c = NotaThemeService.Choice;
+            var missing = StoredThemeIds(settings.Current).FirstOrDefault(id => NotaThemes.Find(id) is null);
+            fallbackNote.Text = missing is null ? "" : Loc.F("preferences.skins.fallback_note", missing,
+                (NotaThemeService.WornTheme is { } worn ? (NotaThemes.Find(worn.Id) ?? worn).Name : NotaThemes.Default.Name));
+            fallbackNote.IsVisible = missing is not null;
             var mode = Appearance.ModeOf(c, (NotaThemes.Find(c.Single) ?? NotaThemes.Default).IsDark);
             for (int i = 0; i < modes.Count; i++) modes[i].IsChecked = i == (int)mode;
             bool follow = mode == AppearanceMode.FollowSystem;
@@ -1070,11 +1095,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         };
 
         Show();
-        return new StackPanel
+        var panel = new StackPanel
         {
             Spacing = 10,
-            Children = { segmented, darkLabel, darkCards, lightLabel, lightCards },
+            Children = { segmented, fallbackNote, darkLabel, darkCards, lightLabel, lightCards, ThemesFolderRow() },
         };
+        if (ThemeProblems() is { } problems) panel.Children.Add(problems);
+        return (panel, Show);
     }
 
     // The themes of one kind as cards in a row: the preview in a frame that takes the
@@ -1085,18 +1112,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         {
             Classes = { "themes" }, SelectionMode = SelectionMode.Single,
             HorizontalAlignment = HorizontalAlignment.Left,
-            ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 }),
+            // Wraps: user themes (spec 087) can make a row longer than the page is wide.
+            ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 12, LineSpacing = 12 }),
             ItemsSource = NotaThemes.OfKind(kind).ToList(),
         };
-        list.ItemTemplate = new FuncDataTemplate<NotaColourTheme>((t, _) => t is null ? new TextBlock() : new StackPanel
-        {
-            Spacing = 6,
-            Children =
-            {
-                new Border { Classes = { "ThemeFrame" }, Child = new ThemePreview(t) },
-                new TextBlock { Text = t.Name, Classes = { "RowName" } },
-            },
-        });
+        // No sideways scrolling, so the wrap panel gets the page's width to wrap at.
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
+        list.ItemTemplate = new FuncDataTemplate<NotaColourTheme>((t, _) => t is null ? new TextBlock() : ThemeCard(t));
         return list;
     }
 
@@ -1116,10 +1138,12 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         public override void Render(DrawingContext ctx)
         {
+            // The theme's own corners (spec 087): a square skin previews square.
+            double fieldR = _theme.Geometry.RadiusOf(RadiusStep.Field);
             var seam = new Pen(B(NotaPalette.Seam), 1);
             void Fill(SolidColorBrush slot, double x, double y, double w, double h) => ctx.FillRectangle(B(slot), new Rect(x, y, w, h));
             void Key(SolidColorBrush slot, double x, double y, double w, double h) =>
-                ctx.DrawRectangle(B(slot), seam, new RoundedRect(new Rect(x + 0.5, y + 0.5, w - 1, h - 1), NotaRadius.FieldValue));
+                ctx.DrawRectangle(B(slot), seam, new RoundedRect(new Rect(x + 0.5, y + 0.5, w - 1, h - 1), fieldR));
             void HLine(double y, double x0, double x1) => ctx.DrawLine(seam, new Point(x0, y + 0.5), new Point(x1, y + 0.5));
             void VLine(double x, double y0, double y1) => ctx.DrawLine(seam, new Point(x + 0.5, y0), new Point(x + 0.5, y1));
 
@@ -1150,7 +1174,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 double y = top + i * laneH, span = W - x0;
                 var track = NotaPalette.TrackBrushes[i % NotaPalette.TrackBrushes.Length];
                 var r = new Rect(x0 + span * clips[i].At, y + 2, span * clips[i].Len, laneH - 4);
-                ctx.FillRectangle(B(track), r, (float)NotaRadius.FieldValue);
+                ctx.FillRectangle(B(track), r, (float)fieldR);
                 if (i < 3) HLine(y + laneH - 1, x0, W);
             }
             ctx.FillRectangle(B(NotaPalette.Accent), new Rect(x0 + (W - x0) * 0.46, top, 1, detailTop - top));
@@ -1406,7 +1430,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return Sections(
             Section("UI", 10,
                 TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
-                Row("", Caption(Loc.T("preferences.themes_change_colours_only_follow"))),
+                Row("", Caption(Loc.T("preferences.skins.follow_system_hint"))),
                 TopRow(Loc.T("preferences.accent"), AccentPicker()),
                 Row("", Caption(Loc.T("preferences.accent_caption"))),
                 Row(Loc.T("preferences.waveform"), WaveformPicker()),

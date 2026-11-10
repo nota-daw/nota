@@ -193,7 +193,7 @@ public sealed partial class PianoRollView
                     size -= 0.5;
                 } while ((ft.Width > Bounds.Width - 2 * pad - 2 || ft.Height > ChipH + 1) && size >= 6);
                 double y = Top + i * RowStep;
-                if (on) ctx.DrawRectangle(NotaPalette.Well, null, new Rect(pad, y, Math.Max(0, Bounds.Width - 2 * pad), ChipH), 5, 5);
+                if (on) ctx.DrawRectangle(NotaPalette.Well, null, new Rect(pad, y, Math.Max(0, Bounds.Width - 2 * pad), ChipH), NotaRadius.CellValue, NotaRadius.CellValue);
                 ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y + (ChipH - ft.Height) / 2));
             }
         }
@@ -360,7 +360,7 @@ public sealed partial class PianoRollView
                         if (px > x1 + 0.5) continue;
                         bool hot = _hoverPt == (i, k) || (_drag == Drag.Point && _ptNote == i && _ptIdx == k);
                         double r = hot ? 3.5 : 2.5;
-                        ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), 1);
+                        ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), (float)NotaSkin.MapRadius(1));
                     }
                 }
 

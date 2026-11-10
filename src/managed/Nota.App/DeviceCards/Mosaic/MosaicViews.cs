@@ -265,22 +265,22 @@ internal sealed class MosaicZoneMap : Control
             roots.Add(z.Root);
             var r = ZoneRect(m, z).Deflate(0.5);
             if (_sounding.ContainsKey(i) || i == _sel || !drawn.Add(r)) continue;
-            ctx.DrawRectangle(NotaPalette.SurfaceCard, Hair, new RoundedRect(r, 1));
-            if (z.Excl != 0 || z.OffBy != 0) ctx.DrawRectangle(null, ExclPen, new RoundedRect(r.Deflate(1.5), 1));
+            ctx.DrawRectangle(NotaPalette.SurfaceCard, Hair, new RoundedRect(r, NotaSkin.MapRadius(1)));
+            if (z.Excl != 0 || z.OffBy != 0) ctx.DrawRectangle(null, ExclPen, new RoundedRect(r.Deflate(1.5), NotaSkin.MapRadius(1)));
         }
         foreach (var (i, st) in _sounding)
         {
             if (i < 0 || i >= _zones.Count || !Shows(_zones[i])) continue;
             var r = ZoneRect(m, _zones[i]).Deflate(0.5);
             IBrush fill = st == 0 ? NotaPalette.Accent : st == 1 ? NotaPalette.AccentDim : NotaPalette.AccentMute;
-            ctx.DrawRectangle(fill, null, new RoundedRect(r, 1));
+            ctx.DrawRectangle(fill, null, new RoundedRect(r, NotaSkin.MapRadius(1)));
         }
         if (_sel >= 0 && _sel < _zones.Count && Shows(_zones[_sel]))
         {
             var z = _zones[_sel];
             var r = ZoneRect(m, z).Deflate(0.75);
-            if (!_sounding.ContainsKey(_sel)) ctx.DrawRectangle(NotaPalette.AccentSubtle, null, new RoundedRect(r, 1));
-            ctx.DrawRectangle(null, SelPen, new RoundedRect(r, 1));
+            if (!_sounding.ContainsKey(_sel)) ctx.DrawRectangle(NotaPalette.AccentSubtle, null, new RoundedRect(r, NotaSkin.MapRadius(1)));
+            ctx.DrawRectangle(null, SelPen, new RoundedRect(r, NotaSkin.MapRadius(1)));
             if (!Mini)
             {
                 var t = SamplerInk.Mono(MosaicNames.NoteName(z.Root), _sounding.ContainsKey(_sel) ? NotaPalette.TextOnAccent : NotaPalette.AccentBright, 6.5);

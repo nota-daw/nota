@@ -88,13 +88,13 @@ internal sealed class CeLevelView : ShDragView
                 if (_in[i] > Lo)
                 {
                     double iy = Y(_in[i]);
-                    ctx.DrawRectangle(inFill, null, new Rect(x, iy, bw, bot - iy), 1, 1);
-                    if (iy < cy - 0.5) ctx.DrawRectangle(overFill, null, new Rect(x, iy, bw, cy - iy), 1, 1);
+                    ctx.DrawRectangle(inFill, null, new Rect(x, iy, bw, bot - iy), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
+                    if (iy < cy - 0.5) ctx.DrawRectangle(overFill, null, new Rect(x, iy, bw, cy - iy), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
                 if (_out[i] > Lo)
                 {
                     double oy = Y(_out[i]);
-                    ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, oy, bw, bot - oy), 1, 1);
+                    ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, oy, bw, bot - oy), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
                 // Reduction strip under the plot (0 … −12 dB hanging).
                 double g = Math.Clamp(_gr[i] / 12.0, 0, 1);
@@ -163,7 +163,7 @@ internal sealed class CeReductionView : Avalonia.Controls.Control
                 if (_gr[i] < 0.02) continue;
                 double x = x0 + i * cw;
                 ctx.DrawRectangle(_clip[i] > 0.5f ? NotaPalette.TextTertiary : NotaPalette.VizInk, null,
-                    new Rect(x, top, Math.Max(0.6, cw - gap), Y(_gr[i]) - top), 1, 1);
+                    new Rect(x, top, Math.Max(0.6, cw - gap), Y(_gr[i]) - top), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
         }
         if (_avg > 0.05)

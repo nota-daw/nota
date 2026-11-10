@@ -589,7 +589,7 @@ internal sealed class ShPatternView : Control
         }
         var ft = NotaGraph.AxisText(_label, _active ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
         var chip = new Rect(w - ft.Width - 12, 5, ft.Width + 8, ft.Height + 2);
-        ctx.FillRectangle(NotaPalette.BgSunken, chip, 3);
+        ctx.FillRectangle(NotaPalette.BgSunken, chip, (float)NotaRadius.SwitchValue);
         ctx.DrawText(ft, new Point(chip.X + 4, chip.Y + 1));
     }
 }

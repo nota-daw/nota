@@ -188,8 +188,8 @@ internal sealed class RandomOutputViz : Control
         double Y(int p) => win.Y + (hi - p - 0.5) * row;
         double X(double beat) => win.X + beat / RandomModel.BarBeats * win.Width;
 
-        ctx.DrawRectangle(Well, null, new RoundedRect(win, 6));
-        using (ctx.PushClip(new RoundedRect(win.Deflate(1), 3)))
+        ctx.DrawRectangle(Well, null, new RoundedRect(win, NotaRadius.FieldValue));
+        using (ctx.PushClip(new RoundedRect(win.Deflate(1), NotaRadius.SwitchValue)))
         {
             for (int p = (int)Math.Ceiling(lo / 12.0) * 12; p <= hi; p += 12)
                 ctx.FillRectangle(Edge, new Rect(win.X, Math.Round(win.Y + (hi - p) * row), win.Width, 1));
@@ -257,7 +257,7 @@ internal sealed class RandomHistViz : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Well, null, new RoundedRect(new Rect(0, 0, w, h), 6));
+        ctx.DrawRectangle(Well, null, new RoundedRect(new Rect(0, 0, w, h), NotaRadius.FieldValue));
         int n = _bins.Length;
         if (n == 0) return;
         double x0 = 3, x1 = w - 3, top = 3, bot = h - 1, gap = 1;

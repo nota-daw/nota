@@ -219,7 +219,7 @@ internal sealed class OrbitPanBar : Control
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, cy), new Point(w, cy));
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(Math.Round(w / 2) + 0.5, cy - 3.5), new Point(Math.Round(w / 2) + 0.5, cy + 3.5));
         if (_max > _min)
-            ctx.DrawRectangle(NotaPalette.TextTertiary, null, new RoundedRect(new Rect(X(_min), cy - 1.5, Math.Max(1, X(_max) - X(_min)), 3), 1.5));
+            ctx.DrawRectangle(NotaPalette.TextTertiary, null, new RoundedRect(new Rect(X(_min), cy - 1.5, Math.Max(1, X(_max) - X(_min)), 3), NotaSkin.MapRadius(1.5)));
         ctx.DrawEllipse(NotaPalette.Accent, new Pen(NotaPalette.DeviceSection, 2), new Point(X(_pan), cy), 4, 4);
     }
 }

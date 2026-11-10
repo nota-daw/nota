@@ -1419,12 +1419,21 @@ audio effects after it keep running and keep their settings; saved with the proj
   orange accent; the default, and what a DAW wants for long sessions in a dark room),
   **Studio Light** (the same system in light greys, the orange a shade deeper), and
   **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
-  A theme changes colours only — track colours included — never the layout; the accent
+  A built-in theme changes colours only — track colours included — never the layout; the accent
   colour is a separate choice (see [Preferences](#preferences)). Panels dock edge
   to edge on thin seams; orange (or the chosen accent) marks only what is playing, selected or switched on, and a
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Skins (user themes)** — theme files in the **Themes** folder of the data folder appear
+  next to the built-ins and are worn the same way. A file sets every colour token. Format 2
+  can also name an installed system typeface, which replaces Geist for all of Nota's text,
+  and a corner roundness from 0 (square) to 2, with optional exact radii per step. All
+  three apply live in every window, device cards and drawn views included, without changing
+  sizes. A file that fails is listed with the reason. A theme below the readability bar
+  still loads, and shows its warnings. Over MCP an AI can validate a theme, get one picture
+  per part of the app in it without the window changing, and save, wear or try it on (see
+  [MCP](#mcp--ai-control)).
 - **Release splash art** — the launch splash shows an abstract picture generated from the
   version number: piano-roll notes, rhythm rings, waveform strata, panels, a Lissajous
   figure or fader rails, in a few of the theme's track colours, with one orange mark that
@@ -1531,7 +1540,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. **Accent** — the colour of what is live or chosen: seven presets
+  live and is remembered. User themes (skins) join the rows, tagged **User theme** and with
+  a warning count when they have one. **Duplicate** (right-click a card) copies any theme
+  into the themes folder. **Open themes folder** and **Reload** sit under the cards, and
+  files that could not be loaded are listed with the reason. **Accent** — the colour of what is live or chosen: seven presets
   (Orange — the default — Lime, Aqua, Sky, Violet, Magenta, Pink) or **Custom**, a colour
   picker (saturation/brightness area, hue strip, hex field) that previews the colour in all
   four themes. One accent for every theme, tuned to each so it stays readable; a grey or a
@@ -1604,6 +1616,12 @@ Coverage:
 - **Automation**: create a lane (volume, pan, a device or instrument parameter),
   read and write points. A send is not a lane target.
 - **MIDI effects** and engine status.
+- **Themes and skins**: `list_themes`, `get_theme` (the file, as a template),
+  `get_theme_catalogue` (every colour token with what it colours, the radius steps),
+  `list_system_fonts`, `validate_theme` (every problem and readability warning).
+  `preview_theme` returns a PNG per part of the app (overview, top bar, arrangement, mixer,
+  device rack, piano roll, browser, Preferences, a menu, a dialog) rendered offscreen in that
+  theme. `save_theme`, `apply_theme`, `try_on_theme` / `revert_try_on`.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch
   mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /

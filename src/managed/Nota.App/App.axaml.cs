@@ -27,6 +27,8 @@ public partial class App : Avalonia.Application
         // One typeface with tabular figures, so digits keep their width everywhere.
         NotaFonts.InstallTabular();
         NotaTextSize.Install();
+        // A skin's typeface and corner radii (spec 087), by the same kind of coercion.
+        NotaSkin.Install();
         // Rounded, bordered, clipping Borders clip their child to the inner edge.
         BorderInnerClip.Install();
         AvaloniaXamlLoader.Load(this);
@@ -101,12 +103,21 @@ public partial class App : Avalonia.Application
             e.SetObserved();
         };
 
+        // Interface language (spec 068), before any view model, window or static text table
+        // exists — and before the themes, whose load problems are interface text (spec 087):
+        // the language is fixed for the run, so those texts are built once, in it.
+        InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
         // Colour theme (Preferences → Appearance), applied before the first window paints so
         // nothing flashes one theme on the way to another. Old Dark / Light / System
         // settings resolve onto the Studio themes (Appearance.Resolve).
         foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
+        // User themes (spec 087) load first, so a stored user theme id resolves to itself.
+        NotaThemes.ReloadUser();
+        foreach (var (file, reason) in NotaThemes.UserLoadProblems) log.Info($"User theme skipped — {file}: {reason}");
         // The accent (spec 084) is resolved with it, so the first frame already wears it too.
         var startSettings = Services.GetRequiredService<ISettingsService>().Current;
+        NotaThemeService.StoredChoice = () => Appearance.Resolve(
+            Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes);
         NotaThemeService.Set(Appearance.Resolve(startSettings, NotaThemeService.KnownThemes));
         NotaThemeService.SetAccent(Accent.Resolve(startSettings));
         // Interface scale (spec 027), likewise before the first window: windows and every
@@ -115,9 +126,6 @@ public partial class App : Avalonia.Application
         NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
         // Text size (spec 038), likewise: every text the app draws takes its step.
         NotaTextSize.Set(Services.GetRequiredService<ISettingsService>().Current.TextSize);
-        // Interface language (spec 068), before any view model, window or static text table
-        // exists: the language is fixed for the run, so those texts are built once, in it.
-        InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
         TranslateAppMenu();
         TextBoxMenu.Install();   // the text boxes' Cut / Copy / Paste menu is Avalonia's, in English
 

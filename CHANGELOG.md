@@ -23,6 +23,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Skins: your own themes** (#336, specs/087). Put a theme file in the **Themes** folder
+  of Nota's data folder and it appears in **Preferences → Appearance**, next to the
+  built-in themes, under Dark or Light. You pick it like any built-in theme, and the choice
+  is kept after a restart.
+  - A theme file sets every colour token. Format 2 can also name a typeface installed on
+    the system and how round the corners are: one roundness from 0 (square) to 2, plus
+    exact values for single steps. The whole app follows it live, device cards and drawn
+    views included; sizes and layout stay the same.
+  - Right-click any theme card and pick **Duplicate** to get a copy to edit. **Open themes
+    folder** and **Reload** are under the cards.
+  - A file that can't be loaded is listed under the cards with the reason, and the token
+    it is about. A theme whose text may be hard to read loads anyway and shows how many
+    warnings it has. A typeface that isn't installed falls back to Geist.
+  - New MCP tools let an AI or a script design a skin:
+    - `list_themes`, `get_theme`, `get_theme_catalogue` and `list_system_fonts` read what
+      there is;
+    - `validate_theme` checks a theme without saving it;
+    - `preview_theme` returns one picture per part of the app in that theme, without
+      changing the window;
+    - `save_theme`, `apply_theme`, `try_on_theme` and `revert_try_on` save it, wear it or
+      try it on.
 - **Custom wavetables in Nota Aurora** (specs/053): drop a WAV, FLAC or MP3 file on either
   oscillator, from the browser or the desktop, or pick **Import…** in its table drop-down.
   Aurora turns it into a table as follows:

@@ -506,7 +506,7 @@ public sealed partial class SessionView
                 if (_o._armed.Contains(_c.TrackId))
                     ctx.DrawEllipse(null, new Pen(_hoverCentre ? NotaPalette.Record : NotaPalette.TextMuted, 1.5), c, 3.25, 3.25);
                 else if (_stopButton)
-                    ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 3, c.Y - 3, 6, 6), 1, 1);
+                    ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 3, c.Y - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (selected) DrawSelection(ctx, r);
                 return;
             }
@@ -573,7 +573,7 @@ public sealed partial class SessionView
                     double x = area.X + n.Start / _lenBeats * area.Width;
                     double w = Math.Max(1.5, Math.Min(n.Len, _lenBeats - n.Start) / _lenBeats * area.Width);
                     double y = area.Y + (_maxPitch - n.Pitch) / (double)range * (area.Height - 3);
-                    ctx.DrawRectangle(_brush, null, new Rect(x, y, w, 3), 1, 1);
+                    ctx.DrawRectangle(_brush, null, new Rect(x, y, w, 3), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
                 return;
             }
@@ -627,7 +627,7 @@ public sealed partial class SessionView
                 double wd = Math.Max(1.5, Math.Min(length, len - start) / len * area.Width);
                 double y = area.Y + (hi - pitch) / (double)range * (area.Height - 3);
                 var b = prog < 1 ? RecordPreview.AppearBrush(ink.Color, prog) : ink;
-                ctx.DrawRectangle(b, null, new Rect(x, y, wd, 3), 1, 1);
+                ctx.DrawRectangle(b, null, new Rect(x, y, wd, 3), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
             foreach (var n in stored)
                 if (n.StartBeat < len) Bar(n.Pitch, n.StartBeat, n.LengthBeats, rp?.Progress(n.Pitch, n.StartBeat) ?? 1);
@@ -652,7 +652,7 @@ public sealed partial class SessionView
         {
             double a = Math.Max(Math.Abs(peaks[i * 2]), Math.Abs(peaks[i * 2 + 1])) / max;
             double h = Math.Max(1, a * area.Height);
-            ctx.DrawRectangle(ink, null, new Rect(area.X + i * step, area.Y + (area.Height - h) / 2, bw, h), 0.5, 0.5);
+            ctx.DrawRectangle(ink, null, new Rect(area.X + i * step, area.Y + (area.Height - h) / 2, bw, h), NotaSkin.MapRadius(0.5), NotaSkin.MapRadius(0.5));
         }
     }
 
@@ -711,7 +711,7 @@ public sealed partial class SessionView
             if (!Any)
             {
                 FillCell(ctx, r, NotaPalette.Well, null);
-                ctx.DrawRectangle(NotaPalette.BorderStrong, null, new Rect(r.Center.X - 3, r.Center.Y - 3, 6, 6), 1, 1);
+                ctx.DrawRectangle(NotaPalette.BorderStrong, null, new Rect(r.Center.X - 3, r.Center.Y - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (selected) DrawSelection(ctx, r);
                 return;
             }
@@ -727,7 +727,7 @@ public sealed partial class SessionView
             {
                 var k = _kids[i];
                 IBrush ink = !k.Has ? NotaPalette.BorderDefault : eng.SessionSlotState(k.Id, _scene) == 3 ? NotaPalette.Success : k.Brush;
-                ctx.DrawRectangle(ink, null, new Rect(7, y, r.Width - 14, 3), 1, 1);
+                ctx.DrawRectangle(ink, null, new Rect(7, y, r.Width - 14, 3), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
             if (selected) DrawSelection(ctx, r);
         }
@@ -863,7 +863,7 @@ public sealed partial class SessionView
             DrawTriangle(ctx, LaunchBox.Center, 8, 9, tri);
 
             double x = LaunchBox.Right + 8;
-            ctx.DrawRectangle(_color, null, new Rect(x, r.Height / 2 - 3, 6, 6), 1, 1);
+            ctx.DrawRectangle(_color, null, new Rect(x, r.Height / 2 - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             x += 14;
             double right = r.Width - 8;
             if (_badge.Length > 0)

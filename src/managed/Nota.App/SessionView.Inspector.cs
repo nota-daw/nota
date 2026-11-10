@@ -492,7 +492,7 @@ public sealed partial class SessionView
                     double x = area.X + n.StartBeat / _len * area.Width;
                     double w = Math.Max(2, Math.Min(n.LengthBeats, _len - n.StartBeat) / _len * area.Width);
                     double y = area.Y + (hi - n.Pitch) / (double)range * (area.Height - 5);
-                    ctx.DrawRectangle(_brush, null, new Rect(x, y, w, 5), 1, 1);
+                    ctx.DrawRectangle(_brush, null, new Rect(x, y, w, 5), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
             }
             else if (!_c.IsInstrument) DrawPeaks(ctx, area, _peaks, _peakCount, _brush);

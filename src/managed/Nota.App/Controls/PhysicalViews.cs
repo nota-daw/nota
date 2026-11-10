@@ -92,7 +92,7 @@ internal sealed class PhysPartialsView : VtWindowBase
                 // as the fundamental at full.
                 byte a = (byte)Math.Clamp(90 + 165 * Math.Min(1, m.Tau / tau0), 60, 255);
                 var c = ((ISolidColorBrush)ink).Color;
-                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B)), null, new Rect(x - 1.5, bot - bh, 3, bh), 1, 1);
+                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B)), null, new Rect(x - 1.5, bot - bh, 3, bh), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (i == 0) ctx.DrawEllipse(_dim ? NotaPalette.TextDisabled : NotaPalette.VizInk, null, new Point(x, bot - bh - 3), 1.8, 1.8);
             }
         }

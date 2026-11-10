@@ -8,23 +8,41 @@
 // take later (specs/011-colour-themes/contracts/theme-file.md), so the loader validates
 // rather than trusts: a file that fails is left out of the list and noted in LoadErrors,
 // never thrown at the UI.
+//
+// User themes (spec 087) are the same files in <data>/Themes. They join the list after the
+// built-ins and can also carry a typeface and corner radii (format 2). One validator —
+// Nota.Application.Themes.ThemeFile — serves the built-ins, the folder, MCP and the tests.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Avalonia.Media;
+using Nota.Application.Themes;
+using Nota.Infrastructure;
 
 namespace Nota.App;
 
 internal enum NotaThemeKind { Dark, Light }
 
+/// <summary>Where a worn theme came from. Try-on and preview themes are never in the list.</summary>
+internal enum ThemeSource { BuiltIn, User, TryOn, Preview }
+
 internal sealed record NotaColourTheme(string Id, string Name, NotaThemeKind Kind, IReadOnlyDictionary<string, Color> Colors)
 {
     public bool IsDark => Kind == NotaThemeKind.Dark;
     public Color this[string token] => Colors[token];
+
+    /// <summary>Typeface and corner radii (spec 087). Default for every built-in.</summary>
+    public SkinGeometry Geometry { get; init; } = SkinGeometry.Default;
+    public ThemeSource Source { get; init; } = ThemeSource.BuiltIn;
+    /// <summary>The file a user theme was read from.</summary>
+    public string? FilePath { get; init; }
+    /// <summary>Readability pairings below their minimum, and a missing typeface.</summary>
+    public IReadOnlyList<ThemeWarning> Warnings { get; init; } = Array.Empty<ThemeWarning>();
+
+    public bool IsUser => Source == ThemeSource.User;
 }
 
 internal static class NotaThemes
@@ -44,17 +62,19 @@ internal static class NotaThemes
 
     // Translucent by design; every other token must be opaque. The wells and the device
     // bevel are a faint white (dark themes) or black (light themes) over whatever they sit on.
-    private static readonly HashSet<string> AlphaTokens = new()
+    public static readonly IReadOnlySet<string> AlphaTokens = new HashSet<string>
     {
         "ShadowBevel", "ShadowPopover", "ShadowModal",
         "Well", "WellTrack", "KnobTrack", "DeviceSectionEdge", "Bevel",
     };
 
-    private static readonly Regex IdPattern = new("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
-    private static readonly Regex HexPattern = new("^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$", RegexOptions.Compiled);
-
     private static IReadOnlyList<NotaColourTheme>? _builtIn;
     private static readonly List<string> _loadErrors = new();
+    private static IReadOnlyList<NotaColourTheme> _user = Array.Empty<NotaColourTheme>();
+    private static IReadOnlyList<NotaColourTheme>? _all;
+    private static IReadOnlyList<(string FileName, string Reason)> _userProblems = Array.Empty<(string, string)>();
+    private static IReadOnlyList<string>? _catalogueList;
+    private static HashSet<string>? _systemFonts;
 
     /// <summary>Why a built-in theme file was left out, if any was. Logged at startup.</summary>
     public static IReadOnlyList<string> LoadErrors { get { _ = BuiltIn; return _loadErrors; } }
@@ -62,15 +82,93 @@ internal static class NotaThemes
     /// <summary>Every built-in theme that loaded and validated, in <see cref="BuiltInOrder"/>.</summary>
     public static IReadOnlyList<NotaColourTheme> BuiltIn => _builtIn ??= LoadBuiltIn();
 
-    public static NotaColourTheme? Find(string? id) => id is null ? null : BuiltIn.FirstOrDefault(t => t.Id == id);
+    /// <summary>The user themes that loaded from <see cref="ThemesFolder"/>, by name.</summary>
+    public static IReadOnlyList<NotaColourTheme> User => _user;
 
-    public static IEnumerable<NotaColourTheme> OfKind(NotaThemeKind kind) => BuiltIn.Where(t => t.Kind == kind);
+    /// <summary>Built-ins, then user themes — every theme Preferences lists and a choice can name.</summary>
+    public static IReadOnlyList<NotaColourTheme> All => _all ??= BuiltIn.Concat(_user).ToList();
+
+    /// <summary>User theme files that could not be loaded, with the reason in plain words.</summary>
+    public static IReadOnlyList<(string FileName, string Reason)> UserLoadProblems => _userProblems;
+
+    /// <summary>Where user themes live: Themes in the Nota data folder (NOTA_DATA_DIR moves it).</summary>
+    public static string ThemesFolder => Path.Combine(NotaPaths.DataDir, "Themes");
+
+    /// <summary>Raised after <see cref="ReloadUser"/> on the UI thread.</summary>
+    public static event Action? ThemesChanged;
+
+    public static NotaColourTheme? Find(string? id) => id is null ? null : All.FirstOrDefault(t => t.Id == id);
+
+    public static bool IsBuiltIn(string id) => BuiltIn.Any(t => t.Id == id);
+
+    public static IEnumerable<NotaColourTheme> OfKind(NotaThemeKind kind) => All.Where(t => t.Kind == kind);
 
     /// <summary>Studio Dark, the default and the last resort.</summary>
-    public static NotaColourTheme Default => Find("studio-dark") ?? BuiltIn[0];
+    public static NotaColourTheme Default => BuiltIn.FirstOrDefault(t => t.Id == "studio-dark") ?? BuiltIn[0];
 
     /// <summary>The token catalogue every theme must match exactly.</summary>
     public static IEnumerable<string> Catalogue => NotaPalette.TokenNames.Concat(ExtraTokens);
+
+    /// <summary>The catalogue in file order — what the validator and the writer take.</summary>
+    public static IReadOnlyList<string> CatalogueList => _catalogueList ??= Catalogue.ToList();
+
+    /// <summary>Whether <paramref name="family"/> is a font installed on this system (case-insensitive).</summary>
+    public static bool IsFontInstalled(string family)
+    {
+        if (_systemFonts is null)
+        {
+            _systemFonts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try { foreach (var f in FontManager.Current.SystemFonts) _systemFonts.Add(f.Name); }
+            catch (Exception) { /* no font manager (tests): treat every family as missing */ }
+        }
+        return _systemFonts.Contains(family);
+    }
+
+    /// <summary>The font families installed on this system, sorted.</summary>
+    public static IReadOnlyList<string> SystemFontNames()
+    {
+        _ = IsFontInstalled("");
+        return _systemFonts!.OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    /// <summary>Validate a theme document with this app's catalogue and installed fonts.</summary>
+    public static ThemeValidation Validate(string json) =>
+        ThemeFile.Validate(json, CatalogueList, AlphaTokens, IsFontInstalled);
+
+    /// <summary>A validated document as a theme the app can wear.</summary>
+    public static NotaColourTheme FromParsed(ThemeValidation v, ThemeSource source, string? path = null)
+    {
+        var t = v.Theme ?? throw new ArgumentException("the theme is not valid", nameof(v));
+        return new NotaColourTheme(t.Id, t.Name, t.IsDark ? NotaThemeKind.Dark : NotaThemeKind.Light,
+            t.Colors.ToDictionary(kv => kv.Key, kv => Color.FromUInt32(kv.Value)))
+        {
+            Geometry = t.Geometry,
+            Source = source,
+            FilePath = path,
+            Warnings = v.Warnings,
+        };
+    }
+
+    /// <summary>The theme as a file (format 1 or 2), tokens in catalogue order.</summary>
+    public static string ToFile(NotaColourTheme theme) =>
+        ThemeFile.Write(new ParsedTheme(theme.Id, theme.Name, theme.IsDark,
+            theme.Colors.ToDictionary(kv => kv.Key, kv => kv.Value.ToUInt32()), theme.Geometry, theme.Geometry.IsDefault ? 1 : 2),
+            CatalogueList);
+
+    /// <summary>Re-read the user themes folder. Never throws; a bad file goes to
+    /// <see cref="UserLoadProblems"/>. Raises <see cref="ThemesChanged"/>.</summary>
+    public static void ReloadUser()
+    {
+        _systemFonts = null;   // a font may have been installed or removed meanwhile
+        var scan = ThemeFolder.Scan(ThemesFolder, CatalogueList, AlphaTokens, IsBuiltIn, IsFontInstalled);
+        _user = scan.Loaded
+            .Select(e => FromParsed(e.Validation, ThemeSource.User, e.Path))
+            .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        _userProblems = scan.Problems;
+        _all = null;
+        ThemesChanged?.Invoke();
+    }
 
     private static IReadOnlyList<NotaColourTheme> LoadBuiltIn()
     {
@@ -83,7 +181,8 @@ internal static class NotaThemes
             var theme = Parse(json, catalogue, out var error);
             if (theme is null) { _loadErrors.Add($"{id}: {error}"); continue; }
             if (theme.Id != id) { _loadErrors.Add($"{id}: file declares id '{theme.Id}'"); continue; }
-            list.Add(theme);
+            // Built-ins are held to the readability bar by the smoke test, not warned about here.
+            list.Add(theme with { Warnings = Array.Empty<ThemeWarning>() });
         }
         if (list.Count == 0) throw new InvalidOperationException("No colour theme could be loaded: " + string.Join("; ", _loadErrors));
         return list;
@@ -106,60 +205,18 @@ internal static class NotaThemes
         return r.ReadToEnd();
     }
 
-    /// <summary>Parse and validate one theme file (rules F1–F6). Returns null with a reason
-    /// on the first problem; reasons name the token so a broken file is easy to fix.</summary>
+    /// <summary>Parse and validate one theme file (rules F1–F6, and the format-2 parts).
+    /// Returns null with the first reason on a problem; reasons name the token so a broken
+    /// file is easy to fix. <see cref="ThemeFile.Validate"/> gives every problem.</summary>
     public static NotaColourTheme? Parse(string json, IReadOnlySet<string> catalogue, out string? error)
     {
+        var v = ThemeFile.Validate(json, catalogue.Count == CatalogueList.Count ? CatalogueList : catalogue.ToList(), AlphaTokens);
+        if (!v.IsValid)
+        {
+            error = v.Problems.FirstOrDefault()?.Message ?? "";
+            return null;
+        }
         error = null;
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return Fail("the file must hold one JSON object", out error);
-            if (!root.TryGetProperty("formatVersion", out var fv) || fv.ValueKind != JsonValueKind.Number
-                || !fv.TryGetInt32(out var version) || version != 1)
-                return Fail("formatVersion must be 1", out error);
-            // Metadata is read only when it is a string: a number or object here fails this
-            // theme with a reason instead of throwing out of the loader.
-            static string Str(JsonElement root, string key)
-                => root.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
-            var id = Str(root, "id");
-            if (!IdPattern.IsMatch(id) || id == "system") return Fail($"invalid id '{id}'", out error);
-            var name = Str(root, "name");
-            if (name.Length is < 1 or > 40) return Fail("name must be 1–40 characters", out error);
-            var kindText = Str(root, "kind");
-            NotaThemeKind kind;
-            if (kindText == "dark") kind = NotaThemeKind.Dark;
-            else if (kindText == "light") kind = NotaThemeKind.Light;
-            else return Fail($"kind must be dark or light, not '{kindText}'", out error);
-            if (!root.TryGetProperty("colors", out var colors) || colors.ValueKind != JsonValueKind.Object)
-                return Fail("colors missing", out error);
-
-            var map = new Dictionary<string, Color>();
-            foreach (var p in colors.EnumerateObject())
-            {
-                if (!catalogue.Contains(p.Name)) return Fail($"unknown token '{p.Name}'", out error);
-                var hex = p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() ?? "" : "";
-                if (!HexPattern.IsMatch(hex)) return Fail($"token '{p.Name}' has invalid colour '{hex}'", out error);
-                var c = Color.Parse(hex);
-                if (c.A != 0xFF && !AlphaTokens.Contains(p.Name)) return Fail($"token '{p.Name}' must be opaque", out error);
-                map[p.Name] = c;
-            }
-            var missing = catalogue.Where(t => !map.ContainsKey(t)).ToList();
-            if (missing.Count > 0) return Fail("missing token(s) " + string.Join(", ", missing), out error);
-            return new NotaColourTheme(id, name, kind, map);
-        }
-        catch (JsonException e)
-        {
-            return Fail("not valid JSON: " + e.Message, out error);
-        }
-        catch (Exception e) when (e is InvalidOperationException or FormatException)
-        {
-            // A JSON value of the wrong kind somewhere the checks above don't look: fail this
-            // theme with a reason (the loader logs and skips it) rather than throw out of startup.
-            return Fail("unexpected value: " + e.Message, out error);
-        }
+        return FromParsed(v, ThemeSource.BuiltIn);
     }
-
-    private static NotaColourTheme? Fail(string reason, out string? error) { error = reason; return null; }
 }

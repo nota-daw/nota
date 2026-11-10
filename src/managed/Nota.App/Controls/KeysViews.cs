@@ -195,7 +195,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions, IValueEntryHo
         var mags = KeysModel.Harmonics(sym, dist, model);
         double bw = 6, gap = 3, ih = 44, iw = 8 * bw + 7 * gap + 10;
         var inset = new Rect(frame.Right - iw - 8, frame.Bottom - ih - 6, iw, ih);
-        ctx.DrawRectangle(NotaGraph.Ground, NotaGraph.FramePen, new RoundedRect(inset, 3));
+        ctx.DrawRectangle(NotaGraph.Ground, NotaGraph.FramePen, new RoundedRect(inset, NotaRadius.SwitchValue));
         ctx.DrawText(NotaGraph.AxisText("H1–H8"), new Point(inset.X + 4, inset.Y + 2));
         for (int k = 0; k < 8; k++)
         {
@@ -236,7 +236,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions, IValueEntryHo
         void Pickup(double t, string label, bool lit)
         {
             var rr = new Rect(X(t) - 8, cy + amp + 6, 16, 9);
-            ctx.DrawRectangle(lit ? NotaPalette.Accent : NotaPalette.BorderStrong, null, new RoundedRect(rr, 2));
+            ctx.DrawRectangle(lit ? NotaPalette.Accent : NotaPalette.BorderStrong, null, new RoundedRect(rr, NotaRadius.FineValue));
             var ft = NotaGraph.AxisText(label, lit ? NotaPalette.AccentBright : NotaPalette.TextAxis);
             ctx.DrawText(ft, new Point(X(t) - ft.Width / 2, rr.Bottom + 2));
         }
@@ -296,7 +296,7 @@ internal sealed class KeysTremView : Control
             // Where the sound sits: the pan dot (stereo) or the level (mono) at the playhead.
             double s = Shape(2 * Math.PI * (0.33 * 2.25 + _phase)) * _get("tremdepth");
             var bar = new Rect(8, h - barH + 1, w - 16, 6);
-            ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar, 3));
+            ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar, NotaRadius.SwitchValue));
             double pos = stereo && on ? 0.5 + s * 0.5 : 0.5;
             double px = bar.X + pos * bar.Width;
             ctx.DrawEllipse(on ? NotaPalette.VizInk : NotaPalette.TextAxis, null, new Point(px, bar.Y + bar.Height / 2), 3, 3);
@@ -329,7 +329,7 @@ internal sealed class KeysVoiceGrid : Control
                 : i < _held ? NotaPalette.Accent
                 : i < _held + _tail ? NotaPalette.TextTertiary
                 : NotaPalette.BorderDefault;
-            ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(c * (cw + 1), r * 6, cw, 5), 1));
+            ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(c * (cw + 1), r * 6, cw, 5), NotaSkin.MapRadius(1)));
         }
     }
 }

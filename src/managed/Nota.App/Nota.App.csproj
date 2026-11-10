@@ -50,6 +50,8 @@
        files from disk. -->
   <ItemGroup>
     <EmbeddedResource Include="Theme\Themes\*.json" LogicalName="Nota.Themes.%(Filename)%(Extension)" />
+    <!-- What each colour token is for (spec 087): the MCP theme catalogue. -->
+    <EmbeddedResource Include="Theme\token-roles.json" LogicalName="Nota.Themes.token-roles.json" />
   </ItemGroup>
 
   <ItemGroup>

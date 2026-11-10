@@ -86,7 +86,7 @@ internal sealed class BrTimelineView : Control
                     2 => NotaPalette.Wash(NotaPalette.VizInk, (byte)Math.Clamp(60 + 150 * g, 50, 210)),
                     _ => NotaPalette.Wash(NotaPalette.TextTertiary, 0x38),
                 };
-                ctx.DrawRectangle(fill, null, r, 2, 2);
+                ctx.DrawRectangle(fill, null, r, NotaRadius.FineValue, NotaRadius.FineValue);
             }
 
         // Interval boundaries (dashed) and the trigger points (ticks at the top).
