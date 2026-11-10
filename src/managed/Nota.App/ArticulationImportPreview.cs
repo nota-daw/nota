@@ -98,7 +98,7 @@ public sealed class ArticulationImportPreview : NotaWindow
     {
         var swatch = new Border
         {
-            Width = 10, Height = 10, CornerRadius = NotaRadius.Badge, Background = Swatch(a),
+            Width = 10, Height = 10, CornerRadius = NotaRadius.Fine, Background = Swatch(a),
             VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 8, 0),
         };
         string head = a.ShortName.Length > 0 && a.ShortName != a.Name ? $"{a.Name}  ({a.ShortName})" : a.Name;
