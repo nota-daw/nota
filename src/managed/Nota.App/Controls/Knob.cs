@@ -83,8 +83,10 @@ public sealed class Knob : Control
     private IBrush? _arc;
 
     /// <summary>Drawn as inactive (no brass) while still taking input — see Inactive.</summary>
-    public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); } }
+    public bool IsDim { get => _dim; set { if (_dim == value) return; _dim = value; InvalidateVisual(); DimChanged?.Invoke(); } }
     private bool _dim;
+    /// <summary>After <see cref="IsDim"/> changes, so a cell can repaint its label and value.</summary>
+    public event Action? DimChanged;
 
     /// <summary>A live reading marked on the track as a short tick, as a 0..max position (NaN = none).</summary>
     public double Marker { get => _marker; set { if (_marker.Equals(value)) return; _marker = value; InvalidateVisual(); } }
