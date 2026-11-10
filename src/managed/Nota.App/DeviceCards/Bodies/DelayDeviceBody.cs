@@ -66,7 +66,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         int Sel(int p, int n) => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1);
 
         var readouts = new List<Action>();
-        var scope = new float[kScope];
+        var scope = new float[kScope + SpaceDraw.Floats];   // the telemetry, then the level history (#377)
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
 
@@ -195,7 +195,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         // One view per centre tab — a control has one parent, and both tabs show the window.
         var tapViews = new List<DelayTaps>();
         double windowSec = 0;
-        var start = DateTime.UtcNow;
+        var start = DateTime.UtcNow;   // Tap tempo's clock
         bool tapDrag = false;
         float fb0 = 0;
         DelayTaps NewTaps()
@@ -258,15 +258,25 @@ internal sealed class DelayDeviceBody : IDeviceBody
             if (freeze) labelL = Loc.T("device.delay.loop_held_no_decay");
             foreach (var t in tapViews) t.Set(fracL, fracR, P(Feedback), On(PingPong), freeze, link, labelL, labelR, ticks.ToArray());
 
-            // Light the repeat that is sounding: the card counts them off the wall clock at the
-            // repeat period, and only while the wet path is actually making sound.
+            // Your echoes behind the stems (the level history after the telemetry), and the repeat
+            // of the latest hit that is sounding now lit — counted from the hit itself, while the
+            // wet path is making sound.
+            bool has = scN >= kScope + SpaceDraw.Floats;
+            double age = -1;
+            foreach (var t in tapViews) age = t.SetLive(scope, kScope, has, windowSec);
             int litL = -1, litR = -1;
-            if (Sc(S_WetPk) > 5e-4 && msl > 1 && msr > 1)
+            if (age >= 0 && Sc(S_WetPk) > 5e-4 && msl > 1 && msr > 1)
             {
-                double ms = (DateTime.UtcNow - start).TotalMilliseconds;
-                int nL = Math.Max(1, (int)(1.0 / Math.Max(fracL, 1e-3)));
-                int nR = Math.Max(1, (int)(1.0 / Math.Max(fracR, 1e-3)));
-                litL = (int)(ms / msl) % nL; litR = (int)(ms / msr) % nR;
+                // The same spacing as the stems (DelayTaps.Echoes): ping-pong alternates the
+                // lanes, so each lane repeats every L + R; otherwise L every L time and R every
+                // R time plus the spread. Count from each lane's first echo.
+                double ms = age * 1000.0;
+                bool ping = On(PingPong);
+                double firstL = msl, periodL = ping ? msl + msr : msl;
+                double firstR = ping ? msl + msr : msr + SpreadMs(), periodR = ping ? msl + msr : msr + SpreadMs();
+                static int Lit(double t, double first, double period) => t >= first ? (int)((t - first) / period) : -1;
+                litL = Lit(ms, firstL, periodL);
+                litR = Lit(ms, firstR, periodR);
             }
             foreach (var t in tapViews) t.SetLit(litL, litR);
         }
@@ -309,7 +319,15 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", v => Hz(HighHz(v)))]);
             ToolTip.SetTip(band, MenuKit.Keys(Loc.T("device.delay.the_band_the_repeats_live")));
             MidiLearn.Bind(band, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
-            readouts.Add(() => { if (!band.Dragging) band.Set(LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) <= 0.001, P(HighCut) >= 0.999); });
+            // Behind the curve, the spectrum of your echoes (the level history's latest wet samples).
+            var spectrum = new FilterSpectrum();
+            band.Spectrum = spectrum;
+            const int specOff = kScope + 2 * SpaceDraw.Points;
+            readouts.Add(() =>
+            {
+                if (!band.Dragging) band.Set(LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) <= 0.001, P(HighCut) >= 0.999);
+                if (band.IsEffectivelyVisible && spectrum.Feed(scope, specOff, scN - specOff, Sc(S_SampleRate), 20, 20000)) band.InvalidateVisual();
+            });
             return CardLayout.View(band,
                 CardLayout.KnobColumn(K(LowCut, "LOW CUT", LowCutF, 34, 50), K(HighCut, "HIGH CUT", HighCutF, 34, 52)));
         }
@@ -451,7 +469,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
 
         void Refresh()
         {
-            scN = engine.DeviceScope(track, di, scope, kScope);
+            scN = engine.DeviceScope(track, di, scope, scope.Length);
             foreach (var a in readouts) a();
         }
         ctx.AddDeviceRefresher(Refresh);

@@ -4744,6 +4744,21 @@ Console.WriteLine("-- Nota Delay --");
     Render(20000);
     int scn = de.DeviceScope(dt, dd, sc, sc.Length);
     Check(scn == 11 && sc[4] > 1000 && sc[5] > 1, $"Delay scope reports sample rate + tempo ({sc[4]:0} Hz, {sc[5]:0.0} BPM)");
+    // The live graph's level history follows the telemetry: input dB, echoes dB, echo samples.
+    var dh = new float[11 + 2 * 1536 + 2048];
+    int dhn = de.DeviceScope(dt, dd, dh, dh.Length);
+    float dIn = -999, dWet = -999;
+    for (int i = 0; i < 1536; i++) { dIn = Math.Max(dIn, dh[11 + i]); dWet = Math.Max(dWet, dh[11 + 1536 + i]); }
+    Check(dhn == dh.Length && dIn > -60 && dWet > -60 && dIn <= 12 && dWet <= 12,
+          $"Delay scope appends the level history (in {dIn:0.0} dB, echoes {dWet:0.0} dB)");
+    // With no blocks run (a settled track), a read moves the history on by the idle time: the
+    // newest points turn to silence and the old echoes scroll left instead of standing still.
+    Thread.Sleep(300);
+    de.DeviceScope(dt, dd, dh, dh.Length);
+    float dNew = -999, dOld = -999;
+    for (int i = 1536 - 40; i < 1536; i++) dNew = Math.Max(dNew, dh[11 + 1536 + i]);
+    for (int i = 0; i < 1536 - 40; i++) dOld = Math.Max(dOld, dh[11 + 1536 + i]);
+    Check(dNew <= -119 && dOld > -60, $"Delay level history scrolls on while no blocks run (newest {dNew:0} dB, older {dOld:0.0} dB)");
     string text = de.DeviceText(dt, dd, 0);
     Check(text.Contains("1/8"), $"Delay status text names the division (got '{text}')");
 
@@ -5039,6 +5054,13 @@ Console.WriteLine("-- Nota Reverb --");
     int scn = re.DeviceScope(rt, rd, sc, sc.Length);
     Check(scn == 11 && sc[4] > 1000 && sc[8] > 100 && Math.Abs(sc[6] - 1.9) < 0.1,
           $"Reverb scope reports sample rate, diffuser delay and RT60 ({sc[4]:0} Hz, {sc[8]:0} smp, {sc[6]:0.00} s)");
+    // The live graph's level history follows the telemetry: input dB, tail dB, tail samples.
+    var rh = new float[11 + 2 * 1536 + 2048];
+    int rhn = re.DeviceScope(rt, rd, rh, rh.Length);
+    float rIn = -999, rWet = -999;
+    for (int i = 0; i < 1536; i++) { rIn = Math.Max(rIn, rh[11 + i]); rWet = Math.Max(rWet, rh[11 + 1536 + i]); }
+    Check(rhn == rh.Length && rIn > -60 && rWet > -80 && rIn <= 12 && rWet <= 12,
+          $"Reverb scope appends the level history (in {rIn:0.0} dB, tail {rWet:0.0} dB)");
     string text = re.DeviceText(rt, rd, 0);
     Check(text.Contains("Hall") && text.Contains("RT60"), $"Reverb status text names the algorithm and RT60 (got '{text}')");
 

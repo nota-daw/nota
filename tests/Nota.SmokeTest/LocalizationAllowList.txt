@@ -680,7 +680,7 @@ Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Chamber	# data: device parameter
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Early reflections	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Freeze	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	HF damp	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	HF DAMP	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	HIGH CUT	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Hall	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/ReverbDeviceBody.cs	Kill tail	# data: device parameter, port and value names and live readouts of their values (FR-004)

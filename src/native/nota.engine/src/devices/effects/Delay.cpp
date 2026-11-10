@@ -61,6 +61,7 @@ void Delay::setSampleRate(double sr, int32_t /*maxBlock*/) {
     quietSamples_ = 0;
     idle_ = false;
     loopPk_ = 0.0f;
+    hist_.setSampleRate(sr_);
     srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
 }
 
@@ -179,6 +180,7 @@ void Delay::process(float* buf, int32_t frames) {
     if (inSilent && !freeze && idle_) {
         wowPhase_ += wowInc * frames;
         if (wowPhase_ >= 1.0) wowPhase_ -= std::floor(wowPhase_);
+        hist_.silence(frames);
         return;
     }
 
@@ -252,6 +254,8 @@ void Delay::process(float* buf, int32_t frames) {
             outWetL = mid + side;
             outWetR = mid - side;
         }
+        hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outWetL), std::fabs(outWetR)),
+            (outWetL + outWetR) * 0.5f);
         const float oL = (dryG * l + wetG * outWetL) * outG;
         const float oR = (dryG * r + wetG * outWetR) * outG;
         buf[i * 2] = oL;
@@ -276,6 +280,7 @@ void Delay::process(float* buf, int32_t frames) {
     if (quietSamples_ > (uint64_t)flight + kIdleSamples) idle_ = true;
 
     // ---- telemetry -----------------------------------------------------------
+    hist_.publish();
     mWet_.store(decayPeak(mWet_.load(std::memory_order_relaxed), wetPk), std::memory_order_relaxed);
     mOutL_.store(decayPeak(mOutL_.load(std::memory_order_relaxed), outPkL), std::memory_order_relaxed);
     mOutR_.store(decayPeak(mOutR_.load(std::memory_order_relaxed), outPkR), std::memory_order_relaxed);
@@ -324,7 +329,7 @@ int32_t Delay::scopeRead(float* out, int32_t maxSamples) const {
     out[S_MsL] = msL_.load(std::memory_order_relaxed);
     out[S_MsR] = msR_.load(std::memory_order_relaxed);
     out[S_Latency] = static_cast<float>(latencySamples());
-    return kScope;
+    return kScope + hist_.read(out + kScope, maxSamples - kScope);
 }
 
 std::string Delay::deviceText(int32_t id) const {
