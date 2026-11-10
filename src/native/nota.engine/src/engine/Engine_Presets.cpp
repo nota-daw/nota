@@ -18,9 +18,9 @@
 namespace nota {
 
 namespace {
-// View settings are not part of the sound: the card size, EQ-8's analyzer.
+// View settings are not part of the sound: the card size, EQ-8's analyzer, Lens's graph.
 bool isViewParam(const std::string& name) {
-    return name == "View" || name == "view" || name == "Analyzer" || name == "Analyzer Range" ||
+    return name == "View" || name == "view" || name == "Graph" || name == "Analyzer" || name == "Analyzer Range" ||
            name == "Analyzer Peak";
 }
 constexpr float kTolerance = 1e-4f; // of the param's range

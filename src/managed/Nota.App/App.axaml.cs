@@ -59,6 +59,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IProjectStore, ProjectStore>();
         services.AddSingleton<IProjectHistory>(_ => new ProjectHistory(AppInfo.Version));
         services.AddSingleton<IPresetStore, PresetStore>();
+        services.AddSingleton<Nota.Application.Articulations.IArticulationLibrary>(_ => new Nota.Infrastructure.Articulations.ArticulationLibraryStore());   // specs/085
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
         services.AddSingleton<IPresetAudition, PresetAudition>();
         services.AddSingleton<IDrumKits, DrumKitService>();
@@ -130,6 +131,10 @@ public partial class App : Avalonia.Application
             catch (Exception e) { log.Error("Couldn't make Mosaic presets for the sample packs", e); }
         });
 
+        // Inputs switched off on the Audio I/O page stay off for takes (specs/086).
+        try { InputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
+        catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+
         // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
         catch (Exception e) { log.Error("Couldn't register the Get Plug-ins folder", e); }
@@ -188,6 +193,13 @@ public partial class App : Avalonia.Application
                 recovery.BeginSession();
 
                 var vm = Services.GetRequiredService<MainWindowViewModel>();   // constructs the engine
+                // Every audio restart may open another device (the system default changed):
+                // its own input names and switched-off inputs (specs/086).
+                vm.AudioApplied += () =>
+                {
+                    try { InputSetupAccess.Push(vm.Engine); }
+                    catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+                };
                 var main = new MainWindow { DataContext = vm, PendingRecovery = pending };
                 desktop.MainWindow = main;
 

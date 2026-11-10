@@ -25,6 +25,7 @@ Ceiling::Ceiling() {
     p_[Delta].store(0.0f);
     p_[ScHp].store(20.0f);
     p_[Target].store(-14.0f);
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -460,7 +461,7 @@ int32_t Ceiling::scopeRead(float* out, int32_t maxSamples) const {
 
 const char* Ceiling::paramName(int32_t i) const {
     static const char* nm[kNumParams] = {"Ceiling", "Gain", "Release", "AutoRelease", "Character", "Lookahead",
-        "StereoLink", "True Peak", "Delta", "SC HP", "Target"};
+        "StereoLink", "True Peak", "Delta", "SC HP", "Target", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

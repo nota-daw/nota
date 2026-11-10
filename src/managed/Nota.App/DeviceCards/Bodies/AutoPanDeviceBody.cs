@@ -8,7 +8,7 @@
 // the floor the depth reaches (drag: Amount up / down, Phase left / right), the stereo position
 // on an L—R line over the swing it covers, a MOTION column (Amount, Phase, Mix, the 0° / 90° /
 // 180° phase snaps and the output meters) with the mode it makes (tremolo, auto-pan, offset
-// pan), and a status strip. The live picture comes from the engine (AutoPan.h scopeRead). Every
+// pan). The live picture comes from the engine (AutoPan.h scopeRead). Every
 // control is a device param (normalized 0..1), so automation / MIDI learn / presets / A-B /
 // persistence come for free. FullBleed — the shared shell draws the header (name · preset ·
 // badge · bypass).
@@ -35,6 +35,8 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         S_SampleRate = 11, S_Sh0 = 12, S_PanMin = 16, S_PanMax = 17, kTele = 32;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Panner";   // the processing type, shown as the header badge
 
@@ -66,7 +68,6 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         double RateHz() => Synced() ? Bpm() / 60 / OrbitMath.DivBeats[DivI()] : OrbitMath.FreeHz(P(Rate));
         double PeriodMs() => 1000 / Math.Max(1e-3, RateHz());
         double Deg() => P(Phase) * 360;
-        double Floor() => 1 - P(Amount) * P(Mix);
         string Mode()
         {
             if (!On()) return "bypass";
@@ -86,7 +87,6 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
         // Slider row: caps label · track · mono value. `label` is returned so a row can rename itself.
         Grid Slider(string label, int p, Func<double, string> fmt, string tip, out TextBlock lbl, double labelW = 40, double valueW = 40,
@@ -104,29 +104,22 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             return g;
         }
 
-        RuleSection Island(Control head, Control body, double width = double.NaN)
+        // Gauge knob over a normalized param (automation gesture, MIDI learn, live follow).
+        Control K(int p, string name, Func<double, string> fmt, string tip, double cellW = 50, double size = 34, Func<double, double>? snap = null)
         {
-            var headBar = new Border
-            {
-                Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
-            };
-            return new RuleSection
-            {
-                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
-            };
+            var val = Mono(fmt(P(p)), 7, TextPrimary);
+            var knob = new Knob(P(p), 1.0) { Accent = true, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            knob.Format = fmt;
+            knob.ValueChanged += v => { Raw(p, snap is null ? v : snap(v)); RefreshAll(); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => End(p);
+            Learn(knob, p);
+            ToolTip.SetTip(knob, tip);
+            readouts.Add(() => { if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+            return KnobCell(name, knob, val, cellW);
         }
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
-        }
+
         // A legend sample: a drawn 8px stroke and its word (never a typed dash).
-        static Control LegendItem(string word, IBrush ink) => new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new Border { Width = 8, Height = 1.5, Background = ink, VerticalAlignment = VerticalAlignment.Center }, Mono(word, 7, ink) },
-        };
 
         // ======================================================================
         // LEFT — LFO: waveform · Hz / Sync · the rate · Rate · Shape
@@ -137,7 +130,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         Learn(syncSeg, Sync);
         ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
-        var waveSeg = Segments(OrbitMath.Waves, WaveI, i => { SetP(Waveform, i / 4.0); RefreshAll(); }, out var waveSync, fill: true, padX: 0);
+        var waveSeg = Segments(OrbitMath.Waves, WaveI, i => { SetP(Waveform, i / 4.0); RefreshAll(); }, out var waveSync, padX: 5);
         readouts.Add(waveSync);
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, Loc.T("device.auto_pan.the_lfo_shape_s_h"));
@@ -162,7 +155,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             }
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
-        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
+        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub } };   // the period is in the tab bar
         ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
 
         var rateRow = Slider("RATE", Rate, v => HzF(OrbitMath.FreeHz(v)) + "\u2009Hz", Loc.T("device.auto_pan.rate_the_free_lfo_rate"), out _, 38, 46);
@@ -173,24 +166,10 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         var shapeRow = Slider("SHAPE", Shape, v => PctF(v), Loc.T("device.auto_pan.shape_sharpens_sine_tri_and"), out var shapeLbl, 38, 46);
         readouts.Add(() => shapeLbl.Text = WaveI() == 4 ? "Glide" : "Shape");
 
-        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
-        leftBody.Children.Add(waveSeg);
-        leftBody.Children.Add(GRow(bigBlock, 1));
-        leftBody.Children.Add(GRow(new Panel { Children = { rateRow, divRow } }, 2));
-        leftBody.Children.Add(GRow(shapeRow, 3));
-        var left = Island(HeadRow(Caps("LFO"), syncSeg), leftBody, 176);
-        DockPanel.SetDock(left, Dock.Left);
 
         // ======================================================================
         // CENTRE — GAIN · 2 CYCLES, and the pan line
         // ======================================================================
-        var waveWord = Mono("", 7, TextTertiary);
-        readouts.Add(() => waveWord.Text = OrbitMath.WaveNames[WaveI()]);
-        var legend = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), waveWord },
-        };
         var graph = new OrbitGainView { Value = () => (P(Amount), P(Phase)) };
         graph.GestureBegin += () => { Begin(Amount); Begin(Phase); };
         graph.GestureEnd += () => { End(Amount); End(Phase); };
@@ -210,9 +189,8 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         panRow.Children.Add(Col(rTag, 2));
         panRow.Children.Add(Col(panTxt, 3));
         ToolTip.SetTip(panRow, Loc.T("device.auto_pan.where_the_sound_sits_now"));
-        var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(panRow, Dock.Bottom), graph } };
-        var centre = Island(HeadRow(Caps(Loc.T("device.auto_pan.gain_2_cycles_caps")), legend), centreBody);
-        centre.Margin = new Thickness(5, 0);
+        // The graph with the pan line under it: one view.
+        var graphView = new DockPanel { LastChildFill = true, Children = { Docked(panRow, Dock.Bottom), graph } };
 
         // ======================================================================
         // RIGHT — MOTION: Amount · Phase · Mix · phase snaps · output meters
@@ -255,7 +233,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             ToolTip.SetTip(b, deg == 0 ? Loc.T("device.auto_pan.0_tremolo_both_channels_together") : deg == 90 ? Loc.T("device.auto_pan.90_a_quarter_cycle_apart") : Loc.T("device.auto_pan.180_auto_pan_one_side"));
             return b;
         }
-        var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 1, Margin = new Thickness(44, 0, 0, 0) };
+        var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("34,34,34"), ColumnSpacing = 1, VerticalAlignment = VerticalAlignment.Center };
         snaps.Children.Add(Snap("0°", 0));
         snaps.Children.Add(Col(Snap("90°", 90), 1));
         snaps.Children.Add(Col(Snap("180°", 180), 2));
@@ -279,6 +257,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         }
         var meters = new Border
         {
+            Background = Brushes.Transparent,   // a fixed-height row in the panel
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
             Child = new StackPanel
             {
@@ -290,50 +269,40 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             },
         };
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        rightBody.Children.Add(amountRow);
-        rightBody.Children.Add(GRow(phaseRow, 2));
-        rightBody.Children.Add(GRow(mixRow, 4));
-        rightBody.Children.Add(GRow(snaps, 6));
-        rightBody.Children.Add(GRow(meters, 8));
-        var right = Island(HeadRow(Caps("MOTION"), modeWord), rightBody, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
         // ======================================================================
-        // Status strip
+        // Frames: L (the motion view, the LFO panel, Mix under it) · S (the graph over the
+        // waveform and Rate · Amount · Phase · Mix)
         // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
+        var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
-            string m = Mode();
-            double hz = RateHz();
-            bool warn = false;
-            string foot;
-            if (!On()) foot = Loc.T("device.auto_pan.panner_bypassed_the_signal_passes");
-            else if (P(Amount) < 0.01f || P(Mix) < 0.01f) { foot = Loc.T("device.auto_pan.amount_or_mix_at_zero"); warn = true; }
-            else if (hz > 8) { foot = Loc.T("device.auto_pan.above_8_hz_the_movement"); warn = true; }
-            else if (m == "tremolo") foot = Loc.T("device.auto_pan.phase_0_l_and_r") + OrbitMath.Db(Floor()) + "\u2009dB";
-            else if (m == "auto-pan")
-            {
-                double mn = Sc(S_PanMin), mx = Sc(S_PanMax);
-                foot = "Swing " + (mn < -0.02 ? PanF(mn) : "C") + " → " + (mx > 0.02 ? PanF(mx) : "C") + " · period " + Ms(PeriodMs());
-            }
-            else foot = Loc.F("device.auto_pan.phase_the_channels_are_offset", Deg());
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · ") : "") + NotaNum.F($"{Bpm():0.##}\u2009BPM · ") + (Synced() ? "retrig bar" : "free run");
+            extras.Text = Mode() + " · " + OrbitMath.WaveNames[WaveI()] + " · " + Ms(PeriodMs());
+            extras.Foreground = Mode() == "tremolo" ? DeviceCardKit.ModInkBright : TextTertiary;
         });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control RateKnob(double cellW)
+        {
+            var free = K(Rate, "RATE", v => HzF(OrbitMath.FreeHz(v)) + "\u2009Hz", Loc.T("device.auto_pan.rate_the_free_lfo_rate"), cellW);
+            var div = K(Division, "RATE", v => OrbitMath.DivNames[OrbitMath.DivIndex(v)], Loc.T("device.auto_pan.rate_the_note_value_of"), cellW,
+                snap: v => OrbitMath.DivNorm(OrbitMath.DivIndex(v)));
+            readouts.Add(() => { free.IsVisible = !Synced(); div.IsVisible = Synced(); });
+            return new Panel { Children = { free, div } };
+        }
+        Control PhaseKnob(double cellW) => K(Phase, "PHASE", v => NotaNum.F($"{v * 360:0}°"), Loc.T("device.auto_pan.phase_the_right_lfo_against"), cellW,
+            snap: v => Math.Round(v * 360) / 360);
+        Control AmountKnob(double cellW) => K(Amount, "AMOUNT", v => PctF(v), Loc.T("device.auto_pan.amount_the_depth_each_channel"), cellW);
+        Control MixKnob(double cellW, double size) => K(Mix, "DRY/WET", v => PctF(v), Loc.T("device.auto_pan.mix_the_moving_signal_against"), cellW, size);
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(graphView, waveSeg, RateKnob(56), AmountKnob(56), PhaseKnob(56), MixKnob(56, 34))
+            : CardLayout.Large(new[] { Loc.T("device.auto_pan.tab_motion") }, 0,
+                _ => CardLayout.View(graphView, CardLayout.KnobColumn(AmountKnob(50), PhaseKnob(50)), CardLayout.Line(8, waveSeg, snaps)),
+                _ => (CardLayout.Head(CardLayout.Title("LFO"), syncSeg), CardLayout.Rows(
+                        new Border { Background = Brushes.Transparent, Margin = new Thickness(0, 0, 0, 3), Child = bigBlock },   // keeps its height
+                        new Panel { Children = { rateRow, divRow } },
+                        shapeRow,
+                        meters)),
+                extras,
+                CardLayout.Output(null, MixKnob(58, 44), null),
+                _ => RefreshAll());
 
         void Refresh()
         {

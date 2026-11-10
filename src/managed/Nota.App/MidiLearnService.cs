@@ -471,6 +471,9 @@ public sealed class MidiLearnService
         public int Kind { get; set; }
         public int DeviceIndex { get; set; } = -1;
         public int ParamIndex { get; set; } = -1;
+        /// <summary>A plug-in / built-in param's stable id (null in files from 0.59 and older):
+        /// the index is looked up by it on load, so a device whose layout grows keeps its mappings.</summary>
+        public string? ParamId { get; set; }
         public int SourceKind { get; set; }
         public int Channel { get; set; }
         public int Number { get; set; }
@@ -494,6 +497,7 @@ public sealed class MidiLearnService
                 Kind = (int)t.Kind,
                 DeviceIndex = t.DeviceIndex,
                 ParamIndex = t.ParamIndex,
+                ParamId = t.Kind == MidiTargetKind.PluginParam ? _engine.PluginParamId(t.TrackId, t.DeviceIndex, t.ParamIndex) : null,
                 SourceKind = (int)m.SourceKind,
                 Channel = m.Channel,
                 Number = m.Number,
@@ -526,7 +530,8 @@ public sealed class MidiLearnService
                     if (scope < 0) continue;                          // its phone's track since deleted
                     _mappings.Add(new MidiMapping
                     {
-                        Target = new MidiTarget(kind, trackId, d.DeviceIndex, d.ParamIndex),
+                        Target = new MidiTarget(kind, trackId, d.DeviceIndex,
+                            kind == MidiTargetKind.PluginParam ? PluginParamIndex(trackId, d) : d.ParamIndex),
                         DisplayName = d.DisplayName,
                         SourceKind = (MidiSourceKind)d.SourceKind,
                         Channel = d.Channel,
@@ -541,6 +546,18 @@ public sealed class MidiLearnService
             catch { /* a corrupt sidecar just means no mappings — never block the load */ }
         }
         MappingsChanged?.Invoke();
+    }
+
+    // A plug-in / built-in param mapping's index today: found by its saved id, or for a file
+    // from 0.59 and older (no id) moved as Nota Twin's grown layout moved it (#531).
+    private int PluginParamIndex(int trackId, Dto d)
+    {
+        if (d.ParamId is not { Length: > 0 } id) return _engine.PluginParamIndexFromV1(trackId, d.DeviceIndex, d.ParamIndex);
+        if (_engine.PluginParamId(trackId, d.DeviceIndex, d.ParamIndex) == id) return d.ParamIndex;
+        int n = _engine.PluginParamCount(trackId, d.DeviceIndex);
+        for (int i = 0; i < n; i++)
+            if (_engine.PluginParamId(trackId, d.DeviceIndex, i) == id) return i;
+        return d.ParamIndex;
     }
 
     private static bool TrackScoped(MidiTargetKind k) => k

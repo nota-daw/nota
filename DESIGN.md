@@ -329,8 +329,8 @@ Text is never faded: a quieter line takes the next ink.
 | Orange text on the soft tint in light themes | `AccentPale` (slot only) | `#FFD08A` | `#8A4A00` | `#FCE5B8` | `#5C3C04` |
 | Pressed orange | `Brush.AccentDeep` | `#C77612` | `#D47800` | `#B08536` | `#7A5008` |
 
-The values are the default, Orange. The user's accent choice replaces this family (and the
-ramp, and `TextOnAccent` by the derived ink) — see § Colour themes, **Accent**.
+The values are the default, Orange. The user's accent choice replaces this family (the
+soft tint, the ramp, and `TextOnAccent` by the derived ink) — see § Colour themes, **Accent**.
 
 Fluent's `SystemAccentColor` ramps are retinted to the accent, so stock controls
 match. `AccentSubtle`, `AccentDim`, `AccentMute` and `AccentHover` are older shades; new
@@ -864,7 +864,14 @@ window (`Controls/NotaGraph.cs`):
 - Title sentence case in ink 3, top left; the legend lives inside the window, a drawn
   sample next to a value (`NotaGraph.Legend`).
 - The primary curve 1.8 px `VizInk`; a second source a darker grey. **No fills under
-  curves, no gradients.**
+  curves, no gradients** — with one exception, the frequency response.
+- **A frequency response** (a filter, an EQ — the shared filter graph, `FilterGraphBase`, and
+  the EQs drawn like it) is the accent curve, 1.8 px `AccentBright`, over a light accent fill
+  (`FilterAxis.ResponseFill`) to its floor or to 0 dB; a second response (modulated, a single
+  band, static) is a dashed grey line. Its frequency axis is a strip under the window
+  (`FilterAxis.Draw`) with the decades and their halves, and the value the graph is showing —
+  the cutoff, the selected band's frequency, gain and Q — lit on it as an accent pill (grey
+  for a band that is off) instead of a box over the plot. dB marks sit up the left edge.
 - Nodes 7 px with a 2 px ground-coloured ring; the selected or dragged node is orange; a
   picked but switched-off node is an orange ring.
 - Waveforms at rest in `VizInk`; second channel a darker grey; the trimmed part darkened,
@@ -1034,7 +1041,8 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
   `SurfaceDeep`: the mode tabs, the track (colour square, name, routing summary),
   Freeze / Live freeze, a rule, then pop-out and close as icon buttons.
 - **Status 22**: one line of caption text (Label 11, ink 2) on `SurfaceDeep`, a seam above it,
-  16 px in. This is the window's status line; a device's own status line sits inside its card.
+  16 px in. This is the window's status line; built-in device cards have none of their own
+  (the racks keep one inside the card).
 - **Mixer strips** are `Panel` columns on seams, each with a 3 px top bar in the track
   colour (grey for master); sliders and knobs are the flat shell kind, sends with their
   amount written inside the bar. The footer's Sends and I/O toggles are chips (shown is
@@ -1055,8 +1063,9 @@ The card each instrument or effect lives in, in the device panel.
 - **Header 22:** name (Device name 12 / 600), preset menu (where the device has presets),
   type tag in ink 3, power switch at the right, on every device, instruments and racks
   included.
-- **Body:** each device keeps its 0.57 layout and sizes, status line included; only the
-  elements in it take this guide's look (§ Devices).
+- **Body:** each device keeps its 0.57 layout and sizes; only the elements in it take this
+  guide's look (§ Devices). Built-in instruments, effects and MIDI effects drop the status
+  line under the body and the side column of upright faders or meters (#531).
 
 ### Track header
 
@@ -1212,7 +1221,8 @@ geometry, and no icon is a typed character (`RunIcons`).
 
 All 50 devices in 0.56.1 (16 instruments, 25 audio effects, 6 MIDI effects, 3 racks), and
 Nota Vocoder added since, **keep their 0.57 layouts and sizes**: the same sections in the
-same places, the same widths, the same status line under the body. The style guide
+same places, the same widths (since #531 without the status line under the body or the
+side column of upright faders and meters; the racks keep their status line). The style guide
 changes the elements inside them, not where they sit. (A full redraw of every card was
 tried first; it made the cards cramped and too large, so it was reverted on Oct 26.)
 
@@ -1220,8 +1230,8 @@ What the guide changes inside a card:
 
 - **Knobs** take the capped look with an orange value arc; the value sits over the name.
 - **Value bars** replace thin sliders: a 9 px groove with an orange wash and a 3 px line
-  (`SliderTrack`); upright faders (Auto Filter's shape, Compressor's Thr and Mkp, the EQ-3
-  bands, Lens, Level, Shutter, Delay) are the same bar standing up (`UprightBar`).
+  (`SliderTrack`); upright faders (the EQ-3 bands, Level's correction) are the same bar
+  standing up (`UprightBar`).
 - **Segments and switches** are the guide's: the picked cell tinted `AccentSoft` in a
   groove, switches 18 × 10.
 - **Sections** are pressed in with the guide's corners; graph windows keep their frame.
@@ -1259,7 +1269,9 @@ What the guide changes inside a card:
   hosted plug-ins, and the Sends card (a `Utility` card with no device menu, selection or
   presets). Never build a header of your own.
 - The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step through them,
-  wrapping. A/B, move and delete live in the header's right-click menu; drag the card by
+  wrapping. An S (260) card has no room for it beside the name: there the presets sit behind
+  an 18 × 18 `List` key at the start of the header's right side (`PresetKey`), whose menu holds
+  Previous / Next, Init and the list, and whose tooltip names the current preset. A/B, move and delete live in the header's right-click menu; drag the card by
   its whole header; Delete removes it.
 - A **bypassed** card keeps its layout and takes the unavailable look via `Inactive`.
 - A **selected** card carries a 1.5 px orange ring outside its outline.
@@ -1269,9 +1281,99 @@ What the guide changes inside a card:
 - **The chain** sits tight in the Devices panel: a 6 px inset all round and 6 px between
   cards (`DeviceChainView.ChainInset`, room for the selection ring), and the panel opens at
   exactly the cards' height (seam + 32 px toolbar + insets + 260).
+- **The XL panel** (specs/085): a device that opts in (Nota EQ-8, Dynamic EQ-8, Lens, Auto Filter) shows
+  `S / L / XL` in its header. XL moves its whole editor into a panel above the chain. The panel
+  uses the same shell, as wide as the Devices panel, 460 tall by default (at least 180 in a short window, then the Devices area scrolls).
+  While it is open the Devices panel keeps its splitter: a drag resizes the XL panel only, and the height is a preference.
+  The L body stretches in it: the graph takes the room, and the controls keep their sizes. The
+  card stays in the chain at 260 × 260, with no preset picker and a caption, "Open in XL
+  above". The panel's header leaves XL with a `Shrink` key and carries no Remove × at all
+  (beside the panel's edge it read as "close" — the card keeps it). The panel has no
+  drag or fold. A track has one XL device, and the panel follows the selected track. The
+  Devices panel grows by the panel's height while it is open.
+- **A device in its own window** (specs/085): every XL device also has a `PopOut` key after
+  its size toggle (in the card and the panel). It opens the L body in the resizable device
+  window (title bar: name · track, presets, bypass), stretched to it. While the window is
+  open the card is a 260 placeholder, "Open in its own window", whose click brings the window
+  forward — an editor is never shown twice.
 - **Hosted plug-ins** (VST3 / AU / CLAP) use the same shell and keep their own parameter
   list: S 260 wide names it over *Open editor* and *Save preset*; L 700 adds the parameters
   as a paged, filterable grid.
+
+### Card layout: graph, tabs and output
+
+How an L card with a graph lays out its controls (#531; Nota Auto Filter is the reference,
+`AutoFilterDeviceBody`). New cards start here; an existing card moves to it as its own
+change, one card at a time, not as part of a style pass (§ Devices, Don't).
+
+**One home per parameter.** Every parameter has exactly one control on the card. No second
+copy on another tab, in a summary, or as a switch that "follows" the tab. The one exception
+is the graph: a handle or a title that edits the same parameter in place (drag the
+amount, click the title to pick the target) is the graph doing its job, not a copy.
+
+**The graph** is the card's main control and gets the most room.
+
+- In L it fills the centre panel: the panel minus its tab bar (20), one knob column and the
+  selector row under it, with 6 margins. It is never a fixed size; it stretches with the
+  panel (`DockPanel`, the graph as the last child).
+- The centre panel takes the width the right panel leaves: on a 700 card the right panel
+  is 186, so the graph is about 430 wide and 150–190 high. Don't shrink it to make room for
+  a second knob column.
+- In S (260) the graph fills the top of the card and one row of up to four knobs sits under
+  it, the main parameters and Dry/wet.
+- A graph that drags a parameter says so in its tooltip and takes ⌥-click / MIDI learn for
+  it, like a knob.
+
+**Knobs next to the graph** are only the parameters the graph draws or drags.
+
+- One column of up to three knobs (34, secondary), on the graph's **right** side only, never
+  split left and right, stacked with a 10 px gap and centred on the graph's height. Order: what the graph's X and Y move first (Freq, Res), then what
+  reshapes the curve (Morph).
+- Discrete choices for the same thing (type, slope, circuit) go in one centred row under
+  the graph: text chips for a type, segments for 2–3 options.
+- Anything the graph doesn't draw (Drive, Dry/wet, Gain, modulation amounts) doesn't sit
+  beside it.
+
+**Tabs.**
+
+- The centre panel's tabs are the views: each tab is one graph of one thing (Filter: the
+  response; Envelope: the cutoff over time; LFO: its wave). The first tab is the device's
+  main job.
+- The right panel has **no tabs of its own**. It follows the centre tab and holds that
+  view's controls, so its content never changes underneath you.
+- Its 20 high title bar lines up with the centre's tab bar and holds the section's on switch
+  on the left (its word is the section's name: "Envelope", "LFO") and the section's mode on
+  the right (Up / Down, Free / Sync). A section with no switch shows its name there, ink 2.
+- Under the bar, rows of value bars stack from the top with an even 7 px gap (40 label
+  column, 34 value column) — never spread over the panel's height, where a few rows drift apart
+  and stop reading as a group; a 1 px rule sets off a routing control (the sidechain key).
+- On the main tab, whose own controls sit around the graph, the right panel gathers what
+  cuts across the views: the modulation (target, each source's amount, smoothing, the key).
+- **Read-outs stay.** What the device measures — a meter box (peaks, LUFS, gain reduction), a
+  detector or state box, the key it learned — is information, not a parameter, so "one home"
+  doesn't apply to it: keep it, as a sunken box in the right panel of the view it explains (a
+  reading may appear in two panels). Short live lines (in → out, the release now) go in the
+  centre tab bar.
+- A setting shared by several views (the modulation target) lives once, in that summary;
+  the views name it in their graph title ("LFO → Freq", with a chevron, ink 2 under the
+  pointer) and a click there opens a small picker for it.
+
+**Output** sits at the bottom of the right panel on every tab, under a 1 px rule, never in a
+tab of its own.
+
+- Knobs, not value bars: **Dry/wet 44 (main) in the middle**, the others 34 on either side
+  in signal order: what comes before the core on the left (Drive), the level after it on the
+  right (Gain, bipolar from 12 o'clock).
+- Values and names line up along the bottom (cells bottom-aligned), so the larger Dry/wet
+  knob rises above its neighbours rather than pushing their labels down.
+- A device with only a mix control shows Dry/wet alone, centred. A device with no dry/wet
+  (an instrument) keeps its single Volume knob as its output. A device with no dry/wet whose
+  few main knobs every view needs (a limiter: Gain · Ceiling · Release) puts them there, its
+  main knob 44 in the middle (Nota Ceiling).
+
+**Don't:** give the right panel its own tab row · put the same switch on two tabs · put
+output controls in a tab · place knobs on both sides of a graph · shrink the graph for knobs
+it doesn't draw.
 
 ## Nota Remote
 
@@ -1313,7 +1415,7 @@ drift).
 | `RunGeometry` | `Radius.*` / `Control.*` / `Space.*` in XAML equal `NotaGeometry`; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views; gradients inside `Theme/` only in `NotaPalette.cs` and `Theme/SplashArt/`; `Rectangle` `RadiusX` / `RadiusY` literals on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale (`RadiusAllowList.txt`) |
 | `RunType` | `Font.UI` matches `NotaFonts.UiUri`; it is the only font family (no Mono URI); `+tnum` is on (`NotaFonts.Tabular`); the four Geist weights are bundled and no other `.ttf`; the Geist OFL licence ships; no font names or `FontFamily.Default` in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; `Knob` snaps to its sizes (34 / 36 / 44 device, 24 inline, 28 flat); `SwitchTrack` is 18 × 10 with a 7 px knob inset 1.5; `SliderTrack` is a 9 px value bar in a groove with a 3 px line (16 in the shell) |
-| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, amber from −6 dBFS, red from 0 dBFS; the arrangement playhead 1 px without glow |
+| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves (a frequency response's goes through `FilterAxis.ResponseFill`); no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, amber from −6 dBFS, red from 0 dBFS; the arrangement playhead 1 px without glow |
 | `RunLayout` | `DeviceCardKit.HeaderH` 22 and cards 260 high; every card width between 260 and 940; the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 30 |
 | `RunNumbers` | Display culture installed; no hyphen in a negative format section or before ∞; no hyphen-minus before a digit in a view literal (`NumberAllowList.txt`); no invariant culture on readouts; thin space before units; no vowel-dropped labels |
 | `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |

@@ -38,6 +38,16 @@ double AsioInput::sampleRate() const {
     return asio::sharedAsioSession().sampleRate();
 }
 
+int32_t AsioInput::channelCount() const {
+    return isRunning() ? asio::sharedAsioSession().inputCount() : 0;
+}
+
+std::string AsioInput::channelName(int32_t index) const {
+    const auto& ins = asio::sharedAsioSession().channels(true);
+    if (index < 0 || index >= static_cast<int32_t>(ins.size())) return {};
+    return ins[static_cast<size_t>(index)].name;
+}
+
 } // namespace nota
 
 #endif // defined(_WIN32)

@@ -55,11 +55,8 @@ internal sealed class PentadWaveIcon : Control
 
 // 24 dB/oct low-pass magnitude over 20 Hz..20 kHz (log X), with the resonant peak and the
 // CEM-style passband loss at high resonance (unless bass compensation is on). Drag to edit.
-internal sealed class PentadFilterCurve : Control
+internal sealed class PentadFilterCurve : FilterGraphBase
 {
-    private static readonly IBrush Grid = NotaGraph.Grid;
-    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
-    private static readonly Typeface NumFace = NotaFonts.Sans;
     private double _cut = 0.5, _reso, _comp;
     private bool _drag;
 
@@ -71,23 +68,29 @@ internal sealed class PentadFilterCurve : Control
 
     public void Set(double cutoffNorm, double resoNorm, bool bassComp) { _cut = cutoffNorm; _reso = resoNorm; _comp = bassComp ? 1 : 0; }
 
+    // The shared filter graph (#531) over 20 Hz … 20 kHz, the cutoff's own map.
+    protected override (double Lo, double Hi) Span => (20.0, 20000.0);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -42.0);
+    protected override double CutoffHz => 20 * Math.Pow(1000, _cut);
+    protected override double ResponseDb(double hz) => Db(Math.Log(hz / 20) / Math.Log(1000));
+
     private void Apply(PointerEventArgs e)
     {
-        double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
+        var r = PlotRect; if (r.Width <= 0 || r.Height <= 0) return;
         var p = e.GetPosition(this);
-        _cut = Math.Clamp(p.X / w, 0, 1);
-        _reso = Math.Clamp(1 - p.Y / h, 0, 1);
+        _cut = Math.Clamp((p.X - r.X) / r.Width, 0, 1);
+        _reso = Math.Clamp(1 - (p.Y - r.Y) / r.Height, 0, 1);
         Changed?.Invoke(_cut, _reso); InvalidateVisual();
     }
     protected override void OnPointerPressed(PointerPressedEventArgs e)
-    { base.OnPointerPressed(e); if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; _drag = true; DragStarted?.Invoke(); Apply(e); e.Pointer.Capture(this); e.Handled = true; }
+    { base.OnPointerPressed(e); if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; _drag = Dragging = true; DragStarted?.Invoke(); Apply(e); e.Pointer.Capture(this); e.Handled = true; }
     protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
+    { base.OnPointerReleased(e); if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
 
     // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
+    { if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
 
     // dB at normalized x (0..1 across 20 Hz..20 kHz): 4 identical poles with feedback k.
     private double Db(double x)
@@ -96,7 +99,6 @@ internal sealed class PentadFilterCurve : Control
         double wr = Math.Pow(1000, x - _cut);              // ω / ωc
         // H = G⁴ / (1 + k G⁴), G = 1 / (1 + j wr); input scaled by (1 + comp k).
         double re = 1, im = wr;                            // 1 + j wr
-        // (1 + j wr)^4
         double r2 = re * re - im * im, i2 = 2 * re * im;
         double r4 = r2 * r2 - i2 * i2, i4 = 2 * r2 * i2;
         double dr = r4 + k, di = i4;                        // (1 + j wr)^4 + k
@@ -106,70 +108,12 @@ internal sealed class PentadFilterCurve : Control
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var gp = new Pen(Grid, 1);
-        foreach (double hz in new[] { 100.0, 1000.0, 10000.0 }) { double gx = Math.Log10(hz / 20) / 3 * w; ctx.DrawLine(gp, new Point(gx, 0), new Point(gx, h)); }
-        double y0 = h * 0.38;                               // 0 dB line
-        ctx.DrawLine(gp, new Point(0, y0), new Point(w, y0));
-        double Y(double db) => Math.Clamp(y0 - db * (h * 0.018), 1, h - 1);
-
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        using (var lc = line.Open())
-        using (var fc = fill.Open())
-        {
-            lc.BeginFigure(new Point(0, Y(Db(0))), false);
-            fc.BeginFigure(new Point(0, h), true);
-            fc.LineTo(new Point(0, Y(Db(0))));
-            for (double x = 1; x <= w; x += 1.5) { var p = new Point(x, Y(Db(x / w))); lc.LineTo(p); fc.LineTo(p); }
-            fc.LineTo(new Point(w, h));
-        }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth), line);
-
-        double hz0 = 20 * Math.Pow(1000, _cut);
-        string txt = (hz0 >= 1000 ? $"{hz0 / 1000:0.0}\u2009k" : $"{hz0:0}\u2009Hz") + $" · Q {_reso * 10:0.0}";
-        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 7, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary, this);
-        ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
-
-        double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(_cut)), 4, h - 4);
-        ctx.DrawEllipse(_drag ? NotaPalette.Accent : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
-    }
-}
-
-// ADSR with RC curves: attack charges toward an overshoot (concave), decay/release discharge.
-internal sealed class PentadEnvCurve : Control
-{
-    private double _a, _d, _s = 0.8, _r = 0.4;
-    public IBrush Accent { get; set; } = NotaPalette.VizInk;   // the curve's ink (neutral at rest)
-    public PentadEnvCurve() { ClipToBounds = true; }
-
-    public void Set(double a, double d, double s, double r) { _a = a; _d = d; _s = s; _r = r; }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 2) return;
-        double top = 3, bot = h - 2, span = bot - top;
-        double wa = w * (0.03 + 0.24 * _a), wd = w * (0.04 + 0.24 * _d), wr = w * (0.04 + 0.24 * _r);
-        double ws = Math.Max(w * 0.08, w - wa - wd - wr);
-        double xa = wa, xd = xa + wd, xs = xd + ws;
-        double Lv(double v) => bot - span * v;
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        void Path(StreamGeometryContext c, bool closed)
-        {
-            c.BeginFigure(new Point(0, bot), closed);
-            const int n = 14;
-            for (int i = 1; i <= n; i++) { double t = i / (double)n; double v = (1 - Math.Exp(-t * 1.47)) / (1 - Math.Exp(-1.47)); c.LineTo(new Point(xa * t, Lv(v))); }
-            for (int i = 1; i <= n; i++) { double t = i / (double)n; double v = _s + (1 - _s) * Math.Exp(-t * 4); c.LineTo(new Point(xa + wd * t, Lv(v))); }
-            c.LineTo(new Point(xs, Lv(_s)));
-            for (int i = 1; i <= n; i++) { double t = i / (double)n; double v = _s * Math.Exp(-t * 4); c.LineTo(new Point(xs + wr * t, Lv(v))); }
-            c.LineTo(new Point(w, bot));
-        }
-        using (var lc = line.Open()) Path(lc, false);
-        using (var fc = fill.Open()) Path(fc, true);
-        var col = ((ISolidColorBrush)Accent).Color;
-        ctx.DrawGeometry(null, new Pen(Accent, 1.4), line);
+        if (Bounds.Width < 2 || Bounds.Height < 2) return;
+        DrawBack(ctx);
+        DrawCurve(ctx, ResponseDb);
+        var at = new Point(XOf(CutoffHz), YOf(ResponseDb(CutoffHz)));
+        DrawFront(ctx, at.Y);
+        DrawHandle(ctx, at);
     }
 }
 

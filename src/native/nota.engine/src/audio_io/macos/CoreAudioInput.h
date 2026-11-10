@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // CoreAudio input capture (macOS, M4-3). A HAL AudioUnit bound to the default
-// input device delivers interleaved stereo float frames to a callback on its
-// own real-time thread. The engine pushes them onto a lock-free ring and
+// input device delivers interleaved float frames of every input channel (specs/086) to a
+// callback on its own real-time thread. The engine pushes them onto a lock-free ring and
 // materialises a clip on the message thread when recording stops.
 //
 // NOTE: capturing input triggers a microphone-permission (TCC) prompt, which
@@ -30,6 +30,8 @@ class CoreAudioInput final : public AudioInput {
     void stop() override;
     bool isRunning() const override { return running_; }
     double sampleRate() const override { return sampleRate_; }
+    int32_t channelCount() const override;
+    std::string channelName(int32_t index) const override;
 
     struct Impl; // opaque; owns the CoreAudio objects + scratch
     Impl* impl_ = nullptr;

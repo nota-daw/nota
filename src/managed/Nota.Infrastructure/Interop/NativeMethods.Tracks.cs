@@ -330,6 +330,54 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_get_input_channels")]
     internal static partial int TrackGetInputChannels(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_input")]
+    internal static partial NotaResult TrackSetInput(IntPtr engine, int trackId, int first, int width);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_input")]
+    internal static partial int TrackGetInput(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_input_available")]
+    internal static partial int TrackInputAvailable(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_count")]
+    internal static partial int AudioInputChannelCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_name")]
+    internal static partial int AudioInputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input_uid", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult TrackSetMidiInputUid(IntPtr engine, int trackId, string? uid, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_input_uid")]
+    internal static partial int TrackGetMidiInputUid(IntPtr engine, int trackId, [Out] byte[] outBuf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input")]
+    internal static partial NotaResult TrackSetMidiInput(IntPtr engine, int trackId, int source, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_input")]
+    internal static partial int TrackGetMidiInput(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_source_of_uid", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int MidiSourceOfUid(IntPtr engine, string uid);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_push_midi_for_test")]
+    internal static partial void EnginePushMidiForTest(IntPtr engine, int source, int status, int channel, int d1, int d2);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_set_disabled")]
+    internal static partial void AudioInputSetDisabled(IntPtr engine, int[] channels, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_probe")]
+    internal static partial int AudioInputProbe(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_feed_input_test")]
+    internal static partial void EngineFeedInputTest(IntPtr engine, float[] interleaved, int frames, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_test_input_device")]
+    internal static partial void EngineSetTestInputDevice(IntPtr engine, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_take_record_test_n")]
+    internal static partial int TakeRecordTestN(IntPtr engine, int trackId, float[] interleaved, int channels, int frames, double startBeat);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_monitor")]
     internal static partial NotaResult TrackSetMonitor(IntPtr engine, int trackId, int on);
 
@@ -344,6 +392,24 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_source")]
     internal static partial int TrackGetMidiSource(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_offset_ms")]
+    internal static partial NotaResult TrackSetMidiOffsetMs(IntPtr engine, int trackId, double ms);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_offset_ms")]
+    internal static partial double TrackGetMidiOffsetMs(IntPtr engine, int trackId);
+
+    // --- articulation maps (specs/085) ---
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_articulation_map")]
+    internal static partial NotaResult TrackSetArticulationMap(IntPtr engine, int trackId, int defaultId,
+        NotaArticulationEntry[] entries, int entryCount, NotaArticulationAction[] actions, int actionCount,
+        byte[] mapJson, int mapJsonLen);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_clear_articulation_map")]
+    internal static partial NotaResult TrackClearArticulationMap(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_articulation_map_json")]
+    internal static partial int TrackGetArticulationMapJson(IntPtr engine, int trackId, byte[]? output, int maxLen);
 
     // --- freeze (M7) ---
     [LibraryImport(Lib, EntryPoint = "nota_track_freeze_begin")]
@@ -628,6 +694,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_scope")]
     internal static partial int TrackInstrumentScope(IntPtr engine, int trackId, [Out] float[] outv, int maxN);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_output")]
+    internal static partial int TrackInstrumentOutput(IntPtr engine, int trackId, [Out] float[] outv, int maxN);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_sampler_track", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int AddSamplerTrack(IntPtr engine, string path, int rootNote, int loop);

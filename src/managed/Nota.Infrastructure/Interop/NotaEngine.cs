@@ -170,6 +170,34 @@ public sealed partial class NotaEngine : IAudioEngine
     public int MasterTrackId { get { ThrowIfDisposed(); return NativeMethods.MasterTrackId(_handle); } }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     public int AudioRecordPeaks(float[] outMinMax, int maxPoints) { ThrowIfDisposed(); return NativeMethods.AudioRecordPeaks(_handle, outMinMax, maxPoints); }
+    public int[] RecordingTracks()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RecordingTracks(_handle, null, 0);
+        if (n <= 0) return Array.Empty<int>();
+        var ids = new int[n];
+        n = Math.Min(n, NativeMethods.RecordingTracks(_handle, ids, n));
+        return n == ids.Length ? ids : ids[..n];
+    }
+    public double AudioRecordLengthBeatsOf(int trackId) { ThrowIfDisposed(); return NativeMethods.AudioRecordLengthBeatsOf(_handle, trackId); }
+    public int AudioRecordPeaksOf(int trackId, float[] outMinMax, int maxPoints) { ThrowIfDisposed(); return NativeMethods.AudioRecordPeaksOf(_handle, trackId, outMinMax, maxPoints); }
+    public (int TrackId, RecordSkipReason Reason)[] RecordSkipped()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RecordSkipped(_handle, null, null, 0);
+        if (n <= 0) return Array.Empty<(int, RecordSkipReason)>();
+        var ids = new int[n];
+        var why = new int[n];
+        n = Math.Min(n, NativeMethods.RecordSkipped(_handle, ids, why, n));
+        var r = new (int, RecordSkipReason)[n];
+        for (int i = 0; i < n; i++) r[i] = (ids[i], (RecordSkipReason)why[i]);
+        return r;
+    }
+    public int TakeRecordTestArmed(float[] interleaved, int channels, int frames, double startBeat)
+    { ThrowIfDisposed(); return NativeMethods.TakeRecordTestArmed(_handle, interleaved, channels, frames, startBeat); }
+    /// <summary>Tests: as <see cref="TakeRecordTestArmed"/>, with one track disarmed partway (specs/086).</summary>
+    public int TakeRecordTestArmedDisarm(float[] interleaved, int channels, int frames, double startBeat, int disarmTrackId, int disarmAtFrame)
+    { ThrowIfDisposed(); return NativeMethods.TakeRecordTestArmedDisarm(_handle, interleaved, channels, frames, startBeat, disarmTrackId, disarmAtFrame); }
     public int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat)
     { ThrowIfDisposed(); return NativeMethods.RecordHeldNotes(_handle, buffer, buffer.Length, out trackId, out sessionScene, out nowBeat); }
 
@@ -332,6 +360,11 @@ public sealed partial class NotaEngine : IAudioEngine
     /// every event at its sample offset; a built-in still renders between events.</summary>
     public bool TimedEventsSelfTest()
     { ThrowIfDisposed(); return NativeMethods.TimedEventsSelfTest(_handle) != 0; }
+
+    /// <summary>Device-free self-test (specs/085): articulation scheduling and delivery. 0 = pass,
+    /// else the number of the check that failed (see Engine::articulationSelfTest).</summary>
+    public int ArticulationSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.ArticulationSelfTest(_handle); }
 
     /// <summary>Smoothed real-time DSP load, 0..1 (render time / block budget).</summary>
     public float CpuLoad

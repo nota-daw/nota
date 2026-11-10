@@ -54,8 +54,13 @@ public static class MidiTransforms
 
             // Extend the chord across the octave range before ordering it.
             var pitches = new List<int>();
+            var artOf = new Dictionary<int, int>();   // each step plays the articulation of the chord note it came from
             foreach (int o in Enumerable.Range(0, octaves))
-                foreach (var n in chord) pitches.Add(n.Pitch + o * distance);
+                foreach (var n in chord)
+                {
+                    pitches.Add(n.Pitch + o * distance);
+                    artOf.TryAdd(n.Pitch + o * distance, n.ArticulationId);
+                }
             var seq = OrderArp(pitches, style, rng);
             if (seq.Count == 0) continue;
 
@@ -68,9 +73,13 @@ public static class MidiTransforms
                 if (style == 7)   // Chord — every pitch of this step's cycle together
                 {
                     int cycle = U.Mod(step, Math.Max(1, octaves));
-                    foreach (var n in chord) outp.Add(U.Note(n.Pitch + cycle * distance, t, len, vel * fade));
+                    foreach (var n in chord) outp.Add(U.Note(n.Pitch + cycle * distance, t, len, vel * fade, n.ArticulationId));
                 }
-                else outp.Add(U.Note(seq[U.Mod(step, seq.Count)], t, len, vel * fade));
+                else
+                {
+                    int p = seq[U.Mod(step, seq.Count)];
+                    outp.Add(U.Note(p, t, len, vel * fade, artOf.GetValueOrDefault(p)));
+                }
             }
         }
         return U.Deoverlap(U.Tidy(outp, ctx.LengthBeats));
@@ -190,7 +199,7 @@ public static class MidiTransforms
                 else pitch = (int)Math.Round(U.Lerp(a.Pitch, b.Pitch, f));
                 // A run that arrives on the target early gives the landing away; step past it.
                 if (pitch == b.Pitch) pitch += Math.Sign(a.Pitch - b.Pitch);
-                runs.Add(U.Note(pitch, runStart + k * rate, rate * gate, a.Velocity * velScale));
+                runs.Add(U.Note(pitch, runStart + k * rate, rate * gate, a.Velocity * velScale, a.ArticulationId));
             }
         }
         outp.AddRange(runs);
@@ -241,12 +250,13 @@ public static class MidiTransforms
             double len = n.LengthBeats;
             double step = Math.Min(rate, len / 2);
             double vel = n.Velocity * velScale;
+            int art = n.ArticulationId;   // every ornament note plays the ornamented note's articulation
 
             switch (type)
             {
                 case 0:   // Grace — a flick into the note, stealing a sliver off the front
-                    outp.Add(U.Note(aux, n.StartBeat, step, vel));
-                    outp.Add(U.Note(n.Pitch, n.StartBeat + step, len - step, n.Velocity));
+                    outp.Add(U.Note(aux, n.StartBeat, step, vel, art));
+                    outp.Add(U.Note(n.Pitch, n.StartBeat + step, len - step, n.Velocity, art));
                     break;
 
                 case 1:   // Trill — alternate for the note's whole length
@@ -255,14 +265,14 @@ public static class MidiTransforms
                     for (double t = n.StartBeat; t < n.StartBeat + len - 1e-6; t += step, k++)
                         outp.Add(U.Note(k % 2 == 0 ? n.Pitch : aux,
                                         t, Math.Min(step, n.StartBeat + len - t),
-                                        k % 2 == 0 ? n.Velocity : vel));
+                                        k % 2 == 0 ? n.Velocity : vel, art));
                     break;
                 }
 
                 case 2:   // Mordent — main, aux, main
-                    outp.Add(U.Note(n.Pitch, n.StartBeat, step, n.Velocity));
-                    outp.Add(U.Note(aux, n.StartBeat + step, step, vel));
-                    outp.Add(U.Note(n.Pitch, n.StartBeat + step * 2, Math.Max(U.MinLength, len - step * 2), n.Velocity));
+                    outp.Add(U.Note(n.Pitch, n.StartBeat, step, n.Velocity, art));
+                    outp.Add(U.Note(aux, n.StartBeat + step, step, vel, art));
+                    outp.Add(U.Note(n.Pitch, n.StartBeat + step * 2, Math.Max(U.MinLength, len - step * 2), n.Velocity, art));
                     break;
 
                 case 3:   // Turn — upper, main, lower, main
@@ -270,22 +280,22 @@ public static class MidiTransforms
                     int upper = Aux(n.Pitch, Math.Abs(interval) == 0 ? 1 : Math.Abs(interval));
                     int lower = Aux(n.Pitch, -(Math.Abs(interval) == 0 ? 1 : Math.Abs(interval)));
                     double q = Math.Min(step, len / 4);
-                    outp.Add(U.Note(upper, n.StartBeat, q, vel));
-                    outp.Add(U.Note(n.Pitch, n.StartBeat + q, q, n.Velocity));
-                    outp.Add(U.Note(lower, n.StartBeat + q * 2, q, vel));
-                    outp.Add(U.Note(n.Pitch, n.StartBeat + q * 3, Math.Max(U.MinLength, len - q * 3), n.Velocity));
+                    outp.Add(U.Note(upper, n.StartBeat, q, vel, art));
+                    outp.Add(U.Note(n.Pitch, n.StartBeat + q, q, n.Velocity, art));
+                    outp.Add(U.Note(lower, n.StartBeat + q * 2, q, vel, art));
+                    outp.Add(U.Note(n.Pitch, n.StartBeat + q * 3, Math.Max(U.MinLength, len - q * 3), n.Velocity, art));
                     break;
                 }
 
                 case 4:   // Flam — a ghost a hair ahead, the main note untouched
-                    outp.Add(U.Note(n.Pitch, Math.Max(0, n.StartBeat - step * 0.5), step * 0.5, vel * 0.6));
+                    outp.Add(U.Note(n.Pitch, Math.Max(0, n.StartBeat - step * 0.5), step * 0.5, vel * 0.6, art));
                     outp.Add(n);
                     break;
 
                 default:  // Roll — ratchet the same pitch across the note
                     for (double t = n.StartBeat; t < n.StartBeat + len - 1e-6; t += step)
                         outp.Add(U.Note(n.Pitch, t, Math.Min(step, n.StartBeat + len - t) * 0.9,
-                                        U.Lerp(n.Velocity, vel, (t - n.StartBeat) / Math.Max(1e-6, len))));
+                                        U.Lerp(n.Velocity, vel, (t - n.StartBeat) / Math.Max(1e-6, len)), art));
                     break;
             }
         }

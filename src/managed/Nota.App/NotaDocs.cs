@@ -3,12 +3,13 @@
 //
 // Links into the user manual (nota-daw/nota-docs, published on GitHub Pages): Help ▸
 // Documentation and each device card's "Documentation" item. The manual is English with a
-// Russian translation under /ru/; a Russian UI culture opens that one. The page slugs mirror
+// translation under /<code>/ for each language ManualLanguage lists (French, Russian); the one
+// that opens follows the language the interface runs in. The page slugs mirror
 // the manual's src/content/docs tree — keep them in step when a device is added there.
 
 using System;
-using System.Globalization;
 using Avalonia.Controls;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -35,10 +36,7 @@ internal static class NotaDocs
 
     /// <summary>The manual's address for a page ("" = the home page), in the UI's language.</summary>
     public static string Url(string page = "")
-    {
-        bool ru = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ru";
-        return BaseUrl + (ru ? "ru/" : "") + (page.Length > 0 ? page.TrimEnd('/') + "/" : "");
-    }
+        => BaseUrl + ManualLanguage.Folder(Loc.Language) + (page.Length > 0 ? page.TrimEnd('/') + "/" : "");
 
     /// <summary>The page for a built-in device, or the plug-ins page for anything else.</summary>
     public static string DevicePage(DeviceChainView.ChainKind kind, int engineKind)

@@ -305,18 +305,27 @@ public sealed partial class SessionView
             if (_engine.TryGetTrackInfo(i, out var t) && t.Id != c.TrackId && !t.IsGroup)
                 names.Add((t.Id, TrackNames.Of(_engine, t), t.IsInstrument));
 
-        // An audio track's hardware input appears once per channel pick (#340): 1, 2, 1/2.
+        // An audio track's hardware input appears once per channel pick: every input, then the
+        // stereo pairs (#340, specs/086).
         var items = new List<(RecordInputPick Value, string Label)>();
         RecordInputPick cur;
-        if (c.IsInstrument)
+        if (c.IsInstrument) // the live input (All inputs / a device) or a track to take MIDI from (specs/086)
         {
-            items.Add((RecordInputPick.Track(-1), Loc.T("session.mixer.all_ins")));
-            foreach (var n in names.Where(n => n.Instrument)) items.Add((RecordInputPick.Track(n.Id), n.Name));
-            cur = RecordInputPick.Track(_engine.GetTrackMidiSource(c.TrackId));
+            var (entries, curEntry) = MidiInputPick.Compact(_engine, c.TrackId, names.Where(n => n.Instrument).Select(n => (n.Id, n.Name)));
+            var mcb = new ComboBox { Height = IoRowH, FontSize = 10, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
+            foreach (var en in entries) mcb.Items.Add(new ComboBoxItem { Content = en.Label, FontSize = 10 });
+            mcb.SelectedIndex = curEntry;
+            int tid = c.TrackId;
+            mcb.SelectionChanged += (_, _) =>
+            {
+                if (mcb.SelectedIndex >= 0 && mcb.SelectedIndex < entries.Count) MidiInputPick.Apply(_engine, tid, entries[mcb.SelectedIndex]);
+            };
+            ToolTip.SetTip(mcb, Loc.T("session.mixer.midi_input_every_input_or"));
+            return mcb;
         }
         else
         {
-            foreach (var (pick, _, shortName) in RecordInputPick.Hardware) items.Add((pick, shortName));
+            foreach (var (pick, _, shortName) in RecordInputPick.HardwareEntries(_engine, c.TrackId)) items.Add((pick, shortName));
             items.Add((RecordInputPick.Track(-1), Loc.T("common.master")));
             foreach (var n in names) items.Add((RecordInputPick.Track(n.Id), n.Name));
             cur = RecordInputPick.Of(_engine, c.TrackId);

@@ -39,8 +39,9 @@ public sealed class ProjectService
     /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
     /// v28 (specs/050) lets a sidechain key name one pad, chain or voice of its source.
     /// v29 (specs/067) adds Takes on audio tracks and TakeId on audio clips.
-    /// v30 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
-    public const int CurrentFormatVersion = 30;
+    /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
+    /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
+    public const int CurrentFormatVersion = 31;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -116,10 +117,19 @@ public sealed class ProjectService
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
                 Monitor = engine.GetTrackMonitor(ti.Id),
-                InputChannels = (int)engine.GetTrackInputChannels(ti.Id),
+                InputChannels = engine.GetTrackInput(ti.Id).AsChannels is { } oldPick ? (int)oldPick : null,
+                InputFirst = engine.GetTrackInput(ti.Id).First + 1,
+                InputWidth = engine.GetTrackInput(ti.Id).Width,
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
+                MidiOffsetMs = engine.GetTrackMidiOffsetMs(ti.Id) is var moff && moff != 0.0 ? moff : null,   // v30; 0 = omitted
+                ArticulationMap = ti.IsInstrument ? CaptureArticulationMap(engine, ti.Id, warnings) : null,   // v30
             };
+            if (ti.IsInstrument && engine.GetTrackMidiInput(ti.Id) is var midiIn)   // MIDI input (specs/086)
+            {
+                t.MidiInputUid = midiIn.Uid;
+                t.MidiInputChannel = midiIn.Channel > 0 ? midiIn.Channel : null;
+            }
             for (int b = 0; b < t.Sends.Length; b++) t.Sends[b] = engine.GetTrackSend(ti.Id, b);
 
             if (ti.IsInstrument)
@@ -759,8 +769,12 @@ public sealed class ProjectService
             if (t.EditLink == true) engine.SetTrackEditLink(id, true);   // group Link (specs/076)
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
-            engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair
+            engine.SetTrackInput(id, TrackInputOf(t));
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
+            if (t.MidiInputUid is { Length: > 0 } || t.MidiInputChannel is > 0)    // MIDI input (specs/086)
+                engine.SetTrackMidiInput(id, t.MidiInputUid, t.MidiInputChannel ?? 0);
+            if (t.MidiOffsetMs is { } offMs && double.IsFinite(offMs)) engine.SetTrackMidiOffsetMs(id, offMs);   // v30; absent = 0, engine clamps
+            if (t.Type == 1 && t.ArticulationMap is { } artMap) ApplyArticulationMap(engine, id, artMap, warnings);   // v30
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
             var ccPaths = new List<(int mi, int chain, int slot)>();   // CC targets inside racks: after the devices
@@ -1247,6 +1261,15 @@ public sealed class ProjectService
         }
     }
 
+    // A saved track's hardware input (specs/086): the device channel + width, or — in files
+    // saved before 0.60 — the old three-value pick (absent before 0.58: the stereo pair).
+    internal static InputPick TrackInputOf(TrackDto t)
+    {
+        if (t.InputFirst is int first && t.InputWidth is int width && new InputPick(first - 1, width) is { IsValid: true } p)
+            return p;
+        return InputPick.From((InputChannels)(t.InputChannels ?? 0));
+    }
+
     // Writes a sample unless its content-named file is already complete on disk.
     private static void WriteSampleWav(IAudioEngine engine, long sampleId, string path)
     {
@@ -1311,6 +1334,25 @@ public sealed class ProjectService
 
     // A note's recorded MPE goes inline with it (notes sharing one curve, like a duplicate,
     // each carry a copy).
+    // --- articulation maps (specs/085) ------------------------------------------------------
+
+    private static JsonObject? CaptureArticulationMap(IAudioEngine engine, int trackId, List<string> warnings)
+    {
+        if (engine.GetTrackArticulationMapJson(trackId) is not { Length: > 0 } json) return null;
+        try { return JsonNode.Parse(json) as JsonObject; }
+        catch (JsonException) { warnings.Add("A track's articulation map couldn't be saved (it isn't valid JSON)."); return null; }
+    }
+
+    // A map that can't be read, or that the engine refuses, is a warning: the project still opens.
+    private static void ApplyArticulationMap(IAudioEngine engine, int trackId, JsonObject node, List<string> warnings)
+    {
+        var read = Nota.Application.Articulations.ArticulationMapFile.Read(node.ToJsonString(), "");
+        foreach (var m in read.Warnings) warnings.Add(m.Text);
+        if (read.Map is not { } map) return;
+        if (!Nota.Application.Articulations.ArticulationMapAssignment.Assign(engine, trackId, map))
+            warnings.Add($"Couldn't restore the articulation map \"{map.Name}\".");
+    }
+
     private static NoteDto[] ToDtos(IAudioEngine engine, NotaNote[] notes)
     {
         var arr = new NoteDto[notes.Length];

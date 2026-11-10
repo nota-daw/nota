@@ -45,6 +45,8 @@
     <Compile Include="..\..\src\managed\Nota.App\Input\ShortcutAvaloniaExtensions.cs" Link="ShortcutAvaloniaExtensions.cs" />
     <!-- What's New's changelog / release-notes parsers (no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\Changelog.cs" Link="Changelog.cs" />
+    <!-- Which language of the manual the app opens (nota#539; no Avalonia inside). -->
+    <Compile Include="..\..\src\managed\Nota.App\ManualLanguage.cs" Link="ManualLanguage.cs" />
     <!-- Typed value entry's parser / read-out search (no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\Controls\ValueText.cs" Link="ValueText.cs" />
     <!-- Clip editor position / tempo / ruler math (specs/036; no Avalonia inside). -->

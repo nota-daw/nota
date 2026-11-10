@@ -52,6 +52,17 @@ class Instrument {
     // sample offset within the next render(). Outside that it stays 0. Audio thread only.
     virtual bool takesTimedEvents() const { return false; }
     int32_t eventOffset = 0;
+    // The MIDI channel of the next event, like eventOffset: 0 = the default (channel 1), 1..16 an
+    // articulation's explicit channel (specs/085). The engine sets it before an articulation action
+    // and puts it back to 0 after. Only a hosted plug-in reads it. Audio thread only.
+    int32_t eventChannel = 0;
+    // A MIDI program change (an articulation action, specs/085), 0..127, at eventOffset on
+    // eventChannel. Built-in instruments have no programs and ignore it.
+    virtual void programChange(int32_t /*program*/) {}
+    // Whether articulation MIDI (keyswitch notes, controllers, programs) is meant for this
+    // instrument (specs/085, FR-024). A built-in would play a keyswitch as a note, so it says no
+    // and the engine sends it nothing; a hosted plug-in, or a rack holding one, says yes.
+    virtual bool takesArticulations() const { return false; }
 
     // Note events (applied at segment boundaries by the engine for sample accuracy, or at
     // eventOffset — see takesTimedEvents).
@@ -128,6 +139,41 @@ class Instrument {
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
     std::atomic<bool> offSettled{false}; // relaxed, like pedalDown
+
+    // ---- output tap (#531) ------------------------------------------------------
+    // The card's filter graph draws the spectrum of what the instrument plays. The audio
+    // thread writes its mono sum into a ring only while a reader has asked recently
+    // (tapBlocks_ counts blocks down from each read), so with no graph on screen it costs a
+    // relaxed load per block. Relaxed atomics: the picture tolerates a torn block.
+    static constexpr int kTapLen = 4096; // a power of two
+    void tapOutput(const float* stereo, int32_t frames) {
+        if (tapBlocks_.load(std::memory_order_relaxed) <= 0) return;
+        tapBlocks_.fetch_sub(1, std::memory_order_relaxed);
+        const uint32_t w = tapW_.load(std::memory_order_relaxed);
+        for (int32_t i = 0; i < frames; ++i)
+            tap_[(w + static_cast<uint32_t>(i)) & (kTapLen - 1)].store(0.5f * (stereo[i * 2] + stereo[i * 2 + 1]),
+                std::memory_order_relaxed);
+        tapW_.store(w + static_cast<uint32_t>(frames), std::memory_order_release);
+    }
+    // A block the instrument doesn't render (switched off): silence, so a reader doesn't
+    // take the last sound before the switch for fresh output.
+    void tapSilence(int32_t frames) {
+        if (tapBlocks_.load(std::memory_order_relaxed) <= 0) return;
+        tapBlocks_.fetch_sub(1, std::memory_order_relaxed);
+        const uint32_t w = tapW_.load(std::memory_order_relaxed);
+        for (int32_t i = 0; i < frames; ++i) tap_[(w + static_cast<uint32_t>(i)) & (kTapLen - 1)].store(0.0f, std::memory_order_relaxed);
+        tapW_.store(w + static_cast<uint32_t>(frames), std::memory_order_release);
+    }
+    // The newest `maxN` output samples, oldest first (message thread); keeps the tap on.
+    int32_t readOutput(float* out, int32_t maxN) const {
+        if (!out || maxN <= 0) return 0;
+        tapBlocks_.store(kTapHoldBlocks, std::memory_order_relaxed);
+        const int32_t n = std::min<int32_t>(maxN, kTapLen);
+        const uint32_t w = tapW_.load(std::memory_order_acquire);
+        for (int32_t i = 0; i < n; ++i)
+            out[i] = tap_[(w - static_cast<uint32_t>(n) + static_cast<uint32_t>(i)) & (kTapLen - 1)].load(std::memory_order_relaxed);
+        return n;
+    }
 
     // Musical transport for generative instruments (e.g. Nota Pendulum): the engine
     // calls this once per block before render() with the block's start beat,
@@ -337,6 +383,12 @@ class Instrument {
     std::atomic<bool> bypassed_{false};
     uint64_t uid_ = nextUid();
     std::atomic<uint64_t> scPart_{0};
+
+  private:
+    static constexpr int kTapHoldBlocks = 400; // ≈ 1 s at 128-frame blocks after the last read
+    std::atomic<float> tap_[kTapLen] = {};
+    std::atomic<uint32_t> tapW_{0};
+    mutable std::atomic<int32_t> tapBlocks_{0};
 };
 
 } // namespace nota

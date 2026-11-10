@@ -381,6 +381,9 @@ int32_t nota_track_held_notes(const NotaEngine* e, int32_t track_id, int32_t* ou
 int32_t nota_track_instrument_scope(const NotaEngine* e, int32_t track_id, float* out, int32_t max_n) {
     return e ? CENG(e)->instrumentScope(track_id, out, max_n) : 0;
 }
+int32_t nota_track_instrument_output(const NotaEngine* e, int32_t track_id, float* out, int32_t max_n) {
+    return e ? CENG(e)->instrumentOutput(track_id, out, max_n) : 0;
+}
 int32_t nota_engine_add_sampler_track(NotaEngine* e, const char* path, int32_t root, int32_t loop) {
     if (!e || !path) return 0;
     return ENG(e)->addSamplerTrack(std::string(path), root, loop != 0);
@@ -740,6 +743,69 @@ NotaResult nota_track_set_input_channels(NotaEngine* e, int32_t track_id, int32_
 int32_t nota_track_get_input_channels(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackInputChannels(track_id) : 0;
 }
+NotaResult nota_track_set_input(NotaEngine* e, int32_t track_id, int32_t first, int32_t width) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackInput(track_id, first, width) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_input(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackInput(track_id) : -1;
+}
+int32_t nota_track_input_available(const NotaEngine* e, int32_t track_id) {
+    return (e && CENG(e)->trackInputAvailable(track_id)) ? 1 : 0;
+}
+NotaResult nota_track_set_midi_input(NotaEngine* e, int32_t track_id, int32_t source, int32_t channel) {
+    if (!e || channel < 0 || channel > 16) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackMidiInput(track_id, source, channel) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_midi_input(const NotaEngine* e, int32_t track_id) {
+    if (!e) return 0;
+    return (CENG(e)->trackMidiInputSource(track_id) + 2) | (CENG(e)->trackMidiInputChannel(track_id) << 8);
+}
+NotaResult nota_track_set_midi_input_uid(NotaEngine* e, int32_t track_id, const char* uid, int32_t channel) {
+    if (!e || channel < 0 || channel > 16) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackMidiInputUid(track_id, uid ? uid : "", channel) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_midi_input_uid(const NotaEngine* e, int32_t track_id, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string uid = CENG(e)->trackMidiInputUid(track_id);
+    if (out && cap > 0) {
+        const size_t n = std::min(uid.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, uid.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(uid.size());
+}
+int32_t nota_midi_source_of_uid(const NotaEngine* e, const char* uid) {
+    return e && uid ? CENG(e)->midiSourceOfUid(uid) : -1;
+}
+void nota_engine_push_midi_for_test(NotaEngine* e, int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
+    if (e) ENG(e)->pushMidiForTest(source, status & 0xF0, channel & 0x0F, d1 & 0x7F, d2 & 0x7F);
+}
+int32_t nota_audio_input_channel_count(const NotaEngine* e) {
+    return e ? CENG(e)->inputChannelCount() : 0;
+}
+int32_t nota_audio_input_channel_name(const NotaEngine* e, int32_t index, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string name = CENG(e)->inputChannelName(index);
+    if (out && cap > 0) {
+        const size_t n = std::min(name.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, name.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(name.size());
+}
+int32_t nota_audio_input_probe(NotaEngine* e) {
+    return e ? ENG(e)->probeAudioInput() : 0;
+}
+void nota_audio_input_set_disabled(NotaEngine* e, const int32_t* channels, int32_t count) {
+    if (e) ENG(e)->setDisabledInputs(channels, count);
+}
+void nota_engine_feed_input_test(NotaEngine* e, const float* interleaved, int32_t frames, int32_t channels) {
+    if (e && interleaved && frames > 0 && channels > 0) ENG(e)->feedInputForTest(interleaved, frames, channels);
+}
+void nota_engine_set_test_input_device(NotaEngine* e, int32_t channels) {
+    if (e) ENG(e)->setTestInputDevice(channels);
+}
 NotaResult nota_track_set_monitor(NotaEngine* e, int32_t track_id, int32_t on) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMonitor(track_id, on != 0);
@@ -755,6 +821,30 @@ NotaResult nota_track_set_midi_source(NotaEngine* e, int32_t track_id, int32_t s
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMidiSource(track_id, source_track_id);
     return NOTA_OK;
+}
+NotaResult nota_track_set_midi_offset_ms(NotaEngine* e, int32_t track_id, double ms) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setTrackMidiOffsetMs(track_id, ms);
+    return NOTA_OK;
+}
+double nota_track_get_midi_offset_ms(NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackMidiOffsetMs(track_id) : 0.0;
+}
+NotaResult nota_track_set_articulation_map(NotaEngine* e, int32_t track_id, int32_t default_id,
+    const NotaArticulationEntry* entries, int32_t entry_count, const NotaArticulationAction* actions, int32_t action_count,
+    const char* map_json, int32_t map_json_len) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackArticulationMap(
+               track_id, default_id, entries, entry_count, actions, action_count, map_json, map_json_len)
+               ? NOTA_OK
+               : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_clear_articulation_map(NotaEngine* e, int32_t track_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->clearTrackArticulationMap(track_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_articulation_map_json(const NotaEngine* e, int32_t track_id, char* out, int32_t max_len) {
+    return e ? CENG(e)->trackArticulationMapJson(track_id, out, max_len) : 0;
 }
 int32_t nota_track_get_midi_source(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackMidiSource(track_id) : -1;
@@ -895,6 +985,19 @@ NotaResult nota_track_restore_joined_edges(NotaEngine* e, int32_t track_id, cons
 int32_t nota_take_record_test(NotaEngine* e, int32_t track_id, const float* interleaved_stereo, int32_t frames,
     double start_beat) {
     return (e && ENG(e)->takeRecordTest(track_id, interleaved_stereo, frames, start_beat)) ? 1 : 0;
+}
+int32_t nota_take_record_test_armed(NotaEngine* e, const float* interleaved, int32_t channels, int32_t frames,
+    double start_beat) {
+    return e ? ENG(e)->takeRecordTestArmed(interleaved, channels, frames, start_beat) : 0;
+}
+int32_t nota_take_record_test_armed_disarm(NotaEngine* e, const float* interleaved, int32_t channels, int32_t frames,
+    double start_beat, int32_t disarm_track_id, int32_t disarm_at_frame) {
+    return e ? ENG(e)->takeRecordTestArmed(interleaved, channels, frames, start_beat, disarm_track_id, disarm_at_frame)
+             : 0;
+}
+int32_t nota_take_record_test_n(NotaEngine* e, int32_t track_id, const float* interleaved, int32_t channels,
+    int32_t frames, double start_beat) {
+    return (e && ENG(e)->takeRecordTestN(track_id, interleaved, channels, frames, start_beat)) ? 1 : 0;
 }
 int32_t nota_sample_get_info(const NotaEngine* e, int64_t sample_id, NotaSampleInfo* out) {
     return (e && CENG(e)->sampleInfo(sample_id, out)) ? 1 : 0;

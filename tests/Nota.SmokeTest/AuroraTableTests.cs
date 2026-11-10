@@ -354,7 +354,7 @@ internal static class AuroraTableTests
             wavs = Directory.GetFiles(Path.Combine(bundle, "samples")).Select(Path.GetFileName).OfType<string>().ToArray();
         }
         var json = JsonNode.Parse(File.ReadAllText(Path.Combine(bundle, ProjectService.ManifestName)))!;
-        yield return (json["formatVersion"]?.GetValue<int>() == 30 && warnCount == 0, $"aurora tables: projects save as format 30 ({json["formatVersion"]})");
+        yield return (json["formatVersion"]?.GetValue<int>() == 31 && warnCount == 0, $"aurora tables: projects save as format 31 ({json["formatVersion"]})");
         yield return (wavs.Length == 2, $"aurora tables: two Auroras with the same table share one file ({wavs.Length} tables for 3 slots)");
         {
             using var e = new NotaEngine();
@@ -402,9 +402,9 @@ internal static class AuroraTableTests
             var w = ProjectService.Apply(doc, e2, old);
             int id = TrackIds(e2)[0];
             e2.TryGetAuroraTableInfo(id, 0, out var v0);
-            yield return (doc.FormatVersion == 30 && w.Count == 0 && v0.Frames == 0
+            yield return (doc.FormatVersion == 31 && w.Count == 0 && v0.Frames == 0
                           && e2.GetPluginState(id, -1).Length == Params * 4,
-                $"aurora tables: a v27 project loads unchanged and migrates to 30 ({doc.FormatVersion})");
+                $"aurora tables: a v27 project loads unchanged and migrates to 31 ({doc.FormatVersion})");
         }
     }
 

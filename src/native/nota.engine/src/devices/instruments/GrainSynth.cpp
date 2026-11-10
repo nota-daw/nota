@@ -166,8 +166,11 @@ void GrainSynth::render(float* out, int32_t frames) {
     const double volume = get(Volume);
     const double panv = (get(Pan) - 0.5) * 2.0;
     const double gpL = std::cos((panv + 1.0) * 0.25 * kPi), gpR = std::sin((panv + 1.0) * 0.25 * kPi);
-    const double fg = std::tan(kPi * std::min(fbase, sampleRate_ * 0.49) / sampleRate_);
-    const double fa1 = 1.0 / (1.0 + fg * (fg + fk));
+    // The block's filter target; g and k ease toward it per sample (~5 ms), so a cutoff turned
+    // quickly sweeps instead of stepping at each block (an audible click).
+    const double fgT = std::tan(kPi * std::min(fbase, sampleRate_ * 0.49) / sampleRate_);
+    if (fgSm_ < 0.0) { fgSm_ = fgT; fkSm_ = fk; }
+    const double fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
     const double wet = get(DryWet);
     const bool doWet = wet > 1e-4, doDry = wet < 1.0 - 1e-4;
     const float wetGain = (float)wet, dryGain = (float)((1.0 - wet) * kDryTrim);
@@ -185,6 +188,9 @@ void GrainSynth::render(float* out, int32_t frames) {
 
     float ownPeak = 0.0f;
     for (int32_t i = 0; i < frames; ++i) {
+        fgSm_ += (fgT - fgSm_) * fSm;
+        fkSm_ += (fk - fkSm_) * fSm;
+        const double fg = fgSm_, fkS = fkSm_, fa1 = 1.0 / (1.0 + fg * (fg + fkS));
         float mixL = 0.0f, mixR = 0.0f;
         for (auto& v : voices_) {
             if (!v.active) continue;
@@ -268,8 +274,8 @@ void GrainSynth::render(float* out, int32_t frames) {
             const float norm = (float)(1.0 / std::sqrt(overlap)) * wetGain;
             double yL = gl * norm + dl * dryGain, yR = gr * norm + dr * dryGain;
             // Subtractive TPT filter per channel.
-            yL = svf(v.s1L, v.s2L, yL, fg, fa1, fk, ftype);
-            yR = svf(v.s1R, v.s2R, yR, fg, fa1, fk, ftype);
+            yL = svf(v.s1L, v.s2L, yL, fg, fa1, fkS, ftype);
+            yR = svf(v.s1R, v.s2R, yR, fg, fa1, fkS, ftype);
             const float e = v.env * v.vel;
             mixL += (float)yL * e;
             mixR += (float)yR * e;

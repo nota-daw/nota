@@ -14,11 +14,11 @@ using Nota.Application;
 namespace Nota.App;
 
     // Interactive filter response for Nota Volt (and Bass, Aurora, Operator): drag anywhere to
-    // set cutoff (X) and resonance (Y) of the targeted filter, recording gestures. Drawn like
-    // Auto Filter's curve: the real 2-pole response by type (LP / HP / BP / Notch / Morph) over a
-    // log-frequency grid, the handle on the curve and the cutoff top-right. ⌥-click types the
+    // set cutoff (X) and resonance (Y) of the targeted filter, recording gestures. The real
+    // 2-pole response by type (LP / HP / BP / Notch / Morph) on the shared filter graph
+    // (FilterGraphBase: spectrum, cutoff on the axis, hover marker). ⌥-click types the
     // cutoff, then (Tab) the resonance; double-click resets both (specs/035-typed-value-entry).
-    internal sealed class VoltFilter : Control, IMidiLearnRegions, IValueEntryHost
+    internal sealed class VoltFilter : FilterGraphBase, IMidiLearnRegions, IValueEntryHost
     {
         private readonly IAudioEngine _e;
         private readonly int _t;
@@ -31,6 +31,9 @@ namespace Nota.App;
         /// The readout and the frequency scale both come from it, so the graph says what the
         /// engine actually does.</summary>
         public (double Lo, double Hi) FreqRange { get; set; } = (20.0, 18000.0);
+        protected override (double Lo, double Hi) Span => FreqRange;
+        protected override double CutoffHz => FreqRange.Lo * Math.Pow(FreqRange.Hi / FreqRange.Lo, G(_freq));
+        protected override double ResponseDb(double hz) => MagDb(hz, CutoffHz, G(_reso));
 
         public VoltFilter(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; ValueEntry.AttachHost(this); }
         public void Target(string title, (int, string) freq, (int, string) reso, int type)
@@ -71,14 +74,14 @@ namespace Nota.App;
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click: the parameter menu
-            _drag = true; Gest(true); e.Pointer.Capture(this); Apply(e.GetPosition(this)); e.Handled = true; }
-        protected override void OnPointerMoved(PointerEventArgs e) { if (_drag) Apply(e.GetPosition(this)); }
+            _drag = Dragging = true; Gest(true); e.Pointer.Capture(this); Apply(e.GetPosition(this)); e.Handled = true; }
+        protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e.GetPosition(this)); }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
-        { if (_drag) { _drag = false; InvalidateVisual(); Gest(false); e.Pointer.Capture(null); } }
+        { if (_drag) { _drag = Dragging = false; InvalidateVisual(); Gest(false); e.Pointer.Capture(null); } }
 
         // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-        { if (_drag) { _drag = false; InvalidateVisual(); Gest(false); } base.OnPointerCaptureLost(e); }
+        { if (_drag) { _drag = Dragging = false; InvalidateVisual(); Gest(false); } base.OnPointerCaptureLost(e); }
 
         private void Gest(bool begin)
         {
@@ -90,12 +93,12 @@ namespace Nota.App;
         /// <summary>24 dB/oct: the response is drawn squared (two poles more), like Auto Filter's.</summary>
         public bool Slope24 { get; set; }
 
-        /// <summary>Write the cutoff top-right; off where the card's own header above already shows it (Operator).</summary>
+        /// <summary>Kept for the cards that set it; the cutoff now lives on the axis (#531).</summary>
         public bool ShowCutoff { get; set; } = true;
 
         // The plot spans the window's width, so the cutoff's x is linear in its normalised value.
         private (double x0, double x1, double top, double bot) Geo()
-        { return (0, Bounds.Width, NotaGraph.PlotTop - 6, Bounds.Height - NotaGraph.PlotFloor); }
+        { var r = PlotRect; return (r.X, r.Right, r.Y + 4, r.Bottom - 3); }
 
         private void Apply(Point p)
         {
@@ -129,18 +132,9 @@ namespace Nota.App;
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
-            var frame = new Rect(0, 0, w, h);
-            NotaGraph.Window(ctx, frame);
-            using var clip = ctx.PushClip(new RoundedRect(frame.Deflate(1), NotaGraph.Radius));
-            var (x0, x1, top, bot) = Geo();
-            double lo = FreqRange.Lo, hi = FreqRange.Hi, span = Math.Log(hi / lo);
-            double X(double hz) => x0 + Math.Log(hz / lo) / span * (x1 - x0);
-            double Y(double db) => top + Math.Clamp((DbTop - db) / (DbTop - DbBot), 0, 1) * (bot - top);
-
-            // Decades across, 0 dB and −24 dB down.
-            foreach (var f in new[] { 100.0, 1000, 10000 }) if (f > lo && f < hi) ctx.DrawLine(NotaGraph.GridPen, new Point(X(f), 0), new Point(X(f), h));
-            foreach (var db in new[] { 0.0, -24 }) ctx.DrawLine(NotaGraph.GridPen, new Point(0, Y(db)), new Point(w, Y(db)));
-
+            DrawBack(ctx);
+            var (lo, hi) = FreqRange;
+            var (x0, x1, _, _) = Geo();
             double cut = G(_freq), res = G(_reso);
             double fc = lo * Math.Pow(hi / lo, cut);
             int n = (int)Math.Clamp(w, 24, 400);
@@ -148,7 +142,7 @@ namespace Nota.App;
             for (int i = 0; i < n; i++)
             {
                 double t = (double)i / (n - 1), f = lo * Math.Pow(hi / lo, t);
-                pts[i] = new Point(x0 + t * (x1 - x0), Y(MagDb(f, fc, res)));
+                pts[i] = new Point(x0 + t * (x1 - x0), YOf(MagDb(f, fc, res)));
             }
             var line = new StreamGeometry();
             using (var g = line.Open())
@@ -157,37 +151,24 @@ namespace Nota.App;
                 for (int i = 1; i < n; i++) g.LineTo(pts[i]);
                 g.EndFigure(false);
             }
-            ctx.DrawGeometry(null, NotaGraph.PrimaryPen, line);
+            var area = new StreamGeometry();
+            using (var g = area.Open())
+            {
+                g.BeginFigure(new Point(pts[0].X, PlotRect.Bottom), true);
+                foreach (var p in pts) g.LineTo(p);
+                g.LineTo(new Point(pts[^1].X, PlotRect.Bottom));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x1E), null, area);
+            ctx.DrawGeometry(null, new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), line);
 
             // The handle sits on the drawn curve at the cutoff (read off the line, so a notch's
-            // bottom, which only the exact cutoff reaches, doesn't pull it below the curve); a
-            // faint rule marks the cutoff while dragged.
+            // bottom, which only the exact cutoff reaches, doesn't pull it below the curve).
             double cx = x0 + cut * (x1 - x0), pos = cut * (n - 1);
             int i0 = Math.Clamp((int)Math.Floor(pos), 0, n - 2);
             double cy = pts[i0].Y + (pts[i0 + 1].Y - pts[i0].Y) * (pos - i0);
-            if (_drag) ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x50), 1), new Point(cx, 0), new Point(cx, h));
-            NotaGraph.Node(ctx, new Point(cx, cy), active: true);
-
-            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopLeft, "+12");
-            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, NotaNum.Hz(lo));
-            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, NotaNum.Hz(hi));
-            // The floor, named just over the bottom-left frequency.
-            var floor = NotaGraph.AxisText("−48\u2009dB");
-            var loT = NotaGraph.AxisText(NotaNum.Hz(lo));
-            ctx.DrawText(floor, new Point(4, h - 4 - loT.Height - floor.Height + 1));
-            // The intermediate frequencies along the bottom (a quarter, half and three quarters of the
-            // span), each left out where it would run into a neighbour.
-            var hiT = NotaGraph.AxisText(NotaNum.Hz(hi));
-            double prevRight = 4 + loT.Width + 4, lastLeft = w - 4 - hiT.Width - 4;
-            for (int i = 1; i <= 3; i++)
-            {
-                double f = lo * Math.Pow(hi / lo, i / 4.0);
-                var t = NotaGraph.AxisText(NotaNum.Hz(f));
-                double tx = X(f) - t.Width / 2;
-                if (tx < prevRight || tx + t.Width > lastLeft) continue;
-                ctx.DrawText(t, new Point(tx, h - 4 - t.Height + 1));
-                prevRight = tx + t.Width + 4;
-            }
-            if (ShowCutoff) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, NotaNum.Hz(fc), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            DrawFront(ctx, cy);
+            if (_drag) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, new Point(cx, cy), 8, 8);
+            ctx.DrawEllipse(_drag ? NotaPalette.AccentBright : NotaGraph.Ground, new Pen(NotaPalette.AccentBright, 1.6), new Point(cx, cy), 3.8, 3.8);
         }
     }

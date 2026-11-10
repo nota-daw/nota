@@ -21,7 +21,8 @@ public static class SamplerModel
     public const int Voices = 16;
 
     // scopeRead layout (Sampler::kTele).
-    public const int ScopeLength = 8;
+    public const int ScopeLength = 10;   // [8] [9]: the envelope's stage and progress (EnvShape.h, #531)
+    private const int ScopeLengthV1 = 8;
 
     public static readonly string[] LoopNames = { "Off", "Fwd", "Ping", "Rev" };
     public static readonly string[] FilterNames = { "Off", "LP", "HP", "BP" };
@@ -174,6 +175,8 @@ public static class SamplerModel
     public sealed class Snapshot
     {
         public int Voices, Stage = -1, Held;
+        public int EnvStage = 4;   // 0 A · 1 D · 2 S · 3 R · 4 none — the envelope graph's playhead
+        public double EnvProgress;
         public double PlayPos = -1, Env, Note = -1, CutoffHz = -1, Peak;
         public bool Live;
     }
@@ -182,10 +185,12 @@ public static class SamplerModel
     /// Sampler inside a rack chain) — the caller then leans on the play position alone.</summary>
     public static void Parse(ReadOnlySpan<float> s, Snapshot o)
     {
-        o.Live = s.Length >= ScopeLength;
+        o.Live = s.Length >= ScopeLengthV1;
         if (!o.Live) return;
         o.Voices = (int)s[0]; o.PlayPos = s[1]; o.Env = s[2]; o.Stage = (int)s[3];
         o.Note = s[4]; o.CutoffHz = s[5]; o.Peak = s[6]; o.Held = (int)s[7];
+        if (s.Length >= ScopeLength) { o.EnvStage = (int)s[8]; o.EnvProgress = s[9]; }
+        else { o.EnvStage = 4; o.EnvProgress = 0; }
     }
 
     // ---- words ----------------------------------------------------------------------------

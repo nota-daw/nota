@@ -117,20 +117,24 @@ internal sealed class PerformWheel : Control
         var body = new Rect(0.5, 0.5, w - 1, h - 1);
         ctx.DrawRectangle(Well, new Pen(Edge, 1), body, r, r);
 
-        // A short raised face in the middle third — the part the thumb would touch.
+        // A short raised face — the part the thumb touches — that rides with the value, the
+        // way a real wheel's grip turns under the thumb. Its centre travels the well's free
+        // height, so at the ends it stops flush with the rim instead of wrapping.
         double faceH = Math.Max(10, h * 0.34);
-        ctx.DrawRectangle(Face, null, new Rect(1.5, (h - faceH) / 2, w - 3, faceH), r - 1, r - 1);
+        double top = 1.5, travel = Math.Max(0, h - 3 - faceH);
+        double faceY = top + (1 - _norm) * travel;
+        ctx.DrawRectangle(Face, null, new Rect(1.5, faceY, w - 3, faceH), r - 1, r - 1);
 
-        // Grip ticks over the face, evenly spaced.
+        // Grip ticks over the face, evenly spaced — they move with it.
         for (int i = 1; i <= 3; i++)
         {
-            double ty = (h - faceH) / 2 + faceH * i / 4.0;
+            if (i == 2) continue;   // the middle one is the value bar
+            double ty = faceY + faceH * i / 4.0;
             ctx.DrawLine(new Pen(Tick, 1), new Point(3, ty), new Point(w - 3, ty));
         }
 
-        // The value bar. Pitch reads from the centre, so at rest it sits on the centreline.
-        double pad = 3;
-        double y = pad + (1 - _norm) * (h - pad * 2);
+        // The value bar, on the face's centreline. Pitch rests in the middle of the well.
+        double y = faceY + faceH / 2;
         bool live = Math.Abs(_norm - Default) > 1e-3;
         ctx.DrawRectangle(_drag ? NotaPalette.Accent : live ? Bar : BarOff, null, new Rect(1.5, y - 1, w - 3, 2), 1, 1);
     }

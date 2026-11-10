@@ -88,6 +88,12 @@ Pentad::Pentad() {
     set(PmFreqA, 0.0f);
     set(PmPwA, 0.0f);
     set(PmFilter, 0.0f);
+    set(FDCurve, 0.5f);
+    set(FRCurve, 0.5f);
+    set(FEnvExp, 1.0f);
+    set(ADCurve, 0.5f);
+    set(ARCurve, 0.5f);
+    set(AEnvExp, 1.0f); // straight + Exp: the RC generator, as before
     initDecimators();
     resetAll();
 }
@@ -118,7 +124,8 @@ const char* Pentad::paramId(int i) {
         "oblofreq", "obkbd", "mixa", "mixaon", "mixb", "mixbon", "mixnoise", "mixnoiseon", "noisecolor", "cutoff",
         "reso", "fenvamt", "keytrk", "fattack", "fdecay", "fsustain", "frelease", "aattack", "adecay", "asustain",
         "arelease", "lforate", "lfosaw", "lfotri", "lfosquare", "lfoamt", "lfosync", "wmmix", "wmfreqa", "wmfreqb",
-        "wmpwa", "wmpwb", "wmfilter", "pmenv", "pmoscb", "pmfreqa", "pmpwa", "pmfilter"};
+        "wmpwa", "wmpwb", "wmfilter", "pmenv", "pmoscb", "pmfreqa", "pmpwa", "pmfilter", "fdcurve", "frcurve", "fenvexp",
+        "adcurve", "arcurve", "aenvexp"};
     return (i >= 0 && i < kNumParams) ? ids[i] : "";
 }
 
@@ -136,7 +143,8 @@ const char* Pentad::paramName(int i) {
         "Amp-Env Decay", "Amp-Env Sustain", "Amp-Env Release", "LFO Rate", "LFO Saw", "LFO Triangle", "LFO Square",
         "LFO Initial-Amount", "LFO Tempo-Sync", "Wheel-Mod Source-Mix", "Wheel-Mod Freq-A", "Wheel-Mod Freq-B",
         "Wheel-Mod PW-A", "Wheel-Mod PW-B", "Wheel-Mod Filter", "Poly-Mod Filter-Env", "Poly-Mod Osc-B",
-        "Poly-Mod Freq-A", "Poly-Mod PW-A", "Poly-Mod Filter"};
+        "Poly-Mod Freq-A", "Poly-Mod PW-A", "Poly-Mod Filter", "Filter-Env Decay Curve", "Filter-Env Release Curve",
+        "Filter-Env Exp", "Amp-Env Decay Curve", "Amp-Env Release Curve", "Amp-Env Exp"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 
@@ -381,6 +389,7 @@ void Pentad::startVoice(int v, int note, float vel, int s, int S, bool glide) {
     V.hasPitch = true;
     V.fst = 1;
     V.ast = 1; // retrigger from the current level (no restart at zero)
+    V.fsh.last = V.ash.last = -1;
     if (!V.active) wake(V);
 }
 
@@ -624,6 +633,14 @@ void Pentad::renderChunk(float* out, int n) {
     c.tAR = relOn ? decaySecOf(P[ARelease]) * 0.25f : 0.001f;
     c.fS = P[FSustain];
     c.aS = P[ASustain];
+    c.sFA = attackSecOf(P[FAttack]);
+    c.sFD = decaySecOf(P[FDecay]);
+    c.sFR = relOn ? decaySecOf(P[FRelease]) : 0.004f;
+    c.sAA = attackSecOf(P[AAttack]);
+    c.sAD = decaySecOf(P[ADecay]);
+    c.sAR = relOn ? decaySecOf(P[ARelease]) : 0.004f;
+    c.fShape = {P[FDCurve], P[FRCurve], P[FEnvExp]};
+    c.aShape = {P[ADCurve], P[ARCurve], P[AEnvExp]};
     const float gT = glideSecOf(P[Glide]);
     c.glideC = gT > 0.0f ? 1.0f - static_cast<float>(std::exp(-1.0 / (gT / 3.0 * sr))) : 1.0f;
     c.walkC = 1.0f - static_cast<float>(std::exp(-1.0 / (0.8 * sr)));
@@ -688,6 +705,10 @@ void Pentad::renderVoice(Voice& V, int n, const VoiceCtl& c) {
     const float ef = 1.0f + c.drift * 0.2f * V.oEnvF, ea = 1.0f + c.drift * 0.2f * V.oEnvA;
     const float fA = coefOf(c.tFA * ef, sr), fD = coefOf(c.tFD * ef, sr), fR = coefOf(c.tFR * ef, sr);
     const float aA = coefOf(c.tAA * ea, sr), aD = coefOf(c.tAD * ea, sr), aR = coefOf(c.tAR * ea, sr);
+    auto rate = [sr](float sec) { return static_cast<float>(1.0 / (std::max(1e-4f, sec) * sr)); };
+    const RcEnvCoefs fRc{fA, 1.3f, fD, fR, 1e-6f, rate(c.sFA * ef), rate(c.sFD * ef), rate(c.sFR * ef)};
+    const RcEnvCoefs aRc{aA, 1.3f, aD, aR, 3e-5f, rate(c.sAA * ea), rate(c.sAD * ea), rate(c.sAR * ea)};
+    const bool fNative = rcEnvNative(c.fShape), aNative = rcEnvNative(c.aShape);
     // Unison stacks stay fat but don't scale linearly with the voice count.
     const float stackGain = V.stackN > 1 ? std::pow(static_cast<float>(V.stackN), -0.4f) : 1.0f;
     const float velA = (1.0f - c.velAmp * (1.0f - V.vel)) * stackGain;
@@ -724,43 +745,9 @@ void Pentad::renderVoice(Voice& V, int n, const VoiceCtl& c) {
         }
         // -- glide (exponential, in semitones) --
         V.pitch += (V.pitchTgt - V.pitch) * c.glideC;
-        // -- envelopes (RC curves; attack aims past 1 like the analog charge) --
-        switch (V.fst) {
-        case 1:
-            V.fenv += (1.3f - V.fenv) * fA;
-            if (V.fenv >= 1.0f) {
-                V.fenv = 1.0f;
-                V.fst = 2;
-            }
-            break;
-        case 2: V.fenv += (c.fS - V.fenv) * fD; break;
-        case 3:
-            V.fenv -= V.fenv * fR;
-            if (V.fenv < 1e-6f) {
-                V.fenv = 0.0f;
-                V.fst = 0;
-            }
-            break;
-        default: break;
-        }
-        switch (V.ast) {
-        case 1:
-            V.aenv += (1.3f - V.aenv) * aA;
-            if (V.aenv >= 1.0f) {
-                V.aenv = 1.0f;
-                V.ast = 2;
-            }
-            break;
-        case 2: V.aenv += (c.aS - V.aenv) * aD; break;
-        case 3:
-            V.aenv -= V.aenv * aR;
-            if (V.aenv < 3e-5f) {
-                V.aenv = 0.0f;
-                V.ast = 0;
-            }
-            break; // ≈ -90 dB
-        default: break;
-        }
+        // -- envelopes (RC curves; attack aims past 1 like the analog charge — or shaped, #531) --
+        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, fNative);
+        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, aNative); // the amp's floor ≈ −90 dB
         if (V.ast == 0 && V.fade == 0) { // asleep: stop computing this voice
             V.active = false;
             V.gate = false;
@@ -946,6 +933,13 @@ void Pentad::publishTelemetry(int32_t /*frames*/) {
     tele_[ScRate].store(static_cast<float>(sampleRate_), std::memory_order_relaxed);
     for (int v = 0; v < kMaxVoices; ++v)
         tele_[ScVoices + v].store(voices_[v].active ? voices_[v].level : 0.0f, std::memory_order_relaxed);
+    const Voice* nv = nullptr;
+    for (const Voice& V : voices_)
+        if (V.active && (!nv || V.order > nv->order)) nv = &V;
+    publishRcEnvTele(tele_ + ScEnvTele, nv != nullptr, nv ? nv->fst : 0, nv ? nv->fsh : EnvShapeState{}, nv ? nv->fenv : 0.0f,
+        pn_[FSustain].load(std::memory_order_relaxed));
+    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, nv != nullptr, nv ? nv->ast : 0, nv ? nv->ash : EnvShapeState{},
+        nv ? nv->aenv : 0.0f, pn_[ASustain].load(std::memory_order_relaxed));
 }
 
 } // namespace nota

@@ -45,6 +45,7 @@ Shutter::Shutter() {
     p_[PatGated].store(0.0f);
     p_[PatComplexity].store(0.5f);
     p_[PatOut].store(1.0f);
+    p_[View].store(0.0f); // L
     for (int k = 0; k < kNumSteps; ++k) p_[Step1 + k].store(kPushPattern[k % 16] / 8.0f); // "Push"
     for (auto& h : hist_) h.fill(0.0f);
     setSampleRate(44100.0, 0);
@@ -495,7 +496,8 @@ const char* Shutter::paramName(int32_t i) const {
         return a;
     }();
     if (i >= 0 && i < Step1) return nm[i];
-    if (i >= Step1 && i < kNumParams) return steps[(size_t)(i - Step1)].c_str();
+    if (i == View) return "View";
+    if (i >= Step1 && i < View) return steps[(size_t)(i - Step1)].c_str();
     return "";
 }
 

@@ -304,6 +304,10 @@ public static class TwinPatterns
                 while (pat.Steps[last].Gate >= GateTie && last + 1 < pat.Length && pat.Steps[last + 1].Notes.Contains(n)) last++;
                 var end = pat.Steps[last];
                 double off = On(last) + (end.Gate >= GateTie ? sb : end.Gate * 0.01 * sb);
+                // A long or swung gate that rings past the next step playing this note again ends
+                // at that onset, as the live sequencer cuts it there before retriggering.
+                for (int j = last + 1; j < pat.Length; j++)
+                    if (pat.Steps[j].Notes.Contains(n)) { off = Math.Min(off, On(j)); break; }
                 notes.Add(new NotaNote(n, On(k), off - On(k), s.Velocity / 127f));
             }
         }

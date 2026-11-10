@@ -90,7 +90,8 @@ class Shutter : public Device {
         PatOut,        // read-only: the pattern's value now 0..1 (written by process; Map's CV source)
         Step1,         // Step 1 .. Step 32, 0..1
         kNumSteps = 32,
-        kNumParams = Step1 + kNumSteps
+        View = Step1 + kNumSteps, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
+        kNumParams
     };
 
     // Telemetry slots (scopeRead). 0..4 keep the original layout.

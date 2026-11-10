@@ -79,6 +79,14 @@ int32_t Engine::trackDeviceBuiltinKind(int32_t trackId, int32_t deviceIndex) con
     return t->devices[deviceIndex]->builtinKind();
 }
 
+// The device's lineage: kept by the copies an edit swaps in, by a move, and by undo (which puts
+// the same objects back).
+int64_t Engine::trackDeviceId(int32_t trackId, int32_t deviceIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[deviceIndex]) return 0;
+    return static_cast<int64_t>(t->devices[deviceIndex]->lineage());
+}
+
 std::string Engine::trackInstrumentPluginId(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return (t && t->instrument) ? t->instrument->pluginIdentifier() : std::string{};

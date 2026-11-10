@@ -2,11 +2,16 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Reverb body (device kind 2), a build of the "Nota Reverb"
-// mockup (700 × 260) on the Chamber / Delay frame: an always-visible TAIL column (Decay ·
-// HF Damp), a centre tabbed panel (Space / Tone · Mod) over the live decay-tail window, a
-// right tabbed panel (Levels / Output) and a status strip. The tail window is a control,
-// not decoration (drag the pre-delay marker, drag the tail for the decay). Every control is
-// a device param, so automation / MIDI learn / presets / A-B / persistence come for free;
+// mockup, laid out the #531 way (CardLayout): a centre panel with Space / Tone · Mod tabs and a
+// right panel with no tabs of its own that follows them, over Dry · Dry/wet · Out. Space is the
+// decay window (the set tail in dB with your audio's measured tail under it, #377) with Decay,
+// Pre and Size beside it and the algorithm under it; its panel holds Freeze, Kill tail, Diffuse,
+// early reflections, wet only and the wet meter. Tone · Mod is the decay across frequency (HF
+// damp, the cut handles, the tail's live spectrum) with Low cut, High cut and HF damp beside it
+// and Vintage and Mod on tail under it; its panel holds Rate, Depth, Width, Mono f and latency
+// comp. S is the decay window over the algorithm and Decay, Pre, Size, Dry/wet. The graphs are
+// controls, not decoration (drag the pre-delay and decay handles, drag the cuts). Every control
+// is a device param, so automation / MIDI learn / presets / A-B / persistence come for free;
 // Kill tail is the one action that is not (it empties the reverb's buffers).
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
@@ -40,9 +45,10 @@ internal sealed class ReverbDeviceBody : IDeviceBody
     private static readonly double[] ErMs = { 7.3, 11.9, 16.1, 23.4, 29.7, 37.9, 47.3, 61.1 };
     private static readonly float[] ErGain = { 1.0f, 0.78f, 0.86f, 0.62f, 0.66f, 0.5f, 0.42f, 0.34f };
     private static readonly double[] ErScale = { 1.0, 0.45, 0.28, 0.7 };
-    private const double LoopSec = 3.4;   // one flash-and-fade of the tail window
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Reverb";
 
@@ -61,7 +67,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         int Sel(int p, int n) => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1);
 
         var readouts = new List<Action>();
-        var scope = new float[kScope];
+        var scope = new float[kScope + SpaceDraw.Floats];   // the telemetry, then the level history (#377)
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
 
@@ -74,34 +80,37 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         static double OutDb(double v) => v <= 0.0005 ? -100 : 20 * Math.Log10(v * 2);
         static double DryDb(double v) { double g = 2 * v * v; return g <= 1e-5 ? -100 : 20 * Math.Log10(g); }
         static double Rt60(double v) => Exp(v, 0.2, 12);
+        // The highs' decay (8 kHz) under HF damp: the combs' one-pole damping (coefficient
+        // damp × 0.4, Reverb.cpp) takes a little more off them on every ~30 ms loop.
+        double RtHigh(double rt)
+        {
+            double d = P(HFDamp) * 0.4, wv = 2 * Math.PI * 8000 / 48000;
+            double g = (1 - d) / Math.Sqrt(1 - 2 * d * Math.Cos(wv) + d * d);
+            double perLoop = -6.9 * 0.03 / rt;   // ln of the loop gain that gives this RT60
+            return rt * perLoop / (perLoop + Math.Log(Math.Max(g, 1e-6)));
+        }
         static string Secs(double s) => s >= 10 ? NotaNum.F($"{s:0.0} s") : NotaNum.F($"{s:0.00} s");
         static double LowHz(double v) => Exp(v, 20, 1000);
         static double HighHz(double v) => Exp(v, 1000, 20000);
         static string RateF(double v) { double hz = Exp(v, 0.05, 5); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }
         static string PreF(double v) => NotaNum.F($"{v * 200:0} ms");
         string DecayF(double v) => On(Freeze) ? "HOLD" : Secs(Rt60(v));
-        string Algo() => Algos[Sel(Algorithm, 4)];
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
-        static StackPanel Row(double sp, params Control[] cs)
-        { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static Border Divider(Control child, double top = 5) => new()
-        { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null)
+        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null, Func<bool>? dim = null)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); SyncTail(); };
+            if (dim is not null) readouts.Add(() => knob.IsDim = dim());
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
             MidiLearn.Bind(knob, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
@@ -158,10 +167,9 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         // ======================================================================
         // One view per centre tab — a control has one parent, and both tabs show the window.
         var tails = new List<ReverbTailView>();
-        var start = DateTime.UtcNow;
         ReverbTailView NewTail()
         {
-            var t = new ReverbTailView { DecayValue = () => P(Decay) };
+            var t = new ReverbTailView();
             t.Changed += (target, v) => { Raw(target == 0 ? Decay : PreDelay, (float)v); SyncTail(); };
             t.GestureBegin += target => Begin(target == 0 ? Decay : PreDelay);
             t.GestureEnd += target => End(target == 0 ? Decay : PreDelay);
@@ -184,121 +192,66 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             double scale = ErScale[Sel(Algorithm, 4)] * (0.5 + P(Size) * 0.8);
             for (int k = 0; k < ErMs.Length; k++) erBuf[k] = ErMs[k] * scale;
             double[] er = early ? erBuf : Array.Empty<double>();
-            foreach (var t in tails) t.Set(freeze ? -1 : Rt60(P(Decay)), freeze, P(PreDelay), P(PreDelay) * 200, er, ErGain);
+            double rt = Rt60(P(Decay));
+            foreach (var t in tails) t.Set(rt, RtHigh(rt), freeze, P(PreDelay) * 200, er, ErGain);
         }
         readouts.Add(() =>
         {
             SyncTail();
-            // The window loops only while the reverb is actually making sound (or is held).
-            bool sounding = Sc(S_WetPk) > 2e-4 || On(Freeze);
-            double ph = sounding ? (DateTime.UtcNow - start).TotalSeconds % LoopSec / LoopSec : -1;
-            foreach (var t in tails) t.SetPhase(ph);
+            // Your audio under the set line: the level history after the telemetry.
+            bool has = scN >= kScope + SpaceDraw.Floats;
+            foreach (var t in tails) t.SetLive(scope, kScope, has);
         });
 
         // ======================================================================
-        // LEFT — Tail column (Decay · HF Damp)
+        // The decay across frequency — the Tone · Mod tab's graph
         // ======================================================================
-        Control TailFader(int p, string label, IBrush ink, IBrush handle, string tip)
-        {
-            var f = new DelayFader { Ink = ink, Handle = handle, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, HorizontalAlignment = HorizontalAlignment.Center, Default = engine.DeviceParamDefault(track, di, p) };
-            f.Changed += v => { Raw(p, (float)v); SyncTail(); };
-            f.GestureBegin += () => Begin(p);
-            f.GestureEnd += () => End(p);
-            MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ToolTip.SetTip(f, tip);
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center; lb.Margin = new Thickness(0, 3, 0, 0);
-            readouts.Add(() =>
-            {
-                bool hold = On(Freeze) && p == Decay;
-                f.Set(hold ? 1 : P(p));
-                lb.Foreground = hold ? AccentBright : TextTertiary;
-            });
-            return new DockPanel { Width = 29, Children = { Docked(lb, Dock.Bottom), f } };
-        }
-        var tailTitle = Caps("TAIL"); tailTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(TailFader(Decay, "DECAY", NotaPalette.VizInk, NotaPalette.VizInk,
-            Loc.T("device.reverb.decay_rt60_the_time_the")));
-        faders.Children.Add(Col(TailFader(HFDamp, "DAMP", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
-            Loc.T("device.reverb.hf_damp_how_much_faster")), 1));
-        var decVal = Mono("", 7, TextPrimary); decVal.HorizontalAlignment = HorizontalAlignment.Center;
-        var dmpVal = Mono("", 7, TextPrimary); dmpVal.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() =>
-        {
-            decVal.Text = DecayF(P(Decay));
-            dmpVal.Text = Pct(P(HFDamp));
-            tailTitle.Foreground = On(Freeze) ? AccentBright : TextTertiary;
-        });
-        // Freeze shows on the column's title (accent), not on a frame: sections have none.
-        var tailCol = new RuleSection
-        {
-            Width = 64, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(tailTitle, Dock.Top), Docked(dmpVal, Dock.Bottom), Docked(decVal, Dock.Bottom), faders } },
-        };
-        DockPanel.SetDock(tailCol, Dock.Left);
+        var tone = new ReverbToneView();
+        tone.Changed += (hd, v) => { Raw(hd == 0 ? LowCut : HighCut, (float)v); SyncTone(); };
+        tone.GestureBegin += hd => Begin(hd == 0 ? LowCut : HighCut);
+        tone.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
+        tone.Reset += hd => { Reset(hd == 0 ? LowCut : HighCut); SyncTone(); };
+        ToolTip.SetTip(tone, MenuKit.Keys(Loc.T("device.reverb.decay_by_frequency_how_long")));
+        ValueEntry.AttachHandles(tone, [ValueEntry.DeviceParam(engine, track, di, LowCut, Loc.T("device.reverb.low_cut"), v => Hz(LowHz(v)), SyncTone)],
+            [ValueEntry.DeviceParam(engine, track, di, HighCut, Loc.T("device.reverb.high_cut"), v => Hz(HighHz(v)), SyncTone)]);
+        MidiLearn.Bind(tone, MidiTarget.DeviceParam(track, di, HighCut), Loc.T("device.reverb.high_cut"));
+        // The spectrum is only worked out while the Tone · Mod graph shows (as Delay's Filter does).
+        void SyncTone()
+            => tone.Set(Rt60(P(Decay)), P(HFDamp), P(Size), Sel(Algorithm, 4), On(Freeze), LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) > 0.001f,
+                scope, kScope + 2 * SpaceDraw.Points, scN >= kScope + SpaceDraw.Floats && tone.IsEffectivelyVisible, Sc(S_SampleRate));
+        readouts.Add(SyncTone);
 
         // ======================================================================
-        // CENTRE — the mode row, shared by both tabs
+        // CENTRE — Space (the tail: Decay · Pre · Size beside it, the algorithm under it) /
+        // Tone · Mod (Low cut · High cut · Width beside it, Vintage and Mod on tail under it)
         // ======================================================================
-        Control ModeRow()
+        Control AlgoSeg()
         {
-            var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => hint.Text = Sel(Algorithm, 4) == 2
-                ? NotaNum.F($"maximum density · size {Pct(P(Size))}")
-                : NotaNum.F($"size {Pct(P(Size))} · diffuse {Pct(P(Diffusion))}"));
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6, Height = 18 };
-            head.Children.Add(Caps("MODE"));
             var seg = Seg(Algorithm, Algos);
             ToolTip.SetTip(seg, Loc.T("device.reverb.algorithm_hall_large_spaced_reflections"));
-            head.Children.Add(Col(seg, 1));
-            head.Children.Add(Col(hint, 2));
-            return head;
+            return seg;
         }
-
-        Control CentreTab(Control knobs)
-        {
-            var bottom = new Border { Height = 54, Margin = new Thickness(0, 4, 0, 0), Child = knobs };
-            return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 3), Children = {
-                Docked(ModeRow(), Dock.Top),
-                Docked(bottom, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 5, 0, 0), Child = NewTail() } } };
-        }
-
-        Control SpaceTab()
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,*,Auto") };
-            g.Children.Add(K(PreDelay, "PRE", PreF));
-            g.Children.Add(Col(K(Size, "SIZE", Pct), 1));
-            g.Children.Add(Col(K(Diffusion, "DIFFUSE", Pct), 2));
-            g.Children.Add(Col(K(Decay, "DECAY", DecayF), 3));
-            var er = Toggle(EarlyRefl, "Early reflections");
-            ToolTip.SetTip(er, Loc.T("device.reverb.early_reflections_the_first_discrete"));
-            var fr = Toggle(Freeze, "Freeze");
-            ToolTip.SetTip(fr, Loc.T("device.reverb.freeze_hold_the_tail_forever"));
-            g.Children.Add(Col(new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { er, fr } }, 5));
-            return CentreTab(g);
-        }
-
+        Control DecayKnob(double cellW) => K(Decay, "DECAY", DecayF, 34, cellW);
+        Control PreKnob(double cellW) => K(PreDelay, "PRE", PreF, 34, cellW);
+        Control SizeKnob(double cellW) => K(Size, "SIZE", Pct, 34, cellW);
+        Control MixKnob(double cellW, double size) => K(DryWet, "DRY/WET", Pct, size, cellW, dim: () => On(WetOnly));
+        Control SpaceTab() => CardLayout.View(NewTail(), CardLayout.KnobColumn(DecayKnob(50), PreKnob(50), SizeKnob(50)), AlgoSeg());
         Control ToneTab()
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto") };
-            g.Children.Add(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), arc: null));
-            g.Children.Add(Col(K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), arc: null), 1));
-            g.Children.Add(Col(K(WidthP, "WIDTH", Pct), 2));
-            g.Children.Add(Col(K(ModRate, "MOD RATE", RateF, arc: DeviceCardKit.ModInk), 3));
-            g.Children.Add(Col(K(ModDepth, "MOD DEPTH", Pct, arc: DeviceCardKit.ModInk), 4));
             var mt = Toggle(ModOnTail, "Mod on tail");
             ToolTip.SetTip(mt, Loc.T("device.reverb.mod_on_tail_the_modulation"));
             var vi = Toggle(Vintage, "Vintage");
             ToolTip.SetTip(vi, Loc.T("device.reverb.vintage_an_early_digital_colour"));
-            g.Children.Add(Col(new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { mt, vi } }, 6));
-            return CentreTab(g);
+            // The knobs the graph draws beside it: the two cuts (its handles) and HF damp (its curve).
+            return CardLayout.View(tone,
+                CardLayout.KnobColumn(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), 34, 50), K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), 34, 52), K(HFDamp, "HF DAMP", Pct, 34, 50)),
+                CardLayout.Line(14, vi, mt));
         }
 
         // ======================================================================
-        // RIGHT — Levels / Output
+        // RIGHT — follows the centre tab: Space (Space) · Mod (Tone · Mod)
         // ======================================================================
-        Control LevelsTab()
+        (Control, Control) SpacePanel()
         {
             var wetBar = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
             var wetDb = Mono("", 8, TextPrimary); wetDb.Width = 30; wetDb.TextAlignment = TextAlignment.Right;
@@ -312,77 +265,39 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             });
             var wet = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
             wet.Children.Add(Caps("WET")); wet.Children.Add(Col(wetBar, 1)); wet.Children.Add(Col(wetDb, 2));
-
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            var freezeBtn = Btn("Freeze", () => { SetP(Freeze, On(Freeze) ? 0f : 1f); SyncTail(); }, Loc.T("device.reverb.freeze_hold_the_tail_forever"));
-            var freezeTxt = (TextBlock)freezeBtn.Child!;
-            readouts.Add(() =>
-            {
-                bool on = On(Freeze);
-                freezeBtn.Background = on ? NotaPalette.AccentSubtle : Raised;
-                freezeBtn.BorderBrush = on ? NotaPalette.BorderBrass : Brushes.Transparent;
-                freezeTxt.Foreground = on ? NotaPalette.AccentHover : TextPrimary;
-                freezeTxt.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-            });
-            MidiLearn.Bind(freezeBtn, MidiTarget.DeviceParam(track, di, Freeze), "Freeze");
-            btns.Children.Add(freezeBtn);
-            btns.Children.Add(Col(Btn("Kill tail", () => engine.DeviceAction(track, di, A_KillTail, 0, 0), Loc.T("device.reverb.kill_tail_empty_the_reverb")), 1));
-
-            var rows = new Control[]
-            {
-                SliderRow("MIX", DryWet, Pct, () => On(WetOnly), () => On(WetOnly)),
-                SliderRow("DRY", DryLevel, v => ShortDb(DryDb(v)), () => On(WetOnly)),
-                SliderRow("OUT", Output, v => ShortDb(OutDb(v))),
-                new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
-                SliderRow("DECAY", Decay, DecayF, null, () => On(Freeze)),
-                SliderRow("HF damp", HFDamp, Pct),
-                new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
-                btns, wet,
-            };
-            var grid = new Grid { RowDefinitions = new RowDefinitions("*,*,*,Auto,*,*,Auto,*,*") };
-            for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
-            return new Border { Padding = new Thickness(8, 4), Child = grid };
-        }
-
-        Control OutputTab()
-        {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Centre(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Mono("0", 7, TextDisabled), GRow(Mono("−12", 7, TextDisabled), 1), GRow(Mono("−48", 7, TextDisabled), 2) } };
-            var meters = Row(4,
-                new StackPanel { Spacing = 2, Children = { meterL, Centre(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Centre(Caps("R")) } },
-                scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(8, K(Output, "OUT", v => Db(OutDb(v)), 40, 54), meters);
-
-            var mid = new StackPanel { Spacing = 6, Children = {
-                SliderRow("MIX", DryWet, Pct, () => On(WetOnly)),
-                SliderRow("WIDTH", WidthP, Pct),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")) } };
-            ToolTip.SetTip(mid.Children[2], Loc.T("device.reverb.bass_mono_below_this_frequency"));
-
+            var fr = Toggle(Freeze, "Freeze");
+            ToolTip.SetTip(fr, Loc.T("device.reverb.freeze_hold_the_tail_forever"));
+            var er = Toggle(EarlyRefl, "Early reflections");
+            ToolTip.SetTip(er, Loc.T("device.reverb.early_reflections_the_first_discrete"));
             var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only_send"));
             ToolTip.SetTip(wetOnly, Loc.T("device.reverb.wet_only_the_tail_with"));
+            return (CardLayout.Head(fr, Btn("Kill tail", () => engine.DeviceAction(track, di, A_KillTail, 0, 0), Loc.T("device.reverb.kill_tail_empty_the_reverb"))),
+                CardLayout.Rows(
+                    SliderRow("DIFFUSE", Diffusion, Pct),
+                    CardLayout.Rule(),
+                    er,
+                    wetOnly,
+                    wet));
+        }
+        (Control, Control) ModPanel()
+        {
+            var mono = SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0} Hz"));
+            ToolTip.SetTip(mono, Loc.T("device.reverb.bass_mono_below_this_frequency"));
             var comp = Toggle(LatencyComp, Loc.T("device.reverb.latency_comp"));
             ToolTip.SetTip(comp, Loc.T("device.reverb.the_input_diffuser_delays_the"));
-            var bottom = new StackPanel { Spacing = 5, Children = { wetOnly, comp } };
-
-            var body = new DockPanel { LastChildFill = false, Children = {
-                Docked(top, Dock.Top), Docked(Divider(mid), Dock.Top), Docked(Divider(bottom), Dock.Bottom) } };
-            ((Control)body.Children[1]).Margin = new Thickness(0, 5, 0, 0);
-            return new Border { Padding = new Thickness(8, 5), Child = body };
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.reverb.mod"))), CardLayout.Rows(
+                SliderRow("RATE", ModRate, RateF),
+                SliderRow("DEPTH", ModDepth, Pct),
+                CardLayout.Rule(),
+                SliderRow("WIDTH", WidthP, Pct),
+                mono,
+                comp));
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (Space / Tone · Mod, the panel that follows them, Dry · Dry/wet · Out under
+        // it) · S (the tail over the algorithm and Decay · Pre · Size · Dry/wet)
         // ======================================================================
-        var centreHost = new ContentControl();
-        var rightHost = new ContentControl();
-        var centreBodies = new Control?[2];
-        var rightBodies = new Control?[2];
         int centreTab = 0;
         var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
@@ -395,103 +310,27 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             }
             extras.Foreground = TextTertiary;
             extras.Text = centreTab == 0
-                ? NotaNum.F($"RT60 {Secs(Rt60(P(Decay)))} · {P(PreDelay) * 200:0} ms pre")
-                : NotaNum.F($"low cut {Hz(LowHz(P(LowCut)))} · high cut {Hz(HighHz(P(HighCut)))}");
+                ? NotaNum.F($"RT60 {Secs(Rt60(P(Decay)))} · {P(PreDelay) * 200:0} ms pre · ") + (Sel(Algorithm, 4) == 2
+                    ? NotaNum.F($"maximum density · size {Pct(P(Size))}") : NotaNum.F($"size {Pct(P(Size))} · diffuse {Pct(P(Diffusion))}"))
+                : NotaNum.F($"decay {Secs(tone.DecayAt(250))} at {Hz(250)} · {Secs(tone.DecayAt(4000))} at {Hz(4000)}");
         });
-        Control CentreBody(int t) => centreBodies[t] ??= t == 1 ? ToneTab() : SpaceTab();
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : LevelsTab();
-
-        var centre = TabFrame(new[] { "Space", "Tone · Mod" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
-        var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            if (On(Freeze))
-                return Loc.F("device.reverb.freeze_tail_held_input_muted", Pct(P(HFDamp)));
-            string rt = NotaNum.F($"{Algo()} · RT60 {Secs(Rt60(P(Decay)))}");
-            string vin = On(Vintage) ? " · vintage" : "";
-            return centreTab == 0
-                ? NotaNum.F($"{rt} · pre {P(PreDelay) * 200:0} ms · diffuse {Pct(P(Diffusion))}{(On(EarlyRefl) ? "" : " · no early reflections")}")
-                : NotaNum.F($"{rt} · mod {RateF(P(ModRate))} / {Pct(P(ModDepth))}{(On(ModOnTail) ? "" : " (early part)")} · width {Pct(P(WidthP))}{vin}");
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = On(Freeze) ? AccentBright : TextSecondary;
-            double sr = Sc(S_SampleRate), diff = Sc(S_DiffuseSmp);
-            // How much of the diffuser delay the pre-delay could actually absorb.
-            double preSmp = P(PreDelay) * 0.2 * sr;
-            string comp = diff < 1 ? "" : On(LatencyComp)
-                ? Loc.F("device.reverb.diffuser_smp_compensated", Math.Min(diff, preSmp))
-                : NotaNum.F($" · diffuser +{diff:0} smp");
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { tailCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(NewTail(), AlgoSeg(), DecayKnob(56), PreKnob(56), SizeKnob(56), MixKnob(56, 34))
+            : CardLayout.Large(new[] { "Space", "Tone · Mod" }, 0,
+                t => t == 1 ? ToneTab() : SpaceTab(),
+                t => t == 1 ? ModPanel() : SpacePanel(),
+                extras,
+                CardLayout.Output(K(DryLevel, "DRY", v => ShortDb(DryDb(v)), 34, 54, dim: () => On(WetOnly)), MixKnob(58, 44), K(Output, "OUT", v => Db(OutDb(v)), 34, 54)),
+                t => { centreTab = t; foreach (var a in readouts) a(); });
 
         void Refresh()
         {
-            scN = engine.DeviceScope(track, di, scope, kScope);
+            scN = engine.DeviceScope(track, di, scope, scope.Length);
             foreach (var a in readouts) a();
         }
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

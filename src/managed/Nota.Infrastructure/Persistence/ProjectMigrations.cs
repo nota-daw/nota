@@ -118,9 +118,13 @@ public static class ProjectMigrations
         // v28 -> v29: audio tracks gain Takes and audio clips TakeId (take lanes, specs/067).
         // Absent in v28 documents = no takes, every clip a plain clip — no-op.
         new Migration(28, _ => { }),
-        // v29 -> v30: Nota Aurora instruments gain Wavetables, their imported tables
-        // (specs/053). Absent in v29 documents; null = the built-in tables — no-op.
+
+        // v29 -> v30: tracks gain MidiOffsetMs (MIDI playback offset) and ArticulationMap, notes gain
+        // Articulation (an id in that map, specs/085). Absent in v29 documents = 0 / none — no-op.
         new Migration(29, _ => { }),
+        // v30 -> v31: Nota Aurora instruments gain Wavetables, their imported tables
+        // (specs/053). Absent in v30 documents; null = the built-in tables — no-op.
+        new Migration(30, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

@@ -200,6 +200,7 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        StrataDeviceBody.StartTempoScan(vm.Engine);   // Set tempo from loop, on any track
         ValueEntry.UndoGroup = (vm.Engine.BeginUndoGroup, vm.Engine.EndUndoGroup);   // a handle's reset is one step
         Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
         Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
@@ -384,6 +385,8 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         TrackArming.OthersChanged -= OnArmsChanged;
         TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
+        InputSetups.Changed -= OnArmsChanged;
+        InputSetups.Changed += OnArmsChanged;          // inputs renamed / switched off (specs/086): pickers relabel
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
@@ -397,6 +400,10 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        // …and whether notes take their articulation's colour (specs/085, FR-015).
+        PianoRollView.NoteColorByArticulation = vm.Settings.Current.PianoRollNoteColorByArticulation;
+        PianoRollView.NoteColorModeChanged -= OnNoteColorModeChanged;
+        PianoRollView.NoteColorModeChanged += OnNoteColorModeChanged;
         PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
         PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
         // The piano roll's key labels (every note, not just C) persist the same way.
@@ -450,6 +457,8 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.PreferredHeightChanged += FitDevicesPanel;   // the XL panel opened, closed or resized (specs/085)
+        if (_vm?.Settings.Current.XlPanelHeight is > 0 and var xlh) _deviceChain.XlPanelHeight = xlh;
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
@@ -895,6 +904,13 @@ public partial class MainWindow : Window
     }
 
     private NativeMenuItem? _followMenuItem;
+
+    private void OnNoteColorModeChanged()
+    {
+        if (_vm is null) return;
+        _vm.Settings.Current.PianoRollNoteColorByArticulation = PianoRollView.NoteColorByArticulation;
+        _vm.Settings.Save();
+    }
 
     private void OnAuditionToggled()
     {

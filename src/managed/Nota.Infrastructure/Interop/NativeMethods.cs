@@ -192,6 +192,24 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_audio_record_peaks")]
     internal static partial int AudioRecordPeaks(IntPtr engine, [Out] float[] outMinMax, int maxPoints);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_recording_tracks")]
+    internal static partial int RecordingTracks(IntPtr engine, [Out] int[]? outIds, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_audio_record_length_beats_of")]
+    internal static partial double AudioRecordLengthBeatsOf(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_audio_record_peaks_of")]
+    internal static partial int AudioRecordPeaksOf(IntPtr engine, int trackId, [Out] float[] outMinMax, int maxPoints);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_record_skipped")]
+    internal static partial int RecordSkipped(IntPtr engine, [Out] int[]? trackIds, [Out] int[]? reasons, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_take_record_test_armed")]
+    internal static partial int TakeRecordTestArmed(IntPtr engine, float[] interleaved, int channels, int frames, double startBeat);
+
+    [LibraryImport(Lib, EntryPoint = "nota_take_record_test_armed_disarm")]
+    internal static partial int TakeRecordTestArmedDisarm(IntPtr engine, float[] interleaved, int channels, int frames, double startBeat, int disarmTrackId, int disarmAtFrame);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_record_held_notes")]
     internal static partial int RecordHeldNotes(IntPtr engine, [Out] NotaRecordHeldNote[] outNotes, int maxN,
                                                 out int trackId, out int sessionScene, out double nowBeat);
@@ -318,6 +336,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_timed_events_selftest")]
     internal static partial int TimedEventsSelfTest(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_articulation_selftest")]
+    internal static partial int ArticulationSelfTest(IntPtr engine);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_cpu_load")]
     internal static partial float CpuLoad(IntPtr engine);

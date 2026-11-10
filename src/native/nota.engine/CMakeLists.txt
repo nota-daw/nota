@@ -131,6 +131,8 @@ set(NOTA_ENGINE_SOURCES
     src/devices/midi_fx/MidiNoteLength.cpp
     src/devices/midi_fx/MidiVelocity.cpp
     src/devices/midi_fx/MidiRandom.cpp
+    src/engine/ArticulationSchedule.cpp
+    src/engine/ArticulationTable.cpp
     src/engine/Graph.cpp
     src/engine/Track.cpp
     src/engine/Transport.cpp

@@ -76,6 +76,7 @@ public partial class MainWindow
         B("view.mixer", ToggleMixer);
         B("view.mixerFloat", () => SetMixerFloating(!MixerFloating));
         B("view.connectPhone", ShowConnectPhone);
+        B("view.articulationMaps", ShowArticulationMaps);
         B("view.toggleBrowser", () => OnMenuToggleBrowser(this, e));
         B("view.toggleDetail", () => OnMenuToggleClip(this, e));
         B("view.maximizeDetail", ToggleDetailMaximized,
@@ -173,7 +174,7 @@ public partial class MainWindow
         if (unbound.Count > 0) throw new InvalidOperationException("Unbound commands: " + string.Join(", ", unbound));
     }
 
-    private void ShowPreferencesPage(string page)
+    internal void ShowPreferencesPage(string page)
     {
         foreach (var w in OwnedWindows)
             if (w is PreferencesWindow open) { open.ShowPage(page); open.Activate(); return; }
