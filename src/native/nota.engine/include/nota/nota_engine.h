@@ -1315,6 +1315,12 @@ NOTA_API int32_t    nota_take_record_test_armed_disarm(NotaEngine* engine, const
                                                        int32_t frames, double start_beat, int32_t disarm_track_id,
                                                        int32_t disarm_at_frame);
 
+/* Smoke-test hook (#521): one block of `channels`-wide device frames handed over as the input
+ * thread does — through the capture gate (shut while a count-in clicks), into the take ring.
+ * Pair with nota_engine_set_test_input_device; the next poll drains it into the take. */
+NOTA_API void       nota_engine_input_block_test(NotaEngine* engine, const float* interleaved, int32_t frames,
+                                                 int32_t channels);
+
 /* Decoded-sample metadata by id; returns 1 if found, else 0. */
 NOTA_API int32_t nota_sample_get_info(const NotaEngine* engine, int64_t sample_id, NotaSampleInfo* out);
 /* Copies up to `cap` interleaved floats into `out`; returns the total count

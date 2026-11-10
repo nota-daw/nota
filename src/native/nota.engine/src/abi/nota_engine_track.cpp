@@ -999,6 +999,9 @@ int32_t nota_take_record_test_n(NotaEngine* e, int32_t track_id, const float* in
     int32_t frames, double start_beat) {
     return (e && ENG(e)->takeRecordTestN(track_id, interleaved, channels, frames, start_beat)) ? 1 : 0;
 }
+void nota_engine_input_block_test(NotaEngine* e, const float* interleaved, int32_t frames, int32_t channels) {
+    if (e) ENG(e)->inputBlockForTest(interleaved, frames, channels);
+}
 int32_t nota_sample_get_info(const NotaEngine* e, int64_t sample_id, NotaSampleInfo* out) {
     return (e && CENG(e)->sampleInfo(sample_id, out)) ? 1 : 0;
 }

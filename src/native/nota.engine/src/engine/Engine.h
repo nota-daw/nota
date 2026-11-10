@@ -1428,6 +1428,10 @@ class Engine {
     bool takeRecordTestN(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat);
     int32_t takeRecordTestArmed(const float* interleaved, int32_t channels, int32_t frames, double startBeat,
         int32_t disarmTrackId = 0, int32_t disarmAtFrame = -1);
+    // One device block as the input thread hands it over (#521): the gate, the epoch marker, the ring.
+    void inputBlockForTest(const float* interleaved, int32_t frames, int32_t channels) {
+        if (interleaved && frames > 0 && channels > 0) onInputBlock(interleaved, frames, channels);
+    }
     bool takeRecordTestImpl(int32_t trackId, const float* interleaved, int32_t channels, int32_t frames, double startBeat,
         int32_t first, int32_t width);
 

@@ -1021,6 +1021,9 @@ void Engine::drainCommands() {
                 countInTotal_ = static_cast<double>(c.i0) * std::max(1, transport_.beatsPerBar());
                 lastCountInBeat_ = -1;
                 uiCountIn_.store(countInTotal_, std::memory_order_relaxed);
+                // Shut the capture here too, in command order: a Stop queued just before (a
+                // retried take, #521) reopened the gate startCountIn() had shut.
+                captureGate_.store(false, std::memory_order_release);
             } else {
                 endCountIn();
                 transport_.play();
