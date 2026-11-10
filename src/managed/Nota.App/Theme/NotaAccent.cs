@@ -19,11 +19,10 @@ internal static class NotaAccent
 {
     private static readonly Dictionary<(string Id, AccentChoice Choice), NotaColourTheme> Cache = new();
 
-    static NotaAccent()
-    {
-        // A reload may change a user theme under the same id: wear it afresh.
-        NotaThemes.ThemesChanged += () => Cache.Clear();
-    }
+    /// <summary>A reload may change a user theme under the same id: wear it afresh. Called by
+    /// <see cref="NotaThemes.ReloadUser"/> before it raises ThemesChanged, so no handler can
+    /// wear a stale cached theme (an event handler here could run after NotaThemeService's).</summary>
+    public static void Forget() => Cache.Clear();
 
     /// <summary><paramref name="theme"/> wearing <paramref name="choice"/>. Orange — and a
     /// choice the theme cannot wear, which no preset is — is the theme itself.</summary>

@@ -102,7 +102,9 @@ public sealed record ThemeChoiceInfo(bool FollowSystem, string Single, string Da
 public sealed record ThemeFileProblem(string File, string Reason);
 public sealed record ThemeTokenInfo(string Name, string Group, string Role, bool Translucent);
 public sealed record ThemeRadiusStepInfo(string Name, double Design);
-public sealed record ThemeCatalogue(ThemeTokenInfo[] Tokens, ThemeRadiusStepInfo[] RadiusSteps, int[] FormatVersions);
+/// <summary>The accepted limits, each as [min, max]: radius scale, a radius step in px, the font family name's length.</summary>
+public sealed record ThemeRanges(double[] Scale, double[] Step, int[] FontFamilyLength);
+public sealed record ThemeCatalogue(ThemeTokenInfo[] Tokens, ThemeRadiusStepInfo[] RadiusSteps, ThemeRanges Ranges, int[] FormatVersions);
 public sealed record ThemePreviewImage(string Name, string Description, byte[] Png);
 public sealed record ThemePreviews(Nota.Application.Themes.ThemeValidation Validation, ThemePreviewImage[] Images,
     string[] Rendered, string[] Unknown);

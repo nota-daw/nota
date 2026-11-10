@@ -167,6 +167,7 @@ internal static class NotaThemes
             .ToList();
         _userProblems = scan.Problems;
         _all = null;
+        NotaAccent.Forget();
         ThemesChanged?.Invoke();
     }
 

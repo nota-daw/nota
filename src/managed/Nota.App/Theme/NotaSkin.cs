@@ -183,6 +183,9 @@ internal static class NotaSkin
     {
         foreach (var v in root.GetSelfAndVisualDescendants())
         {
+            // A dropdown's or menu's content lives in its own popup root, outside the window's
+            // tree — open now, or shown later (a closed ComboBox also draws its item from there).
+            if (v is Avalonia.Controls.Primitives.Popup { Child: { } content }) Reapply(content);
             switch (v)
             {
                 case Border or TemplatedControl or ContentPresenter:

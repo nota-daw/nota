@@ -125,12 +125,13 @@ public sealed partial class PreferencesWindow
     }
 
     /// <summary>Wear <paramref name="id"/> and store it, exactly as a pick on a card does.</summary>
-    internal static void PickTheme(string id)
+    internal static void PickTheme(string id, bool singleMode = false)
     {
         var theme = NotaThemes.Find(id);
         if (theme is null) return;
         var settings = App.Services.GetRequiredService<ISettingsService>();
-        var choice = Appearance.WithPick(NotaThemeService.Choice, theme.Id, theme.IsDark);
+        var current = singleMode ? NotaThemeService.Choice with { FollowSystem = false } : NotaThemeService.Choice;
+        var choice = Appearance.WithPick(current, theme.Id, theme.IsDark);
         var single = NotaThemes.Find(choice.Single) ?? NotaThemes.Default;
         Appearance.Store(settings.Current, choice, single.IsDark);
         settings.Save();

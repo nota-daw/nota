@@ -82,10 +82,13 @@ internal static class NotaTextSize
         foreach (var window in desktop.Windows) Reapply(window);
     }
 
-    private static void Reapply(Visual root)
+    /// <summary>Re-coerce the text in one tree to the current step (a window, or a preview root).</summary>
+    public static void Reapply(Visual root)
     {
         foreach (var v in root.GetSelfAndVisualDescendants())
         {
+            // A popup's content (a ComboBox's items, which its closed box also shows) is outside the tree.
+            if (v is Avalonia.Controls.Primitives.Popup { Child: { } content }) Reapply(content);
             if (v is TextBlock tb) tb.CoerceValue(TextBlock.FontSizeProperty);
             else if (v is TextPresenter tp) tp.CoerceValue(TextElement.FontSizeProperty);
             if (v is Layoutable l) l.InvalidateMeasure();

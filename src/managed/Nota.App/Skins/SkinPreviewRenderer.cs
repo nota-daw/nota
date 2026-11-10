@@ -77,11 +77,16 @@ internal static class SkinPreviewRenderer
         try
         {
             var scene = surfaces.Any(s => !s.Live) ? SampleScene.Shared : null;
-            foreach (var s in surfaces.Where(s => !s.Live))
+            // Built at the default text size: a text that is laid out only once (a closed
+            // ComboBox draws its item, detached, through a brush) would keep the user's size.
+            NotaTextSize.Scoped(0, () =>
             {
-                try { if (Host(s, scene!) is { } h) hosts.Add(h); }
-                catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException) { }
-            }
+                foreach (var s in surfaces.Where(s => !s.Live))
+                {
+                    try { if (Host(s, scene!) is { } h) hosts.Add(h); }
+                    catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException) { }
+                }
+            });
             for (int i = 0; i < 4; i++) await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
             var live = new List<Visual>();
@@ -102,8 +107,8 @@ internal static class SkinPreviewRenderer
                     if (png is not null) images.Add(new Image(s.Name, s.Description, png));
                 }
             }));
-            // The live parts were re-skinned for the picture; give them the live skin back.
-            foreach (var v in live) NotaSkin.Reapply(v);
+            // The live parts were re-skinned for the picture; give them the live skin and text size back.
+            foreach (var v in live) { NotaSkin.Reapply(v); NotaTextSize.Reapply(v); }
         }
         finally
         {
@@ -128,6 +133,7 @@ internal static class SkinPreviewRenderer
         if (target is null || target.Bounds.Width < 1 || target.Bounds.Height < 1) return null;
         touched.Add(target);
         NotaSkin.Reapply(target);
+        NotaTextSize.Reapply(target);   // built at the user's text size; the preview draws at the default
         // Layout with the skin's typeface, at the size it has on screen.
         if (target is TopLevel top)
         {
@@ -253,6 +259,7 @@ internal static class SkinPreviewRenderer
     private static byte[] Snap(Window host, Control content)
     {
         NotaSkin.Reapply(host);
+        NotaTextSize.Reapply(host);   // built before the scope, at the user's text size
         host.UpdateLayout();
         host.UpdateLayout();
         var size = content.Bounds.Size;

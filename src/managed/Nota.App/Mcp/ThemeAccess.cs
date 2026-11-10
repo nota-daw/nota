@@ -49,6 +49,10 @@ internal sealed class ThemeAccess : IThemeAccess
                 return new ThemeTokenInfo(name, group, role, NotaThemes.AlphaTokens.Contains(name));
             }).ToArray(),
             Enum.GetValues<RadiusStep>().Select(s => new ThemeRadiusStepInfo(SkinGeometry.Key(s), SkinGeometry.Design(s))).ToArray(),
+            new ThemeRanges(
+                new[] { SkinGeometry.MinRoundness, SkinGeometry.MaxRoundness },
+                new[] { SkinGeometry.MinStep, SkinGeometry.MaxStep },
+                new[] { 1, SkinGeometry.MaxFamilyLength }),
             new[] { 1, 2 });
     }
 
@@ -81,10 +85,21 @@ internal sealed class ThemeAccess : IThemeAccess
         try
         {
             Directory.CreateDirectory(NotaThemes.ThemesFolder);
-            // Another file in the folder may hold this id under a different name: replace that one.
+            // Write the new file in full first (temp + move), so a failed write leaves the old theme.
+            var temp = path + ".tmp";
+            try
+            {
+                File.WriteAllText(temp, NotaThemes.ToFile(NotaThemes.FromParsed(v, ThemeSource.User)));
+                File.Move(temp, path, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temp)) File.Delete(temp);
+            }
+            // Another file in the folder may hold this id under a different name: it is replaced
+            // now, so it goes — only after the new one is safely on disk.
             if (existing?.FilePath is { } old && !string.Equals(Path.GetFullPath(old), Path.GetFullPath(path), StringComparison.Ordinal))
                 File.Delete(old);
-            File.WriteAllText(path, NotaThemes.ToFile(NotaThemes.FromParsed(v, ThemeSource.User)));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -97,7 +112,9 @@ internal sealed class ThemeAccess : IThemeAccess
     public string? Apply(string id)
     {
         if (NotaThemes.Find(id) is null) return $"No theme '{id}' — see list_themes.";
-        PreferencesWindow.PickTheme(id);
+        // Single-theme mode (contract): under follow system the pick would only fill its kind's
+        // slot, and on a desktop of the other kind another theme would stay on screen.
+        PreferencesWindow.PickTheme(id, singleMode: true);
         return null;
     }
 

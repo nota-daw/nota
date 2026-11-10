@@ -67,7 +67,8 @@ public sealed class ThemeTools(IAudioEngine engine, IEngineDispatch dispatch, IA
 
     [McpServerTool(Name = "get_theme_catalogue"), Description(
         "The colour tokens every theme must define, in file order, each with its group, what it colours, and whether it may "
-        + "be translucent; the radius steps with their design values in px; the supported format versions. "
+        + "be translucent; the radius steps with their design values in px; the accepted ranges ([min, max]) for the radius "
+        + "scale, a radius step in px and the font family name's length; the supported format versions. "
         + "Readability is checked on text tokens over the surfaces (contrast ≥ 4.5 for TextPrimary/Secondary/Muted, …), "
         + "on ink over Accent/Mute/Solo/Record and the track colours, and on how distinct the track colours are.")]
     public Task<ThemeCatalogue> GetThemeCatalogue() => Read(themes.Catalogue);
@@ -125,7 +126,8 @@ public sealed class ThemeTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     }
 
     [McpServerTool(Name = "apply_theme"), Description(
-        "Wear a listed theme (built-in or user) and store the choice, exactly as picking it in Preferences → Appearance. "
+        "Wear a listed theme (built-in or user) and store the choice, as picking it in Preferences → Appearance, in "
+        + "single-theme mode (Follow system is turned off, so this theme is the one on screen). "
         + "Ends any try-on.")]
     public async Task<WornResult> ApplyTheme([Description("Theme id from list_themes")] string id)
     {
