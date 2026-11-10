@@ -967,7 +967,6 @@ Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Osc 2	# data: device pa
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Osc 2 level	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Osc 2 pitch	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Out Pan	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	POS 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Pan	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Parallel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Pitch	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -995,7 +994,6 @@ Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Velocity	# data: device
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Volume	# todo: wrap in Loc.T
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Warp	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	Wavetable	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	frame 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs	→ Amp	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	$"amp · flt · lfo {LfoNames[Sel("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/BassInstrumentCard.cs	$"{Shape()} · {SubWords[Sel("	# data: device parameter, port and value names and live readouts of their values (FR-004)

@@ -83,13 +83,17 @@ internal static class DeviceCardKit
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var valueInk = value.Foreground ?? TextPrimary;
+        // A dimmed knob (Inactive: a bypassed card, an oscillator switched off) keeps its text
+        // in the disabled ink even when automation or MIDI moves it.
         void Paint()
         {
+            if (knob.IsDim) { lbl.Foreground = value.Foreground = TextDisabled; return; }
             bool hot = knob.ArcColor is null && (emphasised || knob.IsModified);
             lbl.Foreground = hot ? TextSecondary : labelInk ?? TextTertiary;
             value.Foreground = valueInk;
         }
         knob.ValueSet += Paint;
+        knob.DimChanged += Paint;
         Paint();
         // ⌥-click the knob, or double-click its value, to type one; double-click the knob to reset (specs/035). A knob
         // without a Format is typed by reading its value line back after each probe.

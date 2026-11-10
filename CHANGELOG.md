@@ -363,6 +363,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the response to drag over Freq, Res, Drive and Dry/wet knobs. The size is a new View
   parameter appended to the device, so it saves with the project; presets, A/B and the
   automation menu leave it alone, and old projects open in L.
+- **Nota Aurora: both oscillators on one Osc tab** (specs/053): the 1 / 2 switch is gone.
+  Osc 1 and Osc 2 sit side by side, each with its own table window (naming what modulates its
+  position, or "no modulation"), table and warp-mode drop-downs, on / off switch and its
+  Position, Warp, Level, Oct, Semi and Fine knobs, so both tables are on screen together. An
+  oscillator that is off greys out in place. The sub and unison stay in one row under both.
+  The Global rail keeps voices, bend, Volume and Pan: its Pos 1, Cutoff and Unison sliders
+  were second copies of the Osc and Filter tab controls and go (one home per control). The
+  table windows keep their drawing between paints, so two of them cost no more than the one
+  before. Sound, parameters, automation, MIDI learn and presets are unchanged.
 - **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
   stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
   under it and the A / D / S / R letter in the box's corner. The box still drags and types
