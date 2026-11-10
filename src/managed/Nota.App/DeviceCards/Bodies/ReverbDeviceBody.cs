@@ -2,15 +2,17 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Reverb body (device kind 2), a build of the "Nota Reverb"
-// mockup, laid out the #531 way (CardLayout): a centre panel with Space / Tone · Mod tabs over the
-// live decay-tail window (Decay, Pre and Size beside it with the algorithm under it; Low cut,
-// High cut and Width beside it with Vintage and Mod on tail under it) and a right panel with no
-// tabs of its own that follows them: Space (Freeze, Kill tail, Diffuse, HF damp, early
-// reflections, wet only, the wet meter) and Mod (Rate, Depth, Mono f, latency comp) — over Dry ·
-// Dry/wet · Out. S is the tail over the algorithm and Decay, Pre, Size, Dry/wet. The tail window
-// is a control, not decoration (drag the pre-delay marker, drag the tail for the decay). Every
-// control is a device param, so automation / MIDI learn / presets / A-B / persistence come for
-// free; Kill tail is the one action that is not (it empties the reverb's buffers).
+// mockup, laid out the #531 way (CardLayout): a centre panel with Space / Tone · Mod tabs and a
+// right panel with no tabs of its own that follows them, over Dry · Dry/wet · Out. Space is the
+// decay window (the set tail in dB with your audio's measured tail under it, #377) with Decay,
+// Pre and Size beside it and the algorithm under it; its panel holds Freeze, Kill tail, Diffuse,
+// early reflections, wet only and the wet meter. Tone · Mod is the decay across frequency (HF
+// damp, the cut handles, the tail's live spectrum) with Low cut, High cut and HF damp beside it
+// and Vintage and Mod on tail under it; its panel holds Rate, Depth, Width, Mono f and latency
+// comp. S is the decay window over the algorithm and Decay, Pre, Size, Dry/wet. The graphs are
+// controls, not decoration (drag the pre-delay and decay handles, drag the cuts). Every control
+// is a device param, so automation / MIDI learn / presets / A-B / persistence come for free;
+// Kill tail is the one action that is not (it empties the reverb's buffers).
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -43,7 +45,6 @@ internal sealed class ReverbDeviceBody : IDeviceBody
     private static readonly double[] ErMs = { 7.3, 11.9, 16.1, 23.4, 29.7, 37.9, 47.3, 61.1 };
     private static readonly float[] ErGain = { 1.0f, 0.78f, 0.86f, 0.62f, 0.66f, 0.5f, 0.42f, 0.34f };
     private static readonly double[] ErScale = { 1.0, 0.45, 0.28, 0.7 };
-    private const double LoopSec = 3.4;   // one flash-and-fade of the tail window
 
     public double Width => 700;
     public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
@@ -66,7 +67,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         int Sel(int p, int n) => Math.Clamp((int)Math.Round(P(p) * (n - 1)), 0, n - 1);
 
         var readouts = new List<Action>();
-        var scope = new float[kScope];
+        var scope = new float[kScope + SpaceDraw.Floats];   // the telemetry, then the level history (#377)
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
 
@@ -166,7 +167,6 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         // ======================================================================
         // One view per centre tab — a control has one parent, and both tabs show the window.
         var tails = new List<ReverbTailView>();
-        var start = DateTime.UtcNow;
         ReverbTailView NewTail()
         {
             var t = new ReverbTailView();
@@ -198,11 +198,27 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         readouts.Add(() =>
         {
             SyncTail();
-            // The window loops only while the reverb is actually making sound (or is held).
-            bool sounding = Sc(S_WetPk) > 2e-4 || On(Freeze);
-            double ph = sounding ? (DateTime.UtcNow - start).TotalSeconds % LoopSec / LoopSec : -1;
-            foreach (var t in tails) t.SetPhase(ph);
+            // Your audio under the set line: the level history after the telemetry.
+            bool has = scN >= kScope + SpaceDraw.Floats;
+            foreach (var t in tails) t.SetLive(scope, kScope, has);
         });
+
+        // ======================================================================
+        // The decay across frequency — the Tone · Mod tab's graph
+        // ======================================================================
+        var tone = new ReverbToneView();
+        tone.Changed += (hd, v) => { Raw(hd == 0 ? LowCut : HighCut, (float)v); SyncTone(); };
+        tone.GestureBegin += hd => Begin(hd == 0 ? LowCut : HighCut);
+        tone.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
+        tone.Reset += hd => { Reset(hd == 0 ? LowCut : HighCut); SyncTone(); };
+        ToolTip.SetTip(tone, MenuKit.Keys(Loc.T("device.reverb.decay_by_frequency_how_long")));
+        ValueEntry.AttachHandles(tone, [ValueEntry.DeviceParam(engine, track, di, LowCut, Loc.T("device.reverb.low_cut"), v => Hz(LowHz(v)), SyncTone)],
+            [ValueEntry.DeviceParam(engine, track, di, HighCut, Loc.T("device.reverb.high_cut"), v => Hz(HighHz(v)), SyncTone)]);
+        MidiLearn.Bind(tone, MidiTarget.DeviceParam(track, di, HighCut), Loc.T("device.reverb.high_cut"));
+        void SyncTone()
+            => tone.Set(Rt60(P(Decay)), P(HFDamp), P(Size), Sel(Algorithm, 4), On(Freeze), LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) > 0.001f,
+                scope, kScope + 2 * SpaceDraw.Points, scN >= kScope + SpaceDraw.Floats, Sc(S_SampleRate));
+        readouts.Add(SyncTone);
 
         // ======================================================================
         // CENTRE — Space (the tail: Decay · Pre · Size beside it, the algorithm under it) /
@@ -225,8 +241,9 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             ToolTip.SetTip(mt, Loc.T("device.reverb.mod_on_tail_the_modulation"));
             var vi = Toggle(Vintage, "Vintage");
             ToolTip.SetTip(vi, Loc.T("device.reverb.vintage_an_early_digital_colour"));
-            return CardLayout.View(NewTail(),
-                CardLayout.KnobColumn(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), 34, 50), K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), 34, 52), K(WidthP, "WIDTH", Pct, 34, 50)),
+            // The knobs the graph draws beside it: the two cuts (its handles) and HF damp (its curve).
+            return CardLayout.View(tone,
+                CardLayout.KnobColumn(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), 34, 50), K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), 34, 52), K(HFDamp, "HF DAMP", Pct, 34, 50)),
                 CardLayout.Line(14, vi, mt));
         }
 
@@ -256,7 +273,6 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             return (CardLayout.Head(fr, Btn("Kill tail", () => engine.DeviceAction(track, di, A_KillTail, 0, 0), Loc.T("device.reverb.kill_tail_empty_the_reverb"))),
                 CardLayout.Rows(
                     SliderRow("DIFFUSE", Diffusion, Pct),
-                    SliderRow("HF damp", HFDamp, Pct),
                     CardLayout.Rule(),
                     er,
                     wetOnly,
@@ -272,6 +288,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 SliderRow("RATE", ModRate, RateF),
                 SliderRow("DEPTH", ModDepth, Pct),
                 CardLayout.Rule(),
+                SliderRow("WIDTH", WidthP, Pct),
                 mono,
                 comp));
         }
@@ -294,7 +311,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             extras.Text = centreTab == 0
                 ? NotaNum.F($"RT60 {Secs(Rt60(P(Decay)))} · {P(PreDelay) * 200:0} ms pre · ") + (Sel(Algorithm, 4) == 2
                     ? NotaNum.F($"maximum density · size {Pct(P(Size))}") : NotaNum.F($"size {Pct(P(Size))} · diffuse {Pct(P(Diffusion))}"))
-                : NotaNum.F($"low cut {Hz(LowHz(P(LowCut)))} · high cut {Hz(HighHz(P(HighCut)))}");
+                : NotaNum.F($"decay {Secs(tone.DecayAt(250))} at {Hz(250)} · {Secs(tone.DecayAt(4000))} at {Hz(4000)}");
         });
         Control root = CardLayout.IsMini(ctx, di)
             ? CardLayout.Mini(NewTail(), AlgoSeg(), DecayKnob(56), PreKnob(56), SizeKnob(56), MixKnob(56, 34))
@@ -307,7 +324,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
 
         void Refresh()
         {
-            scN = engine.DeviceScope(track, di, scope, kScope);
+            scN = engine.DeviceScope(track, di, scope, scope.Length);
             foreach (var a in readouts) a();
         }
         ctx.AddDeviceRefresher(Refresh);

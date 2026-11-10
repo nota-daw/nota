@@ -6,11 +6,14 @@
 // (0 dB) and reaches −60 dB at the decay time (RT60). Two labelled handles set them — Pre
 // (drag sideways) and Decay (drag the −60 dB point sideways); a press elsewhere takes the
 // nearer one, double-click or ⌥-click resets it. The early reflections are ticks right after
-// the pre-delay, and a fainter line shows the highs (8 kHz) dying sooner under HF damp. While
-// the reverb sounds, the stretch it has played is lit; frozen, the tail is a held line at 0 dB
-// under an accent frame. It draws what the card hands it and owns no engine state.
+// the pre-delay, and a fainter line shows the highs (8 kHz) dying sooner under HF damp. Under
+// the set line runs your audio after its latest hit (#377): the input as a grey wash and the
+// measured tail as a grey line, each against its own peak, so a tail that rings longer or
+// shorter than the setting shows at once. Frozen, the tail is a held line at 0 dB under an
+// accent frame. It draws what the card hands it and owns no engine state.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -30,7 +33,12 @@ internal sealed class ReverbTailView : Control, IValueHandles
     private double[] _erMs = Array.Empty<double>();
     private float[] _erGain = Array.Empty<float>();
     private bool _freeze;
-    private double _phase = -1;       // 0..1 while sounding, −1 = still
+    // The latest hit of your audio: (seconds after the hit, dB against its own peak); empty = none.
+    private readonly List<(double Sec, double Db)> _inLive = new(), _tailLive = new();
+    // The hit the curve belongs to: its age when last seen in the history, when that was, and the
+    // tail's peak, so a tail longer than the history (6.1 s) keeps its curve after the hit scrolls out.
+    private double _hitAge = -1, _tailRef;
+    private long _hitSeen;
     private int _drag, _hover;        // 0 none, 1 decay, 2 pre-delay
 
     public event Action<int, double>? Changed;   // target (0 decay / 1 pre-delay), new normalised value
@@ -39,6 +47,8 @@ internal sealed class ReverbTailView : Control, IValueHandles
     public event Action<int>? Reset;
 
     public bool Dragging => _drag != 0;
+
+    private static readonly IPen LivePen = new Pen(NotaPalette.TextSecondary, 1.2, lineJoin: PenLineJoin.Round);
 
     public ReverbTailView()
     {
@@ -63,12 +73,47 @@ internal sealed class ReverbTailView : Control, IValueHandles
         InvalidateVisual();
     }
 
-    /// <summary>Where the loop is (0..1), or −1 for the still picture.</summary>
-    public void SetPhase(double phase)
+    /// <summary>Feed the level history (at <paramref name="off"/> in the scope; <paramref name="has"/>
+    /// false = none): the input and the tail from the latest hit of the input on.</summary>
+    public void SetLive(float[] scope, int off, bool has)
     {
-        if (phase < 0 && _phase < 0) return;
-        _phase = phase;
-        InvalidateVisual();
+        bool had = _tailLive.Count > 0;
+        has = has && scope.Length >= off + SpaceDraw.Floats;
+        int hit = has ? SpaceDraw.LatestHit(scope, off) : -1;
+        int wetOff = off + SpaceDraw.Points;
+        if (hit >= 0)
+        {
+            _inLive.Clear(); _tailLive.Clear(); _hitAge = -1;
+            var input = SpaceDraw.Since(scope, off, hit);
+            var tail = SpaceDraw.Since(scope, wetOff, hit);
+            double inPk = -120, tailPk = -120;
+            foreach (var (_, db) in input) inPk = Math.Max(inPk, db);
+            foreach (var (_, db) in tail) tailPk = Math.Max(tailPk, db);
+            if (tailPk > -70)
+            {
+                foreach (var (t, db) in input) _inLive.Add((t, db - inPk));
+                foreach (var (t, db) in tail) _tailLive.Add((t, db - tailPk));
+                _hitAge = (SpaceDraw.Points - 1 - hit) * SpaceDraw.PointSec;
+                _hitSeen = System.Diagnostics.Stopwatch.GetTimestamp();
+                _tailRef = tailPk;
+            }
+        }
+        else if (has && _hitAge >= 0)
+        {
+            // The hit has left the history but its tail may still ring: keep what was drawn before
+            // the history's oldest point and redraw the rest from the history.
+            double age = _hitAge + System.Diagnostics.Stopwatch.GetElapsedTime(_hitSeen).TotalSeconds;
+            if (age > Windows[^1]) { _inLive.Clear(); _tailLive.Clear(); _hitAge = -1; }
+            else
+            {
+                double oldest = age - (SpaceDraw.Points - 1) * SpaceDraw.PointSec;
+                _tailLive.RemoveAll(e => e.Sec >= oldest);
+                foreach (var (t, db) in SpaceDraw.Since(scope, wetOff, 0))
+                    _tailLive.Add((oldest + t, db - _tailRef));
+            }
+        }
+        else { _inLive.Clear(); _tailLive.Clear(); _hitAge = -1; }
+        if (had || _tailLive.Count > 0) InvalidateVisual();
     }
 
     // ---- geometry ------------------------------------------------------------------
@@ -171,7 +216,6 @@ internal sealed class ReverbTailView : Control, IValueHandles
 
         double pre = _preMs / 1000;
         double preX = XOfSec(pre);
-        bool live = _phase >= 0;
 
         if (_freeze)
         {
@@ -179,6 +223,33 @@ internal sealed class ReverbTailView : Control, IValueHandles
             ctx.DrawText(new NotaFormattedText(Loc.T("device.reverb.tail_held_no_decay"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 3));
             return;
+        }
+
+        // Your audio after its latest hit, under the set line: the input as a wash, the tail as a line.
+        if (_tailLive.Count > 1)
+        {
+            var wash = new StreamGeometry();
+            using (var g = wash.Open())
+            {
+                g.BeginFigure(new Point(XOfSec(0), r.Bottom), true);
+                foreach (var (t, db) in _inLive) { if (t > _win) break; g.LineTo(new Point(XOfSec(t), YOf(db))); }
+                g.LineTo(new Point(XOfSec(Math.Min(_inLive[^1].Sec, _win)), r.Bottom));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.TextTertiary, 0x40), null, wash);
+            var line = new StreamGeometry();
+            using (var g = line.Open())
+            {
+                bool first = true;
+                foreach (var (t, db) in _tailLive)
+                {
+                    if (t > _win) break;
+                    var at = new Point(XOfSec(t), YOf(Math.Max(db, DbFloor)));
+                    if (first) { g.BeginFigure(at, false); first = false; } else g.LineTo(at);
+                }
+                g.EndFigure(false);
+            }
+            ctx.DrawGeometry(null, LivePen, line);
         }
 
         // The highs: a fainter line that falls sooner (HF damp).
@@ -198,14 +269,6 @@ internal sealed class ReverbTailView : Control, IValueHandles
         }
         ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x14), null, fill);
         ctx.DrawLine(new Pen(NotaPalette.VizInk, 1.8, lineCap: PenLineCap.Round), new Point(preX, YOf(0)), end);
-        // The stretch already played while the reverb sounds.
-        if (live && _phase > 0)
-        {
-            double t = Math.Min(_phase * (endSec - pre), _win - pre);
-            var at = new Point(XOfSec(pre + t), YOf(-60 * t / _rt60));
-            ctx.DrawLine(new Pen(NotaPalette.AccentBright, 2.2, lineCap: PenLineCap.Round), new Point(preX, YOf(0)), at);
-        }
-
         // The early reflections: short ticks hanging under the start of the tail, longer the
         // louder they are (they come within ~60 ms, so on a seconds axis they sit close).
         int n = Math.Min(_erMs.Length, _erGain.Length);
@@ -239,5 +302,12 @@ internal sealed class ReverbTailView : Control, IValueHandles
         double lx = w - 10 - hi.Width;
         ctx.DrawText(hi, new Point(lx, 4));
         ctx.DrawLine(hiPen, new Point(lx - 18, 4 + hi.Height / 2), new Point(lx - 4, 4 + hi.Height / 2));
+        if (_tailLive.Count > 1)
+        {
+            var yt = Text(Loc.T("device.reverb.your_tail"), NotaGraph.AxisInk);
+            double yx = lx - 26 - yt.Width;
+            ctx.DrawText(yt, new Point(yx, 4));
+            ctx.DrawLine(LivePen, new Point(yx - 18, 4 + yt.Height / 2), new Point(yx - 4, 4 + yt.Height / 2));
+        }
     }
 }

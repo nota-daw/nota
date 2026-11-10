@@ -299,6 +299,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   are lit on the frequency strip instead, and dB marks run up the left edge. The selected band's
   own curve is a dashed grey line, Dynamic EQ's static response too. EQ-3's crossover values move
   from the pills over the graph onto the strip; drag a crossover there or by its line.
+- **Nota Reverb and Nota Delay: your audio in the graphs** (nota-daw/nota#377): the graphs
+  now show what the device does to the audio playing through it, on top of the settings.
+  Reverb's Space graph draws the input after its latest hit as a grey wash and the measured
+  tail as a grey line under the set decay, so a tail that rings longer or shorter than Decay
+  shows at once. Its Tone · Mod tab draws how long the tail rings at each frequency (HF damp
+  shortens the highs), the low and high cut as handles you drag, and the tail's live spectrum;
+  Low cut, High cut and HF damp sit beside it, and Width moves to the Mod panel. Delay's repeat
+  lanes draw the level of your echoes behind the stems, and the lit repeat follows the latest
+  hit instead of a clock; its Filter tab draws the echoes' spectrum behind the filter curve.
 - **Nota Delay, Reverb and Chamber: graphs you can read, controls that sit together**
   (nota-daw/nota#531): Delay's Time tab draws the repeats as two lanes in dB — L over R — on a
   grid in beats or ms, the dry hit at 0 and each echo as tall as it is loud (ping-pong hops

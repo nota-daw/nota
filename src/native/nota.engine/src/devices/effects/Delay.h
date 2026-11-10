@@ -10,6 +10,7 @@
 
 #include "devices/Device.h"
 #include "dsp/primitives/DelayLine.h"
+#include "dsp/primitives/LevelHistory.h"
 
 #include <algorithm>
 #include <atomic>
@@ -53,7 +54,8 @@ class Delay : public Device {
         View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
-    // Scope telemetry layout (read by the card).
+    // Scope telemetry layout (read by the card). After the kScope values comes the level
+    // history (dsp::LevelHistory: input dB, echoes dB before the mix, echo samples), oldest first.
     enum {
         S_WetPk = 0,
         S_OutL,
@@ -153,6 +155,7 @@ class Delay : public Device {
     AllPass ap_[4];
     float hpL_ = 0, hpR_ = 0, lpL_ = 0, lpR_ = 0, tapeL_ = 0, tapeR_ = 0, monoL_ = 0, monoR_ = 0;
     double cpuS_ = 0.0;
+    dsp::LevelHistory hist_; // the card's live echo graph
 
     // Auto-sleep hangover.
     uint64_t quietSamples_ = 0;

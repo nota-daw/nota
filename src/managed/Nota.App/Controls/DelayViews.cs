@@ -21,7 +21,9 @@ namespace Nota.App;
 // repeats last reads off the heights. Ping-pong draws the source arriving on L and the repeats
 // hopping between the lanes. The first echo of each lane is a handle: drag it sideways for the
 // time, up or down for Feedback. Frozen, every repeat stands at full height in an accent frame;
-// the repeat that is sounding now is lit.
+// the repeat that is sounding now is lit. Behind the stems runs your audio (#377): the echoes
+// after the latest hit of the input, as a grey wash in dB against that hit, so what the loop
+// really does to the repeats (the filter, the tape, the diffuser) reads against the set ones.
 internal sealed class DelayTaps : Control
 {
     private const int MaxTaps = 32;
@@ -33,6 +35,9 @@ internal sealed class DelayTaps : Control
     private string _labelL = "", _labelR = "";
     private (double Frac, string Text)[] _ticks = Array.Empty<(double, string)>();
     private int _litL = -1, _litR = -1;
+    // The echoes of your latest hit: (seconds after the hit, dB against the hit); empty = none.
+    private readonly System.Collections.Generic.List<(double Sec, double Db)> _live = new();
+    private double _liveWin = 1;
     private int _drag = -1, _hover = -1;   // lane: 0 L, 1 R
     private Point _grab;
 
@@ -44,6 +49,8 @@ internal sealed class DelayTaps : Control
     public event Action<int>? GestureEnd;
 
     public bool Dragging => _drag >= 0;
+
+    private static readonly IBrush LiveWash = NotaPalette.Wash(NotaPalette.TextTertiary, 0x40);
 
     public DelayTaps() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); }
 
@@ -57,6 +64,33 @@ internal sealed class DelayTaps : Control
         _fb = feedback; _ping = ping; _freeze = freeze; _linked = linked;
         _labelL = labelL; _labelR = labelR; _ticks = ticks;
         InvalidateVisual();
+    }
+
+    /// <summary>Feed the level history (at <paramref name="off"/> in the scope; <paramref name="has"/>
+    /// false = none) and the window's length in seconds. Returns how long ago the latest hit of
+    /// the input was, in seconds, or −1 when there is none on record.</summary>
+    public double SetLive(float[] scope, int off, bool has, double windowSec)
+    {
+        bool had = _live.Count > 0;
+        _live.Clear();
+        _liveWin = Math.Max(0.01, windowSec);
+        int hit = has && scope.Length >= off + SpaceDraw.Floats ? SpaceDraw.LatestHit(scope, off) : -1;
+        double age = -1;
+        if (hit >= 0)
+        {
+            age = (SpaceDraw.Points - 1 - hit) * SpaceDraw.PointSec;
+            // The hit's level: the loudest input within 50 ms of its start.
+            float pk = -120;
+            for (int k = hit; k < Math.Min(SpaceDraw.Points, hit + 13); k++) pk = Math.Max(pk, scope[off + k]);
+            foreach (var (t, db) in SpaceDraw.Since(scope, off + SpaceDraw.Points, hit))
+            {
+                if (t > _liveWin) break;
+                _live.Add((t, db - pk));
+            }
+            if (_live.TrueForAll(e => e.Db < FloorDb)) _live.Clear();
+        }
+        if (had || _live.Count > 0) InvalidateVisual();
+        return age;
     }
 
     /// <summary>Which repeat is sounding now per lane (−1 = none).</summary>
@@ -189,6 +223,20 @@ internal sealed class DelayTaps : Control
             {
                 var m = Text("−24", NotaGraph.AxisInk);
                 ctx.DrawText(m, new Point(X1 - m.Width, YOf(0, -24) - m.Height - 1));
+            }
+
+            // Your echoes behind the stems, in this lane's dB scale.
+            if (_live.Count > 1)
+            {
+                var geo = new StreamGeometry();
+                using (var g = geo.Open())
+                {
+                    g.BeginFigure(new Point(X0, b), true);
+                    foreach (var (sec, db) in _live) g.LineTo(new Point(XAt(sec / _liveWin), YOf(lane, db)));
+                    g.LineTo(new Point(XAt(_live[^1].Sec / _liveWin), b));
+                    g.EndFigure(true);
+                }
+                ctx.DrawGeometry(LiveWash, null, geo);
             }
 
             // The dry hit at 0.
