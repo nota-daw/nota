@@ -357,6 +357,18 @@ public interface IAudioEngine : IDisposable
     /// MIDI output ("MIDI In"). sourceTrackId = -1 turns it off.</summary>
     void SetTrackMidiSource(int trackId, int sourceTrackId);
     int GetTrackMidiSource(int trackId);
+    /// <summary>Track-level MIDI playback offset in ms (negative = notes play earlier). Playback only:
+    /// the notes in the clips do not move. Clamped to ±2000 ms.</summary>
+    void SetTrackMidiOffsetMs(int trackId, double ms);
+    double GetTrackMidiOffsetMs(int trackId);
+    /// <summary>Gives an instrument track its articulation map (specs/085): the compiled table
+    /// (see ArticulationMapCompiler) plus the map as Nota's JSON, saved with the project. One undo
+    /// step. False, with nothing changed, when the engine rejects the table or the track.</summary>
+    bool SetTrackArticulationMap(int trackId, int defaultId, NotaArticulationEntry[] entries, NotaArticulationAction[] actions, string mapJson);
+    /// <summary>Removes the track's map; notes keep their articulation ids. One undo step.</summary>
+    bool ClearTrackArticulationMap(int trackId);
+    /// <summary>The map JSON the track holds, or null when it has none.</summary>
+    string? GetTrackArticulationMapJson(int trackId);
 
     // --- freeze (M7): bounce a track's pre-fader audio to a buffer and play it back
     //     in place of the live instrument+device chain. Drive offline with the backend

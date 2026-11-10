@@ -333,6 +333,11 @@ public sealed partial class NotaEngine : IAudioEngine
     public bool TimedEventsSelfTest()
     { ThrowIfDisposed(); return NativeMethods.TimedEventsSelfTest(_handle) != 0; }
 
+    /// <summary>Device-free self-test (specs/085): articulation scheduling and delivery. 0 = pass,
+    /// else the number of the check that failed (see Engine::articulationSelfTest).</summary>
+    public int ArticulationSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.ArticulationSelfTest(_handle); }
+
     /// <summary>Smoothed real-time DSP load, 0..1 (render time / block budget).</summary>
     public float CpuLoad
     { get { ThrowIfDisposed(); return NativeMethods.CpuLoad(_handle); } }

@@ -4,6 +4,7 @@
 // Engine — realtime render core: poll, block render, offline bounce, command/live-MIDI drain, per-track raw renderers, mixer processBlock, metronome & test tone. RT-hot; do not add allocations.
 
 #include "Engine.h"
+#include "ArticulationSchedule.h"
 #include "dsp/core/ScopedNoDenormals.h"
 #include "dsp/math/SimdAudio.h"
 #include "devices/racks/DrumRack.h"
@@ -179,14 +180,27 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
 // after that it isn't rendered at all (no CPU) until it is switched back on, so `dst` stays
 // silent. The MIDI before it keeps running. `beat` / `spb` / `rolling` is the clock the track's
 // MIDI effects ran on, for the MIDI effects inside the instrument.
+// One articulation event (specs/085) into the instrument, on its channel. Keyswitch notes bypass
+// the engine's sustain pedal (sendNoteOn/Off): a switch is not a note the player holds.
+inline void deliverArt(Instrument& inst, const ArtEv& e) {
+    inst.eventChannel = e.channel;
+    switch (e.kind) {
+    case ArtEvKind::KeyOn: inst.noteOn(e.data1, static_cast<float>(std::max<int>(1, e.data2)) / 127.0f); break;
+    case ArtEvKind::KeyOff: inst.noteOff(e.data1); break;
+    case ArtEvKind::Control: inst.controller(e.data1, static_cast<float>(e.data2) / 127.0f); break;
+    case ArtEvKind::Program: inst.programChange(e.data1); break;
+    }
+    inst.eventChannel = 0;
+}
+
 template <class Live>
 void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn,
-    double beat, double spb, bool rolling, Live&& live) {
+    const ArtEv* aev, int an, double beat, double spb, bool rolling, Live&& live) {
     const bool off = inst.bypassed();
     if (!off) inst.offSettled.store(false, std::memory_order_relaxed);
     else if (inst.offSettled.load(std::memory_order_relaxed))
         return;
-    if (off) n = xn = 0; // nothing new starts on the way out
+    if (off) n = xn = an = 0; // nothing new starts on the way out
     if (inst.takesBlockMidi()) inst.blockMidi(evs, n, frames, beat, spb, rolling); // a rack's chain MIDI effects (#329)
     int32_t cursor = 0;
     bool liveDone = false;
@@ -208,11 +222,12 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         live();
         liveDone = true;
     };
-    int k = 0, x = 0;
-    while (k < n || x < xn) {
+    int k = 0, x = 0, a = 0;
+    while (k < n || x < xn || a < an) {
         const int32_t nOff = k < n ? std::clamp(evs[k].off, 0, frames) : INT32_MAX;
         const int32_t xOff = x < xn ? std::clamp(xev[x].off, 0, frames) : INT32_MAX;
-        const int32_t at = std::min(nOff, xOff);
+        const int32_t aOff = a < an ? std::clamp(aev[a].off, 0, frames) : INT32_MAX;
+        const int32_t at = std::min(std::min(nOff, xOff), aOff);
         if (timed) {
             if (at >= frames) break; // after the render, at the next block's start (as segmented)
             if (at > 0) liveAt0();   // live input sits after the offset-0 notes
@@ -220,7 +235,10 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         } else {
             renderTo(at);
         }
-        if (nOff <= xOff) {
+        if (aOff <= nOff && aOff <= xOff) { // an articulation goes ahead of the note it selects
+            deliverArt(inst, aev[a]);
+            ++a;
+        } else if (nOff <= xOff) {
             if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
             else
                 sendNoteOff(inst, evs[k].pitch, evs[k].vel);
@@ -235,7 +253,8 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         inst.eventOffset = 0;
         inst.render(dst, frames);
         cursor = frames;
-        for (; k < n; ++k) // end-of-block events: offset 0 of the next render
+        for (; a < an; ++a) deliverArt(inst, aev[a]); // end-of-block events: offset 0 of the next render
+        for (; k < n; ++k)
             if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
             else
                 sendNoteOff(inst, evs[k].pitch);
@@ -1237,37 +1256,55 @@ int Engine::gatherInstrumentNotes(
             const double clipStart = clip.startBeat * spb;
             const double clipEnd = clipStart + clip.lengthBeats * spb;
             const bool hasVel = !clip.velocityEnvelope.points.empty();
-            for (const Note& note : clip.notes) {
-                // Clip length gates note starts (M4-2): notes outside don't play. A note that
-                // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
-                // sounds from the clip start for the part that reaches into it.
-                if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
-                const double onS = clipStart + std::max(0.0, note.startBeat) * spb;
-                // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
-                // shortened) end stops at the boundary instead of sounding its full length.
-                double offS = clipStart + (note.startBeat + note.lengthBeats) * spb;
-                if (offS > clipEnd) offS = clipEnd;
-                // Velocity envelope (M9 follow-up): scale by the curve at the note's
-                // clip-local start beat.
-                float vel = note.velocity;
-                if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
-                if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
-                        static_cast<float>((offS - onS) / spb)};
-                // Loop seam: a note still sounding at the loop end releases here, ahead of any
-                // chase re-trigger at the same offset (offs sort first).
-                if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
-                    evs[n++] = {0, false, note.pitch, 0.0f};
-                // Chase: a note already held at the jump point starts sounding right here.
-                if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
-                    evs[n++] = {0, true, note.pitch, vel};
-                if (offS >= blockStart && offS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
-                // Recorded MPE: the note's curve while it sounds in this block.
-                if (xev && note.expr && clipActive)
-                    noteExprEvents(note, clipStart + note.startBeat * spb - blockStart, offS - blockStart, frames, spb,
-                        xev, *xn, kMaxBlockExpr); // curve timed from the true start
-            }
+            // Track MIDI offset (ms → samples at the device rate). Playback-only: the shift
+            // is applied to the scheduled times below, never to the stored notes.
+            // A track without a map and without an offset (most tracks) pays nothing per note here:
+            // the per-note articulation lookup is skipped and the shift stays a constant zero.
+            const double msToS = transport_.sampleRate() / 1000.0;
+            const double trackShiftS = t.midiOffsetMs() * msToS;
+            const ArticulationTable* artTable = t.articulationTable.get();
+            const auto gatherClip = [&]<bool shifted>() {
+                for (const Note& note : clip.notes) {
+                    // FR-018: track offset + the note's articulation offset, applied once (specs/085).
+                    double shiftS = 0.0;
+                    if constexpr (shifted)
+                        shiftS = artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS : trackShiftS;
+                    // Clip length gates note starts (M4-2): notes outside don't play. A note that
+                    // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
+                    // sounds from the clip start for the part that reaches into it.
+                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
+                    const double nominalOn = clipStart + std::max(0.0, note.startBeat) * spb;
+                    // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
+                    // shortened) end stops at the boundary instead of sounding its full length.
+                    double nominalOff = clipStart + (note.startBeat + note.lengthBeats) * spb;
+                    if (nominalOff > clipEnd) nominalOff = clipEnd;
+                    const double onS = shifted ? nominalOn + shiftS : nominalOn;
+                    const double offS = shifted ? nominalOff + shiftS : nominalOff;
+                    // Velocity envelope (M9 follow-up): scale by the curve at the note's
+                    // clip-local start beat.
+                    float vel = note.velocity;
+                    if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
+                    if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
+                        evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
+                            static_cast<float>((offS - onS) / spb)};
+                    // Loop seam: a note still sounding at the loop end releases here, ahead of any
+                    // chase re-trigger at the same offset (offs sort first).
+                    if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
+                        evs[n++] = {0, false, note.pitch, 0.0f};
+                    // Chase: a note already held at the jump point starts sounding right here.
+                    if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
+                        evs[n++] = {0, true, note.pitch, vel};
+                    if (offS >= blockStart && offS < blockStart + frames && n < 1024)
+                        evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+                    // Recorded MPE: the note's curve while it sounds in this block.
+                    if (xev && note.expr && clipActive)
+                        noteExprEvents(note, (shifted ? clipStart + note.startBeat * spb + shiftS : clipStart + note.startBeat * spb) - blockStart,
+                            offS - blockStart, frames, spb,
+                            xev, *xn, kMaxBlockExpr); // curve timed from the true start
+                }
+            };
+            if (!artTable && trackShiftS == 0.0) gatherClip.template operator()<false>();
+            else gatherClip.template operator()<true>();
             // The clip's controllers (specs/020).
             if (xev && clipActive)
                 clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr);
@@ -1500,7 +1537,26 @@ void Engine::renderInstrumentRaw(
 
     std::sort(evs, evs + n, midiEvLess);
     std::stable_sort(xev, xev + xn, [](const ExprEv& a, const ExprEv& b) { return a.off < b.off; });
-    playEvents(*inst, dst, frames, evs, n, xev, xn, spb > 0.0 ? blockStart / spb : 0.0, spb, playing, [&] {
+
+    // Articulation MIDI (specs/085): the track's own arrangement clips, past its MIDI FX, only to an
+    // instrument that takes it. A stack array like the notes' (AR-6); overflow is dropped, never grown.
+    ArtEv aev[kMaxBlockArt];
+    int an = 0;
+    if (t.articulationTable && playing && spb > 0.0 && arrangementActive_.load(std::memory_order_relaxed) &&
+        inst->takesArticulations()) {
+        ArticulationBlock ab;
+        ab.frames = frames;
+        ab.blockStart = blockStart;
+        ab.spb = spb;
+        ab.sampleRate = transport_.sampleRate();
+        ab.trackOffsetMs = t.midiOffsetMs();
+        ab.chase = chaseNotes_;
+        ab.chaseStart = articulationChaseStart_;
+        ab.seamOffs = seamOffs_;
+        ab.seamEnd = seamEndSamples_;
+        an = scheduleArticulations(t.midiClips, *t.articulationTable, ab, aev, kMaxBlockArt);
+    }
+    playEvents(*inst, dst, frames, evs, n, xev, xn, aev, an, spb > 0.0 ? blockStart / spb : 0.0, spb, playing, [&] {
         if (liveExprCount_ > 0) applyLiveExpression(g, t, *inst);
     });
 
@@ -1539,32 +1595,44 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
 
     MidiEv evs[1024];
     int n = 0;
-    const long i0 = static_cast<long>(std::floor(p / L));
-    const float velGain = sp.gain;
-    for (long it = i0; it <= i0 + 1; ++it) {
-        if (!s.loop && it > 0) break; // one-shot: a single pass
-        for (const Note& note : s.midi.notes) {
-            if (note.startBeat < 0.0 || note.startBeat >= L) continue;
-            const double onAbs = it * L + note.startBeat;
-            const double offAbs = onAbs + note.lengthBeats;
-            if (onAbs >= p && onAbs < p + db && n < 1024)
-                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb), true, note.pitch, note.velocity * velGain,
-                    static_cast<float>(note.lengthBeats)};
-            if (offAbs >= p && offAbs < p + db && n < 1024)
-                evs[n++] = {static_cast<int32_t>((offAbs - p) * spb), false, note.pitch, 0.0f};
-        }
-    }
-    // Recorded MPE of the slot's notes sounding in this block (a note may have started a pass
-    // earlier, so look one iteration back).
     ExprEv xev[kMaxBlockExpr];
     int xn = 0;
-    for (long it = std::max(0L, i0 - 1); it <= i0 + 1; ++it) {
-        if (!s.loop && it > 0) break;
-        for (const Note& note : s.midi.notes) {
-            if (!note.expr || note.startBeat < 0.0 || note.startBeat >= L) continue;
+    const long i0 = static_cast<long>(std::floor(p / L));
+    const float velGain = sp.gain;
+    // The track's MIDI offset and each note's articulation offset (specs/085, T049), as in the
+    // arrangement: the notes stay where they are, they sound shifted. A later shift can bring a note
+    // of the previous pass into this block, so that pass is read too — only when something is late,
+    // so a slot with no offset plays exactly as before.
+    const double msToS = transport_.sampleRate() / 1000.0;
+    const ArticulationTable* artTable = t.articulationTable.get();
+    const double trackMs = t.midiOffsetMs();
+    for (const Note& note : s.midi.notes) {
+        if (note.startBeat < 0.0 || note.startBeat >= L) continue;
+        const double shiftS = artTable ? (trackMs + articulationOffsetMs(artTable, note.articulation)) * msToS : trackMs * msToS;
+        const double shiftBeats = shiftS / spb;
+        // This note's on, off, or expression can reach the block from any pass whose shifted
+        // lifetime overlaps it. Derive both bounds per note: offsets and long tails can span
+        // arbitrarily many short loops, and the block itself may cross several loops.
+        const long itLo = std::max(0L, static_cast<long>(std::floor((p - shiftBeats - note.startBeat - note.lengthBeats) / L)));
+        long itHi = static_cast<long>(std::floor((p + db - shiftBeats - note.startBeat) / L));
+        if (!s.loop) itHi = std::min(itHi, 0L);
+        for (long it = itLo; it <= itHi; ++it) {
             const double onAbs = it * L + note.startBeat;
-            noteExprEvents(
-                note, (onAbs - p) * spb, (onAbs + note.lengthBeats - p) * spb, frames, spb, xev, xn, kMaxBlockExpr);
+            const double offAbs = onAbs + note.lengthBeats;
+            // Unshifted: the block test in beats, as always — the next block starts at exactly p + db,
+            // so a note on the boundary falls in one block, never both or neither. Shifted: in samples.
+            const bool onIn = shiftS == 0.0 ? onAbs >= p && onAbs < p + db
+                                            : (onAbs - p) * spb + shiftS >= 0.0 && (onAbs - p) * spb + shiftS < frames;
+            const bool offIn = shiftS == 0.0 ? offAbs >= p && offAbs < p + db
+                                             : (offAbs - p) * spb + shiftS >= 0.0 && (offAbs - p) * spb + shiftS < frames;
+            if (onIn && n < 1024)
+                evs[n++] = {static_cast<int32_t>((onAbs - p) * spb + shiftS), true, note.pitch, note.velocity * velGain,
+                    static_cast<float>(note.lengthBeats)};
+            if (offIn && n < 1024)
+                evs[n++] = {static_cast<int32_t>((offAbs - p) * spb + shiftS), false, note.pitch, 0.0f};
+            if (note.expr)
+                noteExprEvents(note, (onAbs - p) * spb + shiftS, (offAbs - p) * spb + shiftS, frames, spb, xev, xn,
+                    kMaxBlockExpr);
         }
     }
     // The slot clip's controllers, per loop iteration: a release at each iteration's end, then
@@ -1600,7 +1668,28 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         applyMidiCcRouting(t); // Arps grouped into the Instrument Rack's chains (specs/044)
 
     // The monitored live expression, after the offset-0 notes (as in renderInstrumentRaw).
-    playEvents(*inst, dst, frames, evs, n, xev, xn, p, spb, true, [&] { // the slot's own loop clock
+    // The slot's articulation MIDI (specs/085, T042), on the slot's own loop clock, past its MIDI FX.
+    ArtEv aev[kMaxBlockArt];
+    int an = 0;
+    if (artTable && spb > 0.0 && inst->takesArticulations()) {
+        ArticulationBlock ab;
+        ab.frames = frames;
+        ab.blockStart = p * spb;
+        ab.spb = spb;
+        ab.sampleRate = transport_.sampleRate();
+        ab.trackOffsetMs = t.midiOffsetMs();
+        // The first block after a launch (playedBeats resets at launch): what is in force where the
+        // slot starts — its start, or the outgoing position for a legato launch — goes out, so a
+        // switch whose lead falls before the launch isn't lost.
+        ab.chase = sp.playedBeats.load(std::memory_order_relaxed) == 0.0;
+        ab.releases = &sp.articulationReleases;
+        ab.seamOffs = false;
+        ab.seamEnd = 0.0;
+        an = scheduleSlotArticulations(s.midi, L, s.loop, *artTable, ab, aev, kMaxBlockArt);
+    } else if (sp.articulationReleases.count > 0 && inst->takesArticulations()) {
+        an = scheduleArticulationReleases(sp.articulationReleases, frames, aev, kMaxBlockArt);
+    }
+    playEvents(*inst, dst, frames, evs, n, xev, xn, aev, an, p, spb, true, [&] { // the slot's own loop clock
         if (!monitoring) return;
         for (int i = 0; i < liveExprCount_; ++i)
             if (liveExpr_[i].trackId < 0 || liveExpr_[i].trackId == t.id())
@@ -1975,6 +2064,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             presentationFrames += seg;
         }
         chaseNotes_ = chase;
+        if (chase) articulationChaseStart_ = segStart;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
@@ -2426,6 +2516,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     // what it holds, or a note crossed while silent would sound on after unmute.
                     // Once, on going silent: a hosted plug-in queues each release until it renders.
                     if (t.instrument && !t.sessionSilentReleased) t.instrument->allNotesOff();
+                    // Those voices were flushed; an old latching release must not survive the
+                    // silent interval and cut a new momentary hold after mute/solo is lifted.
+                    t.sessionPlayer->articulationReleases.count = 0;
                     t.sessionSilentReleased = true;
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
@@ -3039,7 +3132,7 @@ bool Engine::timedEventsSelfTest() {
     const ExprEv xev[] = {{20, -1, kCtlDimBase + 1, 0.5f}};
     float dst[frames * 2] = {};
     auto run = [&](Probe& p) {
-        playEvents(p, dst, frames, evs, 4, xev, 1, 0.0, 0.0, false,
+        playEvents(p, dst, frames, evs, 4, xev, 1, nullptr, 0, 0.0, 0.0, false,
             [&] { p.events.push_back({3, -1, p.eventOffset, (int32_t)p.renders.size()}); });
     };
     using E = std::array<int32_t, 4>;
@@ -3057,6 +3150,564 @@ bool Engine::timedEventsSelfTest() {
     const std::vector<E> wantSeg = {
         {1, 60, 0, 0}, {3, -1, 0, 0}, {0, 60, 0, 1}, {1, 62, 0, 1}, {2, 1, 0, 2}, {0, 62, 0, 3}};
     return seg.renders == std::vector<int32_t>{10, 10, 44} && seg.events == wantSeg;
+}
+
+// specs/085: the articulation scheduler, block by block at exact samples, and delivery through
+// playEvents. Returns 0 on success, else the number of the first check that failed.
+int32_t Engine::articulationSelfTest() {
+    constexpr double sr = 48000.0, spb = 24000.0; // 120 BPM
+    constexpr int32_t B = 512;
+    using AK = ArticulationActionKind;
+    // 1 Long: latching, keyswitches 24/1 + 35/1 + CC58=81. 2 Legato: latching, CC58=76, lead 30 ms,
+    // offset -150 ms. 3 Pizz: momentary, keyswitch 30/127, channel 2. Default = 1.
+    const ArticulationAction actions[] = {
+        {AK::Keyswitch, 0, 24, 1}, {AK::Keyswitch, 0, 35, 1}, {AK::ControlChange, 0, 58, 81},
+        {AK::ControlChange, 0, 58, 76},
+        {AK::Keyswitch, 2, 30, 127},
+    };
+    const ArticulationEntry entries[] = {
+        {1, ArticulationTrigger::Latching, 0.0, 0.0, 0, 3},
+        {2, ArticulationTrigger::Latching, -150.0, 30.0, 3, 1},
+        {3, ArticulationTrigger::Momentary, 0.0, 0.0, 4, 1},
+    };
+    auto table = ArticulationTable::build(1, entries, 3, actions, 5);
+    if (!table) return 1;
+
+    auto makeClip = [&](std::vector<std::pair<double, int32_t>> notes, double len = 1.0) {
+        MidiClip c;
+        c.startBeat = 0.0;
+        c.lengthBeats = 8.0;
+        for (auto [beat, art] : notes) {
+            Note n;
+            n.pitch = 60;
+            n.startBeat = beat;
+            n.lengthBeats = len;
+            n.articulation = art;
+            c.notes.push_back(n);
+        }
+        c.articulations = buildArticulationTimeline(c, table);
+        return c;
+    };
+    // Beat 0 Long, beat 1 Long again (no new switch), beat 2 Legato, beat 3 Pizz (momentary),
+    // beat 4 a note with no articulation (the default: Long again, a change from Legato).
+    std::vector<MidiClip> clips{makeClip({{0.0, 1}, {1.0, 1}, {2.0, 2}, {3.0, 3}, {4.0, 0}})};
+
+    struct Abs {
+        double at;
+        ArtEvKind kind;
+        int d1, d2, ch;
+    };
+    // Play [from, to) in blocks; the first block is a chase when `chase`.
+    auto play = [&](double from, double to, double trackMs, bool chase, std::vector<Abs>& got, int* dropped = nullptr) {
+        ArtEv buf[kMaxBlockArt];
+        for (double s = from; s < to; s += B) {
+            ArticulationBlock b{B, s, spb, sr, trackMs, chase && s == from, false, 0.0};
+            b.chaseStart = chase ? from : -1.0;
+            int d = 0;
+            const int n = scheduleArticulations(clips, *table, b, buf, kMaxBlockArt, &d);
+            if (dropped) *dropped += d;
+            for (int i = 0; i < n; ++i) got.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        }
+    };
+    auto count = [](const std::vector<Abs>& v, ArtEvKind k, int d1) {
+        int c = 0;
+        for (auto& e : v) c += e.kind == k && e.d1 == d1;
+        return c;
+    };
+    auto at = [](const std::vector<Abs>& v, ArtEvKind k, int d1, int d2 = -1) {
+        for (auto& e : v)
+            if (e.kind == k && e.d1 == d1 && (d2 < 0 || e.d2 == d2)) return e.at;
+        return -1.0;
+    };
+
+    // ---- a straight run from the start ----
+    std::vector<Abs> run;
+    play(0.0, 6 * spb, 0.0, true, run);
+    // 2: Long at 0 in map order — key 24, key 35, CC58=81 — and its keys released 20 ms later.
+    if (run.size() < 3 || run[0].at != 0.0 || run[0].kind != ArtEvKind::KeyOn || run[0].d1 != 24 || run[1].d1 != 35 ||
+        run[2].kind != ArtEvKind::Control || run[2].d1 != 58 || run[2].d2 != 81)
+        return 2;
+    if (at(run, ArtEvKind::KeyOff, 24) != 960.0 || at(run, ArtEvKind::KeyOff, 35) != 960.0) return 3;
+    // 4: the second Long note sends nothing (still in force): Long's keys go out twice in all — at
+    // beat 0 and again at beat 4 where the default (Long) follows Legato.
+    if (count(run, ArtEvKind::KeyOn, 24) != 2) return 4;
+    // 5: Legato: offset -150 ms and lead 30 ms → 48000 − 7200 − 1440 = 39360.
+    if (at(run, ArtEvKind::Control, 58, 76) != 39360.0) return 5;
+    // 6: Pizz is momentary on channel 2: pressed with its note (beat 3), released at its end.
+    double pOn = -1, pOff = -1;
+    for (auto& e : run)
+        if (e.d1 == 30 && e.ch == 2) (e.kind == ArtEvKind::KeyOn ? pOn : pOff) = e.at;
+    if (pOn != 72000.0 || pOff != 96000.0) return 6;
+    // 7: the default after Legato: Long again at beat 4.
+    if (at(run, ArtEvKind::Control, 58, 81) != 0.0) return 7; // first one at 0 …
+    {
+        int n81 = 0;
+        for (auto& e : run) n81 += e.kind == ArtEvKind::Control && e.d1 == 58 && e.d2 == 81 && e.at == 96000.0;
+        if (n81 != 1) return 7; // … and one at beat 4
+    }
+    // 8: nothing else: 2 × Long (3 actions + 2 releases), Legato (1), Pizz (on + off).
+    if (run.size() != 2 * 5 + 1 + 2) return 8;
+
+    // ---- a track offset moves every switch with the notes ----
+    std::vector<Abs> shifted;
+    play(0.0, 6 * spb, -100.0, true, shifted);
+    if (at(shifted, ArtEvKind::Control, 58, 76) != 39360.0 - 4800.0) return 9;
+    double sOn = -1;
+    for (auto& e : shifted)
+        if (e.d1 == 30 && e.kind == ArtEvKind::KeyOn) sOn = e.at;
+    if (sOn != 72000.0 - 4800.0) return 10;
+
+    // ---- a seek into the Legato phrase: what is in force goes out once, at the landing ----
+    std::vector<Abs> seek;
+    const double land = 2.5 * spb; // 60000: past Legato's switch (39360), before Pizz
+    play(land, land + 4 * B, 0.0, true, seek);
+    if (seek.size() != 1 || seek[0].at != land || seek[0].kind != ArtEvKind::Control || seek[0].d2 != 76) return 11;
+    // 12: without a chase, nothing is re-sent mid-phrase.
+    std::vector<Abs> quiet;
+    play(land, land + 4 * B, 0.0, false, quiet);
+    if (!quiet.empty()) return 12;
+    // 13: landing inside a held momentary note chases its switch too.
+    std::vector<Abs> inPizz;
+    play(3.5 * spb, 3.5 * spb + B, 0.0, true, inPizz);
+    if (count(inPizz, ArtEvKind::KeyOn, 30) != 1 || at(inPizz, ArtEvKind::KeyOn, 30) != 3.5 * spb) return 13;
+
+    // ---- a loop wrap onto a change at the loop start: no stale chase ahead of it ----
+    {
+        std::vector<Abs> wrap;
+        ArtEv buf[kMaxBlockArt];
+        ArticulationBlock b{B, 4 * spb, spb, sr, 0.0, true, true, 6 * spb}; // looping 4..6, just wrapped
+        const int n = scheduleArticulations(clips, *table, b, buf, kMaxBlockArt);
+        for (int i = 0; i < n; ++i) wrap.push_back({b.blockStart + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        // 14: Long's change lands on the block's first sample; the chase (Legato, in force before) is skipped.
+        if (count(wrap, ArtEvKind::Control, 58) != 1 || at(wrap, ArtEvKind::Control, 58, 81) != 4 * spb) return 14;
+    }
+    // 15: a seam lets go of a key pressed just before it.
+    {
+        std::vector<MidiClip> one{makeClip({{0.0, 1}})};
+        ArtEv buf[kMaxBlockArt];
+        ArticulationBlock b{B, 0.0, spb, sr, 0.0, false, true, 100.0}; // the key went down at 0, the seam came at 100
+        const int n = scheduleArticulations(one, *table, b, buf, kMaxBlockArt);
+        int offsAt0 = 0;
+        for (int i = 0; i < n; ++i) offsAt0 += buf[i].kind == ArtEvKind::KeyOff && buf[i].off == 0;
+        if (offsAt0 != 2) return 15;
+    }
+    // 16: releases sort before presses at the same sample.
+    {
+        std::vector<MidiClip> tight{makeClip({{0.0, 1}, {0.04, 3}}, 0.01)}; // Pizz 20 ms in = Long's release
+        ArtEv buf[kMaxBlockArt];
+        ArticulationBlock b{2048, 0.0, spb, sr, 0.0, false, false, 0.0};
+        const int n = scheduleArticulations(tight, *table, b, buf, kMaxBlockArt);
+        int firstOn = -1, lastOff = -1;
+        for (int i = 0; i < n; ++i)
+            if (buf[i].off == 960) {
+                if (buf[i].kind == ArtEvKind::KeyOff) lastOff = i;
+                else if (firstOn < 0) firstOn = i;
+            }
+        if (firstOn < 0 || lastOff < 0 || lastOff > firstOn) return 16;
+    }
+    // 17: a full buffer drops and counts, never overruns.
+    {
+        ArtEv small[2];
+        int dropped = 0;
+        ArticulationBlock b{B, 0.0, spb, sr, 0.0, false, false, 0.0};
+        const int n = scheduleArticulations(clips, *table, b, small, 2, &dropped);
+        if (n != 2 || dropped != 1) return 17;
+    }
+    // 18: an inactive clip sends nothing.
+    {
+        std::vector<MidiClip> off = clips;
+        off[0].active = false;
+        ArtEv buf[kMaxBlockArt];
+        ArticulationBlock b{B, 0.0, spb, sr, 0.0, true, false, 0.0};
+        if (scheduleArticulations(off, *table, b, buf, kMaxBlockArt) != 0) return 18;
+    }
+
+    // ---- delivery: ahead of the note at the same offset, on its channel, channel reset after ----
+    struct Probe final : Instrument {
+        std::vector<std::array<int32_t, 5>> events; // kind (1 on, 0 off, 2 cc, 3 program), d1, d2, offset, channel
+        bool articulations = false;
+        bool takesTimedEvents() const override { return true; }
+        bool takesArticulations() const override { return articulations; }
+        void setSampleRate(double) override {}
+        void noteOn(int32_t p, float v) override { events.push_back({1, p, (int32_t)std::lround(v * 127.0f), eventOffset, eventChannel}); }
+        void noteOff(int32_t p) override { events.push_back({0, p, 0, eventOffset, eventChannel}); }
+        void allNotesOff() override {}
+        void controller(int32_t c, float v) override { events.push_back({2, c, (int32_t)std::lround(v * 127.0f), eventOffset, eventChannel}); }
+        void programChange(int32_t p) override { events.push_back({3, p, 0, eventOffset, eventChannel}); }
+        void noteExpression(int32_t p, int32_t, float v) override {
+            events.push_back({4, p, (int32_t)std::lround(v * 127.0f), eventOffset, eventChannel});
+        }
+        void render(float*, int32_t) override {}
+    };
+    Probe p;
+    if (p.takesArticulations()) return 19; // the default is no: a built-in never gets keyswitches
+    const MidiEv evs[] = {{100, true, 60, 0.5f}};
+    const ArtEv aev[] = {{100, 0, ArtEvKind::KeyOn, 0, 24, 1}, {100, 1, ArtEvKind::Control, 5, 58, 81}, {100, 2, ArtEvKind::Program, 0, 12, 0}};
+    float dst[B * 2] = {};
+    playEvents(p, dst, B, evs, 1, nullptr, 0, aev, 3, 0.0, spb, true, [] {});
+    using E5 = std::array<int32_t, 5>;
+    const std::vector<E5> want = {{1, 24, 1, 100, 0}, {2, 58, 81, 100, 5}, {3, 12, 0, 100, 0}, {1, 60, 64, 100, 0}};
+    if (p.events != want) return 20;
+    if (p.eventChannel != 0) return 21;
+
+    // 22: changing only a note's articulation makes the published timeline stale (publishRaw
+    // rebuilds it), and the rebuilt one switches there.
+    {
+        MidiClip c = makeClip({{0.0, 1}, {1.0, 1}});
+        MidiClip edited = c;
+        edited.notes[1].articulation = 2;
+        if (articulationNotesKey(c) == articulationNotesKey(edited)) return 22;
+        if (!articulationTimelineCurrent(c, table) || articulationTimelineCurrent(edited, table)) return 22;
+        auto rebuilt = buildArticulationTimeline(edited, table);
+        if (rebuilt->changes.size() != 2 || rebuilt->changes[1].entryId != 2) return 22;
+    }
+
+    // ---- Session slots (T042): the slot's clip looped every 2 beats on its own clock ----
+    {
+        MidiClip slot = makeClip({{0.0, 1}, {1.0, 2}}); // Long at 0, Legato at 1, each pass
+        constexpr double L = 2.0;
+        auto playSlot = [&](bool loop, double from, double to, std::vector<Abs>& got) {
+            ArtEv buf[kMaxBlockArt];
+            for (double s = from; s < to; s += B) {
+                ArticulationBlock b{B, s, spb, sr, 0.0, false, false, 0.0};
+                const int n = scheduleSlotArticulations(slot, L, loop, *table, b, buf, kMaxBlockArt);
+                for (int i = 0; i < n; ++i) // the last block runs past `to`: count only what falls before it
+                    if (s + buf[i].off < to) got.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+            }
+        };
+        std::vector<Abs> looped;
+        playSlot(true, 0.0, 3 * L * spb, looped);
+        // 23: each pass switches to Long at its start and to Legato (−150 ms, lead 30 ms) after —
+        // three passes, three of each, at their places (Legato: pass k at k·48000 + 24000 − 8640).
+        int longs = 0, legatos = 0;
+        bool placed = true;
+        for (auto& e : looped) {
+            if (e.kind == ArtEvKind::KeyOn && e.d1 == 24) { ++longs; placed &= std::fmod(e.at, L * spb) == 0.0; }
+            if (e.kind == ArtEvKind::Control && e.d2 == 76) { ++legatos; placed &= std::fmod(e.at, L * spb) == 24000.0 - 8640.0; }
+        }
+        if (longs != 3 || legatos != 3 || !placed) return 23;
+        // 24: a one-shot slot plays its single pass.
+        std::vector<Abs> once;
+        playSlot(false, 0.0, 3 * L * spb, once);
+        if (count(once, ArtEvKind::KeyOn, 24) != 1 || count(once, ArtEvKind::Control, 58) != 2) return 24;
+        // 25: a launch sends the switch whose lead falls before it, and an early switch reaches back
+        // across the loop end. Legato on beat 0 (−150 ms, lead 30 ms) and Long on beat 1 of each pass:
+        // the launch block's chase sends Legato at 0; after that, each pass's Legato goes out at the
+        // end of the pass before (k·48000 − 8640) and its Long at k·48000 + 24000.
+        MidiClip early = makeClip({{0.0, 2}, {1.0, 1}});
+        std::vector<Abs> back;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 2 * L * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, s == 0.0, false, 0.0};
+            const int n = scheduleSlotArticulations(early, L, true, *table, b, buf, kMaxBlockArt);
+            for (int i = 0; i < n; ++i)
+                if (s + buf[i].off < 2 * L * spb) back.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        }
+        std::vector<double> legatoAt, longAt;
+        for (auto& e : back) {
+            if (e.kind == ArtEvKind::Control && e.d2 == 76) legatoAt.push_back(e.at);
+            if (e.kind == ArtEvKind::KeyOn && e.d1 == 24) longAt.push_back(e.at);
+        }
+        if (legatoAt != std::vector<double>{0.0, L * spb - 8640.0, 2 * L * spb - 8640.0} ||
+            longAt != std::vector<double>{24000.0, L * spb + 24000.0})
+            return 25;
+    }
+
+    // 26: a chase in a block shorter than 20 ms lets go exactly 20 ms later, in a subsequent block.
+    {
+        std::vector<Abs> got;
+        const double land = 0.5 * spb; // inside the first Long phrase
+        play(land, land + 3 * B, 0.0, true, got);
+        if (count(got, ArtEvKind::KeyOn, 24) != 1 || count(got, ArtEvKind::KeyOff, 24) != 1 ||
+            at(got, ArtEvKind::KeyOn, 24) != land || at(got, ArtEvKind::KeyOff, 24) != land + 960.0) return 26;
+    }
+
+    // 27: overlapping clips share the instrument's state. Clip A: Long at beats 0 and 2; clip B:
+    // Legato at beat 1. Beat 2's Long must be sent again — B changed the articulation in between.
+    {
+        std::vector<MidiClip> overlap{makeClip({{0.0, 1}, {2.0, 1}}), makeClip({{1.0, 2}})};
+        std::vector<Abs> got;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 3 * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, s == 0.0, false, 0.0};
+            const int n = scheduleArticulations(overlap, *table, b, buf, kMaxBlockArt);
+            for (int i = 0; i < n; ++i) got.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        }
+        int longs = 0, legatos = 0;
+        for (auto& e : got) {
+            longs += e.kind == ArtEvKind::Control && e.d2 == 81;
+            legatos += e.kind == ArtEvKind::Control && e.d2 == 76;
+        }
+        if (longs != 2 || legatos != 1 || at(got, ArtEvKind::Control, 58, 81) != 0.0) return 27;
+    }
+
+    // 28: two overlapping momentary notes on the same key: the shorter one ending doesn't let go of
+    // the key the longer one still holds. Pizz (key 30, channel 2) 3.0–5.0 and 3.5–3.75 beats.
+    {
+        MidiClip c;
+        c.startBeat = 0.0;
+        c.lengthBeats = 8.0;
+        for (auto [start, len] : {std::pair{3.0, 2.0}, std::pair{3.5, 0.25}}) {
+            Note n;
+            n.pitch = 60;
+            n.startBeat = start;
+            n.lengthBeats = len;
+            n.articulation = 3;
+            c.notes.push_back(n);
+        }
+        c.articulations = buildArticulationTimeline(c, table);
+        std::vector<MidiClip> one{c};
+        std::vector<Abs> got;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 6 * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, false, false, 0.0};
+            const int n = scheduleArticulations(one, *table, b, buf, kMaxBlockArt);
+            for (int i = 0; i < n; ++i) got.push_back({s + buf[i].off, buf[i].kind, buf[i].data1, buf[i].data2, buf[i].channel});
+        }
+        int earlyOff = 0, finalOff = 0;
+        for (auto& e : got)
+            if (e.kind == ArtEvKind::KeyOff && e.d1 == 30) {
+                earlyOff += e.at == 3.75 * spb;
+                finalOff += e.at == 5.0 * spb;
+            }
+        if (earlyOff != 0 || finalOff != 1) return 28;
+    }
+
+    // 29: a short slot with a large offset: a one-beat loop (24000 samples = 500 ms) with a +1500 ms
+    // momentary articulation — each pass's switch lands three passes later and must not be lost.
+    {
+        const ArticulationAction late[] = {{AK::Keyswitch, 0, 40, 100}};
+        const ArticulationEntry lateE[] = {{1, ArticulationTrigger::Momentary, 1500.0, 0.0, 0, 1}};
+        auto lateTable = ArticulationTable::build(0, lateE, 1, late, 1);
+        if (!lateTable) return 29;
+        MidiClip slot;
+        slot.lengthBeats = 1.0;
+        Note n;
+        n.pitch = 60;
+        n.startBeat = 0.0;
+        n.lengthBeats = 0.25;
+        n.articulation = 1;
+        slot.notes.push_back(n);
+        slot.articulations = buildArticulationTimeline(slot, lateTable);
+        std::vector<double> ons;
+        ArtEv buf[kMaxBlockArt];
+        for (double s = 0.0; s < 6 * spb; s += B) {
+            ArticulationBlock b{B, s, spb, sr, 0.0, false, false, 0.0};
+            const int cnt = scheduleSlotArticulations(slot, 1.0, true, *lateTable, b, buf, kMaxBlockArt);
+            for (int i = 0; i < cnt; ++i)
+                if (buf[i].kind == ArtEvKind::KeyOn && s + buf[i].off < 6 * spb) ons.push_back(s + buf[i].off);
+        }
+        // Passes 0, 1, 2 land at 72000, 96000, 120000; pass 3 would land at 144000, past the window.
+        if (ons != std::vector<double>{72000.0, 96000.0, 120000.0}) return 29;
+
+        // 30: a 31.25 ms loop requires looking 48 passes back for this same offset. Its release
+        // must also survive. Read just the block containing the first on, then the first off.
+        slot.lengthBeats = 0.0625;
+        slot.notes[0].lengthBeats = 0.03125;
+        slot.articulations = buildArticulationTimeline(slot, lateTable);
+        for (bool release : {false, true}) {
+            const double due = 72000.0 + (release ? 750.0 : 0.0);
+            ArticulationBlock b{B, due - 100, spb, sr, 0.0, false, false, 0.0};
+            const int cnt = scheduleSlotArticulations(slot, 0.0625, true, *lateTable, b, buf, kMaxBlockArt);
+            if (cnt != 1 || buf[0].off != 100 || buf[0].kind != (release ? ArtEvKind::KeyOff : ArtEvKind::KeyOn)) return 30;
+        }
+    }
+
+    // 31: different momentary articulations in separate clips can hold the same explicit key.
+    {
+        ArticulationAction keys[] = {{AK::Keyswitch, 2, 30, 100}, {AK::Keyswitch, 2, 30, 100}};
+        const ArticulationEntry entries[] = {{1, ArticulationTrigger::Momentary, 0, 0, 0, 1},
+            {2, ArticulationTrigger::Momentary, 0, 0, 1, 1}};
+        for (bool defaultChannel : {false, true}) {
+            keys[0].channel = defaultChannel ? 0 : 2;
+            keys[1].channel = defaultChannel ? 1 : 2;
+            auto shared = ArticulationTable::build(0, entries, 2, keys, 2);
+            auto a = makeClip({{0.0, 1}}, 2.0), b = makeClip({{0.5, 2}}, 0.5);
+            a.articulations = buildArticulationTimeline(a, shared);
+            b.articulations = buildArticulationTimeline(b, shared);
+            ArtEv buf[kMaxBlockArt];
+            ArticulationBlock block{B, spb - 100, spb, sr};
+            if (scheduleArticulations({a, b}, *shared, block, buf, kMaxBlockArt) != 0) return 31;
+            block.blockStart = 2 * spb - 100;
+            const int cnt = scheduleArticulations({a, b}, *shared, block, buf, kMaxBlockArt);
+            if (cnt != 1 || buf[0].off != 100 || buf[0].kind != ArtEvKind::KeyOff || buf[0].channel != keys[0].channel) return 31;
+        }
+    }
+
+    // Exercise Session rendering itself, capturing the events delivered to a timed instrument.
+    auto slotEngine = std::make_unique<Engine>();
+    slotEngine->transport_.setSampleRate(sr);
+    Track track(1, TrackType::Instrument);
+    auto probe = std::make_shared<Probe>();
+    track.instrument = probe;
+    track.sessionSlots.resize(1);
+    track.sessionPlayer->playing.store(0);
+    auto& slot = track.sessionSlots[0];
+    slot.hasClip = true;
+    slot.lengthBeats = 1.0;
+    Note note;
+    note.startBeat = 0.5;
+    note.lengthBeats = 0.25;
+    note.articulation = 1;
+    auto expr = std::make_shared<NoteExpr>();
+    expr->dim[ExprPressure] = {{0.0f, 0.25f}, {0.25f, 0.75f}};
+    note.expr = expr;
+    slot.midi.notes = {note};
+    // 32: both positive and negative track + articulation offsets move opening expression with
+    // its note. It starts at 0.25 pressure at the note-on, never partway through the curve.
+    for (double offset : {-100.0, 100.0}) {
+        const ArticulationEntry entry{1, ArticulationTrigger::Latching, offset, 0, 0, 0};
+        track.articulationTable = ArticulationTable::build(0, &entry, 1, nullptr, 0);
+        track.setMidiOffsetMs(offset);
+        track.sessionPlayer->localBeats = offset < 0 ? 0.09375 : 0.890625;
+        probe->events.clear();
+        slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+        const int32_t at = offset < 0 ? 150 : 225;
+        const E5 on{1, 60, 102, at, 0}, pressure{4, 60, 32, at, 0};
+        if (std::find(probe->events.begin(), probe->events.end(), on) == probe->events.end() ||
+            std::find(probe->events.begin(), probe->events.end(), pressure) == probe->events.end()) return 32;
+    }
+    // 33: a note release more than one pass after its start must still reach the instrument.
+    track.articulationTable.reset();
+    track.setMidiOffsetMs(0);
+    slot.midi.notes[0].expr.reset();
+    slot.midi.notes[0].startBeat = 0;
+    slot.midi.notes[0].lengthBeats = 3;
+    track.sessionPlayer->localBeats = 3.0 - 0.015625;
+    probe->events.clear();
+    slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+    if (std::find(probe->events.begin(), probe->events.end(), E5{0, 60, 0, 375, 0}) == probe->events.end()) return 33;
+
+    // 34: even one-frame render segments preserve the full chased-key hold.
+    {
+        ArtEv buf[kMaxBlockArt];
+        const double land = 0.5 * spb;
+        ArticulationBlock b{1, land, spb, sr, 0.0, true};
+        b.chaseStart = land;
+        if (scheduleArticulations(clips, *table, b, buf, kMaxBlockArt) != 3) return 34;
+        b.chase = false;
+        b.blockStart = land + 960;
+        const int cnt = scheduleArticulations(clips, *table, b, buf, kMaxBlockArt);
+        if (cnt != 2 || buf[0].kind != ArtEvKind::KeyOff || buf[0].off != 0 || buf[1].kind != ArtEvKind::KeyOff) return 34;
+    }
+    // 35: launch and legato launch restore a pre-launch switch through the real Session renderer,
+    // and its release reaches the next block rather than being shortened to this block.
+    {
+        const ArticulationAction key{AK::Keyswitch, 0, 24, 100};
+        const ArticulationEntry entry{1, ArticulationTrigger::Latching, 0, 30, 0, 1};
+        track.articulationTable = ArticulationTable::build(0, &entry, 1, &key, 1);
+        slot.midi.notes[0].lengthBeats = 1;
+        slot.midi.articulations = buildArticulationTimeline(slot.midi, track.articulationTable);
+        probe->articulations = true;
+        for (bool legato : {false, true}) {
+            track.sessionPlayer->localBeats = legato ? 0.5 : 0.0;
+            track.sessionPlayer->requestLaunch(0, 0, legato);
+            if (!track.sessionPlayer->maybeApply(0, B / spb, 0)) return 35;
+            probe->events.clear();
+            slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+            if (std::find(probe->events.begin(), probe->events.end(), E5{1, 24, 100, 0, 0}) == probe->events.end()) return 35;
+            track.sessionPlayer->publish(B / spb);
+            probe->events.clear();
+            slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+            if (std::find(probe->events.begin(), probe->events.end(), E5{0, 24, 0, 448, 0}) == probe->events.end()) return 35;
+        }
+    }
+    // 36: Session releases count rendered frames, even when tempo changes between the press and
+    // release at a nonzero legato position. Check both faster and slower tempo, natural switches,
+    // and clearing the map while the key is held. Every release still lands at frame 960.
+    {
+        const ArticulationAction keys[] = {{AK::Keyswitch, 0, 24, 100}, {AK::Keyswitch, 0, 25, 100}};
+        const ArticulationEntry entries[] = {{1, ArticulationTrigger::Latching, 0, 0, 0, 1},
+            {2, ArticulationTrigger::Latching, 0, 0, 1, 1}};
+        const auto mapped = ArticulationTable::build(0, entries, 2, keys, 2);
+        slot.midi.notes = makeClip({{0.0, 1}, {0.5, 2}}, 0.25).notes;
+        slot.midi.articulations = buildArticulationTimeline(slot.midi, mapped);
+        for (bool chase : {false, true})
+            for (double nextSpb : {spb / 2, spb * 2})
+                for (bool clearMap : {false, true}) {
+                    track.articulationTable = mapped;
+                    track.sessionPlayer->localBeats = chase ? 8.125 : 8.0;
+                    track.sessionPlayer->requestLaunch(0, 0, true);
+                    if (!track.sessionPlayer->maybeApply(0, B / spb, 0)) return 36;
+                    if (!chase) track.sessionPlayer->playedBeats.store(1.0); // normal beat-8 switch, not a chase
+                    probe->events.clear();
+                    slotEngine->renderSessionSlotRaw(track, dst, B, spb);
+                    if (std::count(probe->events.begin(), probe->events.end(), E5{1, 24, 100, 0, 0}) != 1 ||
+                        track.sessionPlayer->articulationReleases.count != 1) return 36;
+                    track.sessionPlayer->publish(B / spb);
+                    if (clearMap) track.articulationTable.reset();
+                    probe->events.clear();
+                    slotEngine->renderSessionSlotRaw(track, dst, B, nextSpb);
+                    if (std::count(probe->events.begin(), probe->events.end(), E5{0, 24, 0, 448, 0}) != 1 ||
+                        track.sessionPlayer->articulationReleases.count != 0) return 36;
+                }
+    }
+    // 37: a bounded pending queue never presses a key whose release can't be retained. Due offs
+    // have priority, and an output buffer too small for them carries the rest to the next block.
+    {
+        std::vector<ArticulationAction> keys;
+        for (int i = 0; i <= kMaxBlockArt; ++i) keys.push_back({AK::Keyswitch, 1 + i / 128, i % 128, 100});
+        const ArticulationEntry entry{1, ArticulationTrigger::Latching, 0, 0, 0, static_cast<int32_t>(keys.size())};
+        auto many = ArticulationTable::build(0, &entry, 1, keys.data(), static_cast<int32_t>(keys.size()));
+        MidiClip clip = makeClip({{0.0, 1}});
+        clip.articulations = buildArticulationTimeline(clip, many);
+        ArticulationReleaseState pending;
+        ArticulationBlock b{1, 0, spb, sr};
+        b.releases = &pending;
+        ArtEv buf[kMaxBlockArt];
+        int dropped = 0;
+        if (scheduleSlotArticulations(clip, 8, true, *many, b, buf, kMaxBlockArt, &dropped) != kMaxBlockArt ||
+            dropped != 1 || pending.count != kMaxBlockArt) return 37;
+        if (scheduleArticulationReleases(pending, 960, buf, kMaxBlockArt) != kMaxBlockArt || pending.count != 0) return 37;
+        for (int i = 0; i < kMaxBlockArt; ++i)
+            if (buf[i].kind != ArtEvKind::KeyOff || buf[i].off != 959 || buf[i].channel != keys[i].channel ||
+                buf[i].data1 != keys[i].data1) return 37;
+        pending.pending[0] = {0, 2, 30};
+        pending.pending[1] = {0, 3, 31};
+        pending.count = 2;
+        if (scheduleArticulationReleases(pending, 1, buf, 1) != 1 || pending.count != 1 || buf[0].data1 != 30) return 37;
+        if (scheduleArticulationReleases(pending, 1, buf, 1) != 1 || pending.count != 0 || buf[0].data1 != 31) return 37;
+        track.sessionPlayer->articulationReleases.count = 1;
+        track.sessionPlayer->requestLaunch(0, 0, true);
+        if (!track.sessionPlayer->maybeApply(0, 1, 0) || track.sessionPlayer->articulationReleases.count != 0) return 37;
+        track.sessionPlayer->articulationReleases.count = 1;
+        track.sessionPlayer->requestStopNow();
+        if (!track.sessionPlayer->maybeApply(0, 1, 0) || track.sessionPlayer->articulationReleases.count != 0) return 37;
+    }
+    // 38: mute/solo gating flushes an old latching hold. Its obsolete release must never resume
+    // after unmuting and cut a new momentary hold of the same key.
+    for (bool soloGate : {false, true}) {
+        auto engine = std::make_unique<Engine>();
+        const int id = engine->addInstrumentTrack(), other = engine->addAudioTrack();
+        auto target = engine->cloneTrack(*engine->findTrackAuthoring(id));
+        auto capture = std::make_shared<Probe>();
+        capture->articulations = true;
+        target->instrument = capture;
+        const ArticulationAction key{AK::Keyswitch, 0, 24, 100};
+        const ArticulationEntry entries[] = {{1, ArticulationTrigger::Latching, 0, 0, 0, 1},
+            {2, ArticulationTrigger::Momentary, 0, 0, 0, 1}};
+        target->articulationTable = ArticulationTable::build(0, entries, 2, &key, 1);
+        target->sessionSlots.resize(1);
+        auto& clip = target->sessionSlots[0];
+        clip.hasClip = true;
+        clip.lengthBeats = 4;
+        clip.midi.notes = makeClip({{0.0, 1}, {0.046875, 2}}, 1.0).notes; // momentary starts at frame 1125
+        engine->republishWithTrack(id, target);
+        engine->setLaunchQuant(0);
+        engine->transportPlay();
+        engine->launchSlot(id, 0);
+        engine->renderOffline(dst, B, sr); // first 512 frames: latching key has 448 frames left
+        if (target->sessionPlayer->articulationReleases.count != 1) return 38;
+        if (soloGate) engine->setTrackSolo(other, true); else engine->setTrackMute(id, true);
+        engine->renderOffline(dst, 256, sr); // the mute flushes voices; the slot still advances
+        if (soloGate) engine->setTrackSolo(other, false); else engine->setTrackMute(id, false);
+        capture->events.clear();
+        engine->renderOffline(dst, B, sr); // momentary key at offset 357, obsolete off would be 448
+        if (target->sessionPlayer->articulationReleases.count != 0 ||
+            std::count(capture->events.begin(), capture->events.end(), E5{1, 24, 100, 357, 0}) != 1 ||
+            std::any_of(capture->events.begin(), capture->events.end(), [](const E5& e) { return e[0] == 0 && e[1] == 24; })) return 38;
+    }
+    return 0;
 }
 
 } // namespace nota

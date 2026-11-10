@@ -345,6 +345,24 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_source")]
     internal static partial int TrackGetMidiSource(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_offset_ms")]
+    internal static partial NotaResult TrackSetMidiOffsetMs(IntPtr engine, int trackId, double ms);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_offset_ms")]
+    internal static partial double TrackGetMidiOffsetMs(IntPtr engine, int trackId);
+
+    // --- articulation maps (specs/085) ---
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_articulation_map")]
+    internal static partial NotaResult TrackSetArticulationMap(IntPtr engine, int trackId, int defaultId,
+        NotaArticulationEntry[] entries, int entryCount, NotaArticulationAction[] actions, int actionCount,
+        byte[] mapJson, int mapJsonLen);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_clear_articulation_map")]
+    internal static partial NotaResult TrackClearArticulationMap(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_articulation_map_json")]
+    internal static partial int TrackGetArticulationMapJson(IntPtr engine, int trackId, byte[]? output, int maxLen);
+
     // --- freeze (M7) ---
     [LibraryImport(Lib, EntryPoint = "nota_track_freeze_begin")]
     internal static partial long TrackFreezeBegin(IntPtr engine, int trackId, double lengthBeats);

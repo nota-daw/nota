@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ArticulationTable.h"
 #include "Automation.h"
 #include "MidiController.h"
 #include "NoteExpression.h"
@@ -50,6 +51,7 @@ struct Note {
     double startBeat = 0.0; // relative to the clip start
     double lengthBeats = 1.0;
     float velocity = 0.8f;                // 0..1
+    int32_t articulation = 0;             // stable articulation id within the track's map (0 = none/default)
     int32_t exprId = 0;                   // the engine's expression store id (0 = none)
     std::shared_ptr<const NoteExpr> expr; // resolved from exprId; null = none
 };
@@ -68,6 +70,11 @@ struct MidiClip {
     // Instrument-wide controllers (specs/020): at most one curve per ctl, sorted by ctl.
     // Shared, immutable curves — a clip copy shares them; an edit swaps in a new one.
     std::vector<std::shared_ptr<const ControllerCurve>> controllers;
+    // Where the latching articulation changes (specs/085), derived from the notes and the
+    // track's articulation table when the graph is published (Engine::publishRaw) — never
+    // edited directly. Null when the track has no map. A copied clip carries its source's until
+    // the publish replaces it.
+    std::shared_ptr<const ArticulationTimeline> articulations;
 
     const ControllerCurve* controller(int32_t ctl) const {
         for (const auto& c : controllers)

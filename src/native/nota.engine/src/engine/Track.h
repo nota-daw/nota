@@ -199,7 +199,10 @@ inline constexpr int kMaxReturns = 4;
 
 class Track {
   public:
-    explicit Track(int32_t id, TrackType type = TrackType::Audio) : id_(id), type_(type) {}
+    explicit Track(int32_t id, TrackType type = TrackType::Audio)
+        : Track(id, type, std::make_shared<SessionPlayer>()) {}
+    Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player)
+        : sessionPlayer(player), id_(id), type_(type) {}
 
     int32_t id() const { return id_; }
     TrackType type() const { return type_; }
@@ -322,6 +325,12 @@ class Track {
     int32_t midiFromTrackId() const { return midiFromTrackId_.load(std::memory_order_relaxed); }
     void setMidiFromTrackId(int32_t id) { midiFromTrackId_.store(id, std::memory_order_relaxed); }
 
+    // Track-level MIDI playback offset in milliseconds (negative = notes play earlier). Applied by
+    // the scheduler to arrangement clip notes only; the stored note positions never move. Atomic:
+    // written on the message thread, read on the audio thread.
+    double midiOffsetMs() const { return midiOffsetMs_.load(std::memory_order_relaxed); }
+    void setMidiOffsetMs(double ms) { midiOffsetMs_.store(ms, std::memory_order_relaxed); }
+
     // Freeze (M7): when frozen, the render substitutes `frozenBuf` (this track's
     // post-device, PRE-fader audio, captured offline over the whole arrangement) for
     // the live instrument + device chain — the fader/pan/sends/mute/solo still run
@@ -334,6 +343,11 @@ class Track {
     std::vector<AudioClip> clips;           // audio tracks
     std::vector<AudioTake> takes;           // audio loop-recording passes (specs/067), recording order
     std::vector<MidiClip> midiClips;        // instrument tracks
+    // Articulation map (specs/085), instrument tracks: the compiled table the scheduler reads and
+    // the map itself as the UI's JSON (saved with the project, restored by undo). Both immutable
+    // and shared between snapshots; an edit swaps them as a pair. Null = no map.
+    std::shared_ptr<const ArticulationTable> articulationTable;
+    std::shared_ptr<const std::string> articulationMapJson;
     std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
     std::vector<TrackLane> automation; // parameter automation lanes (M9)
 
@@ -378,7 +392,7 @@ class Track {
     std::shared_ptr<dsp::CompensationDelay> pdc = std::make_shared<dsp::CompensationDelay>();
 
     // Session playback (M5-2). Shared across snapshots (position/state persists).
-    std::shared_ptr<SessionPlayer> sessionPlayer = std::make_shared<SessionPlayer>();
+    std::shared_ptr<SessionPlayer> sessionPlayer; // constructor accepts the existing player for graph clones
 
     // Freeze buffer (M7): interleaved stereo PCM (null = not frozen), captured at
     // `frozenSpb` samples-per-beat. Shared across snapshots; only replaced on a
@@ -408,6 +422,8 @@ class Track {
     std::atomic<int32_t> recordInputSource_{0};                         // 0 hardware, -1 master, >0 source track id
     std::atomic<int32_t> inputChannels_{kInputStereo};                  // hardware input channels (#340)
     std::atomic<bool> monitor_{false};                                  // live input monitoring (audio tracks)
+    std::atomic<double> midiOffsetMs_{0.0};                             // track MIDI playback offset (ms)
+    static_assert(std::atomic<double>::is_always_lock_free, "the audio thread reads midiOffsetMs_: it must not take a lock");
     std::atomic<int32_t> midiFromTrackId_{-1};                          // -1 off, >0 forward MIDI to this track id
     std::atomic<bool> frozen_{false};                                   // M7: play frozenBuf instead of the live chain
 };

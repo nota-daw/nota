@@ -55,6 +55,10 @@ class RackInstrument : public Instrument, public RackCore {
     void noteExpression(int32_t pitch, int32_t dim, float value) override;
     // Controllers too: every chain hears the pedal and the wheels, like live input.
     void controller(int32_t ctl, float value) override;
+    // An articulation's program change (specs/085) reaches every chain, on its channel.
+    void programChange(int32_t program) override;
+    // True when a chain holds an instrument that takes articulation MIDI (a hosted plug-in).
+    bool takesArticulations() const override;
     bool supportsMpe() const override;
 
     // ---- render: sum every audible chain into `out` -------------------------

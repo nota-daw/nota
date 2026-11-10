@@ -31,6 +31,13 @@ public partial class MainWindow
     // Help ▸ Documentation: the user manual in the browser.
     private void OnDocumentation(object? sender, EventArgs e) => NotaDocs.Open(this);
 
+    /// <summary>The articulation map manager (specs/085, T065), on the selected track's map.</summary>
+    public void ShowArticulationMaps()
+    {
+        if (_vm is null) return;
+        ArticulationMapManager.Open(this, Engine, () => Timeline.SelectedTrackId);
+    }
+
     private void OnPreferences(object? sender, EventArgs e) => ShowPreferences();
     public void ShowPreferences()
     {

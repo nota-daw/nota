@@ -13,6 +13,7 @@
 
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Nota.Infrastructure;
@@ -133,6 +134,11 @@ public sealed class TrackDto
     public int? InputChannels { get; set; }
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
+    // MIDI playback offset in ms (negative = earlier; playback only, notes don't move). Omitted = 0. v30.
+    public double? MidiOffsetMs { get; set; }
+    // The track's articulation map (specs/085), embedded as Nota's map JSON
+    // (contracts/nota-articulation-map-file.md). Omitted = none. v30.
+    public JsonObject? ArticulationMap { get; set; }
     public float[] Sends { get; set; } = new float[4];
     public InstrumentDto? Instrument { get; set; }
     public List<MidiDeviceDto> MidiEffects { get; set; } = new();   // MIDI FX chain, before the instrument
@@ -575,9 +581,16 @@ public sealed class NoteDto
     /// <summary>Recorded MPE, when the note has any (omitted otherwise).</summary>
     public NoteMpeDto? Mpe { get; set; }
 
+    /// <summary>The note's articulation: an id in its track's articulation map (omitted = none). v30.</summary>
+    public int? Articulation { get; set; }
+
     public NoteDto() { }
-    public NoteDto(NotaNote n) { Pitch = n.Pitch; Start = n.StartBeat; Length = n.LengthBeats; Velocity = n.Velocity; }
-    public NotaNote ToNote() => new(Pitch, Start, Length, Velocity);
+    public NoteDto(NotaNote n)
+    {
+        Pitch = n.Pitch; Start = n.StartBeat; Length = n.LengthBeats; Velocity = n.Velocity;
+        Articulation = n.ArticulationId > 0 ? n.ArticulationId : null;
+    }
+    public NotaNote ToNote() => new(Pitch, Start, Length, Velocity) { ArticulationId = Articulation is > 0 ? Articulation.Value : 0 };
 }
 
 /// <summary>A note's recorded expression: per dimension a flat [beat, value, beat, value…] list,
