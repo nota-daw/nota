@@ -2070,6 +2070,7 @@ class Engine {
     // This block's per-lane capture clock (audio thread, drainLiveMidi).
     double rtLaneNow_[16] = {}, rtLaneSlotLen_[16] = {};
     bool rtLaneSlot_[16] = {}, rtLaneLive_[16] = {};
+    bool rtLaneWasLive_[16] = {}, rtLaneJustLive_[16] = {}; // a joined slot starting to record this block
     void publishMidiLanes(const std::vector<int32_t>& trackIds); // opens one lane per track
     void closeMidiLane(int32_t lane);
     int32_t midiLaneOf(int32_t trackId) const; // message thread

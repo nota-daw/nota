@@ -292,8 +292,6 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     // does; with the transport already rolling it starts on the launch quantum as before.
     const bool countIn =
         !transport_.uiIsPlaying() && uiCountIn_.load(std::memory_order_relaxed) <= 0.0 && countInBars() > 0;
-    sessionCountIn_ = false;
-    sessionCountInFresh_ = false;
     // Another audio slot while a Session audio take runs: it records along, as a lane of that
     // take (specs/086), from now — the take is already rolling and counted in.
     if (t->type() == TrackType::Audio && recordSessionAudio_ && audioRecording_) {
@@ -308,6 +306,14 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     // Another track's MIDI slot while a Session MIDI take runs: it joins the take (specs/086).
     if (t->type() == TrackType::Instrument && trackId != recordSessionTrackId_ && addSessionMidiLane(trackId, scene))
         return;
+    // While a Session MIDI take counts in, another track's slot can't join it yet (its launch
+    // would start the transport early) and mustn't take the take over: the press waits.
+    if (sessionCountIn_ && recording_.load(std::memory_order_relaxed) && !recordSessionAudio_ &&
+        trackId != recordSessionTrackId_)
+        return;
+    // A slot joining the take above keeps its count-in; a new take starts without one.
+    sessionCountIn_ = false;
+    sessionCountInFresh_ = false;
     // Remember the slot as it was, so the take can be discarded and retried (specs/078).
     openTakeAttempt(true);
     noteTakeTrack(trackId);
