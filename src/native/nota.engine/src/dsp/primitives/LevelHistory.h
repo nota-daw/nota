@@ -8,7 +8,9 @@
 // Every slot is a relaxed atomic, so a read on the UI thread never races a write (it may be
 // a point or two behind, which a graph never shows). When the engine stops calling the device
 // (a settled track), the history goes stale; read() moves it on by the time since the last
-// publish, filling with silence, so an old hit scrolls away instead of standing still.
+// publish, filling with silence, so an old hit scrolls away instead of standing still. Stale
+// means no publish for three blocks (at least 60 ms), so a large audio buffer — 4096 frames is
+// 85 ms at 48 kHz — still reads as live between its callbacks.
 // Fixed size, no allocation, no lock.
 
 #pragma once
@@ -30,9 +32,10 @@ class LevelHistory {
     static constexpr double kBucketSec = 0.004;
     static constexpr int kFloats = 2 * kPoints + kSpecN;
     static constexpr float kFloorDb = -120.0f;
-    static constexpr int64_t kStaleNs = 60'000'000; // a publish older than this means no blocks run
+    static constexpr int64_t kStaleNs = 60'000'000; // the least idle time that means no blocks run
 
     void setSampleRate(double sr) {
+        sr_ = sr > 0.0 ? sr : 48000.0;
         bucket_ = std::max(1, static_cast<int>(std::lround(sr * kBucketSec)));
         reset();
     }
@@ -42,14 +45,17 @@ class LevelHistory {
         for (auto& v : wet_) v.store(kFloorDb, std::memory_order_relaxed);
         for (auto& v : spec_) v.store(0.0f, std::memory_order_relaxed);
         w_ = s_ = cnt_ = 0;
+        since_ = 0;
         pkIn_ = pkWet_ = 0.0f;
         wA_.store(0, std::memory_order_relaxed);
         sA_.store(0, std::memory_order_relaxed);
         pubNs_.store(0, std::memory_order_relaxed);
+        staleNs_.store(kStaleNs, std::memory_order_relaxed);
     }
 
     // One sample: the input and wet magnitudes (any stereo fold the caller likes) and the mono wet.
     void push(float inAbs, float wetAbs, float wetMono) {
+        ++since_;
         spec_[s_].store(std::isfinite(wetMono) ? wetMono : 0.0f, std::memory_order_relaxed);
         if (++s_ >= kSpecN) s_ = 0;
         pkIn_ = std::max(pkIn_, inAbs);
@@ -64,6 +70,7 @@ class LevelHistory {
             if (++s_ >= kSpecN) s_ = 0;
         }
         cnt_ += frames;
+        since_ += frames;
         while (cnt_ >= bucket_) {
             cnt_ -= bucket_;
             in_[w_].store(kFloorDb, std::memory_order_relaxed);
@@ -74,6 +81,10 @@ class LevelHistory {
     }
 
     void publish() {
+        // Three of the blocks the device sees, so the gap between two callbacks never reads as stale.
+        const auto blockNs = static_cast<int64_t>(static_cast<double>(since_) / sr_ * 1e9);
+        staleNs_.store(std::max(kStaleNs, 3 * blockNs), std::memory_order_relaxed);
+        since_ = 0;
         wA_.store(w_, std::memory_order_relaxed);
         sA_.store(s_, std::memory_order_relaxed);
         pubNs_.store(nowNs(), std::memory_order_release);
@@ -87,7 +98,7 @@ class LevelHistory {
         const int64_t pub = pubNs_.load(std::memory_order_acquire);
         const int w = wA_.load(std::memory_order_relaxed), s = sA_.load(std::memory_order_relaxed);
         const int64_t idle = pub > 0 ? nowNs() - pub : 0;
-        const bool stale = idle > kStaleNs;
+        const bool stale = idle > staleNs_.load(std::memory_order_relaxed);
         const int skip = stale ? static_cast<int>(std::min<int64_t>(kPoints, idle / static_cast<int64_t>(kBucketSec * 1e9))) : 0;
         for (int k = 0; k < kPoints; ++k) {
             if (k >= kPoints - skip) {
@@ -118,9 +129,11 @@ class LevelHistory {
 
     std::atomic<float> in_[kPoints]{}, wet_[kPoints]{}, spec_[kSpecN]{};
     int w_ = 0, s_ = 0, cnt_ = 0, bucket_ = 176;
+    int64_t since_ = 0; // samples since the last publish (the block the device just ran)
+    double sr_ = 48000.0;
     float pkIn_ = 0.0f, pkWet_ = 0.0f;
     std::atomic<int> wA_{0}, sA_{0};
-    std::atomic<int64_t> pubNs_{0};
+    std::atomic<int64_t> pubNs_{0}, staleNs_{kStaleNs};
     static_assert(std::atomic<float>::is_always_lock_free, "the audio thread must not lock");
 };
 
