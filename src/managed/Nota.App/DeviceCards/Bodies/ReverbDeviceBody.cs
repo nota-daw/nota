@@ -215,9 +215,10 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         ValueEntry.AttachHandles(tone, [ValueEntry.DeviceParam(engine, track, di, LowCut, Loc.T("device.reverb.low_cut"), v => Hz(LowHz(v)), SyncTone)],
             [ValueEntry.DeviceParam(engine, track, di, HighCut, Loc.T("device.reverb.high_cut"), v => Hz(HighHz(v)), SyncTone)]);
         MidiLearn.Bind(tone, MidiTarget.DeviceParam(track, di, HighCut), Loc.T("device.reverb.high_cut"));
+        // The spectrum is only worked out while the Tone · Mod graph shows (as Delay's Filter does).
         void SyncTone()
             => tone.Set(Rt60(P(Decay)), P(HFDamp), P(Size), Sel(Algorithm, 4), On(Freeze), LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) > 0.001f,
-                scope, kScope + 2 * SpaceDraw.Points, scN >= kScope + SpaceDraw.Floats, Sc(S_SampleRate));
+                scope, kScope + 2 * SpaceDraw.Points, scN >= kScope + SpaceDraw.Floats && tone.IsEffectivelyVisible, Sc(S_SampleRate));
         readouts.Add(SyncTone);
 
         // ======================================================================

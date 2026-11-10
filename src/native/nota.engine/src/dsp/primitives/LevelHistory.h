@@ -63,23 +63,42 @@ class LevelHistory {
         if (++cnt_ >= bucket_) close();
     }
 
+    // At the top of every process(): if the engine stopped calling the device for a while (a
+    // muted or settled track), first scroll the stored rings on by that gap in silence, so the
+    // history read() showed moving on stays moved on instead of the old audio coming back.
+    void begin() {
+        const int64_t pub = pubNs_.load(std::memory_order_relaxed);
+        if (pub <= 0) return;
+        const int64_t gap = nowNs() - pub;
+        if (gap <= staleNs_.load(std::memory_order_relaxed)) return;
+        const double frames = std::min(static_cast<double>(gap) * 1e-9 * sr_, static_cast<double>(kPoints + 1) * bucket_);
+        fill(static_cast<int32_t>(frames));
+        since_ = 0;
+    }
+
     // A block the device skipped (asleep on silence): the graph keeps scrolling through it.
     void silence(int32_t frames) {
+        fill(frames);
+        since_ += frames;
+        publish();
+    }
+
+  private:
+    void fill(int32_t frames) {
         for (int32_t i = 0, n = std::min<int32_t>(frames, kSpecN); i < n; ++i) {
             spec_[s_].store(0.0f, std::memory_order_relaxed);
             if (++s_ >= kSpecN) s_ = 0;
         }
         cnt_ += frames;
-        since_ += frames;
         while (cnt_ >= bucket_) {
             cnt_ -= bucket_;
             in_[w_].store(kFloorDb, std::memory_order_relaxed);
             wet_[w_].store(kFloorDb, std::memory_order_relaxed);
             if (++w_ >= kPoints) w_ = 0;
         }
-        publish();
     }
 
+  public:
     void publish() {
         // Three of the blocks the device sees, so the gap between two callbacks never reads as stale.
         const auto blockNs = static_cast<int64_t>(static_cast<double>(since_) / sr_ * 1e9);

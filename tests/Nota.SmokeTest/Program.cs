@@ -4759,6 +4759,12 @@ Console.WriteLine("-- Nota Delay --");
     for (int i = 1536 - 40; i < 1536; i++) dNew = Math.Max(dNew, dh[11 + 1536 + i]);
     for (int i = 0; i < 1536 - 40; i++) dOld = Math.Max(dOld, dh[11 + 1536 + i]);
     Check(dNew <= -119 && dOld > -60, $"Delay level history scrolls on while no blocks run (newest {dNew:0} dB, older {dOld:0.0} dB)");
+    // When blocks run again, the gap stays silence: the old echoes don't come back to the right.
+    { var b = new float[512]; de.Seek(96000); de.Play(); de.RenderOffline(b, 256); de.StopTransport(); }
+    de.DeviceScope(dt, dd, dh, dh.Length);
+    float dGap = -999;
+    for (int i = 1536 - 60; i < 1536 - 4; i++) dGap = Math.Max(dGap, dh[11 + 1536 + i]);
+    Check(dGap <= -119, $"Delay level history keeps the gap as silence once blocks run again ({dGap:0} dB)");
     string text = de.DeviceText(dt, dd, 0);
     Check(text.Contains("1/8"), $"Delay status text names the division (got '{text}')");
 
