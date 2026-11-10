@@ -183,7 +183,7 @@ new rules (quickstart.md § 1). They are pure checks with no UI, in `tests/Nota.
 - [X] T040 AGPL-3.0-only SPDX two-line header on every new source file (SkinGeometry.cs, ThemeFile.cs, ThemeFolder.cs, NotaSkin.cs, SampleScene.cs, SkinPreviewRenderer.cs, ThemeAccess.cs, ThemeTools.cs, SkinTests.cs)
 - [X] T041 New dependency: N/A (none added) — confirm
 - [X] T042 `CHANGELOG.md` `[Unreleased]` → Added: user skins (colours, typeface, corner radii) in Preferences → Appearance; MCP theme tools with preview screenshots
-- [ ] T043 (FEATURES.md done; nota-docs EN+RU pages still to write) FEATURES.md via the `nota-features` skill; user manual EN + RU via `nota-docs` (Appearance page, new "Making a skin" page with the file format and the MCP loop); shortcuts: N/A
+- [X] T043 (FEATURES.md done; nota-docs EN+RU: Appearance ▸ Your own themes, reference/theme-files, ai/mcp ▸ Design a theme — nota-daw/nota-docs branch docs/user-skins) FEATURES.md via the `nota-features` skill; user manual EN + RU via `nota-docs` (Appearance page, new "Making a skin" page with the file format and the MCP loop); shortcuts: N/A
 - [X] T044 Engine behaviour change: N/A (managed only); the smoke test is extended by T006/T023 for the new rules
 
 ---
