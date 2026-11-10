@@ -2061,6 +2061,9 @@ Nota.App/DeviceCards/Rack/RackKindProfile.cs	Select	# data: device parameter, po
 Nota.App/DeviceCards/Rack/RackKindProfile.cs	Serial	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackKindProfile.cs	Zones	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/SidechainSourcePicker.cs	Internal	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Diagnostics/UiProbe.cs	$"card build→first paint p50 {b.P50:0.0}\u2009ms (n {b.N})"	# data: perf probe report for stderr and perf runs (specs/053), not interface text
+Nota.App/Diagnostics/UiProbe.cs	$"tick p50 {t.P50:0.000}\u2009ms p99 {t.P99:0.000}\u2009ms (n {t.N}) · "	# data: perf probe report for stderr and perf runs (specs/053), not interface text
+Nota.App/Diagnostics/UiProbe.cs	$"ui-probe aurora: paint p50 {p.P50:0.000}\u2009ms p99 {p.P99:0.000}\u2009ms (n {p.N}) · "	# data: perf probe report for stderr and perf runs (specs/053), not interface text
 Nota.App/ExportWindow.cs	32-bit float	# data: bit-depth names of the export format
 Nota.App/ImeLogNoiseFilter.cs	Error while destroying the context:	# data: log text matched against the OS
 Nota.App/MacAppMenu.cs	Hide Others	# data: the English title Avalonia gives the item, matched in code; the app name

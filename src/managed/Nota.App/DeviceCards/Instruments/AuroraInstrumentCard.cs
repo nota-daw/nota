@@ -8,7 +8,10 @@
 //   Centre      six tabs:
 //               Osc    — both oscillators side by side (specs/053), each with its own
 //                        table window, table and warp-mode drop-downs, on switch and six
-//                        knobs; the sub and the unison stack share a row under them.
+//                        knobs; the sub and the unison stack share a row under them. Each
+//                        oscillator takes a dropped or picked audio file as its table
+//                        (WAV / FLAC / MP3), and its window follows the position the
+//                        newest sounding voice plays.
 //               Filter — the selected filter's response as a drag pad, with its type,
 //                        slope, cutoff, resonance, env / LFO / key amounts and where each
 //                        source (Osc 1 / Osc 2 / Sub) is sent.
@@ -39,6 +42,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
 using Nota.Application.Localization;
@@ -51,6 +55,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
     public string Subtitle => "Wavetable";
     public double CardWidth => 700;
 
+    // The synth's scope (WavetableSynth::kScopeN): live follow and table serials first, the
+    // envelope telemetry after them.
+    private const int WavetableScopeN = 6;
     private const double WheelsW = 56, RailW = 186, TabH = 20, StatusH = 18, BodyH = 186;
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Mod", "FX" };
@@ -130,8 +137,27 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         int tab = 0, railTab = 0, fsel = 0;   // Osc · Global · Filter 1
 
         // One table window per oscillator: both are on screen together (specs/053).
-        var stacks = new AuroraStack[2];
-        for (int o = 0; o < 2; o++) stacks[o] = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 40 };
+        var stacks = new AuroraTableView[2];
+        for (int o = 0; o < 2; o++) stacks[o] = new AuroraTableView { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 40 };
+        // Imported tables (specs/053): what each oscillator holds, re-read when its serial or
+        // its source changes, or a parameter moves (an undo, a preset), plus a passing note (loading, an error, a shortened file) for the caption.
+        var tinfo = new AuroraTableInfo[2];
+        bool canImport = engine.TryGetAuroraTableInfo(track, 0, out tinfo[0]);   // false inside a rack chain
+        if (canImport) engine.TryGetAuroraTableInfo(track, 1, out tinfo[1]);
+        var knownSerial = new[] { tinfo[0].Serial & 0xFFFFFF, tinfo[1].Serial & 0xFFFFFF };
+        var note = new string?[2];
+        var noteUntil = new DateTime[2];
+        var loading = new bool[2];
+        var dragging = new bool[2];
+        var capUpdates = new Action?[2];
+        var scope = new float[WavetableScopeN];
+        bool Imported(int o) => tinfo[o].HasTable && tinfo[o].UseCustom;
+        void ReloadInfo(int o)
+        {
+            if (!canImport) return;
+            engine.TryGetAuroraTableInfo(track, o, out tinfo[o]);
+            knownSerial[o] = tinfo[o].Serial & 0xFFFFFF;
+        }
         var oscDimmed = new List<Control>[] { new(), new() };   // what an off oscillator greys
         var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, Spectrum = new FilterSpectrum(engine, track) };
         var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
@@ -164,15 +190,45 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             primed = true;
             return moved;
         }
-        void Refresh(bool force)
+        // Every tick, before the gate: where the newest sounding voice reads each table
+        // (the set Position when nothing sounds), and whether a table changed underneath
+        // (an undo, a preset). The windows repaint only when their lit step moves.
+        void Follow()
         {
-            if (!ParamsMoved() && !force) return;
-            applyFilter();
+            int n = engine.InstrumentScope(track, scope);
             for (int o = 0; o < 2; o++)
             {
-                stacks[o].Set(Sel(o == 0 ? "table" : "osc2table", 4), G(o == 0 ? "position" : "osc2position"));
-                stacks[o].Dimmed = G(o == 0 ? "osc1on" : "osc2on") < 0.5f;
+                bool stale = n >= 4 && (uint)scope[2 + o] != knownSerial[o]
+                          || n >= 6 && ((((int)scope[5] >> o) & 1) != 0) != tinfo[o].UseCustom;
+                if (canImport && stale) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
+                if (note[o] is not null && DateTime.UtcNow > noteUntil[o]) { note[o] = null; capUpdates[o]?.Invoke(); }
+                double pos = n >= 2 && scope[o] >= 0 ? scope[o] : G(o == 0 ? "position" : "osc2position");
+                if (Imported(o) && AuroraTableView.PreviewFor(tinfo[o].Serial, () => FetchPreview(o)) is { } pv)
+                    stacks[o].SetImported(tinfo[o].Serial, pv, pos);
+                else
+                    stacks[o].Set(Sel(o == 0 ? "table" : "osc2table", 4), pos);
             }
+        }
+        AuroraTableView.Preview? FetchPreview(int o)
+        {
+            int frames = tinfo[o].Frames;
+            if (frames <= 0) return null;
+            int rep = Math.Min(frames, 16), grid = Math.Min(frames, 64);
+            const int points = 96;
+            var data = engine.AuroraTablePreview(track, o, rep, grid, points);
+            return data.Length == (rep + grid) * points ? new AuroraTableView.Preview(data, rep, grid, points, frames) : null;
+        }
+        void Refresh(bool force)
+        {
+            long t0 = UiProbe.Start();
+            Follow();
+            if (!ParamsMoved() && !force) { UiProbe.EndTick(t0); return; }
+            // A parameter moved underneath (an undo, a preset, another card): the table info
+            // may have changed with it, so read it again before the readouts use it.
+            for (int o = 0; o < 2; o++) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
+            applyFilter();
+            for (int o = 0; o < 2; o++)
+                stacks[o].Dimmed = G(o == 0 ? "osc1on" : "osc2on") < 0.5f;
             env1.Refresh(); env2.Refresh();
             lfoStrip.Set(Sel("lfo1shape", 4), LfoCycles(0), G("lfo1depth"));
             // Undim first so the readouts paint over the real colours, not ones saved while the
@@ -186,6 +242,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 if (G(o == 0 ? "osc1on" : "osc2on") < 0.5f)
                     foreach (var c in oscDimmed[o]) Inactive.Set(c, true, interactive: true);
             hint.Text = Hint();
+            UiProbe.EndTick(t0);
         }
         void Touch() => Refresh(true);
 
@@ -470,6 +527,149 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             return box;
         }
 
+        // ---- imported tables (specs/053) ---------------------------------------------
+        // A position as the frame it lands on, out of the table the oscillator plays.
+        string PosText(int o, float pos)
+        {
+            if (!Imported(o)) return FrameText(pos);
+            int frames = Math.Max(1, tinfo[o].Frames);
+            return frames == 1 ? Loc.T("device.aurora.one_frame") : $"{1 + (int)Math.Round(pos * (frames - 1))}/{frames}";
+        }
+        void Note(int o, string text, double seconds = 4)
+        {
+            note[o] = text.Length == 0 ? null : text;
+            noteUntil[o] = DateTime.UtcNow.AddSeconds(seconds);
+            capUpdates[o]?.Invoke();
+        }
+        async void Import(int o, string path)
+        {
+            if (!canImport || loading[o]) return;
+            loading[o] = true; capUpdates[o]?.Invoke();
+            AuroraImportResult r;
+            try { r = await AuroraTableImporter.ImportAsync(engine, track, o, path); }
+            finally { loading[o] = false; }
+            ReloadInfo(o);
+            Note(o, r.Message);
+            if (r.Loaded) ctx.NotifyChanged();
+            Touch();
+        }
+        async void PickFile(Control anchor, int o)
+        {
+            if (TopLevel.GetTopLevel(anchor) is not { } top) return;
+            var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Loc.F("device.aurora.import_a_wavetable_into_osc", o + 1), AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType(Loc.T("common.audio")) { Patterns = new[] { "*.wav", "*.flac", "*.mp3" } } },
+            });
+            if (files.Count > 0 && files[0].TryGetLocalPath() is { } p) Import(o, p);
+        }
+        void AcceptDrops(Control target, int o)
+        {
+            if (!canImport) return;
+            DragDrop.SetAllowDrop(target, true);
+            void Hover(bool on) { dragging[o] = on; stacks[o].DragOver = on; capUpdates[o]?.Invoke(); }
+            DragDrop.AddDragOverHandler(target, (_, e) =>
+            {
+                if (!BrowserView.IsAcceptableDrag(e)) return;
+                e.DragEffects = DragDropEffects.Copy; Hover(true); ctx.HideDropGlow(); e.Handled = true;
+            });
+            DragDrop.AddDragLeaveHandler(target, (_, _) => Hover(false));
+            DragDrop.AddDropHandler(target, (_, e) =>
+            {
+                Hover(false);
+                foreach (var it in BrowserView.DroppedItems(e))
+                    if (it.Kind is not (Nota.Presentation.BrowserItemKind.MidiFile or Nota.Presentation.BrowserItemKind.Preset
+                            or Nota.Presentation.BrowserItemKind.Project)
+                        && it.Path is { Length: > 0 } p && AuroraTableImporter.IsSupported(p))
+                    {
+                        Import(o, p);
+                        break;
+                    }
+                e.Handled = true;
+            });
+        }
+
+        // The table drop-down: the four banks, then (when the oscillator can hold one) the
+        // imported table by name, Import… and Remove. While the imported table plays, the
+        // bank row it would fall back to is shown greyed (FR-010).
+        Control TableDrop(int o, string id, string learn)
+        {
+            const int n = 4;
+            var name = Mono("", TextPrimary, NotaType.RowLabel);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            var chev = new Glyph(GlyphKind.ChevronDown, 7)
+            {
+                Foreground = TextTertiary, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            };
+            DockPanel.SetDock(chev, Dock.Right);
+            var box = new Border
+            {
+                Height = 16, Width = 74, Background = NotaPalette.Groove, CornerRadius = NotaRadius.Cell,
+                Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new DockPanel { Children = { chev, name } },
+            };
+            box.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
+            void Pick(int iv)
+            {
+                bool was = Imported(o);
+                if (I(id) >= 0) AuroraTableImporter.PickBank(engine, track, o, I(id), id, iv / (float)(n - 1));
+                if (was) { ReloadInfo(o); ctx.NotifyChanged(); }
+                Touch();
+            }
+            box.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
+                var fly = new MenuFlyout();
+                int cur = Sel(id, n);
+                bool imp = Imported(o);
+                for (int i = 0; i < n; i++)
+                {
+                    int iv = i;
+                    var mi = new MenuItem { Header = Banks[i], ToggleType = MenuItemToggleType.Radio, IsChecked = !imp && i == cur };
+                    if (imp && i == cur) mi.Foreground = TextTertiary;   // what it falls back to
+                    mi.Click += (_, _) => Pick(iv);
+                    fly.Items.Add(mi);
+                }
+                if (canImport)
+                {
+                    fly.Items.Add(new Separator());
+                    if (tinfo[o].HasTable)
+                    {
+                        var own = new MenuItem { Header = tinfo[o].Name, ToggleType = MenuItemToggleType.Radio, IsChecked = imp };
+                        own.Click += (_, _) => { engine.AuroraSetSource(track, o, true, undoable: true); ReloadInfo(o); ctx.NotifyChanged(); Touch(); };
+                        fly.Items.Add(own);
+                    }
+                    var import = new MenuItem { Header = Loc.T("device.aurora.import") };
+                    import.Click += (_, _) => PickFile(box, o);
+                    fly.Items.Add(import);
+                    if (tinfo[o].HasTable)
+                    {
+                        fly.Items.Add(new Separator());
+                        fly.Items.Add(MenuKit.Danger(Loc.T("device.aurora.remove_imported_table"), null,
+                            () => { engine.AuroraClearTable(track, o); ReloadInfo(o); ctx.NotifyChanged(); Touch(); }));
+                    }
+                }
+                fly.ShowAt(box);
+                e.Handled = true;
+            };
+            box.PointerWheelChanged += (wt, e) =>
+            {
+                if (WheelInput.Step(e, wt ?? box) is not { } st) return;
+                e.Handled = true; if (st == 0) return;
+                Pick(Math.Clamp(Sel(id, n) - st, 0, n - 1));
+            };
+            readouts.Add(() =>
+            {
+                name.Text = Imported(o) ? tinfo[o].Name : Banks[Sel(id, n)];
+                ToolTip.SetTip(box, Imported(o)
+                    ? Loc.F("device.aurora.imported_click_for_the_banks", learn, tinfo[o].Name)
+                    : learn + Loc.T("device.aurora.click_to_pick_or_import"));
+            });
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(box, MidiTarget.PluginParam(track, -1, pi), learn);
+            return box;
+        }
+
         // What steers the position: the strongest matrix route into Position (it moves
         // both oscillators, so both windows name it).
         string PosModText()
@@ -491,7 +691,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             string posId = o == 0 ? "position" : "osc2position";
 
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Height = 18 };
-            var tableDrop = Drop(tableId, Banks, Loc.F("device.aurora.osc_table", nm), 74);
+            var tableDrop = TableDrop(o, tableId, Loc.F("device.aurora.osc_table", nm));
             var warpDrop = Drop(pre + "warpmode", WarpModes, Loc.F("device.aurora.osc_warp_mode", nm), 52);
             var headCells = new Control[] { Section(nm), Toggle("", pre + "on", () => G(pre + "on") >= 0.5f ? "on" : "off"), new Panel(), tableDrop, warpDrop };
             for (int i = 0; i < headCells.Length; i++) { Grid.SetColumn(headCells[i], i); head.Children.Add(headCells[i]); }
@@ -502,15 +702,36 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var frameCap = Mono("", TextPrimary, NotaType.Axis);
             var modCap = Mono("", Teal, NotaType.Axis);
             modCap.HorizontalAlignment = HorizontalAlignment.Right;
+            // The caption names the source and its frame, or what is happening to it: a drop
+            // about to land, a file loading, why one was refused, a table a project lost.
+            void UpdateCap()
+            {
+                string? state = dragging[o] ? Loc.F("device.aurora.drop_to_load_into", nm)
+                    : loading[o] ? Loc.T("device.aurora.loading")
+                    : note[o];
+                if (state is null && tinfo[o].Missing && !tinfo[o].HasTable) state = Loc.F("device.aurora.missing", tinfo[o].Name);
+                if (state is not null) { bankCap.Text = state; frameCap.Text = ""; return; }
+                if (Imported(o))
+                {
+                    bankCap.Text = tinfo[o].Name;
+                    frameCap.Text = PosText(o, G(posId));
+                }
+                else
+                {
+                    bankCap.Text = Banks[Sel(tableId, 4)];
+                    frameCap.Text = FrameText(G(posId));
+                }
+            }
+            capUpdates[o] = UpdateCap;
             readouts.Add(() =>
             {
-                bankCap.Text = Banks[Sel(tableId, 4)];
-                frameCap.Text = FrameText(G(posId));
+                UpdateCap();
                 // Nothing drives Position: say so, greyed, as the single window did.
                 string mod = PosModText();
                 modCap.Text = mod.Length > 0 ? mod : Loc.T("device.aurora.no_modulation");
                 modCap.Foreground = mod.Length > 0 ? Teal : TextDisabled;
             });
+            bankCap.TextTrimming = TextTrimming.CharacterEllipsis;
             var capRow = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5,
@@ -526,7 +747,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*,*") };
             var cells = new[]
             {
-                PKnob(posId, "Position", nm + " Position", FrameText, 34, 35, Teal),   // what the modulators reach for: the modulation mark
+                PKnob(posId, "Position", nm + " Position", v => PosText(o, v), 34, 35, Teal),   // what the modulators reach for: the modulation mark
                 PKnob(o == 0 ? "warp" : "osc2warp", "Warp", nm + " Warp", Pct, 34, 35),
                 PKnob(pre + "level", "Level", nm + " Level", Pct, 34, 35),
                 PKnob(pre + "oct", Loc.T("device.aurora.oct"), nm + " Octave", Oct, 34, 35),
@@ -545,6 +766,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             // Off: everything but the name and the switch takes the unavailable look (the
             // stack greys itself through Dimmed).
             oscDimmed[o].AddRange(new Control[] { tableDrop, warpDrop, capRow, knobs });
+            col.Background = Brushes.Transparent;   // the whole column takes a dropped file
+            AcceptDrops(col, o);
             return col;
         }
 
@@ -699,7 +922,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var envPanel2 = EnvPanel.Build(env2, new EnvPanel.Spec("ENV 2", new[] { "env2attack", "env2decay", "env2sustain", "env2release" },
                 new[] { "env2dcurve", "env2rcurve", "env2exp" }, (0.001, 2.0), (0.002, 3.0), (0.002, 4.0)),
             P, EnvKnobCell, (id, names) => Chips(id, names), EnvRoute(() => EnvDest(1)), envScale);
-        EnvPanel.FollowVoice(ctx, 0, () => tab == 2, env1, env2);
+        EnvPanel.FollowVoice(ctx, WavetableScopeN, () => tab == 2, env1, env2);
         var env2Host = new Border
         {
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),
@@ -1095,7 +1318,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        string OscWord(int o) => BankWords[Sel(o == 0 ? "table" : "osc2table", 4)];
+        string OscWord(int o) => Imported(o) ? tinfo[o].Name : BankWords[Sel(o == 0 ? "table" : "osc2table", 4)];
         string FiltPre() => fsel == 0 ? "fil1" : "fil2";
 
         string Hint() => tab switch

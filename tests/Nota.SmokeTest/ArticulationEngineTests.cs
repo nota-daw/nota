@@ -514,8 +514,8 @@ internal static class ArticulationEngineTests
         foreach (var r in Playback()) yield return r;
 
         var old = ProjectMigrations.Migrate(new JsonObject { ["formatVersion"] = 29 });
-        yield return (old["formatVersion"]?.GetValue<int>() == ProjectService.CurrentFormatVersion && ProjectService.CurrentFormatVersion == 30
+        yield return (old["formatVersion"]?.GetValue<int>() == ProjectService.CurrentFormatVersion && ProjectService.CurrentFormatVersion >= 30
                       && new TrackDto().MidiOffsetMs is null && new NoteDto().Articulation is null && new NoteDto().ToNote().ArticulationId == 0,
-            "articulations: a v29 project migrates to v30 with no offsets and no articulations");
+            "articulations: a v29 project migrates past v30 with no offsets and no articulations");
     }
 }

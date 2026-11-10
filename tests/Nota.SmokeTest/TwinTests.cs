@@ -317,6 +317,8 @@ internal static class TwinTests
         var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
         yield return (bad.Count == 0, $"every Twin preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
         int tp = e.AddTwinTrack();
+        // Settle the heap first, so a collection left over from earlier tests doesn't land in the timing.
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         int fails = 0;
         double slowest = 0;
         foreach (var p in mine)
