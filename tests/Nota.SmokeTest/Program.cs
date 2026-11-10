@@ -453,6 +453,19 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
+// Articulation map importers alone: `--articulations` (specs/085). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--articulations")
+{
+    Console.WriteLine("-- articulations --");
+    foreach (var (ok, label) in ArticulationImportTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ArticulationFileTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ArticulationEngineTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ArticulationManagerTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ArticulationUiTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "ARTICULATIONS PASSED" : $"ARTICULATIONS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // OS user-folder defaults alone: `--user-dirs` (#522). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--user-dirs")
 {
@@ -14584,6 +14597,13 @@ Console.WriteLine("-- MCP tools --");
     }).Wait();
     var mcpNotes = mcpMidi.GetClipNotes(mcpT, mcpClip).Result;
     Check(mcpNotes.Length == 3 && mcpNotes[0].Pitch == 60 && Math.Abs(mcpNotes[2].Length - 2) < 1e-3, $"MCP set/get_clip_notes round-trip ({mcpNotes.Length})");
+    // specs/085: an agent's get → edit → set keeps each note's articulation, and can set one.
+    mcpMidi.SetClipNotes(mcpT, mcpClip, new[] { mcpNotes[0] with { Articulation = 3 }, mcpNotes[1], mcpNotes[2] }).Wait();
+    var mcpArt = mcpMidi.GetClipNotes(mcpT, mcpClip).Result;
+    mcpMidi.SetClipNotes(mcpT, mcpClip, mcpArt).Wait();   // a plain round trip
+    var mcpArt2 = mcpMidi.GetClipNotes(mcpT, mcpClip).Result;
+    Check(mcpArt2.Length == 3 && mcpArt2.Single(n => n.Pitch == 60).Articulation == 3 && mcpArt2.Single(n => n.Pitch == 64).Articulation == 0,
+        "MCP set/get_clip_notes carries each note's articulation through a round trip");
     mcpMidi.SetClipController(mcpT, mcpClip, "sustain", new[]
     {
         new Nota.Mcp.Tools.MidiTools.ControllerPoint(0, 1f), new Nota.Mcp.Tools.MidiTools.ControllerPoint(3.9, 0f),
@@ -15716,6 +15736,13 @@ foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- user dirs --");
 foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- articulations --");
+foreach (var (ok, label) in ArticulationImportTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ArticulationFileTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ArticulationEngineTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ArticulationManagerTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ArticulationUiTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- range clipboard --");
 foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);

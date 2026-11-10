@@ -6,6 +6,7 @@
 
 #include "PluginInstrument.h"
 
+#include "engine/ArticulationSchedule.h"
 #include "engine/MidiController.h"
 
 #include "dsp/math/SimdAudio.h"
@@ -15,8 +16,12 @@ namespace hosting {
 
 PluginInstrument::PluginInstrument(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock)
     : plugin_(std::move(p)), maxBlock_(juce::jmin(maxBlock, kPluginMaxBlock)) {
-    pending_.ensureSize(8192);
-    piece_.ensureSize(8192);
+    // Room reserved up front so the audio thread doesn't grow the buffers. On top of the notes' room,
+    // a block's articulation MIDI (specs/085): at most kMaxBlockArt messages, 9 bytes each in a
+    // MidiBuffer (sample position, size, 3 data bytes).
+    constexpr int kArtBytes = nota::kMaxBlockArt * 9;
+    pending_.ensureSize(8192 + kArtBytes);
+    piece_.ensureSize(8192 + kArtBytes);
     if (plugin_) name_ = plugin_->getName().toStdString(); // cache for displayName()
     // VST3 process calls may run on audio workers. All MIDI, channel storage and
     // playhead state belong to this instance; the engine joins before the next
@@ -40,30 +45,39 @@ void PluginInstrument::setSampleRate(double sr) {
     prepare(sr);
 }
 
+// Every engine-driven event goes out on chan(): channel 1, or an articulation's explicit channel
+// (specs/085). The editor window's own keyboard notes (render) stay on channel 1.
 void PluginInstrument::noteOn(int32_t pitch, float velocity) {
-    pending_.addEvent(juce::MidiMessage::noteOn(1, pitch, (float)velocity), eventOffset);
+    pending_.addEvent(juce::MidiMessage::noteOn(chan(), pitch, (float)velocity), eventOffset);
 }
 
 void PluginInstrument::noteOff(int32_t pitch) {
-    pending_.addEvent(juce::MidiMessage::noteOff(1, pitch), eventOffset);
+    pending_.addEvent(juce::MidiMessage::noteOff(chan(), pitch), eventOffset);
 }
 
 void PluginInstrument::allNotesOff() {
-    pending_.addEvent(juce::MidiMessage::allNotesOff(1), eventOffset);
+    // A flush (stop, seek, a voice cut): channel 1 as always, plus any channel an articulation
+    // sent on, so a note held on it can't hang. A plug-in never driven off channel 1 sees one message.
+    for (int c = 1; c <= 16; ++c)
+        if ((usedChannels_ >> (c - 1)) & 1u) pending_.addEvent(juce::MidiMessage::allNotesOff(c), eventOffset);
 }
 
 void PluginInstrument::noteExpression(int32_t pitch, int32_t dim, float value) {
-    if (pitch >= 0 && dim == 1) pending_.addEvent(juce::MidiMessage::aftertouchChange(1, pitch, u7(value)), eventOffset);
+    if (pitch >= 0 && dim == 1) pending_.addEvent(juce::MidiMessage::aftertouchChange(chan(), pitch, u7(value)), eventOffset);
+}
+
+void PluginInstrument::programChange(int32_t program) {
+    if (program >= 0 && program < 128) pending_.addEvent(juce::MidiMessage::programChange(chan(), program), eventOffset);
 }
 
 void PluginInstrument::controller(int32_t ctl, float value) {
     if (ctl == nota::kCtlPitchWheel)
         pending_.addEvent(
-            juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), eventOffset);
+            juce::MidiMessage::pitchWheel(chan(), juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), eventOffset);
     else if (ctl == nota::kCtlChannelPressure)
-        pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), eventOffset);
+        pending_.addEvent(juce::MidiMessage::channelPressureChange(chan(), u7(value)), eventOffset);
     else if (ctl >= 0 && ctl < 128)
-        pending_.addEvent(juce::MidiMessage::controllerEvent(1, ctl, u7(value)), eventOffset);
+        pending_.addEvent(juce::MidiMessage::controllerEvent(chan(), ctl, u7(value)), eventOffset);
 }
 
 void PluginInstrument::render(float* out, int32_t frames) {

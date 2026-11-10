@@ -18,7 +18,8 @@ namespace Nota.Mcp.Tools;
 public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, IArrangementRefresh refresh)
     : EngineTools(engine, dispatch, refresh)
 {
-    public sealed record Note(int Pitch, double Start, double Length, float Velocity);
+    public sealed record Note(int Pitch, double Start, double Length, float Velocity,
+        [property: Description("Articulation id in the track's articulation map, 0 = none. Keep the value get_session_notes returned when you write a note back.")] int Articulation = 0);
     public sealed record FollowAction(string Action, int Chance);
     public sealed record Slot(int TrackId, int Scene, string State, double LengthBeats, string Name, int Color,
         string LaunchMode, double? QuantBeats, bool Legato, bool Loop, float VelocityAmount,
@@ -33,8 +34,9 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
     private static readonly string[] Actions = { "none", "stop", "again", "previous", "next", "first", "last", "any", "other", "jump" };
 
     private static string StateName(int s) => s switch { 5 => "record pending", 4 => "recording", 3 => "playing", 2 => "queued", 1 => "filled", _ => "empty" };
-    private static NotaNote ToEngine(Note n) => new(n.Pitch, n.Start, n.Length, Math.Clamp(n.Velocity, 0f, 1f));
-    private static Note FromEngine(NotaNote n) => new(n.Pitch, n.StartBeat, n.LengthBeats, n.Velocity);
+    // The articulation travels both ways, so a get → edit → set round trip keeps it (specs/085).
+    private static NotaNote ToEngine(Note n) => new(n.Pitch, n.Start, n.Length, Math.Clamp(n.Velocity, 0f, 1f)) { ArticulationId = Math.Max(0, n.Articulation) };
+    private static Note FromEngine(NotaNote n) => new(n.Pitch, n.StartBeat, n.LengthBeats, n.Velocity, n.ArticulationId);
 
     private static int Parse(string? value, string[] names, string what)
     {

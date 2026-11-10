@@ -677,9 +677,12 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Length of the active clip (the inspector's LENGTH / LOOP).</summary>
     public double ActiveLengthBeats => _set.ActiveClip.LengthBeats;
 
-    /// <summary>Track colour of note i's clip; the active colour for a one-clip set.</summary>
+    /// <summary>Note i's colour: its articulation's when notes are coloured by articulation and it
+    /// has one to show (specs/085, FR-015), else the track colour of its clip (the active colour for
+    /// a one-clip set). Selected, ghost and locked notes are drawn by their own branches.</summary>
     private Color ColorOf(int i)
     {
+        if (NoteColorByArticulation && ArticulationColourOf(i) is Color art) return art;
         int s = i >= 0 && i < _owner.Count ? _owner[i] : 0;
         return s < _slotBrushes.Count && _set.IsMulti ? _slotBrushes[s].Color : _trackColor;
     }
@@ -1187,9 +1190,8 @@ public sealed partial class PianoRollView : UserControl
         if (a.Count != b.Length) return false;
         for (int i = 0; i < b.Length; i++)
         {
-            var x = a[i]; var y = b[i];
-            if (x.Pitch != y.Pitch || x.StartBeat != y.StartBeat || x.LengthBeats != y.LengthBeats
-                || x.Velocity != y.Velocity || x.ExprId != y.ExprId) return false;
+            // Every field, the articulation included (specs/085): an edit to any of them must reach the engine.
+            if (!NotaNote.Same(a[i], b[i])) return false;
         }
         return true;
     }
@@ -2267,6 +2269,9 @@ public sealed partial class PianoRollView : UserControl
                     }
                 }
                 if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
+                // FR-014: an articulation the map no longer holds — a warning notch at the note's start.
+                if (n.ArticulationId > 0 && _o.HasMissingArticulation(i))
+                    ctx.FillRectangle(NotaPalette.Warning, new Rect(r.X, r.Y, Math.Min(3, r.Width), r.Height), 1);
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
                 bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft || (_drag == Mode.Place && _placeKind == PlaceDragKind.Length)) && sel)
                               || (_drag == Mode.None && _hoverNote == i && !_o.IsLocked(i));
@@ -2393,6 +2398,20 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
+            // Right-click a note: its articulation (specs/085). The selection stays when the note is
+            // in it (a chord, a phrase), else the note alone is selected first.
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed && _drag == Mode.None)
+            {
+                int rhit = HitTest(e.GetPosition(this), out _);
+                if (rhit < 0) return;
+                // A pending paste / drawn note lands first (settling can cut or remove notes): hit again.
+                if (!_o._selection.Contains(rhit) && _o.SettlePlacement()) rhit = HitTest(e.GetPosition(this), out _);
+                if (rhit < 0) return;
+                if (!_o._selection.Contains(rhit)) { _o._selection.Clear(); _o._selection.Add(rhit); _o.Invalidate(); _o.Changed?.Invoke(); }
+                _o.ShowArticulationMenu(this, rhit);
+                e.Handled = true;
+                return;
+            }
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             _o.EndVelocityWheel();   // a press starts a new edit: close the wheel's burst first
             var p = e.GetPosition(this);
@@ -2681,7 +2700,11 @@ public sealed partial class PianoRollView : UserControl
             int hn = kind == 1 ? hit : -1;   // the bright trim-edge affordance shows only on the edge
             bool left = edge < 0;
             if (hn != _hoverNote || left != _hoverLeft) { _hoverNote = hn; _hoverLeft = left; _o.Invalidate(); }
+            // FR-014: say why a note carries the warning notch.
+            object? tip = hit >= 0 && _o.HasMissingArticulation(hit) ? MissingArticulationTip : null;
+            if (!Equals(ToolTip.GetTip(this), tip)) ToolTip.SetTip(this, tip);
         }
+        private static readonly string MissingArticulationTip = Loc.T("articulations.menu.missing_tip");
 
         // Whatever ends the press (release, a window losing the pointer) ends its note.
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)

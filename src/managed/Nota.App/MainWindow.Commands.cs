@@ -76,6 +76,7 @@ public partial class MainWindow
         B("view.mixer", ToggleMixer);
         B("view.mixerFloat", () => SetMixerFloating(!MixerFloating));
         B("view.connectPhone", ShowConnectPhone);
+        B("view.articulationMaps", ShowArticulationMaps);
         B("view.toggleBrowser", () => OnMenuToggleBrowser(this, e));
         B("view.toggleDetail", () => OnMenuToggleClip(this, e));
         B("view.maximizeDetail", ToggleDetailMaximized,
