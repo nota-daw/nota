@@ -231,7 +231,10 @@ inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, cons
     if (sh.p < 0.0f) sh.p = rcEnvProgress(env, sh, sus); // carry on from where the generator was
     S s = st == 1 ? S::Attack : st == 2 ? (sh.last == 2 ? S::Sustain : S::Decay) : st == 3 ? S::Release : S::Off;
     advanceShapedEnv(env, s, sh, c.atkRate, c.decRate, sus, c.relRate, envBends(p));
-    if (s == S::Sustain) sh.last = 2;
+    if (s == S::Sustain) {
+        sh.last = 2;
+        env += (sus - env) * c.dC; // a held note follows the Sustain knob, as the generator does
+    }
     st = s == S::Attack ? 1 : (s == S::Decay || s == S::Sustain) ? 2 : s == S::Release ? 3 : 0;
 }
 

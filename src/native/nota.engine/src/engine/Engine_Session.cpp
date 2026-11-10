@@ -130,6 +130,12 @@ bool Engine::removeScene(int32_t scene) {
     for (size_t k = 0; k < midiLanes_.size(); ++k)
         if (midiLanes_[k].trackId >= 0 && midiLanes_[k].scene == scene && midiLanes_[k].trackId != recordSessionTrackId_)
             finishSessionMidiLane(static_cast<int32_t>(k));
+    if (recordSessionAudio_ && audioRecording_) { // the same for an audio slot recording along
+        std::vector<int32_t> along;
+        for (const auto& l : captureLanes_)
+            if (l.scene == scene && l.trackId != recordSessionTrackId_) along.push_back(l.trackId);
+        for (int32_t tid : along) finishCaptureLane(tid);
+    }
     if (recordSessionScene_ == scene) finalizeSessionRecord(false);
     auto g = rebuildScenes(authoring_->sceneCount - 1, [scene](std::vector<SessionSlot>& slots) {
         if (scene < static_cast<int32_t>(slots.size())) slots.erase(slots.begin() + scene);
