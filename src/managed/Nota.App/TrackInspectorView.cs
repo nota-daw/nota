@@ -351,7 +351,7 @@ internal sealed class TrackInspectorView : UserControl
 
         var host = new Border
         {
-            Child = rows, Padding = new Thickness(6), Margin = new Thickness(-6), CornerRadius = NotaRadius.Control,
+            Child = rows, Padding = new Thickness(6), Margin = new Thickness(-6), CornerRadius = NotaRadius.Field,
             BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Background = Brushes.Transparent,
         };
         HookArticulationDrop(host, id);
