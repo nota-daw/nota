@@ -17,7 +17,7 @@ namespace Nota.SmokeTest;
 
 internal static class AuroraTableTests
 {
-    private const int Sr = 48000, Frame = 2048, Params = 156;
+    private const int Sr = 48000, Frame = 2048, Params = 162;   // 156 + the six envelope-shape params appended by #531
 
     public static IEnumerable<(bool ok, string label)> Run()
     {

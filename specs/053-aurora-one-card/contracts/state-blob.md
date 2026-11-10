@@ -6,7 +6,7 @@ follows at the **end** of the blob:
 
 ```text
 offset            content
-0                 float32 × P          parameters (P = kNumParams of the writer; 156 today)
+0                 float32 × P          parameters (P = kNumParams of the writer; 162 today, 156 before #531)
 4P                section (S bytes):
                     char[4]  "AWT1"
                     u32      version = 1
