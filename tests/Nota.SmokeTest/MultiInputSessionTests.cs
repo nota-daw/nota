@@ -22,6 +22,7 @@ internal static class MultiInputSessionTests
     {
         foreach (var r in TwoSlotsOneTake()) yield return r;
         foreach (var r in RetryEverySlot()) yield return r;
+        foreach (var r in RemoveRowOfJoinedSlot()) yield return r;
     }
 
     private static float Level(int channel) => (channel + 1) / 8f;
@@ -150,5 +151,35 @@ internal static class MultiInputSessionTests
         yield return (b1.SampleId != 0 && e.TryGetSessionAudioSlot(bass, 1, out var b2) && b2.SampleId == b1.SampleId,
             "…and the stopped slot keeps its take");
         e.StopSessionRecord();
+    }
+
+    // Removing the row a joined slot records in ends that slot's lane; its take must not land
+    // in the row that moves up into the removed one's place.
+    private static IEnumerable<(bool, string)> RemoveRowOfJoinedSlot()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetCountIn(0);
+        e.SetLaunchQuant(0.0);
+        e.SetTestInputDevice(Inputs);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 512, Sr);
+        int vox = e.AddAudioTrack(), cello = e.AddAudioTrack();
+        e.SetTrackInput(vox, InputPick.Mono(0));
+        e.SetTrackInput(cello, InputPick.Mono(1));
+        e.SetTrackArmed(vox, true);
+        e.SetTrackArmed(cello, true);
+
+        e.RecordSessionSlot(vox, 0);
+        e.RecordSessionSlot(cello, 1);
+        e.FeedInputForTest(Device(Beat), Beat, Inputs);
+        e.RemoveScene(1);
+        yield return (e.RecordingTracks().Length == 1,
+            $"removing a joined slot's row ends that slot's recording ({e.RecordingTracks().Length} lanes)");
+        e.FeedInputForTest(Device(Beat), Beat, Inputs);
+        e.StopSessionRecord();
+        yield return (!e.TryGetSessionAudioSlot(cello, 1, out var c) || c.SampleId == 0,
+            "…and its take does not land in the row that moved up");
     }
 }
