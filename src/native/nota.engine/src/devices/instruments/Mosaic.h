@@ -32,6 +32,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 #include "MosaicProgram.h"
 #include "engine/NoteExpression.h"
 #include "media/SampleBuffer.h"
@@ -83,6 +84,10 @@ class Mosaic final : public Instrument {
         MpePressure,
         MpeSlide,
         View,
+        // ---- appended (#531): the envelope's shape — 0.5 = straight, Exp off ----
+        DCurve,
+        RCurve,
+        EnvExp,
         kNumParams
     };
     static constexpr int kPool = 160; // voices incl. those fading out after a steal
@@ -171,7 +176,9 @@ class Mosaic final : public Instrument {
     // note · [14] last velocity 0..127 · [15] sounding entries N, then N entries
     // zone × 4 + state (0 held · 1 pedal · 2 release / fading); then [128 …] the keys held or
     // sustained now, 128 bits as 8 floats of 16 bits each.
-    static constexpr int kScHead = 16, kScZones = 112, kScKeys = kScHead + kScZones, kScope = kScKeys + 8;
+    // …then the loudest voice's envelope stage and progress (EnvShape.h, #531).
+    static constexpr int kScHead = 16, kScZones = 112, kScKeys = kScHead + kScZones, kScEnv = kScKeys + 8,
+                         kScope = kScEnv + kEnvTeleFloats;
     int32_t scopeRead(float* out, int32_t maxN) const override;
     int32_t activeVoiceCount() const override { return static_cast<int32_t>(tele_[0].load(std::memory_order_relaxed)); }
 
@@ -198,7 +205,7 @@ class Mosaic final : public Instrument {
     static constexpr double kPi = 3.14159265358979323846;
     static constexpr int kCtl = 16;
     static constexpr uint64_t kIdleSamples = 16384; // hangover before sleep
-    enum class Stage { Attack, Decay, Sustain, Release };
+    enum class Stage { Attack, Decay, Sustain, Release, Off };   // Off: the release ended
     struct Voice {
         bool active = false, held = false, sustained = false, relTrig = false;
         int32_t pitch = 0, root = 60, zone = -1, dir = 1, loopMode = 0;
@@ -210,6 +217,7 @@ class Mosaic final : public Instrument {
         int kill = 0, killLen = 1;
         double ic1L = 0, ic2L = 0, ic1R = 0, ic2R = 0;
         Stage stage = Stage::Attack;
+        EnvShapeState shape; // the curve of the envelope's current stage
         VoiceExpr ex;
     };
 

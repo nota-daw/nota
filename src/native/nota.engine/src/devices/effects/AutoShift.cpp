@@ -38,6 +38,7 @@ AutoShift::AutoShift() {
     p_[MidiGlide].store(0.49f);           // ~60 ms
     p_[MidiBendRange].store(1.0f / 3.0f); // ±2 st (6v)
     p_[MidiBend].store(1.0f);
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -213,7 +214,7 @@ const char* AutoShift::paramName(int32_t i) const {
         "Key Source", "Follow Scale", "Human", "Fine", "Formant Shift", "Det Low", "Det High", "Det Sens",
         "Skip Sibilants", "Custom Scale", "Note C", "Note C#", "Note D", "Note D#", "Note E", "Note F", "Note F#",
         "Note G", "Note G#", "Note A", "Note A#", "Note B", "MIDI Mode", "MIDI Latch", "MIDI Oct Lock", "MIDI Glide",
-        "MIDI Bend Range", "MIDI Bend"};
+        "MIDI Bend Range", "MIDI Bend", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

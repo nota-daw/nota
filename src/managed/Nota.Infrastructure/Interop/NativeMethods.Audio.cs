@@ -148,6 +148,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_midi_input_device_uid")]
     internal static partial IntPtr MidiInputDeviceUid(int index);
 
+    [LibraryImport(Lib, EntryPoint = "nota_audio_effective_input_uid")]
+    internal static partial int AudioEffectiveInputUid(IntPtr engine, [Out] byte[] outBuf, int cap);
+
     [LibraryImport(Lib, EntryPoint = "nota_midi_input_device_name")]
     internal static partial IntPtr MidiInputDeviceName(int index);
 

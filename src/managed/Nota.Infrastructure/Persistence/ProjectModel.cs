@@ -132,8 +132,17 @@ public sealed class TrackDto
     // Hardware input channels (audio tracks): 0 stereo pair, 1 input 1, 2 input 2. Absent in
     // files saved before 0.58, which recorded the stereo pair.
     public int? InputChannels { get; set; }
+    // The hardware input as device channel + width (specs/086): InputFirst 1-based, InputWidth
+    // 1 (mono) or 2 (pair). Absent in files saved before 0.60 — then InputChannels says it.
+    // InputChannels is still written when it can name the pick, so 0.59 opens the file.
+    public int? InputFirst { get; set; }
+    public int? InputWidth { get; set; }
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
+    // An instrument track's MIDI input (specs/086): the device's uid (absent = All inputs) and
+    // channel (absent / 0 = all, 1–16).
+    public string? MidiInputUid { get; set; }
+    public int? MidiInputChannel { get; set; }
     // MIDI playback offset in ms (negative = earlier; playback only, notes don't move). Omitted = 0. v30.
     public double? MidiOffsetMs { get; set; }
     // The track's articulation map (specs/085), embedded as Nota's map JSON

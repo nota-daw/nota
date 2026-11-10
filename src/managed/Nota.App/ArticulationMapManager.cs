@@ -410,7 +410,7 @@ public sealed class ArticulationMapManager : NotaWindow
 
     private Control ArtRow(Articulation a)
     {
-        var swatch = new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8, 0) };
+        var swatch = new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8, 0) };
         var name = new TextBlock { FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = ClipEditorKit.Mono("", 10, NotaPalette.TextTertiary);
         meta.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -574,7 +574,7 @@ public sealed class ArticulationMapManager : NotaWindow
                 bool on = a.ColorArgb == argb;
                 var sw = new Border
                 {
-                    Height = 14, Margin = new Thickness(1.5), CornerRadius = NotaRadius.Badge, Background = ArrangementView.TrackBrush(idx),
+                    Height = 14, Margin = new Thickness(1.5), CornerRadius = NotaRadius.Fine, Background = ArrangementView.TrackBrush(idx),
                     BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
@@ -684,7 +684,7 @@ public sealed class ArticulationMapManager : NotaWindow
         string shown = Show(value);
         var box = new TextBox
         {
-            Text = shown, FontSize = 11, FontFamily = NotaFonts.MonoFamily, Height = NotaSize.Shell, MinHeight = 0, Width = 52,
+            Text = shown, FontSize = 11, FontFamily = NotaFonts.UiFamily, Height = NotaSize.Shell, MinHeight = 0, Width = 52,
             VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Right,
         };
         ToolTip.SetTip(box, tip);

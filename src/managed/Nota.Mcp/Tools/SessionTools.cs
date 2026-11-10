@@ -266,6 +266,9 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
     [McpServerTool(Name = "set_session_record_length"), Description("Fixed session record length in beats (e.g. 16 = 4 bars; 0 = off): a take stops by itself after it.")]
     public Task SetSessionRecordLength(double beats) => Mutate(() => E.SessionRecordLength = Math.Max(0, beats));
 
+    [McpServerTool(Name = "stop_session_record_slot"), Description("Stop recording one track's slot and keep its take; other slots recording audio in the same take keep going.")]
+    public Task StopSessionRecordSlot(int trackId) => Mutate(() => E.StopSessionRecordSlot(trackId));
+
     [McpServerTool(Name = "stop_session_record"), Description("Stop the in-progress session slot recording and keep the take.")]
     public Task StopSessionRecord() => Mutate(() => E.StopSessionRecord());
 

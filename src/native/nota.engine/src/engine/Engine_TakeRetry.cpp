@@ -38,6 +38,8 @@ void Engine::noteTakeTrack(int32_t trackId) {
 void Engine::keepTakeTrack(int32_t trackId) {
     auto& b = takeAttempt_.baseTracks;
     b.erase(std::remove_if(b.begin(), b.end(), [&](const auto& p) { return p.first == trackId; }), b.end());
+    auto& sl = takeAttempt_.sessionSlots; // a landed Session slot is no longer the take's (specs/086)
+    sl.erase(std::remove_if(sl.begin(), sl.end(), [&](const auto& p) { return p.first == trackId; }), sl.end());
     for (size_t i = std::min(takeAttempt_.undoBase, undoStack_.size()); i < undoStack_.size(); ++i)
         if (undoStack_[i].take) {
             undoStack_[i].take = false;
@@ -132,6 +134,7 @@ void Engine::discardTake() {
     recordTrackId_ = 0;
     recordClipIndex_ = -1;
     recordTrackRt_.store(-1, std::memory_order_relaxed);
+    publishMidiLanes({}); // every MIDI take lane goes with the take (specs/086)
     recordSlotPlayer_.store(nullptr, std::memory_order_release);
     recordSessionScene_ = -1;
     recordSessionTrackId_ = 0;
@@ -155,15 +158,18 @@ void Engine::discardTake() {
         auto base = cur ? baseOf(cur->id()) : nullptr;
         if (!base || cur == base) return cur;
         auto nt = cloneTrack(*cur);
-        if (!a.session || cur->id() != a.sessionTrackId) {
+        int32_t sc = -1; // the slot this track's lane of a Session take records (specs/086)
+        if (a.session)
+            for (const auto& [tid, scene] : a.sessionSlots)
+                if (tid == cur->id()) sc = scene;
+        if (a.session && a.sessionSlots.empty() && cur->id() == a.sessionTrackId) sc = a.sessionScene;
+        if (sc < 0) {
             nt->clips = base->clips;
             nt->takes = base->takes;
             nt->midiClips = base->midiClips;
             nt->automation = lanesOnto(*base, *cur);
             return nt;
         }
-        const int32_t sc = a.sessionScene;
-        if (sc < 0) return nt;
         if (static_cast<int32_t>(nt->sessionSlots.size()) <= sc) nt->sessionSlots.resize(sc + 1);
         nt->sessionSlots[sc] =
             sc < static_cast<int32_t>(base->sessionSlots.size()) ? base->sessionSlots[sc] : SessionSlot{};
@@ -263,6 +269,10 @@ int32_t Engine::retryTake() {
 
     if (takeAttempt_.session) {
         const int32_t tid = takeAttempt_.sessionTrackId, sc = takeAttempt_.sessionScene;
+        // The other slots the take still records start again with it (FR-007, specs/086).
+        std::vector<std::pair<int32_t, int32_t>> others;
+        for (const auto& p : takeAttempt_.sessionSlots)
+            if (p.first != tid) others.push_back(p);
         // Still counting in from stop: nothing was recorded — start the count-in over, as Stop
         // and a fresh Record into the slot would.
         if (sessionCountIn_ && uiCountIn_.load(std::memory_order_relaxed) > 0.0) {
@@ -285,6 +295,8 @@ int32_t Engine::retryTake() {
             Retrying r(*this);
             forceSlotLaunch_ = true;
             recordSessionSlot(tid, sc);
+            if (isRecording())
+                for (auto [otid, osc] : others) recordSessionSlot(otid, osc); // joins as a lane
             forceSlotLaunch_ = false;
         }
         pushTakeRestart(true, audio ? -1 : sc);

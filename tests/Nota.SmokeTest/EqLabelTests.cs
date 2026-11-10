@@ -45,7 +45,7 @@ internal static class EqLabelTests
     {
         var (e, t, d) = NewEq();
         using var _ = e;
-        yield return (e.DeviceParamCount(t, d) == 63 && e.DeviceParamName(t, d, LabelsP) == "Labels" && e.DeviceGetParam(t, d, LabelsP) == 1f
+        yield return (e.DeviceParamCount(t, d) == 64 && e.DeviceParamName(t, d, LabelsP) == "Labels" && e.DeviceGetParam(t, d, LabelsP) == 1f
                       && e.DeviceGetState(t, d).Length == 0 && L(e, t, d, 0) == "",
             "EQ-8 appends Labels (on by default); a fresh EQ-8 has no labels and saves no state");
 

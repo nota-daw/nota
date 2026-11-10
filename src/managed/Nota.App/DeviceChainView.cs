@@ -55,6 +55,8 @@ public sealed partial class DeviceChainView : UserControl
     internal const double ChainInset = 6;
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = ChainInset, Margin = new Thickness(ChainInset) };
     private int _trackId = -1;
+    private readonly Grid _layout;
+    private readonly ScrollViewer _outer;
 
     /// <summary>Raised after a change that affects track headers (remove/reorder).</summary>
     public event Action? Changed;
@@ -97,7 +99,7 @@ public sealed partial class DeviceChainView : UserControl
     private readonly Border _dropGlow = new()
     {
         IsVisible = false, IsHitTestVisible = false,
-        BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Body,
+        BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Card,
         BorderBrush = NotaPalette.AccentBright,
         Background = NotaPalette.Wash(NotaPalette.AccentBright, 0x14),
         Margin = new Thickness(2),
@@ -136,7 +138,19 @@ public sealed partial class DeviceChainView : UserControl
             if (e.Source is ScrollViewer or Avalonia.Controls.Presenters.ScrollContentPresenter || ReferenceEquals(e.Source, _row))
             { ClearDeviceSelection(); Rebuild(); }
         };
-        Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        // The XL panel (specs/085) sits over the chain; without one the chain fills the view.
+        var chain = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
+        Grid.SetRow(chain, 1);
+        _layout = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Children = { _xlHost, chain } };
+        // In a window too short for the panel's minimum and the chain, the view scrolls instead of
+        // clipping the chain: the grid is at least that tall, and otherwise exactly the viewport.
+        _outer = new ScrollViewer
+        {
+            Content = _layout, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        _outer.SizeChanged += (_, _) => FitLayoutHeight();
+        Content = _outer;
         HookBrowserDrop();
     }
 
@@ -144,7 +158,7 @@ public sealed partial class DeviceChainView : UserControl
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
-    public void ForgetCardState() => _cardExtra.Clear();
+    public void ForgetCardState() { _cardExtra.Clear(); CloseDeviceWindows(); }
 
     /// <summary>Forgets the instrument card's remembered preset label + A/B slots on a
     /// track (its instrument was just swapped in place, possibly for one of the same kind).</summary>
@@ -207,6 +221,9 @@ public sealed partial class DeviceChainView : UserControl
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
+        int devCount = _trackId > 0 ? _engine.TrackDeviceCount(_trackId) : 0;
+        _xlIndex = ResolveXl();
+        BuildXl(devCount);
         if (_trackId <= 0) { _row.Children.Add(Hint(Loc.T("device_chain.select_a_track"))); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).
@@ -233,10 +250,13 @@ public sealed partial class DeviceChainView : UserControl
         bool bypassed = _engine.DeviceBypassed(_trackId, index);
         string name = _engine.DeviceName(_trackId, index);
         if (_engine.DeviceFolded(_trackId, index)) return FoldedStrip(ChainKind.Effect, index, name, bypassable: true, bypassed);   // built-in or plug-in
+        if (index == _xlIndex) return XlPlaceholder(index, count, kind, name, bypassed);   // its editor is in the XL panel (specs/085)
+        if (kind >= 0 && InWindow(index)) return WindowPlaceholder(index, count, kind, name, bypassed);   // ... or in its own window
 
         Control body;
         double width;
         bool fullBleed = false;
+        Control? headerExtra = null;
         string tag = kind >= 0 ? "BUILT-IN" : "PLUGIN";
         if (kind == -1) return PluginCardFor(ChainKind.Effect, index, count);   // hosted VST3 / AU
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
@@ -248,8 +268,12 @@ public sealed partial class DeviceChainView : UserControl
         else
         {
             var strategy = _cardFactory.Resolve(kind);
-            body = strategy.Build(NewCardContext(), index);
-            width = strategy.AutoWidth ? double.NaN : strategy.Width;   // NaN → card sizes to content
+            var bodyCtx = NewCardContext();
+            body = strategy.Build(bodyCtx, index);
+            width = strategy.AutoWidth ? double.NaN : strategy.WidthFor(_engine, _trackId, index);   // NaN → card sizes to content
+            headerExtra = strategy.HeaderAccessory(bodyCtx, index);
+            // A device that opens in XL also opens in its own window: the pop-out key after the size.
+            if (strategy.SupportsXl) headerExtra = HeaderKeys(headerExtra, PopOutKey(index));
             fullBleed = strategy.FullBleed;
             if (strategy.Subtitle is { } sub) tag = sub;
         }
@@ -257,7 +281,8 @@ public sealed partial class DeviceChainView : UserControl
         // almanac body inset (6).
         var spec = new ShellSpec(
             Name: name, Subtitle: tag, DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
-            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect);
+            CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: width, Kind: ChainKind.Effect,
+            HeaderExtra: headerExtra, Compact: width < 300);
         return BuildCardShell(spec, fullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
     }
 
@@ -278,13 +303,19 @@ public sealed partial class DeviceChainView : UserControl
                s => StatusMessage?.Invoke(s),
                () => _rackSel,
                SelectRackDevice,
-               RackCopied);
+               RackCopied,
+               canXl: true);
 
     // ---- instrument / sends / add ----------------------------------------
 
+    // The Sends card: one column per return track (its colour and letter, the knob, the
+    // amount, the return's name), in one pressed-in section. The card sizes to its columns,
+    // so it is narrow with one return and grows by a column for each return added.
+    internal const double SendColumnW = 60, SendColumnGap = 4;
+
     private Control SendsCard()
     {
-        var knobs = new WrapPanel();
+        var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = SendColumnGap, VerticalAlignment = VerticalAlignment.Center };
         int shown = 0;
         for (int i = 0; i < _engine.TrackCount; i++)
         {
@@ -292,9 +323,9 @@ public sealed partial class DeviceChainView : UserControl
             int bus = _engine.TrackReturnIndex(ti.Id);
             if (bus < 0) continue;
             char letter = (char)('A' + bus);
+            string returnName = TrackNames.Of(_engine, ti);
 
-            var value = new TextBlock { Text = Pct(_engine.GetTrackSend(_trackId, bus)), FontSize = 8, Foreground = TextPrimary };
-            value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            var value = new TextBlock { Text = Pct(_engine.GetTrackSend(_trackId, bus)), Foreground = TextPrimary };
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0, Format = v => Pct((float)v) };
             int b = bus;
             SendControl.Attach(knob, _engine, _trackId, b, v => value.Text = Pct((float)v));   // undoable, writes automation (specs/072)
@@ -305,15 +336,50 @@ public sealed partial class DeviceChainView : UserControl
                 float v = _engine.GetTrackSend(_trackId, b);
                 if (Math.Abs(v - knob.Value) > 1e-3) { knob.Value = v; value.Text = Pct(v); }
             });
-            knobs.Children.Add(KnobCell(Loc.F("common.send", letter), knob, value));
+
+            // The return's colour and letter over the knob, so the column reads as that bus.
+            int colorIdx = ArrangementView.EffectiveColorIndex(_engine, ti.Id);
+            var swatch = new Border
+            {
+                Width = 8, Height = 8, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
+                Background = ArrangementView.TrackBrush(colorIdx),
+            };
+            var tag = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8),
+                Children =
+                {
+                    swatch,
+                    new TextBlock { Text = letter.ToString(), FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                },
+            };
+            var cell = (Panel)KnobCell(returnName, knob, value, SendColumnW);
+            var nameLbl = (TextBlock)cell.Children[2];   // knob · value · name
+            var column = new StackPanel { Width = SendColumnW, Children = { tag, cell } };
+            ToolTip.SetTip(column, Loc.F("session.mixer.send_n", letter, returnName));
+            // Follow a rename or recolour of the return made elsewhere (Session, the arrangement),
+            // checked every half second or so rather than on every tick.
+            int retId = ti.Id, tick = 0;
+            string shownName = returnName;
+            _deviceLiveRefreshers.Add(() =>
+            {
+                if (++tick % 15 != 0) return;
+                int c = ArrangementView.EffectiveColorIndex(_engine, retId);
+                if (c != colorIdx) { colorIdx = c; swatch.Background = ArrangementView.TrackBrush(c); }
+                string n = _engine.GetTrackName(retId);
+                if (n.Length > 0 && n != shownName) { shownName = n; nameLbl.Text = NotaText.Label(n); ToolTip.SetTip(column, Loc.F("session.mixer.send_n", letter, n)); }
+            });
+            columns.Children.Add(column);
             shown++;
         }
-        Control body = shown > 0 ? knobs : new TextBlock { Text = Loc.T("device_chain.no_return_tracks"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        Control body = shown > 0
+            ? Section(new Border { Padding = new Thickness(SectionPad - 1, 0), Child = columns })
+            : new TextBlock { Text = Loc.T("device_chain.no_return_tracks"), FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var spec = new ShellSpec(
             Name: Loc.T("common.sends"), Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
-            CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: shown > 2 ? 200 : 140,
+            CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: double.NaN,
             Kind: ChainKind.Effect, Compact: true, Utility: true);
-        return BuildCardShell(spec, new Border { Padding = new Thickness(10), Child = body });
+        return BuildCardShell(spec, new Border { Padding = new Thickness(CardPad, 0, CardPad, CardPad), Child = body });
     }
 
     // The end of the chain: a slim "+" key. Its dashed outline shows only while a browser
@@ -326,14 +392,14 @@ public sealed partial class DeviceChainView : UserControl
         _addDash = new Rectangle
         {
             Stroke = BorderStrong, StrokeThickness = 1, IsVisible = false,
-            StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue,
+            StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = NotaRadius.FieldValue, RadiusY = NotaRadius.FieldValue,
         };
         var plus = new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary };
         var host = new Grid { Children = { _addDash, plus } };
         var card = new Border
         {
             Width = 28, Height = CardH, Background = Brushes.Transparent, Child = host,
-            CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand),
         };
         // A real button (#97): a click opens the browser on Audio effects, typing into its search.
         card.PointerEntered += (_, _) => { card.BindResource(Border.BackgroundProperty, "Brush.SurfaceHover"); plus.BindResource(Glyph.ForegroundProperty, "Brush.TextSecondary"); };

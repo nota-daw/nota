@@ -173,7 +173,7 @@ internal static class MosaicTests
             var ids = new HashSet<string>();
             bool names = true;
             for (int i = 0; i < pc; i++) { ids.Add(e.PluginParamId(t, -1, i)); if (e.PluginParamName(t, -1, i).Length == 0) names = false; }
-            yield return (pc == 31 && ids.Count == pc && names, $"Nota Mosaic exposes 31 params with unique ids and names (got {pc})");
+            yield return (pc == 34 && ids.Count == pc && names, $"Nota Mosaic exposes 34 params with unique ids and names (got {pc})");
             yield return (e.TrackInstrumentSupportsMpe(t), "Nota Mosaic reports MPE support");
             yield return (InstrumentView.Index(e, t) >= 0 && !InstrumentView.IsMini(e, t), "Nota Mosaic has an S / L view param and opens as L");
             yield return (MosaicModel.Poly(e.PluginParamGet(t, -1, Pi(e, t, "polyphony"))) == 64 && MosaicModel.PerKey(e.PluginParamGet(t, -1, Pi(e, t, "perkey"))) == 2,

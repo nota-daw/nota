@@ -2,24 +2,30 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Strata (kind 15) body, mockup 3n on the shared
-// shell (700×260, full-bleed). A LIVE strip (big bar.beat counter · a cycle tick
-// strip that fills as the loop runs · the four transport actions, each captioned
-// with what it will do next) sits above a body of the layer stack (per pass: index,
-// name, its own waveform, PLAY/MUTED/REC state, level and mute) | a LOOP rail
-// (Feedback teal · Input gain · Speed · Quantize · count-in / set-tempo / reverse
-// switches · Undo / Export / Clear). Transport + editing go through the device
-// command channel; state and per-layer waveforms come from the device scope.
+// shell (700×260, full-bleed), in pressed-in sections. A transport section (big
+// bar.beat counter · a beat tick strip that fills as the loop runs · the four
+// transport actions, each captioned with what it will do next) sits above the layer
+// stack (per pass: index, name, its own waveform, Play/Muted/Rec state, level and
+// mute) | a Loop rail (Feedback · Input gain · Speed · Quantize · count-in /
+// set-tempo / reverse switches · Undo / Export / Clear). Transport + editing go
+// through the device command channel; state and per-layer waveforms come from the
+// device scope; Export mixes the recorded layers from the device state blob. S (260, #531):
+// the bar counter and the beat ticks over the four transport actions and Feedback · Input gain
+// · Speed knobs.
 
 using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Nota.Application;
-using static Nota.App.DeviceCardKit;
 using Nota.Application.Localization;
+using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
 
@@ -30,15 +36,117 @@ internal sealed class StrataDeviceBody : IDeviceBody
     private const int C_Record = 0, C_Overdub = 1, C_Play = 2, C_Stop = 3, C_Undo = 4, C_Clear = 5, A_LayerMute = 6, A_LayerGain = 7;
     private const int M_Empty = 0, M_Rec = 1, M_Play = 2, M_Over = 3, M_Stop = 4;
     private const int MaxLayers = 8;
-    // Per-layer identity hues, resolved through NotaPalette.Ink at draw time so they
-    // follow the theme (a snapshot here would freeze the loop bands in one variant).
-    private static readonly string[] Palette =
-    {
-        "#C99C55", "#9BA65D", "#6FA383", "#C4756A",
-        "#6E93C4", "#B07FC0", "#C0A24E", "#7FB0A0",
-    };
+    // Scope tail, after the layer table (mirror Strata::scopeRead).
+    private const int S_CountIn = 6 + MaxLayers * 3, S_LoopBpm = S_CountIn + 1, S_BeatsPerBar = S_CountIn + 2, S_Pending = S_CountIn + 3;
+    private const double MinDb = -24, MaxDb = 12;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
+
+    // Set tempo from loop (#372): the song takes the loop's tempo when the first pass closes,
+    // whether or not the card is on screen then. Watched here, apart from any one card. Moving or
+    // removing devices shifts the index, so the watch follows the Strata by its instance id.
+    private const int StrataKind = 15, LayerRecording = 2;   // Strata::LS_Rec
+    private const int S_Id = S_Pending + 1;
+    private static readonly HashSet<(IAudioEngine, int, int)> TempoWatch = new();
+
+    private static float InstanceAt(IAudioEngine engine, int track, int di, float[] sc, out int n)
+    {
+        n = di < engine.TrackDeviceCount(track) && engine.TrackDeviceBuiltinKind(track, di) == StrataKind
+            ? engine.DeviceScope(track, di, sc, sc.Length) : 0;
+        return n > S_Id ? sc[S_Id] : 0f;
+    }
+
+    // One cycle of a Strata state blob as Strata plays it, written as a 32-bit float WAV: the
+    // layers mixed at their gains and the feedback's fade (the layer being recorded is unfinished
+    // and left out, as Strata plays it), at its speed, backwards when reversed, between samples
+    // read as the engine reads them (linear).
+    private static void WriteLoopWav(byte[] blob, float fb, double speed, bool reverse, string path)
+    {
+        int off = 0;
+        int I() { int v = BitConverter.ToInt32(blob, off); off += 4; return v; }
+        float F() { float v = BitConverter.ToSingle(blob, off); off += 4; return v; }
+        I(); int sr = I(), len = I(); I(); int lc = Math.Clamp(I(), 0, MaxLayers);
+        if (len <= 0 || lc <= 0 || blob.Length < 20 + lc * 12 + (long)lc * len * 8) return;
+        var gain = new float[lc];
+        for (int k = 0; k < lc; k++)
+        {
+            float db = F(); bool muted = I() != 0; bool recording = I() == LayerRecording;
+            gain[k] = muted || recording ? 0f : MathF.Pow(10f, db / 20f) * MathF.Pow(fb, lc - 1 - k);
+        }
+        var sum = new float[len * 2];
+        for (int k = 0; k < lc; k++)
+        {
+            for (int i = 0; i < len * 2; i++) sum[i] += F() * gain[k];
+        }
+        int frames = Math.Max(1, (int)Math.Round(len / speed));
+        var mix = new float[frames * 2];
+        double pos = 0;
+        for (int i = 0; i < frames; i++)
+        {
+            int p0 = (int)pos, p1 = p0 + 1 >= len ? 0 : p0 + 1;
+            float fr = (float)(pos - p0);
+            mix[i * 2] = sum[p0 * 2] + fr * (sum[p1 * 2] - sum[p0 * 2]);
+            mix[i * 2 + 1] = sum[p0 * 2 + 1] + fr * (sum[p1 * 2 + 1] - sum[p0 * 2 + 1]);
+            pos += reverse ? -speed : speed;
+            if (pos >= len) pos -= len;
+            if (pos < 0) pos += len;
+        }
+        using var w = new Nota.Infrastructure.WavWriter(path, sr > 0 ? sr : 44100, 2, WavBitDepth.Float32);
+        w.WriteFrames(mix, frames);
+    }
+
+    // The watch starts for any Strata on its first pass with Set tempo on, on any track, shown
+    // or not (a loop started from the assistant or on a track that isn't selected).
+    private static DispatcherTimer? _tempoScan;
+
+    public static void StartTempoScan(IAudioEngine engine)
+    {
+        if (_tempoScan is not null) return;
+        var sc = new float[S_Id + 1];
+        _tempoScan = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _tempoScan.Tick += (_, _) =>
+        {
+            for (int i = 0; i < engine.TrackCount; i++)
+            {
+                if (!engine.TryGetTrackInfo(i, out var ti)) continue;
+                int count = engine.TrackDeviceCount(ti.Id);
+                for (int di = 0; di < count; di++)
+                {
+                    if (engine.TrackDeviceBuiltinKind(ti.Id, di) != StrataKind) continue;
+                    int n = engine.DeviceScope(ti.Id, di, sc, sc.Length);
+                    if (n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0 && engine.DeviceGetParam(ti.Id, di, SetTempo) > 0.5f)
+                        WatchTempo(engine, ti.Id, di);
+                }
+            }
+        };
+        _tempoScan.Start();
+    }
+
+    private static void WatchTempo(IAudioEngine engine, int track, int di)
+    {
+        var sc = new float[S_Id + 1];
+        float id = InstanceAt(engine, track, di, sc, out _);
+        if (id <= 0 || !TempoWatch.Add((engine, track, (int)id))) return;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        timer.Tick += (_, _) =>
+        {
+            int n;
+            if (InstanceAt(engine, track, di, sc, out n) != id)
+            {
+                int count = engine.TrackDeviceCount(track);   // moved: find it again
+                for (di = 0; di < count && InstanceAt(engine, track, di, sc, out n) != id; di++) { }
+                if (di >= count) n = 0;                        // removed
+            }
+            if (n > S_LoopBpm && (int)sc[0] == M_Rec && sc[S_LoopBpm] <= 0) return;   // still on the first pass
+            timer.Stop();
+            TempoWatch.Remove((engine, track, (int)id));
+            float lb = n > S_LoopBpm && sc[3] > 0 ? sc[S_LoopBpm] : 0f;            // closed (not cleared or gone)
+            if (lb >= 20 && lb <= 300 && engine.DeviceGetParam(track, di, SetTempo) > 0.5f) engine.SetBpm(Math.Round(lb, 2));
+        };
+        timer.Start();
+    }
 
     public string? Subtitle => "Looper";   // the processing type, shown as the header badge
     public bool FullBleed => true;
@@ -51,219 +159,364 @@ internal sealed class StrataDeviceBody : IDeviceBody
         float Mx(int p) => engine.DeviceParamMax(track, di, p);
         void SetR(int p, float v) => engine.DeviceSetParam(track, di, p, v);
         void Act(int id, int iarg = 0, float farg = 0) => engine.DeviceAction(track, di, id, iarg, farg);
+        bool On(int p) => P(p) > 0.5f;
 
         var readouts = new List<Action>();
-        var scope = new float[6 + MaxLayers * 3];
-        var waveBuf = new float[64];
+        var scope = new float[S_Pending + 1];
+        int scN = 0;
+        float Sc(int i) => i < scN ? scope[i] : 0f;
+        var waveBuf = new float[96];
 
-        Control Lbl(string t, double fs, IBrush c) => new TextBlock { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.SemiBold, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null) => new()
+        { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Mono(string t, double fs, IBrush c)
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
+        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
+        static bool Left(PointerPressedEventArgs e, Control c) => e.GetCurrentPoint(c).Properties.IsLeftButtonPressed;
 
-        // ---------- Live strip ----------
-        var barNum = new TextBlock { Text = "–", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, MinWidth = 30 };
-        barNum.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        var ticks = new Border[16];
+        // ---------- transport ----------
+        var barNum = Mono("–", 13, TextPrimary);
+        barNum.FontWeight = FontWeight.SemiBold; barNum.MinWidth = 34;
         var tickRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        for (int i = 0; i < 16; i++) { ticks[i] = new Border { Width = i % 4 == 0 ? 2 : 1, Height = 14, Background = Sunken, CornerRadius = NotaRadius.Bar }; tickRow.Children.Add(ticks[i]); }
-        var ofBars = new TextBlock { Text = "of – bars", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var ticks = new List<Border>();
+        int tickBeats = -1;   // beats per tick group the strip was built for (1 = a tick per beat, else per bar)
+        var ofBars = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        void BuildTicks(int count, int every)
+        {
+            tickRow.Children.Clear(); ticks.Clear();
+            for (int i = 0; i < count; i++)
+            {
+                var t = new Border { Width = i % every == 0 ? 2 : 1, Height = 14, CornerRadius = NotaRadius.Fine };
+                ticks.Add(t); tickRow.Children.Add(t);
+            }
+        }
 
-        // Transport actions. Each button is captioned with what it does next; the
-        // active mode's button lights in its colour (Overdub's is the accent, so it rests neutral).
+        // The four transport actions. Neutral at rest; the running one lifts in the accent
+        // (Record in the record red), a queued one waits outlined. Each is captioned with what it does next.
         var actNames = new[] { "Record", "Overdub", "Play", "Stop" };
         var actCmds = new[] { C_Record, C_Overdub, C_Play, C_Stop };
-        var actInks = new[] { NotaPalette.Record, NotaPalette.Accent, NotaPalette.Success, NotaPalette.TextSecondary };
+        var actTips = new[]
+        {
+            Loc.T("device.strata.record_start_the_loop_on"),
+            Loc.T("device.strata.overdub_record_a_new_layer"),
+            Loc.T("device.strata.play_play_every_layer_on"),
+            Loc.T("device.strata.stop_stop_at_the_next"),
+        };
         var actBtn = new Border[4]; var actSub = new TextBlock[4]; var actName = new TextBlock[4];
-        var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 0; i < 4; i++)
         {
             int iv = i;
-            actName[i] = new TextBlock { Text = actNames[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = i == 1 ? TextPrimary : actInks[i] };
-            actSub[i] = new TextBlock { Text = "", FontSize = 7, Foreground = TextTertiary };
-            actBtn[i] = new Border { Height = 24, MinWidth = 62, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            actName[i] = new TextBlock { Text = actNames[i], FontSize = 9, FontWeight = FontWeight.SemiBold };
+            actSub[i] = new TextBlock { FontSize = 7, Foreground = TextTertiary };
+            actBtn[i] = new Border { Height = 26, MinWidth = 76, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { actName[i], actSub[i] } } };
-            actBtn[i].PointerPressed += (_, _) => Act(actCmds[iv]);
+            actBtn[i].PointerPressed += (_, e) => { if (!Left(e, actBtn[iv])) return; Act(actCmds[iv]); e.Handled = true; };
+            ToolTip.SetTip(actBtn[i], actTips[i]);
             actRow.Children.Add(actBtn[i]);
         }
-        DockPanel.SetDock(actRow, Dock.Right);
-        var live = new Border { Height = 34, Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = new DockPanel { LastChildFill = false, Margin = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center, Children = {
-                actRow,
+        var transport = new RuleSection { Height = 40, Padding = new Thickness(10, 0, 6, 0),
+            Child = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center, Children = {
+                Docked(actRow, Dock.Right),
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
 
         // ---------- layer stack ----------
         var layerHint = new TextBlock { Text = Loc.T("device.strata.press_record_to_lay_down"), FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var layerRows = new Border[MaxLayers]; var waves = new StrataWave[MaxLayers];
-        var stateTxts = new TextBlock[MaxLayers]; var dbTxts = new TextBlock[MaxLayers]; var muteBtns = new Border[MaxLayers]; var idxTxts = new TextBlock[MaxLayers];
+        var stateTxts = new TextBlock[MaxLayers]; var muteBtns = new Border[MaxLayers];
         var layerStack = new StackPanel { Spacing = 3 };
-        var countLbl = new TextBlock { Text = "", FontSize = 8, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right };
+        var countLbl = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 0; i < MaxLayers; i++)
         {
             int iv = i;
-            idxTxts[i] = new TextBlock { Text = $"{i + 1}", FontSize = 9, Foreground = TextTertiary, Width = 8, VerticalAlignment = VerticalAlignment.Center };
-            idxTxts[i].BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            var nameTxt = new TextBlock { Text = $"Layer {i + 1}", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Width = 58, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            waves[i] = new StrataWave { Height = 20, VerticalAlignment = VerticalAlignment.Center };
-            stateTxts[i] = new TextBlock { Text = "Play", FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = Success, Width = 36, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            dbTxts[i] = new TextBlock { Text = "0.0", FontSize = 9, Foreground = TextSecondary, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth) };
-            dbTxts[i].BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-            // Vertical drag on the dB readout sets that layer's level.
-            bool drag = false; double startY = 0, startDb = 0;
-            dbTxts[i].PointerPressed += (_, e) => { drag = true; startY = e.GetPosition(dbTxts[iv]).Y; startDb = scope[7 + iv * 3]; e.Pointer.Capture(dbTxts[iv]); };
-            dbTxts[i].PointerMoved += (_, e) => { if (drag) { double db = Math.Clamp(startDb + (startY - e.GetPosition(dbTxts[iv]).Y) * 0.15, -24, 12); Act(A_LayerGain, iv, (float)db); dbTxts[iv].Text = $"{db:+0.0;−0.0;0.0}"; } };
-            dbTxts[i].PointerReleased += (_, e) => { drag = false; e.Pointer.Capture(null); };
-            dbTxts[i].PointerCaptureLost += (_, _) => drag = false;
-            muteBtns[i] = new Border { Width = 16, Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = Sunken, Cursor = new Cursor(StandardCursorType.Hand),
-                Child = new TextBlock { Text = "M", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-            muteBtns[i].PointerPressed += (_, _) => { bool nowMuted = scope[8 + iv * 3] <= 0.5f; Act(A_LayerMute, iv, nowMuted ? 1f : 0f); };
-            var row = new DockPanel { LastChildFill = true, Children = { } };
-            var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Children = { idxTxts[i], nameTxt } };
-            var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Children = { stateTxts[i], dbTxts[i], muteBtns[i] } };
-            DockPanel.SetDock(left, Dock.Left); DockPanel.SetDock(right, Dock.Right);
-            row.Children.Add(left); row.Children.Add(right); row.Children.Add(new Border { Margin = new Thickness(7, 0), Child = waves[i] });
-            layerRows[i] = new Border { Height = 36, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1, 1, 1, 1), Padding = new Thickness(7, 0), IsVisible = false, Child = row };
+            var idx = Mono($"{i + 1}", 9, TextTertiary); idx.Width = 8;
+            var nameTxt = new TextBlock { Text = $"Layer {i + 1}", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Width = 46, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            waves[i] = new StrataWave { VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 3) };
+            stateTxts[i] = new TextBlock { FontSize = 8, Width = 36, VerticalAlignment = VerticalAlignment.Center };
+            // The layer's level: a value bar (drag, double-click resets to 0 dB, double-click the value to type one).
+            double NormOf(double db) => (Math.Clamp(db, MinDb, MaxDb) - MinDb) / (MaxDb - MinDb);
+            var level = SliderRow("", () => NormOf(Sc(7 + iv * 3)), n => Act(A_LayerGain, iv, (float)(MinDb + n * (MaxDb - MinDb))),
+                () => DbText(Sc(7 + iv * 3)), out var levelSync, reset: () => Act(A_LayerGain, iv, 0f), trackWidth: 52, valueWidth: 34,
+                textAt: n => DbText(MinDb + n * (MaxDb - MinDb)));
+            ToolTip.SetTip(level, Loc.F("device.strata.layer_level", i + 1));
+            readouts.Add(levelSync);
+            var mtxt = new TextBlock { Text = "M", FontSize = 8, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            muteBtns[i] = new Border { Width = 16, Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = mtxt };
+            muteBtns[i].PointerPressed += (_, e) =>
+            {
+                if (!Left(e, muteBtns[iv])) return;
+                Act(A_LayerMute, iv, Sc(8 + iv * 3) > 0.5f ? 0f : 1f);
+                e.Handled = true;
+            };
+            ToolTip.SetTip(muteBtns[i], Loc.F("device.strata.mute_layer", i + 1));
+            var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Children = { idx, nameTxt } };
+            var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { stateTxts[i], level, muteBtns[i] } };
+            var row = new DockPanel { LastChildFill = true, Children = { Docked(left, Dock.Left), Docked(right, Dock.Right), new Border { Margin = new Thickness(8, 0), Child = waves[i] } } };
+            layerRows[i] = new Border { Height = 28, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(7, 0, 5, 0), IsVisible = false, Child = row };
             layerStack.Children.Add(layerRows[i]);
         }
-        var layerHead = new DockPanel { LastChildFill = false, Children = { Lbl("LAYERS", 8, TextTertiary) } };
-        DockPanel.SetDock(countLbl, Dock.Right); layerHead.Children.Add(countLbl);
-        var layerCol = new DockPanel { LastChildFill = true, Margin = new Thickness(8, 6), Children = { } };
-        DockPanel.SetDock(layerHead, Dock.Top); layerCol.Children.Add(layerHead);
         var stackHost = new Grid { Children = { layerStack, layerHint } };
-        layerCol.Children.Add(stackHost);
+        var layerHead = new DockPanel { LastChildFill = false, Height = 16, Children = { Docked(Caps(Loc.T("device.strata.layers")), Dock.Left), Docked(countLbl, Dock.Right) } };
+        var layers = new RuleSection { Margin = new Thickness(0, 5, 5, 0), Padding = new Thickness(8, 5, 8, 7),
+            Child = new DockPanel { LastChildFill = true, Children = { Docked(new Border { Margin = new Thickness(0, 0, 0, 4), Child = layerHead }, Dock.Top), stackHost } } };
+        // Rows share the stack's height, so all eight layers fit.
+        int shownRows = 0;
+        stackHost.SizeChanged += (_, _) => FitRows();
+        void FitRows()
+        {
+            int n = Math.Max(1, shownRows);
+            double h = Math.Clamp((stackHost.Bounds.Height - (n - 1) * layerStack.Spacing) / n, 14, 30);
+            foreach (var r in layerRows) r.Height = h;
+        }
 
         // ---------- Loop rail ----------
-        Control HSlider(int p, string name, Func<double, string> fmt, bool log, IBrush accent)
+        Control Row(int p, string name, Func<double, string> fmt, bool log)
         {
             double mn = Mn(p), mx = Mx(p);
             double lmn = log ? Math.Log(mn) : mn, lspan = (log ? Math.Log(mx) : mx) - lmn;
             double NormOf(double v) { double x = log ? Math.Log(Math.Clamp(v, mn, mx)) : Math.Clamp(v, mn, mx); return (x - lmn) / Math.Max(1e-9, lspan); }
             double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
-            var slider = new SliderTrack { Width = 84 };
-            var val = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = 9, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-            void Vis() { slider.Norm = NormOf(P(p)); val.Text = fmt(P(p)); }
-            slider.Changed += n => { SetR(p, (float)ValOf(n)); val.Text = fmt(P(p)); };
-            slider.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
-            slider.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
-            MidiLearn.Bind(slider, MidiTarget.DeviceParam(track, di, p), name);
-            ValueEntry.Attach(val, () => NormOf(P(p)), n => SetR(p, (float)ValOf(n)), () => fmt(P(p)),
-                () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
-                () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""), Vis, control: slider);
-            readouts.Add(() => { if (!slider.Dragging) Vis(); });
-            Vis();
-            var lbl = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, Width = 52, VerticalAlignment = VerticalAlignment.Center };
-            var head = new DockPanel { LastChildFill = false, Children = { lbl } };
-            DockPanel.SetDock(val, Dock.Right); head.Children.Add(val);
-            return new StackPanel { Spacing = 2, Children = { head, slider } };
+            float def = p switch { Feedback => 100f, Speed => 1f, _ => 0f };
+            var row = SliderRow(name, () => NormOf(P(p)), n => SetR(p, (float)ValOf(n)), () => fmt(P(p)), out var sync,
+                begin: () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
+                end: () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, ""),
+                reset: () => SetR(p, def), labelWidth: 54, valueWidth: 40, textAt: n => fmt(ValOf(n)));
+            MidiLearn.Bind(row, MidiTarget.DeviceParam(track, di, p), name);
+            readouts.Add(sync);
+            return row;
         }
         Control Seg(int p, string[] names)
         {
             int n = names.Length;
-            var seg = DeviceCardKit.Segments(names, () => Math.Clamp((int)Math.Round(P(p)), 0, n - 1), iv => SetR(p, iv), out var sync, minSegWidth: 26);
+            var seg = Segments(names, () => Math.Clamp((int)Math.Round(P(p)), 0, n - 1), iv => SetR(p, iv), out var sync);
             readouts.Add(sync);
             MidiLearn.Bind(seg, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             return seg;
         }
-        Control Toggle(int p, string label, IBrush tint)
+        Control Toggle(int p, string label, string tip)
         {
-            var b = Switch(label, () => P(p) > 0.5f, () => SetR(p, P(p) > 0.5f ? 0f : 1f), out var sync);
+            var b = Switch(label, () => On(p), () => SetR(p, On(p) ? 0f : 1f), out var sync);
             MidiLearn.Bind(b, MidiTarget.DeviceParam(track, di, p), label);
+            ToolTip.SetTip(b, tip);
             readouts.Add(sync); return b;
         }
-        Control ActionBtn(string label, IBrush color, Action onClick)
+        Control ActionBtn(string label, string tip, Action onClick, Func<bool> enabled)
         {
-            var b = new Border { CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderStrong, Background = Card2, Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand),
-                Child = new TextBlock { Text = label, FontSize = 9, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center } };
-            b.PointerPressed += (_, _) => onClick();
+            var tb = new TextBlock { Text = label, FontSize = NotaType.DeviceBody, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border { Height = 18, CornerRadius = NotaRadius.Cell, Background = NotaPalette.SurfaceHover, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+            b.PointerPressed += (_, e) => { if (!Left(e, b) || !enabled()) return; onClick(); e.Handled = true; };
+            ToolTip.SetTip(b, tip);
+            readouts.Add(() => tb.Foreground = enabled() ? TextPrimary : TextDisabled);
             return b;
         }
-        string PctF(double v) => $"{v:0}\u2009%"; string DbF(double v) => $"{v:+0.0;−0.0;0.0}"; string SpeedF(double v) => $"{v:0.00}×";
+        string PctF(double v) => NotaNum.F($"{v:0} %");
+        string SpeedF(double v) => NotaNum.F($"{v:0.00}×");
 
-        var undo = ActionBtn("Undo", TextSecondary, () => Act(C_Undo));
-        var export = ActionBtn("Export", TextSecondary, () => ctx.NotifyChanged());
-        var clear = ActionBtn("Clear", NotaPalette.TextSecondary, () => Act(C_Clear));
-        var bottomActions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4, Margin = new Thickness(0, 4, 0, 0) };
-        Grid.SetColumn(undo, 0); Grid.SetColumn(export, 1); Grid.SetColumn(clear, 2);
+        bool HasLayers() => (int)Sc(3) > 0;
+        var undo = ActionBtn("Undo", Loc.T("device.strata.undo_drop_the_last_layer"), () => Act(C_Undo), HasLayers);
+        Border? root = null;
+        var export = ActionBtn("Export", Loc.T("device.strata.export_write_the_loop_as"), ExportWav, () => HasLayers() && Sc(S_LoopBpm) > 0);
+        var clear = ActionBtn("Clear", Loc.T("device.strata.clear_remove_every_layer"), () => Act(C_Clear), HasLayers);
+        var bottomActions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 5 };
+        Grid.SetColumn(export, 1); Grid.SetColumn(clear, 2);
         bottomActions.Children.Add(undo); bottomActions.Children.Add(export); bottomActions.Children.Add(clear);
 
-        var qRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { new TextBlock { Text = "Quantize", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, Seg(Quantize, new[] { "Off", "Bar", "1/4" }) } };
-        var rail = new Border { Width = 174, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 6),
-            Child = new StackPanel { Spacing = 5, Children = {
-                Lbl("LOOP", 8, TextTertiary),
-                HSlider(Feedback, "FEEDBACK", PctF, false, Teal),
-                HSlider(InputGain, "INPUT GAIN", DbF, false, NotaPalette.VizInk),
-                HSlider(Speed, "SPEED", SpeedF, true, NotaPalette.VizInk),
-                qRow,
-                new Border { Height = 1, Background = NotaPalette.SurfaceRaised },
-                Toggle(CountIn, "Count-in 1 bar", Teal),
-                Toggle(SetTempo, Loc.T("device.strata.set_tempo_from_loop"), Teal),
-                Toggle(Reverse, "Reverse", NotaPalette.VizInk),
-                new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Children = { bottomActions } } } } };
+        var qRow = new Grid { ColumnDefinitions = new ColumnDefinitions("54,Auto"), ColumnSpacing = 8 };
+        var qLbl = new TextBlock { Text = "Quantize", FontSize = NotaType.RowLabel, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var qSeg = Seg(Quantize, new[] { "Off", "Bar", "1/4" });
+        Grid.SetColumn(qSeg, 1); qRow.Children.Add(qLbl); qRow.Children.Add(qSeg);
+
+        var rail = new RuleSection { Width = 186, Margin = new Thickness(0, 5, 0, 0), Padding = new Thickness(8, 5, 8, 7),
+            Child = new DockPanel { LastChildFill = false, Children = {
+                Docked(bottomActions, Dock.Bottom),
+                Docked(new StackPanel { Spacing = 6, Children = {
+                    new Border { Height = 16, Child = Caps(Loc.T("common.loop")) },
+                    Row(Feedback, Loc.T("device.strata.feedback"), PctF, false),
+                    Row(InputGain, Loc.T("device.strata.input_gain"), DbText, false),
+                    Row(Speed, Loc.T("device.strata.speed"), SpeedF, true),
+                    qRow,
+                    new StackPanel { Spacing = 5, Margin = new Thickness(0, 2, 0, 0), Children = {
+                        Toggle(CountIn, "Count-in 1 bar", Loc.T("device.strata.count_in_the_first_record")),
+                        Toggle(SetTempo, Loc.T("device.strata.set_tempo_from_loop"), Loc.T("device.strata.set_tempo_when_the_first")),
+                        Toggle(Reverse, "Reverse", Loc.T("device.strata.reverse_play_the_layers_backwards")) } } } }, Dock.Top) } } };
         DockPanel.SetDock(rail, Dock.Right);
 
-        var body = new DockPanel { LastChildFill = true, Children = { rail, layerCol } };
+        root = new Border { Background = NotaPalette.SurfaceCard,
+            Child = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(transport, Dock.Top), rail, layers } } };
+
+        // ---------- export ----------
+        // The state blob: version, sample rate, length, bars, layer count, per layer (gain dB,
+        // muted, state), then each layer's interleaved stereo PCM. Mixed as Strata plays it:
+        // unmuted layers at their level, older ones sunk by Feedback.
+        async void ExportWav()
+        {
+            try { await ExportWavAsync(); }
+            catch (Exception ex) { ctx.Status(Loc.F("main.files.export_failed", ex.Message)); }   // a full disk, a locked file
+        }
+        async System.Threading.Tasks.Task ExportWavAsync()
+        {
+            var top = root is null ? null : TopLevel.GetTopLevel(root);
+            if (top is null) return;
+            // The loop as it is when Export is pressed; the mix and the file are made off the UI
+            // thread (a long loop at a high rate is hundreds of MB of audio).
+            var blob = engine.DeviceGetState(track, di);
+            if (blob.Length < 20 || BitConverter.ToInt32(blob, 8) <= 0 || BitConverter.ToInt32(blob, 16) <= 0) return;   // nothing recorded
+            float fb = Math.Clamp(P(Feedback) * 0.01f, 0f, 1f);
+            double speed = Math.Clamp(P(Speed), 0.25f, 4f);
+            bool reverse = On(Reverse);
+            var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
+            {
+                Title = Loc.T("device.strata.export_the_strata_loop_to"),
+                DefaultExtension = "wav",
+                SuggestedFileName = Loc.T("device.strata.nota_strata_loop_wav"),
+                FileTypeChoices = new[] { new FilePickerFileType(Loc.T("device.strata.wav_audio")) { Patterns = new[] { "*.wav" } } },
+            });
+            string? path = file?.TryGetLocalPath();
+            if (path is null) return;
+            await System.Threading.Tasks.Task.Run(() => WriteLoopWav(blob, fb, speed, reverse, path));
+        }
 
         // ---------- live refresh ----------
         void Refresh()
         {
-            int cnt = engine.DeviceScope(track, di, scope, scope.Length);
-            if (cnt < 6) return;
-            int mode = (int)scope[0], loopBars = Math.Max(0, (int)scope[1]), layers = (int)scope[3], recL = (int)scope[4];
-            float phase = scope[2], recProg = scope[5];
+            scN = engine.DeviceScope(track, di, scope, scope.Length);
+            if (scN < 6) return;
+            int mode = (int)Sc(0), loopBars = Math.Max(0, (int)Sc(1)), lc = (int)Sc(3), recL = (int)Sc(4);
+            float phase = Sc(2), recProg = Sc(5);
+            int bpb = Math.Max(1, (int)Sc(S_BeatsPerBar)); if (scN <= S_BeatsPerBar) bpb = 4;
+            int countIn = (int)Sc(S_CountIn), pending = scN > S_Pending ? (int)Sc(S_Pending) : -1;
+            bool firstPass = mode == M_Rec && Sc(S_LoopBpm) <= 0;
+            bool counting = firstPass && countIn > 0;
+            bool closed = lc > 0 && !firstPass;
+            int quant = Math.Clamp((int)Math.Round(P(Quantize)), 0, 2);
 
-            if (layers > 0 && loopBars > 0)
+            // Set tempo from loop: when the first pass closes, the song takes the loop's tempo.
+            if (firstPass && On(SetTempo)) WatchTempo(engine, track, di);
+
+            // Counter + beat ticks (a tick per beat, or per bar for a long loop).
+            if (counting) barNum.Text = NotaNum.F($"−{countIn}");
+            else if (closed && loopBars > 0)
             {
-                int barPos = Math.Clamp((int)(phase * loopBars), 0, loopBars - 1);
-                int beat = ((int)(phase * loopBars * 4)) % 4;
-                barNum.Text = $"{barPos + 1} . {beat + 1}";
+                int beatsTotal = loopBars * bpb;
+                int beatPos = Math.Clamp((int)(phase * beatsTotal), 0, beatsTotal - 1);
+                barNum.Text = NotaNum.F($"{beatPos / bpb + 1}.{beatPos % bpb + 1}");
             }
             else barNum.Text = "–";
-            ofBars.Text = Loc.Plural("device.strata.of_bars", loopBars > 0 ? loopBars : 0);
-            int lit = (int)Math.Round(Math.Clamp(phase, 0, 1) * 16);
+            int count = closed && loopBars > 0 ? loopBars * bpb : 16, every = closed ? bpb : 4;
+            if (count > 32) { count = Math.Min(32, loopBars); every = 4; }
+            if (ticks.Count != count || tickBeats != every) { BuildTicks(count, every); tickBeats = every; }
+            int lit = closed ? (int)Math.Floor(Math.Clamp(phase, 0, 0.9999) * count) + 1 : 0;
+            // The strip is always there, as before the restyle: unlit until the first loop closes.
             bool rolling = mode is M_Rec or M_Over or M_Play;   // the progress is the playhead only while it runs
-            for (int i = 0; i < 16; i++) ticks[i].Background = (layers > 0 && i < lit) ? (rolling ? Brass : NotaPalette.VizInk) : Sunken;
-            countLbl.Text = layers > 0 ? Loc.F("device.strata.of_one_cycle_shown", layers, MaxLayers) : "";
+            for (int i = 0; i < ticks.Count; i++)
+                ticks[i].Background = closed && rolling && i < lit ? Brass : NotaPalette.BorderStrong;
+            ofBars.Text = counting ? Loc.T("device.strata.count_in") : firstPass ? Loc.T("device.strata.recording_the_first_loop") : closed ? Loc.Plural("device.strata.of_bars", loopBars) : "";
+            countLbl.Text = closed || firstPass ? Loc.F("device.strata.of_one_cycle_shown", lc, MaxLayers) : "";
 
-            // Action captions + active highlight.
-            actSub[0].Text = mode == M_Empty || layers == 0 ? "start loop" : "arm next";
-            actSub[1].Text = layers < MaxLayers ? Loc.F("device.strata.onto_layer", Math.Min(MaxLayers, layers + 1)) : "full";
-            actSub[2].Text = "all layers";
-            actSub[3].Text = Loc.T("device.strata.at_bar_end");
-            int active = mode switch { M_Rec => 0, M_Over => 1, M_Play => 2, M_Stop => 3, _ => -1 };
+            // Captions say what each action does now; one that would do nothing dims.
+            string when = quant switch { 0 => Loc.T("device.strata.now"), 1 => Loc.T("device.strata.next_bar"), _ => Loc.T("device.strata.next_beat") };
+            bool full = lc >= MaxLayers, overdubbing = mode == M_Over;
+            var subs = new string[4]; var can = new bool[4];
+            if (counting) { subs[0] = subs[1] = subs[2] = ""; subs[3] = Loc.T("device.strata.cancel_count_in"); can[3] = true; }
+            else if (mode == M_Empty || lc == 0)
+            {
+                subs[0] = subs[1] = On(CountIn) ? Loc.T("device.strata.after_a_count_in") : Loc.T("device.strata.start_the_loop"); can[0] = can[1] = true;
+                subs[2] = subs[3] = "";
+            }
+            else if (firstPass)
+            {
+                subs[0] = Loc.T("device.strata.close_then_play"); subs[1] = Loc.T("device.strata.close_add_layer_2"); subs[2] = Loc.T("device.strata.close_then_play"); subs[3] = Loc.T("device.strata.close_then_stop");
+                can[0] = can[1] = can[2] = can[3] = true;
+            }
+            else
+            {
+                subs[0] = full ? Loc.T("device.strata.layers_full") : overdubbing ? Loc.T("device.strata.recording") : Loc.F("device.strata.layer_loop_top", lc + 1);
+                subs[1] = full ? Loc.T("device.strata.layers_full") : overdubbing ? Loc.T("device.strata.recording") : Loc.F("device.strata.layer_when", lc + 1, when);
+                can[0] = can[1] = !full && !overdubbing;
+                subs[2] = mode == M_Stop ? Loc.T("device.strata.from_the_top") : "all layers"; can[2] = mode != M_Play;
+                subs[3] = mode == M_Stop ? Loc.T("device.strata.stopped_caption") : quant == 0 ? when : Loc.F("device.strata.at_the", when); can[3] = mode != M_Stop;
+            }
+            int active = counting ? 0 : mode switch { M_Rec => 0, M_Over => 1, M_Play => 2, M_Stop => 3, _ => -1 };
             for (int i = 0; i < 4; i++)
             {
-                bool on = i == active;
-                actBtn[i].Background = on ? NotaPalette.Wash(actInks[i], 0x28) : Card2;
-                actBtn[i].BorderBrush = on ? actInks[i] : BorderStrong;
-                if (i == 1) actName[i].Foreground = on ? actInks[i] : TextPrimary;
+                bool on = i == active, waiting = pending == actCmds[i];
+                var ink = i == 0 ? NotaPalette.Record : NotaPalette.Accent;
+                actSub[i].Text = waiting ? Loc.T("device.strata.waiting") : subs[i];
+                actBtn[i].Background = on ? NotaPalette.Wash(ink, 0x24) : NotaPalette.SurfaceHover;
+                actBtn[i].BorderBrush = on ? ink : waiting ? NotaPalette.BorderBrass : Brushes.Transparent;
+                actName[i].Foreground = on ? (i == 0 ? NotaPalette.Record : AccentBright) : can[i] ? TextPrimary : TextDisabled;
             }
 
-            layerHint.IsVisible = layers == 0;
+            // Layers: neutral greys told apart by shade, newest brightest; the recording one in the
+            // record red. The steps shrink as layers stack up so all eight keep their own shade.
+            layerHint.IsVisible = lc == 0;
+            if (lc != shownRows) { shownRows = lc; FitRows(); }
+            var grey = NotaPalette.VizInk.Color;
+            int shadeStep = lc > 1 ? Math.Min(0x18, (0xE6 - 0x60) / (lc - 1)) : 0;
             for (int k = 0; k < MaxLayers; k++)
             {
-                bool vis = k < layers;
+                bool vis = k < lc;
                 layerRows[k].IsVisible = vis;
                 if (!vis) continue;
-                int st = (int)scope[6 + k * 3]; float gainDb = scope[7 + k * 3]; bool muted = scope[8 + k * 3] > 0.5f;
-                bool rec = recL == k;
-                stateTxts[k].Text = rec ? "Rec" : muted ? "Muted" : "Play";
-                stateTxts[k].Foreground = rec ? NotaPalette.Record : muted ? TextTertiary : Success;
-                dbTxts[k].Text = $"{gainDb:+0.0;−0.0;0.0}";
+                bool muted = Sc(8 + k * 3) > 0.5f, rec = recL == k && !counting;
+                stateTxts[k].Text = rec ? "Rec" : muted ? "Muted" : mode == M_Stop ? Loc.T("device.strata.stopped") : "Play";
+                stateTxts[k].Foreground = rec ? NotaPalette.Record : muted ? TextTertiary : TextSecondary;
                 var mtxt = (TextBlock)muteBtns[k].Child!;
-                muteBtns[k].Background = muted ? NotaPalette.Mute : Sunken;   // mute on = the amber mute fill
-                muteBtns[k].BorderBrush = muted ? NotaPalette.Mute : BorderDef;
+                muteBtns[k].Background = muted ? NotaPalette.Mute : Brushes.Transparent;   // mute on = the amber mute fill
+                muteBtns[k].BorderBrush = muted ? NotaPalette.Mute : NotaPalette.BorderStrong;
                 mtxt.Foreground = muted ? NotaPalette.InkOn(NotaPalette.Mute) : TextTertiary;
-                var col = NotaPalette.InkColor(Palette[k % Palette.Length]);
-                layerRows[k].Background = rec ? NotaPalette.Wash(NotaPalette.Record, 0x1A) : muted ? NotaPalette.SurfaceInset : NotaPalette.Wash(NotaPalette.VizInk, 0x0A);
-                layerRows[k].BorderBrush = rec ? NotaPalette.Record : muted ? BorderDef : new SolidColorBrush(Color.FromArgb(0x73, col.R, col.G, col.B));
+                layerRows[k].Background = rec ? NotaPalette.Wash(NotaPalette.Record, 0x14) : Sunken;
                 int wn = engine.DeviceLayerWave(track, di, k, waveBuf, waveBuf.Length);
                 var env = new float[Math.Max(1, wn)];
                 for (int i = 0; i < wn; i++) env[i] = Math.Clamp(waveBuf[i], 0f, 1f);
-                waves[k].Set(env, col, muted, rec, rec ? recProg : 1f);
+                byte a = (byte)(0xE6 - (lc - 1 - k) * shadeStep);   // older layers fade, as Feedback sinks them
+                // The row's outline carries the layer's shade too, as its colour did before the restyle.
+                layerRows[k].BorderBrush = rec ? NotaPalette.Record : muted ? NotaPalette.GraphBorder
+                    : new SolidColorBrush(Color.FromArgb((byte)(a * 0x73 / 0xFF), grey.R, grey.G, grey.B));
+                waves[k].Set(env, Color.FromArgb(a, grey.R, grey.G, grey.B), muted, rec, rec && !firstPass ? recProg : 1f);   // the first pass grows to fill the strip
             }
-            foreach (var a in readouts) a();
+            foreach (var r in readouts) r();
         }
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
 
-        DockPanel.SetDock(live, Dock.Top);
-        return new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { live, body } };
+        // ---------- S (#531): the bar counter and the beat ticks over the four transport actions
+        // and Feedback · Input gain · Speed ----------
+        if (CardLayout.IsMini(ctx, di))
+        {
+            Control MiniKnob(int p, string name, Func<double, string> fmt, bool log)
+            {
+                double mn = Mn(p), mx = Mx(p);
+                double lmn = log ? Math.Log(mn) : mn, lspan = (log ? Math.Log(mx) : mx) - lmn;
+                double NormOf(double v) { double x = log ? Math.Log(Math.Clamp(v, mn, mx)) : Math.Clamp(v, mn, mx); return (x - lmn) / Math.Max(1e-9, lspan); }
+                double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
+                var val = new TextBlock { Foreground = TextPrimary };
+                var knob = new Knob(NormOf(P(p)), 1.0) { Accent = true, Default = NormOf(engine.DeviceParamDefault(track, di, p)), Width = 34, Height = 34 };
+                knob.ValueChanged += n => { SetR(p, (float)ValOf(n)); val.Text = fmt(P(p)); };
+                knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
+                knob.GestureEnd += () => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
+                MidiLearn.Bind(knob, MidiTarget.DeviceParam(track, di, p), name);
+                readouts.Add(() => { if (!knob.Dragging) { double c = NormOf(P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+                return KnobCell(name, knob, val, 60);
+            }
+            actRow.Children.Clear();
+            if (barNum.Parent is Panel livePanel) livePanel.Children.Clear();   // the counter moves from the transport section
+            var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var b in actBtn) { b.Margin = new Thickness(2); b.HorizontalAlignment = HorizontalAlignment.Stretch; grid.Children.Add(b); }
+            var counter = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Children = { barNum, ofBars } };
+            var knobs = new UniformGrid { Rows = 1, Margin = new Thickness(0, 6, 0, 0), Children = {
+                MiniKnob(Feedback, Loc.T("device.strata.feedback"), PctF, false),
+                MiniKnob(InputGain, Loc.T("device.strata.input_gain"), DbText, false),
+                MiniKnob(Speed, Loc.T("device.strata.speed"), SpeedF, true) } };
+            var mini = new StackPanel { Margin = new Thickness(8), Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = {
+                counter, new Border { HorizontalAlignment = HorizontalAlignment.Center, Child = tickRow }, grid, knobs } };
+            foreach (var a in readouts) a();
+            root = new Border { Background = NotaPalette.SurfaceCard, Child = new RuleSection { Margin = new Thickness(5), Child = mini } };
+        }
+
+        return root;
     }
+
+    private static string DbText(double v) => NotaNum.F($"{v:+0.0;−0.0;0.0} dB");
 }

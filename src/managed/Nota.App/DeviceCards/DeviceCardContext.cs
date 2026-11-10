@@ -32,8 +32,18 @@ internal sealed class DeviceCardContext(
     Action<string>? status = null,
     Func<RackDeviceSel?>? rackSelection = null,
     Action<RackDeviceSel?, RackDeviceCommands?>? selectRackDevice = null,
-    Action? rackCopied = null)
+    Action? rackCopied = null,
+    bool canXl = false,
+    bool popout = false)
 {
+    /// <summary>True for a card in a track's own chain, where XL can open the panel above it
+    /// (specs/085); false in racks and pop-out windows.</summary>
+    public bool CanXl => canXl;
+
+    /// <summary>True for a body built for the device's own window (specs/085): it lays out at L
+    /// whatever the card's size, and stretches to the window.</summary>
+    public bool Popout => popout;
+
     public IAudioEngine Engine => engine;
     public int TrackId => trackId;
 

@@ -8,7 +8,7 @@
 // of L and R (drag: the notch left / right = Delay, up / down = Feedback) and, under it, the delay
 // τ of both channels over two cycles with a running head, a DELAY LINE column (Delay, Depth, the
 // bipolar Feedback with its − / 0 / + snaps, Mix, and the first notch's sweep and null depth)
-// with the mode the feedback makes, and a status strip. The live τ comes from the engine
+// with the mode the feedback makes. The live τ comes from the engine
 // (Flanger.h scopeRead); the comb is drawn from the same formula the DSP runs. Every control is a
 // device param (normalized 0..1), so automation / MIDI learn / presets / A-B / persistence come
 // for free. FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -34,6 +34,8 @@ internal sealed class FlangerDeviceBody : IDeviceBody
     private const int S_TauL = 3, S_TauR = 4, S_WinPhase = 5, S_SampleRate = 10, kTele = 32;
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 
@@ -87,10 +89,9 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => new()
         { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
 
         // Slider row: caps label · track · mono value.
         Grid Slider(string label, int p, Func<double, string> fmt, string tip, double labelW = 46, double valueW = 36,
@@ -107,29 +108,21 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             return g;
         }
 
-        RuleSection Island(Control head, Control body, double width = double.NaN)
+        // Gauge knob over a normalized param (automation gesture, MIDI learn, live follow).
+        Control K(int p, string name, Func<double, string> fmt, string tip, double cellW = 50, double size = 34, Func<double, double>? snap = null, bool bipolar = false)
         {
-            var headBar = new Border
-            {
-                Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
-            };
-            return new RuleSection
-            {
-                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
-            };
-        }
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
+            var val = Mono(fmt(P(p)), 7, TextPrimary);
+            var knob = new Knob(P(p), 1.0) { Accent = true, Bipolar = bipolar, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            knob.Format = fmt;
+            knob.ValueChanged += v => { Raw(p, snap is null ? v : snap(v)); RefreshAll(); };
+            knob.GestureBegin += () => Begin(p);
+            knob.GestureEnd += () => End(p);
+            Learn(knob, p);
+            ToolTip.SetTip(knob, tip);
+            readouts.Add(() => { if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; } val.Text = fmt(P(p)); });
+            return KnobCell(name, knob, val, cellW);
         }
         // A legend sample: a drawn 8px stroke and its word (never a typed dash).
-        static Control LegendItem(string word, IBrush ink) => new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new Border { Width = 8, Height = 1.5, Background = ink, VerticalAlignment = VerticalAlignment.Center }, Mono(word, 7, ink) },
-        };
 
         // ======================================================================
         // LEFT — LFO: waveform · Hz / Sync · the rate · Rate · Stereo
@@ -140,7 +133,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         Learn(syncSeg, Sync);
         ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
-        var waveSeg = Segments(FlangerMath.Waves, WaveI, i => { SetP(Waveform, i / 2.0); RefreshAll(); }, out var waveSync, fill: true, padX: 0);
+        var waveSeg = Segments(FlangerMath.Waves, WaveI, i => { SetP(Waveform, i / 2.0); RefreshAll(); }, out var waveSync, padX: 5);
         readouts.Add(waveSync);
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, Loc.T("device.flanger.the_lfo_shape_that_sweeps"));
@@ -165,7 +158,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             }
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
-        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
+        var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub } };   // the period is in the tab bar
         ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
 
         var rateRow = Slider("RATE", Rate, v => HzF(FlangerMath.FreeHz(v)) + " Hz", Loc.T("common.rate_the_free_lfo_rate"), 38, 46);
@@ -177,23 +170,10 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             Loc.T("device.flanger.stereo_the_right_lfo_against"), 38, 46,
             modulation: true, snap: v => Math.Round(v * 180) / 180);
 
-        var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
-        leftBody.Children.Add(waveSeg);
-        leftBody.Children.Add(GRow(bigBlock, 1));
-        leftBody.Children.Add(GRow(new Panel { Children = { rateRow, divRow } }, 2));
-        leftBody.Children.Add(GRow(stereoRow, 3));
-        var left = Island(HeadRow(Caps("LFO"), syncSeg), leftBody, 176);
-        DockPanel.SetDock(left, Dock.Left);
-
         // ======================================================================
         // CENTRE — COMB RESPONSE, and τ over two cycles
         // ======================================================================
         var tauWord = Mono("", 7, TextTertiary);
-        var legend = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), tauWord },
-        };
         var comb = new FlangerCombView { Value = () => (P(Delay), P(Feedback)) };
         comb.GestureBegin += () => { Begin(Delay); Begin(Feedback); };
         comb.GestureEnd += () => { End(Delay); End(Feedback); };
@@ -201,40 +181,31 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         comb.ResetRequested += () => { Reset(Delay); Reset(Feedback); RefreshAll(); };
         Learn(comb, Delay);
         ToolTip.SetTip(comb, MenuKit.Keys(Loc.T("device.flanger.the_comb_the_delay_carves")));
-        ValueEntry.AttachAll(comb, ValueEntry.DeviceParam(engine, track, di, Delay, "Delay", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(FlangerMath.Fb(v)), RefreshAll));
+        ValueEntry.AttachAll(comb, ValueEntry.DeviceParam(engine, track, di, Delay, "Delay", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(FlangerMath.Fb(v)), RefreshAll));
 
         var sweep = new FlangerSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, Loc.T("device.flanger.the_delay_of_both_channels"));
-        var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(sweep, Dock.Bottom), comb } };
-        var centre = Island(HeadRow(Caps("COMB RESPONSE"), legend), centreBody);
-        centre.Margin = new Thickness(5, 0);
+        // The comb with τ over two cycles under it: one view.
+        var combView = new DockPanel { LastChildFill = true, Children = { Docked(sweep, Dock.Bottom), comb } };
 
         // ======================================================================
         // RIGHT — DELAY LINE: Delay · Depth · Feedback · Mix · snaps · notch readouts
         // ======================================================================
         var modeWord = Mono("", 7, TextSecondary);
-        modeWord.Margin = new Thickness(0, 0, 5, 0);
-        readouts.Add(() =>
+                readouts.Add(() =>
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, Loc.T("device.flanger.what_the_feedback_makes_positive"));
-
-        var delayRow = Slider("DELAY", Delay, v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", Loc.T("device.flanger.delay_the_centre_of_the"));
-        var depthRow = Slider("DEPTH", Depth, v => PctF(v), Loc.T("device.flanger.depth_how_far_the_lfo"));
-        var fbRow = Slider("FEEDBACK", Feedback, v => FbF(FlangerMath.Fb(v)),
-            Loc.T("device.flanger.feedback_the_delayed_signal_fed"), modulation: true, bipolar: true,
-            snap: v => FlangerMath.FbNorm(Math.Round(FlangerMath.Fb(v) * 100) / 100));
-        var mixRow = Slider("MIX", Mix, v => PctF(v), Loc.T("device.flanger.mix_50_gives_the_deepest"));
 
         Border Snap(string text, double fb)
         {
             var tb = Mono(text, 7, TextTertiary); tb.HorizontalAlignment = HorizontalAlignment.Center;
             var b = new Border
             {
-                BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 1),
+                BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(0, 1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             b.PointerPressed += (_, e) =>
@@ -252,7 +223,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             ToolTip.SetTip(b, fb < 0 ? Loc.T("device.flanger.feedback_70_hollow") : fb > 0 ? Loc.T("device.flanger.feedback_70_the_classic_jet") : Loc.T("device.flanger.feedback_0_a_plain_comb"));
             return b;
         }
-        var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 1, Margin = new Thickness(46, 0, 0, 0) };
+        var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("26,26,26"), ColumnSpacing = 1, VerticalAlignment = VerticalAlignment.Center };
         snaps.Children.Add(Snap("−", -0.7));
         snaps.Children.Add(Col(Snap("0", 0), 1));
         snaps.Children.Add(Col(Snap("+", 0.7), 2));
@@ -270,10 +241,11 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         }
         var notchBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
         var notchVal = Mono("", 8, TextPrimary);
-        var nullBar = new FlangerBar { Ink = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
+        var nullBar = new FlangerBar { Ink = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Center };
         var nullVal = Mono("", 8, TextPrimary);
         var reads = new Border
         {
+            Background = Brushes.Transparent,   // a fixed-height row in the panel
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
             Child = new StackPanel
             {
@@ -285,55 +257,38 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             },
         };
 
-        var rightBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        rightBody.Children.Add(delayRow);
-        rightBody.Children.Add(GRow(depthRow, 2));
-        rightBody.Children.Add(GRow(fbRow, 4));
-        rightBody.Children.Add(GRow(mixRow, 6));
-        rightBody.Children.Add(GRow(snaps, 8));
-        rightBody.Children.Add(GRow(reads, 10));
-        var right = Island(HeadRow(Caps("DELAY LINE"), modeWord), rightBody, 176);
-        DockPanel.SetDock(right, Dock.Right);
-
         // ======================================================================
-        // Status strip
+        // Frames: L (the comb with Delay · Feedback · Depth beside it and the waveform and the
+        // feedback snaps under it; the LFO panel; Dry/wet under it) · S (the comb over the
+        // waveform and Rate · Delay · Feedback · Dry/wet)
         // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        readouts.Add(() =>
+        var extras = Mono("", 7, TextTertiary);
+        readouts.Add(() => { extras.Text = modeWord.Text + " · " + tauWord.Text + " · period " + PeriodF(PeriodMs()); });
+        Control RateKnob(double cellW)
         {
-            double fb = Fb(), afb = Math.Abs(fb);
-            bool warn = false;
-            string foot;
-            if (!On()) foot = Loc.T("device.flanger.flanger_bypassed_the_signal_passes");
-            else if (P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
-            else if (afb >= 0.85)
-            {
-                foot = Loc.F("device.flanger.feedback_peaks_up_to_db_the", FbF(fb), FlangerMath.PeakDb(P(Mix), fb));
-                warn = true;
-            }
-            else if (P(Depth) < 0.01f) foot = Loc.T("device.flanger.depth_at_zero_the_comb");
-            else
-            {
-                var (th, _) = FlangerMath.Notch(P(Mix), fb);
-                double lo = th / (2 * Math.PI) / (TauMax() / 1000), hi = th / (2 * Math.PI) / (TauMin() / 1000);
-                foot = "Notch sweeps " + FlangerMath.HzF(lo) + " ↔ " + FlangerMath.HzF(hi) + " Hz · τ "
-                    + FlangerMath.Ms(TauMin()) + "–" + FlangerMath.Ms(TauMax()) + " ms";
-            }
-            statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ") + (Synced() ? "retrig bar" : "free run");
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+            var free = K(Rate, "RATE", v => HzF(FlangerMath.FreeHz(v)) + "\u2009Hz", Loc.T("common.rate_the_free_lfo_rate"), cellW);
+            var div = K(Division, "RATE", v => FlangerMath.DivNames[FlangerMath.DivIndex(v)], Loc.T("device.flanger.rate_the_note_value_of"), cellW,
+                snap: v => FlangerMath.DivNorm(FlangerMath.DivIndex(v)));
+            readouts.Add(() => { free.IsVisible = !Synced(); div.IsVisible = Synced(); });
+            return new Panel { Children = { free, div } };
+        }
+        Control DelayKnob(double cellW) => K(Delay, "DELAY", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + "\u2009ms", Loc.T("device.flanger.delay_the_centre_of_the"), cellW);
+        Control FbKnob(double cellW) => K(Feedback, "FEEDBACK", v => FbF(FlangerMath.Fb(v)), Loc.T("device.flanger.feedback_the_delayed_signal_fed"), cellW,
+            snap: v => FlangerMath.FbNorm(Math.Round(FlangerMath.Fb(v) * 100) / 100), bipolar: true);
+        Control MixKnob(double cellW, double size) => K(Mix, "DRY/WET", v => PctF(v), Loc.T("device.flanger.mix_50_gives_the_deepest"), cellW, size);
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(combView, waveSeg, RateKnob(56), DelayKnob(56), FbKnob(56), MixKnob(56, 34))
+            : CardLayout.Large(new[] { Loc.T("device.flanger.tab_comb") }, 0,
+                _ => CardLayout.View(combView, CardLayout.KnobColumn(DelayKnob(50), FbKnob(50), K(Depth, "DEPTH", v => PctF(v), Loc.T("device.flanger.depth_how_far_the_lfo"), 50)),
+                    CardLayout.Line(8, waveSeg, snaps)),
+                _ => (CardLayout.Head(CardLayout.Title("LFO"), syncSeg), CardLayout.Rows(
+                        new Border { Background = Brushes.Transparent, Margin = new Thickness(0, 0, 0, 3), Child = bigBlock },
+                        new Panel { Children = { rateRow, divRow } },
+                        stereoRow,
+                        reads)),
+                extras,
+                CardLayout.Output(null, MixKnob(58, 44), null),
+                _ => RefreshAll());
 
         void Refresh()
         {

@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Strata (mockup 3n) per-layer waveform strip. A peak envelope of one loop
-// layer, drawn as vertical bars in the layer's palette colour — greyed when the
-// layer is muted, and (while that layer is the one recording) drawn only up to the
-// playhead, with the rest dark because it hasn't happened yet. The device body
-// pushes a fresh envelope each 60 Hz tick from the engine's layerWave query.
+// layer, drawn as vertical bars in the layer's shade of grey — dimmed when the
+// layer is muted, and (while that layer is the one recording) drawn in the record
+// red only up to the playhead, with the rest flat because it hasn't happened yet.
+// The device body pushes a fresh envelope each 60 Hz tick from the engine's layerWave query.
 
 using System;
 using Avalonia;
@@ -17,7 +17,7 @@ namespace Nota.App;
 internal sealed class StrataWave : Control
 {
     private float[] _env = Array.Empty<float>();
-    private Color _color = NotaPalette.InkColor("#C99C55");
+    private Color _color = NotaPalette.VizInk.Color;
     private bool _muted, _recording;
     private float _progress = 1f;   // 0..1 of the loop that has been recorded (rec layer)
 
@@ -32,7 +32,7 @@ internal sealed class StrataWave : Control
         double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0 || _env.Length == 0) return;
         int n = _env.Length; double bw = w / n, mid = h / 2;
         var full = _muted ? NotaPalette.BorderStrong
-                          : new SolidColorBrush(_recording ? NotaPalette.Record.Color : Color.FromArgb(0xCC, _color.R, _color.G, _color.B));
+                          : new SolidColorBrush(_recording ? NotaPalette.Record.Color : _color);
         var future = NotaPalette.GraphBorder;
         double cut = _recording ? _progress * n : n;
         for (int i = 0; i < n; i++)

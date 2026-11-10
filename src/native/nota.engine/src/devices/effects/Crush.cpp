@@ -32,6 +32,7 @@ Crush::Crush() {
     p_[Drive].store(0.333f);   // ~0 dB pre-crush
     p_[AutoGain].store(0.0f);  // off
     p_[DcFilter].store(0.0f);  // off
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -344,6 +345,7 @@ const char* Crush::paramName(int32_t i) const {
     case Drive: return "Drive";
     case AutoGain: return "Auto Gain";
     case DcFilter: return "DC Filter";
+    case View: return "View";
     default: return "";
     }
 }

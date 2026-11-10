@@ -7,7 +7,7 @@
 //
 //   macros (116) │ Chains · Zones|Select · Macros │ Chain · Rack out|Output (160)
 //   ─────────────┴─────────────────────────────────┴──────────────────────────────
-//   status line (18)
+//   status line (18) — the effect racks only
 //
 // The columns are card sections (a rule where they meet), never framed boxes. What differs
 // between the racks comes from RackKindProfile; the regions live in the RackCard.*.cs
@@ -95,21 +95,27 @@ internal sealed partial class RackCardView
         _rs.SelectedMacro = Math.Clamp(_rs.SelectedMacro, 0, 7);
         if (_rs.Centre != RackCentreTab.Chains) _rs.MappingMacro = -1;
 
+        // The Instrument Rack has no status line, as the built-in instruments (#531): the Zones
+        // tab already answers what a note plays. The effect racks keep theirs (mode, dry / wet).
+        bool status = _rp.Kind != RackKind.Instrument;
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions($"{RcMacroWidth},*,{RcRightWidth}"),
-            RowDefinitions = new RowDefinitions($"*,{RcStatusHeight}"),
+            RowDefinitions = new RowDefinitions(status ? $"*,{RcStatusHeight}" : "*"),
             ColumnSpacing = RcGutter, RowSpacing = 3,
-            Margin = new Thickness(NotaSpace.DeviceInset, NotaSpace.DeviceInset, NotaSpace.DeviceInset, 0),
+            Margin = new Thickness(NotaSpace.DeviceInset, NotaSpace.DeviceInset, NotaSpace.DeviceInset, status ? 0 : NotaSpace.DeviceInset),
         };
         // A section's rule is on its left edge: pad the content off it by a gutter, so the rule
         // sits halfway between the columns.
         RcPlace(grid, Section(RcMacroColumn()), 0, 0);
         RcPlace(grid, new RuleSection { Padding = new Thickness(RcGutter, 0, 0, 0), Child = RcCentre() }, 0, 1);
         RcPlace(grid, new RuleSection { Padding = new Thickness(RcGutter, 0, 0, 0), Child = RcRightPanel() }, 0, 2);
-        var status = Section(RcStatusLine(), SectionEdge.Top);
-        Grid.SetColumnSpan(status, 3);
-        RcPlace(grid, status, 1, 0);
+        if (status)
+        {
+            var line = Section(RcStatusLine(), SectionEdge.Top);
+            Grid.SetColumnSpan(line, 3);
+            RcPlace(grid, line, 1, 0);
+        }
 
         if (_irTick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _irTick.Count; i++) _irTick[i](); });
         return grid;
@@ -236,7 +242,7 @@ internal sealed partial class RackCardView
 
     private static TextBlock RcMono(string text, IBrush ink, double size = NotaType.KnobValue) => new()
     {
-        Text = text, FontFamily = NotaFonts.MonoFamily, FontSize = size, Foreground = ink,
+        Text = text, FontFamily = NotaFonts.UiFamily, FontSize = size, Foreground = ink,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -265,7 +271,7 @@ internal sealed partial class RackCardView
         };
         var b = new Border
         {
-            Height = 16, MinWidth = 26, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge,
+            Height = 16, MinWidth = 26, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell,
             Background = on ? fill : NotaPalette.SurfaceRaised, BorderBrush = on ? fill : NotaPalette.BorderDefault,
             BorderThickness = new Thickness(1), Cursor = enabled ? new Cursor(StandardCursorType.Hand) : Cursor.Default,
             VerticalAlignment = VerticalAlignment.Center, Child = tb,

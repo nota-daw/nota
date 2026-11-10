@@ -16,8 +16,8 @@
 //               Filter    — LP / HP / BP, cutoff and resonance, after the cloud.
 //               Amp       — the envelope of the whole cloud.
 //   Rail 186    READ — Scan / Freeze / Key, then Position, Scan speed and Spray — and the
-//               output: volume, dry/wet (the sample itself against the cloud) and the
-//               track's meter. On screen on every tab.
+//               output: volume, dry/wet (the sample itself against the
+//               cloud). On screen on every tab.
 //   Status 18   the tab read back in words, and the sample, voices and grains live.
 //
 // Neutral ink is the parameter itself; teal is variation and scatter (spread, spray, the three
@@ -139,12 +139,10 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
 
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
 
         void Refresh()
         {
@@ -153,8 +151,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             wave.SetGrains(cloud, grains);
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
 
         wave.ValueChanged += v => { SetP("position", (float)v); Refresh(); };
@@ -182,7 +178,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         // Every knob is a table cell: a short label on the card while MIDI learn and the CV
@@ -193,7 +189,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };
@@ -249,7 +245,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 var ic = new GrainShapeIcon(i) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 var c = new Border
                 {
-                    Width = 26, Height = 19, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
+                    Width = 26, Height = 19, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
                     Cursor = new Cursor(StandardCursorType.Hand), Child = ic,
                 };
                 ToolTip.SetTip(c, $"{char.ToUpperInvariant(ShapeWords[i][0])}{ShapeWords[i][1..]} window");
@@ -297,7 +293,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             {
                 var b = new Border
                 {
-                    Width = 16, Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                    Width = 16, Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                     BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 };
@@ -311,7 +307,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             }
             var box = new Border
             {
-                Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+                Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
                 Background = NotaPalette.BgSunken, Child = text,
             };
             box.PointerWheelChanged += (wt, e) => { if (WheelInput.Step(e, wt) is not { } s) return; e.Handled = true; if (s != 0) SetRoot(rootNote + s); };
@@ -427,33 +423,15 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             },
         };
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid
-        {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
-        };
-        for (int i = 0; i < 3; i++)
-        {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 50);
+        // Volume · Dry/Wet centred in the rail — the track meter already shows the level.
         var mixCell = PKnob("drywet", "DRY/WET", "Dry/Wet", Pct, NotaSize.KnobRegular, 46);
         ToolTip.SetTip(mixCell, Loc.T("device.grain.blend_the_sample_itself_dry"));
-        outRow.Children.Add(volCell);
-        Grid.SetColumn(mixCell, 1); outRow.Children.Add(mixCell);
-        Grid.SetColumn(meterBlock, 2); outRow.Children.Add(meterBlock);
+        var outRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children = { PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 50), mixCell },
+        };
         var outFrame = new Border
         {
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),
@@ -469,15 +447,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
         string ModeWord() => ModeNames[Mode()].ToLowerInvariant();
-        string Read() => Mode() switch
-        {
-            0 => $"scan {ScanSpeed(G("scan"))} from {Pct(G("position"))}",
-            1 => $"freeze at {Pct(G("position"))}",
-            _ => $"key from {Pct(G("position"))} at C4",
-        };
-        string Mix() => G("drywet") >= 0.9995f ? "" : $" · dry/wet {Pct(G("drywet"))}";
 
         // The line at the right of the tab strip: what this tab holds, in a few words.
         string Hint() => tab switch
@@ -487,30 +457,6 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             2 => Loc.F("device.grain.position_pitch_pan", ModeWord()),
             3 => $"{ModeWord()} · {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))}",
             _ => $"{ModeWord()} · a · d · s · r",
-        };
-        string Summary() => tab switch
-        {
-            0 => $"Window {ShapeWords[Sel("grainshape", 4)]} · size {Size(G("grainsize"))} · density {Density(G("density"))} · spread {Pct(G("spread"))} · {Read()}{Mix()}",
-            1 => Math.Abs(G("coarse") - 0.5f) < 0.001f && Math.Abs(G("fine") - 0.5f) < 0.0026f
-                ? Loc.F("device.grain.root_plays_the_sample_as", SamplerModel.NoteName(rootNote))
-                : $"Root {SamplerModel.NoteName(rootNote)} · coarse {Coarse(G("coarse"))} · fine {Fine(G("fine"))} — every grain transposed by it",
-            2 => $"Variation: position {Pct(G("posrand"))} · pitch {PitchJitter(G("pitchrand"))} · pan {Pct(G("panrand"))} — per grain",
-            3 => $"Filter {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))} · reso {Pct(G("filreso"))} — after the grain cloud",
-            _ => $"Amp {Attack(G("attack"))} · {Decay(G("decay"))} · {Pct(G("sustain"))} · {Release(G("release"))} — the envelope shapes the cloud, not the grain",
-        };
-        string Meta()
-        {
-            string sample = sampleId == 0 ? "DEFAULT" : "SAMPLE";
-            string rate = sampleKHz > 0 ? " · " + NotaNum.Unit(sampleKHz, "0.#", "kHz") : "";
-            return Loc.F("device.grain.voices_grains_caps", sample, NotaNum.Time(sampleSec), rate, voices, grains);
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
         };
 
         // ---- assembly ---------------------------------------------------------
@@ -522,12 +468,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         // Live tick: the read heads and the grain cloud, then every readout.
         void Tick()
@@ -601,18 +542,4 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

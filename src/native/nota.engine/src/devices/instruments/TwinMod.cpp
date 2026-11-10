@@ -162,6 +162,9 @@ void evalPart(const std::atomic<float>* pn, int part, float morph, double spb, d
     c.mA = attackSec(S(MEnvA)), c.mD = decaySec(S(MEnvD)), c.mS = S(MEnvS), c.mR = decaySec(S(MEnvR));
     c.mVel = S(MEnvVel);
     c.mLoop = S(MEnvLoop) >= 0.5f;
+    c.fShape = {S(FDCurve), S(FRCurve), S(FEnvExp)};
+    c.aShape = {S(ADCurve), S(ARCurve), S(AEnvExp)};
+    c.mShape = {S(MDCurve), S(MRCurve), S(MEnvExp)};
 
     for (int l = 0; l < 3; ++l) {
         const int o = l * (Lfo2Shape - Lfo1Shape);

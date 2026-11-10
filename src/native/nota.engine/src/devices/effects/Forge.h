@@ -91,6 +91,7 @@ class Forge : public Device {
         S3Bias,
         S3Tone,
         S3Width,
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     static constexpr int kLegacyParams = Oversampling + 1; // 27: the layout before the per-stage shape

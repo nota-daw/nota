@@ -11,15 +11,15 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-// An on/off switch that owns its state and fires Changed — the same 18×10 brass pill as
-// SwitchTrack (almanac § Controls), for call sites that want a self-toggling control.
+// An on/off switch that owns its state and fires Changed — the same switch as SwitchTrack,
+// for call sites that want a self-toggling control.
 internal sealed class ToggleSwitch : Control
 {
     private readonly SwitchTrack _track;
     public event Action<bool>? Changed;
-    public ToggleSwitch(bool on, bool large = false)
+    public ToggleSwitch(bool on, bool large = false, bool shell = false)
     {
-        _track = new SwitchTrack(large) { IsOn = on };
+        _track = new SwitchTrack(large, shell) { IsOn = on };
         Width = _track.Width; Height = _track.Height;
         Cursor = new Cursor(StandardCursorType.Hand);
         LogicalChildren.Add(_track); VisualChildren.Add(_track);

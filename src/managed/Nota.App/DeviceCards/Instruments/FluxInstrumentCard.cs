@@ -89,14 +89,10 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var clock = Stopwatch.StartNew();
         int perBar = 0;
 
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
 
         void Refresh()
         {
             foreach (var r in readouts) r();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
 
         // ---- shared builders --------------------------------------------------
@@ -113,7 +109,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         };
         static TextBlock Mono(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
@@ -198,11 +194,11 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             if (!pad.Dragging) pad.SetValue(G("vecx"), G("vecy"));
             pad.SetGhost(effX, effY, Ghost());
             vecReadout.Text = $"x {Coord(G("vecx"))} · y {Coord(G("vecy"))}";
-            vecReadout.Foreground = VectorPulled() ? NotaPalette.TealBright : TextSecondary;   // teal: the reaction pulls it
+            vecReadout.Foreground = VectorPulled() ? TextPrimary : TextSecondary;   // lifted to ink 1 while the reaction pulls it
             bool pulled = VectorPulled();
             vecFoot.Text = pulled ? Loc.T("device.flux.dashed_where_the_reaction_pulls")
                 : Ghost() ? Loc.T("device.flux.dashed_where_motion_drifts") : Loc.T("device.flux.four_timbres_drag_the_point");
-            vecFoot.Foreground = pulled ? NotaPalette.TealBright : TextTertiary;
+            vecFoot.Foreground = pulled ? DeviceCardKit.ModInkBright : TextTertiary;
         });
 
         var vecGrid = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*,{StatusH}") };
@@ -233,7 +229,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var srcChevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         var srcField = new Border
         {
-            Height = 15, MinWidth = 92, CornerRadius = NotaRadius.Badge, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
+            Height = 15, MinWidth = 92, CornerRadius = NotaRadius.Cell, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
             Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new DockPanel { Children = { Docked(srcChevron, Dock.Right), srcText } },
         };
@@ -310,13 +306,13 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         {
             scope.Live = live;
             listen.Knob.IsDim = !live;
-            reactCap.Foreground = live ? NotaPalette.TealBright : TextTertiary;
+            reactCap.Foreground = live ? DeviceCardKit.ModInkBright : TextTertiary;
             reactSub.Foreground = live ? NotaPalette.TextMuted : TextDisabled;
             srcText.Text = KeyName();
             srcText.Foreground = live ? TextPrimary : TextDisabled;
             srcField.Background = live ? NotaPalette.SurfaceRaised : NotaPalette.BgSunken;
             targetHint.Text = TargetLine();
-            targetHint.Foreground = live ? NotaPalette.TealBright : TextDisabled;
+            targetHint.Foreground = live ? DeviceCardKit.ModInkBright : TextDisabled;
         });
 
         var reactBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
@@ -375,7 +371,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             {
                 Slider("GLIDE", "glide", () => GlideT(G("glide"))),
                 Slider("TUNE", "tune", () => Cents(G("tune"))),
-                Slider("GAIN", "gain", () => Pct(G("gain"))),
+                Slider("VOLUME", "gain", () => Pct(G("gain"))),
             },
         };
         var macroFoot = Mono("adaptive: reso · a/r · unison", TextDisabled);
@@ -396,37 +392,6 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var macroPanel = SectionBox(macroGridHost);
         macroPanel.Width = SideW;
 
-        // ---- status strip -------------------------------------------------------
-        string Summary()
-        {
-            if (!live)
-            {
-                var w = Weights(G("vecx"), G("vecy"));
-                var parts = new List<string>();
-                for (int i = 0; i < 4; i++) parts.Add($"{WorldNames[i]} {Pct((float)w[i])}");
-                return $"Vector x {Coord(G("vecx"))} · y {Coord(G("vecy"))} → {string.Join(" · ", parts)} · react off";
-            }
-            string src = KeyName();
-            string what = TargetIdx() switch
-            {
-                3 => $"vector x {Coord(G("vecx"))} → {Coord(effX)}",
-                0 => Loc.F("device.flux.cutoff_of_range", Pct(react * 0.45f)),
-                1 => NotaNum.Unit(react * 3, "+0.0;−0.0;0", "st"),
-                _ => $"space +{Pct(react * 0.5f)}",
-            };
-            string hits = Loc.Plural("device.flux.transients_per_bar", perBar);
-            return $"{src} → {Targets[TargetIdx()].ToLowerInvariant()} · listen {Pct(G("listen"))} · {hits} · {what}";
-        }
-        string Meta() => $"MOTION {RateNames[RateIdx()]} · TUNE {Cents(G("tune"))} · GAIN {Pct(G("gain"))}";
-
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly -----------------------------------------------------------
         var body = new Grid
@@ -438,8 +403,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         Grid.SetColumn(reactPanel, 1); body.Children.Add(reactPanel);
         Grid.SetColumn(macroPanel, 2); body.Children.Add(macroPanel);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         // Live tick: the scope, the pulled vector, transients per bar, then every readout.
         void Tick()

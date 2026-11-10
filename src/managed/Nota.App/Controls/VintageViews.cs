@@ -3,11 +3,11 @@
 //
 // Nota Vintage card windows (the centre panel's three tabs):
 //  • VtCurveView — Curve: the static transfer curve the engine runs (input level → output,
-//                  neutral ink), what reaches the output with Mix and Output (teal), the dry
+//                  neutral ink), what reaches the output with Mix and Output (a darker grey), the dry
 //                  line dashed, a dot where the input peak sits on the curve and the dust
 //                  of Crackle; drag up / down for the drive;
 //  • VtWearView  — Wear: the pitch drift over the last ~4 s in cents — wow in neutral ink,
-//                  flutter in teal — from the engine's history; drag up / down for the
+//                  flutter in a darker grey — from the engine's history; drag up / down for the
 //                  depth of the selected source, sideways for its rate;
 //  • VtHarmView  — Output: the harmonics the curve adds at the input level (f … 7f,
 //                  relative to the fundamental) against the hiss floor; drag for the drive.
@@ -99,7 +99,7 @@ internal sealed class VtCurveView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 4);
-        double x0 = 3, x1 = w - 3, top = 14, bot = h - 12;
+        double x0 = 3, x1 = w - 3, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         // y spans the larger of the curve's peak and unity, so a hot curve is never clipped.
         double peak = 1;
         for (int i = 0; i < _n; i++) peak = Math.Max(peak, Math.Abs(_curve[i]) * Math.Max(1, _out));
@@ -124,7 +124,7 @@ internal sealed class VtCurveView : VtWindowBase
             double Heard(int i) => (1 - _mix) * ((double)i / (_n - 1)) + _mix * _curve[i] * _out;
             bool differs = false;
             for (int i = 0; i < _n && !differs; i++) differs = Math.Abs(Heard(i) - _curve[i]) > 0.01;
-            if (differs) ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x90), 1.1), Line(Heard));
+            if (differs) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.2), Line(Heard));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(i => _curve[i]));
 
             // where the input sits on the curve now
@@ -135,12 +135,12 @@ internal sealed class VtCurveView : VtWindowBase
                 double yv = _curve[a] + (_curve[b] - _curve[a]) * (f - a);
                 NotaGraph.Node(ctx, new Point(X(t), Y(yv)), Dragging);
             }
-            if (differs) NotaGraph.Legend(ctx, w - 5, 14, ("heard", NotaPalette.TealBright, NotaGraph.Mark.Line));
+            if (differs) NotaGraph.Legend(ctx, w - 5, 14, ("heard", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         }
 
         // dust: re-sprinkled every frame, as many specks as the crackle asks for
         int dots = (int)(_crackle * 26);
-        var dust = NotaPalette.Wash(NotaPalette.VizInk, 0x70);
+        var dust = NotaPalette.TextTertiary;
         for (int i = 0; i < dots; i++)
         {
             double rr = 0.6 + Rand() * 0.8;
@@ -152,7 +152,7 @@ internal sealed class VtCurveView : VtWindowBase
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "−∞");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "0 dBFS");
         var mid = NotaGraph.AxisText("−6 dB");
-        ctx.DrawText(mid, new Point(X(0.5) - mid.Width / 2, h - mid.Height - 3));
+        ctx.DrawText(mid, new Point(X(0.5) + 3, h - mid.Height - 3));   // beside its grid line, not on it
     }
 }
 
@@ -179,7 +179,7 @@ internal sealed class VtWearView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 6);
-        double top = 14, bot = h - 12, cy = (top + bot) / 2, half = Math.Max(4, (bot - top) / 2);
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, cy = (top + bot) / 2, half = Math.Max(4, (bot - top) / 2);
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, cy), new Point(w, cy));
         if (_n < 2) { Labels(); return; }
 
@@ -207,9 +207,10 @@ internal sealed class VtWearView : VtWindowBase
             c.EndFigure(false);
             return g;
         }
-        if (showF) ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xA0), 1), Line(k => _flut[k] + (showW ? _wow[k] : 0)));
+        if (showF) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), Line(k => _flut[k] + (showW ? _wow[k] : 0)));
         if (showW) ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(k => _wow[k]));
-        var scale = NotaGraph.AxisText(NotaNum.F($"±{range:0} ¢"));
+        // The scale (it grows to fit what is drawn), named at the top of the plot on the left.
+        var scale = NotaGraph.AxisText(NotaNum.F($"±{range:0}\u2009¢"));
         ctx.DrawText(scale, new Point(4, top));
         Labels();
 
@@ -217,7 +218,8 @@ internal sealed class VtWearView : VtWindowBase
         {
             NotaGraph.Title(ctx, frame, "Pitch drift");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _peak, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-            if (_show != 0) NotaGraph.Legend(ctx, w - 5, h - 26, ("flutter", NotaPalette.TealBright, NotaGraph.Mark.Line));
+            // The flutter key sits in the title row, left of the peak, clear of the corner labels.
+            if (_show != 0) NotaGraph.Legend(ctx, w - 4 - NotaGraph.AxisText(_peak).Width - 12, 3, ("flutter", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "0");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, _end);
             var m = NotaGraph.AxisText(_mid);
@@ -248,7 +250,7 @@ internal sealed class VtHarmView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 6);
-        double top = 16, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         const double range = 96;   // dB below the fundamental
         double Y(double db) => bot - Math.Clamp((db + range) / range, 0, 1) * (bot - top);
         double Xk(int k) => w * (0.1 + 0.8 * k / 6.0);
@@ -264,12 +266,10 @@ internal sealed class VtHarmView : VtWindowBase
                 c.LineTo(new Point(w * 0.6, fy)); c.LineTo(new Point(w, fy + 3));
                 c.EndFigure(false);
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xA0), 1.1), g);
-            var ft = NotaGraph.AxisText(_floorText, NotaPalette.TealBright);
-            ctx.DrawText(ft, new Point(w - ft.Width - 5, Math.Max(top, fy - ft.Height - 2)));
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), g);
         }
         var bar = new Pen(NotaPalette.VizInk, 3, lineCap: PenLineCap.Round);
-        var dim = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x50), 3, lineCap: PenLineCap.Round);
+        var dim = new Pen(NotaPalette.TextDisabled, 3, lineCap: PenLineCap.Round);   // under the hiss: ink 4
         for (int k = 0; k < 7; k++)
         {
             double x = Xk(k);
@@ -279,7 +279,9 @@ internal sealed class VtHarmView : VtWindowBase
         }
 
         NotaGraph.Title(ctx, frame, "Harmonics");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _thd, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        // The corner names the hiss floor (inside a short plot it lands on its own line or a bar);
+        // THD is in the tab's head row, so it shows here only while a drag changes it.
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, Dragging ? _thd : _floor > -range ? _floorText : "", Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         string[] names = { "f", "2f", "3f", "4f", "5f", "6f", "7f" };
         for (int k = 0; k < 7; k++)
         {

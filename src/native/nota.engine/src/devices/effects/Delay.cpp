@@ -38,6 +38,7 @@ Delay::Delay() {
     set(BassMono, 0.0f);
     set(WetOnly, 0.0f);
     set(LatencyComp, 1.0f);
+    set(View, 0.0f); // L
 }
 
 void Delay::setSampleRate(double sr, int32_t /*maxBlock*/) {
@@ -60,6 +61,7 @@ void Delay::setSampleRate(double sr, int32_t /*maxBlock*/) {
     quietSamples_ = 0;
     idle_ = false;
     loopPk_ = 0.0f;
+    hist_.setSampleRate(sr_);
     srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
 }
 
@@ -174,10 +176,12 @@ void Delay::process(float* buf, int32_t frames) {
     // so the wake-up echo has no timing jump. Sleep engages only after the
     // loop's full flight time (an echo can arrive long after the input and the
     // output both read silent), tracked below via loopPk_/quietSamples_.
+    hist_.begin(); // a gap since the last block (track muted or asleep) scrolls the graph on
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     if (inSilent && !freeze && idle_) {
         wowPhase_ += wowInc * frames;
         if (wowPhase_ >= 1.0) wowPhase_ -= std::floor(wowPhase_);
+        hist_.silence(frames);
         return;
     }
 
@@ -251,6 +255,8 @@ void Delay::process(float* buf, int32_t frames) {
             outWetL = mid + side;
             outWetR = mid - side;
         }
+        hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outWetL), std::fabs(outWetR)),
+            (outWetL + outWetR) * 0.5f);
         const float oL = (dryG * l + wetG * outWetL) * outG;
         const float oR = (dryG * r + wetG * outWetR) * outG;
         buf[i * 2] = oL;
@@ -275,6 +281,7 @@ void Delay::process(float* buf, int32_t frames) {
     if (quietSamples_ > (uint64_t)flight + kIdleSamples) idle_ = true;
 
     // ---- telemetry -----------------------------------------------------------
+    hist_.publish();
     mWet_.store(decayPeak(mWet_.load(std::memory_order_relaxed), wetPk), std::memory_order_relaxed);
     mOutL_.store(decayPeak(mOutL_.load(std::memory_order_relaxed), outPkL), std::memory_order_relaxed);
     mOutR_.store(decayPeak(mOutR_.load(std::memory_order_relaxed), outPkR), std::memory_order_relaxed);
@@ -291,7 +298,7 @@ void Delay::process(float* buf, int32_t frames) {
 const char* Delay::paramName(int32_t i) const {
     static const char* nm[] = {"Sync", "Time L", "Time R", "Div L", "Div R", "Link L/R", "Feedback", "Spread",
         "Ping-Pong", "Wow Rate", "Wow Depth", "Freeze", "Dry/Wet", "Output", "Dry Level", "Diffuse", "Low Cut",
-        "High Cut", "Tape Mode", "Fade on Change", "Width", "Bass Mono", "Wet Only", "Latency Comp"};
+        "High Cut", "Tape Mode", "Fade on Change", "Width", "Bass Mono", "Wet Only", "Latency Comp", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 
@@ -323,7 +330,7 @@ int32_t Delay::scopeRead(float* out, int32_t maxSamples) const {
     out[S_MsL] = msL_.load(std::memory_order_relaxed);
     out[S_MsR] = msR_.load(std::memory_order_relaxed);
     out[S_Latency] = static_cast<float>(latencySamples());
-    return kScope;
+    return kScope + hist_.read(out + kScope, maxSamples - kScope);
 }
 
 std::string Delay::deviceText(int32_t id) const {

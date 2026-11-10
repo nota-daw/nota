@@ -27,13 +27,13 @@ internal sealed class VoltMatrix : Control, IValueEntryHost
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush GridB = NotaGraph.Grid;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush ModInk = NotaPalette.TextSecondary;   // a modulator source: ink 2, told from audio sources by shade
     private static readonly IBrush Lit = NotaPalette.TextPrimary;
     private static readonly IBrush LitEdge = NotaPalette.BorderStrong;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush CellBg = NotaPalette.BgSunken;
-    private static readonly Typeface Face = NotaFonts.Mono;
+    private static readonly Typeface Face = NotaFonts.Sans;
     // How far the pointer travels for the full ±range — the knob's own feel.
     private const double Travel = 140;
 
@@ -175,7 +175,7 @@ internal sealed class VoltMatrix : Control, IValueEntryHost
 
     private void Txt(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 8, bool center = false)
     {
-        var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b);
+        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b, this);
         ctx.DrawText(ft, new Point(center ? x - ft.Width / 2 : x, y));
     }
 
@@ -189,7 +189,7 @@ internal sealed class VoltMatrix : Control, IValueEntryHost
         for (int s = 0; s < _src.Length; s++)
         {
             double cy = HeaderH + s * ch;
-            Txt(ctx, _src[s], 2, cy + ch / 2 - 5, s < Modulators ? Teal : TxtC, 8);
+            Txt(ctx, _src[s], 2, cy + ch / 2 - 5, s < Modulators ? ModInk : TxtC, NotaGraph.AxisSize);
             for (int d = 0; d < _dst.Length; d++)
             {
                 double cx = LabelW + d * cw;

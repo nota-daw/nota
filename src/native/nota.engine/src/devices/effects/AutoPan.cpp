@@ -20,6 +20,7 @@ AutoPan::AutoPan() {
     p_[Mix].store(1.0f);
     p_[Sync].store(0.0f); // Free (Hz)
     p_[Division].store((float)kDefaultDiv / (kDivs - 1));
+    p_[View].store(0.0f); // L
     setSampleRate(44100.0, 0);
 }
 
@@ -227,6 +228,7 @@ const char* AutoPan::paramName(int32_t i) const {
     case Mix: return "Mix";
     case Sync: return "Sync";
     case Division: return "Division";
+    case View: return "View";
     default: return "";
     }
 }

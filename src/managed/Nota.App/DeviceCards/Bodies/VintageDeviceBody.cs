@@ -2,11 +2,14 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Vintage body (device kind 8), a build of the "Nota
-// Vintage" mockup (700 × 260) on the Auto Filter / Lens / Compressor frame: an always-
-// visible STATE column (drive · wear faders), a centre panel with Curve / Wear / Output
-// tabs — the transfer curve the engine runs, the pitch drift over the last four seconds,
-// the harmonics against the hiss floor — each with the character list in its head row, a
-// right panel with Tone / Output tabs, and a status strip. Every control is a device param,
+// Vintage" mockup (700 × 260) on the Auto Filter / Lens / Compressor frame: a centre panel
+// with Curve / Wear / Output tabs, laid out the #531 way (CardLayout) — the transfer curve the
+// engine runs (Drive and Tone beside it, the character and OS under it), the pitch drift over the
+// last four seconds (Wow, Flutter and Crackle beside it), the harmonics against the hiss floor
+// (Even only under it) — and a right panel with no tabs of its own that follows them: Character
+// (on, the tone model, the shelves, the character box), Wear (sync, the rates, Wear, follow,
+// stereo drift), Output (auto-comp, the measurements box, noise, hiss HP, Tube / Analog) — over
+// Dry/wet · Output. S is the curve over the character and Drive, Tone, Wow, Dry/wet. Every control is a device param,
 // so automation / MIDI learn / presets / A-B / persistence come for free.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
@@ -41,6 +44,8 @@ internal sealed class VintageDeviceBody : IDeviceBody
     private static readonly string[] SyncNames = { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8" };
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Character";
 
@@ -96,7 +101,6 @@ internal sealed class VintageDeviceBody : IDeviceBody
         }
         static string Ordinal(int k) => k switch { 2 => "2nd", 3 => "3rd", _ => NotaNum.F($"{k}th") };
         string Loudest() { int best = 2; for (int k = 3; k <= 7; k++) if (H(k) > H(best)) best = k; return H(best) > -100 ? Ordinal(best) + " harmonic" : Loc.T("device.vintage.no_harmonics"); }
-        string StageName() => Sel(OutputStage, 3) switch { 1 => "tube stage", 2 => "analog stage", _ => "" };
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
@@ -104,19 +108,16 @@ internal sealed class VintageDeviceBody : IDeviceBody
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
         static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
-        static StackPanel Row(double sp, params Control[] cs)
-        { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, double cellW = 46)
+        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, double cellW = 46, double size = 34, bool bipolar = false)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = 34, Height = 34 };
+            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Bipolar = bipolar, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); };
             knob.GestureBegin += () => Begin(p);
@@ -155,7 +156,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var tb = new TextBlock { Text = names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; pick(iv); RefreshAll(); e.Handled = true; };
                 cells[i] = b; texts[i] = tb; row.Children.Add(b);
             }
@@ -178,7 +179,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false)
         {
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -217,7 +218,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             var name = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             var box = new Border
             {
-                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
             };
@@ -250,68 +251,14 @@ internal sealed class VintageDeviceBody : IDeviceBody
             return box;
         }
 
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
-        }
-        Control KnobRow(Control[] knobs, Func<string> info1, Func<string> info2)
-        {
-            var i1 = Mono("", 7, TextTertiary); i1.HorizontalAlignment = HorizontalAlignment.Right;
-            var i2 = Mono("", 7, TextTertiary); i2.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52 };
-            g.Children.Add(Row(4, knobs));
-            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
-            return g;
-        }
-        static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
-        {
-            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
-        };
+        int centreTab = 0;
+        Control OsSeg() { var s = Seg(OS, OsNames); ToolTip.SetTip(s, Loc.T("device.vintage.no_oversampling")); return s; }
 
         // ======================================================================
-        // LEFT — STATE column (drive · wear)
-        // ======================================================================
-        Control StateFader(int p, string label, IBrush ink, Func<double, string> fmt, string tip)
-        {
-            var f = new AfFader { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
-            f.Changed += v => { Raw(p, (float)v); RefreshAll(); };
-            f.GestureBegin += () => Begin(p);
-            f.GestureEnd += () => End(p);
-            Learn(f, p);
-            ToolTip.SetTip(f, MenuKit.Keys(tip));
-            ValueEntry.Attach(f, F(p, NotaText.Label(label), fmt));
-            readouts.Add(() => f.Set(P(p), double.NaN));
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
-        }
-        var stateTitle = Caps("STATE"); stateTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var stateDrv = Mono("", 7, TextPrimary); stateDrv.HorizontalAlignment = HorizontalAlignment.Center;
-        var stateWear = Mono("", 7, TextPrimary); stateWear.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() =>
-        {
-            stateDrv.Text = Pct(P(Drive));
-            stateWear.Text = Pct(P(Wear));
-            stateTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
-        });
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StateFader(Drive, "DRV", NotaPalette.VizInk, Pct, Loc.T("device.vintage.drive_how_hard_the_signal")));
-        faders.Children.Add(Col(StateFader(Wear, "WEAR", Teal, Pct, Loc.T("device.vintage.wear_the_age_of_the")), 1));
-        var stateCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(stateTitle, Dock.Top), Docked(stateWear, Dock.Bottom), Docked(stateDrv, Dock.Bottom), faders } },
-        };
-        DockPanel.SetDock(stateCol, Dock.Left);
-
-        // ======================================================================
-        // CENTRE — Curve
+        // CENTRE — Curve (drag for Drive; Drive · Tone beside it, the character and OS under it)
         // ======================================================================
         VtCurveView? curve = null;
-        Control CurveTab()
+        VtCurveView NewCurve()
         {
             curve = new VtCurveView();
             curve.StartV = () => P(Drive);
@@ -321,26 +268,14 @@ internal sealed class VintageDeviceBody : IDeviceBody
             ToolTip.SetTip(curve, MenuKit.Keys(Loc.T("device.vintage.the_transfer_curve_the_saturation")));
             ValueEntry.AttachAll(curve, F(Drive, "Drive", Pct));
             Learn(curve, Drive);
-
-            var thd = Mono("", 7, TextTertiary);
-            readouts.Add(() => thd.Text = "THD " + ThdF(Sc(S_Thd)));
-            var count = Mono("", 7, TextTertiary);
-            readouts.Add(() => count.Text = NotaNum.F($"{Sel(Mode, 6) + 1} / 6"));
-            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), count, new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames)), thd);
-            var knobs = KnobRow(new[]
-            {
-                K(Drive, "DRIVE", Pct),
-                K(Tone, "TONE", ToneF),
-                K(Mix, "MIX", Pct),
-                K(Output, "OUTPUT", GainF, Teal),
-            },
-            () => NotaNum.F($"peak {DbF(Sc(S_InPk))} → {DbF(Sc(S_OutPk))}"),
-            () => NotaNum.F($"{OsText()} · asym {Pct(Sc(S_Asym))} · {Dominant()}"));
-            return TabBody(head, curve, knobs);
+            return curve;
         }
+        Control CurveTab() => CardLayout.View(NewCurve(),
+            CardLayout.KnobColumn(K(Drive, "DRIVE", Pct, cellW: 50), K(Tone, "TONE", ToneF, cellW: 50)),
+            CardLayout.Line(6, CharDrop(), Acr("OS"), OsSeg()));
 
         // ======================================================================
-        // CENTRE — Wear
+        // CENTRE — Wear (the pitch drift: Wow · Flutter · Crackle beside it, what it shows under it)
         // ======================================================================
         VtWearView? wearView = null;
         int wearShow = 2;   // 0 wow, 1 flutter, 2 both — what the window shows and a drag edits
@@ -365,27 +300,11 @@ internal sealed class VintageDeviceBody : IDeviceBody
                     v => Raw(wearShow == 1 ? FlutterRate : WowRate, (float)v),
                     () => Begin(wearShow == 1 ? FlutterRate : WowRate), () => End(wearShow == 1 ? FlutterRate : WowRate)) { After = RefreshAll });
             Learn(wearView, Wow);
-
             var show = Chips(new[] { "Wow", "Flutter", "Both" }, i => wearShow == i, i => wearShow = i, -1);
             ToolTip.SetTip(show, Loc.T("device.vintage.what_the_window_shows_and"));
-            var sync = Latch(WowSync, () => On(WowSync), () => SetP(WowSync, On(WowSync) ? 0f : 1f),
-                () => Synced() ? "Sync " + SyncNames[Sel(WowRate, 6)] : "Sync off",
-                Loc.T("device.vintage.sync_the_wow_follows_the"));
-            var drift = Mono("", 7, TextSecondary);
-            readouts.Add(() => drift.Text = "drift " + HzF(WowHz()));
-            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), show, sync), drift);
-            var knobs = KnobRow(new[]
-            {
-                K(Wow, "WOW", Pct, null, 40),
-                K(WowRate, "RATE", WowRateF, null, 40),
-                K(Flutter, "FLUTTER", Pct, Teal, 40),
-                K(FlutterRate, "F·RATE", FlutRateF, Teal, 40),
-                K(Crackle, "CRACKLE", Pct, null, 40),
-                K(Wear, "WEAR", Pct, null, 40),
-            },
-            () => NotaNum.F($"{CentsF(Sc(8) + Sc(9))} · wow {HzF(WowHz())} · flut {HzF(FlutHz())}"),
-            () => (Sc(S_BandHz) > 0 ? "band " + HzF(Sc(S_BandHz)) : "band open") + (Sc(S_HissDb) > -119 ? NotaNum.F($" · hiss {Sc(S_HissDb):0} dB") : " · no hiss"));
-            return TabBody(head, wearView, knobs);
+            return CardLayout.View(wearView,
+                CardLayout.KnobColumn(K(Wow, "WOW", Pct, cellW: 50), K(Flutter, "FLUTTER", Pct, Teal, 50), K(Crackle, "CRACKLE", Pct, cellW: 50)),
+                show);
         }
         void SyncWearView()
         {
@@ -394,11 +313,11 @@ internal sealed class VintageDeviceBody : IDeviceBody
             double secs = kHist * (Sc(S_HistMs) > 0 ? Sc(S_HistMs) : 4) / 1000.0;
             string peak = wearShow switch { 0 => "+" + CentsF(Sc(S_WowCents))[1..], 1 => "+" + CentsF(Sc(S_FlutCents))[1..], _ => "+" + CentsF(Sc(S_WowCents) + Sc(S_FlutCents))[1..] };
             wearView.Set(scope, kTele + kCurve, kTele + kCurve + kHist, n, wearShow, peak,
-                NotaNum.F($"wow {HzF(WowHz())}"), NotaNum.F($"{secs:0} s"));
+                NotaNum.F($"wow {HzF(WowHz())}"), NotaNum.F($"{secs:0} s"));
         }
 
         // ======================================================================
-        // CENTRE — Output
+        // CENTRE — Output (the harmonics; drag for Drive, Even only under it)
         // ======================================================================
         VtHarmView? harm = null;
         Control OutputTab()
@@ -411,22 +330,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             ToolTip.SetTip(harm, MenuKit.Keys(Loc.T("device.vintage.the_harmonics_the_saturation_adds")));
             ValueEntry.AttachAll(harm, F(Drive, "Drive", Pct));
             Learn(harm, Drive);
-
-            var peak = Mono("", 7, TextSecondary);
-            readouts.Add(() => peak.Text = DbfsF(Sc(S_OutPk)));
-            var comp = ToggleLatch(AutoComp, () => Sc(S_CompDb) != 0 && On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0}") : "Auto-comp",
-                Loc.T("device.vintage.auto_comp_the_output_level"));
-            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), comp), peak);
-            var knobs = KnobRow(new[]
-            {
-                K(Drive, "DRIVE", Pct),
-                K(Tone, "TONE", ToneF),
-                K(Wear, "WEAR", Pct, Teal),
-                K(Output, "OUTPUT", GainF),
-            },
-            () => H(2) > -100 || H(3) > -100 ? NotaNum.F($"2nd {H(2):0} dB · 3rd {H(3):0} dB · {Dominant()}") : "no harmonics — clean",
-            () => NotaNum.F($"{OsText()}{(On(AutoComp) ? NotaNum.F($" · comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "")}"));
-            return TabBody(head, harm, knobs);
+            return CardLayout.View(harm, null, ToggleLatch(EvenOnly, () => Loc.T("device.vintage.even_only"), Loc.T("device.vintage.even_harmonics_only")));
         }
         void SyncHarm()
         {
@@ -438,198 +342,98 @@ internal sealed class VintageDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // RIGHT — Tone / Output
+        // RIGHT — follows the centre tab: Character (Curve) · Wear (Wear) · Output (Output)
         // ======================================================================
-        int centreTab = 0;
-        Control Box(string title, Func<string> line1, Func<string> line2, Func<bool>? lit = null)
+        Control Box(string title, Func<string> line1, Func<string> line2)
         {
             var t = Caps(title);
             var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
-            var b = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
-                Child = new StackPanel { Spacing = 2, Children = { t, l1, l2 } } };
-            readouts.Add(() =>
-            {
-                l1.Text = line1(); l2.Text = line2();
-                bool on = lit?.Invoke() ?? false;   // engaged: a stronger frame, not the accent
-                b.BorderBrush = on ? NotaPalette.BorderStrong : NotaPalette.GraphBorder;
-                t.Foreground = on ? TextSecondary : TextTertiary;
-            });
+            l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
+            var b = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = { t, l1, l2 } });
+            readouts.Add(() => { l1.Text = line1(); l2.Text = line2(); });
             return b;
         }
-        Control ModelRow()
+        (Control, Control) CharacterPanel()
         {
             var chips = Chips(new[] { "Warm", "Flat", "Dark" }, i => Sel(ToneModel, 3) == i, i => SetP(ToneModel, i / 2f), ToneModel, h: 15, padX: 6);
             ToolTip.SetTip(chips, Loc.T("device.vintage.tone_model_warm_the_eras"));
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*") };
-            g.Children.Add(Caps("MODEL")); g.Children.Add(Col(chips, 1));
-            return g;
+            return (CardLayout.Head(Toggle(Character, "Character", () => On(Character) ? "Character: " + ModeName() : "Character off")),
+                CardLayout.Rows(
+                    CardLayout.LabelRow("MODEL", chips),
+                    SliderRow("LOW", ToneLow, ShelfF, bipolar: true),
+                    SliderRow("HIGH", ToneHigh, ShelfF, bipolar: true),
+                    CardLayout.Rule(),
+                    Box("CHARACTER", () => NotaNum.F($"{ModeName()} · asym {Pct(Sc(S_Asym))}"),
+                        () => P(Wear) > 0.004f ? NotaNum.F($"wear {Pct(P(Wear))} · {Loudest()}") : "no wear · " + Loudest())));
         }
-        static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = c };
-        static Control Spread(params Control[] rows)
+        (Control, Control) WearPanel()
         {
-            var defs = new List<string>();
-            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
-            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
-            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
-            return new Border { Padding = new Thickness(8, 6), Child = g };
-        }
-
-        // Tone for the Curve / Output tabs: the model, the shelves, the character.
-        Control ToneCharBody() => Spread(
-            ModelRow(),
-            SliderRow("LOW", ToneLow, ShelfF, bipolar: true),
-            SliderRow("HIGH", ToneHigh, ShelfF, bipolar: true),
-            Rule(SliderRow("MIX", Mix, Pct)),
-            Box("CHARACTER", () => NotaNum.F($"{ModeName()} · asym {Pct(Sc(S_Asym))}"),
-                () => P(Wear) > 0.004f ? NotaNum.F($"wear {Pct(P(Wear))} · {Loudest()}") : "no wear · " + Loudest(), () => On(Character)),
-            new StackPanel { Spacing = 5, Children = {
-                Toggle(Character, "Character", () => On(Character) ? "Character: " + ModeName() : "Character off"),
-                Toggle(AutoComp, "Auto-compensation") } });
-        // Tone for the Wear tab: the model, the hiss and its high-pass, the wear box.
-        Control ToneWearBody() => Spread(
-            ModelRow(),
-            SliderRow("NOISE", Noise, Pct, modulation: true),
-            SliderRow("HISS HP", HissHp, HissHpF, modulation: true),
-            Rule(SliderRow("MIX", Mix, Pct)),
-            Box("WEAR", () => NotaNum.F($"{CentsF(Sc(S_WowCents) + Sc(S_FlutCents))} · peak drift"),
-                () => NotaNum.F($"wow {Pct(P(Wow))} + flutter {Pct(P(Flutter))}"), () => P(Wow) + P(Flutter) > 0.01f),
-            new StackPanel { Spacing = 5, Children = {
+            var sync = Latch(WowSync, () => On(WowSync), () => SetP(WowSync, On(WowSync) ? 0f : 1f),
+                () => Synced() ? "Sync " + SyncNames[Sel(WowRate, 6)] : "Sync off",
+                Loc.T("device.vintage.sync_the_wow_follows_the"));
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.vintage.wear")), sync), CardLayout.Rows(
+                SliderRow("RATE", WowRate, WowRateF),
+                SliderRow("F·RATE", FlutterRate, FlutRateF, modulation: true),
+                SliderRow("WEAR", Wear, Pct),
+                CardLayout.Rule(),
                 Toggle(WearFollow, Loc.T("device.vintage.wear_follows_input")),
-                Toggle(StereoDrift, "Stereo drift") } });
-        Control ToneTab()
-        {
-            var host = new ContentControl();
-            Control? a = null, b = null;
-            readouts.Add(() =>
-            {
-                Control want = centreTab == 1 ? (b ??= ToneWearBody()) : (a ??= ToneCharBody());
-                if (!ReferenceEquals(host.Content, want)) host.Content = want;
-            });
-            return host;
+                Toggle(StereoDrift, "Stereo drift")));
         }
-
-        Control OutTab()
+        (Control, Control) OutputPanel()
         {
-            Control Line(string k, Func<string> v, IBrush? ink = null)
+            Control Line(string k, Func<string> v)
             {
-                var val = Mono("", 8, ink ?? TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+                var val = Mono("", 8, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
                 readouts.Add(() => val.Text = v());
                 var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
                 g.Children.Add(new TextBlock { Text = k, FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
                 g.Children.Add(Col(val, 1));
                 return g;
             }
-            var box = new Border
-            {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
-                Child = new StackPanel { Spacing = 2, Children = {
-                    Caps("OUTPUT"),
-                    Line("in", () => DbF(Sc(S_InPk))),
-                    Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("THD", () => ThdF(Sc(S_Thd)), TextPrimary) } },
-            };
-            var sliders = new StackPanel { Spacing = 6, Children = {
-                SliderRow("MIX", Mix, Pct),
-                SliderRow("NOISE", Noise, Pct, modulation: true),
-                SliderRow("GAIN", Output, ShelfF, bipolar: true) } };
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = {
+                Caps("OUTPUT"),
+                Line("in", () => DbF(Sc(S_InPk))),
+                Line("out", () => DbF(Sc(S_OutPk))),
+                Line("THD", () => ThdF(Sc(S_Thd))) } });
             // Output stage: Tube / Analog, a click on the lit one switches the stage off.
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-            btns.Children.Add(Latch(OutputStage, () => Sel(OutputStage, 3) == 1, () => SetP(OutputStage, Sel(OutputStage, 3) == 1 ? 0f : 0.5f), () => "Tube",
-                Loc.T("device.vintage.tube_stage_a_warm_asymmetric"), fill: true));
-            btns.Children.Add(Col(Latch(OutputStage, () => Sel(OutputStage, 3) == 2, () => SetP(OutputStage, Sel(OutputStage, 3) == 2 ? 0f : 1f), () => "Analog",
-                Loc.T("device.vintage.analog_stage_a_console_style"), fill: true), 1));
-            var body = new DockPanel { LastChildFill = false, Children = {
-                Docked(box, Dock.Top),
-                Docked(new Border { Margin = new Thickness(0, 7, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 5, Children = { Toggle(AutoComp, "Auto-compensation"), Toggle(EvenOnly, Loc.T("device.vintage.even_harmonics_only")) } }, Dock.Bottom),
-                Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(8, 6), Child = body };
+            var btns = CardLayout.Pair(
+                Latch(OutputStage, () => Sel(OutputStage, 3) == 1, () => SetP(OutputStage, Sel(OutputStage, 3) == 1 ? 0f : 0.5f), () => "Tube",
+                    Loc.T("device.vintage.tube_stage_a_warm_asymmetric"), fill: true),
+                Latch(OutputStage, () => Sel(OutputStage, 3) == 2, () => SetP(OutputStage, Sel(OutputStage, 3) == 2 ? 0f : 1f), () => "Analog",
+                    Loc.T("device.vintage.analog_stage_a_console_style"), fill: true));
+            var comp = Toggle(AutoComp, "Auto-compensation",
+                    () => On(AutoComp) && Sc(S_CompDb) != 0 ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation");
+            ToolTip.SetTip(comp, Loc.T("device.vintage.auto_comp_the_output_level"));
+            return (CardLayout.Head(comp),
+                CardLayout.Rows(box, SliderRow("NOISE", Noise, Pct, modulation: true), SliderRow("HISS HP", HissHp, HissHpF, modulation: true), btns));
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (tabs, the panel that follows them, Dry/wet · Output under it) · S (the curve
+        // over the character and Drive · Tone · Wow · Dry/wet)
         // ======================================================================
-        var centreHost = new ContentControl();
-        var rightHost = new ContentControl();
-        var centreBodies = new Control?[3];
-        var rightBodies = new Control?[2];
         var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
             string m = ModeName().ToLowerInvariant();
             extras.Text = centreTab switch
             {
-                1 => NotaNum.F($"window {kHist * (Sc(S_HistMs) > 0 ? Sc(S_HistMs) : 4) / 1000:0} s · {m}"),
-                2 => NotaNum.F($"{m} · {(Sel(OS, 4) == 0 ? "no OS" : OsNames[Sel(OS, 4)] + " OS")} · THD {ThdF(Sc(S_Thd))}"),
-                _ => NotaNum.F($"{m} · asym {Pct(Sc(S_Asym))} · {Loudest()}"),
+                1 => NotaNum.F($"{CentsF(Sc(8) + Sc(9))} · wow {HzF(WowHz())} · flut {HzF(FlutHz())} · ")
+                     + (Sc(S_BandHz) > 0 ? "band " + HzF(Sc(S_BandHz)) : "band open") + (Sc(S_HissDb) > -119 ? NotaNum.F($" · hiss {Sc(S_HissDb):0} dB") : " · no hiss"),
+                2 => H(2) > -100 || H(3) > -100 ? NotaNum.F($"2nd {H(2):0} dB · 3rd {H(3):0} dB · {Dominant()} · {DbfsF(Sc(S_OutPk))}") : "no harmonics — clean",
+                _ => NotaNum.F($"{m} · asym {Pct(Sc(S_Asym))} · {Dominant()} · {OsText()} · peak {DbF(Sc(S_InPk))} → {DbF(Sc(S_OutPk))}"),
             };
         });
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => WearTab(), 2 => OutputTab(), _ => CurveTab() };
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutTab() : ToneTab();
-
-        var centre = TabFrame(new[] { "Curve", "Wear", "Output" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
-        var rightFrame = TabFrame(new[] { "Tone", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string> { On(Character) ? ModeName() : ModeName() + " (voicing off)" };
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(NotaNum.F($"wow {Pct(P(Wow))}{(Synced() ? " " + SyncNames[Sel(WowRate, 6)] : "")}"));
-                    parts.Add(NotaNum.F($"flutter {Pct(P(Flutter))}"));
-                    parts.Add(NotaNum.F($"crackle {Pct(P(Crackle))}"));
-                    parts.Add(NotaNum.F($"wear {Pct(P(Wear))}"));
-                    parts.Add(NotaNum.F($"noise {Pct(P(Noise))}"));
-                    if (On(WearFollow)) parts.Add("follows input");
-                    if (On(StereoDrift)) parts.Add("stereo drift");
-                    break;
-                case 2:
-                    parts.Add(NotaNum.F($"drive {Pct(P(Drive))}"));
-                    parts.Add("tone " + ToneF(P(Tone)));
-                    parts.Add(NotaNum.F($"wear {Pct(P(Wear))}"));
-                    parts.Add(NotaNum.F($"mix {Pct(P(Mix))}"));
-                    parts.Add("out " + GainF(P(Output)));
-                    if (StageName().Length > 0) parts.Add(StageName());
-                    if (On(EvenOnly)) parts.Add("even only");
-                    parts.Add(Sel(OS, 4) == 0 ? "OS off" : OsNames[Sel(OS, 4)] + " OS");
-                    break;
-                default:
-                    parts.Add(NotaNum.F($"drive {Pct(P(Drive))}"));
-                    parts.Add("tone " + ToneF(P(Tone)));
-                    parts.Add(NotaNum.F($"mix {Pct(P(Mix))}"));
-                    parts.Add("out " + GainF(P(Output)));
-                    parts.Add(Sel(OS, 4) == 0 ? "OS off" : OsNames[Sel(OS, 4)] + " OS");
-                    if (On(AutoComp)) parts.Add("auto-comp");
-                    break;
-            }
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate), dl = Sc(S_Delay);
-            string lat = dl > 0 && sr > 0 ? NotaNum.F($"tape delay {dl / sr * 1000:0.0} ms") : "latency 0 smp";
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · {lat} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stateCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(NewCurve(), CharDrop(),
+                K(Drive, "DRIVE", Pct, cellW: 56), K(Tone, "TONE", ToneF, cellW: 56), K(Wow, "WOW", Pct, cellW: 56), K(Mix, "DRY/WET", Pct, cellW: 56))
+            : CardLayout.Large(new[] { "Curve", "Wear", "Output" }, 0,
+                t => t switch { 1 => WearTab(), 2 => OutputTab(), _ => CurveTab() },
+                t => t switch { 1 => WearPanel(), 2 => OutputPanel(), _ => CharacterPanel() },
+                extras,
+                CardLayout.Output(null, K(Mix, "DRY/WET", Pct, cellW: 58, size: 44), K(Output, "OUTPUT", GainF, cellW: 54, bipolar: true)),
+                t => { centreTab = t; Refresh(); });
 
         void Refresh()
         {
@@ -645,45 +449,5 @@ internal sealed class VintageDeviceBody : IDeviceBody
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

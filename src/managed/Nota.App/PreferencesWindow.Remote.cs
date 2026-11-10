@@ -38,10 +38,10 @@ public sealed partial class PreferencesWindow
         var portBox = new TextBox
         {
             Text = settings.Current.RemotePort.ToString(), Width = 90, Classes = { "field" },
-            FontSize = 12, FontFamily = NotaFonts.MonoFamily, HorizontalAlignment = HorizontalAlignment.Left,
+            FontSize = 11, FontFamily = NotaFonts.UiFamily, HorizontalAlignment = HorizontalAlignment.Left,
         };
         var statusDot = Dot(BorderStrong);
-        var status = new TextBlock { FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var status = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
 
         // Phones may: play notes only, or play and control the project.
         var access = new StackPanel { Spacing = 6 };
@@ -65,8 +65,8 @@ public sealed partial class PreferencesWindow
             var dot = new Ellipse { Width = 6, Height = 6 };
             radios.Add((ring, dot));
             var text = new StackPanel { Spacing = 2 };
-            text.Children.Add(new TextBlock { Text = name, FontSize = 12, Foreground = TextPrimary });
-            text.Children.Add(new TextBlock { Text = sub, FontSize = 11, Foreground = TextMuted, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = name, FontSize = 11, Foreground = TextPrimary });
+            text.Children.Add(new TextBlock { Text = sub, FontSize = 10, Foreground = TextMuted, TextWrapping = TextWrapping.Wrap });
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 9, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
@@ -95,10 +95,10 @@ public sealed partial class PreferencesWindow
             foreach (var d in list)
             {
                 bool live = connected.Contains(d.Id) && remote.Running;
-                var name = new TextBlock { Text = d.Name, FontSize = 12, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-                var seen = new TextBlock { Text = live ? Loc.T("preferences.remote.now") : Ago(d.LastSeen), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var name = new TextBlock { Text = d.Name, FontSize = 11, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                var seen = new TextBlock { Text = live ? Loc.T("preferences.remote.now") : Ago(d.LastSeen), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 var forget = Btn(Loc.T("preferences.remote.forget"));
-                forget.Height = 24; forget.FontSize = 11; forget.Padding = new Thickness(10, 0);
+                forget.Height = 24; forget.FontSize = 10; forget.Padding = new Thickness(10, 0);
                 ToolTip.SetTip(forget, Loc.T("preferences.remote.disconnect_it_and_make_it"));
                 string id = d.Id;
                 forget.Click += (_, _) => { remote.Hub.Forget(id); RenderTrusted(); };
@@ -154,14 +154,14 @@ public sealed partial class PreferencesWindow
                 : Loc.T("preferences.remote.phones_reach_nota_on_the");
         var warn = new Border
         {
-            Padding = new Thickness(14, 12), CornerRadius = NotaRadius.Panel, Background = RowBg, BorderBrush = Divider, BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 12), CornerRadius = NotaRadius.Group, Background = RowBg, BorderBrush = Divider, BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 10,
                 Children =
                 {
                     new Ellipse { Width = 6, Height = 6, Fill = NotaPalette.Warning, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 0, 0) },
-                    new TextBlock { Text = sysNote + Loc.T("preferences.remote.nota_never_shows_files_or"), FontSize = 11, LineHeight = 17, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap, MaxWidth = 560 },
+                    new TextBlock { Text = sysNote + Loc.T("preferences.remote.nota_never_shows_files_or"), FontSize = 10, LineHeight = 17, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap, MaxWidth = 560 },
                 },
             },
         };

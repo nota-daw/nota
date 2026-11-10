@@ -10,7 +10,7 @@ internal static class ControlExtensions
 {
     /// <summary>
     /// Binds <paramref name="property"/> to the dynamic theme resource
-    /// <paramref name="key"/> (e.g. "Brush.TextPrimary", "Font.Mono").
+    /// <paramref name="key"/> (e.g. "Brush.TextPrimary", "Font.UI").
     /// Use this in code-built views instead of <c>TryFindResource</c>: those views
     /// are constructed during MainWindow's XAML load, before they attach to the
     /// visual tree, so <c>TryFindResource</c> returns the magenta fallback. The

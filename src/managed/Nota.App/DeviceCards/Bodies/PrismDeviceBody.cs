@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Prism body (device kind 21, three-band dynamics), a build of
-// the "Nota Prism" mockup (700 × 260) on the Chamber frame: an always-visible Global column
-// (Amount + Output), a centre tabbed panel (Bands / Band detail / Time), a right tabbed panel
-// (Meters / Output) and a status strip. Bands are colour-coded Low = mauve, Mid = neutral ink,
-// High = teal. The spectrum's crossover lines, the transfer curve's threshold dots and every
-// slider are controls. Every control is a device param, so automation / MIDI learn / presets /
-// A-B / persistence come for free. FullBleed — the shared shell draws the header.
+// the "Nota Prism" mockup (700 × 260) on the #531 card layout: a centre tabbed panel (Bands / Band
+// detail / Time), a right panel that follows the tab (Gain reduction · Stage · Detector) over
+// Amount · Dry/wet · Output; S is the spectrum over the band count and Amount · Dry/wet · Output. Bands are colour-coded Low = mauve, Mid = neutral ink, High = teal. The spectrum's
+// crossover lines, the transfer curve's threshold dots and every slider are controls. Every
+// control is a device param, so automation / MIDI learn / presets / A-B / persistence come for
+// free. FullBleed — the shared shell draws the header.
 
 using System;
 using System.Collections.Generic;
@@ -58,6 +58,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
     private static readonly Dictionary<(int, int), (int Band, int Centre, int Right)> ViewState = new();
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Multiband";
 
@@ -120,7 +122,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
         static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         static Control GRow(Control c, int row) { Grid.SetRow(c, row); return c; }
@@ -207,7 +209,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var name = new TextBlock { Text = PrismInk.Names[b], FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => { bool s = band == b; name.Foreground = s ? PrismInk.BandLit[b] : TxtC; name.FontWeight = s ? FontWeight.SemiBold : FontWeight.Normal; });
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new Border { Width = 3, Height = barH, CornerRadius = NotaRadius.Clip, Background = PrismInk.Band[b] }, name } };
+                new Border { Width = 3, Height = barH, CornerRadius = NotaRadius.Field, Background = PrismInk.Band[b] }, name } };
         }
 
         // A clickable table row for band b: selects the band; dimmed + inert when the band is off.
@@ -226,35 +228,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // LEFT — GLOBAL column (Amount + Output)
-        // ======================================================================
-        Control Fader(int p, string label, string tip)
-        {
-            var f = new ChamberFader { VerticalAlignment = VerticalAlignment.Stretch, Default = Def(p) };
-            f.Changed += v => Raw(p, (float)v);
-            f.DragStarted += () => Begin(p);
-            f.DragEnded += () => End(p);
-            readouts.Add(() => f.Set(P(p)));
-            Learn(f, p);
-            ToolTip.SetTip(f, tip);
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            return new DockPanel { Children = { Docked(lb, Dock.Bottom), f } };
-        }
-        var amtTxt = Mono("", 7, TxtC); amtTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        var outTxt = Mono("", 7, TxtC); outTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() => { amtTxt.Text = Pct(P(Amount)); outTxt.Text = DbShort((P(Output) - 0.5) * 48); });
-        var globTitle = Caps("GLOBAL"); globTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(Fader(Amount, "AMOUNT", Loc.T("device.prism.amount_scales_every_bands_compression")));
-        faders.Children.Add(Col(Fader(Output, "OUT", Loc.T("device.prism.output_gain_24_db_double")), 1));
-        var globCol = new RuleSection { Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(globTitle, Dock.Top), Docked(outTxt, Dock.Bottom), Docked(amtTxt, Dock.Bottom), faders } } };
-        DockPanel.SetDock(globCol, Dock.Left);
-
-        // ======================================================================
         // CENTRE — Bands (spectrum + per-band overview)
         // ======================================================================
-        Control BandsTab()
+        PrismSpectrum Spectrum()
         {
             var spec = new PrismSpectrum(engine, track, di) { DefaultLow = Def(XoverLow), DefaultHigh = Def(XoverHigh) };
             spec.CrossoverChanged += (h, v) => Raw(h == 0 ? XoverLow : XoverHigh, (float)v);
@@ -264,7 +240,11 @@ internal sealed class PrismDeviceBody : IDeviceBody
             ValueEntry.AttachHandles(spec, [PF(XoverLow, Loc.T("device.prism.low_mid_crossover"), v => HzF(XHz(v)))], [PF(XoverHigh, Loc.T("device.prism.mid_high_crossover"), v => HzF(XHz(v)))]);
             ToolTip.SetTip(spec, MenuKit.Keys(Loc.T("device.prism.input_spectrum_fill_and_output")));
             readouts.Add(() => { spec.Set(P(XoverLow), P(XoverHigh), BandCount(), band, Sc(S_SampleRate)); spec.Tick(); });
-
+            return spec;
+        }
+        Control BandsTab()
+        {
+            var spec = Spectrum();
             const string cols = "50,*,*,40,40";
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions(cols), Height = 11 };
             var hA = Caps(Loc.T("device.prism.above_compress_caps"), DimC); hA.HorizontalAlignment = HorizontalAlignment.Center;
@@ -295,7 +275,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 var gain = DragVal(BP(bb, Gain), v => DbShort((v - 0.5) * 48), () => Math.Abs(P(BP(bb, Gain)) - 0.5f) < 0.001f ? Txt2 : TxtC);
                 ToolTip.SetTip(gain, Loc.T("device.prism.band_gain_24_db_drag"));
                 g.Children.Add(Col(gain, 3));
-                var grTrack = new Border { Width = 32, Height = 4, CornerRadius = NotaRadius.Clip, Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+                var grTrack = new Border { Width = 32, Height = 4, CornerRadius = NotaRadius.Field, Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
                 var grFill = new Border { Background = PrismInk.Band[bb], HorizontalAlignment = HorizontalAlignment.Right };
                 grTrack.Child = grFill;
                 readouts.Add(() => grFill.Width = 32 * Math.Clamp(Sc(S_Gr0 + bb) / 12, 0, 1));
@@ -441,9 +421,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // RIGHT — Meters / Output
+        // RIGHT — the panel that follows the tab: Gain reduction · Stage · Detector
         // ======================================================================
-        Control MetersTab()
+        (Control, Control) MetersPanel()
         {
             var meters = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto"), Margin = new Thickness(0, 4, 0, 0) };
             for (int b = 0; b < 3; b++)
@@ -491,7 +471,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             for (int i = 0; i < 3; i++)
             {
                 int iv = i;
-                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new TextBlock { Text = sl[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center } };
                 c.PointerPressed += (_, e) =>
                 {
@@ -507,20 +487,11 @@ internal sealed class PrismDeviceBody : IDeviceBody
             soloGrid.Children.Add(Caps("SOLO")); soloGrid.Children.Add(Col(soloRow, 1)); soloGrid.Children.Add(Col(soloTxt, 2));
             var bottom = Divider(new StackPanel { Spacing = 5, Children = { soloGrid, Toggle(PeakHold, "Peak hold") } });
             bottom.Margin = new Thickness(0, 5, 0, 0);
-            return new DockPanel { Margin = new Thickness(8, 6, 8, 5), Children = { Docked(Caps("GAIN REDUCTION"), Dock.Top), Docked(bottom, Dock.Bottom), meters } };
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.prism.gain_reduction")), ModeSeg()),
+                new DockPanel { Margin = new Thickness(8, 2, 8, 5), Children = { Docked(bottom, Dock.Bottom), meters } });
         }
-        Control OutputTab()
+        (Control, Control) DetectorPanel()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 50 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 50 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 50, Children = { Mono("0", 7, DimC), GRow(Mono("−12", 7, DimC), 1), GRow(Mono("−48", 7, DimC), 2) } };
-            var meters = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Top, Children = {
-                new StackPanel { Spacing = 2, Children = { meterL, Center(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Center(Caps("R")) } }, scale } };
-            var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { K(Output, "OUTPUT", v => DbF((v - 0.5) * 48), 38, 54), meters } };
-
             // Sidechain source (None + every other track, and the pads / chains / voices of a
             // track's instrument, specs/050).
             var scName = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -531,7 +502,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 scName.Text = !scOk ? Loc.T("device.prism.n_a_in_a_rack") : src < 0 ? Loc.T("device.prism.none_own_input") : SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
                 scName.Foreground = src >= 0 ? TxtC : Txt2;
             });
-            var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0),
+            var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), scName } } };
             ToolTip.SetTip(scBox, Loc.T("device.prism.sidechain_key_every_bands_detector"));
@@ -557,14 +528,37 @@ internal sealed class PrismDeviceBody : IDeviceBody
             scRow.Children.Add(Caps("SIDECHAIN")); scRow.Children.Add(Col(scBox, 1));
             var listen = Toggle(ScListen, "Listen");
             ToolTip.SetTip(listen, Loc.T("device.prism.listen_hear_the_detectors_key"));
+            var seg = Seg(Detect, new[] { "Peak", "RMS" });
+            ToolTip.SetTip(seg, Loc.T("device.prism.detector_peak_follows_every_transient"));
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.prism.detector")), seg), CardLayout.Rows(
+                SliderRow("LOOKAHEAD", Lookahead, v => Inv($"{v * 10:0.0}\u2009ms")),
+                CardLayout.Rule(),
+                scRow,
+                listen));
+        }
+        (Control, Control) StagePanel()
+        {
             var mk = Toggle(AutoMakeup, "Auto makeup");
             ToolTip.SetTip(mk, Loc.T("device.prism.auto_makeup_each_band_gets"));
-            var toggles = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
-            toggles.Children.Add(listen); toggles.Children.Add(Col(mk, 1));
-            var mid = new StackPanel { Spacing = 5, Children = {
-                SliderRow("LOOKAHEAD", Lookahead, v => Inv($"{v * 10:0.0}\u2009ms")),
-                SliderRow("MIX", Mix, Pct), scRow, toggles } };
-
+            TextBlock Val() { var t = Mono("", 8, TxtC); t.HorizontalAlignment = HorizontalAlignment.Right; return t; }
+            Control Line(string k, TextBlock v)
+            {
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                g.Children.Add(new TextBlock { Text = k, FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center });
+                g.Children.Add(Col(v, 1));
+                return g;
+            }
+            var cap = Caps("");
+            var gr = Val(); var boost = Val(); var lvl = Val();
+            readouts.Add(() =>
+            {
+                cap.Text = NotaText.Label(PrismInk.Names[band]);
+                cap.Foreground = PrismInk.BandLit[band];
+                gr.Text = Sc(S_Gr0 + band) > 0.05 ? Inv($"−{Sc(S_Gr0 + band):0.0}\u2009dB") : "0.0\u2009dB";
+                boost.Text = Sc(S_Boost0 + band) > 0.05 ? Inv($"+{Sc(S_Boost0 + band):0.0}\u2009dB") : "0.0\u2009dB";
+                lvl.Text = Sc(S_Level0 + band) <= -119 ? "−∞\u2009dB" : Inv($"{Sc(S_Level0 + band):0.0}\u2009dB");
+            });
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = { cap, Line("GR", gr), Line("boost", boost), Line("level", lvl) } });
             var clipTxt = Mono("", 7, TxtC); clipTxt.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(() =>
             {
@@ -576,23 +570,20 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var clipSeg = Seg(SoftClip, new[] { "Off", "On" });
             ToolTip.SetTip(clipSeg, Loc.T("device.prism.soft_clip_a_smooth_ceiling"));
             clipRow.Children.Add(Caps("SOFT CLIP")); clipRow.Children.Add(Col(clipSeg, 1)); clipRow.Children.Add(Col(clipTxt, 2));
-            var midB = Divider(mid); midB.Margin = new Thickness(0, 4, 0, 0);
-            return new DockPanel { LastChildFill = false, Margin = new Thickness(8, 5, 8, 5), Children = {
-                Docked(top, Dock.Top), Docked(midB, Dock.Top), Docked(Divider(clipRow), Dock.Bottom) } };
+            return (CardLayout.Head(mk), CardLayout.Rows(box, CardLayout.Rule(), clipRow));
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (tabs, the panel that follows them, Amount · Dry/wet · Output under it) · S (the
+        // spectrum over the band count and Amount · Dry/wet · Output)
         // ======================================================================
-        var centreHost = new ContentControl(); var rightHost = new ContentControl();
-        var centreBodies = new Control?[3]; var rightBodies = new Control?[2];
         int centreTab = view.Centre;
         var extras = new ContentControl { VerticalAlignment = VerticalAlignment.Center };
-        Control ModeExtras()
+        Control ModeSeg()
         {
             var seg = Seg(BandsP, new[] { "3", "2", "1" }, () => { if (!BandActive(band)) SelectBand(1); foreach (var a in readouts) a(); });
             ToolTip.SetTip(seg, Loc.T("device.prism.bands_3_low_mid_high"));
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { Caps("MODE"), seg } };
+            return seg;
         }
         Control BandChips()
         {
@@ -611,7 +602,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             for (int i = 0; i < 3; i++)
             {
                 int iv = i;
-                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new TextBlock { Text = PrismInk.Names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center } };
                 c.PointerPressed += (_, e) => { SelectBand(iv); e.Handled = true; };
                 cells[i] = c; chips.Children.Add(c);
@@ -619,77 +610,41 @@ internal sealed class PrismDeviceBody : IDeviceBody
             readouts.Add(Hi); Hi();
             return chips;
         }
-        Control DetectExtras()
+        Control Info(Func<string> text)
         {
-            var seg = Seg(Detect, new[] { "Peak", "RMS" });
-            ToolTip.SetTip(seg, Loc.T("device.prism.detector_peak_follows_every_transient"));
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { Caps("DETECT"), seg } };
+            var t = Mono("", 7, MutedC);
+            readouts.Add(() => t.Text = text());
+            return t;
         }
         var extrasBodies = new Control?[3];
-        void SetExtras(int t) => extras.Content = extrasBodies[t] ??= t switch { 1 => BandChips(), 2 => DetectExtras(), _ => ModeExtras() };
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => DetailTab(), 2 => TimeTab(), _ => BandsTab() };
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : MetersTab();
-        SetExtras(centreTab);
-        var centre = TabFrame(new[] { "Bands", "Band detail", "Time" }, centreTab, centreHost, CentreBody, false, t =>
+        void SetExtras(int t) => extras.Content = extrasBodies[t] ??= t switch
         {
-            centreTab = t; view = (band, t, view.Right); ViewState[(track, di)] = view; SetExtras(t); foreach (var a in readouts) a();
-        }, extras);
-        var rightFrame = TabFrame(new[] { "Meters", "Output" }, view.Right, rightHost, RightBody, true, t =>
-        {
-            view = (band, view.Centre, t); ViewState[(track, di)] = view; foreach (var a in readouts) a();
-        }, null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
+            1 => BandChips(),
+            2 => Info(() => PrismInk.Names[band].ToLowerInvariant() + " · " + AtkF(P(BP(band, Attack))) + " / " + RelF(P(BP(band, Release)))),
+            _ => Info(() => BandCount() == 1 ? Loc.T("device.prism.one_band") : BandCount() == 2 ? HzF(XHz(P(XoverLow))) : HzF(XHz(P(XoverLow))) + " · " + HzF(XHz(P(XoverHigh)))),
+        };
+        Control OutputKnobs(double cw) => CardLayout.Output(
+            K(Amount, "AMOUNT", Pct, 34, cw),
+            K(Mix, "DRY/WET", Pct, 44, cw + 4),
+            K(Output, "OUTPUT", v => DbF((v - 0.5) * 48), 34, cw));
 
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, Txt2);
-        string StatusText()
+        Control root;
+        if (CardLayout.IsMini(ctx, di))
         {
-            int nb = BandCount();
-            int solo = Sel(Solo, 4) - 1;
-            if (On(ScListen)) return Loc.T("device.prism.listening_to_the_detector_key") + (solo >= 0 ? Inv($" · {PrismInk.Names[solo]} band") : "");
-            switch (centreTab)
-            {
-                case 1:
-                {
-                    int b = band;
-                    string head = solo == b ? Inv($"{PrismInk.Names[b]} solo") : PrismInk.Names[b];
-                    string below = On(BP(b, BelowOn)) ? Inv($"below {ThrB(P(BP(b, BelowThresh))):0;−0}\u2009dB {RatioBF(P(BP(b, BelowRatio))).Replace(" ", "")}") : "below off";
-                    return Inv($"{head} · above {ThrA(P(BP(b, AboveThresh))):0;−0}\u2009dB {RatioAF(P(BP(b, AboveRatio))).Replace(" ", "")} · {below} · knee {P(BP(b, Knee)) * 24:0.#}\u2009dB");
-                }
-                case 2:
-                {
-                    var autos = Enumerable.Range(0, 3).Where(b => BandActive(b) && On(BP(b, AutoRelease))).Select(b => PrismInk.Names[b]).ToList();
-                    int src = engine.DeviceAcceptsSidechain(track, di) ? engine.DeviceSidechainSource(track, di) : -1;
-                    string sc = src >= 0 ? "sidechain: " + SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di)) : "own input";
-                    return Inv($"{(On(Detect) ? "RMS" : "Peak")} detector · {(autos.Count > 0 ? "auto release on " + string.Join(", ", autos) : "fixed release")} · {sc}");
-                }
-                default:
-                    string xo = nb == 3 ? Loc.F("device.prism.crossovers", HzF(XHz(P(XoverLow))), HzF(XHz(P(XoverHigh)))) : nb == 2 ? Inv($"crossover {HzF(XHz(P(XoverLow)))}") : "full band";
-                    return Inv($"{nb} {(nb == 1 ? "band" : "bands")} · {xo} · amount {P(Amount) * 100:0} %{(solo >= 0 && BandActive(solo) ? " · " + PrismInk.Names[solo] + " solo" : "")}");
-            }
+            var spec = Spectrum();
+            root = CardLayout.Mini(spec, CardLayout.Line(5, Caps("Bands"), ModeSeg()),
+                K(Amount, "AMOUNT", Pct, 34, 56), K(Mix, "DRY/WET", Pct, 34, 56), K(Output, "OUTPUT", v => DbF((v - 0.5) * 48), 34, 56));
         }
-        readouts.Add(() =>
+        else
         {
-            statusLeft.Text = StatusText();
-            statusLeft.Foreground = (centreTab == 1 && Sel(Solo, 4) - 1 == band) || On(ScListen) ? AmberLit : Txt2;
-            double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
-            string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#}\u2009ms") : Loc.T("device.prism.no_lookahead");
-            string sc = Sc(S_ScActive) > 0.5 ? " · SC" : "";
-            statusRight.Text = sr > 0 ? Loc.F("device.prism.khz_cpu", sr / 1000, la, sc, Sc(S_Cpu) * 100) : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { globCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+            SetExtras(centreTab);
+            root = CardLayout.Large(new[] { "Bands", "Band detail", "Time" }, Math.Clamp(centreTab, 0, 2),
+                t => t switch { 1 => DetailTab(), 2 => TimeTab(), _ => BandsTab() },
+                t => t switch { 1 => StagePanel(), 2 => DetectorPanel(), _ => MetersPanel() },
+                extras,
+                OutputKnobs(54),
+                t => { centreTab = t; view = (band, t, 0); ViewState[(track, di)] = view; SetExtras(t); foreach (var a in readouts) a(); });
+        }
 
         void Refresh()
         {
@@ -701,36 +656,5 @@ internal sealed class PrismDeviceBody : IDeviceBody
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, int initial, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = Math.Clamp(initial, 0, tabs.Length - 1); var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? TabBg : Brushes.Transparent; btns[i].BorderBrush = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!; tb.Foreground = on ? NotaPalette.TextPrimary : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border { Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center } };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b; bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi(); host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

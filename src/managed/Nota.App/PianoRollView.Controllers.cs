@@ -407,7 +407,7 @@ public sealed partial class PianoRollView
 
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
-                var hint = new FormattedText(IsSwitch ? Loc.T("piano_roll.controllers.drag_to_draw_a_block") : Loc.T("piano_roll.controllers.drag_to_draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
+                var hint = new NotaFormattedText(IsSwitch ? Loc.T("piano_roll.controllers.drag_to_draw_a_block") : Loc.T("piano_roll.controllers.drag_to_draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
                 ctx.DrawText(hint, new Point((w - hint.Width) / 2, (h - hint.Height) / 2));
             }
             if (!double.IsNaN(_hoverBeat) || _drag != Drag.None)
@@ -415,7 +415,7 @@ public sealed partial class PianoRollView
                 double beat = _drag == Drag.Point && _pt >= 0 && _pt < c.Count ? c[_pt].Beat : _hoverBeat;
                 if (!double.IsNaN(beat) && (c.Count > 0 || _drag != Drag.None))
                 {
-                    var ft = new FormattedText(Readout(ValueAt(c, beat, IsSwitch)), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, KeyLabelHot);
+                    var ft = new NotaFormattedText(Readout(ValueAt(c, beat, IsSwitch)), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, KeyLabelHot);
                     ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
                 }
             }

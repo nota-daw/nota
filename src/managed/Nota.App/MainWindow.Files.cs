@@ -163,11 +163,9 @@ public partial class MainWindow
     {
         string title = Loc.F("main.files.nota", ProjectDisplayName());
         Title = title;
-        // The project's name leads the transport, so the frameless title-bar caption is just
-        // the app; the OS window title keeps both for the Dock and window switcher.
-        DocTitleText.Text = "Nota";
-        ProjectNameText.Text = ProjectDisplayName();
-        RequestTransportFit();
+        // The frameless header's caption is the project's name; the OS window title keeps the
+        // app too, for the Dock and window switcher.
+        DocTitleText.Text = ProjectDisplayName();
     }
 
     /// <summary>A crash-recovery snapshot to offer on open (set by App at launch). M7-7.</summary>
@@ -455,9 +453,8 @@ public partial class MainWindow
         _blockMoves.Clear();             // ...and the clip moves it remembers are the old project's
         _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
-        _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
+        _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project, and so do device windows
         _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
-        LensWindow.CloseAll();             // and Lens windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
         PianoRollView.ForgetBendPicks();   // and the Bend lane ranges picked per clip
         Timeline.Refresh();

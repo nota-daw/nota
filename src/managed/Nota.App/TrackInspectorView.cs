@@ -119,7 +119,7 @@ internal sealed class TrackInspectorView : UserControl
             sb.Append(pick).Append(_engine.GetTrackMonitor(id));
             if (pick.Source > 0) sb.Append(TrackNames.Of(_engine, pick.Source));
             foreach (var c in _timeline.RecordInputChoices(id))
-                sb.Append('|').Append(c.Pick.Source).Append(':').Append((int)c.Pick.Channels).Append('=').Append(c.Label);
+                sb.Append('|').Append(c.Pick.Source).Append(':').Append(c.Pick.Input.First).Append('.').Append(c.Pick.Input.Width).Append('=').Append(c.Label);
         }
         if (ti.IsInstrument)
         {
@@ -190,7 +190,7 @@ internal sealed class TrackInspectorView : UserControl
         s.Children.Add(state);
 
         if (audio) s.Children.Add(Section(Loc.T("common.input"), InputRows(id)));
-        if (ti.IsInstrument) s.Children.Add(Section(Loc.T("common.input"), MidiFromRow(id)));
+        if (ti.IsInstrument) s.Children.Add(Section(Loc.T("common.input"), MidiInputRows(id)));
         if (ti.IsInstrument) s.Children.Add(Section(Loc.T("articulations.inspector.head"), ArticulationsBody(id)));
 
         s.Children.Add(Section(Loc.T("track_inspector.color"), Swatches(id)));
@@ -244,7 +244,7 @@ internal sealed class TrackInspectorView : UserControl
         var choices = _timeline.RecordInputChoices(id);
         var cur = RecordInputPick.Of(_engine, id);
         int sel = choices.FindIndex(c => c.Pick.Matches(cur));
-        string label = sel >= 0 ? choices[sel].Label : RecordInputPick.Hardware[0].Label;
+        string label = sel >= 0 ? choices[sel].Label : choices[0].Label;
         var rows = new StackPanel { Spacing = 8 };
         rows.Children.Add(SessionView.Row(Loc.T("common.record_input"), SessionView.Chip(label, false, a =>
             SessionView.Pick(a, choices.Select(c => (c.Pick, c.Label)), p => p.Matches(cur),
@@ -257,6 +257,29 @@ internal sealed class TrackInspectorView : UserControl
         chip.IsEnabled = canMonitor;
         ToolTip.SetTip(chip, canMonitor ? Loc.T("track_inspector.hear_the_input_live_through") : Loc.T("track_inspector.master_cant_be_monitored_it"));
         rows.Children.Add(SessionView.Row(Loc.T("track_inspector.monitor_input"), chip));
+        return rows;
+    }
+
+    // MIDI input (specs/086): device, channel, then MIDI from.
+    private Control MidiInputRows(int id)
+    {
+        var cur = _engine.GetTrackMidiInput(id);
+        var devices = MidiInputPick.Devices(_engine, id);
+        string devLabel = devices.Find(d => d.Uid == cur.Uid).Label ?? Loc.T("midi_input.all_inputs");
+        var rows = new StackPanel { Spacing = 8 };
+        var devChip = SessionView.Chip(devLabel, false, a =>
+            SessionView.Pick(a, devices.Select(d => (d.Uid, d.Label)), u => u == cur.Uid,
+                u => { _engine.SetTrackMidiInput(id, u, cur.Channel); Edited(); }));
+        ToolTip.SetTip(devChip, Loc.T("midi_input.tooltip"));
+        rows.Children.Add(SessionView.Row(Loc.T("midi_input.menu"), devChip));
+        var channels = MidiInputPick.Channels();
+        string chLabel = cur.Channel > 0 ? channels[cur.Channel].Label : channels[0].Label;
+        rows.Children.Add(SessionView.Row(Loc.T("midi_input.channel"), SessionView.Chip(chLabel, false, a =>
+            SessionView.Pick(a, channels.Select(c => (c.Channel, c.Label)), c => c == cur.Channel,
+                c => { _engine.SetTrackMidiInput(id, cur.Uid, c); Edited(); }))));
+        if (MidiInputPick.MpeWarning(_engine, id))
+            rows.Children.Add(Note(Loc.T("midi_input.mpe_warning")));
+        rows.Children.Add(MidiFromRow(id));
         return rows;
     }
 
@@ -328,7 +351,7 @@ internal sealed class TrackInspectorView : UserControl
 
         var host = new Border
         {
-            Child = rows, Padding = new Thickness(6), Margin = new Thickness(-6), CornerRadius = NotaRadius.Control,
+            Child = rows, Padding = new Thickness(6), Margin = new Thickness(-6), CornerRadius = NotaRadius.Field,
             BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Background = Brushes.Transparent,
         };
         HookArticulationDrop(host, id);
@@ -458,7 +481,7 @@ internal sealed class TrackInspectorView : UserControl
     {
         var sw = new Border
         {
-            Height = 18, Margin = new Thickness(2), CornerRadius = NotaRadius.Badge, Background = fill,
+            Height = 18, Margin = new Thickness(2), CornerRadius = NotaRadius.Cell, Background = fill,
             BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
             Cursor = new Cursor(StandardCursorType.Hand),
         };
@@ -503,7 +526,7 @@ internal sealed class TrackInspectorView : UserControl
 
     private static Control Title(IBrush color, string title, string sub)
     {
-        var dot = new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Clip, Background = color, VerticalAlignment = VerticalAlignment.Center };
+        var dot = new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Field, Background = color, VerticalAlignment = VerticalAlignment.Center };
         var name = new TextBlock
         {
             Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
@@ -537,7 +560,7 @@ internal sealed class TrackInspectorView : UserControl
         };
         var chip = new Border
         {
-            Height = 22, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = tb,
+            Height = 22, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = tb,
             Background = on ? fill : NotaPalette.SurfaceRaised, BorderBrush = on ? fill : NotaPalette.Seam,
             Cursor = new Cursor(StandardCursorType.Hand),
         };

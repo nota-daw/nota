@@ -2,16 +2,15 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Shutter body (noise gate / ducker, device kind 19), a build
-// of the "Nota Shutter" mockup (700 × 260) on the Utility / Valve / Vintage frame: an always-
-// visible STATE column (input or key level with the threshold · reduction), a centre panel
-// with Signal / Envelope / Sidechain / Pattern tabs — the input and the gated output over the
-// window with the threshold and the close level on it, one opening drawn from attack / hold /
-// release / shape / floor, the detector's band-pass under the reduction, the rhythmic gate's
-// step grid — a right panel with Detector / Meters tabs (Rhythm / Detector on the Pattern
-// tab), and a status strip. The pictures come from the engine (Shutter.h
-// scopeRead), so they show what the gate does. Every control is a device param, so
-// automation / MIDI learn / presets / A-B / persistence come for free; the window length,
-// Live (freeze) and Reset are view / meter actions, not params.
+// of the "Nota Shutter" mockup (700 × 260) on the Utility / Valve / Vintage frame: a centre
+// panel with Signal / Envelope / Sidechain / Pattern tabs — the input and the gated output over
+// the window with the threshold and the close level on it, one opening drawn from attack /
+// hold / release / shape / floor, the detector's band-pass under the reduction, the rhythmic
+// gate's step grid — and a right panel that follows the tab (Detector · Opening · Key · Rhythm)
+// over Floor · Threshold · Return (#531 card layout; S = the Signal graph and four knobs). The pictures come from the engine (Shutter.h scopeRead), so they show what the
+// gate does. Every control is a device param, so automation / MIDI learn / presets / A-B /
+// persistence come for free; the window length, Live (freeze) and Reset are view / meter
+// actions, not params.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -70,6 +69,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
     private static readonly Random Rng = new();
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Gate";
 
@@ -116,13 +117,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         bool Duck() => On(Flip);
         string ThrShort(double v) => NotaNum.F($"{-70 + v * 70:0.0}");
         string RetF(double v) => NotaNum.F($"{v * 24:0.0}\u2009dB");
-        string RetShort(double v) => NotaNum.F($"{v * 24:0.0}");
         string AtkF(double v) => MsF(Exp(v, 0.01, 100));
         string HoldF(double v) => MsF(Exp(v, 0.1, 500));
         string RelF(double v) => MsF(Exp(v, 1, 2000));
         string FloorF(double v) => v <= 0.001 ? "−∞\u2009dB" : NotaNum.F($"{-70 + v * 70:0.0}\u2009dB");
-        string FloorShort(double v) => v <= 0.001 ? "−∞" : NotaNum.F($"{-70 + v * 70:0.0}");
-        string LookF(double v) => NotaNum.F($"{new[] { 0, 1, 5 }[Math.Clamp((int)Math.Round(v * 2), 0, 2)]}\u2009ms");
         string HpF(double v) => HzF(Exp(v, 20, 2000));
         string LpF(double v) => HzF(Exp(v, 200, 20000));
         string Times() => NotaNum.F($"{MsN(AtkMs())} / {MsN(HoldMs())} / {MsN(RelMs())}\u2009ms");
@@ -141,19 +139,17 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
-        static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
         // `steps` > 1 snaps a discrete param (Lookahead).
-        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, int steps = 0, string? tip = null, double size = 34)
+        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, int steps = 0, string? tip = null, double size = 34, double cellW = 44)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = size, Height = size };
@@ -168,7 +164,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             Learn(knob, p);
             if (tip is not null) ToolTip.SetTip(knob, tip);
             readouts.Add(() => { if (knob.Dragging) return; double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; val.Text = fmt(P(p)); });
-            return KnobCell(name, knob, val, 44);
+            return KnobCell(name, knob, val, cellW);
         }
 
         // On/off switch bound to a param (>= 0.5 = on).
@@ -203,7 +199,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var tb = new TextBlock { Text = names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; pick(iv); RefreshAll(); e.Handled = true; };
                 cells[i] = b; texts[i] = tb; row.Children.Add(b);
             }
@@ -227,7 +223,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false)
         {
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -248,19 +244,6 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             => Latch(p, () => On(p), () => SetP(p, On(p) ? 0f : 1f), () => text, tip, fill);
         Border ListenLatch(bool fill = false) => ToggleLatch(Listen, "Listen", Loc.T("device.shutter.listen_hear_the_key_as"), fill);
 
-        // Slider row: caps label · track · mono value.
-        Control SliderRow(string label, int p, Func<double, string> fmt, bool modulation = false, double labW = 40)
-        {
-            var bar = DeviceCardKit.SliderRow("", () => P(p), v => { Raw(p, v); RefreshAll(); }, () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 34, modulation: modulation);
-            readouts.Add(sync);
-            Learn(bar, p);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(Caps(label));
-            g.Children.Add(Col(bar, 1));
-            return g;
-        }
-
         // The key source: [name ▾] lists Internal and the other tracks. Picking a track switches
         // External Key on; Internal clears the source.
         Control KeyDrop(bool stretch)
@@ -269,7 +252,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Margin = new Thickness(6, 0, 0, 0) };
             var box = new Border
             {
-                Height = 16, MinWidth = 74, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = 74, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { Docked(chev, Dock.Right), name } },
             };
@@ -333,28 +316,6 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             return sw;
         }
 
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
-        }
-        Control KnobRow(Control[] knobs, Func<string> info1, Func<string> info2)
-        {
-            var i1 = Mono("", 7, TextTertiary); i1.HorizontalAlignment = HorizontalAlignment.Right;
-            var i2 = Mono("", 7, TextTertiary); i2.HorizontalAlignment = HorizontalAlignment.Right;
-            i1.TextTrimming = i2.TextTrimming = TextTrimming.CharacterEllipsis;
-            readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52, ColumnSpacing = 6 };
-            g.Children.Add(Row(4, knobs));
-            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
-            return g;
-        }
-        static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
-        {
-            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
-        };
         void WireDrag<T>(T v, Func<int, int> param, params ValueField[] fields) where T : ShDragView
         {
             ValueEntry.AttachHandles(v, fields.Select(f => (IReadOnlyList<ValueField>)new[] { f }).ToArray());
@@ -366,68 +327,26 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // LEFT — STATE column (input or key level · reduction)
-        // ======================================================================
-        var stateTitle = Caps("STATE"); stateTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
-        var grPill = new ShPill { Ink = Teal, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch };
-        var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var grLbl = Acr("GR"); grLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(inPill, Loc.T("device.shutter.the_level_the_detector_compares"));
-        ToolTip.SetTip(grPill, Loc.T("device.shutter.gain_reduction_how_far_the"));
-        var stateIn = Mono("", 7, TextPrimary); stateIn.HorizontalAlignment = HorizontalAlignment.Center;
-        var stateGr = Mono("", 7, TextPrimary); stateGr.HorizontalAlignment = HorizontalAlignment.Center;
-        static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
-        readouts.Add(() =>
-        {
-            bool ext = Sc(S_ExtKey) > 0.5;
-            double lvl = ext ? Sc(S_KeyDb) : Sc(S_InDb);
-            inLbl.Text = NotaText.Label(ext ? "SC" : "IN");
-            inPill.Set(Norm60(lvl), Norm60(ThrDb()));
-            grPill.Set(Math.Clamp(Sc(S_GrDb) / 60, 0, 1), double.NaN);
-            stateIn.Text = lvl <= -119 ? "−∞" : NotaNum.F($"{lvl:0.0}");
-            stateGr.Text = Sc(S_GrDb) < 0.05 ? "0.0\u2009dB" : Sc(S_GrDb) > 99 ? "−∞\u2009dB" : NotaNum.F($"−{Sc(S_GrDb):0.0}\u2009dB");
-            stateTitle.Foreground = State() is 1 or 2 or 3 ? AccentBright : TextTertiary;   // lit while the gate is open
-        });
-        Control PillCol(ShPill pill, TextBlock lbl) => new DockPanel { Children = { Docked(lbl, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = pill } } };
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        pills.Children.Add(PillCol(inPill, inLbl));
-        pills.Children.Add(Col(PillCol(grPill, grLbl), 1));
-        var stateCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(stateTitle, Dock.Top), Docked(stateGr, Dock.Bottom), Docked(stateIn, Dock.Bottom), pills } },
-        };
-        DockPanel.SetDock(stateCol, Dock.Left);
-
-        // ======================================================================
         // CENTRE — Signal
         // ======================================================================
         ShSignalView? signal = null;
-        Control SignalTab()
+        ShSignalView SignalGraph()
         {
             signal = new ShSignalView();
             WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return,
                 F(Threshold, "Threshold", v => ThrShort(v) + "\u2009dB"), F(Return, "Return", RetF));
             ToolTip.SetTip(signal, MenuKit.Keys(Loc.T("device.shutter.the_input_teal_and_what")));
             Learn(signal, Threshold);
-
+            return signal;
+        }
+        Control LookSeg() => Seg(Lookahead, new[] { "0", "1", "5\u2009ms" }, Loc.T("device.shutter.lookahead_the_gate_opens_this"));
+        Control SignalTab()
+        {
+            var g = SignalGraph();
             var liveBtn = Latch(-1, () => live, () => { live = !live; if (!live) Array.Copy(scope, frozen, kScope); }, () => live ? "Live" : "Frozen",
                 Loc.T("device.shutter.live_the_graph_follows_the"));
-            var ret = Mono("", 7, TextSecondary);
-            readouts.Add(() => ret.Text = NotaNum.F($"return {RetDb():0.0}\u2009dB"));
-            var head = HeadRow(Row(6, Caps("MODE"), ModeSeg(), new Border { Width = 2 }, Caps("LOOK"),
-                Seg(Lookahead, new[] { "0", "1", "5\u2009ms" }, Loc.T("device.shutter.lookahead_the_gate_opens_this")), liveBtn), ret);
-            var knobs = KnobRow(new[]
-            {
-                K(Threshold, "THRESH", ThrShort),
-                K(Attack, "ATTACK", AtkF),
-                K(Hold, "HOLD", HoldF),
-                K(Release, "RELEASE", RelF),
-            },
-            () => NotaNum.F($"threshold {ThrDb():0.0}\u2009dB · return {RetDb():0.0}\u2009dB"),
-            () => NotaNum.F($"{(Duck() ? "ducked" : "open")} {Sc(S_OpenRatio) * 100:0}\u2009% of window · {GrText()}"));
-            return TabBody(head, signal, knobs);
+            var peak = ToggleLatch(PeakHold, "Peak hold", Loc.T("device.shutter.peak_hold_the_detector_holds"));
+            return CardLayout.View(g, null, CardLayout.Line(6, Caps("LOOK"), LookSeg(), peak, liveBtn));
         }
 
         // ======================================================================
@@ -445,19 +364,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
                 Loc.T("device.shutter.shape_linear_straight_ramps_over"));
             var retrig = ToggleLatch(Retrigger, "Retrig", Loc.T("device.shutter.retrigger_trigger_mode_each_hit"));
-            var times = Mono("", 7, TextSecondary);
-            readouts.Add(() => times.Text = Times());
-            var head = HeadRow(Row(6, Caps("SHAPE"), shapes, new Border { Width = 2 }, ModeSeg(), retrig), times);
-            var knobs = KnobRow(new[]
-            {
-                K(Attack, "ATTACK", AtkF),
-                K(Hold, "HOLD", HoldF),
-                K(Release, "RELEASE", RelF),
-                K(Floor, "FLOOR", FloorF, Teal, tip: Loc.T("device.shutter.floor_the_level_when_closed")),
-            },
-            () => P(Floor) <= 0.001f ? (Duck() ? Loc.T("device.shutter.ducks_to_silence") : Loc.T("device.shutter.closes_to_silence")) : Loc.F("device.shutter.floor_db_instead_of_silence", FloorDb()),
-            () => NotaNum.F($"openings {Sc(S_TrigPerBar):0} / bar · {GrText()}"));
-            return TabBody(head, envView, knobs);
+            return CardLayout.View(envView,
+                CardLayout.KnobColumn(K(Attack, "ATTACK", AtkF, cellW: 50), K(Hold, "HOLD", HoldF, cellW: 50), K(Release, "RELEASE", RelF, cellW: 50)),
+                CardLayout.Line(6, Caps("SHAPE"), shapes, retrig));
         }
 
         // ======================================================================
@@ -473,19 +382,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
             var eq = Latch(DetFilter, () => On(DetFilter), () => SetP(DetFilter, On(DetFilter) ? 0f : 1f), () => On(DetFilter) ? "SC EQ on" : "SC EQ off",
                 Loc.T("device.shutter.sc_eq_the_detector_hears"));
-            var look = Mono("", 7, TextSecondary);
-            readouts.Add(() => look.Text = NotaNum.F($"look {LookMs()}\u2009ms"));
-            var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ModeSeg(), ListenLatch(), eq), look);
-            var knobs = KnobRow(new[]
-            {
-                K(Threshold, "THRESH", ThrShort),
-                K(Floor, "RANGE", FloorF, tip: Loc.T("device.shutter.range_how_far_the_gate")),
-                K(Return, "RETURN", RetF, Teal, tip: Loc.T("device.shutter.return_how_far_under_the")),
-                K(Lookahead, "LOOK", LookF, Teal, steps: 3, tip: Loc.T("device.shutter.lookahead_0_1_or_5")),
-            },
-            () => NotaNum.F($"key {KeyName()} · {(On(DetFilter) ? "fires on " + HpF(P(DetHP)) + "…" + LpF(P(DetLP)) : "full band")}"),
-            () => NotaNum.F($"{(Duck() ? "ducks" : "closes")} to {(P(Floor) <= 0.001f ? "−∞\u2009dB" : NotaNum.F($"{FloorDb():0.0}\u2009dB"))} · {GrText()}"));
-            return TabBody(head, keyView, knobs);
+            return CardLayout.View(keyView,
+                CardLayout.KnobColumn(K(DetHP, "SC HP", HpF, Teal, cellW: 50), K(DetLP, "SC LP", LpF, Teal, cellW: 50)),
+                CardLayout.Line(6, eq, ListenLatch()));
         }
 
         // ======================================================================
@@ -533,7 +432,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var grid = new Grid { Children = { fill, tb } };
             var host = new Border
             {
-                Height = 18, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 18, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 ClipToBounds = true, Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = grid,
             };
             bool drag = false;
@@ -569,7 +468,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var tb = new TextBlock { Text = text, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border
             {
-                Height = 18, Padding = new Thickness(8, 0), Background = Raised, CornerRadius = NotaRadius.Badge,
+                Height = 18, Padding = new Thickness(8, 0), Background = Raised, CornerRadius = NotaRadius.Cell,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             b.PointerPressed += (_, e) =>
@@ -632,7 +531,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             readouts.Add(() => pname.Text = PatternName());
             var browser = new Border
             {
-                Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new DockPanel { Children = { Docked(Arrow(GlyphKind.ChevronLeft, -1), Dock.Left), Docked(Arrow(GlyphKind.ChevronRight, 1), Dock.Right), pname } },
             };
             ToolTip.SetTip(browser, Loc.T("device.shutter.pattern_shapes_the_arrows_step"));
@@ -654,7 +553,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             }
             var gridSize = new Border
             {
-                Height = 18, Padding = new Thickness(6, 0), Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 18, Padding = new Thickness(6, 0), Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = Row(4, Caps("GRID"),
                     Cycle(nSt, () =>
                     {
@@ -684,58 +583,38 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             };
         }
 
-        Control RhythmTab()
-        {
-            var rate = K(PatRate, "RATE", _ => RateName(), steps: 5, size: 40, tip: Loc.T("device.shutter.rate_how_long_the_whole"));
-            var depth = K(PatDepth, "DEPTH", v => Pct((float)v), Teal, size: 40, tip: Loc.T("device.shutter.depth_how_far_an_empty"));
-            var knobs = new UniformGrid { Columns = 2, Children = { rate, depth } };
-            var clock = Segments(new[] { "Sync", "Free" }, () => On(PatSync) ? 0 : 1, i => { SetP(PatSync, i == 0 ? 1f : 0f); RefreshAll(); }, out var clockSync, fill: true);
-            readouts.Add(clockSync);
-            Learn(clock, PatSync);
-            ToolTip.SetTip(clock, Loc.T("device.shutter.clock_sync_locks_the_pattern"));
-            var clockRow = LabelRow("CLOCK", clock);
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4 };
-            btns.Children.Add(Button("Copy", () => _clipboard = StepsNow(), Loc.T("device.shutter.copy_the_steps")));
-            btns.Children.Add(Col(Button("Paste", () => { if (_clipboard is { } c) WriteSteps(Array.ConvertAll(Resample(c, NSteps()), v => Qz(v))); }, Loc.T("device.shutter.paste_copied_steps_fitted_to"), () => _clipboard is not null), 1));
-            btns.Children.Add(Col(Button("Clear", () => WriteSteps(new float[NSteps()]), Loc.T("device.shutter.clear_every_step")), 2));
-            return Spread(
-                knobs,
-                clockRow,
-                btns,
-                new StackPanel { Spacing = 5, Children = {
-                    Toggle(PatRetrig, Loc.T("device.shutter.retrig_on_midi_note"), Loc.T("device.shutter.retrig_every_midi_note_on")),
-                    Toggle(PatGated, Loc.T("device.shutter.only_while_gate_open"), Loc.T("device.shutter.gated_the_pattern_plays_only")) } });
-        }
-
         // ======================================================================
-        // RIGHT — Detector / Meters
+        // RIGHT — the panel that follows the tab: Detector · Opening · Key · Rhythm
         // ======================================================================
-        static Control LabelRow(string label, Control c, double labW = 40)
+        Control Line(Func<string> k, Func<string> v, IBrush? ink = null)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")) };
-            g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
-            g.Children.Add(Col(c, 1));
+            var key = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+            var val = Mono("", 8, ink ?? TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+            readouts.Add(() => { key.Text = k(); val.Text = v(); });
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            g.Children.Add(key);
+            g.Children.Add(Col(val, 1));
             return g;
         }
-        static Control Spread(params Control[] rows)
+        Control Info(Func<string> text)
         {
-            var defs = new List<string>();
-            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
-            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
-            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
-            return new Border { Padding = new Thickness(8, 6), Child = g };
+            var t = Mono("", 8, TextSecondary);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            readouts.Add(() => t.Text = text());
+            return t;
         }
+        static string GrF(double gr) => gr < 0.05 ? "0.0" : gr > 99 ? "−∞" : NotaNum.F($"−{gr:0.0}");
 
         Control StateBox()
         {
             var t = Caps("STATE");
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
             var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
             l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var b = new Border
             {
-                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
             };
             readouts.Add(() =>
@@ -754,70 +633,69 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             return b;
         }
 
-        Control DetectorTab()
+        (Control, Control) DetectorPanel()
         {
-            var floor = SliderRow("FLOOR", Floor, FloorShort, modulation: true);
-            return Spread(
-                LabelRow("SOURCE", KeyDrop(true)),
-                SliderRow("THRESH", Threshold, ThrShort),
-                SliderRow("RETURN", Return, RetShort),
-                new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = floor },
-                StateBox(),
-                new StackPanel { Spacing = 5, Children = {
-                    ExtSwitch(),
-                    Toggle(DetFilter, "Detector filter", Loc.T("device.shutter.detector_filter_the_key_goes")),
-                    Toggle(PeakHold, "Peak hold", Loc.T("device.shutter.peak_hold_the_detector_holds")) } });
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = {
+                Caps("MEASUREMENTS"),
+                Line(() => Sc(S_ExtKey) > 0.5 ? "sc in" : "in", () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb))),
+                Line(() => "out", () => DbF(Sc(S_OutDb))),
+                Line(() => "GR · peak", () => NotaNum.F($"{GrF(Sc(S_GrDb))} · {GrF(Sc(S_PeakGrDb))}\u2009dB")) } });
+            var reset = Latch(-1, () => false, () => engine.DeviceAction(track, di, A_ResetMeters, 0, 0), () => "Reset",
+                Loc.T("device.shutter.reset_clear_the_peak_reduction"));
+            return (CardLayout.Head(CardLayout.Title("Detector"), reset), CardLayout.Rows(StateBox(), box));
         }
 
-        Control MetersTab()
+        (Control, Control) OpeningPanel()
         {
-            Control Line(Func<string> k, Func<string> v, IBrush? ink = null)
-            {
-                var key = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-                var val = Mono("", 8, ink ?? TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
-                readouts.Add(() => { key.Text = k(); val.Text = v(); });
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-                g.Children.Add(key);
-                g.Children.Add(Col(val, 1));
-                return g;
-            }
-            var box = new Border
-            {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
-                Child = new StackPanel { Spacing = 2, Children = {
-                    Caps("MEASUREMENTS"),
-                    Line(() => Sc(S_ExtKey) > 0.5 ? "sc in" : "in", () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb))),
-                    Line(() => "out", () => DbF(Sc(S_OutDb))),
-                    Line(() => "GR · peak", () => NotaNum.F($"{(Sc(S_GrDb) < 0.05 ? "0.0" : Sc(S_GrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_GrDb):0.0}"))} · {(Sc(S_PeakGrDb) < 0.05 ? "0.0" : Sc(S_PeakGrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_PeakGrDb):0.0}"))}\u2009dB"), TextPrimary) } },
-            };
-            var sliders = new StackPanel { Spacing = 6, Children = {
-                SliderRow("SC HP", DetHP, HpF, modulation: true),
-                SliderRow("SC LP", DetLP, LpF, modulation: true),
-                SliderRow("RANGE", Floor, FloorShort) } };
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-            btns.Children.Add(ListenLatch(fill: true));
-            btns.Children.Add(Col(Latch(-1, () => false, () => engine.DeviceAction(track, di, A_ResetMeters, 0, 0), () => "Reset",
-                Loc.T("device.shutter.reset_clear_the_peak_reduction"), fill: true), 1));
-            var body = new DockPanel { LastChildFill = false, Children = {
-                Docked(box, Dock.Top),
-                Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 5, Children = {
-                    ExtSwitch(),
-                    Toggle(DetFilter, "Detector filter", Loc.T("device.shutter.detector_filter_the_key_goes_2")) } }, Dock.Bottom),
-                Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(8, 6), Child = body };
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = {
+                Caps(Loc.T("device.shutter.opening")),
+                Line(() => "attack · hold · release", Times),
+                Line(() => Loc.T("device.shutter.one_opening"), () => NotaNum.F($"{MsN(AtkMs() + HoldMs() + RelMs())}\u2009ms")),
+                Line(() => "openings", () => NotaNum.F($"{Sc(S_TrigPerBar):0} / bar")) } });
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.shutter.opening"))), CardLayout.Rows(
+                box,
+                CardLayout.Rule(),
+                Info(() => P(Floor) <= 0.001f ? (Duck() ? Loc.T("device.shutter.ducks_to_silence") : Loc.T("device.shutter.closes_to_silence")) : Loc.F("device.shutter.floor_db_instead_of_silence", FloorDb()))));
+        }
+
+        (Control, Control) KeyPanel()
+        {
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 2, Children = {
+                Caps("KEY"),
+                Line(() => "level", () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb))),
+                Line(() => Loc.T("device.shutter.fires_on"), () => On(DetFilter) ? HpF(P(DetHP)) + "…" + LpF(P(DetLP)) : "full band"),
+                Line(() => "look", () => NotaNum.F($"{LookMs()}\u2009ms")) } });
+            return (CardLayout.Head(ExtSwitch()), CardLayout.Rows(
+                CardLayout.LabelRow("SOURCE", KeyDrop(true), stretch: true),
+                box,
+                CardLayout.Rule(),
+                Info(() => NotaNum.F($"{(Duck() ? "ducks" : "closes")} to {(P(Floor) <= 0.001f ? "−∞\u2009dB" : NotaNum.F($"{FloorDb():0.0}\u2009dB"))} · {GrText()}"))));
+        }
+
+        (Control, Control) RhythmPanel()
+        {
+            var rate = K(PatRate, "RATE", _ => RateName(), steps: 5, tip: Loc.T("device.shutter.rate_how_long_the_whole"), size: 28, cellW: 54);
+            var depth = K(PatDepth, "DEPTH", v => Pct((float)v), Teal, tip: Loc.T("device.shutter.depth_how_far_an_empty"), size: 28, cellW: 54);
+            var clock = Segments(new[] { "Sync", "Free" }, () => On(PatSync) ? 0 : 1, i => { SetP(PatSync, i == 0 ? 1f : 0f); RefreshAll(); }, out var clockSync);
+            readouts.Add(clockSync);
+            Learn(clock, PatSync);
+            ToolTip.SetTip(clock, Loc.T("device.shutter.clock_sync_locks_the_pattern"));
+            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            btns.Children.Add(Button("Copy", () => _clipboard = StepsNow(), Loc.T("device.shutter.copy_the_steps")));
+            btns.Children.Add(Col(Button("Paste", () => { if (_clipboard is { } c) WriteSteps(Array.ConvertAll(Resample(c, NSteps()), v => Qz(v))); }, Loc.T("device.shutter.paste_copied_steps_fitted_to"), () => _clipboard is not null), 1));
+            btns.Children.Add(Col(Button("Clear", () => WriteSteps(new float[NSteps()]), Loc.T("device.shutter.clear_every_step")), 2));
+            return (CardLayout.Head(CardLayout.Title("Rhythm"), clock), new Border { Padding = new Thickness(8, 4, 8, 0), Child = new StackPanel { Spacing = 4, Children = {
+                CardLayout.Pair(rate, depth),
+                btns,
+                Toggle(PatRetrig, Loc.T("device.shutter.retrig_on_midi_note"), Loc.T("device.shutter.retrig_every_midi_note_on")),
+                Toggle(PatGated, Loc.T("device.shutter.only_while_gate_open"), Loc.T("device.shutter.gated_the_pattern_plays_only")) } } });
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (tabs, the panel that follows them, Floor · Threshold · Return under the Gate /
+        // Duck switch) · S (the Signal graph over the mode and Threshold · Attack · Release · Floor)
         // ======================================================================
         int centreTab = 0;
-        var centreHost = new ContentControl();
-        var rightHost = new ContentControl();
-        var rhythmHost = new ContentControl();
-        var centreBodies = new Control?[4];
-        var rightBodies = new Control?[2];
-        var rhythmBodies = new Control?[2];
         var extras = Mono("", 7, TextTertiary);
         var extrasHost = new Border { Background = Brushes.Transparent, Child = extras, VerticalAlignment = VerticalAlignment.Stretch };
         extrasHost.PointerPressed += (_, e) =>
@@ -838,87 +716,21 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             extrasHost.Cursor = centreTab == 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         });
         ToolTip.SetTip(extrasHost, Loc.T("device.shutter.signal_tab_click_to_change") + string.Join(" · ", WindowNames));
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => EnvelopeTab(), 2 => SidechainTab(), 3 => PatternTab(), _ => SignalTab() };
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? MetersTab() : DetectorTab();
-        Control RhythmBody(int t) => rhythmBodies[t] ??= t == 1 ? DetectorTab() : RhythmTab();
 
-        // The right panel follows the centre: Rhythm / Detector beside the pattern, else Detector / Meters.
-        var rightFrame = TabFrame(new[] { "Detector", "Meters" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        Control? rhythmFrame = null;
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        var centre = TabFrame(new[] { "Signal", "Envelope", "Sidechain", "Pattern" }, centreHost, CentreBody, false, t =>
-        {
-            centreTab = t;
-            right.Child = t == 3 ? rhythmFrame ??= TabFrame(new[] { "Rhythm", "Detector" }, rhythmHost, RhythmBody, true, _ => RefreshAll(), null) : rightFrame;
-            Refresh();
-        }, extrasHost);
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            string floor = P(Floor) <= 0.001f ? "−∞" : NotaNum.F($"{FloorDb():0.0}\u2009dB");
-            var parts = new List<string> { Duck() ? "Duck" : "Gate" };
-            if (centreTab == 3)
-            {
-                int tg = Sel(PatTarget, 3);
-                return string.Join(" · ", new[]
-                {
-                    tg == 0 ? "Pattern off" : "Pattern", PatternName(), RateName(), NotaNum.F($"{NSteps()} × {NLevels()}"),
-                    "smooth " + Pct(P(PatSmooth)), "swing " + NotaNum.F($"{P(PatSwing) * 75:0}\u2009%"), "depth " + Pct(P(PatDepth)),
-                }) + (tg == 0 ? "" : tg == 2 ? Loc.T("device.shutter.map_pattern_out") : On(PatGated) ? Loc.T("device.shutter.volume_gated") : " → Volume")
-                  + (On(PatRetrig) ? " · MIDI retrig" : "");
-            }
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(Shapes[Sel(Shape, 3)].ToLowerInvariant());
-                    parts.Add(Times());
-                    parts.Add("floor " + floor);
-                    parts.Add(NotaNum.F($"threshold {ThrDb():0.0}"));
-                    parts.Add(NotaNum.F($"return {RetDb():0.0}"));
-                    if (On(Retrigger)) parts.Add("retrigger");
-                    break;
-                case 2:
-                    parts.Add("key " + KeyName());
-                    parts.Add(NotaNum.F($"threshold {ThrDb():0.0}"));
-                    parts.Add("range " + floor);
-                    parts.Add(On(DetFilter) ? "SC " + HpF(P(DetHP)) + "…" + LpF(P(DetLP)) : "SC full band");
-                    parts.Add(NotaNum.F($"look {LookMs()}\u2009ms"));
-                    if (On(Listen)) parts.Add("listening");
-                    break;
-                default:
-                    parts.Add(NotaNum.F($"threshold {ThrDb():0.0}\u2009dB"));
-                    parts.Add(NotaNum.F($"return {RetDb():0.0}"));
-                    parts.Add(Times());
-                    parts.Add("floor " + floor);
-                    parts.Add(NotaNum.F($"look {LookMs()}\u2009ms"));
-                    if (ExtOn()) parts.Add("key " + KeyName());
-                    break;
-            }
-            if (On(PeakHold) && centreTab != 1) parts.Add("peak hold");
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency {Sc(S_Latency):0}\u2009smp · CPU {Sc(S_Cpu) * 100:0.0}\u2009%") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stateCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(SignalGraph(), ModeSeg(),
+                K(Threshold, "THRESH", ThrShort, cellW: 56), K(Attack, "ATTACK", AtkF, cellW: 56), K(Release, "RELEASE", RelF, cellW: 56),
+                K(Floor, "FLOOR", FloorF, Teal, tip: Loc.T("device.shutter.floor_the_level_when_closed"), cellW: 56))
+            : CardLayout.Large(new[] { "Signal", "Envelope", "Sidechain", "Pattern" }, 0,
+                t => t switch { 1 => EnvelopeTab(), 2 => SidechainTab(), 3 => PatternTab(), _ => SignalTab() },
+                t => t switch { 1 => OpeningPanel(), 2 => KeyPanel(), 3 => RhythmPanel(), _ => DetectorPanel() },
+                extrasHost,
+                CardLayout.Output(
+                    K(Floor, "FLOOR", FloorF, tip: Loc.T("device.shutter.floor_the_level_when_closed"), cellW: 54),
+                    K(Threshold, "THRESH", ThrShort, size: 44, cellW: 58),
+                    K(Return, "RETURN", RetF, Teal, tip: Loc.T("device.shutter.return_how_far_under_the"), cellW: 54),
+                    ModeSeg()),
+                t => { centreTab = t; Refresh(); });
 
         void Refresh()
         {
@@ -949,45 +761,5 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Refresh();
         return root;
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

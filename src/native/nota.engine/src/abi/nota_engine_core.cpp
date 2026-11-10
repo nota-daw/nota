@@ -326,6 +326,18 @@ int32_t nota_engine_master_track_id(const NotaEngine* e) {
 int32_t nota_engine_audio_record_peaks(const NotaEngine* e, float* out, int32_t maxPoints) {
     return e ? CENG(e)->audioRecordPeaks(out, maxPoints) : 0;
 }
+int32_t nota_engine_recording_tracks(const NotaEngine* e, int32_t* out, int32_t cap) {
+    return e ? CENG(e)->audioRecordingTracks(out, cap) : 0;
+}
+double nota_engine_audio_record_length_beats_of(const NotaEngine* e, int32_t track_id) {
+    return e && track_id > 0 ? CENG(e)->audioRecordLengthBeats(track_id) : 0.0;
+}
+int32_t nota_engine_audio_record_peaks_of(const NotaEngine* e, int32_t track_id, float* out, int32_t maxPoints) {
+    return e && track_id > 0 ? CENG(e)->audioRecordPeaks(out, maxPoints, track_id) : 0;
+}
+int32_t nota_engine_record_skipped(const NotaEngine* e, int32_t* track_ids, int32_t* reasons, int32_t cap) {
+    return e ? CENG(e)->recordSkipped(track_ids, reasons, cap) : 0;
+}
 int32_t nota_audio_record_selftest(NotaEngine* e) {
     return (e && ENG(e)->audioRecordSelfTest()) ? 1 : 0;
 }

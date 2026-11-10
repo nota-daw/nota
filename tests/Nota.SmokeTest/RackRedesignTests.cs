@@ -185,7 +185,9 @@ internal static class RackRedesignTests
             for (int d = 0; d < e.RackChainDeviceCount(t, c); d++)
             {
                 s.Append($"  dev {d} kind={e.RackChainDeviceBuiltinKind(t, c, d)}");
-                for (int p = 0; p < e.RackChainDeviceParamCount(t, c, d); p++) s.Append(' ').Append(F(e.RackChainDeviceParamGet(t, c, d, p)));
+                for (int p = 0; p < e.RackChainDeviceParamCount(t, c, d); p++)
+                    if (e.RackChainDeviceParamName(t, c, d, p) != "View")   // the card size (#531) is editor state, not a setting
+                        s.Append(' ').Append(F(e.RackChainDeviceParamGet(t, c, d, p)));
                 s.Append('\n');
             }
         }
@@ -210,7 +212,9 @@ internal static class RackRedesignTests
             for (int k = 0; k < e.RackDevChainDeviceCount(t, d, c); k++)
             {
                 s.Append($"  dev {k} kind={e.RackDevChainDeviceBuiltinKind(t, d, c, k)}");
-                for (int p = 0; p < e.RackDevChainDeviceParamCount(t, d, c, k); p++) s.Append(' ').Append(F(e.RackDevChainDeviceParamGet(t, d, c, k, p)));
+                for (int p = 0; p < e.RackDevChainDeviceParamCount(t, d, c, k); p++)
+                    if (e.RackDevChainDeviceParamName(t, d, c, k, p) != "View")   // the card size (#531) is editor state, not a setting
+                        s.Append(' ').Append(F(e.RackDevChainDeviceParamGet(t, d, c, k, p)));
                 s.Append('\n');
             }
         }

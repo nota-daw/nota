@@ -52,7 +52,8 @@ public static class MosaicModel
     // ---- telemetry (Mosaic::scopeRead) -------------------------------------------------------
     public const int ScVoices = 0, ScLimit = 1, ScHeld = 2, ScPedalHeld = 3, ScRelease = 4, ScPedal = 5, ScPeak = 6,
                      ScPos = 7, ScEnv = 8, ScStage = 9, ScNote = 10, ScCutoff = 11, ScZone = 12, ScLastNote = 13,
-                     ScLastVel = 14, ScSounding = 15, ScHead = 16, ScKeys = 16 + 112, ScopeLength = 16 + 112 + 8;
+                     ScLastVel = 14, ScSounding = 15, ScHead = 16, ScKeys = 16 + 112, ScEnvTele = 16 + 112 + 8,
+                     ScopeLength = ScEnvTele + 2;   // ScEnvTele: the envelope's stage and progress (#531)
 
     /// <summary>A zone that sounds now: 0 held · 1 held by the pedal · 2 release / fading.</summary>
     public readonly record struct Sounding(int Zone, int State);
@@ -61,6 +62,8 @@ public static class MosaicModel
     {
         public bool Live;
         public int Voices, Limit, Held, PedalHeld, Release, Zone = -1, LastNote = -1, LastVel, Stage = -1;
+        public int EnvStage = 4;   // 0 A · 1 D · 2 S · 3 R · 4 none — the envelope graph's playhead
+        public double EnvProgress;
         public bool Pedal;
         public double Peak, Pos = -1, Env, Note = -1, CutoffHz = -1;
         public readonly List<Sounding> Zones = new();
@@ -84,7 +87,9 @@ public static class MosaicModel
             int code = (int)sc[ScHead + i];
             s.Zones.Add(new Sounding(code / 4, code % 4));
         }
-        if (sc.Length >= ScopeLength)
+        s.EnvStage = sc.Length >= ScopeLength ? (int)sc[ScEnvTele] : 4;
+        s.EnvProgress = sc.Length >= ScopeLength ? sc[ScEnvTele + 1] : 0;
+        if (sc.Length >= ScKeys + 8)
             for (int i = 0; i < 8; i++)
             {
                 int bits = (int)sc[ScKeys + i];

@@ -56,7 +56,7 @@ namespace nota {
 class Phaser : public Device {
   public:
     // Param layout — order is the persisted/automation layout. APPEND ONLY.
-    enum { Rate = 0, Center, Depth, Feedback, Mix, Waveform, Sync, Division, Stereo, Stages, kNumParams };
+    enum { Rate = 0, Center, Depth, Feedback, Mix, Waveform, Sync, Division, Stereo, Stages, View /* card size, not sound: 0 = L, 1 = S (#531) */, kNumParams };
 
     // Telemetry slots (scopeRead).
     enum {

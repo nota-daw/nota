@@ -52,7 +52,7 @@ public sealed partial class SessionView
         else if (ColumnFor(_sel.TrackId) is { } c)
         {
             if (c.Kind == ColKind.Group) BuildGroupInspector(stack, c, _sel.Scene);
-            else if (SlotFilled(c.TrackId, _sel.Scene) && !(_recTrack == c.TrackId && _recScene == _sel.Scene)) BuildClipInspector(stack, c, _sel.Scene);
+            else if (SlotFilled(c.TrackId, _sel.Scene) && !(_recTrack == c.TrackId && _recScene == _sel.Scene) && _engine.SessionSlotState(c.TrackId, _sel.Scene) != 4) BuildClipInspector(stack, c, _sel.Scene);
             else BuildEmptyInspector(stack, c, _sel.Scene);
         }
         else if (_sel.Kind == SelKind.Bus && BusColumn(_sel.TrackId) is { } bus) BuildBusInspector(stack, bus);
@@ -60,9 +60,9 @@ public sealed partial class SessionView
         var hint = new TextBlock
         {
             Text = MenuKit.Keys(Loc.T("session.inspector.click_selects_the_triangle_launches")),
-            FontSize = 9, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
+            FontSize = 8.5, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var dock = new DockPanel();
         DockPanel.SetDock(hint, Dock.Bottom);
         dock.Children.Add(hint);
@@ -81,8 +81,8 @@ public sealed partial class SessionView
             Orientation = Orientation.Horizontal, Spacing = 8,
             Children =
             {
-                new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Clip, Background = color, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = InspectorW - 60 },
+                new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Field, Background = color, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = InspectorW - 60 },
             },
         };
         var s = Mono(sub, 10, NotaPalette.TextTertiary);
@@ -92,7 +92,7 @@ public sealed partial class SessionView
 
     internal static TextBlock SectionHead(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted,
+        Text = text, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted,
     };
 
     // A labelled value well (LENGTH, LOOP, START…): a click opens its choices when it has any.
@@ -104,7 +104,7 @@ public sealed partial class SessionView
         {
             well = new Border
             {
-                Height = NotaSize.Shell, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Badge,
+                Height = NotaSize.Shell, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Cell,
                 Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = text,
             };
         }
@@ -121,7 +121,7 @@ public sealed partial class SessionView
         return new StackPanel
         {
             Spacing = 4,
-            Children = { new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary }, well },
+            Children = { new TextBlock { Text = label, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary }, well },
         };
     }
 
@@ -142,7 +142,7 @@ public sealed partial class SessionView
     internal static Control Row(string label, Control right)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 22 };
-        g.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
+        g.Children.Add(new TextBlock { Text = label, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(right, 1);
         right.VerticalAlignment = VerticalAlignment.Center;
         g.Children.Add(right);
@@ -175,7 +175,7 @@ public sealed partial class SessionView
         var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var (label, key, click) in actions)
         {
-            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.Medium } } };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.Medium } } };
             if (key.Length > 0) content.Children.Add(Mono(MenuKit.Keys(key), 9, NotaPalette.TextDisabled));
             var b = new Button { Height = NotaSize.Shell, Padding = new Thickness(10, 0), Margin = new Thickness(0, 0, 6, 6), Content = content };
             b.Click += (_, _) => click();
@@ -197,7 +197,7 @@ public sealed partial class SessionView
                 bool on = idx == current;
                 var sw = new Border
                 {
-                    Height = 22, Margin = new Thickness(3), CornerRadius = NotaRadius.Badge, Background = ArrangementView.TrackBrush(idx),
+                    Height = 22, Margin = new Thickness(3), CornerRadius = NotaRadius.Cell, Background = ArrangementView.TrackBrush(idx),
                     BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
@@ -233,7 +233,7 @@ public sealed partial class SessionView
         _inspPreview = new InspectorPreview(this, c, scene, brush);
         s.Children.Add(new Border
         {
-            Height = 68, CornerRadius = NotaRadius.Control, Background = NotaPalette.Wash(brush, 0x1F),
+            Height = 68, CornerRadius = NotaRadius.Field, Background = NotaPalette.Wash(brush, 0x1F),
             BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), ClipToBounds = true, Child = _inspPreview,
         });
 
@@ -260,7 +260,7 @@ public sealed partial class SessionView
         OneUndoStep(vel);
         vel.ValueChanged += v => { if (_engine.TryGetSessionClipProps(id, scene, out var cur)) { cur.VelocityAmount = (float)(v / 100); _engine.SetSessionClipProps(id, scene, cur); } };
         ToolTip.SetTip(vel, Loc.T("session.inspector.velocity_amount_how_far_the"));
-        launch.Children.Add(Row(Loc.T("session.inspector.velocity"), new Border { CornerRadius = NotaRadius.Badge, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
+        launch.Children.Add(Row(Loc.T("session.inspector.velocity"), new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
         // Follow actions.
@@ -281,7 +281,7 @@ public sealed partial class SessionView
                 Background = NotaPalette.BgSunken,
                 Content = new DockPanel
                 {
-                    Children = { new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled, [DockPanel.DockProperty] = Dock.Right }, new TextBlock { Text = ActionLabel(action), FontSize = 11, Foreground = NotaPalette.TextPrimary } },
+                    Children = { new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled, [DockPanel.DockProperty] = Dock.Right }, new TextBlock { Text = ActionLabel(action), FontSize = 10, Foreground = NotaPalette.TextPrimary } },
                 },
             };
             pick.Click += (_, _) => Pick(pick, Array.ConvertAll(FollowActions, x => ((int)x.Action, x.Label)), a => a == action, setAction);
@@ -374,8 +374,8 @@ public sealed partial class SessionView
                 Spacing = 4,
                 Children =
                 {
-                    new TextBlock { Text = Loc.T("session.inspector.tempo"), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
-                    new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
+                    new TextBlock { Text = Loc.T("session.inspector.tempo"), FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
+                    new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Cell, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
                 },
             };
             ToolTip.SetTip(tempo, Loc.T("session.inspector.tempo_set_when_the_scene"));
@@ -413,7 +413,7 @@ public sealed partial class SessionView
 
     private void BuildEmptyInspector(StackPanel s, Column c, int scene)
     {
-        bool rec = _recTrack == c.TrackId && _recScene == scene;
+        bool rec = (_recTrack == c.TrackId && _recScene == scene) || (_recScene >= 0 && _engine.SessionSlotState(c.TrackId, scene) == 4);
         s.Children.Add(Title(NotaPalette.BorderStrong, rec ? Loc.T("session.recording") : Loc.T("session.inspector.empty_slot"), $"{c.Name} · {SceneName(scene)}"));
         bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
         var rows = new StackPanel { Spacing = 8 };
@@ -421,12 +421,12 @@ public sealed partial class SessionView
         rows.Children.Add(new TextBlock
         {
             Text = stop ? Loc.F("session.inspector.launching_this_scene_stops", c.Name) : Loc.F("session.inspector.launching_this_scene_keeps_playing", c.Name),
-            FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+            FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
         if (c.IsInstrument) actions.Add((Loc.T("session.insert_midi_clip"), "", () => InsertMidiClip(c.TrackId, scene)));
-        actions.Add(rec ? (Loc.T("session.inspector.stop_recording"), "", () => { _engine.StopSessionRecord(); Refresh(); })
+        actions.Add(rec ? (Loc.T("session.inspector.stop_recording"), "", () => { _engine.StopSessionRecordSlot(c.TrackId); Refresh(); })
                         : (Loc.T("session.record_here"), "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
         if (CanPaste) actions.Add((Loc.T("common.paste"), Shortcut.Cmd('V'), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
@@ -451,7 +451,7 @@ public sealed partial class SessionView
         s.Children.Add(new TextBlock
         {
             Text = Loc.T("session.inspector.launches_every_tracks_slot_in"),
-            FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+            FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
         s.Children.Add(Actions((Loc.T("session.inspector.launch_group_slot"), Shortcut.None(KeyGlyphs.Return), () => LaunchGroup(g, scene)), (Loc.T("session.inspector.stop_group"), "", () => StopColumn(g)),
             (Loc.T("session.inspector.to_arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement())));

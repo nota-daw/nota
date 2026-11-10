@@ -94,7 +94,8 @@ class Prism final : public Device {
         AutoRelease,
         kPerBand
     };
-    static constexpr int kNumParams = kGlobal + kBands * kPerBand; // 52
+    static constexpr int View = kGlobal + kBands * kPerBand; // 52: card size, not sound: 0 = L, 1 = S (#531); presets skip it
+    static constexpr int kNumParams = View + 1;
     static constexpr int P(int band, int field) { return kGlobal + band * kPerBand + field; }
 
     // Packed scope telemetry (lock-free, UI-polled).

@@ -9,9 +9,8 @@
 //   Env     the amplitude ADSR (drag its breakpoints) · A / D / S / R · VEL → VOL
 //   Filter  the response curve (drag for cutoff / reso) · TYPE · CUTOFF · RESO · ENV
 //
-// A 186px rail stays put on every tab — voice mode, volume, pan, glide, unison spread,
-// velocity tracking and the track's meter — over a status strip that reads the patch back
-// in words. Neutral ink is the parameter itself; teal is modulation (detune, env → cutoff).
+// A 186px rail stays put on every tab — voice mode, pan, glide, then volume, unison
+// spread and velocity tracking as knobs. Neutral ink is the parameter itself; teal is modulation (detune, env → cutoff).
 //
 // Two sizes share every value; the S / L toggle in the shell header flips the card (the
 // choice is the synth's "view" param — see InstrumentView — so it persists with the
@@ -52,7 +51,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         return row;
     }
 
-    private const double RailW = 186, TabH = 20, StatusH = 18, RowH = 60, MiniRowH = 53;
+    private const double RailW = 186, TabH = 20, RowH = 60, MiniRowH = 53;
 
     private static readonly string[] WaveNames = { "Saw", "Square", "Triangle", "Sine" };
     private static readonly string[] FilterNames = { "Off", "LP", "HP", "BP" };
@@ -101,16 +100,11 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         var osc = new SynthViz(SynthViz.K.Osc, engine, track, idx);
         var env = new SynthViz(SynthViz.K.Adsr, engine, track, idx);
         var flt = new SynthViz(SynthViz.K.Filter, engine, track, idx) { Mini = mini };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        meta.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
 
         void Refresh()
         {
             osc.Refresh(); env.Refresh(); flt.Refresh();
             foreach (var a in readouts) a();
-            status.Text = Summary();
-            meta.Text = Meta();
         }
         ctx.SetInstLiveViz(Refresh);
         env.Changed += Refresh; flt.Changed += Refresh;
@@ -156,7 +150,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             };
         }
 
-        if (mini) return BuildMini(ctx, flt, Knob, readouts, Refresh, () => Sel("filtype", 4) == 0, status, meta);
+        if (mini) return BuildMini(ctx, flt, Knob, readouts, Refresh, () => Sel("filtype", 4) == 0);
 
         // ---- Osc tab ----------------------------------------------------------
         var pwKnobCell = Knob("pulsewidth", "Pulse W", v => NotaNum.Pct(0.05 + v * 0.90));
@@ -217,7 +211,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             FontSize = NotaType.Axis, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var tabStrip = new Grid
         {
             Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*"),
@@ -297,47 +291,24 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         voiceChips.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(voiceChips, 1); railHeader.Children.Add(voiceChips);
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        // The three captions sit at their real height on the meter's scale (−60 … +6 dB),
-        // not spread evenly — a scale that lies is worse than no scale.
-        var meterScale = new Grid
+        // Volume first and a size up, then Spread and Vel → Vol — the track meter already shows the level.
+        var railBottomHost = new StackPanel
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
-        };
-        for (int i = 0; i < 3; i++)
-        {
-            var cap = Axis(i == 0 ? "0" : i == 1 ? "−12" : "−48");
-            Grid.SetRow(cap, i * 2 + 1); meterScale.Children.Add(cap);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var railBottom = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                Knob("spread", "Spread", v => NotaNum.Pct(v), size: 44, cellW: 50),
-                Knob("velamp", "Vel → Vol", v => NotaNum.Pct(v), cellW: 46, arc: Teal),
+                Knob("gain", "Volume", v => Db(v), size: NotaSize.KnobMain, cellW: 50),
+                Knob("spread", "Spread", v => NotaNum.Pct(v), size: NotaSize.KnobRegular, cellW: 46),
+                Knob("velamp", "Vel → Vol", v => NotaNum.Pct(v), size: NotaSize.KnobRegular, cellW: 46, arc: Teal),
             },
         };
-        var railBottomHost = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        railBottomHost.Children.Add(railBottom);
-        Grid.SetColumn(meterBlock, 1); railBottomHost.Children.Add(meterBlock);
 
         var railBody = new StackPanel
         {
             Spacing = 6, Margin = new Thickness(8, 6),
             Children =
             {
-                Slider("Volume", "gain", () => Db(G("gain"))),
                 Slider("Pan", "pan", () => PanText(G("pan")), bipolar: true),
                 Slider("Glide", "glide", () => Glide(G("glide"))),
             },
@@ -354,28 +325,6 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip -----------------------------------------------------
-        string Summary() => mini
-            ? $"{VoiceNames[Sel("voicemode", 3)]} · glide {Glide(G("glide"))}"
-            : tab switch
-        {
-            0 => $"{WaveNames[Sel("wave", 4)]} · unison {UnisonCounts[Sel("unison", 4)]} · detune {Cents(G("detune"))}"
-                 + (Sel("wave", 4) == 1 ? $" · pulse {NotaNum.Pct(0.05 + G("pulsewidth") * 0.90)}" : ""),
-            1 => $"Env {Secs(G("attack"), 0.001, 2.0)} · {Secs(G("decay"), 0.002, 2.0)} · {Db(G("sustain"))} · {Secs(G("release"), 0.002, 3.0)}",
-            _ => Sel("filtype", 4) == 0
-                 ? Loc.T("device.synth.filter_off_the_oscillator_goes")
-                 : $"Filter {FilterNames[Sel("filtype", 4)]} · cutoff {KHz(G("cutoff"))} · Q {G("resonance").ToString("0.00", NotaNum.Culture)} · env {Bipolar(G("filenv"))}",
-        };
-        string Meta()
-        {
-            if (mini) return $"out {Db(G("gain"))}";
-            int uni = UnisonCounts[Sel("unison", 4)];
-            string mode = VoiceNames[Sel("voicemode", 3)];
-            string oct = Octaves(G("octave"));
-            return $"{mode} · unison {uni} · oct {oct} · {Db(G("gain"))}";
-        }
-        var statusHost = StatusStrip(status, meta);
-
         // ---- assembly ---------------------------------------------------------
         var body = new Grid
         {
@@ -385,22 +334,17 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
         ShowTab();
         return root;
     }
 
     // ---- S: the mini card -------------------------------------------------------
     // One island: the filter window fills it, the four main knobs sit under it, spaced
-    // evenly across the 260 card; the status strip carries voices / glide / output.
+    // evenly across the 260 card.
     private static Control BuildMini(DeviceCardContext ctx, SynthViz flt,
         Func<string, string, Func<float, string>, double, double, IBrush?, Control> knob,
-        List<Action> readouts, Action refresh, Func<bool> filterOff, TextBlock status, TextBlock meta)
+        List<Action> readouts, Action refresh, Func<bool> filterOff)
     {
         var cells = new[]
         {
@@ -431,33 +375,11 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         var island = SectionBox(inner);
         island.Margin = new Thickness(NotaSpace.DeviceGap);
 
-        var statusHost = StatusStrip(status, meta);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, island },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = island };
         refresh();
         return root;
     }
 
-    // The 18px strip under the card: the patch in words on the left, a mono readout right.
-    private static Border StatusStrip(TextBlock status, TextBlock meta)
-    {
-        var bar = new Grid
-        {
-            Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10,
-            Background = NotaPalette.SurfaceAbyss,
-        };
-        bar.Children.Add(status);
-        Grid.SetColumn(meta, 1); bar.Children.Add(meta);
-        return new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = bar,
-        };
-    }
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
     {
@@ -477,25 +399,11 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 
     private static TextBlock Axis(string text)
     {
         var tb = new TextBlock { Text = text, FontSize = NotaType.Axis, Foreground = NotaPalette.TextAxis };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return tb;
     }
 

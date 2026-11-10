@@ -69,7 +69,7 @@ public partial class MainWindow
         _chipKey = key;
 
         var dot = new Rectangle { Width = 8, Height = 8, RadiusX = 2, RadiusY = 2, Fill = TrackBrush(trackId), VerticalAlignment = VerticalAlignment.Center };
-        var nameText = new TextBlock { Text = name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var nameText = new TextBlock { Text = name, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sumText = new TextBlock { Text = summary, Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
         DetailChipHost.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { dot, nameText, sumText } };
     }
@@ -112,7 +112,7 @@ public partial class MainWindow
             {
                 parts.Add("audio");
                 int src = Engine.GetTrackRecordInput(trackId);
-                parts.Add(Loc.T("main.detail.in") + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? Loc.T("common.master") : ChipTrackName(src)));
+                parts.Add(Loc.T("main.detail.in") + (src == 0 ? RecordInputPick.ShortLabel(Engine, Engine.GetTrackInput(trackId)) : src == -1 ? Loc.T("common.master") : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
                 if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add(Loc.T("main.detail.monitor_in"));
             }
@@ -453,8 +453,34 @@ public partial class MainWindow
         DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
         // Devices: exactly the cards' height — the 1px seam, the 32px toolbar, the chain inset
-        // above and below a card. Nothing floats under the chain.
-        ShowDetail(1 + 32 + 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH, honorPersist: false, resizable: false);
+        // above and below a card, and the XL panel over the chain when one is open (specs/085).
+        // Nothing floats under the chain.
+        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: XlResizable);
+    }
+
+    // With a device in XL the Devices panel gets its splitter: the XL panel takes what it gives
+    // (specs/085, #540). Without one the cards have a fixed height and the panel no splitter.
+    private bool XlResizable => _deviceChain?.XlOpen == true;
+
+    // The splitter was dragged on the Devices tab with XL open: the XL panel keeps the new height.
+    private void OnDevicesSplitterDragged()
+    {
+        if (_deviceChain is not { XlOpen: true } chain || DetailFloating || DetailDevicesBtn.IsChecked != true
+            || !ReferenceEquals(DeviceHost.Content, chain)) return;
+        chain.XlPanelHeight = _detailRow.ActualHeight - 1 - 32 - DeviceChainView.XlChainPart;
+        if (_vm is null) return;
+        _vm.Settings.Current.XlPanelHeight = chain.XlPanelHeight;
+        _vm.Settings.Save();
+    }
+
+    private double DevicesPanelHeight => 1 + 32 + (_deviceChain?.PreferredHeight ?? 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH);
+
+    // The chain's height changed (XL opened or closed, a track with or without an XL device
+    // shown): refit the docked Devices panel while it is the one showing. It is not opened for it.
+    private void FitDevicesPanel()
+    {
+        if (DetailFloating || !DetailPanel.IsVisible || !ReferenceEquals(DeviceHost.Content, _deviceChain) || DetailDevicesBtn.IsChecked != true) return;
+        ShowDetail(DevicesPanelHeight, honorPersist: false, resizable: XlResizable);
     }
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
@@ -1144,7 +1170,7 @@ public partial class MainWindow
         LayoutBottomPanels();
         BodyGrid.SizeChanged += (_, e) => { if (e.HeightChanged) FitBottomPanels(); };
         MixerSplitter.DragCompleted += (_, _) => OnMixerHeightDragged();
-        DetailSplitter.DragCompleted += (_, _) => { if (!_mixerDocked) _detailWanted = _detailRow.ActualHeight; };
+        DetailSplitter.DragCompleted += (_, _) => { if (!_mixerDocked) _detailWanted = _detailRow.ActualHeight; OnDevicesSplitterDragged(); };
         // However the Detail panel is hidden or shown (close, pop-out, a tab, a menu), the
         // Mixer takes back or gives up the room; and the edge follows the splitter.
         DetailPanel.PropertyChanged += (_, e) =>

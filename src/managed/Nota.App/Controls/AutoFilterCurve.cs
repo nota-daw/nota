@@ -1,54 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Auto Filter response curve (the Filter tab). Layers over a log-frequency grid:
-//  1) a real-time spectrum of the pre-filter signal (FFT of the device's scope ring, fed
-//     by the card each tick);
-//  2) the teal range the modulation can walk the cutoff over (from the settings), and the
-//     filter's magnitude response at the BASE cutoff — interactive: drag the handle (or
-//     anywhere) to set cutoff (X) + resonance (Y), recording an automation gesture;
-//  3) the response at the LIVE modulated cutoff and resonance, dashed, so you see the
-//     envelope / LFO / sidechain working.
-// Frequency axis == the Freq param range (30..18000 Hz) so handle-X ↔ normalized cutoff.
+// Auto Filter response curve (the Filter tab), on the shared filter graph of the built-in
+// instruments (FilterGraphBase, #531): the window and grid, the spectrum of the signal coming
+// into the filter (fed by the card from the device's scope ring) as a filled line, the cutoff
+// lit on the frequency axis with a dashed rule up to the curve, and the hover marker
+// (frequency, note, gain). Over that:
+//  · the shaded range the modulation can walk the cutoff over (from the settings);
+//  · the response at the LIVE modulated cutoff and resonance, dashed, so you see the
+//    envelope / LFO / sidechain working;
+//  · the response at the BASE cutoff in the accent with a light fill and a hollow handle —
+//    drag anywhere: sideways for the cutoff, up / down for the resonance, recording an
+//    automation gesture.
+// Frequency axis == the Freq param range (30..18000 Hz) so handle-X ↔ normalized cutoff.
 
 using System;
-using System.Globalization;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 
 namespace Nota.App;
 
-internal sealed class AutoFilterCurve : Control
+internal sealed class AutoFilterCurve : FilterGraphBase
 {
-    private static readonly IPen CurvePen = new Pen(NotaPalette.VizInk, 1.8); // solid neutral ink = current response
-    private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.Ink("#9CB4CC"), 0x44));
-    private static readonly IPen ModPen = new Pen(NotaPalette.Teal, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }; // dashed teal = at modulation
-    private static readonly IPen RangePen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x8C), 1);
-    private static readonly IPen RangePen2 = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x4C), 1);
-    private static readonly IBrush RangeFill = NotaPalette.Wash(NotaPalette.Teal, 0x10);
+    private static readonly IPen ModPen = new Pen(NotaPalette.TextSecondary, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }; // dashed grey = at modulation
+    private static readonly IPen RangePen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x8C), 1);
+    private static readonly IPen RangePen2 = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x4C), 1);
+    private static readonly IBrush RangeFill = NotaPalette.Wash(NotaPalette.TextTertiary, 0x10);
 
     private const double FMin = 30.0, FMax = 18000.0;
-    private const double DbTop = 18.0, DbBot = -36.0;
-    public const int FftN = 2048;
-    private const int Bins = FftN / 2;
+    public const int FftN = FilterSpectrum.N;
 
     private double _fcNorm = 0.5, _res;
     private int _type;
     private float _morph;
     private bool _slope24;
-    private bool _drag;
     private Point _grab;
     private double _fc0, _res0;                    // the settings when the drag began
     private double _liveCut = 0.5, _liveRes;       // live modulated cutoff / resonance (normalized)
     private double _rangeLo = 0.5, _rangeHi = 0.5; // where the modulation can take the cutoff
     private bool _modAssigned;
-
-    private readonly double[] _re = new double[FftN], _im = new double[FftN];
-    private readonly double[] _specDb = new double[Bins];
-    private readonly double[] _hann = new double[FftN];
-    private double _sr = 48000;
+    private readonly FilterSpectrum _input = new();
 
     public event Action<double>? CutoffChanged;
     public event Action<double>? ResChanged;
@@ -57,15 +49,19 @@ internal sealed class AutoFilterCurve : Control
 
     public AutoFilterCurve()
     {
-        MinHeight = 40;
+        MinHeight = 60;
         MinWidth = 120;
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Cross);
-        for (var i = 0; i < FftN; i++) _hann[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (FftN - 1));
-        for (var i = 0; i < Bins; i++) _specDb[i] = -120;
+        Spectrum = _input;
     }
 
-    public bool Dragging => _drag;
+    protected override (double Lo, double Hi) Span => (FMin, FMax);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -36.0);
+    protected override double CutoffHz => HzOf(_fcNorm);
+    protected override double ResponseDb(double hz) => MagDb(hz, HzOf(_fcNorm), _res);
+
+    public new bool Dragging => base.Dragging;
 
     // Base (user-set) filter params — drives the drawn response + the handle.
     public void Set(double freqNorm, double res, int type, float morph, bool slope24)
@@ -92,41 +88,30 @@ internal sealed class AutoFilterCurve : Control
     // The pre-filter ring (oldest → newest), FftN samples from `offset`; n < FftN clears it.
     public void FeedSpectrum(float[] buf, int offset, int n, double sampleRate)
     {
-        if (n < FftN || offset + FftN > buf.Length)
-        {
-            for (var k = 1; k < Bins; k++) _specDb[k] = -120;
-            return;
-        }
-        for (var i = 0; i < FftN; i++) { _re[i] = buf[offset + i] * _hann[i]; _im[i] = 0; }
-        Fft(_re, _im);
-        _sr = sampleRate > 0 ? sampleRate : 48000;
-        var refMag = FftN / 4.0;
-        for (var k = 1; k < Bins; k++)
-        {
-            var mag = Math.Sqrt(_re[k] * _re[k] + _im[k] * _im[k]);
-            _specDb[k] = 20 * Math.Log10(mag / refMag + 1e-9);   // this frame, no ballistics (almanac)
-        }
+        if (_input.Feed(buf, offset, n, sampleRate, FMin, FMax)) InvalidateVisual();
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        _drag = true;
+        base.Dragging = true;
         _grab = e.GetPosition(this); _fc0 = _fcNorm; _res0 = _res;
         GestureBegin?.Invoke();
         e.Pointer.Capture(this);
         e.Handled = true;
+        InvalidateVisual();
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
-        if (_drag) Apply(e.GetPosition(this));
+        base.OnPointerMoved(e);
+        if (base.Dragging) Apply(e.GetPosition(this));
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        if (!_drag) return;
-        _drag = false; InvalidateVisual();
+        if (!base.Dragging) return;
+        base.Dragging = false; InvalidateVisual();
         GestureEnd?.Invoke();
         e.Pointer.Capture(null);
     }
@@ -134,7 +119,7 @@ internal sealed class AutoFilterCurve : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
-        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        if (base.Dragging) { base.Dragging = false; InvalidateVisual(); GestureEnd?.Invoke(); }
         base.OnPointerCaptureLost(e);
     }
 
@@ -146,10 +131,10 @@ internal sealed class AutoFilterCurve : Control
     // the height; sideways moves the cutoff with the pointer, as the handle's x is linear in it.
     private void Apply(Point p)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        _fcNorm = Math.Clamp(_fc0 + (p.X - _grab.X) / w, 0, 1);
-        _res = Math.Clamp(_res0 + (_grab.Y - p.Y) / (h * 0.8), 0, 1);
+        var r = PlotRect;
+        if (r.Width <= 0 || r.Height <= 0) return;
+        _fcNorm = Math.Clamp(_fc0 + (p.X - _grab.X) / r.Width, 0, 1);
+        _res = Math.Clamp(_res0 + (_grab.Y - p.Y) / (r.Height * 0.8), 0, 1);
         CutoffChanged?.Invoke(_fcNorm);
         ResChanged?.Invoke(_res);
         InvalidateVisual();
@@ -175,128 +160,51 @@ internal sealed class AutoFilterCurve : Control
         return 20.0 * Math.Log10(Math.Max(m, 1e-5));
     }
 
-    private static double YForDb(double db, double h) => Math.Clamp((DbTop - db) / (DbTop - DbBot) * h, 0, h);
-
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var frame = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, frame);
+        var r = PlotRect;
+        if (r.Width <= 0 || r.Height <= 0) return;
+        DrawBack(ctx);
 
-        double logMin = Math.Log10(FMin), logSpan = Math.Log10(FMax) - logMin;
-        double X(double f) => (Math.Log10(f) - logMin) / logSpan * w;
-
-        foreach (var f in new[] { 100.0, 1000, 10000 }) ctx.DrawLine(NotaGraph.GridPen, new Point(X(f), 0), new Point(X(f), h));
-        foreach (var db in new[] { 0.0, -18 }) ctx.DrawLine(NotaGraph.GridPen, new Point(0, YForDb(db, h)), new Point(w, YForDb(db, h)));
-
-        // 1) spectrum analyzer (behind)
-        var spec = new StreamGeometry();
-        using (var g = spec.Open())
-        {
-            g.BeginFigure(new Point(0, h), false);
-            for (var k = 1; k < Bins; k++)
-            {
-                var f = k * _sr / FftN;
-                if (f < FMin || f > FMax) continue;
-                var norm = Math.Clamp((_specDb[k] + 84) / 84, 0, 1);
-                g.LineTo(new Point(X(f), h - norm * h));
-            }
-            g.LineTo(new Point(w, h));
-            g.EndFigure(false);
-        }
-        ctx.DrawGeometry(null, SpecPen, spec);
-
-        // 2a) the range the modulation can walk the cutoff over (two teal rules)
+        // The range the modulation can walk the cutoff over (two grey rules).
         if (_modAssigned && _rangeHi - _rangeLo > 0.004)
         {
-            double x0 = _rangeLo * w, x1 = _rangeHi * w;
-            ctx.FillRectangle(RangeFill, new Rect(x0, 0, x1 - x0, h));
-            ctx.DrawLine(RangePen, new Point(x0, 0), new Point(x0, h));
-            ctx.DrawLine(RangePen2, new Point(x1, 0), new Point(x1, h));
+            double x0 = XOf(HzOf(_rangeLo)), x1 = XOf(HzOf(_rangeHi));
+            ctx.FillRectangle(RangeFill, new Rect(x0, r.Y + 1, x1 - x0, r.Height - 2));
+            ctx.DrawLine(RangePen, new Point(x0, r.Y + 1), new Point(x0, r.Bottom - 1));
+            ctx.DrawLine(RangePen2, new Point(x1, r.Y + 1), new Point(x1, r.Bottom - 1));
         }
 
-        int n = (int)Math.Max(24, Math.Min(400, w));
-        Point[] Curve(double fc, double res)
-        {
-            var pts = new Point[n];
-            for (var i = 0; i < n; i++)
-            {
-                var fx = (double)i / (n - 1);
-                var f = Math.Pow(10, logMin + fx * logSpan);
-                pts[i] = new Point(fx * w, YForDb(MagDb(f, fc, res), h));
-            }
-            return pts;
-        }
-        void Stroke(IPen pen, Point[] pts)
-        {
-            var geo = new StreamGeometry();
-            using (var gc = geo.Open())
-            {
-                gc.BeginFigure(pts[0], false);
-                for (int i = 1; i < pts.Length; i++) gc.LineTo(pts[i]);
-                gc.EndFigure(false);
-            }
-            ctx.DrawGeometry(null, pen, geo);
-        }
-
-        // 3) dashed response at the live modulated cutoff / resonance (under the base curve)
+        // The response at the live modulated cutoff / resonance, dashed, under the base curve.
         bool moving = Math.Abs(_liveCut - _fcNorm) > 0.004 || Math.Abs(_liveRes - _res) > 0.01;
-        if (moving) Stroke(ModPen, Curve(HzOf(_liveCut), _liveRes));
-
-        // 2b) base response curve (interactive) with its handle
-        var baseFc = HzOf(_fcNorm);
-        Stroke(CurvePen, Curve(baseFc, _res));
-        double cx = _fcNorm * w, cy = YForDb(MagDb(baseFc, baseFc, _res), h);
-        NotaGraph.Node(ctx, new Point(cx, cy), active: _drag);
-
-        // Labels: title, legend, the range corners and the cutoff under its handle.
-        NotaGraph.Title(ctx, frame, "Response");
-        if (moving || _modAssigned) NotaGraph.Legend(ctx, w - 5, 3, ("modulated", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "30");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "18k Hz");
-        var hz = baseFc;
-        string cut = hz >= 1000 ? NotaNum.Str(hz / 1000.0, "0.0") + "k" : NotaNum.Str(hz, "0");
-        var cf = NotaGraph.AxisText(cut, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        double lx = Math.Clamp(cx - cf.Width / 2, 24, Math.Max(24, w - 44 - cf.Width));
-        ctx.DrawText(cf, new Point(lx, h - cf.Height - 3));
-    }
-
-    // In-place iterative radix-2 Cooley–Tukey FFT.
-    private static void Fft(double[] re, double[] im)
-    {
-        var n = re.Length;
-        for (int i = 1, j = 0; i < n; i++)
+        if (moving)
         {
-            var bit = n >> 1;
-            for (; (j & bit) != 0; bit >>= 1) j ^= bit;
-            j ^= bit;
-            if (i < j)
+            double fc = HzOf(_liveCut), res = _liveRes;
+            int n = (int)Math.Clamp(r.Width / 1.5, 24, 420);
+            var geo = new StreamGeometry();
+            using (var g = geo.Open())
             {
-                (re[i], re[j]) = (re[j], re[i]);
-                (im[i], im[j]) = (im[j], im[i]);
-            }
-        }
-
-        for (var len = 2; len <= n; len <<= 1)
-        {
-            double ang = -2 * Math.PI / len, wr = Math.Cos(ang), wi = Math.Sin(ang);
-            for (var i = 0; i < n; i += len)
-            {
-                double cr = 1, ci = 0;
-                for (var k = 0; k < len / 2; k++)
+                for (int i = 0; i < n; i++)
                 {
-                    int a = i + k, b = i + k + len / 2;
-                    double tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
-                    re[b] = re[a] - tr;
-                    im[b] = im[a] - ti;
-                    re[a] += tr;
-                    im[a] += ti;
-                    var ncr = cr * wr - ci * wi;
-                    ci = cr * wi + ci * wr;
-                    cr = ncr;
+                    double x = r.X + r.Width * i / (n - 1);
+                    var p = new Point(x, YOf(MagDb(HzAt(x), fc, res)));
+                    if (i == 0) g.BeginFigure(p, false); else g.LineTo(p);
                 }
+                g.EndFigure(false);
             }
+            ctx.DrawGeometry(null, ModPen, geo);
         }
+
+        // The base response with its handle, which sits on the drawn curve at the cutoff (a
+        // notch's bottom, which only the exact cutoff reaches, would pull it off the line).
+        double baseFc = HzOf(_fcNorm);
+        DrawCurve(ctx, f => MagDb(f, baseFc, _res));
+        double cx = XOf(baseFc), dx = Math.Max(1.5, r.Width / 420);
+        double cy = Math.Min(YOf(MagDb(HzAt(cx - dx), baseFc, _res)), YOf(MagDb(HzAt(cx + dx), baseFc, _res)));
+        DrawFront(ctx, cy);
+        DrawHandle(ctx, new Point(cx, cy));
+
+        if (moving || _modAssigned)
+            NotaGraph.Legend(ctx, r.Right - 5, r.Y + 3, ("modulated", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
     }
 }

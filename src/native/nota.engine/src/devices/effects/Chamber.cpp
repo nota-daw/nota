@@ -637,7 +637,8 @@ Chamber::Chamber() {
         1.0f,                         // freeze · freeze in · vintage · rate · depth · shimmer · pitch · feedback
         0.0f, 0.5f, 0.5f, 1.0f, 0.5f, // EQ low cut · low gain · high shelf · high cut · position
         0.0f, 0.548f, 0.6666667f, 0.5f, 0.0f, 0.5f, 0.0f,
-        1.0f // duck · release · output · width · bass mono · quality · wet only · zero latency
+        1.0f, // duck · release · output · width · bass mono · quality · wet only · zero latency
+        0.0f  // view: L (#531)
     };
     for (int i = 0; i < kNumParams; ++i) p_[i].store(def[i], std::memory_order_relaxed);
 }
@@ -1056,7 +1057,7 @@ const char* Chamber::paramName(int32_t i) const {
         "Algo Low Decay", "Algo High Decay", "Freeze", "Freeze In", "Algo Vintage", "Mod Rate", "Mod Depth",
         "Shimmer Amount", "Shimmer Pitch", "Shimmer Feedback", "EQ Low Cut", "EQ Low Gain", "EQ High Shelf",
         "EQ High Cut", "EQ Position", "Duck Amount", "Duck Release", "Output", "Width", "Bass Mono", "Quality",
-        "Wet Only", "Zero Latency"};
+        "Wet Only", "Zero Latency", "View"};
     return (i >= 0 && i < kNumParams) ? nm[i] : "";
 }
 

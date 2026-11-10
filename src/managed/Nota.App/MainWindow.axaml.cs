@@ -200,6 +200,7 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        StrataDeviceBody.StartTempoScan(vm.Engine);   // Set tempo from loop, on any track
         ValueEntry.UndoGroup = (vm.Engine.BeginUndoGroup, vm.Engine.EndUndoGroup);   // a handle's reset is one step
         Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
         Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
@@ -236,31 +237,31 @@ public partial class MainWindow : Window
         _masterMeter = new MeterBar(horizontal: true);
         MasterMeterHost.Children.Add(_masterMeter);
 
-        // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider. It
-        // sits over the master meter inside the MST module, with the gain printed in dB.
-        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0 };
+        // The master slider: a flat bar over the master meter, its gain in dB written inside.
+        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0, Text = v => NotaNum.GainDb(v) };
         var masterUndo = new MixGesture(vm.Engine, MixTarget.Master);   // one undo step per drag (specs/009)
         masterVol.GestureBegin += masterUndo.Begin;
         masterVol.GestureEnd += masterUndo.End;
         Action<double> setMaster = v => vm.Transport.MasterVolume = v;
         masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
-        // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
-        ValueEntry.Attach(masterVol, masterVol.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)), MasterDb);
+        // Double-click the dB written in the bar (or ⌥-click anywhere) to type the master gain;
+        // a double-click elsewhere on the bar resets to 0 dB.
+        ValueEntry.Attach(masterVol, masterVol.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)));
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
         // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
         // (half a BPM per pixel), the hundredths come from double-click-to-type.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: NotaType.Readout, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
-        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsNum.ValueChanged += v => vm.Transport.TimeSigNumerator = (int)Math.Round(v);
         TimeSigNumHost.Children.Add(tsNum);
-        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsDen.ValueChanged += v =>
         {
             int d = NearestPow2(v);
@@ -384,6 +385,8 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         TrackArming.OthersChanged -= OnArmsChanged;
         TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
+        InputSetups.Changed -= OnArmsChanged;
+        InputSetups.Changed += OnArmsChanged;          // inputs renamed / switched off (specs/086): pickers relabel
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
@@ -454,6 +457,8 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.PreferredHeightChanged += FitDevicesPanel;   // the XL panel opened, closed or resized (specs/085)
+        if (_vm?.Settings.Current.XlPanelHeight is > 0 and var xlh) _deviceChain.XlPanelHeight = xlh;
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
