@@ -47,6 +47,7 @@ internal static class RetryTakeTests
         foreach (var r in NoEmptyUndoAfterPartialKeep()) yield return r;
         foreach (var r in JoinedSlotKeepsHeldNote()) yield return r;
         foreach (var r in JoinDuringCountInThenStop()) yield return r;
+        foreach (var r in JoinAfterCountIn()) yield return r;
     }
 
     // Audio and MIDI into empty tracks, audio disarmed (kept), MIDI retried and kept: two undo
@@ -102,6 +103,25 @@ internal static class RetryTakeTests
         Beats(e, 0.5);
         yield return (e.CountInBeats <= 0.0 && !e.IsPlaying,
             $"stopping a take a slot joined during its count-in stops the count-in ({e.CountInBeats:F2} beats left, playing {e.IsPlaying})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // Once the count-in has run out, another track's slot joins the take as usual.
+    private static IEnumerable<(bool, string)> JoinAfterCountIn()
+    {
+        using var e = TwoArmed(out int a, out int b);
+        e.SetCountIn(1);
+        e.SetLaunchQuant(0.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 5.0);                           // the bar of count-in, then a beat of take
+        e.RecordSessionSlot(b, 0);
+        Beats(e, 0.2);
+        yield return (e.SessionSlotState(a, 0) == 4 && e.SessionSlotState(b, 0) == 4,
+            $"a slot pressed after the count-in joins the take (states {e.SessionSlotState(a, 0)}, {e.SessionSlotState(b, 0)})");
+        e.StopSessionRecord();
         e.StopAllSession();
         e.StopTransport();
     }

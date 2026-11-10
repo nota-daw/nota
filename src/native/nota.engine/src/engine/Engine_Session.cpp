@@ -292,6 +292,12 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     // does; with the transport already rolling it starts on the launch quantum as before.
     const bool countIn =
         !transport_.uiIsPlaying() && uiCountIn_.load(std::memory_order_relaxed) <= 0.0 && countInBars() > 0;
+    // A count-in that has run out no longer holds the take back: joining is open again.
+    if (sessionCountIn_ && countInLaunchScene_.load(std::memory_order_acquire) < 0 &&
+        uiCountIn_.load(std::memory_order_relaxed) <= 0.0) {
+        sessionCountIn_ = false;
+        sessionCountInFresh_ = false;
+    }
     // Another audio slot while a Session audio take runs: it records along, as a lane of that
     // take (specs/086), from now — the take is already rolling and counted in.
     if (t->type() == TrackType::Audio && recordSessionAudio_ && audioRecording_) {
