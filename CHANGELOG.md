@@ -508,6 +508,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
   graph tooltips that named colours no longer drawn now describe what is on screen.
 
+### Fixed
+- **Compact Mixer: the MIDI-in selector shows its whole name** (#550): the drop-down on an
+  instrument strip left 20 px for the chosen name, so "Aucune" read "ucun" and a longer track
+  name lost both ends. It now leaves about 29 px, writes the name from the left and ends a longer
+  one with "…". The regular strip is unchanged.
+
 ## [0.59.2] — 2026-11-08
 
 ### Added

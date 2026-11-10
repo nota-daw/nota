@@ -21,9 +21,11 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Localization;
@@ -923,13 +925,27 @@ public sealed partial class MixerView : UserControl
             FontSize = 8, Height = 16, MinHeight = 0, Padding = new Thickness(5, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
+        if (compact)
+        {
+            // Plain strings drawn by a template, so the closed box builds a live TextBlock that
+            // trims with "…". A TextBlock handed over as the item's Content is shown there as a
+            // picture of itself, centred, and a name wider than the box lost both ends (#550).
+            // No recycling: the closed box would keep the first TextBlock, whose Text is set once, and
+            // go on showing the previous name after another source is picked.
+            cb.ItemTemplate = new FuncDataTemplate<string>((label, _) => new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, supportsRecycling: false);
+            var item = new Style(x => x.OfType<ComboBoxItem>());
+            item.Setters.Add(new Setter(TemplatedControl.PaddingProperty, new Thickness(5, 1)));
+            item.Setters.Add(new Setter(Layoutable.MinHeightProperty, 0.0));
+            cb.Styles.Add(item);
+        }
         // The live input (All inputs / a device) or the track it takes MIDI from (specs/086).
         var instruments = new List<(int, string)>();
         for (int i = 0; i < _engine.TrackCount; i++)
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument) instruments.Add((ti.Id, TrackNames.Of(_engine, ti)));
         var (entries, cur) = MidiInputPick.Compact(_engine, id, instruments);
         foreach (var en in entries)
-            cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = en.Label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
+            if (compact) cb.Items.Add(en.Label);
+            else cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = en.Label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
         cb.SelectedIndex = cur;
         cb.SelectionChanged += (_, _) =>
         {
@@ -939,6 +955,7 @@ public sealed partial class MixerView : UserControl
         if (compact)   // one line: the selector alone, its label in the tooltip (specs/070)
         {
             cb.Height = 14;
+            cb.Padding = new Thickness(1, 0);   // the arrow column keeps 32 px of the 62; leave the text what is left
             ToolTip.SetTip(cb, Loc.T("mixer.midi_in"));
             return new Border { Height = IoH, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(4, 2), Child = cb };
         }
