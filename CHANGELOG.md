@@ -457,6 +457,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Discard and retry keeps the count-in out of an audio take** (#521): retrying an audio take
+  that counted in from stop counted in again, but the input was recorded from the moment of the
+  retry, so the new clip began with the count-in and ran late against the playhead by its
+  length. The input is now kept out until the count-in runs out, as on a fresh take.
 - **Compact Mixer: the MIDI-in selector shows its whole name** (#550): the drop-down on an
   instrument strip left 20 px for the chosen name, so "Aucune" read "ucun" and a longer track
   name lost both ends. It now leaves about 29 px, writes the name from the left and ends a longer

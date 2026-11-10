@@ -198,6 +198,10 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Tests: as <see cref="TakeRecordTestArmed"/>, with one track disarmed partway (specs/086).</summary>
     public int TakeRecordTestArmedDisarm(float[] interleaved, int channels, int frames, double startBeat, int disarmTrackId, int disarmAtFrame)
     { ThrowIfDisposed(); return NativeMethods.TakeRecordTestArmedDisarm(_handle, interleaved, channels, frames, startBeat, disarmTrackId, disarmAtFrame); }
+    /// <summary>Tests (#521): one device block through the input thread's path — the capture gate,
+    /// then the take ring (see <see cref="SetTestInputDevice"/>); the next poll drains it.</summary>
+    public void InputBlockTest(float[] interleaved, int frames, int channels)
+    { ThrowIfDisposed(); NativeMethods.InputBlockTest(_handle, interleaved, frames, channels); }
     public int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat)
     { ThrowIfDisposed(); return NativeMethods.RecordHeldNotes(_handle, buffer, buffer.Length, out trackId, out sessionScene, out nowBeat); }
 
