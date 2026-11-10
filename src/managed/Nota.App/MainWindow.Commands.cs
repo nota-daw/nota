@@ -157,9 +157,11 @@ public partial class MainWindow
         B("prefs.open", ShowPreferences);
         foreach (var (id, page) in new[]
         {
-            ("prefs.audio", "Audio"), ("prefs.midi", "MIDI"), ("prefs.gamepads", "Gamepads"), ("prefs.remote", "Remote"),
-            ("prefs.plugins", "Plug-ins"), ("prefs.downloads", "Downloads"), ("prefs.library", "Library"),
-            ("prefs.appearance", "Appearance"), ("prefs.shortcuts", "Shortcuts"), ("prefs.updates", "Updates"),
+            ("prefs.audio", "Audio"), ("prefs.outputs", "Outputs"), ("prefs.inputs", "Inputs"), ("prefs.midi", "MIDI"),
+            ("prefs.gamepads", "Gamepads"), ("prefs.remote", "Remote"), ("prefs.mcp", "MCP"),
+            ("prefs.plugins", "Plug-ins"), ("prefs.downloads", "Downloads"),
+            ("prefs.appearance", "Appearance"), ("prefs.language", "Language"), ("prefs.editing", "Editing"),
+            ("prefs.library", "Library"), ("prefs.shortcuts", "Shortcuts"), ("prefs.updates", "Updates"),
         })
             B(id, () => ShowPreferencesPage(page));
 

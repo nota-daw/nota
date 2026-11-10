@@ -17,8 +17,6 @@ namespace Nota.App;
 
 public sealed partial class PreferencesWindow
 {
-    private const int UpdatesIndex = 9;
-
     private Control UpdatesPane()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();

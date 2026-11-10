@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Preferences → Audio → Inputs (specs/086, #353 option 2): every input of the capture device
-// with the name the device gives it, a switch and a name of the user's; then the stereo
-// pairs, which can be named too. Track input pickers list only switched-on inputs, under these
-// names. Kept per device in the app settings (InputSetupAccess); edits apply at once.
+// Settings → Outputs and Settings → Inputs (specs/088): which device Nota plays through and
+// records from. Outputs carries the test tone. Inputs lists every input of the capture device
+// (specs/086, #353 option 2) with the name the device gives it, a switch and a name of the
+// user's; then the stereo pairs, which can be named too. Track input pickers list only
+// switched-on inputs, under these names. Kept per device in the app settings
+// (InputSetupAccess); edits apply at once. Under ASIO one driver is both sides: it is picked
+// on the Audio page, and these pages pick its output / input pair.
 
 using System;
 using System.Collections.Generic;
@@ -21,6 +24,82 @@ namespace Nota.App;
 public sealed partial class PreferencesWindow
 {
     private const double InputNameW = 200, InputDeviceW = 170;
+
+    private Control OutputsPane()
+    {
+        if (_main is null) return Caption(Loc.T("preferences.audio_settings_are_unavailable_in"));
+        _loading = true;
+        var engine = _main.Engine;
+        var rows = new List<Control>();
+        if (IsAsio(engine))
+        {
+            rows.Add(AsioDeviceRow(engine));
+            if (engine.ActiveAudioSystem == AudioSystem.Asio)
+                rows.Add(Row(Loc.T("common.output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
+        }
+        else
+        {
+            var combo = Combo(280);
+            FillDeviceCombo(combo, _outputUids, _audioDevices.OutputDevices(), engine.GetAudioConfig().OutputUid);
+            combo.SelectionChanged += (_, _) => { int i = combo.SelectedIndex; if (i >= 0 && i < _outputUids.Count) { engine.SetAudioOutputDevice(_outputUids[i]); Apply(); } };
+            rows.Add(Row(Loc.T("common.output"), combo));
+        }
+        var body = Sections(
+            Section(Loc.T("preferences.audio_device"), 6, rows.ToArray()),
+            Section(Loc.T("preferences.test"), 8, TestToneRow()));
+        _loading = false;
+        return body;
+    }
+
+    private Control InputsPane()
+    {
+        if (_main is null) return Caption(Loc.T("preferences.audio_settings_are_unavailable_in"));
+        _loading = true;
+        var engine = _main.Engine;
+        var rows = new List<Control>();
+        if (IsAsio(engine))
+        {
+            rows.Add(AsioDeviceRow(engine));
+            if (engine.ActiveAudioSystem == AudioSystem.Asio)
+            {
+                var ins = engine.AsioChannels(true);
+                rows.Add(Row(Loc.T("common.input"), ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption(Loc.T("preferences.no_inputs_on_this_driver"))));
+            }
+        }
+        else
+        {
+            var combo = Combo(280);
+            FillDeviceCombo(combo, _inputUids, _audioDevices.InputDevices(), engine.GetAudioConfig().InputUid);
+            combo.SelectionChanged += (_, _) => { int i = combo.SelectedIndex; if (i >= 0 && i < _inputUids.Count) { engine.SetAudioInputDevice(_inputUids[i]); Apply(); } };
+            rows.Add(Row(Loc.T("common.input"), combo));
+        }
+        var body = Sections(
+            Section(Loc.T("preferences.audio_device"), 6, rows.ToArray()),
+            InputsHost(engine));
+        _loading = false;
+        return body;
+    }
+
+    private static bool IsAsio(IAudioEngine engine) =>
+        OperatingSystem.IsWindows() && engine.AsioAvailable && engine.AudioSystem == AudioSystem.Asio;
+
+    // "Driver   Focusrite USB ASIO — the ASIO driver is both input and output.  [Change on the Audio page]"
+    private Control AsioDeviceRow(IAudioEngine engine)
+    {
+        string uid = engine.AsioDriver;
+        string name = uid;
+        foreach (var d in engine.AsioDrivers())
+            if (string.Equals(d.Uid, uid, StringComparison.OrdinalIgnoreCase)) name = d.Name;
+        if (name.Length == 0) name = Loc.T("preferences.asio_caps");
+        var go = Btn(Loc.T("preferences.change_on_audio_page"));
+        go.HorizontalAlignment = HorizontalAlignment.Left;
+        go.Click += (_, _) => Select("Audio");
+        return Row(Loc.T("preferences.driver"), new StackPanel
+        {
+            Spacing = 8,
+            Children = { Caption(Loc.F("preferences.asio_device_on_audio", name)), go },
+        });
+    }
 
     // The Inputs section sits in a host so a device change can rebuild it alone: the list is
     // the device's inputs, its names and switches its own entry in the settings.

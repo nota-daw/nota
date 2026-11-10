@@ -37,6 +37,12 @@ public sealed partial class PreferencesWindow
     private sealed record LanguageItem(string Code, string Name, LanguageKind Kind, string Detail,
         InstalledLanguage? Installed, CatalogLanguage? Offered);
 
+    // Settings → General → Language (specs/088): its own page, off Appearance (#427).
+    private Control LanguagePane() => Sections(
+        Section(Loc.T("preferences.language"), 10,
+            Row(Loc.T("preferences.language"), LanguagePicker()),
+            Row("", Caption(Loc.T("preferences.the_language_of_menus_panels")))));
+
     private Control LanguagePicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();

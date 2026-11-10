@@ -344,6 +344,17 @@ internal static class PaletteTests
             : $"commands without a handler: {string.Join(", ", unbound)}");
 
         var prefs = File.ReadAllText(Path.Combine(app, "PreferencesWindow.cs"));
+        // Settings pages are opened by id (specs/088): every prefs.* command names a page in the
+        // sidebar, and every page has its command.
+        var pageIds = System.Text.RegularExpressions.Regex.Matches(prefs, "new Page\\(\"([^\"]+)\"").Select(m => m.Groups[1].Value).ToHashSet();
+        var prefCmds = System.Text.RegularExpressions.Regex.Matches(bindings, "\\(\"(prefs\\.[a-z]+)\", \"([^\"]+)\"\\)")
+            .Select(m => (Cmd: m.Groups[1].Value, Page: m.Groups[2].Value)).ToList();
+        var badPages = prefCmds.Where(c => !pageIds.Contains(c.Page)).Select(c => $"{c.Cmd} → {c.Page}")
+            .Concat(pageIds.Where(id => prefCmds.All(c => c.Page != id)).Select(id => $"no command for {id}")).ToList();
+        yield return (pageIds.Count >= 15 && badPages.Count == 0, badPages.Count == 0
+            ? $"every Settings page ({pageIds.Count}) has its palette command and every command its page"
+            : $"Settings pages and commands disagree: {string.Join(", ", badPages)}");
+
         var listed = System.Text.RegularExpressions.Regex.Matches(prefs, "\\(\"([^\"]+)\",\\s*(?:Loc\\.T\\()?\"").Select(m => m.Groups[1].Value)
             .SelectMany(k => k.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Select(Canon).ToHashSet();
         var missing = catalog.Where(c => c.Gesture.Length > 0 && !listed.Contains(Canon(c.Gesture))).Select(c => $"{c.Gesture} ({c.Title})").ToList();
