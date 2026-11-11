@@ -3673,6 +3673,8 @@
     "preferences.per_note_expression_from_mpe": "Per-note expression from MPE controllers",
     "preferences.performance": "Performance",
     "preferences.phones_and_tablets_on_this": "Phones and tablets on this network",
+    "preferences.phrase_lines": "Phrase lines",
+    "preferences.phrase_lines_caption": "A heavier grid line every 4, 8, 16 or 32 bars, counted from bar 1, across the arrangement and its ruler — so you can see where a phrase or section starts.",
     "preferences.pick_how_far_the_bend": "Pick how far the Bend lane reaches: ±2, 12, 24, 48 or 96 semitones · a bend already on the notes can widen it further",
     "preferences.play_c4_d4_e4_f4": "Play C4 D4 E4 F4",
     "preferences.play_from_that_point": "Play from that point",

@@ -383,6 +383,14 @@ if (args.Length >= 1 && args[0] == "--bend-range")
     Console.WriteLine(failures == 0 ? "BEND RANGE PASSED" : $"BEND RANGE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Arrangement phrase lines alone: `--phrase-lines`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--phrase-lines")
+{
+    Console.WriteLine("-- phrase lines --");
+    foreach (var (ok, label) in PhraseLinesTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PHRASE LINES PASSED" : $"PHRASE LINES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Filter knob glide alone: `--glide`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--glide")
 {
@@ -15746,6 +15754,8 @@ Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");
 foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
+Console.WriteLine("-- phrase lines --");
+foreach (var (ok, label) in PhraseLinesTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 

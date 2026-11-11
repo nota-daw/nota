@@ -425,14 +425,16 @@ public partial class MainWindow : Window
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
         Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);
+        Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
         vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
-        // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
+        // Settings → Appearance can switch the waveform style, the phrase lines and the header side while the arrangement is open.
         vm.Settings.Changed += () =>
         {
             Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
             Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);   // a pick, or the look's default
+            Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
             vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         };
