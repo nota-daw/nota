@@ -258,6 +258,7 @@ class Track {
         // the note-offs would never arrive, so the render ends these notes itself.
         uint64_t routedBits[2] = {0, 0};
         int32_t routedFrom = -1;
+        void forgetRouted() { routedBits[0] = routedBits[1] = 0; } // the voices were ended elsewhere
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 

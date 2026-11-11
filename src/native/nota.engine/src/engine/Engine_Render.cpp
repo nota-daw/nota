@@ -1586,9 +1586,8 @@ bool Engine::passesMidiInput(const Track& t, const MidiEvent& e) const {
 // evs at the block start; the note-ons of a new route at the same offset sort after them.
 int Engine::releaseRouted(Track::LiveHeld& held, MidiEv* evs, int n) {
     for (int h = 0; h < 2; ++h) {
-        uint64_t bits = held.routedBits[h];
-        held.routedBits[h] = 0;
-        while (bits && n < 1024) {
+        uint64_t& bits = held.routedBits[h];
+        while (bits && n < 1024) { // a full buffer keeps the rest for the next block
             evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
             bits &= bits - 1;
         }
@@ -1760,16 +1759,17 @@ void Engine::renderInstrumentRaw(
             if (!self && !routed) continue;
             const int m = rs_->blockMidiN[j];
             const MidiEv* srcEvs = rs_->blockMidi[j].data();
-            for (int k = 0; k < m && n < 1024; ++k) evs[n++] = srcEvs[k];
             if (routed) srcFound = true;
-            if (routed && held)
-                for (int k = 0; k < m; ++k) {
-                    const int pitch = srcEvs[k].pitch;
-                    if (pitch < 0 || pitch >= 128) continue;
-                    const uint64_t bit = 1ull << (pitch & 63);
-                    if (srcEvs[k].on) held->routedBits[pitch >> 6] |= bit;
-                    else held->routedBits[pitch >> 6] &= ~bit;
-                }
+            // The route's notes are tracked as delivered: an event the full buffer drops never
+            // reached the instrument, so it must not change what the route is holding (#504).
+            for (int k = 0; k < m && n < 1024; ++k) {
+                evs[n++] = srcEvs[k];
+                const int pitch = srcEvs[k].pitch;
+                if (!routed || !held || pitch < 0 || pitch >= 128) continue;
+                const uint64_t bit = 1ull << (pitch & 63);
+                if (srcEvs[k].on) held->routedBits[pitch >> 6] |= bit;
+                else held->routedBits[pitch >> 6] &= ~bit;
+            }
             if (j < rs_->blockExprN.size())
                 for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
             if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
@@ -2265,6 +2265,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             for (auto& tptr : g->tracks)
                 if (tptr->instrument && !sessionActiveOf(*tptr)) {
                     tptr->instrument->allNotesOff();
+                    if (tptr->liveHeld) tptr->liveHeld->forgetRouted(); // #504
                     releaseHeldControllers(*tptr->instrument); // a clip's pedal / wheel (specs/020)
                     for (auto& md : tptr->midiEffects)
                         if (md) md->reset(); // flush arp held/pending
@@ -2284,6 +2285,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
                     if (tptr->instrument) {
                         tptr->instrument->allNotesOff();
                         releaseHeldControllers(*tptr->instrument);
+                        if (tptr->liveHeld) tptr->liveHeld->forgetRouted(); // #504
                     }
                     for (auto& md : tptr->midiEffects)
                         if (md) md->reset();
