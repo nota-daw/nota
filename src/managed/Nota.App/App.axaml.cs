@@ -142,9 +142,6 @@ public partial class App : Avalonia.Application
         // Inputs switched off on the Audio I/O page stay off for takes (specs/086).
         try { InputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
         catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
-        // Main and Cue's output pairs and the click (specs/089).
-        try { OutputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
-        catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
 
         // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
@@ -204,6 +201,10 @@ public partial class App : Avalonia.Application
                 recovery.BeginSession();
 
                 var vm = Services.GetRequiredService<MainWindowViewModel>();   // constructs the engine
+                // Main and Cue's output pairs and the click (specs/089), once the device runs: the
+                // setup is keyed on the backend that actually started (ASIO, or its WASAPI fallback).
+                try { OutputSetupAccess.Push(vm.Engine); }
+                catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
                 // Every audio restart may open another device (the system default changed):
                 // its own input names and switched-off inputs (specs/086).
                 vm.AudioApplied += () =>
