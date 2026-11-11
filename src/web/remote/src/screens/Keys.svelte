@@ -181,7 +181,7 @@
       <button class="btn sq" aria-label="Octave down" onclick={() => (app.prefs.octave = Math.max(0, app.prefs.octave - 1))}>
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6 H10" /></svg>
       </button>
-      <span class="octn">Oct <span class="mono">{app.prefs.octave}</span></span>
+      <span class="octn">Oct <span class="ov">{app.prefs.octave}</span></span>
       <button class="btn sq" aria-label="Octave up" onclick={() => (app.prefs.octave = Math.min(7, app.prefs.octave + 1))}>
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6 H10 M6 2 V10" /></svg>
       </button>
@@ -194,7 +194,7 @@
       <div class="kb">
         {#each whites as n (n)}
           <div class="white" class:on={held['n' + n]} data-t={'n' + n}>
-            {#if n % 12 === 0}<span class="mono lbl">{noteName(n)}</span>{/if}
+            {#if n % 12 === 0}<span class="lbl">{noteName(n)}</span>{/if}
             {#if lit.has(n)}<span class="band"></span>{/if}
           </div>
         {/each}
@@ -208,7 +208,7 @@
       <div class="grid" style:grid-template-columns="repeat({gridCols}, minmax(0, 1fr))">
         {#each cells as c, i (i)}
           <div class="cell" class:tonic={c.tonic} class:on={held['n' + c.note]} class:lit={lit.has(c.note)} data-t={'n' + c.note}>
-            <span class="mono">{NN[c.note % 12]}{c.tonic ? Math.floor(c.note / 12) - 1 : ''}</span>
+            <span class="cl">{NN[c.note % 12]}{c.tonic ? Math.floor(c.note / 12) - 1 : ''}</span>
           </div>
         {/each}
       </div>
@@ -216,7 +216,7 @@
       <div class="grid chords" style:grid-template-columns="repeat({form === 'phone' ? 2 : 7}, minmax(0, 1fr))">
         {#each chordList as ch, i (i)}
           <div class="chord" class:on={held['c' + i]} class:lit={ch.notes.every((n) => lit.has(n))} data-t={'c' + i}>
-            <span class="mono roman">{ch.roman}</span>
+            <span class="roman">{ch.roman}</span>
             <span class="cn">{ch.name}</span>
           </div>
         {/each}
@@ -236,34 +236,35 @@
   .modes button { flex: none; }
   .keybtn { gap: 7px; padding: 0 10px; }
   .expr { padding: 0 10px; }
-  .k { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+  .k { font-size: 11px; color: var(--text-muted); }
   .kn { font-size: 12px; font-weight: 600; color: var(--text-primary); }
   .src { font-size: 11px; color: var(--text-tertiary); }
   .oct { display: flex; align-items: center; gap: 2px; margin-left: auto; }
   .octn { width: 52px; text-align: center; font-size: 12px; color: var(--text-secondary); }
-  .octn .mono { color: var(--text-primary); }
+  .ov { font-weight: 500; color: var(--text-primary); }
   .sq { width: 42px; padding: 0; }
   .sq path { stroke: currentColor; stroke-width: 1.5; fill: none; }
   .surface { flex: 1; min-height: 0; display: flex; touch-action: none; }
-  /* The keyboard: keys butted on seams; the key under a finger is the accent, a key the track plays carries its colour. */
-  .kb { flex: 1; min-width: 0; position: relative; display: flex; gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-top: none; border-radius: 0 0 3px 3px; overflow: hidden; }
-  .white { flex: 1; min-width: 0; border-radius: 0 0 2px 2px; background: var(--mini-key-white); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 12px; }
+  /* The keyboard: keys butted on seams in a group frame; the key under a finger is live
+     (solid accent), a key the track plays carries its colour. */
+  .kb { flex: 1; min-width: 0; position: relative; display: flex; gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-top: none; border-radius: 0 0 var(--r-group) var(--r-group); overflow: hidden; }
+  .white { flex: 1; min-width: 0; border-radius: 0 0 var(--r-fine) var(--r-fine); background: var(--mini-key-white); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 12px; }
   .white.on { background: var(--accent); }
   .lbl { font-size: 10px; color: var(--text-tertiary); }
   .white.on .lbl { color: var(--ink-on-accent); }
-  .black { position: absolute; top: 0; height: 58%; border-radius: 0 0 2px 2px; background: var(--mini-key-black); border: 1px solid var(--seam); border-top: none; overflow: hidden; z-index: 1; }
+  .black { position: absolute; top: 0; height: 58%; border-radius: 0 0 var(--r-fine) var(--r-fine); background: var(--mini-key-black); border: 1px solid var(--seam); border-top: none; overflow: hidden; z-index: 1; }
   .black.on { background: var(--accent); border-color: var(--accent); }
   .band { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--tc); }
-  /* Scale cells and chords: tiles. Tonic cells sit a tone up. */
+  /* Scale cells and chords: raised cells. Tonic cells sit a tone up. */
   .grid { flex: 1; min-width: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 6px; }
-  .cell { border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; align-items: center; justify-content: center; min-height: 0; }
-  .cell .mono { font-size: 12px; color: var(--text-secondary); pointer-events: none; }
+  .cell { border-radius: min(var(--r-cell), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .cl { font-size: 12px; color: var(--text-secondary); pointer-events: none; }
   .cell.tonic { background: var(--surface-hover); }
-  .cell.tonic .mono { color: var(--text-primary); font-weight: 600; }
-  .cell.lit, .chord.lit { border-color: var(--tc); }
+  .cell.tonic .cl { color: var(--text-primary); font-weight: 600; }
+  .cell.lit, .chord.lit { border-color: var(--tc); box-shadow: inset 0 0 0 1px var(--tc); }
   .cell.on { background: var(--accent); border-color: var(--accent); box-shadow: none; }
-  .cell.on .mono { color: var(--ink-on-accent); }
-  .chord { border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 0; }
+  .cell.on .cl { color: var(--ink-on-accent); }
+  .chord { border-radius: min(var(--r-cell), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 0; }
   .chord * { pointer-events: none; }
   .roman { font-size: 12px; color: var(--text-muted); }
   .cn { font-size: 20px; font-weight: 600; color: var(--text-primary); }

@@ -35,7 +35,7 @@ public sealed partial class ArrangementView
     private static readonly double[] RowPresets = { CompactRowHeight, StandardRowHeight, LargeRowHeight };
 
     // Header column: 160–480 px, and never so wide that the lanes drop under 240 px.
-    internal const double DefaultHeaderW = 228;
+    internal const double DefaultHeaderW = 252;
     internal const double MinHeaderW = 160;
     internal const double MaxHeaderW = 480;
     private const double MinLanesW = 240;

@@ -29,21 +29,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
   recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
   save with the project, and playback follows their integrated timing.
-
-### Fixed
-- Starting or seeking between beats no longer produces an immediate extra metronome click.
-- Muting or solo-gating a Session track discards keyswitch releases for the flushed voices,
-  preventing them from cutting a new articulation after unmute. Clip edits reuse the track's
-  Session player directly instead of allocating and discarding temporary playback state.
-- Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
-  files with duplicate IDs no longer prevent the articulation map manager from opening.
-- Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
-  Session launches, and preserves notes, releases and expression when timing offsets span short
-  loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
-  shared switch held until the last note ends. The map manager prefers the project's saved map
-  when the library has a different version, including after undo.
-
-### Added
+- **Nota Remote shows what is in each clip on the Scenes screen** (#557, specs/090). A filled
+  cell reads like the desktop's Session slot: the clip's name and length on top, and below
+  them its notes as a small piano roll, or its waveform, in the clip's colour. Editing,
+  replacing or recording a clip on the computer updates its cell on the phone within a
+  second; a take being recorded grows as it records. Previews are sent only to a phone on
+  Scenes and only for the clips that changed.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
@@ -177,6 +168,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
+  follows the style guide the desktop wears: the same corner scale, one typeface with
+  fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin
+  spaces in numbers. Orange means what it means on the desktop: solid for what is live
+  (Play, a pad under your finger), a soft tint with orange text for what you picked (the
+  current screen, a segment, a toggle that is on). Macros and XY draw their values in the
+  track's colour; the mixer stays grey. The phone also wears your skin's typeface (when the
+  phone has it) and corner roundness, under Follow Nota and Follow phone alike.
+- **Track headers, a little wider** (#296): the header column now starts at 252 px instead
+  of 228, so names and controls breathe in the new look. A width you dragged yourself stays.
+  A group's **Link** key now matches M and S in the new look.
 - **Settings, reorganised** (#427, specs/088): every setting is on a page named for it.
   - **Outputs** and **Inputs** are their own pages under Devices: the output device and the
     test tone on one, the input device and the list of inputs with their switches and names
@@ -529,6 +531,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- Starting or seeking between beats no longer produces an immediate extra metronome click.
+- Muting or solo-gating a Session track discards keyswitch releases for the flushed voices,
+  preventing them from cutting a new articulation after unmute. Clip edits reuse the track's
+  Session player directly instead of allocating and discarding temporary playback state.
+- Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
+  files with duplicate IDs no longer prevent the articulation map manager from opening.
+- Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
+  Session launches, and preserves notes, releases and expression when timing offsets span short
+  loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
+  shared switch held until the last note ends. The map manager prefers the project's saved map
+  when the library has a different version, including after undo.
+- **Monitoring a track through an audio track no longer crackles** (#563): an audio track whose
+  input is another track (an instrument, say) played it with clicks while monitoring, though a
+  recording of the same input was clean. It happened whenever the audio device asked for blocks
+  of varying length, as a Bluetooth output or one running at another sample rate does, and once
+  a pass at the loop seam. The monitored signal is now continuous, one block behind its source
+  as before.
 - **Discard and retry keeps the count-in out of an audio take** (#521): retrying an audio take
   that counted in from stop counted in again, but the input was recorded from the moment of the
   retry, so the new clip began with the count-in and ran late against the playhead by its
