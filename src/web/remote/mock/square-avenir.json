@@ -1,0 +1,10 @@
+{
+  "formatVersion": 2,
+  "id": "square-avenir",
+  "name": "Square Avenir",
+  "kind": "dark",
+  "base": "studio-dark",
+  "font": { "family": "Avenir Next" },
+  "radius": { "scale": 0 },
+  "colors": {}
+}

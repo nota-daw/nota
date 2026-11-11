@@ -9,6 +9,8 @@
 //   ?theme=<id>             the theme the stand-in wears (any Theme/Themes/<id>.json)
 //   ?pick=<dark>,<light>    its dark-mode and light-mode picks
 //   ?legacy=1               behave like an older Nota: no theme message, only proj.dark
+//   ?skin=<name>            wear mock/<name>.json, a format-2 skin (spec 087): its typeface and
+//                           corner radii go out with the theme as Nota sends them (spec 090)
 //   GET /mock?theme=<id>    switch the worn theme live for the connected phones
 
 import { createServer } from 'node:http';
@@ -36,6 +38,21 @@ const themes = Object.fromEntries(readdirSync(themesDir).filter((f) => f.endsWit
 }));
 const look = { on: 'studio-dark', dark: 'studio-dark', light: 'studio-light', legacy: false };
 
+// A format-2 skin's corners as the desktop resolves them (SkinGeometry.RadiusOf): an exact
+// step value, else round(design × scale). Sent only when they differ from the design scale.
+const DESIGN_R = { card: 9, group: 7, field: 6, cell: 5, valueBar: 4, switch: 3, fine: 2 };
+function loadSkin(name) {
+  const file = join(here, `${name.replace(/[^\w-]/g, '')}.json`);
+  if (!existsSync(file)) return null;
+  const t = JSON.parse(readFileSync(file, 'utf8'));
+  const base = themes[t.base] ?? themes['studio-dark'];
+  const c = { ...base.c, ...Object.fromEntries(Object.entries(t.colors ?? {}).map(([k, v]) => [k, v.length === 9 ? '#' + v.slice(3) + v.slice(1, 3) : v])) };
+  const scale = t.radius?.scale ?? 1, steps = t.radius?.steps ?? {};
+  const r = Object.fromEntries(Object.entries(DESIGN_R).map(([k, d]) => [k, steps[k] ?? Math.round(d * scale)]));
+  const differs = Object.entries(r).some(([k, v]) => v !== DESIGN_R[k]);
+  return { name: t.name, dark: t.kind === 'dark', c, ...(t.font?.family ? { font: t.font.family } : {}), ...(differs ? { r } : {}) };
+}
+
 function themeMessage() {
   const ids = [...new Set([look.on, look.dark, look.light])];
   const ink = [themes['studio-dark'].c.TextOnAccent, themes['studio-dark'].c.ShadeUp];
@@ -49,6 +66,8 @@ function readLook(url) {
   if (themes[pick[0]]?.dark) look.dark = pick[0];
   if (themes[pick[1]] && !themes[pick[1]].dark) look.light = pick[1];
   if (q.has('legacy')) look.legacy = q.get('legacy') === '1';
+  const skin = q.get('skin') && loadSkin(q.get('skin'));
+  if (skin) { themes[`skin-${q.get('skin')}`] = skin; look.on = `skin-${q.get('skin')}`; }
 }
 
 // ---- the demo project -----------------------------------------------------------------
@@ -162,6 +181,37 @@ function sendScreen(c) {
   if (s) c.send(s());
 }
 
+// Clip previews (#557, specs/090 contracts/clips-message.md): every filled slot once when a
+// phone opens Scenes, then the recording slot as its take grows.
+const rnd = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+function notesOf(seed, count, lo, span, len = 4) {
+  const r = rnd(seed), out = [];
+  for (let i = 0; i < count; i++) out.push([Math.floor(r() * 60), Math.max(1, Math.round(len * (0.5 + r()))), lo + Math.floor(r() * span)]);
+  return out;
+}
+const peaksOf = (seed, n = 48) => { const r = rnd(seed); return Array.from({ length: n }, (_, i) => Math.round(99 * Math.min(1, 0.25 + 0.75 * Math.abs(Math.sin(i / 3 + seed)) * r()))); };
+const clipNames = { 1: ['Beat A', 'Beat B', 'Fill', ''], 2: ['Bass line', 'Bass line 2', 'Walk', ''], 3: ['Chords', '', 'Chords alt', 'Stab'], 4: ['', 'Vox take', '', ''], 6: ['Strings', 'Strings hi', '', 'Swell'] };
+function clips(all) {
+  const s = [];
+  for (const tr of ses().tr) {
+    const def = trackDefs.find((t) => t.id === tr.id);
+    tr.c.forEach(([st, len], i) => {
+      if (st === 0) return;
+      const rec = st === 4;
+      const base = { id: tr.id, i, nm: clipNames[tr.id]?.[i] || `${def.name} ${i + 1}`, col: colour(def.slot), len, ...(rec ? { rec: true } : {}) };
+      if (def.kind === 'audio') {
+        const p = peaksOf(tr.id * 10 + i);
+        if (rec) { const grown = Math.floor(((Date.now() - state.started) / 250) % 48) + 1; for (let k = grown; k < 48; k++) p[k] = 0; }
+        s.push({ ...base, k: 'p', p });
+      } else {
+        const drums = def.kind === 'drum';
+        s.push({ ...base, k: 'n', n: notesOf(tr.id * 10 + i + 1, drums ? 40 : 18, drums ? 36 : 40, drums ? 10 : 20, drums ? 1 : 6) });
+      }
+    });
+  }
+  return { t: 'clips', all, s: all ? s : s.filter((x) => x.rec) };
+}
+
 function welcome(c, m) {
   c.paired = true;
   c.screen = m.screen ?? c.screen;
@@ -173,6 +223,7 @@ function welcome(c, m) {
   c.send({ t: 'who', p: { 3: ['Anna'] } });
   c.send({ t: 'learn', on: false, pend: null });
   sendScreen(c);
+  if (c.screen === 'Scenes') c.send(clips(true));
 }
 
 function onMessage(c, m) {
@@ -180,7 +231,7 @@ function onMessage(c, m) {
   switch (m.t) {
     case 'pair': case 'hello': welcome(c, m); break;
     case 'ping': c.send({ t: 'pong', c: m.c }); break;
-    case 'sub': c.screen = m.s; sendScreen(c); break;
+    case 'sub': c.screen = m.s; sendScreen(c); if (m.s === 'Scenes') c.send(clips(true)); break;
     case 'track': state.you = m.id; broadcast(proj()); break;
     case 'follow': state.follow = m.on; broadcast(proj()); break;
     case 'play': tp.play = true; broadcast({ t: 'tp', ...tp }); break;
@@ -208,6 +259,7 @@ setInterval(() => {
     broadcast({ t: 'tp', ...state.tp });
   }
   for (const c of clients) if (c.paired && (c.screen === 'Mixer' || c.screen === 'Scenes')) sendScreen(c);
+  for (const c of clients) if (c.paired && c.screen === 'Scenes') c.send(clips(false));
 }, 250);
 
 // ---- HTTP -----------------------------------------------------------------------------

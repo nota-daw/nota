@@ -3,8 +3,10 @@
 //
 // Nota Remote's page (src/web/remote, spec 014) held as the desktop is: no colour value of
 // its own — every colour is a theme token as a custom property, its first-paint fallback
-// built from the theme files — and the Studio rules a source scan can see: sentence case
-// with no tracking, radii 0–4, every custom property it reads defined. A failure names the
+// built from the theme files — and the style guide's rules a source scan can see (spec 090):
+// sentence case with no tracking, every corner on the skinnable scale (var(--r-*)), one
+// typeface (no monospace), the picked ink for both theme kinds, every custom property it
+// reads defined. A failure names the
 // file and what it found.
 
 using System.Text.Json;
@@ -20,7 +22,7 @@ internal static partial class DesignTokenCheck
     private static readonly Regex Radius = new(@"border-radius\s*:\s*(?<v>[^;}""]+)");
     private static readonly Regex VarUse = new(@"var\(\s*(?<n>--[a-z0-9-]+)");
     private static readonly Regex VarDef = new(@"(?<![\w-])(?<n>--[a-z0-9-]+)\s*:|style:(?<n>--[a-z0-9-]+)|['""](?<n>--[a-z0-9-]+)['""]");
-    private static readonly HashSet<string> RadiusOk = new() { "0", "1px", "2px", "3px", "4px", "50%" };
+    private static readonly HashSet<string> RadiusOk = new() { "0", "50%" };
 
     public static IEnumerable<(bool Ok, string Label)> RunRemote()
     {
@@ -56,12 +58,27 @@ internal static partial class DesignTokenCheck
             .Select(kv => Rel(src, kv.Key)).ToArray();
         yield return (caps.Length == 0, caps.Length == 0 ? "phone: no forced capitals" : $"phone: forced capitals (uppercase, toUpperCase, .caps): {string.Join(", ", caps)}");
 
-        // Radii 2 / 3 / 4 (0 docked, 1 for bars, 50 % for round dots).
+        // Corners on the scale a skin can re-round: var(--r-*) (or built from it), 0 docked,
+        // 50 % for round dots. A literal px radius would ignore the skin.
         var radii = text.SelectMany(kv => Radius.Matches(kv.Value)
-                .Where(m => m.Groups["v"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(v => !RadiusOk.Contains(v.Trim())))
+                .Where(m => !m.Groups["v"].Value.Contains("var(--r-")
+                            && m.Groups["v"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(v => !RadiusOk.Contains(v.Trim())))
                 .Select(m => $"{Rel(src, kv.Key)}: {m.Value.Trim()}"))
             .ToArray();
-        yield return (radii.Length == 0, radii.Length == 0 ? "phone: radii are 0 / 1 / 2 / 3 / 4" : $"phone: off-scale radii: {string.Join(", ", radii.Take(8))}");
+        yield return (radii.Length == 0, radii.Length == 0 ? "phone: corners are on the skinnable scale (var(--r-*), 0, 50 %)" : $"phone: literal radii — use var(--r-*): {string.Join(", ", radii.Take(8))}");
+
+        // One typeface with tabular figures: no monospace face, no .mono class, no font file for one.
+        var mono = text.Where(kv => kv.Value.Contains("Geist Mono") || kv.Value.Contains("monospace") || Regex.IsMatch(kv.Value, @"class=""[^""]*\bmono\b|class:mono|\.mono\b"))
+            .Select(kv => Rel(src, kv.Key)).ToArray();
+        var monoFont = Directory.Exists(Path.Combine(web, "public/fonts")) && Directory.GetFiles(Path.Combine(web, "public/fonts"), "*Mono*").Length > 0;
+        yield return (mono.Length == 0 && !monoFont, mono.Length == 0 && !monoFont ? "phone: one typeface, no monospace"
+            : $"phone: monospace still used — numbers are tabular Geist: {string.Join(", ", mono)}{(monoFont ? " (and a Mono font file ships)" : "")}");
+
+        // A picked option's text is the bright orange in dark themes and the pale one in light.
+        var css = File.ReadAllText(Path.Combine(src, "app.css"));
+        bool picked = Regex.IsMatch(css, @"\[data-theme='dark'\][^{]*\{[^}]*--picked-ink:\s*var\(--accent-bright\)")
+                      && Regex.IsMatch(css, @"\[data-theme='light'\][^{]*\{[^}]*--picked-ink:\s*var\(--accent-pale\)");
+        yield return (picked, "phone: --picked-ink defined for dark (accent-bright) and light (accent-pale) themes");
 
         // Every custom property read is a theme token or one the page defines — a renamed or
         // removed token fails here, not as a silently transparent fill on the phone.

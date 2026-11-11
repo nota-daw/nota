@@ -28,9 +28,9 @@
   <div class="cover" role="alert">
     <h1>Nota isn’t responding</h1>
     <ol>
-      <li><span class="mono">1</span>Nota is open on {app.host}</li>
-      <li><span class="mono">2</span>Remote is on: the Remote button in Nota’s top bar is lit</li>
-      <li><span class="mono">3</span>The phone is on the same Wi-Fi. Guest networks often keep devices apart; share the phone’s hotspot with the computer instead.</li>
+      <li><span class="n">1</span>Nota is open on {app.host}</li>
+      <li><span class="n">2</span>Remote is on: the Remote button in Nota’s top bar is lit</li>
+      <li><span class="n">3</span>The phone is on the same Wi-Fi. Guest networks often keep devices apart; share the phone’s hotspot with the computer instead.</li>
     </ol>
     <div class="retry"><span class="dot blink"></span>Retrying every few seconds</div>
   </div>
@@ -43,7 +43,7 @@
         oninput={() => (digits = digits.replace(/\D/g, '').slice(0, 4))} />
       {#each [0, 1, 2, 3] as i}
         <span class="cell" class:cur={digits.length === i}>
-          {#if digits[i]}<span class="mono">{digits[i]}</span>{:else if digits.length === i}<span class="caret"></span>{/if}
+          {#if digits[i]}<span class="d">{digits[i]}</span>{:else if digits.length === i}<span class="caret"></span>{/if}
         </span>
       {/each}
     </label>
@@ -58,7 +58,7 @@
 
 {#if app.countIn !== null}
   <button class="count" onclick={() => app.record()} aria-label="Cancel count-in">
-    <span class="mono num {form}">{app.countIn}</span>
+    <span class="num {form}">{app.countIn}</span>
     <span class="rec">Count-in · recording starts on 1</span>
   </button>
 {/if}
@@ -68,33 +68,35 @@
 {/if}
 
 <style>
+  /* A cover is docked over the whole page (square); what sits on it uses the corner scale. */
   .cover { position: absolute; inset: 0; z-index: 40; background: var(--bg-app); display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 28px; padding-top: calc(env(safe-area-inset-top) + 28px); }
   h1 { font-size: 22px; font-weight: 600; color: var(--text-heading); }
   p { font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-width: 420px; }
-  /* The checklist: panel rows on rules, one frame. */
-  ol { list-style: none; border-radius: 3px; overflow: hidden; max-width: 420px; background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
+  /* The checklist: panel rows on rules, one card. */
+  ol { list-style: none; border-radius: var(--r-card); overflow: hidden; max-width: 420px; background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
   li { padding: 12px 14px; display: flex; gap: 12px; font-size: 12px; line-height: 1.5; color: var(--text-strong); }
   li + li { border-top: 1px solid var(--rule); }
-  li .mono { font-size: 11px; color: var(--text-muted); }
+  li .n { font-size: 11px; color: var(--text-muted); }
   .retry { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
   .blink { animation: blink 800ms steps(1) infinite; }
   @keyframes blink { 50% { opacity: .35; } }
-  /* Code cells: wells with a rule edge; the one being typed into has an accent edge and caret. */
+  /* Code cells: fields in the well; the one being typed into has the 1 px orange focus edge and caret. */
   .code { position: relative; display: grid; grid-template-columns: repeat(4, 64px); gap: 10px; }
   .code input { position: absolute; inset: 0; opacity: 0; font-size: 16px; }
-  .cell { height: 68px; border-radius: 3px; background: var(--bg-sunken); box-shadow: var(--sunken); display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .cell { height: 68px; border-radius: var(--r-field); background: var(--bg-sunken); box-shadow: var(--sunken); display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .cell.cur { box-shadow: inset 0 0 0 1px var(--accent); }
-  .cell .mono { font-size: 28px; color: var(--text-heading); }
-  .caret { width: 2px; height: 28px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+  .cell .d { font-size: 28px; font-weight: 500; color: var(--text-heading); }
+  .caret { width: 2px; height: 28px; border-radius: min(var(--r-fine), 1px); background: var(--accent); animation: blink 1s steps(1) infinite; }
   /* The cover's one action is set apart by weight and a tone step, not by colour. */
   .big { height: 48px; align-self: flex-start; padding: 0 20px; font-size: 13px; }
   .primary { font-weight: 600; background: var(--surface-hover); color: var(--text-primary); }
+  /* The count-in is live: the number in solid orange on the ground. */
   .count { position: absolute; inset: 0; z-index: 35; background: var(--bg-app); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
-  .num { font-size: 200px; font-weight: 500; line-height: 1; color: var(--accent-bright); }
+  .num { font-size: 200px; font-weight: 500; line-height: 1; color: var(--accent); }
   .num.phoneLand { font-size: 150px; }
   .num.tablet { font-size: 260px; }
   .rec { color: var(--record); font-size: 13px; font-weight: 600; }
-  .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: 86%; padding: 10px 14px; border-radius: 3px; background: var(--surface-raised); box-shadow: var(--popover); font-size: 12px; line-height: 1.45; color: var(--text-primary); text-align: center; }
+  .toast { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: 86%; padding: 10px 14px; border-radius: min(var(--r-group), 12px); background: var(--surface-raised); box-shadow: var(--popover); font-size: 12px; line-height: 1.45; color: var(--text-primary); text-align: center; }
   .toast.low { bottom: calc(env(safe-area-inset-bottom) + 84px); }
 </style>
