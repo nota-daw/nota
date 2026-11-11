@@ -414,23 +414,23 @@ internal sealed class RhythmStepStrip : Control
             double x = s * (cw + Gap);
             var r = new Rect(x, 0, cw, cellH);
             bool on = On[s], acc = on && Acc[s], quiet = on && !acc && Vel[s] < RhythmModel.QuietBelow;
-            if (!on) ctx.DrawRectangle(s % 4 == 0 ? NotaPalette.Groove : NotaGraph.Ground, null, r, 4, 4);
-            else if (quiet) ctx.DrawRectangle(NotaPalette.AccentSoft, null, r, 4, 4);
-            else ctx.DrawRectangle(acc ? NotaPalette.AccentBright : NotaPalette.Accent, null, r, 4, 4);
+            if (!on) ctx.DrawRectangle(s % 4 == 0 ? NotaPalette.Groove : NotaGraph.Ground, null, r, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
+            else if (quiet) ctx.DrawRectangle(NotaPalette.AccentSoft, null, r, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
+            else ctx.DrawRectangle(acc ? NotaPalette.AccentBright : NotaPalette.Accent, null, r, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
             if (on)
             {
                 var ft = new NotaFormattedText((s + 1).ToString(NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
                     NotaType.KnobValue, quiet ? NotaPalette.AccentBright : NotaPalette.TextOnAccent, this);
                 ctx.DrawText(ft, new Point(x + (cw - ft.Width) / 2, (cellH - ft.Height) / 2));
             }
-            if (s == _head) ctx.DrawRectangle(null, headPen, r.Deflate(0.5), 4, 4);
+            if (s == _head) ctx.DrawRectangle(null, headPen, r.Deflate(0.5), NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
 
             // The velocity lane: grey by strength — accent the lightest, quiet the darkest.
             var lane = new Rect(x, h - LaneH, cw, LaneH);
             IBrush li = !on ? NotaPalette.Rule
                 : acc ? NotaPalette.VizInk
                 : NotaPalette.Wash(NotaPalette.VizInk, (byte)Math.Clamp(60 + Vel[s] * 140, 60, 200));
-            ctx.DrawRectangle(li, null, lane, 1.5, 1.5);
+            ctx.DrawRectangle(li, null, lane, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
         }
     }
 }

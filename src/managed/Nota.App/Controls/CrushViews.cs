@@ -246,9 +246,9 @@ internal sealed class CrSpectrumView : ShDragView
                 double fc = FLo * Math.Pow(FHi / FLo, (b + 0.5) / _n);
                 double yi = Y(_in[b]), yo = Y(_out[b]);
                 double ys = Math.Max(yi, yo);   // the signal part: up to the lower of in and out
-                if (ys < bot - 0.5) ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, ys, cw, bot - ys), 1, 1);
+                if (ys < bot - 0.5) ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, ys, cw, bot - ys), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (_out[b] > _in[b] + 1 && yo < ys - 0.5)
-                    ctx.DrawRectangle(fc > _nyq ? addHi : addLo, null, new Rect(x, yo, cw, ys - yo), 1, 1);
+                    ctx.DrawRectangle(fc > _nyq ? addHi : addLo, null, new Rect(x, yo, cw, ys - yo), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (_in[b] > _out[b] + 3 && yi < bot - 1)
                     ctx.DrawRectangle(null, ghost, new Rect(x + 0.5, yi, cw - 1, yo - yi));
             }

@@ -90,8 +90,9 @@ freeze a view in the theme it was built in. Use the slot, a `Wash`, `InkOn`, a p
 A colour theme is one fixed look: an id, a name, a kind (**dark** or **light**) and one
 value for every token. The format is `specs/011-colour-themes/contracts/theme-file.md`.
 The kind sets the OS window chrome and Fluent's base, and decides which follow-system list
-the theme appears in. A theme changes colour only: never shapes, type, layout, or which
-element carries orange.
+the theme appears in. A built-in theme changes colour only: never shapes, type, layout, or
+which element carries orange. A user theme may also change the typeface and corner radii
+(below), never layout or which element carries orange.
 
 | Theme | Kind | Values |
 |---|---|---|
@@ -122,6 +123,25 @@ Remote get. Where the accent goes does not change.
 **Adding a theme.** Add `Theme/Themes/<id>.json` with every token and append its id to
 `NotaThemes.BuiltInOrder`. Nothing else names a theme. The smoke test checks the file
 against the catalogue and the readability bar.
+
+**User themes (skins, specs/087).** The same files in `<data>/Themes/` join the list after
+the built-ins. One validator, `Nota.Application.Themes.ThemeFile`, serves the built-ins,
+the folder, MCP and the tests. For a user theme the readability bar gives warnings and
+does not block it. Format 2 (`specs/087-user-skins/contracts/theme-file-v2.md`) adds two
+optional parts:
+- `font`: a system typeface;
+- `radius`: a roundness over the corner scale, and exact values per step.
+
+Built-in themes are format 1: Geist and the scale below.
+
+This is why code keeps writing the **design** values (`NotaRadius.*`, `Radius.*`,
+`Font.UI` / `NotaFonts.*`). `NotaSkin` lays the worn skin's value over every `CornerRadius`,
+`Rectangle` radius and Geist font family, at Animation priority. The value it lays over is
+always worked out from the design base value, so going back to the built-ins is exact. Custom-drawn
+views read `NotaRadius.*Value` at render time, and `NotaFormattedText` swaps the typeface.
+A literal radius in a `DrawRectangle` / `FillRectangle` / `RoundedRect` call bypasses the
+skin, so use `NotaRadius.*Value`, or `NotaSkin.MapRadius(x)` for a radius off the scale.
+Never name another font family in a view.
 
 ### Readability bar
 
@@ -571,6 +591,9 @@ R2). Each site picks the name for what it draws.
 | `Fine` | 2 | Switch knob, notes, bars inside a plot, a meter channel |
 
 `NotaRadius.Top(r)` rounds only the top corners (a header strip on a body).
+
+A skin can re-round this scale (see § Colour themes → User themes). The values above are
+the design values the code is written against.
 
 ### Sizes
 

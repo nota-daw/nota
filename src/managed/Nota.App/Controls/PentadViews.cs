@@ -147,7 +147,7 @@ internal sealed class PentadVoiceStrip : Control
             float lv = _lv[i];
             bool lit = lv > 0.0005f;
             byte a = (byte)(lit ? 0x22 + (int)(Math.Clamp(lv, 0f, 1f) * 0x40) : 0);
-            ctx.DrawRectangle(lit ? new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B)) : NotaPalette.BgSunken, lit ? on : off, r, 3, 3);
+            ctx.DrawRectangle(lit ? new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B)) : NotaPalette.BgSunken, lit ? on : off, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             if (cw >= 12)
             {
                 var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled, this);

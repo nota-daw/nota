@@ -231,7 +231,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, HeaderH), new Point(b.Width, HeaderH));
         DrawText(ctx, Loc.T("common.stereo_map"), NotaFonts.SansBold, 10, NotaPalette.TextPrimary, new Point(12, HeaderH / 2), vCenter: true);
         var well = new Rect(Inset, HeaderH + Inset, b.Width - 2 * Inset, b.Height - HeaderH - BottomH - 2 * Inset);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), well, 4, 4);
+        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), well, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         DrawGrid(ctx, plot);
 
         // Clouds, then handles and labels, in draw order.
@@ -325,7 +325,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         x += DrawText(ctx, Loc.T("stereo_map.correlation"), NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
         x += DrawText(ctx, "−1", NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
         var bar = new Rect(x, cy - 3, 180, 6);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), bar, 2, 2);
+        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), bar, NotaRadius.FineValue, NotaRadius.FineValue);
         double mid = bar.Left + bar.Width / 2;
         float corr = 1f;
         foreach (var it in _items) if (it.Master && it.Has && !it.M.Silent) corr = it.M.Correlation;
@@ -383,7 +383,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         double x = c.X + 16 + W > b.Width ? c.X - 16 - W : c.X + 16;
         double y = c.Y - 8 + h > b.Height ? c.Y + 8 - h : c.Y - 8;
         var r = new Rect(x, Math.Max(0, y), W, h);
-        ctx.DrawRectangle(NotaPalette.TooltipBg, new Pen(NotaPalette.BorderStrong, 1), r, 4, 4);
+        ctx.DrawRectangle(NotaPalette.TooltipBg, new Pen(NotaPalette.BorderStrong, 1), r, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         double ty = r.Top + 8;
         ctx.DrawEllipse(it.Color, null, new Point(r.Left + Pad + 4, ty + 7), 4, 4);
         DrawText(ctx, it.Name, NotaFonts.SansSemiBold, 11, NotaPalette.TextPrimary, new Point(r.Left + Pad + 14, ty + 7), vCenter: true);

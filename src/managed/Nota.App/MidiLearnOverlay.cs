@@ -99,7 +99,7 @@ public sealed class MidiLearnOverlay : Control
                      : mapped ? NotaPalette.Wash(NotaPalette.Success, 0x2E)
                      : NotaPalette.Wash(NotaPalette.Accent, 0x26);
             var pad = rect.Inflate(2);
-            ctx.DrawRectangle(fill, new Pen(outline, pending ? 2.5 : 1.5), pad, 4, 4);
+            ctx.DrawRectangle(fill, new Pen(outline, pending ? 2.5 : 1.5), pad, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         }
     }
 

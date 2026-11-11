@@ -274,7 +274,7 @@ internal sealed class ChamberIrView : Control, IValueHandles
             var ink = hot ? NotaPalette.AccentBright : NotaPalette.VizInk;
             ctx.DrawLine(new Pen(ink, hot ? 1.6 : 1.2), new Point(x, r.Y), new Point(x, r.Bottom));
             var tab = left ? new Rect(x, r.Y, 5, 12) : new Rect(x - 5, r.Y, 5, 12);
-            ctx.DrawRectangle(ink, null, tab, 1.5, 1.5);
+            ctx.DrawRectangle(ink, null, tab, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
             ctx.DrawLine(new Pen(ink, 2), new Point(left ? x : x - 5, r.Bottom - 0.5), new Point(left ? x + 5 : x, r.Bottom - 0.5));
             var ft = NotaGraph.AxisText(label, hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
             double tx = left ? x + 8 : x - 8 - ft.Width;
@@ -507,7 +507,7 @@ internal sealed class ChamberDecayGraph : Control, IValueHandles
         var dp = HandlePt(3);
         if (dampHot) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, dp, 8, 8);
         var grip = new Rect(dp.X - 3.5, dp.Y - 3.5, 7, 7);
-        ctx.DrawRectangle(dampHot ? NotaPalette.AccentBright : NotaGraph.Ground, new Pen(NotaPalette.AccentBright, 1.4), grip, 1.5, 1.5);
+        ctx.DrawRectangle(dampHot ? NotaPalette.AccentBright : NotaGraph.Ground, new Pen(NotaPalette.AccentBright, 1.4), grip, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
         var dl = NotaGraph.AxisText(Loc.T("device.chamber.damping") + " " + NotaNum.Hz(_damp), dampHot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         double dx = dp.X + 8 + dl.Width > r.Right ? dp.X - 8 - dl.Width : dp.X + 8;
         NotaGraph.PlateText(ctx, dl, new Point(dx, dp.Y - dl.Height - 6));
@@ -746,8 +746,8 @@ internal sealed class ChamberFlowView : Control
         Rect Block(double bx, double cy, double bw, string name, string value, bool on, bool hot, bool click)
         {
             var b = new Rect(bx, cy - bh / 2, bw, bh);
-            if (on) ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderDefault, 1), b, 4, 4);
-            else ctx.DrawRectangle(null, new Pen(hot ? NotaPalette.AccentBright : NotaPalette.TextDisabled, 1) { DashStyle = new DashStyle(new double[] { 3, 2 }, 0) }, b, 4, 4);
+            if (on) ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderDefault, 1), b, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
+            else ctx.DrawRectangle(null, new Pen(hot ? NotaPalette.AccentBright : NotaPalette.TextDisabled, 1) { DashStyle = new DashStyle(new double[] { 3, 2 }, 0) }, b, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
             var n = new NotaFormattedText(name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaGraph.TitleSize,
                 on ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, NotaTextSize.InCard) { MaxTextWidth = bw - 6, Trimming = TextTrimming.CharacterEllipsis };
             var v = NotaGraph.AxisText(value, on ? (click && hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary) : NotaPalette.TextDisabled);
@@ -814,7 +814,7 @@ internal sealed class ChamberFlowView : Control
         string duckVal = !ducking ? Loc.T("device.chamber.off") : _s.DuckNowDb > 0.05 ? NotaNum.Unit(-_s.DuckNowDb, "0.0", "dB") : NotaNum.Unit(-_s.DuckAmountDb, "0", "dB") + " " + Loc.T("device.chamber.max");
         Block(xd, yMain, blkW, Loc.T("device.chamber.ducking"), duckVal, ducking, false, false);
         if (ducking && _s.DuckNowDb > 0.05)
-            ctx.DrawRectangle(NotaPalette.AccentBright, null, new Rect(xd + 4, yMain + bh / 2 - 3, (blkW - 8) * Math.Clamp(_s.DuckNowDb / Math.Max(1, _s.DuckAmountDb), 0, 1), 2), 1, 1);
+            ctx.DrawRectangle(NotaPalette.AccentBright, null, new Rect(xd + 4, yMain + bh / 2 - 3, (blkW - 8) * Math.Clamp(_s.DuckNowDb / Math.Max(1, _s.DuckAmountDb), 0, 1), 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
         cur = xd + blkW;
 
         // The mix: the wet in from the left, the dry up from below.

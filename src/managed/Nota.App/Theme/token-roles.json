@@ -1,0 +1,612 @@
+[
+ {
+  "name": "SurfaceAbyss",
+  "group": "Surfaces",
+  "role": "well: the transport console recess"
+ },
+ {
+  "name": "BgApp",
+  "group": "Surfaces",
+  "role": "ground: window, arrangement, plugin body"
+ },
+ {
+  "name": "Gutter",
+  "group": "Surfaces",
+  "role": "the seam the docked panels meet on"
+ },
+ {
+  "name": "BgSunken",
+  "group": "Surfaces",
+  "role": "well: the recess behind sunken controls (chrome background)"
+ },
+ {
+  "name": "CanvasBg",
+  "group": "Surfaces",
+  "role": "modular canvas, just above the well"
+ },
+ {
+  "name": "SurfaceDeep",
+  "group": "Surfaces",
+  "role": "step-sequencer ground"
+ },
+ {
+  "name": "LaneB",
+  "group": "Surfaces",
+  "role": "alternating lane"
+ },
+ {
+  "name": "Panel",
+  "group": "Surfaces",
+  "role": "browser, headers, inspector"
+ },
+ {
+  "name": "SurfaceCard",
+  "group": "Surfaces",
+  "role": "a section inside a device (panel tone; divided by rules)"
+ },
+ {
+  "name": "SurfaceInset",
+  "group": "Surfaces",
+  "role": "rail, sunken chip, hovered well"
+ },
+ {
+  "name": "SurfaceRaised",
+  "group": "Surfaces",
+  "role": "button at rest"
+ },
+ {
+  "name": "SurfaceHover",
+  "group": "Surfaces",
+  "role": "a raised button under the pointer"
+ },
+ {
+  "name": "TrackOff",
+  "group": "Surfaces",
+  "role": "track of an off toggle"
+ },
+ {
+  "name": "SurfaceActive",
+  "group": "Surfaces",
+  "role": "a raised button while pressed or on"
+ },
+ {
+  "name": "GridSubBeat",
+  "group": "Grid + graph lines",
+  "role": "finer than a beat"
+ },
+ {
+  "name": "GridBeat",
+  "group": "Grid + graph lines",
+  "role": "grid inside graphs, zero axis"
+ },
+ {
+  "name": "GridRow",
+  "group": "Grid + graph lines",
+  "role": "piano-roll row divider"
+ },
+ {
+  "name": "GridBar",
+  "group": "Grid + graph lines",
+  "role": "bar lines in the arrangement and editors"
+ },
+ {
+  "name": "GraphBorder",
+  "group": "Grid + graph lines",
+  "role": "inner border of a visualiser well"
+ },
+ {
+  "name": "WellGrid",
+  "group": "Grid + graph lines",
+  "role": "grid drawn inside a well"
+ },
+ {
+  "name": "PadGrid",
+  "group": "Grid + graph lines",
+  "role": "XY-pad grid"
+ },
+ {
+  "name": "TextHeading",
+  "group": "Text",
+  "role": "Ink 0 — page titles, project name. Rare."
+ },
+ {
+  "name": "TextPrimary",
+  "group": "Text",
+  "role": "Ink 1 — device/track/preset names, values"
+ },
+ {
+  "name": "TextStrong",
+  "group": "Text",
+  "role": "Ink 2 — button text, transport readouts"
+ },
+ {
+  "name": "TextSecondary",
+  "group": "Text",
+  "role": "Ink 3 — inactive but readable, metadata"
+ },
+ {
+  "name": "TextMuted",
+  "group": "Text",
+  "role": "Ink 4 — explanations, units, hints"
+ },
+ {
+  "name": "TextTertiary",
+  "group": "Text",
+  "role": "Ink 5 — caps labels above parameters"
+ },
+ {
+  "name": "TextDisabled",
+  "group": "Text",
+  "role": "Ink 6 — placeholder, disabled action"
+ },
+ {
+  "name": "TextAxis",
+  "group": "Text",
+  "role": "Ink 7 — axis labels inside graphs only"
+ },
+ {
+  "name": "TextOnAccent",
+  "group": "Text",
+  "role": "text and glyphs on an accent fill"
+ },
+ {
+  "name": "TextFaint",
+  "group": "Text",
+  "role": "disabled controls only"
+ },
+ {
+  "name": "VizInk",
+  "group": "Text",
+  "role": "lines and fills drawn inside visualisers"
+ },
+ {
+  "name": "VizGrid",
+  "group": "Text",
+  "role": "grid inside a well"
+ },
+ {
+  "name": "BorderDefault",
+  "group": "Borders",
+  "role": "the border of fields, buttons and cards"
+ },
+ {
+  "name": "BorderStrong",
+  "group": "Borders",
+  "role": "knob cap, hovered border"
+ },
+ {
+  "name": "BorderBrass",
+  "group": "Borders",
+  "role": "accent line: 70% accent over panel"
+ },
+ {
+  "name": "Seam",
+  "group": "Borders",
+  "role": "the 1 px line where panels meet"
+ },
+ {
+  "name": "Rule",
+  "group": "Borders",
+  "role": "divider lines inside a panel"
+ },
+ {
+  "name": "Accent",
+  "group": "Accent",
+  "role": "playhead, selection, toggled-on fill"
+ },
+ {
+  "name": "AccentBright",
+  "group": "Accent",
+  "role": "accent glow: the line/ink variant"
+ },
+ {
+  "name": "AccentHover",
+  "group": "Accent",
+  "role": "accent text on hover"
+ },
+ {
+  "name": "AccentDeep",
+  "group": "Accent",
+  "role": "press, left half of the loop"
+ },
+ {
+  "name": "AccentDim",
+  "group": "Accent",
+  "role": "the soft/pressed accent"
+ },
+ {
+  "name": "AccentEdge",
+  "group": "Accent",
+  "role": "chip border, link underline"
+ },
+ {
+  "name": "AccentMute",
+  "group": "Accent",
+  "role": "a muted accent; nothing at rest uses it any more"
+ },
+ {
+  "name": "AccentPale",
+  "group": "Accent",
+  "role": "hot edge highlight"
+ },
+ {
+  "name": "AccentSubtle",
+  "group": "Accent",
+  "role": "accent-soft wash"
+ },
+ {
+  "name": "Record",
+  "group": "Status",
+  "role": "active recording, the only claim on red"
+ },
+ {
+  "name": "RecordInk",
+  "group": "Status",
+  "role": "disc on an engaged record button"
+ },
+ {
+  "name": "Success",
+  "group": "Status",
+  "role": "Signal, working meter zone"
+ },
+ {
+  "name": "SuccessInk",
+  "group": "Status",
+  "role": "ink on a Success fill (Session play)"
+ },
+ {
+  "name": "SuccessDim",
+  "group": "Status",
+  "role": "transport input, metronome"
+ },
+ {
+  "name": "Warning",
+  "group": "Status",
+  "role": "Caution, −6..0 dB"
+ },
+ {
+  "name": "Mute",
+  "group": "Status",
+  "role": "mute button when on, muted state"
+ },
+ {
+  "name": "Solo",
+  "group": "Status",
+  "role": "solo button when on"
+ },
+ {
+  "name": "Danger",
+  "group": "Status",
+  "role": "Alert, overload / clipping"
+ },
+ {
+  "name": "DangerHover",
+  "group": "Status",
+  "role": "a destructive button under the pointer"
+ },
+ {
+  "name": "DangerBright",
+  "group": "Status",
+  "role": "Alert Light, readout text"
+ },
+ {
+  "name": "DangerDeep",
+  "group": "Status",
+  "role": "over-threshold fill, below Alert"
+ },
+ {
+  "name": "DangerPale",
+  "group": "Status",
+  "role": "live-take waveform / label"
+ },
+ {
+  "name": "Teal",
+  "group": "Data + modulation",
+  "role": "2nd layer; also the modulation accent"
+ },
+ {
+  "name": "TealBright",
+  "group": "Data + modulation",
+  "role": "light variant of Teal, for lines and text"
+ },
+ {
+  "name": "Rose",
+  "group": "Data + modulation",
+  "role": "3rd layer: right channel, highs, tail"
+ },
+ {
+  "name": "RoseBright",
+  "group": "Data + modulation",
+  "role": "light variant of Rose, for lines and text"
+ },
+ {
+  "name": "Steel",
+  "group": "Data + modulation",
+  "role": "4th layer, used rarely"
+ },
+ {
+  "name": "Sage",
+  "group": "Data + modulation",
+  "role": "standalone hue (no longer a track slot)"
+ },
+ {
+  "name": "Threshold",
+  "group": "Data + modulation",
+  "role": "threshold markers"
+ },
+ {
+  "name": "Marker",
+  "group": "Data + modulation",
+  "role": "clip markers / brackets"
+ },
+ {
+  "name": "MarkerHot",
+  "group": "Data + modulation",
+  "role": "resize-edge affordance"
+ },
+ {
+  "name": "Frozen",
+  "group": "Data + modulation",
+  "role": "frozen-track ice"
+ },
+ {
+  "name": "SignalIn",
+  "group": "Data + modulation",
+  "role": "ghost \"input\" trace label"
+ },
+ {
+  "name": "SignalInFill",
+  "group": "Data + modulation",
+  "role": "fill under the ghost input trace"
+ },
+ {
+  "name": "HandleSel",
+  "group": "Data + modulation",
+  "role": "selected graph handle"
+ },
+ {
+  "name": "SelHeaderBg",
+  "group": "Tinted chrome",
+  "role": "selected track header — raised hover (the accent tick marks it)"
+ },
+ {
+  "name": "FrozenHeaderBg",
+  "group": "Tinted chrome",
+  "role": "frozen track header"
+ },
+ {
+  "name": "MuteTint",
+  "group": "Tinted chrome",
+  "role": "muted band"
+ },
+ {
+  "name": "Veil",
+  "group": "Tinted chrome",
+  "role": "deactivated-clip scrim base"
+ },
+ {
+  "name": "TooltipBg",
+  "group": "Tinted chrome",
+  "role": "tooltip: a raised popover"
+ },
+ {
+  "name": "TooltipText",
+  "group": "Tinted chrome",
+  "role": "tooltip text"
+ },
+ {
+  "name": "Well",
+  "group": "Wells and depth",
+  "role": "behind a button, field or menu at rest"
+ },
+ {
+  "name": "WellTrack",
+  "group": "Wells and depth",
+  "role": "switch and slider track"
+ },
+ {
+  "name": "KnobTrack",
+  "group": "Wells and depth",
+  "role": "the arc a knob's value runs on"
+ },
+ {
+  "name": "Groove",
+  "group": "Wells and depth",
+  "role": "device controls sit in one"
+ },
+ {
+  "name": "DeviceSection",
+  "group": "Wells and depth",
+  "role": "a pressed-in section inside a device"
+ },
+ {
+  "name": "DeviceSectionEdge",
+  "group": "Wells and depth",
+  "role": "that section's inner edge"
+ },
+ {
+  "name": "DeviceHeader",
+  "group": "Wells and depth",
+  "role": "device card header"
+ },
+ {
+  "name": "Bevel",
+  "group": "Wells and depth",
+  "role": "light top edge on raised parts"
+ },
+ {
+  "name": "KnobCap",
+  "group": "Wells and depth",
+  "role": "knob centre cap (devices only)"
+ },
+ {
+  "name": "AccentSoft",
+  "group": "Wells and depth",
+  "role": "behind something picked"
+ },
+ {
+  "name": "MeterSafe",
+  "group": "Wells and depth",
+  "role": "meter fill in the working range"
+ },
+ {
+  "name": "MeterHot",
+  "group": "Wells and depth",
+  "role": "meter fill near the top (−6..0 dB)"
+ },
+ {
+  "name": "MeterOver",
+  "group": "Wells and depth",
+  "role": "meter fill over 0 dB"
+ },
+ {
+  "name": "TrackHeaderSelected",
+  "group": "Wells and depth",
+  "role": "the selected track's header"
+ },
+ {
+  "name": "LaneSelected",
+  "group": "Wells and depth",
+  "role": "the selected track's lane"
+ },
+ {
+  "name": "KeyWhite",
+  "group": "Piano keys",
+  "role": "piano-roll keys: dark, never the brightest thing"
+ },
+ {
+  "name": "KeyBlack",
+  "group": "Piano keys",
+  "role": "black keys and their lanes"
+ },
+ {
+  "name": "MiniKeyWhite",
+  "group": "Piano keys",
+  "role": "device-card mini keyboards"
+ },
+ {
+  "name": "MiniKeyBlack",
+  "group": "Piano keys",
+  "role": "black keys of device-card mini keyboards"
+ },
+ {
+  "name": "ShadeUp",
+  "group": "Track-shade mix targets",
+  "role": "\"lighter\" shade"
+ },
+ {
+  "name": "ShadeDown",
+  "group": "Track-shade mix targets",
+  "role": "\"darker\" shade"
+ },
+ {
+  "name": "Track1",
+  "group": "Track palette",
+  "role": "track colour 1 (Drums by default)"
+ },
+ {
+  "name": "Track2",
+  "group": "Track palette",
+  "role": "track colour 2 (Perc by default)"
+ },
+ {
+  "name": "Track3",
+  "group": "Track palette",
+  "role": "track colour 3 (Bass by default)"
+ },
+ {
+  "name": "Track4",
+  "group": "Track palette",
+  "role": "track colour 4 (Keys by default)"
+ },
+ {
+  "name": "Track5",
+  "group": "Track palette",
+  "role": "track colour 5 (Texture by default)"
+ },
+ {
+  "name": "Track6",
+  "group": "Track palette",
+  "role": "track colour 6 (FX by default)"
+ },
+ {
+  "name": "Track7",
+  "group": "Track palette",
+  "role": "track colour 7 (Brass by default)"
+ },
+ {
+  "name": "Track8",
+  "group": "Track palette",
+  "role": "track colour 8 (Vox by default)"
+ },
+ {
+  "name": "Track9",
+  "group": "Track palette",
+  "role": "track colour 9 (Return by default)"
+ },
+ {
+  "name": "Master",
+  "group": "Track palette",
+  "role": "the master track's colour"
+ },
+ {
+  "name": "ReturnA",
+  "group": "Track palette",
+  "role": "return track A's colour"
+ },
+ {
+  "name": "ReturnB",
+  "group": "Track palette",
+  "role": "return track B's colour"
+ },
+ {
+  "name": "SystemAccent",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "SystemAccentLight1",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "SystemAccentLight2",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "SystemAccentLight3",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "SystemAccentDark1",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "SystemAccentDark2",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "SystemAccentDark3",
+  "group": "Fluent accent ramp",
+  "role": "the accent ramp Avalonia's own controls read"
+ },
+ {
+  "name": "ShadowBevel",
+  "group": "Shadows",
+  "role": "light top edge of raised parts (translucent)"
+ },
+ {
+  "name": "ShadowPopover",
+  "group": "Shadows",
+  "role": "drop shadow under menus and popovers (translucent)"
+ },
+ {
+  "name": "ShadowModal",
+  "group": "Shadows",
+  "role": "drop shadow under dialogs (translucent)"
+ }
+]

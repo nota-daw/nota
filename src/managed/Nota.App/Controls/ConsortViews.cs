@@ -350,10 +350,10 @@ internal sealed class ConsortStepGrid : Control
             (Color c, string lbl) = t switch { 1 => (mv, $"×{_ratchet}"), 2 => (tl, "~"), 3 => (Colors.Transparent, "·"), _ => (ac, (i + 1).ToString(NotaNum.Culture)) };
             IBrush fill = t == 3 ? NotaPalette.BgSunken : new SolidColorBrush(Color.FromArgb((byte)(inLen ? 0x40 : 0x14), c.R, c.G, c.B));
             IBrush stroke = t == 3 ? NotaPalette.BorderDefault : new SolidColorBrush(Color.FromArgb((byte)(inLen ? 0xE0 : 0x50), c.R, c.G, c.B));
-            ctx.DrawRectangle(fill, new Pen(stroke, i == _play ? 2 : 1), r, 3, 3);
+            ctx.DrawRectangle(fill, new Pen(stroke, i == _play ? 2 : 1), r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, inLen ? (t == 3 ? NotaPalette.TextDisabled : NotaPalette.TextPrimary) : NotaPalette.TextDisabled, this);
             ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
-            if (i == _play) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1), r.Inflate(1.5), 4, 4);
+            if (i == _play) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1), r.Inflate(1.5), NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         }
     }
 }
@@ -421,8 +421,8 @@ internal sealed class ConsortPitchLane : Control
             var col = _t[i] == 2 ? tl : ac;
             double y = Y(_p[i]);
             var r = new Rect(i * cw + 3, y - 3.5, cw - 6, 7);
-            ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, col.R, col.G, col.B)), null, r, 2.5, 2.5);
-            if (_t[i] == 1) ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, mv.R, mv.G, mv.B)), null, new Rect(r.X, r.Bottom + 2, r.Width, 4), 2, 2);
+            ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, col.R, col.G, col.B)), null, r, NotaSkin.MapRadius(2.5), NotaSkin.MapRadius(2.5));
+            if (_t[i] == 1) ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, mv.R, mv.G, mv.B)), null, new Rect(r.X, r.Bottom + 2, r.Width, 4), NotaRadius.FineValue, NotaRadius.FineValue);
         }
         if (_play >= 0 && _play < 16)
         {
@@ -639,7 +639,7 @@ internal sealed class ConsortJackField : Control
                 var t = new NotaFormattedText($"{j.Name} · {(j.Out ? "out" : "in")}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary, this);
                 double x = Math.Clamp(p.X - t.Width / 2, 1, w - t.Width - 1), y = p.Y - 21;
                 if (y < 1) y = p.Y + 15;
-                ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderStrong, 1), new Rect(x - 3, y - 1, t.Width + 6, t.Height + 2), 3, 3);
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderStrong, 1), new Rect(x - 3, y - 1, t.Width + 6, t.Height + 2), NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                 ctx.DrawText(t, new Point(x, y));
             }
         }
@@ -788,7 +788,7 @@ internal sealed class ConsortPatchMatrix : Control, IValueEntryHost
                 var cab = Find(_rows[r], _cols[c]);
                 if (cab is { } cb)
                 {
-                    ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(0x30, tc.R, tc.G, tc.B)), new Pen(new SolidColorBrush(tc), 1.2), cell, 3, 3);
+                    ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(0x30, tc.R, tc.G, tc.B)), new Pen(new SolidColorBrush(tc), 1.2), cell, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     // depth bar from the centre
                     double mid = cell.X + cell.Width / 2, bw = cell.Width / 2 * Math.Abs(cb.Depth);
                     ctx.FillRectangle(new SolidColorBrush(Color.FromArgb(0x38, tc.R, tc.G, tc.B)), new Rect(cb.Depth >= 0 ? mid : mid - bw, cell.Bottom - 3, bw, 2));
@@ -797,7 +797,7 @@ internal sealed class ConsortPatchMatrix : Control, IValueEntryHost
                 }
                 else
                 {
-                    ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), cell, 3, 3);
+                    ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), cell, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     var v = new NotaFormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, NotaPalette.TextDisabled, this);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }

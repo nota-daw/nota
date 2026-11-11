@@ -329,7 +329,7 @@ public sealed partial class ArrangementView
             // at the very end is pushed left, not clamped to nothing).
             x0 = Math.Clamp(x0, 0, Math.Max(0, w - 2));
             x1 = Math.Clamp(x1, x0 + 2, Math.Max(x0 + 2, w));
-            ctx.DrawRectangle(OvWindow, OvFrame, new Rect(x0 + 0.5, 2.5, Math.Max(1, x1 - x0 - 1), h - 5), 2, 2);
+            ctx.DrawRectangle(OvWindow, OvFrame, new Rect(x0 + 0.5, 2.5, Math.Max(1, x1 - x0 - 1), h - 5), NotaRadius.FineValue, NotaRadius.FineValue);
 
             // Loop region: a thin brass band along the top edge (the ruler owns the full
             // brace). Drawn over the scrim — a loop outside the viewport still has to show.

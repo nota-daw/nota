@@ -25,10 +25,8 @@ namespace Nota.App;
 
 public sealed partial class PreferencesWindow
 {
-    private const int RemoteIndex = 3;
-
     /// <summary>Open Settings on the Remote page.</summary>
-    public void ShowRemote() => Select(RemoteIndex);
+    public void ShowRemote() => Select("Remote");
 
     private Control RemotePane()
     {

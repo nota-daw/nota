@@ -195,14 +195,14 @@ internal sealed class VoltMatrix : Control, IValueEntryHost
                 double cx = LabelW + d * cw;
                 var r = new Rect(cx + 1, cy + 1, cw - 2, ch - 2);
                 int i = _idx[s, d];
-                if (i < 0) { ctx.DrawRectangle(Sunken, new Pen(GridB, 1), r, 2, 2); continue; }
+                if (i < 0) { ctx.DrawRectangle(Sunken, new Pen(GridB, 1), r, NotaRadius.FineValue, NotaRadius.FineValue); continue; }
                 double amt = (_e.PluginParamGet(_t, -1, i) - 0.5) * 2.0;
                 bool on = Math.Abs(amt) > 0.01;
-                if (!on) { ctx.DrawRectangle(CellBg, new Pen(GridB, 1), r, 2, 2); continue; }
+                if (!on) { ctx.DrawRectangle(CellBg, new Pen(GridB, 1), r, NotaRadius.FineValue, NotaRadius.FineValue); continue; }
                 // A route lights the whole cell: a neutral wash that deepens with the amount,
                 // a hairline, and the signed number in primary ink.
                 var wash = NotaPalette.Wash(NotaPalette.VizInk, (byte)(0x18 + 0x40 * Math.Min(1.0, Math.Abs(amt))));
-                ctx.DrawRectangle(wash, new Pen(LitEdge, 1), r, 2, 2);
+                ctx.DrawRectangle(wash, new Pen(LitEdge, 1), r, NotaRadius.FineValue, NotaRadius.FineValue);
                 if (r.Width >= 18)
                     Txt(ctx, (amt > 0 ? "+" : "−") + (int)Math.Round(Math.Abs(amt) * 100), r.X + r.Width / 2, r.Y + r.Height / 2 - 5, Lit, 8, true);
             }

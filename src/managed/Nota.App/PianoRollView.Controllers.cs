@@ -474,7 +474,7 @@ public sealed partial class PianoRollView
                 if (px < -4 || px > w + 4) continue;
                 bool hot = k == _hoverPt || (_drag == Drag.Point && k == _pt);
                 const double r = 2.5;   // hover changes colour, not size
-                ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), 1);
+                ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), (float)NotaSkin.MapRadius(1));
             }
         }
 

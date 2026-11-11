@@ -340,12 +340,12 @@ internal sealed class UtCorrBar : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 1) return;
         double cy = h / 2;
-        ctx.DrawRectangle(NotaPalette.Rule, null, new Rect(0, cy - 1.5, w, 3), 1.5, 1.5);
+        ctx.DrawRectangle(NotaPalette.Rule, null, new Rect(0, cy - 1.5, w, 3), NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
         // The out-of-phase half (below 0) is tinted in the warning colour, so the danger side reads at a glance.
-        ctx.DrawRectangle(OutOfPhase, null, new Rect(0, cy - 1.5, Math.Round(w / 2), 3), 1.5, 1.5);
+        ctx.DrawRectangle(OutOfPhase, null, new Rect(0, cy - 1.5, Math.Round(w / 2), 3), NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
         ctx.FillRectangle(NotaPalette.TextTertiary, new Rect(Math.Round(w / 2) - 0.5, cy - 4, 1, 8));
         double x = (_c + 1) / 2 * w;
         var ink = _c < 0 ? NotaPalette.Danger : _c < 0.3 ? NotaPalette.Warning : NotaPalette.Success;
-        ctx.DrawRectangle(ink, null, new Rect(Math.Clamp(x - 1.5, 0, w - 3), 0, 3, h), 1, 1);
+        ctx.DrawRectangle(ink, null, new Rect(Math.Clamp(x - 1.5, 0, w - 3), 0, 3, h), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
     }
 }

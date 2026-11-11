@@ -290,7 +290,7 @@ public sealed partial class ArrangementView
                     FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 9.5, RulerText);
                 double lx = Math.Max(4, Math.Min(x0 + 4, w - ft.Width - 8));
                 var plate = new Rect(lx - 3, y + 4, ft.Width + 6, ft.Height + 1);
-                ctx.DrawRectangle(LabelPlate, null, plate, 2, 2);
+                ctx.DrawRectangle(LabelPlate, null, plate, NotaRadius.FineValue, NotaRadius.FineValue);
                 ctx.DrawText(ft, new Point(lx, y + 4));
             }
         }

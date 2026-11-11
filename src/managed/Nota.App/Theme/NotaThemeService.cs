@@ -18,6 +18,11 @@
 //
 // Custom-drawn Render() overrides read slot colours without subscribing to them, so every
 // switch forces a repaint of every window.
+//
+// A theme also carries a typeface and corner radii (spec 087): NotaSkin wears them, and a
+// change re-coerces every window. User themes join the list from the themes folder; a reload
+// re-wears the active one. A try-on (MCP) is worn without being stored, and RenderScoped
+// wears a theme for the length of one call — the skin previews — and puts the live one back.
 
 using System;
 using System.Collections.Generic;
@@ -39,6 +44,7 @@ internal static class NotaThemeService
     private static AppearanceChoice _choice = new(false, Appearance.StudioDark, Appearance.StudioDark, Appearance.StudioLight);
 
     private static AccentChoice _accent = AccentChoice.Default;
+    private static NotaColourTheme? _tryOn;
 
     /// <summary>The appearance being followed.</summary>
     public static AppearanceChoice Choice => _choice;
@@ -61,9 +67,73 @@ internal static class NotaThemeService
         ApplyActive();
     }
 
-    /// <summary>Every loaded theme id → whether it is dark — what <see cref="Appearance.Resolve"/> needs.</summary>
+    /// <summary>Every loaded theme id (built-in and user) → whether it is dark — what
+    /// <see cref="Appearance.Resolve"/> needs.</summary>
     public static IReadOnlyDictionary<string, bool> KnownThemes =>
-        NotaThemes.BuiltIn.ToDictionary(t => t.Id, t => t.IsDark);
+        NotaThemes.All.ToDictionary(t => t.Id, t => t.IsDark);
+
+    /// <summary>The choice the settings hold, resolved against the themes loaded now. Set by the
+    /// app at startup; read again after each reload of the themes folder.</summary>
+    public static Func<AppearanceChoice>? StoredChoice { get; set; }
+
+    /// <summary>The theme being tried on (not stored), if any.</summary>
+    public static NotaColourTheme? TryOnTheme => _tryOn;
+
+    /// <summary>The theme the window wears now, accent included.</summary>
+    public static NotaColourTheme? WornTheme => NotaPalette.Theme;
+
+    /// <summary>Wear <paramref name="theme"/> live without storing it, until <see cref="RevertTryOn"/>,
+    /// a <see cref="Set"/> (a pick in Preferences) or a restart.</summary>
+    public static void TryOn(NotaColourTheme theme)
+    {
+        _tryOn = theme;
+        ApplyActive();
+    }
+
+    /// <summary>End a try-on: back to the stored choice. No-op without one.</summary>
+    public static void RevertTryOn()
+    {
+        if (_tryOn is null) return;
+        _tryOn = null;
+        ApplyActive();
+    }
+
+    /// <summary>Wear <paramref name="theme"/> (with the user's accent, or the theme's own) for the
+    /// length of <paramref name="render"/>, then put the live theme back — all inside the caller's
+    /// UI-thread job, so the compositor never sends a frame of it to the screen. Live windows are
+    /// neither repainted nor re-coerced; <paramref name="render"/> re-coerces its own trees.</summary>
+    public static void RenderScoped(NotaColourTheme theme, bool themeAccent, Action render)
+    {
+        var app = Avalonia.Application.Current;
+        if (app is null) { render(); return; }
+        var live = NotaPalette.Theme;
+        var liveGeometry = NotaSkin.Geometry;
+        var scoped = themeAccent ? theme : Worn(theme);
+        InScope = true;
+        try
+        {
+            NotaPalette.Apply(scoped);
+            ApplyResources(app, scoped);
+            NotaSkin.Set(scoped.Geometry);
+            render();
+        }
+        finally
+        {
+            if (live is not null)
+            {
+                NotaPalette.Apply(live);
+                ApplyResources(app, live);
+            }
+            // Resource changes inside the scope make live controls re-evaluate their typeface and
+            // radii against the scoped skin; give every live window its own skin back.
+            if (NotaSkin.Set(liveGeometry)) NotaSkin.Reapply();
+            InScope = false;
+        }
+    }
+
+    /// <summary>True while <see cref="RenderScoped"/> wears a theme for a picture: views built
+    /// then must not reload or re-wear themes (that would put the live theme back mid-picture).</summary>
+    public static bool InScope { get; private set; }
 
     /// <summary>Wear <paramref name="choice"/> and keep following it. Safe to call repeatedly.</summary>
     public static void Set(AppearanceChoice choice)
@@ -73,9 +143,19 @@ internal static class NotaThemeService
         Publish(app);
         _choice = choice;
 
+        _tryOn = null;   // a pick replaces a try-on
+
         if (!_hooked)
         {
             app.ActualThemeVariantChanged += (_, _) => { if (_choice.FollowSystem) ApplyActive(); };
+            // The folder changed under the worn theme: wear what it holds now (or the fallback).
+            NotaThemes.ThemesChanged += () =>
+            {
+                // Re-resolve from the settings: a stored theme that had fallen back comes back
+                // once its file loads again (the fallback was never stored).
+                if (StoredChoice?.Invoke() is { } stored) _choice = stored;
+                ApplyActive();
+            };
             _hooked = true;
         }
 
@@ -92,16 +172,28 @@ internal static class NotaThemeService
         if (app is null) return;
         // With no OS signal Avalonia reports Light, which is the spec's fallback too.
         bool osDark = app.ActualThemeVariant == ThemeVariant.Dark;
-        var theme = Worn(NotaThemes.Find(_choice.Active(osDark)) ?? NotaThemes.Default);
+        var theme = _tryOn is not null ? Worn(_tryOn) : Worn(NotaThemes.Find(_choice.Active(osDark)) ?? FallbackFor(osDark));
 
-        if (!_choice.FollowSystem)
+        if (!_choice.FollowSystem || _tryOn is not null)
             app.RequestedThemeVariant = theme.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
+        else
+            app.RequestedThemeVariant = ThemeVariant.Default;
         if (ReferenceEquals(NotaPalette.Theme, theme)) return;
 
         NotaPalette.Apply(theme);
         ApplyResources(app, theme);
+        if (NotaSkin.Set(theme.Geometry)) NotaSkin.Reapply();
         RepaintEverything();
         Changed?.Invoke();
+    }
+
+    // A stored theme that is gone (a user file removed or broken): the default for that mode,
+    // as Appearance.Resolve falls back. The stored choice is kept, so fixing the file brings it back.
+    private static NotaColourTheme FallbackFor(bool osDark)
+    {
+        bool dark = _choice.FollowSystem ? osDark : true;
+        return dark ? NotaThemes.Default
+                    : NotaThemes.BuiltIn.FirstOrDefault(t => t.Id == Appearance.StudioLight) ?? NotaThemes.Default;
     }
 
     // Put the slot brushes into the application resources once. They are re-tinted in

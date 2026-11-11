@@ -214,7 +214,7 @@ internal sealed class LvMeter : Control
             if (_r > _l) ctx.FillRectangle(_ink, new Rect(_l * w, ty, (_r - _l) * w, 3));
         }
         if (!double.IsNaN(_mark))
-            ctx.FillRectangle(NotaPalette.TextSecondary, new Rect(Math.Round(Math.Clamp(_mark, 0, 1) * (w - 2)), 0, 2, h), 1);
+            ctx.FillRectangle(NotaPalette.TextSecondary, new Rect(Math.Round(Math.Clamp(_mark, 0, 1) * (w - 2)), 0, 2, h), (float)NotaSkin.MapRadius(1));
     }
 }
 

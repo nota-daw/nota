@@ -136,6 +136,6 @@ internal sealed class PerformWheel : Control
         // The value bar, on the face's centreline. Pitch rests in the middle of the well.
         double y = faceY + faceH / 2;
         bool live = Math.Abs(_norm - Default) > 1e-3;
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : live ? Bar : BarOff, null, new Rect(1.5, y - 1, w - 3, 2), 1, 1);
+        ctx.DrawRectangle(_drag ? NotaPalette.Accent : live ? Bar : BarOff, null, new Rect(1.5, y - 1, w - 3, 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
     }
 }

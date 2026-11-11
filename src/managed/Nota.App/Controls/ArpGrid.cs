@@ -317,7 +317,7 @@ internal sealed class ArpGrid : Control
         var ft = new NotaFormattedText(DeviceCardKit.NoteName(top ? rows[0] : rows[^1]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaType.Axis, NotaPalette.TextTertiary, this);
         double x = w.X + 4, y = top ? w.Y + 3 : w.Bottom - 3 - ft.Height;
         if (!bottomFree && !topFree)
-            ctx.DrawRectangle(NotaGraph.Ground, null, new RoundedRect(new Rect(x - 2, y, ft.Width + 4, ft.Height), 2));
+            ctx.DrawRectangle(NotaGraph.Ground, null, new RoundedRect(new Rect(x - 2, y, ft.Width + 4, ft.Height), NotaRadius.FineValue));
         ctx.DrawText(ft, new Point(x, y));
     }
 
@@ -346,8 +346,8 @@ internal sealed class ArpGrid : Control
                 {
                     double x = w.X + c * cw + off + k * cellW / rat + 1;
                     var rc = new Rect(x, w.Y + r * rh + 1, Math.Max(1, cellW / rat - 2), Math.Max(1, rh - 2));
-                    if (muted) ctx.DrawRectangle(null, new Pen(border, 1), rc.Deflate(0.5), 2, 2);
-                    else ctx.DrawRectangle(fill, null, rc, 2, 2);
+                    if (muted) ctx.DrawRectangle(null, new Pen(border, 1), rc.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
+                    else ctx.DrawRectangle(fill, null, rc, NotaRadius.FineValue, NotaRadius.FineValue);
                 }
             }
         }
@@ -365,17 +365,17 @@ internal sealed class ArpGrid : Control
             if (lane.Base == LRatchet)
             {
                 double q = w.Height / 4;
-                for (int k = 0; k < (int)d; k++) ctx.DrawRectangle(fill, null, new Rect(x, w.Bottom - (k + 1) * q + 2, bw, Math.Max(1, q - 3)), 1, 1);
+                for (int k = 0; k < (int)d; k++) ctx.DrawRectangle(fill, null, new Rect(x, w.Bottom - (k + 1) * q + 2, bw, Math.Max(1, q - 3)), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
             else if (lane.Bipolar)
             {
                 double h = Math.Abs(f - 0.5) * w.Height, mid = w.Y + w.Height / 2;
-                ctx.DrawRectangle(fill, null, new Rect(x, f >= 0.5 ? mid - h : mid, bw, Math.Max(h, 1)), 1, 1);
+                ctx.DrawRectangle(fill, null, new Rect(x, f >= 0.5 ? mid - h : mid, bw, Math.Max(h, 1)), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
             else
             {
                 double h = Math.Max(f, 0.02) * w.Height;
-                ctx.DrawRectangle(fill, null, new Rect(x, w.Bottom - h, bw, h), 1, 1);
+                ctx.DrawRectangle(fill, null, new Rect(x, w.Bottom - h, bw, h), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
         }
         if (!Mini)
