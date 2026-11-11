@@ -128,6 +128,9 @@ public static class ProjectMigrations
         // v31 -> v32 (specs/089): tracks gain Cue, the mixer CueVolume. Absent -> not in Cue,
         // unity Cue level; no-op, stamp version.
         new Migration(31, _ => { }),
+        // v32 -> v33 (#499): Session slots gain FollowBypass. Absent -> false, the follow
+        // actions fire as set; no-op, stamp version.
+        new Migration(32, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

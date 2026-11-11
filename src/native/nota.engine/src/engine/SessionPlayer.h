@@ -41,6 +41,7 @@ class SessionPlayer {
 
     // Audio-thread-only.
     double localBeats = 0.0; // absolute position within the loop clock
+    double followFrom = 0.0; // playedBeats where the follow time counts from (a bypassed period moves it on, #499)
     ArticulationReleaseState articulationReleases; // pending latching keys, timed by rendered frames
     float gain = 1.0f;       // launch-velocity gain of the playing slot
 

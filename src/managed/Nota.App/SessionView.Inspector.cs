@@ -263,13 +263,20 @@ public sealed partial class SessionView
         launch.Children.Add(Row(Loc.T("session.inspector.velocity"), new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
-        // Follow actions.
+        // Follow actions. Bypass (#499) keeps the clip's A/B, chances, Jump and time as they are
+        // and dims them; the global switch still dims the whole section.
         bool follow = _engine.SessionFollow;
+        bool bypass = p.FollowBypass != 0;
         var fa = new StackPanel { Spacing = 10 };
         var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         faHead.Children.Add(SectionHead(Loc.T("session.inspector.follow_action")));
         if (!follow) { var off = Mono(Loc.T("session.inspector.off_globally"), 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
+        else if (bypass) { var off = Mono(Loc.T("session.inspector.bypassed"), 9, NotaPalette.Warning); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
         fa.Children.Add(faHead);
+        var bypassChip = Chip(bypass ? "On" : Loc.T("common.off"), bypass, _ => Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; }));
+        ToolTip.SetTip(bypassChip, Loc.T("session.inspector.bypass_keeps_this_clips_follow"));
+        fa.Children.Add(Row(Loc.T("session.inspector.bypass"), bypassChip));
+        var rules = new StackPanel { Spacing = 10 };
         string ActionLabel(int a) => Array.Find(FollowActions, x => (int)x.Action == a).Label ?? Loc.T("common.none");
         Control ActionRow(string slot, int action, Action<int> setAction, Control chance)
         {
@@ -305,20 +312,22 @@ public sealed partial class SessionView
             if (_engine.TryGetSessionClipProps(id, scene, out var cur)) { cur.ChanceA = a; cur.ChanceB = 100 - a; _engine.SetSessionClipProps(id, scene, cur); }
         };
         ToolTip.SetTip(chanceA, Loc.T("session.inspector.chance_of_a_in_percent"));
-        fa.Children.Add(ActionRow("A", p.FollowA, a => Set(x => { x.FollowA = a; return x; }), chanceA));
-        fa.Children.Add(ActionRow("B", p.FollowB, a => Set(x => { x.FollowB = a; return x; }), chanceB));
+        rules.Children.Add(ActionRow("A", p.FollowA, a => Set(x => { x.FollowA = a; return x; }), chanceA));
+        rules.Children.Add(ActionRow("B", p.FollowB, a => Set(x => { x.FollowB = a; return x; }), chanceB));
         if (p.FollowA == (int)SessionFollowAction.Jump || p.FollowB == (int)SessionFollowAction.Jump)
         {
             var scenes = new List<(int, string)>();
             for (int i = 0; i < _sceneCount; i++) scenes.Add((i, SceneName(i)));
-            fa.Children.Add(Row(Loc.T("session.inspector.jump_to"), Chip(SceneName(Math.Clamp(p.JumpScene, 0, Math.Max(0, _sceneCount - 1))), false,
+            rules.Children.Add(Row(Loc.T("session.inspector.jump_to"), Chip(SceneName(Math.Clamp(p.JumpScene, 0, Math.Max(0, _sceneCount - 1))), false,
                 a => Pick(a, scenes, i => i == p.JumpScene, i => Set(x => { x.JumpScene = i; return x; })))));
         }
         double after = p.FollowBeats > 0 ? p.FollowBeats : len;
-        fa.Children.Add(Row(Loc.T("session.inspector.after"), Chip(FormatDuration(after), false, a => Pick(a, FollowTimes, b => Math.Abs(b - p.FollowBeats) < 1e-6,
+        rules.Children.Add(Row(Loc.T("session.inspector.after"), Chip(FormatDuration(after), false, a => Pick(a, FollowTimes, b => Math.Abs(b - p.FollowBeats) < 1e-6,
             b => Set(x => { x.FollowBeats = b; return x; })))));
+        fa.Children.Add(rules);
         s.Children.Add(fa);
         if (!follow) Inactive.Set(fa, true, interactive: true);
+        else if (bypass) Inactive.Set(rules, true, interactive: true);
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(

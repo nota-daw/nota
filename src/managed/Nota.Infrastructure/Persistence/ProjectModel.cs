@@ -603,6 +603,7 @@ public sealed class SessionSlotDto
     public int ChanceB { get; set; }
     public double FollowBeats { get; set; }
     public int JumpScene { get; set; }
+    public bool FollowBypass { get; set; }                         // follow actions bypassed (v33, #499)
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

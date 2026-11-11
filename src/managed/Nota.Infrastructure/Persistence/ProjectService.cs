@@ -42,7 +42,8 @@ public sealed class ProjectService
     /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
     /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
     /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
-    public const int CurrentFormatVersion = 32;
+    /// v33 (#499, specs/094) adds FollowBypass on Session slots.
+    public const int CurrentFormatVersion = 33;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -1466,7 +1467,7 @@ public sealed class ProjectService
         dto.Color = p.Color; dto.LaunchMode = p.LaunchMode; dto.Quant = p.QuantBeats;
         dto.Legato = p.Legato != 0; dto.Loop = p.Loop != 0; dto.VelocityAmount = p.VelocityAmount;
         dto.FollowA = p.FollowA; dto.FollowB = p.FollowB; dto.ChanceA = p.ChanceA; dto.ChanceB = p.ChanceB;
-        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene;
+        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene; dto.FollowBypass = p.FollowBypass != 0;
         return dto;
     }
 
@@ -1478,7 +1479,7 @@ public sealed class ProjectService
             Color = sl.Color, LaunchMode = sl.LaunchMode, QuantBeats = sl.Quant,
             Legato = sl.Legato ? 1 : 0, Loop = sl.Loop ? 1 : 0, VelocityAmount = sl.VelocityAmount,
             FollowA = sl.FollowA, FollowB = sl.FollowB, ChanceA = sl.ChanceA, ChanceB = sl.ChanceB,
-            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene,
+            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene, FollowBypass = sl.FollowBypass ? 1 : 0,
         });
     }
 }

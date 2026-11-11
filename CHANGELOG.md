@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Bypass one Session clip's follow actions** (#499, specs/094). The Follow action section of
+  the clip inspector has a **Bypass** key. While it is on, the clip keeps looping and neither
+  follow action fires, but its A and B actions, their chances, the Jump target and the time
+  stay as you set them, dimmed, and the section reads **Bypassed**. Other clips and the global
+  Follow switch are not affected, and the clip still launches and stops as usual.
+  - Turn Bypass off and the follow action fires at the end of the follow time that is running,
+    counted in whole follow times from the launch. A time that ran out while the clip was
+    bypassed doesn't fire late.
+  - Saved with the project (format 33). The MCP `get_session` and `set_session_clip` tools read
+    and set it as `followBypass`.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.

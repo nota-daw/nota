@@ -23,7 +23,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
     public sealed record FollowAction(string Action, int Chance);
     public sealed record Slot(int TrackId, int Scene, string State, double LengthBeats, string Name, int Color,
         string LaunchMode, double? QuantBeats, bool Legato, bool Loop, float VelocityAmount,
-        FollowAction A, FollowAction B, double FollowBeats, int JumpScene);
+        FollowAction A, FollowAction B, double FollowBeats, int JumpScene, bool FollowBypass);
     public sealed record Scene(int Index, string Name, int Color, double? Tempo, string? Signature, double? FollowNextAfterBeats);
     public sealed record TrackState(int TrackId, int PlayingScene, double PositionBeats);
     public sealed record SlotRef(int TrackId, int Scene);
@@ -49,7 +49,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         "Snapshot of the Session (clip-launcher) grid: scene count + scene names/colours/tempo/signature/follow, "
         + "the launch quantum, the global follow-action switch, the fixed record length, every non-empty slot "
         + "(track id, scene, state, loop length in beats, name, colour, launch mode, quantum, legato, loop, velocity "
-        + "amount, follow actions A/B with chances and time), which scene each track is playing (with its position "
+        + "amount, follow actions A/B with chances and time, whether they are bypassed), which scene each track is playing (with its position "
         + "in the loop), and empty slots whose stop button was removed. Call before launching or filling slots.")]
     public Task<SessionSnapshot> GetSession() => Read(() =>
     {
@@ -74,7 +74,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
                 slots.Add(new Slot(ti.Id, s, StateName(st), E.SessionSlotLength(ti.Id, s), E.GetSessionClipName(ti.Id, s), c.Color,
                     Modes[Math.Clamp(c.LaunchMode, 0, 3)], c.QuantBeats < 0 ? null : c.QuantBeats, c.Legato != 0, c.Loop != 0, c.VelocityAmount,
                     new FollowAction(Actions[Math.Clamp(c.FollowA, 0, 9)], c.ChanceA), new FollowAction(Actions[Math.Clamp(c.FollowB, 0, 9)], c.ChanceB),
-                    c.FollowBeats, c.JumpScene));
+                    c.FollowBeats, c.JumpScene, c.FollowBypass != 0));
             }
         }
         var sceneList = new List<Scene>();
@@ -134,11 +134,13 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         + "quantum in beats (0 = immediate), -1 = global. legato: start at the outgoing clip's position. loop: false = one-shot. "
         + "velocityAmount 0..1: how far launch velocity scales the clip. followA/followB: none | stop | again | previous | next | "
         + "first | last | any | other | jump; chanceA/chanceB: relative weights 0..100; followBeats: when the follow action fires "
-        + "(0 = after one pass); jumpScene: the target of 'jump'. Follow actions run only while the global switch is on.")]
+        + "(0 = after one pass); jumpScene: the target of 'jump'. followBypass: true = this clip's follow actions are bypassed "
+        + "(kept as set, neither fires; turned back on, they fire at the end of the follow time then running). Follow actions "
+        + "run only while the global switch is on.")]
     public Task SetSessionClip(int trackId, int scene, string? name = null, int? color = null, string? launchMode = null,
         double? quantBeats = null, bool? legato = null, bool? loop = null, float? velocityAmount = null,
         string? followA = null, int? chanceA = null, string? followB = null, int? chanceB = null,
-        double? followBeats = null, int? jumpScene = null) => Mutate(() =>
+        double? followBeats = null, int? jumpScene = null, bool? followBypass = null) => Mutate(() =>
     {
         if (!E.TryGetSessionClipProps(trackId, scene, out var p))
             throw new ArgumentException($"Slot (track {trackId}, scene {scene}) is empty.");
@@ -158,6 +160,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
             if (chanceB is { } cb) p.ChanceB = Math.Clamp(cb, 0, 100);
             if (followBeats is { } fb) p.FollowBeats = Math.Max(0, fb);
             if (jumpScene is { } js) p.JumpScene = Math.Max(0, js);
+            if (followBypass is { } fy) p.FollowBypass = fy ? 1 : 0;
             E.SetSessionClipProps(trackId, scene, p);
         }
         finally { E.EndUndoGroup(); }
