@@ -540,6 +540,7 @@ public sealed partial class ArrangementView : UserControl
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(_sectionsRow);   // …then the named song sections
         root.Children.Add(top);
+        root.Children.Add(BuildTempoRow());
         root.Children.Add(bottom);
         root.Children.Add(_footerScroller);
         root.Children.Add(footerSeam);     // docked after the footer → sits on top of it
@@ -727,6 +728,7 @@ public sealed partial class ArrangementView : UserControl
 
     public void SetPlayhead(double beats, bool preserveDisplay = false)
     {
+        _tempoLane?.InvalidateVisual();
         _playheadBeats = beats;
         bool playing = _engine is { IsPlaying: true };
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
@@ -748,6 +750,7 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Frame-rate display update; does no meter, automation or loop polling.</summary>
     public void SetPlayheadFrame(double positionBeats, double displayBeats, bool playing)
     {
+        _tempoLane?.InvalidateVisual();
         _playheadBeats = positionBeats;
         UpdatePlayheadDisplay(displayBeats, playing, false);
     }
@@ -759,7 +762,7 @@ public sealed partial class ArrangementView : UserControl
         if (playing && !_wasPlaying) SetFollowSuspended(false);
         _wasPlaying = playing;
         // Follow must repaint the content as well as the moving overlay.
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && !_tempoLane.IsDragging && CenterOnPlayhead();
         if (scrolled) _lanes.InvalidateVisual();
         // Stopped with nothing moving: the playhead chrome is already right — repainting it
         // every tick kept the whole window redrawing ~30×/s while idle (#55).
@@ -1018,7 +1021,8 @@ public sealed partial class ArrangementView : UserControl
         double old = _pixelsPerBeat;
         _pixelsPerBeat = Math.Clamp(_pixelsPerBeat * factor, 4, 240);
         if (Math.Abs(_pixelsPerBeat - old) < 1e-9) return;
-        _scrollBeats = Math.Max(0, beatAnchor - (beatAnchor - _scrollBeats) * (old / _pixelsPerBeat));
+        _scrollBeats = TempoAxis ? Math.Max(0, TempoBeat(TempoSeconds(beatAnchor) - (TempoSeconds(beatAnchor) - TempoSeconds(_scrollBeats)) * old / _pixelsPerBeat))
+            : Math.Max(0, beatAnchor - (beatAnchor - _scrollBeats) * (old / _pixelsPerBeat));
         SyncScroll(_lanes.Bounds.Width);   // clamps _scrollBeats to range + syncs the scrollbar
         Redraw();
     }
@@ -1038,6 +1042,7 @@ public sealed partial class ArrangementView : UserControl
 
     private void Redraw()
     {
+        _tempoLane?.InvalidateVisual();
         _ruler.InvalidateVisual();
         _sectionsLane.InvalidateVisual();   // spans follow scroll + zoom
         _lanes.InvalidateVisual();
@@ -1099,6 +1104,7 @@ public sealed partial class ArrangementView : UserControl
                     if (!c.IsMidi && c.Peaks is not null) oldClips[(t.Id, c.ClipIndex)] = c;
         }
         if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
+        if (rebuildHeaders) ReloadTempo();
         _tracks.Clear();
         _returns.Clear();
         _link = null;   // group Link sets (specs/076): rebuilt on next use
@@ -1261,7 +1267,7 @@ public sealed partial class ArrangementView : UserControl
     // Keep the horizontal scrollbar's range in sync with the visible width.
     internal void SyncScroll(double laneWidth)
     {
-        double viewportBeats = laneWidth > 0 ? laneWidth / _pixelsPerBeat : _totalBeats;
+        double viewportBeats = laneWidth > 0 ? XToBeat(laneWidth) - XToBeat(0) : _totalBeats;
         _hScroll.ViewportSize = viewportBeats;
         _hScroll.Maximum = Math.Max(0, _totalBeats - viewportBeats);
         if (_scrollBeats > _hScroll.Maximum) { _scrollBeats = _hScroll.Maximum; }
@@ -1287,7 +1293,7 @@ public sealed partial class ArrangementView : UserControl
         // ⌘/Ctrl + wheel → horizontal zoom toward the cursor (DAW-standard).
         if ((mods & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
         {
-            double beatAtCursor = _scrollBeats + cursorX / _pixelsPerBeat;
+            double beatAtCursor = XToBeat(cursorX);
             ZoomAtBeat(WheelInput.ZoomFactor(e.Delta.Y, 1.25), beatAtCursor);
             e.Handled = true;
             return;
@@ -1721,7 +1727,7 @@ public sealed partial class ArrangementView : UserControl
         int trackId = ti >= 0 ? _tracks[ti].Id : -1;
         // A drop on a header lands at the visible start, whichever side the headers are on.
         double x = p.X >= 0 && p.X <= _lanes.Bounds.Width ? p.X : 0;
-        double beat = Math.Max(0.0, Snap(_scrollBeats + x / _pixelsPerBeat));
+        double beat = Math.Max(0.0, Snap(XToBeat(x)));
         // One internal item drops as-is; multiple external files land the first on the
         // target track and each of the rest on its own new track (trackId -1), so they
         // never stack on top of each other.
@@ -3658,7 +3664,7 @@ public sealed partial class ArrangementView : UserControl
 
     private static IBrush Alpha(Color c, double a) => new SolidColorBrush(Color.FromArgb((byte)(a * 255), c.R, c.G, c.B));
 
-    private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
+    private double BeatToX(double beat) => TempoAxis ? SecondsToX(TempoSeconds(beat)) : (beat - _scrollBeats) * _pixelsPerBeat;
 
     /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
     /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
@@ -3667,8 +3673,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_pixelsPerBeat <= 0) return;
         double step = SnapGridState.Draw.Beats(_beatsPerBar);
-        double bar = _beatsPerBar > 0 ? _beatsPerBar : 4;
-        foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
+        double bar = TempoAxis ? TempoBarLength : _beatsPerBar > 0 ? _beatsPerBar : 4;
+        double first = XToBeat(0), last = XToBeat(w);
+        foreach (double b in SnapGrid.GridLines(first, last, step, _beatsPerBar))
         {
             double x = BeatToX(b);
             var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;

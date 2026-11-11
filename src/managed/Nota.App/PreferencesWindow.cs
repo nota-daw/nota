@@ -1367,6 +1367,16 @@ public sealed partial class PreferencesWindow : NotaWindow
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
+        (Loc.T("tempo.shortcuts"), new[]
+        {
+            (Loc.T("tempo.shortcut_add"), Loc.T("tempo.shortcut_add_action")),
+            (Loc.T("tempo.shortcut_shape"), Loc.T("tempo.shortcut_shape_action")),
+            (Loc.T("tempo.shortcut_select"), Loc.T("tempo.shortcut_selection")),
+            ("Delete", Loc.T("tempo.shortcut_delete")),
+            ("Esc", Loc.T("tempo.shortcut_cancel")),
+            (Loc.T("tempo.shortcut_map"), Loc.T("tempo.shortcut_map_action")),
+            (Loc.T("tempo.shortcut_map_alt"), Loc.T("tempo.shortcut_map_alt_action")),
+        }),
         (Loc.T("common.file"), new[]
         {
             ("⌘N   ⌘O", Loc.T("preferences.new_project_open_a_project")),

@@ -13,6 +13,7 @@
 #pragma once
 
 #include "Track.h"
+#include "TempoMap.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -43,6 +44,7 @@ struct TimeRegion {
 };
 
 struct Graph {
+    std::shared_ptr<const TempoMap> tempoMap;
     std::vector<std::shared_ptr<Track>> tracks;
     int32_t sceneCount = 8; // Session view rows (M5)
     // Scene names / colours / tempo / follow (Session P0). May be shorter than sceneCount

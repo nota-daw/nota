@@ -69,7 +69,7 @@ public sealed partial class ArrangementView
 
     /// <summary>Beats currently visible in the lane column.</summary>
     internal double ViewportBeats
-        => _lanes.Bounds.Width > 0 && _pixelsPerBeat > 0 ? _lanes.Bounds.Width / _pixelsPerBeat : _totalBeats;
+        => _lanes.Bounds.Width > 0 && _pixelsPerBeat > 0 ? XToBeat(_lanes.Bounds.Width) - XToBeat(0) : _totalBeats;
 
     /// <summary>The beat span the strip maps onto its width: the project length, stretched
     /// if the viewport somehow reaches past it (very low zoom) so the window always fits.</summary>

@@ -23,6 +23,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Tempo track and Time Scale Tool** (#535): collapse or resize the tempo lane,
+  add and move points, and shape stepped, linear or Bezier tempo ramps. Right-drag
+  a marquee and Delete to remove several points in one undo step; the initial
+  point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
+  recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
+  save with the project, and playback follows their integrated timing.
+
+### Fixed
+- Starting or seeking between beats no longer produces an immediate extra metronome click.
+- Muting or solo-gating a Session track discards keyswitch releases for the flushed voices,
+  preventing them from cutting a new articulation after unmute. Clip edits reuse the track's
+  Session player directly instead of allocating and discarding temporary playback state.
+- Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
+  files with duplicate IDs no longer prevent the articulation map manager from opening.
+- Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
+  Session launches, and preserves notes, releases and expression when timing offsets span short
+  loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
+  shared switch held until the last note ends. The map manager prefers the project's saved map
+  when the library has a different version, including after undo.
+
+### Added
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.

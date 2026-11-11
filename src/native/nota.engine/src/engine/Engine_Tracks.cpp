@@ -319,6 +319,7 @@ void clampWarpPlay(AudioClip& c) {
 // Editor edits defer too: the clip keeps its now-stale cache (played clipped to the new
 // length) until the background build replaces it, instead of the UI freezing on a long file.
 void Engine::configureClipWarp(AudioClip& c, double spb, double devSR) {
+    c.tempoWarpCache.reset(); c.tempoWarpMap.reset();
     if (!c.warpEnabled) {
         c.warpCache = nullptr;
         return;
@@ -327,6 +328,44 @@ void Engine::configureClipWarp(AudioClip& c, double spb, double devSR) {
     if (warpCacheFrames(c, spb, devSR) > 0 && reuseWarpCache(c, spb, devSR)) return; // free, so even when deferred
     if (deferWarpBuild_) return; // stale (or no) cache until warpBuildStep / warpBuildPoll
     buildWarpCache(c, spb, devSR);
+}
+
+void Engine::configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR) {
+    if (!map || !c.warpEnabled || !c.sample || c.warpMarkers.size() < 2 || devSR <= 0) return;
+    const auto inputs = warpInputsOf(c, devSR, devSR);
+    if (c.tempoWarpMap == map && c.tempoWarpCache && c.tempoWarpCache->inputs == inputs) return;
+    AudioClip shaped = c;
+    shaped.warpCache.reset(); shaped.tempoWarpCache.reset(); shaped.tempoWarpMap.reset();
+    const double from = c.warpPlayStart, to = c.warpPlayEndEff();
+    const double origin = map->secondsAt(c.startBeat);
+    std::vector<double> beats{from, to};
+    for (const auto& p : c.warpMarkers) if (p.beat > from && p.beat < to) beats.push_back(p.beat);
+    for (const auto& n : map->nodes) {
+        const double b = n.beat - c.startBeat + from;
+        if (b > from && b < to) beats.push_back(b);
+    }
+    std::sort(beats.begin(), beats.end());
+    beats.erase(std::unique(beats.begin(), beats.end()), beats.end());
+    shaped.warpMarkers.clear();
+    for (double b : beats) {
+        auto hi = std::upper_bound(c.warpMarkers.begin(), c.warpMarkers.end(), b,
+            [](double beat, const WarpMarker& p) { return beat < p.beat; });
+        const auto& p = hi == c.warpMarkers.begin() ? c.warpMarkers.front() : *(hi - 1);
+        const auto& q = hi == c.warpMarkers.end() ? c.warpMarkers.back() : *hi;
+        const double src = p.beat == q.beat ? p.srcFrame : p.srcFrame + (q.srcFrame - p.srcFrame) * (b - p.beat) / (q.beat - p.beat);
+        shaped.warpMarkers.push_back({src, map->secondsAt(c.startBeat + b - from) - origin});
+    }
+    shaped.warpBeats = shaped.warpMarkers.back().beat;
+    shaped.warpPlayStart = shaped.warpPlayEnd = 0;
+    buildWarpCache(shaped, devSR, devSR); // pseudo beats are seconds; stretch remains offline
+    if (!shaped.warpCache) return;
+    auto cache = std::make_shared<WarpCache>();
+    cache->frames = shaped.warpCache->frames;
+    cache->devSR = cache->spb = devSR;
+    cache->inputs = inputs;
+    cache->base = shaped.warpCache;
+    c.tempoWarpCache = std::move(cache);
+    c.tempoWarpMap = map;
 }
 
 bool Engine::warpNeedsBuild(const AudioClip& c) const {
@@ -1271,7 +1310,7 @@ bool Engine::clipInfo(int32_t trackId, int32_t clipIndex, NotaClipInfo* out) con
     if (c.sample && spb > 0.0 && devSR > 0.0 && c.sample->sourceSampleRate > 0.0) {
         const double devFrames =
             static_cast<double>(c.effectiveLength()) * devSR / c.sample->sourceSampleRate / c.pitchRatio();
-        out->length_beats = devFrames / spb;
+        out->length_beats = tempoMap() ? secondsToBeat(beatToSeconds(c.startBeat) + devFrames / devSR) - c.startBeat : devFrames / spb;
     } else {
         out->length_beats = 0.0;
     }

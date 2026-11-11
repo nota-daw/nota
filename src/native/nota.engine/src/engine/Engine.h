@@ -1513,6 +1513,10 @@ class Engine {
     // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
     // one undo step (an identical list makes none); false = baseline (project load).
     void setSections(std::vector<Section> sections, bool checkpoint);
+    bool setTempoPoints(std::vector<NotaTempoPoint> points, bool checkpoint);
+    const TempoMap* tempoMap() const { return authoring_ ? authoring_->tempoMap.get() : nullptr; }
+    double beatToSeconds(double beat) const { return tempoMap() ? tempoMap()->secondsAt(beat) : beat * 60.0 / authoringBpm_; }
+    double secondsToBeat(double seconds) const { return tempoMap() ? tempoMap()->beatAt(seconds) : seconds * authoringBpm_ / 60.0; }
     // Section edits that carry the arrangement with them (specs/073). `index` is into the
     // start-sorted list. Each is one undo step over clips (cut at the edges), automation (every
     // track, the master track, master volume), take lanes and the sections; the playhead stays.
@@ -1634,6 +1638,9 @@ class Engine {
     // message thread
     void installRackPluginFactory(); // wire RackCore::pluginFactory to the plugin host bridge
     std::shared_ptr<Track> findTrackAuthoring(int32_t id) const;
+    double renderSampleAtBeat(double beat, double blockStart, double spb) const {
+        return transport_.hasTempoMap() ? blockStart + transport_.samplesAtBeat(beat) - transport_.playheadSamples() : beat * spb;
+    }
     std::shared_ptr<Track> cloneTrack(const Track& t) const;
     // Articulation timelines (specs/085), kept current by publishRaw.
     static bool articulationsCurrent(const Track& t);
@@ -1646,6 +1653,7 @@ class Engine {
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
+    void configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR);
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
     void reconfigureAllWarpStreams();                         // rebuild warp caches for the current tempo + device SR
     void reconfigureAllWarpStreams(double spb, double devSR); // …for an explicit tempo (tempo-change path)
@@ -2071,7 +2079,7 @@ class Engine {
     // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
     // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
     void mixAudioClip(
-        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
+        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain, bool mapped = false);
 
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
@@ -2356,7 +2364,10 @@ class Engine {
     void trackRoutedDown(int32_t ownerId, const MidiEv* evs, int n, double blockStart, double spb, bool timed);
     // Capture clock: during a count-in the transport holds still, so notes are timed back
     // from the take start (negative offsets — before 1.1 when the take starts there).
-    double countInClockOffset() const { return countInActive_ ? -(countInTotal_ - countInPos_) : 0.0; }
+    double countInClockOffset() const {
+        const double denom = static_cast<double>(std::max(1, transport_.timeSigDenom()));
+        return countInActive_ ? -(countInTotal_ - countInPos_) * 4.0 / denom : 0.0;
+    }
     // Held-note snapshot for the live-recording preview: written once per block by the
     // audio thread behind a sequence counter (odd while writing), read by the UI.
     static constexpr int kMaxHeldSnap = 256; // 128 pitches × live + routed
@@ -2379,7 +2390,8 @@ class Engine {
     // clip's start or at a jump into it (chase), every point inside the block, and a value every
     // 64 samples while a curve moves. Times are in samples on the block's clock.
     static void clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
-        int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap);
+        int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap,
+        const TempoMap* map = nullptr, double sr = 0, double sampleStart = 0);
     // At a clip's end, the pedals it holds down and a bent wheel go back to rest — no note stays
     // held by a clip that is over.
     static void clipCtlEndResets(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
@@ -2388,7 +2400,8 @@ class Engine {
     // [onS, offS) in samples relative to the block start; one value per dim at the note's
     // start (or the block's) and then every kExprStep samples while its curve moves.
     static void noteExprEvents(
-        const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap);
+        const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap,
+        const TempoMap* map = nullptr, double sr = 0, double sampleStart = 0, double startBeat = 0, double shift = 0);
 
     // Capture layout (specs/086): the device channels some track uses — armed or monitoring
     // on the hardware input, or the take in progress — published to the input and audio

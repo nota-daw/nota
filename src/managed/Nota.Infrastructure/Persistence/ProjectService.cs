@@ -42,7 +42,8 @@ public sealed class ProjectService
     /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
     /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
     /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
-    public const int CurrentFormatVersion = 32;
+    /// v33 (specs/086) adds the optional tempo map and curve handles.
+    public const int CurrentFormatVersion = 33;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -72,7 +73,7 @@ public sealed class ProjectService
             Session = CaptureSession(engine),
             Transport = new TransportDto
             {
-                Bpm = transport.Bpm,
+                Bpm = engine.TempoPoints is { Count: > 0 } tempo ? tempo[0].Bpm : transport.Bpm,
                 MasterVolume = transport.MasterVolume,
                 MetronomeOn = transport.MetronomeOn,
                 LoopOn = transport.LoopOn,
@@ -90,6 +91,7 @@ public sealed class ProjectService
             },
             // Always written ([] when none), so a load can tell "no sections" from "older file".
             Sections = engine.Sections.Select(s => new SectionDto { Start = s.StartBeat, Length = s.LengthBeats, Name = s.Name }).ToList(),
+            TempoPoints = engine.TempoPoints.ToList(),
         };
 
         int trackCount = engine.TrackCount;
@@ -588,6 +590,7 @@ public sealed class ProjectService
         // The saved tempo before any clip (specs/067): take lanes lay their comp out on it, so a
         // section the user moved isn't mistaken for one still on its take when the UI's tempo lands.
         if (doc.Transport.Bpm > 0) engine.SetBpm(doc.Transport.Bpm);
+        engine.SetTempoPoints(doc.TempoPoints ?? new List<TempoPoint>(), checkpoint: false);
 
         // The loop: its region as saved (#455) and whether it's on; the transport bar reads both back.
         if (doc.Transport.LoopStart is double ls && doc.Transport.LoopEnd is double le && le > ls)

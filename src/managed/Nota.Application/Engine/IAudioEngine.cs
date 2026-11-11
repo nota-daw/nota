@@ -39,6 +39,12 @@ public interface IAudioEngine : IDisposable
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
+    IReadOnlyList<TempoPoint> TempoPoints { get; }
+    void SetTempoPoints(IReadOnlyList<TempoPoint> points, bool checkpoint = true);
+    double BeatToSeconds(double beat);
+    double SecondsToBeat(double seconds);
+    double TempoAt(double beat);
+    ITempoPreview CreateTempoPreview(IReadOnlyList<TempoPoint> points);
     void SetTimeSignature(int num, int denom);
     void SetLoop(bool enabled, double startBeat, double endBeat);
     void SetMetronome(bool enabled);

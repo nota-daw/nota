@@ -201,7 +201,7 @@ public sealed partial class ArrangementView
 
         private (TrackVM track, ClipVM clip)? HitTest(Point p, out double beat)
         {
-            beat = _o._scrollBeats + p.X / _o._pixelsPerBeat;
+            beat = _o.XToBeat(p.X);
             int ti = _o.RowAtY(p.Y);
             if (ti < 0 || p.Y >= RowTop(ti) + RowH(ti)) return null;   // below the clip area: take lanes
             var t = _o._tracks[ti];
@@ -463,8 +463,8 @@ public sealed partial class ArrangementView
                     {
                         // Shift+drag authors a time-range live: snap both edges (Alt bypasses),
                         // extend across rows vertically (req 1.2.1/1.2.2).
-                        double a = _o.SnapMaybe(_o._scrollBeats + _marqueePress.X / _o._pixelsPerBeat, e.KeyModifiers);
-                        double b = _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers);
+                        double a = _o.SnapMaybe(_o.XToBeat(_marqueePress.X), e.KeyModifiers);
+                        double b = _o.SnapMaybe(_o.XToBeat(pos.X), e.KeyModifiers);
                         int rowA = Math.Max(0, _o.RowAtYClamped(_marqueePress.Y));
                         int rowB = Math.Max(0, _o.RowAtYClamped(pos.Y));
                         _o.SetTimeSelection(a, b, rowA, rowB);
@@ -532,7 +532,7 @@ public sealed partial class ArrangementView
         // Split out so the autoscroll timer can re-run it after nudging the view (req 2.10).
         private void UpdateActiveDrag(Point pos, KeyModifiers mods)
         {
-            double beat = _o._scrollBeats + pos.X / _o._pixelsPerBeat;
+            double beat = _o.XToBeat(pos.X);
 
             if (_drag == Drag.Move && _groupMove is not null)
             {
@@ -643,7 +643,7 @@ public sealed partial class ArrangementView
                 // Also drop the playhead where the user clicked (same as clicking empty lane) —
                 // but not during playback: scrubbing off the grid is disruptive, use the ruler.
                 if (_o._engine is not { IsPlaying: true })
-                    _o.SeekTo(_o._scrollBeats + _pressPos.X / _o._pixelsPerBeat);
+                    _o.SeekTo(_o.XToBeat(_pressPos.X));
                 InvalidateVisual();
                 return;
             }
@@ -667,7 +667,7 @@ public sealed partial class ArrangementView
                         _o.ClearTimeSelection();
                         if (row >= 0 && row < _o._tracks.Count) _o.FocusTrackId = _o._tracks[row].Id;
                         if (_o._engine is not { IsPlaying: true })
-                            _o.SeekTo(_o._scrollBeats + _marqueePress.X / _o._pixelsPerBeat);
+                            _o.SeekTo(_o.XToBeat(_marqueePress.X));
                     }
                 }
                 else if (!_emptyTimeMode && _marquee is { } r)
@@ -1433,8 +1433,8 @@ public sealed partial class ArrangementView
             using (var g = geo.Open())
                 foreach (var n in c.Notes)
                 {
-                    double nx = r.X + (n.StartBeat / c.LengthBeats) * r.Width;
-                    double nw = Math.Max(2, (n.LengthBeats / c.LengthBeats) * r.Width);
+                    double nx = _o.BeatToX(c.StartBeat + n.StartBeat);
+                    double nw = Math.Max(2, _o.BeatToX(c.StartBeat + n.StartBeat + n.LengthBeats) - nx);
                     double ny = Math.Max(r.Y, r.Bottom - (n.Pitch - lo + 1) * step);
                     double ww = Math.Min(nw, r.Right - nx);
                     if (ww <= 0) continue;
@@ -1563,8 +1563,7 @@ public sealed partial class ArrangementView
                                   int trackId = -1, int row = -1, RecordPreview? appear = null)
         {
             double w = Bounds.Width;
-            double x0 = _o.BeatToX(c.StartBeat);
-            double x1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
+            var (x0, x1) = _o.ClipScreenEdges(c);
             if (x1 < 0 || x0 > w || c.LengthBeats <= 0) return;
             var (_, edge, tint, content) = ClipColors(colorIndex);
             // The clip (style guide): a 20% tint of the track colour over the lane, corner 6, a

@@ -89,6 +89,8 @@ struct AudioClip {
     // shared across snapshots; rebuilt on tempo/pitch/mode/marker/window/SR change.
     // Null when warp is off (or while a rebuild is pending).
     std::shared_ptr<const WarpCache> warpCache;
+    std::shared_ptr<const WarpCache> tempoWarpCache;
+    std::shared_ptr<const class TempoMap> tempoWarpMap;
     // Clip volume envelope (M9 follow-up): breakpoints in clip-local beats, value
     // 0..1, multiplying the per-sample output. Empty = no envelope (fast path).
     AutomationLane volumeEnvelope;

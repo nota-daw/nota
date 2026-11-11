@@ -108,7 +108,7 @@ public sealed partial class ArrangementView
             double pillW = PillWidth(t.AutoLabel);
             if (PillRect(i, pillW).Contains(pos)) { _o.ShowAutoTargetMenu(_owner, t); return; }
 
-            double curBeat = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
+            double curBeat = Math.Max(0, _o.SnapMaybe(_o.XToBeat(pos.X), e.KeyModifiers));
 
             // Point under the cursor? (7px grab radius). Detected first so Shift can mean
             // "fine-drag this point" (req 8.2.2) rather than always starting a range select.
@@ -170,7 +170,7 @@ public sealed partial class ArrangementView
                     // nothing while playing. Points come from double-clicking, never a single click.
                     _o.ClearAutoSelection();
                     if (_o._engine is not { IsPlaying: true })
-                        _o.SeekTo(_o._scrollBeats + pos.X / _o._pixelsPerBeat);
+                        _o.SeekTo(_o.XToBeat(pos.X));
                     return;
                 }
             }
@@ -195,7 +195,7 @@ public sealed partial class ArrangementView
         private (AutoPt left, AutoPt right)? HitSegment(TrackVM t, int row, Point pos)
         {
             var ordered = t.AutoPoints.OrderBy(p => p.Beat).ToList();
-            double beat = _o._scrollBeats + pos.X / _o._pixelsPerBeat;
+            double beat = _o.XToBeat(pos.X);
             for (int k = 1; k < ordered.Count; k++)
             {
                 var a = ordered[k - 1]; var b = ordered[k];
@@ -260,7 +260,7 @@ public sealed partial class ArrangementView
         {
             if (_rangeTrack is not null)
             {
-                double beat = Math.Max(0, _o.Snap(_o._scrollBeats + e.GetPosition(_owner).X / _o._pixelsPerBeat));
+                double beat = Math.Max(0, _o.Snap(_o.XToBeat(e.GetPosition(_owner).X)));
                 _o.SetAutoSelection(_rangeTrack, _rangeAnchor, beat);
                 return;
             }
@@ -270,7 +270,7 @@ public sealed partial class ArrangementView
             if (i < 0) return;
             var pos = e.GetPosition(_owner);
             // Time: snapped (Alt bypasses), clamped between neighbour points — no reordering (8.2.3).
-            double cand = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
+            double cand = Math.Max(0, _o.SnapMaybe(_o.XToBeat(pos.X), e.KeyModifiers));
             _autoDrag.Beat = Math.Clamp(cand, _autoDragLo, _autoDragHi);
             // Value: free, but Shift = fine-mode (quarter sensitivity, anchored at the grab value, 8.2.2).
             float full = YToValue(_autoDragTrack, i, pos.Y);

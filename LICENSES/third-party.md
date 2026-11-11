@@ -12,6 +12,7 @@ public domain, or AGPL-compatible copyleft.
 |---|---|---|---|---|
 | .NET runtime | 10 | Managed runtime | MIT | ✅ in use |
 | Avalonia | 12 | UI framework | MIT | ✅ in use |
+| Avalonia.Headless | 12.1.4 | Tempo interaction test harness (test only) | MIT | ✅ in use — package license expression checked |
 | JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM release tarball — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
 | miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM release tarball, fetched to build dir |

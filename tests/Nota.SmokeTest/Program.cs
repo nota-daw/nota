@@ -30,6 +30,12 @@ static float MonoRms(float[] buf)
 }
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
+if (args.Contains("--tempo"))
+{
+    foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 
 if (args.Length >= 2 && args[0] == "--profile-project")
 {
@@ -15697,6 +15703,7 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
 Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");

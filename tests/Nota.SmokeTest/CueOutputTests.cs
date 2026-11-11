@@ -53,7 +53,8 @@ internal static class CueOutputTests
                 _ = b;
             }
             var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(bundle, ProjectService.ManifestName)))!;
-            yield return (json["formatVersion"]?.GetValue<int>() == 32, $"projects save as format 32 ({json["formatVersion"]})");
+            yield return (json["formatVersion"]?.GetValue<int>() == ProjectService.CurrentFormatVersion,
+                $"projects save as the current format ({json["formatVersion"]})");
             {
                 using var e = new NotaEngine();
                 var w = ProjectService.Apply(ProjectService.Load(bundle), e, bundle);
@@ -74,8 +75,8 @@ internal static class CueOutputTests
                 var doc = ProjectService.Load(bundle);
                 ProjectService.Apply(doc, e, bundle);
                 bool none = Enumerable.Range(0, e.TrackCount).All(i => e.TryGetTrackInfo(i, out var ti) && !e.GetTrackCue(ti.Id));
-                yield return (doc.FormatVersion == 32 && none && Math.Abs(e.CueVolume - 1f) < 1e-6f,
-                    "a v31 project opens with nothing in Cue at unity Cue level");
+                yield return (doc.FormatVersion == ProjectService.CurrentFormatVersion && none && Math.Abs(e.CueVolume - 1f) < 1e-6f,
+                    "a v31 project migrates past v32 with nothing in Cue at unity Cue level");
             }
         }
         finally { try { Directory.Delete(bundle, true); } catch { } }

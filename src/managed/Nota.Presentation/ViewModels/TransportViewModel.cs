@@ -335,7 +335,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     {
         if (ShowTimeDisplay)
         {
-            double sec = Bpm > 0 ? beats * 60.0 / (double)Bpm : 0.0;
+            double sec = _engine.BeatToSeconds(beats);
             int m = (int)(sec / 60.0);
             double s = sec - m * 60.0;
             // The app installs a display culture (point separator, U+2212 minus) at start-up.

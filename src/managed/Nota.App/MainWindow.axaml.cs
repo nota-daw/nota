@@ -287,13 +287,15 @@ public partial class MainWindow : Window
                 tsNum.Value = vm.Transport.TimeSigNumerator;
                 ApplyMeter(vm.Transport.TimeSigNumerator);   // bar lines and bar numbers follow (#405)
             }
-            else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
+            else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator))
+            { tsDen.Value = vm.Transport.TimeSigDenominator; Timeline.TimeSignatureDenominator = vm.Transport.TimeSigDenominator; Timeline.Refresh(); }
             else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
             // Every ruler reads in the read-out's unit, bars or time (#275).
             else if (e.PropertyName == nameof(vm.Transport.ShowTimeDisplay)) RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         };
         RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         ApplyMeter(vm.Transport.TimeSigNumerator);
+        Timeline.TimeSignatureDenominator = vm.Transport.TimeSigDenominator;
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
