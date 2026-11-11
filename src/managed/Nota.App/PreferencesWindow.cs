@@ -158,7 +158,14 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
         var sidebar = new Border
         {
-            Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0), Child = nav,
+            Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0),
+            // Fifteen pages outgrow the 480 px minimum height: the list scrolls so Shortcuts and
+            // Updates stay reachable in a short window.
+            Child = new ScrollViewer
+            {
+                Content = nav,
+                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            },
         };
 
         // The download dock is its own row under the scrolled pane: it shortens the pane
@@ -266,6 +273,13 @@ public sealed partial class PreferencesWindow : NotaWindow
             n.Icon.Foreground = on ? Brass : TextTertiary;
             n.Label.Foreground = on ? TextPrimary : TextSecondary;
             n.Label.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+        }
+        // A page opened from elsewhere (ShowPage("Updates")) shows its row even when the sidebar is scrolled.
+        // Posted past layout: called before the window is measured, the row has no place to scroll to yet.
+        if (index >= 0 && index < _navItems.Count)
+        {
+            var row = _navItems[index].Root;
+            Dispatcher.UIThread.Post(() => row.BringIntoView(), DispatcherPriority.Loaded);
         }
 
         var page = Pages.ElementAt(index);
