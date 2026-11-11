@@ -33,6 +33,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     bypassed doesn't fire late.
   - Saved with the project (format 33). The MCP `get_session` and `set_session_clip` tools read
     and set it as `followBypass`.
+- **Nota Remote shows what is in each clip on the Scenes screen** (#557, specs/090). A filled
+  cell reads like the desktop's Session slot: the clip's name and length on top, and below
+  them its notes as a small piano roll, or its waveform, in the clip's colour. Editing,
+  replacing or recording a clip on the computer updates its cell on the phone within a
+  second; a take being recorded grows as it records. Previews are sent only to a phone on
+  Scenes and only for the clips that changed.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
@@ -166,6 +172,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
+  follows the style guide the desktop wears: the same corner scale, one typeface with
+  fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin
+  spaces in numbers. Orange means what it means on the desktop: solid for what is live
+  (Play, a pad under your finger), a soft tint with orange text for what you picked (the
+  current screen, a segment, a toggle that is on). Macros and XY draw their values in the
+  track's colour; the mixer stays grey. The phone also wears your skin's typeface (when the
+  phone has it) and corner roundness, under Follow Nota and Follow phone alike.
 - **Track headers, a little wider** (#296): the header column now starts at 252 px instead
   of 228, so names and controls breathe in the new look. A width you dragged yourself stays.
   A group's **Link** key now matches M and S in the new look.

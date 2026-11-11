@@ -10,7 +10,7 @@
 </div>
 
 <style>
-  .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; border-radius: 3px; background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
+  .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; border-radius: var(--r-card); background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
   .t { font-size: 14px; font-weight: 600; color: var(--text-primary); }
   .s { font-size: 12px; line-height: 1.6; color: var(--text-tertiary); max-width: 280px; }
   .btn { height: 44px; padding: 0 18px; font-size: 13px; }

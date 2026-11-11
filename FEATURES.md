@@ -575,8 +575,15 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
-  Studio look — one accent (Nota's chosen accent) for what is live or chosen, semantic mute / solo / arm
-  colours, sentence-case labels — and a returning phone paints in its last theme at once.
+  style guide the desktop wears — the corner scale, one typeface with tabular figures,
+  orange solid for what is live and a soft tint for what is picked (Nota's chosen accent),
+  values on Macros and XY in the track's colour, semantic mute / solo / arm colours,
+  sentence-case labels — and a returning phone paints in its last theme at once. A user
+  skin's typeface (when the phone has it) and corner roundness reach the phone too.
+- **Nota Remote Scenes shows clip contents**: each filled cell has the clip's name and
+  length and a preview of what is in it — notes as a small piano roll, audio as a
+  waveform — in the clip's colour, updated within a second of an edit and growing while a
+  take records.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
