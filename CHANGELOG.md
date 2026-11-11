@@ -23,6 +23,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A Mixer button in the toolbar** (#516, specs/092). Next to Automation, the faders key shows
+  or hides the Mixer with one click, docked or in its own window, as View → Mixer and ⌘⇧M do.
+  It reads as on while the Mixer is shown and stays in step however you open or close it: the
+  menu, the shortcut, the panel's or the window's close button. Its tooltip names the shortcut.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.

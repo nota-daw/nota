@@ -297,8 +297,8 @@
         </StackPanel>
 
         <!-- Tools. Each draws the thing it does, so the row carries no prose: a metronome, a
-             playhead flag, a magnet, a breakpoint envelope. On is the soft tint (picked);
-             none sets Foreground, so the glyph takes the orange ink through
+             playhead flag, a magnet, a breakpoint envelope, faders. On is the soft tint
+             (picked); none sets Foreground, so the glyph takes the orange ink through
              ToggleButton:checked. -->
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="10,0,0,0">
           <Border Classes="tb-sep" Margin="0,0,8,0"/>
@@ -323,6 +323,11 @@
           <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
           <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation">
             <app:Glyph Kind="Automation" Size="16"/>
+          </ToggleButton>
+          <!-- Mixer: three channel faders. Runs view.mixer like View ▸ Mixer and ⌘⇧M, and reads
+               as on while the Mixer is shown, docked or in its own window (#516). -->
+          <ToggleButton x:Name="MixerToggle" Classes="tp-icon" Click="OnToggleMixerButton">
+            <app:Glyph Kind="Mixer" Size="16"/>
           </ToggleButton>
           <!-- Shown only while a hand-moved control has taken a lane over from
                playback (M9-C); one click hands every overridden lane back. -->

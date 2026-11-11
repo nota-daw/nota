@@ -27,6 +27,7 @@ public partial class MainWindow
     {
         BindCommands();
         ToolTip.SetTip(AutomationToggle, MenuKit.Keys(Loc.T("main.menu_keys.show_parameter_automation_lanes_a")));
+        ToolTip.SetTip(MixerToggle, MenuKit.Keys(Loc.T("main.menu_keys.show_or_hide_the_mixer")));
         // The XAML tips name the macOS keys; spell them Ctrl+… on Windows / Linux (#10).
         foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn, DetailMaximizeBtn })
             if (ToolTip.GetTip(c) is string tip) ToolTip.SetTip(c, MenuKit.Keys(tip));

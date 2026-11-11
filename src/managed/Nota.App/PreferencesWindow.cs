@@ -1415,7 +1415,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘Z   ⌘⇧Z", Loc.T("preferences.undo_redo")),
             ("⌘A", Loc.T("preferences.select_all_clips")),
             ("⌘⇧A", Loc.T("preferences.toggle_automation_mode")),
-            ("⌘⇧M", Loc.T("preferences.toggle_the_mixer_view")),
+            ("⌘⇧M", Loc.T("preferences.show_or_hide_the_mixer_also")),
             ("Tab", Loc.T("preferences.cycle_devices_pattern_clip_in")),
             ("Esc", Loc.T("preferences.cancel_the_current_gesture_clear")),
             ("⌘G   ⌘⇧G", Loc.T("preferences.group_ungroup_selected_tracks_on")),

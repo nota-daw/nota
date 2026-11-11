@@ -35,7 +35,7 @@ internal enum GlyphKind
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (24-unit grid, see Paths)
-    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
+    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Mixer, Apple, Windows, Linux, ChainLink, Update,
     Output, Globe,                 // Settings → Outputs and Language
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
@@ -536,6 +536,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Snap] = (null, "M4 17 V12.5 A8 8 0 0 1 20 12.5 V17 H15.5 V12.5 A3.5 3.5 0 0 0 8.5 12.5 V17 ZM4 19 H8.5 V21.5 H4 ZM15.5 19 H20 V21.5 H15.5 Z"),
         // A breakpoint envelope with two handles.
         [GlyphKind.Automation] = ("M3 17.5 H9 L14.5 7.5 H21", "M7.099 17.5 A1.9 1.9 0 1 0 10.901 17.5 A1.9 1.9 0 1 0 7.099 17.5 ZM12.6 7.5 A1.9 1.9 0 1 0 16.399 7.5 A1.9 1.9 0 1 0 12.6 7.5 Z"),
+        // Three channel faders, each a slot with a solid cap at its own level (the Mixer).
+        [GlyphKind.Mixer] = ("M6 4 V20 M12 4 V20 M18 4 V20", "M4 12.5 H8 V16 H4 ZM10 6.5 H14 V10 H10 ZM16 10 H20 V13.5 H16 Z"),
         // The Apple mark.
         [GlyphKind.Apple] = (null, "F1 M8 4.8 C6.4 3.733 3 3.867 3 7.867 C3 11.067 4.933 14 6.2 14 C7.067 14 7.333 13.533 8 13.533 C8.667 13.533 8.933 14 9.8 14 C10.8 14 12.267 12.133 12.867 10.267 C11.733 9.8 11.067 8.8 11.067 7.667 C11.067 6.6 11.667 5.733 12.533 5.267 C11.467 4 9.333 3.933 8 4.8 ZM8.133 4.2 C8.133 2.867 9.067 1.867 10.4 1.8 C10.4 3.133 9.467 4.133 8.133 4.2 Z"),
         // The Windows mark.

@@ -59,6 +59,20 @@ public partial class MainWindow
 
     private void OnMenuMixer(object? sender, EventArgs e) => ToggleMixer();
 
+    // The toolbar's Mixer button (#516) runs view.mixer like View → Mixer and ⌘⇧M. A click
+    // flips the button by itself; put it back to what is true, since the Mixer may not open.
+    private void OnToggleMixerButton(object? sender, RoutedEventArgs e)
+    {
+        _commands.Run("view.mixer");
+        SyncMixerToggle();
+    }
+
+    /// <summary>The toolbar's Mixer button reads as on while the Mixer is shown, docked or in
+    /// its own window — however it was opened or closed (button, menu, ⌘⇧M, the panel's or
+    /// the window's close button, a switch of placement, launch): docking, undocking and the
+    /// window opening and closing all end here.</summary>
+    private void SyncMixerToggle() => MixerToggle.IsChecked = IsMixerShown;
+
     /// <summary>Show the Mixer in its remembered placement, or hide it (⌘⇧M / View → Mixer).</summary>
     internal void ToggleMixer()
     {
@@ -157,6 +171,7 @@ public partial class MainWindow
         _mixerWanted = DockedMixerHeight();
         LayoutBottomPanels();
         _mixer.Refresh();
+        SyncMixerToggle();
     }
 
     // The height the user dragged it to; until they have, full strips but no more than half
@@ -175,6 +190,7 @@ public partial class MainWindow
         SetHost(MixerHost, null);
         if (_mixer is not null && _mixerWindow is null) _mixer.IsVisible = false;
         LayoutBottomPanels();
+        SyncMixerToggle();
     }
 
     // A finished drag of either splitter next to the docked Mixer sets its height.
@@ -245,8 +261,10 @@ public partial class MainWindow
             _mixerWindow = null;
             // Closing it by hand hides the Mixer; a switch to docked or quitting the app doesn't.
             if (!_mixerSwitching && !_shuttingDown && !_quitRequested) RememberMixerShown(false);
+            SyncMixerToggle();
         };
         _mixerWindow = win;
+        SyncMixerToggle();
 
         _mixer.IsVisible = true;       // so the tick loop updates its meters
         SetHost(win.Host, _mixer);

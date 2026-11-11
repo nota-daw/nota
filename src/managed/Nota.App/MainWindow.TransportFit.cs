@@ -35,6 +35,7 @@ public partial class MainWindow
         new Control[] { RemoteBtn },            // View ▸ Connect Phone…
         new Control[] { FollowBtn },            // View ▸ Follow playhead
         new Control[] { AutomationToggle },     // ⌘⇧A
+        new Control[] { MixerToggle },          // View ▸ Mixer, ⌘⇧M
         new Control[] { TimeSigCell },          // set once per project
         new Control[] { RemotePanel },          // MIDI learn (the panel goes with its last chip)
         new Control[] { SnapChip },             // the grid; snapping itself stays switchable
