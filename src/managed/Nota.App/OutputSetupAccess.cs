@@ -18,15 +18,17 @@ internal static class OutputSetupAccess
 
     private static string? _key;
 
+    // The backend that actually runs: after a failed ASIO start Nota plays on WASAPI's
+    // default device, whose setup must not be the ASIO driver's (or overwrite it).
     public static string KeyOf(IAudioEngine engine)
-        => _key ??= OutputSetups.KeyOf(engine.AudioSystem, engine.EffectiveOutputUid(), engine.AsioDriver);
+        => _key ??= OutputSetups.KeyOf(engine.ActiveAudioSystem, engine.EffectiveOutputUid(), engine.AsioDriver);
 
     /// <summary>The setup of the device the engine plays on now (defaults when never set up;
     /// under ASIO Main starts on the output pair chosen before, FR-005).</summary>
     public static OutputSetup Current(IAudioEngine engine)
     {
         if (Settings is { } s && s.Current.OutputSetups.TryGetValue(KeyOf(engine), out var v)) return v;
-        return OutputSetups.Default(engine.AudioSystem == AudioSystem.Asio ? engine.AsioPair(false) : 0);
+        return OutputSetups.Default(engine.ActiveAudioSystem == AudioSystem.Asio ? engine.AsioPair(false) : 0);
     }
 
     public static void Store(IAudioEngine engine, OutputSetup setup)

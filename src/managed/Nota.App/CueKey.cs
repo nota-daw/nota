@@ -68,7 +68,8 @@ internal static class CueKey
         void Reread() => follow(engine.GetTrackCue(trackId));
         b.AttachedToVisualTree += (_, _) => { Changed += Reread; Reread(); };
         b.DetachedFromVisualTree += (_, _) => Changed -= Reread;
-        MidiLearn.Bind(b, MidiTarget.TrackCue(trackId), Loc.T("mixer.cue"));
+        // The mapping's name carries the track, so the Map tab tells one Cue mapping from another.
+        MidiLearn.Bind(b, MidiTarget.TrackCue(trackId), Loc.F("mixer.cue_track", TrackNames.Of(engine, trackId)));
         Paint();
         return b;
     }

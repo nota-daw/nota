@@ -241,6 +241,21 @@ internal static class CueOutputTests
             _ = ret;
         }
         {
+            // Review on #566: a group nested in a muted, cued group still reaches its Cue tap.
+            using var e = Engine();
+            int outer = e.AddGroupTrack();
+            int inner = e.AddGroupTrack();
+            e.SetTrackGroup(inner, outer);
+            int t = e.AddAudioTrack();
+            e.AddAudioClip(t, wav, 0.0);
+            e.SetTrackGroup(t, inner);
+            e.SetTrackMute(outer, true);
+            e.SetTrackCue(outer, true);
+            var (main, cue) = Play(e, N);
+            yield return (Rms(cue) > 0.5 * ClipRms && Rms(main) == 0,
+                $"a nested group under a muted cued group reaches its Cue ({Rms(cue):F4}), Main silent");
+        }
+        {
             using var e = Engine();
             int t = e.AddAudioTrack();
             e.AddAudioClip(t, wav, 0.0);

@@ -387,6 +387,9 @@ public partial class MainWindow : Window
         TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
         InputSetups.Changed -= OnArmsChanged;
         InputSetups.Changed += OnArmsChanged;          // inputs renamed / switched off (specs/086): pickers relabel
+        OutputSetups.Changed -= OnOutputSetupChanged;
+        _cueKeysShown = CueKey.Shown(vm.Engine);       // the views below are built with this
+        OutputSetups.Changed += OnOutputSetupChanged;  // a Cue output set or cleared (specs/089): Cue keys come or go
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
@@ -938,6 +941,21 @@ public partial class MainWindow : Window
         Timeline.Refresh();
         _session?.Refresh();
         _mixer?.Refresh();
+    });
+
+    // Cue keys show only while a Cue output is set (or a track is in Cue). The setup is pushed
+    // on every audio restart, so rebuild the views only when that actually changes.
+    private bool _cueKeysShown;
+    private void OnOutputSetupChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        if (_vm is null) return;
+        bool shown = CueKey.Shown(_vm.Engine);
+        if (_cueKeysShown == shown) return;
+        _cueKeysShown = shown;
+        Timeline.Refresh();
+        _session?.Refresh();
+        _mixer?.Refresh();
+        _trackInspector?.Reload();
     });
 
     private void OnFollowSuspendedChanged()

@@ -3183,8 +3183,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
                 std::copy_n(groupBus_[gi].data(), frames * 2, scratch_.data()); // this group's summed children
                 {
-                    const int32_t preSlot = routeSlotForTrack(t.id()); // Phase D pre-FX tap
-                    if (preSlot >= 0)
+                    // Phase D pre-FX tap. A group muted in Main (rendered only for Cue) keeps it
+                    // silent, as its mute always did: Cue must not change a sidechain key.
+                    const int32_t preSlot = routeSlotForTrack(t.id());
+                    if (preSlot >= 0 && !grpMuteE[gi])
                         simd_audio::addStereoScaled(
                             routeBusPreNext_[preSlot].data(), scratch_.data(), 1.0f, 1.0f, frames);
                 }
@@ -3199,10 +3201,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (t.pdc) t.pdc->process(scratch_.data(), frames);
                 // Cue tap (specs/089): the bus after its devices, before its fader and mute.
                 if (cueOn && t.cue()) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
-                if (grpMuteE[gi]) { // muted but cued: heard in Cue only
+                if (t.mute()) { // muted but cued: heard in Cue only
                     t.setMeter(0, 0, 0, 0);
                     continue;
                 }
+                // Muted only through a cued ancestor: still folds into the parent's bus, so the
+                // ancestor's Cue tap hears it; the ancestor keeps it out of Main. Its own
+                // sidechain and record taps stay silent, as the mute made them.
+                const bool cueFeedOnly = grpMuteE[gi];
 
                 const float vol = t.volume();
                 const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
@@ -3214,8 +3220,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 const int pslot = slotOf(grpParent[gi]);
                 float* dest = pslot >= 0 ? groupBus_[pslot].data() : out; // parent group bus, else master
                 const int32_t routeSlot = routeSlotForTrack(t.id());
-                float* route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
-                const bool tapRec = (recSrc > 0 && t.id() == recSrc);
+                float* route = routeSlot >= 0 && !cueFeedOnly ? routeBusNext_[routeSlot].data() : nullptr;
+                const bool tapRec = (recSrc > 0 && t.id() == recSrc) && !cueFeedOnly;
                 float pkL = 0.0f, pkR = 0.0f;
                 double sqL = 0.0, sqR = 0.0;
                 int64_t recDropped = 0;
@@ -3236,8 +3242,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     }
                 }
                 if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
-                t.setMeter(
-                    pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+                if (cueFeedOnly) t.setMeter(0, 0, 0, 0); // silent in Main, as its muted ancestor makes it
+                else
+                    t.setMeter(pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)),
+                        static_cast<float>(std::sqrt(sqR / frames)));
             }
 
         // Pass 2: return buses -> device chain -> master (M6-1). Exempt from the
@@ -3256,8 +3264,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
             std::copy_n(returnBus_[bus].data(), frames * 2, scratch_.data());
             {
-                const int32_t preSlot = routeSlotForTrack(t.id()); // Phase D pre-FX tap
-                if (preSlot >= 0)
+                // Phase D pre-FX tap; a muted return rendered only for Cue keeps it silent.
+                const int32_t preSlot = routeSlotForTrack(t.id());
+                if (preSlot >= 0 && !t.mute())
                     simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), scratch_.data(), 1.0f, 1.0f, frames);
             }
             for (auto& d : t.devices)

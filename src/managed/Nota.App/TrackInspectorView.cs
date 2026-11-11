@@ -56,6 +56,9 @@ internal sealed class TrackInspectorView : UserControl
         Rebuild();
     }
 
+    /// <summary>Rebuilds the shown track's page (the Cue key appears or goes — specs/089).</summary>
+    public void Reload() => Rebuild();
+
     /// <summary>Shows this track (≤ 0: none).</summary>
     public void Show(int trackId)
     {

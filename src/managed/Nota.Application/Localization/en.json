@@ -2889,6 +2889,7 @@
     "mixer.cue_output_tip": "Where Cue plays. Choose the pair in Settings → Outputs.",
     "mixer.cue_tip": "Cue: hear this track in your private mix, before its fader, mute and solo. The audience doesn't hear Cue.",
     "mixer.cue_tracks_count": "{0} tracks",
+    "mixer.cue_track": "{0} · Cue",
     "mixer.cue_unavailable_tip": "This device doesn't have the Cue pair. Cue is silent — nothing moves to Main. Choose another pair in Settings → Outputs, or reconnect the interface.",
     "mixer.cue_with_click": "{0} + click",
     "mixer.dock_the_mixer_in_the": "Dock the mixer in the main window",
