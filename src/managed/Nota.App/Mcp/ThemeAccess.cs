@@ -98,7 +98,7 @@ internal sealed class ThemeAccess : IThemeAccess
             }
             // Another file in the folder may hold this id under a different name: it is replaced
             // now, so it goes — only after the new one is safely on disk.
-            if (existing?.FilePath is { } old && !string.Equals(Path.GetFullPath(old), Path.GetFullPath(path), StringComparison.Ordinal))
+            if (existing?.FilePath is { } old && !SameFile(old, path))
                 File.Delete(old);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -107,6 +107,23 @@ internal sealed class ThemeAccess : IThemeAccess
         }
         NotaThemes.ReloadUser();
         return new ThemeSaveResult(v, true, path, null);
+    }
+
+    // Whether two paths in the themes folder name one file. Names that differ only in case
+    // (My-Skin.json vs my-skin.json) are one file on a case-insensitive file system (Windows,
+    // default macOS) — deleting one would delete the other — and two files on Linux. The
+    // folder listing tells which: two entries for the name only when they are distinct.
+    private static bool SameFile(string a, string b)
+    {
+        a = Path.GetFullPath(a);
+        b = Path.GetFullPath(b);
+        if (string.Equals(a, b, StringComparison.Ordinal)) return true;
+        if (!string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return false;
+        var name = Path.GetFileName(b);
+        var dir = Path.GetDirectoryName(b);
+        if (dir is null || !Directory.Exists(dir)) return false;
+        return Directory.EnumerateFiles(dir)
+            .Count(f => string.Equals(Path.GetFileName(f), name, StringComparison.OrdinalIgnoreCase)) < 2;
     }
 
     public string? Apply(string id)
