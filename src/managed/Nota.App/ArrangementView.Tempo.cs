@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -36,6 +37,11 @@ public sealed partial class ArrangementView
     private double SecondsToX(double seconds) => (seconds - AxisOriginSeconds) * _pixelsPerBeat * 2;
     private double XToSeconds(double x) => AxisOriginSeconds + x / (_pixelsPerBeat * 2);
     private double XToBeat(double x) => TempoAxis ? TempoBeat(XToSeconds(x)) : _scrollBeats + x / _pixelsPerBeat;
+    private double ScrollBeatForX(double beat, double x, double? pixelsPerBeat = null)
+    {
+        double ppb = pixelsPerBeat ?? _pixelsPerBeat;
+        return Math.Max(0, TempoAxis ? TempoBeat(TempoSeconds(beat) - x / (ppb * 2)) : beat - x / ppb);
+    }
     public int TimeSignatureDenominator { get; set; } = 4;
     private double TempoBarLength => _beatsPerBar * 4.0 / Math.Max(1, TimeSignatureDenominator);
 
@@ -80,13 +86,24 @@ public sealed partial class ArrangementView
     {
         if (commit && _engine is { } engine)
         {
-            engine.SetTempoPoints(points);
+            engine.SetDeferWarpBuild(true);
+            try { engine.SetTempoPoints(points); }
+            finally { engine.SetDeferWarpBuild(false); }
             _hasTempoMap = true;
             _scrollBeats = engine.SecondsToBeat(_tempoScrollSeconds);
+            BuildTempoWarpCaches();
         }
         _tempoPreview?.Dispose(); _tempoPreview = null;
         if (commit) { Refresh(); SessionChanged?.Invoke(); }
         else { ReloadTempo(); Redraw(); }
+    }
+
+    private async void BuildTempoWarpCaches()
+    {
+        var engine = _engine;
+        if (engine is null) return;
+        while (ReferenceEquals(engine, _engine) && engine.WarpBuildPoll() > 0)
+            await Task.Delay(15);
     }
 
     private (double start, double end) ClipScreenEdges(ClipVM clip)
@@ -109,7 +126,7 @@ public sealed partial class ArrangementView
         private double _pressBeat, _pressBpm, _barBeat, _minBpm = 30, _maxBpm = 240, _startHeight;
         private bool _moved, _ctrl, _inside, _scaleChanged;
         private double[] _snapTimes = Array.Empty<double>();
-        private double _scaleTargetSeconds;
+        private double _scaleTargetSeconds, _scaleOriginSeconds, _scaleSecondsPerPixel;
         private static readonly Cursor ScaleCursor = new(StandardCursorType.SizeWestEast);
         private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeNorthSouth);
         private static readonly Cursor PointCursor = new(StandardCursorType.Cross);
@@ -125,11 +142,11 @@ public sealed partial class ArrangementView
             _points = points.ToList();
             if (changed) _selection.Clear();
             _minBpm = Math.Max(1, Math.Min(30, _points.Min(p => p.Bpm) * .8));
-            _maxBpm = Math.Min(1000, Math.Max(240, _points.Max(p => p.Bpm) * 1.2));
+            _maxBpm = Math.Min(999, Math.Max(240, _points.Max(p => p.Bpm) * 1.2));
             InvalidateVisual();
         }
         private double Y(double bpm) => 20 + (1 - (bpm - _minBpm) / (_maxBpm - _minBpm)) * Math.Max(1, Bounds.Height - 36);
-        private double Bpm(double y) => Math.Clamp(_minBpm + (1 - (y - 20) / Math.Max(1, Bounds.Height - 36)) * (_maxBpm - _minBpm), 1, 1000);
+        private double Bpm(double y) => Math.Clamp(_minBpm + (1 - (y - 20) / Math.Max(1, Bounds.Height - 36)) * (_maxBpm - _minBpm), 1, 999);
         private Point PointAt(int i) => new(_o.BeatToX(_points[i].Beat), Y(_points[i].Bpm));
         private Point Handle(int i, bool second)
         {
@@ -201,7 +218,10 @@ public sealed partial class ArrangementView
             {
                 _barBeat = Math.Max(_o.TempoBarLength, Math.Round(_pressBeat / _o.TempoBarLength) * _o.TempoBarLength);
                 _drag = Drag.Scale;
-                _o._tempoScrollSeconds = _o._engine.BeatToSeconds(_o._scrollBeats);
+                _scaleOriginSeconds = _o._engine.BeatToSeconds(_o._scrollBeats);
+                _scaleSecondsPerPixel = _o.TempoAxis ? 1 / (_o._pixelsPerBeat * 2)
+                    : 60 / (_o._engine.TempoAt(_o._scrollBeats) * _o._pixelsPerBeat);
+                _o._tempoScrollSeconds = _scaleOriginSeconds;
                 _snapTimes = BuildSnapTimes();
             }
             else
@@ -271,7 +291,7 @@ public sealed partial class ArrangementView
                         : a with { X2 = Math.Max(hx, a.X1), Y2 = hy };
                     _o.PreviewTempo(_points); break;
                 case Drag.Scale:
-                    double seconds = SnapSeconds(_o.XToSeconds(_pointer.X));
+                    double seconds = SnapSeconds(_scaleOriginSeconds + _pointer.X * _scaleSecondsPerPixel);
                     if (TempoMapping.MapBar(_o._engine!, _before, _barBeat, seconds, (e.KeyModifiers & KeyModifiers.Alt) == 0) is { } mapped)
                     { _points = mapped.ToList(); _o.PreviewTempo(_points); _scaleChanged = true; _scaleTargetSeconds = seconds; }
                     else { _scaleChanged = false; _points = _before.ToList(); if (_o._tempoPreview is not null) _o.EndTempoPreview(false, _before); }
@@ -302,7 +322,7 @@ public sealed partial class ArrangementView
         }
         private double SnapSeconds(double seconds)
         {
-            double best = 7 / (_o._pixelsPerBeat * 2), result = seconds;
+            double best = 7 * (_drag == Drag.Scale ? _scaleSecondsPerPixel : 1 / (_o._pixelsPerBeat * 2)), result = seconds;
             foreach (double time in _snapTimes)
                 if (Math.Abs(time - seconds) < best) { best = Math.Abs(time - seconds); result = time; }
             return result;
@@ -364,7 +384,7 @@ public sealed partial class ArrangementView
         }
         private void ShowBpmEditor(int index)
         {
-            var field = new NumericUpDown { Minimum = 1, Maximum = 1000, Increment = .1m, Value = (decimal)_points[index].Bpm,
+            var field = new NumericUpDown { Minimum = 1, Maximum = 999, Increment = .1m, Value = (decimal)_points[index].Bpm,
                 FormatString = "0.00", Width = 130 };
             var apply = new Button { Content = Loc.T("tempo.apply") };
             var flyout = new Flyout { Content = new StackPanel { Spacing = 6, Children = { field, apply } } };

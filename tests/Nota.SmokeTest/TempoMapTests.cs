@@ -55,6 +55,13 @@ internal static class TempoMapTests
             yield return (rejected && e.TempoPoints.SequenceEqual(curved), "tempo: invalid map rejected without changing project");
         }
 
+        e.SetTempoPoints(new[] { new TempoPoint(0, 999) });
+        yield return (Math.Abs(e.TempoAt(0) - 999) < 1e-12,
+            "tempo: the persisted maximum matches the transport ABI maximum of 999 BPM");
+        bool thousandRejected = false;
+        try { e.SetTempoPoints(new[] { new TempoPoint(0, 1000) }); } catch (NotaEngineException) { thousandRejected = true; }
+        yield return (thousandRejected, "tempo: 1000 BPM is rejected before it can create an unloadable project");
+
         e.SetTempoPoints(steps); e.ClearUndoHistory();
         var remaining = TempoMapping.DeleteSelected(steps, new HashSet<int> { 0, 1, 2 });
         e.SetTempoPoints(remaining);

@@ -58,15 +58,18 @@ void Transport::publishPresentation(double startSamples, int32_t playingFrames, 
     }
     // Loop seams round to whole samples. Re-anchor the history at each real block
     // start so fractional-sample loop lengths cannot accumulate display drift.
-    if (!map_ && presentationFrames_ > 0 && playingFrames > 0) {
-        double predicted = (presentationOrigin_ + presentationFrames_) / samplesPerBeat();
-        const double actual = startSamples / samplesPerBeat();
-        if (loopEnabled_ && predicted >= loopEndBeat_)
-            predicted = loopStartBeat_ + std::fmod(predicted - loopStartBeat_, loopEndBeat_ - loopStartBeat_);
+    if (presentationFrames_ > 0 && playingFrames > 0) {
+        double predicted = presentationOrigin_ + presentationFrames_;
+        const double actual = startSamples;
+        const double loopStart = samplesAtBeat(loopStartBeat_);
+        const double loopEnd = samplesAtBeat(loopEndBeat_);
+        const double loopLength = loopEnd - loopStart;
+        if (loopEnabled_ && loopLength > 0 && predicted >= loopEnd)
+            predicted = loopStart + std::fmod(predicted - loopStart, loopLength);
         double correction = actual - predicted;
-        if (loopEnabled_ && actual >= loopStartBeat_ && predicted >= loopStartBeat_)
-            correction = std::remainder(correction, loopEndBeat_ - loopStartBeat_);
-        presentationOrigin_ += correction * samplesPerBeat();
+        if (loopEnabled_ && loopLength > 0 && actual >= loopStart && predicted >= loopStart)
+            correction = std::remainder(correction, loopLength);
+        presentationOrigin_ += correction;
     }
     presentationFrames_ += playingFrames;
     const auto span = std::min<int64_t>(presentationFrames_, std::max(windowFrames, playingFrames));

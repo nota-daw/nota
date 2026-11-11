@@ -47,6 +47,17 @@ Check(Get<bool>(lane, "_ctrl") && lane.Cursor?.ToString()?.Contains("SizeWestEas
 window.KeyRelease(Key.LeftCtrl, RawInputModifiers.None, PhysicalKey.ControlLeft, null); Pump();
 Check(!Get<bool>(lane, "_ctrl"), "Ctrl release clears indicator without moving pointer");
 
+engine.SetTempoPoints(Array.Empty<TempoPoint>()); engine.SetBpm(60);
+engine.RenderOffline(new float[2], 1, 48000); timeline.Refresh(); Pump();
+double legacyBarX = X(4);
+double legacyExpectedSeconds = engine.BeatToSeconds(4) + 20 * 60 / (60 * Get<double>(timeline, "_pixelsPerBeat"));
+Down(legacyBarX, 35, MouseButton.Left, RawInputModifiers.Control);
+Move(legacyBarX + 20, 35, RawInputModifiers.Control | RawInputModifiers.LeftMouseButton);
+Check(Math.Abs(Get<double>(lane, "_scaleTargetSeconds") - legacyExpectedSeconds) < .02,
+    "first time-scale drag uses the legacy 60 BPM seconds axis");
+SendKey(Key.Escape, RawInputModifiers.Control); Up(legacyBarX + 20, 35, MouseButton.Left);
+Reset();
+
 Down(20, 20, MouseButton.Right); Move(420, lane.Bounds.Height - 8, RawInputModifiers.RightMouseButton); Up(420, lane.Bounds.Height - 8, MouseButton.Right);
 Check(Get<HashSet<int>>(lane, "_selection").SetEquals(new[] { 1, 2 }), "right drag selects every enclosed point");
 Check(lane.IsFocused, "marquee drag leaves no context menu");

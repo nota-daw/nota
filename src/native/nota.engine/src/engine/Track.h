@@ -91,6 +91,7 @@ struct AudioClip {
     std::shared_ptr<const WarpCache> warpCache;
     std::shared_ptr<const WarpCache> tempoWarpCache;
     std::shared_ptr<const class TempoMap> tempoWarpMap;
+    double tempoWarpStartBeat = -1.0;
     // Clip volume envelope (M9 follow-up): breakpoints in clip-local beats, value
     // 0..1, multiplying the per-sample output. Empty = no envelope (fast path).
     AutomationLane volumeEnvelope;

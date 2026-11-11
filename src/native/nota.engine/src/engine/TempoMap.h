@@ -20,11 +20,11 @@ class TempoMap {
         double prev = -1.0;
         for (const auto& a : p) {
             if (!std::isfinite(a.beat) || a.beat < 0 || a.beat > 1e8 || a.beat - prev < 1e-6 ||
-                !std::isfinite(a.bpm) || a.bpm < 1 || a.bpm > 1000 || a.shape < 0 || a.shape > 2) return false;
+                !std::isfinite(a.bpm) || a.bpm < 1 || a.bpm > 999 || a.shape < 0 || a.shape > 2) return false;
             for (double h : {a.x1, a.y1, a.x2, a.y2})
                 if (!std::isfinite(h) || h < 0 || h > 1) return false;
             if (a.x1 > a.x2) return false;
-            if (!std::isfinite(a.incoming_bpm) || (a.incoming_bpm != 0 && (a.incoming_bpm < 1 || a.incoming_bpm > 1000))) return false;
+            if (!std::isfinite(a.incoming_bpm) || (a.incoming_bpm != 0 && (a.incoming_bpm < 1 || a.incoming_bpm > 999))) return false;
             prev = a.beat;
         }
         return true;

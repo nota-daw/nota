@@ -1679,10 +1679,9 @@ public sealed partial class ArrangementView
         private void DrawResizeWaveform(DrawingContext ctx, Rect r, IBrush brush, float gain)
         {
             double mid = r.Y + r.Height / 2, amp = r.Height / 2 - 1;
-            double ppb = _o._pixelsPerBeat, scroll = _o._scrollBeats;
             double rate = (_rpS1 - _rpS0) / _origLen;   // material units per timeline beat (committed)
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
-            double MaterialAt(double px) => _rpS0 + (scroll + px / ppb - _origStart) * rate;
+            double MaterialAt(double px) => _rpS0 + (_o.XToBeat(px) - _origStart) * rate;
             // The whole-material overview, or — when the lane shows it wider than it has buckets —
             // the material under the whole lane at one bucket per pixel, fetched once per drag (#299).
             float[] pk = _rpPeaks!;
@@ -1709,7 +1708,7 @@ public sealed partial class ArrangementView
             if (smooth)
             {
                 // Material → screen is linear while the drag holds the committed window.
-                double XAt(double m) => ((m - _rpS0) / rate + _origStart - scroll) * ppb;
+                double XAt(double m) => _o.BeatToX((m - _rpS0) / rate + _origStart);
                 double bm = (m1 - m0) / count;
                 int i0 = Math.Max(0, (int)Math.Floor((MaterialAt(vx0) - m0) / bm) - 1);
                 int i1 = Math.Min(count, (int)Math.Ceiling((MaterialAt(vx1) - m0) / bm) + 1);

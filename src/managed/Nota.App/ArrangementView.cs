@@ -676,10 +676,9 @@ public sealed partial class ArrangementView : UserControl
         SetFollowSuspended(false);
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
-        double viewportBeats = laneWidth / _pixelsPerBeat;
-        double rel = _displayPlayheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
-        if (rel >= margin && rel <= viewportBeats - margin) return false;
-        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
+        double playheadX = BeatToX(_displayPlayheadBeats), margin = laneWidth * 0.05;
+        if (playheadX >= margin && playheadX <= laneWidth - margin) return false;
+        double target = Math.Clamp(ScrollBeatForX(_displayPlayheadBeats, laneWidth * 0.25), 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;
@@ -718,8 +717,7 @@ public sealed partial class ArrangementView : UserControl
     {
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
-        double viewportBeats = laneWidth / _pixelsPerBeat;
-        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats / 2.0, 0, Math.Max(0, _hScroll.Maximum));
+        double target = Math.Clamp(ScrollBeatForX(_displayPlayheadBeats, laneWidth / 2.0), 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;   // the InvalidateVisual calls below repaint with the new scroll

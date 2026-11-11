@@ -648,7 +648,7 @@ void Engine::backToArrangement() {
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
 void Engine::setBpm(double bpm) {
-    if (!std::isfinite(bpm) || bpm < 1 || bpm > 1000) return;
+    if (!std::isfinite(bpm) || bpm < 1 || bpm > 999) return;
     if (const auto* map = tempoMap()) {
         const double beat = std::max(0.0, transport_.uiPositionBeats());
         if (std::abs(map->bpmAt(beat) - bpm) < 1e-9) return;
@@ -872,6 +872,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             if (!c.warpEnabled || !c.sample) continue;
             const auto* cache = c.tempoWarpCache.get();
             if (c.tempoWarpMap == g->tempoMap && cache && cache->devSR == transport_.sampleRate() &&
+                c.tempoWarpStartBeat == c.startBeat &&
                 cache->inputs.sample == c.sample.get() && cache->inputs.markers == c.warpMarkers &&
                 cache->inputs.playStart == c.warpPlayStart && cache->inputs.playEnd == c.warpPlayEndEff() &&
                 cache->inputs.pitch == c.pitchSemitones && cache->inputs.mode == c.warpMode) continue;

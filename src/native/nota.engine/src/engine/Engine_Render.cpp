@@ -2336,7 +2336,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         chaseNotes_ = chase;
         if (chase) articulationChaseStart_ = transport_.hasTempoMap() ? segStart : musicalStart;
         cueSeg_ = cue ? cue + done * 2 : nullptr; // this segment of the Cue bus (specs/089)
-        if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, musicalStart, playing, localSpb);
+        if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, musicalStart, segStart, playing, localSpb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
@@ -2619,7 +2619,8 @@ void Engine::processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* 
     if (!w.frozenActive && t.pdc) t.pdc->process(buf, frames);
 }
 
-void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, bool playing, double spb) {
+void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, double elapsedStart, bool playing,
+    double spb) {
     {
         // Pan law (specs/006): a change of the live law starts a 10 ms crossfade of the pan
         // gains; flipping back mid-fade reverses it from where it is, so nothing jumps. A law
@@ -2651,8 +2652,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // restore), so the UI shows the movement smoothly; the base lives in the link.
         if (spb > 0.0) {
             const double srMod = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
-            updateModulators(g, blockStart / spb, blockStart / srMod, frames / srMod); // stateful + Math
-            applyModulation(g, blockStart / spb, blockStart / srMod);
+            updateModulators(g, blockStart / spb, elapsedStart / srMod, frames / srMod); // stateful + Math
+            applyModulation(g, blockStart / spb, elapsedStart / srMod);
         }
 
         // Transport snapshot for this segment: pushed to every instrument/device

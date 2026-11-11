@@ -1550,7 +1550,8 @@ class Engine {
     // Mixes the graph for one contiguous musical segment (no loop wrap inside):
     // automation + solo + send buses + track pass + return pass. processBlock
     // splits a block at loop boundaries and calls this per segment.
-    void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, bool playing, double spb);
+    void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, double elapsedStartSamples,
+        bool playing, double spb);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames); // live input monitoring
     void drainCommands();
     void drainLiveMidi(double blockStartBeat, bool playing);
@@ -2725,6 +2726,9 @@ class Engine {
         int32_t clipIndex = -1;
         std::shared_ptr<WarpCache> cache;
         std::unique_ptr<ClipWarpStream> stream;
+        WarpInputs renderInputs;
+        std::shared_ptr<const TempoMap> tempoMap;
+        double tempoStartBeat = -1.0;
         int64_t offset = 0;
     } wb_;
     // The ONE clip being stretched on a worker thread (warpBuildPoll). The worker only reads
@@ -2735,6 +2739,9 @@ class Engine {
         int32_t clipIndex = -1;
         std::shared_ptr<SampleBuffer> sample;
         std::shared_ptr<WarpCache> cache;
+        WarpInputs renderInputs;
+        std::shared_ptr<const TempoMap> tempoMap;
+        double tempoStartBeat = -1.0;
         std::atomic<int64_t> done{0};
         std::atomic<bool> cancel{false};
         std::atomic<bool> finished{false};

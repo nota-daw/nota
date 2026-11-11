@@ -82,6 +82,14 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         _sentBpmAt = Environment.TickCount64;
         _engine.SetBpm((double)value);
     }
+
+    public void RestoreBpm(double value)
+    {
+        _followingBpm = true;
+        Bpm = (decimal)Math.Round(value, 2);
+        _followingBpm = false;
+        _sentBpm = null;
+    }
     partial void OnTimeSigNumeratorChanged(int value)
     {
         _engine.SetTimeSignature(value, TimeSigDenominator);

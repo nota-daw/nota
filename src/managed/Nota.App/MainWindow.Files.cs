@@ -268,7 +268,7 @@ public partial class MainWindow
             finally { Engine.SetDeferWarpBuild(false); }
             _links.Clear();   // the old project's live-freeze ids mean nothing in the loaded graph
             // Load resets the engine but leaves transport; restore it via the VM.
-            _vm.Transport.Bpm = (decimal)result.Transport.Bpm;
+            _vm.Transport.RestoreBpm(result.Transport.Bpm);
             _vm.Transport.MasterVolume = result.Transport.MasterVolume;
             _vm.Transport.MetronomeOn = result.Transport.MetronomeOn;
             _vm.Transport.SyncLoop();   // the loop (on/off and its region) came with the project (#455)
