@@ -39,19 +39,28 @@ internal static class TrackMonitorTests
             yield return (varLag > 0.99, $"…at a fixed lag, the longest block (correlation {varLag:F3})");
 
             // An export's long chunks, then short live blocks: after a second of short ones the
-            // lag comes back down to one short block, and the stream is whole again after that.
+            // lag comes back down to one short block (~2 s in), crossfading from the old read
+            // position rather than skipping 3840 frames. Measured across the change itself.
             var downX = Monitor(wav, [256], warmup: [4096]);
-            var (downJump, downRms) = Smoothness(downX, Rate * 9 / 4, Rate * 11 / 4);
+            var (downJump, downRms) = Smoothness(downX, Rate * 3 / 4, Rate * 11 / 4);
             double downLag = Match(downX, 256, Rate * 9 / 4, Rate * 11 / 4);
             yield return (downRms > 0.05 && downJump < 0.01 && downLag > 0.99,
-                $"…and the lag shrinks back once long chunks give way to short blocks (correlation {downLag:F3}, worst jump {downJump:G3})");
+                $"…and the lag shrinks back smoothly once long chunks give way to short blocks (correlation {downLag:F3}, worst jump {downJump:G3})");
+
+            // Short blocks, then longer ones (a larger buffer picked while monitoring, 1 s in):
+            // the lag grows without repeating frames audibly.
+            var upX = Monitor(wav, [1024], warmup: [256], warmupSeconds: 1.0);
+            var (upJump, upRms) = Smoothness(upX, Rate * 3 / 4, Rate * 7 / 4);
+            double upLag = Match(upX, 1024, Rate * 5 / 4, Rate * 7 / 4);
+            yield return (upRms > 0.05 && upJump < 0.01 && upLag > 0.99,
+                $"…and grows smoothly when longer blocks arrive (correlation {upLag:F3}, worst jump {upJump:G3})");
         }
         finally { try { File.Delete(wav); } catch { } }
     }
 
     // The monitoring track alone (soloed: its source still feeds it) over 3 s of the clip,
-    // rendered in `chunks` (cycled), after half a second of `warmup` chunks if given.
-    private static float[] Monitor(string wav, int[] chunks, int[]? warmup = null)
+    // rendered in `chunks` (cycled), after `warmupSeconds` of `warmup` chunks if given.
+    private static float[] Monitor(string wav, int[] chunks, int[]? warmup = null, double warmupSeconds = 0.5)
     {
         using var e = new NotaEngine();
         e.SetBpm(120);
@@ -63,7 +72,7 @@ internal static class TrackMonitorTests
         e.SetTrackSolo(mon, true);
         e.Seek(0.0);
         e.Play();
-        var head = warmup != null ? Render(e, warmup, Rate / 2) : [];
+        var head = warmup != null ? Render(e, warmup, (int)(Rate * warmupSeconds)) : [];
         var tail = Render(e, chunks, 3 * Rate - head.Length / 2);
         return [.. head, .. tail];
     }

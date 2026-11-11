@@ -37,6 +37,9 @@ for (int32_t i = 0; i < frames; ++i) {
 
 The lag grows at once to the longest segment and shrinks to the longest segment of the last
 second, so an export's 8192-frame chunks or a larger buffer don't keep their latency for good.
+A change of lag crossfades from the old read position over ~10 ms (review on #567): shrinking,
+the old position is further back and always written; growing, the fade is capped at the old
+lag so the old read never reaches unwritten frames.
 
 ## Tests Added or Updated
 
@@ -44,7 +47,10 @@ second, so an export's 8192-frame chunks or a larger buffer don't keep their lat
   another track:
   - fixed 512-frame blocks: smooth (worst second difference) and exactly one block behind;
   - blocks of 470/471/470/333/512/128/1024/471: smooth and at a fixed lag (the longest block);
-  - 4096-frame chunks for 0.5 s, then 256-frame blocks: the lag is back to 256 and smooth.
+  - 4096-frame chunks for 0.5 s, then 256-frame blocks: smooth across the shrink (~2 s in) and
+    the lag is back to 256;
+  - 256-frame blocks for 1 s, then 1024: smooth across the growth, lag 1024.
+  Without the crossfade the two lag-change checks fail (worst jumps 0.202 and 0.0828).
 
 ## Local Verification
 

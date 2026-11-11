@@ -2779,6 +2779,7 @@ class Engine {
     // lag behind the write position: no frame lost or repeated, whatever the segment lengths.
     // The lag is the longest segment seen (one block on a fixed-size device, as before); it
     // comes back down after a second of shorter ones (an export's chunks, a smaller buffer).
+    // A change of lag crossfades from the old read position over ~10 ms.
     // Audio thread only; sized in the constructor.
     static constexpr int32_t kTrackTapRingFrames = 2 * kMaxBlock; // power of two, > the largest lag
     std::array<std::vector<float>, kMaxRoutes> trackTapRing_;      // stereo interleaved
@@ -2787,6 +2788,8 @@ class Engine {
     int32_t monitorLag_ = 0;                                       // read lag in frames
     int32_t monitorLagPeak_ = 0;                                   // longest segment in the current window
     int64_t monitorLagWindow_ = 0;                                 // frames into the window
+    int32_t monitorLagFrom_ = 0;                                   // the lag a change fades from
+    int32_t monitorFadePos_ = 0, monitorFadeLen_ = 0;              // that crossfade, in frames
     void advanceMonitorLag(int32_t frames);    // audio thread, before any read this segment
     void publishTrackTapRings(int32_t frames); // audio thread, after the taps are filled
     void feedPartTaps(const Track& t);                                  // audio thread
