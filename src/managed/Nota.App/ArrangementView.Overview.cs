@@ -258,7 +258,9 @@ public sealed partial class ArrangementView
             double newPpb = _o.TempoAxis
                 ? Math.Clamp(laneW / Math.Max(1e-9, 2 * Math.Abs(_o.TempoSeconds(_fixedBeat) - _o.TempoSeconds(beat))), 4, 240)
                 : Math.Clamp(laneW / span, 4, 240);
-            double start = _drag == Drag.EdgeLeft ? beat : _fixedBeat;
+            // Left edge: derive the start from the pinned right edge and the clamped zoom, so the
+            // pinned edge stays put once the zoom limit is reached.
+            double start = _drag == Drag.EdgeLeft ? _o.ScrollBeatForX(_fixedBeat, laneW, newPpb) : _fixedBeat;
             _o.ApplyOverviewView(newPpb, start);
         }
 

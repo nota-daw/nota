@@ -2752,7 +2752,9 @@ class Engine {
     std::unique_ptr<WarpJob> wj_;
     void cancelWarpJob();
     // Warped clip whose cache is missing or built from other inputs (needs a (re)build).
-    bool warpNeedsBuild(const AudioClip& c) const;
+    // `arrangement` = an arrangement clip, which follows the tempo map; Session slots loop on
+    // their own clock and always use the ordinary cache (warpCache).
+    bool warpNeedsBuild(const AudioClip& c, bool arrangement = true) const;
     // The next clip needing a build (arrangement clips, then session slots), or null.
     const AudioClip* nextWarpBuildTarget(int32_t& trackId, int32_t& clipIndex) const;
     // Per-clip scratch for a warped clip carrying a volume envelope (render there,

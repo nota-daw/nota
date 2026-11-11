@@ -381,9 +381,9 @@ void Engine::configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoM
     c.tempoWarp = std::make_shared<const AudioClip::TempoWarp>(AudioClip::TempoWarp{std::move(cache), map, c.startBeat});
 }
 
-bool Engine::warpNeedsBuild(const AudioClip& c) const {
+bool Engine::warpNeedsBuild(const AudioClip& c, bool arrangement) const {
     const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
-    if (authoring_ && authoring_->tempoMap) {
+    if (arrangement && authoring_ && authoring_->tempoMap) {
         WarpInputs renderInputs;
         int64_t frames = 0;
         if (!tempoWarpPlan(c, authoring_->tempoMap, devSR, renderInputs, frames)) return false;
@@ -406,7 +406,7 @@ const AudioClip* Engine::nextWarpBuildTarget(int32_t& trackId, int32_t& clipInde
             }
         for (size_t sc = 0; sc < t->sessionSlots.size(); ++sc) {
             const SessionSlot& sl = t->sessionSlots[sc];
-            if (sl.hasClip && warpNeedsBuild(sl.audio)) {
+            if (sl.hasClip && warpNeedsBuild(sl.audio, false)) {
                 trackId = t->id();
                 clipIndex = sessionClipIndex(static_cast<int32_t>(sc));
                 return &sl.audio;
@@ -432,7 +432,7 @@ const AudioClip* Engine::warpBuildTargetClip() const {
     const AudioClip* cp = audioClipRef(*t, wb_.clipIndex); // an arrangement clip or a session slot's
     if (!cp) return nullptr;
     const AudioClip& c = *cp;
-    if (!wb_.cache || !warpNeedsBuild(c)) return nullptr;
+    if (!wb_.cache || !warpNeedsBuild(c, wb_.clipIndex >= 0)) return nullptr;
     if (wb_.tempoMap) {
         if (!authoring_ || authoring_->tempoMap != wb_.tempoMap || c.startBeat != wb_.tempoStartBeat ||
             !(warpInputsOf(c, transport_.sampleRate(), transport_.sampleRate()) == wb_.cache->inputs)) return nullptr;
@@ -455,11 +455,7 @@ int64_t Engine::warpBuildRemainingFrames() const {
                     ? frames : warpCacheFrames(c, spb, devSR);
             }
         for (auto& sl : t->sessionSlots)
-            if (sl.hasClip && warpNeedsBuild(sl.audio)) {
-                WarpInputs renderInputs; int64_t frames = 0;
-                sum += authoring_->tempoMap && tempoWarpPlan(sl.audio, authoring_->tempoMap, devSR, renderInputs, frames)
-                    ? frames : warpCacheFrames(sl.audio, spb, devSR);
-            }
+            if (sl.hasClip && warpNeedsBuild(sl.audio, false)) sum += warpCacheFrames(sl.audio, spb, devSR);
     }
     // The in-progress clip is still un-cached above, so its full length was counted —
     // subtract what's already rendered so the bar reflects real progress.
@@ -486,7 +482,7 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
             const AudioClip* target = nextWarpBuildTarget(tid, ci);
             if (!target) break; // nothing left to build
             int64_t frames = 0;
-            wb_.tempoMap = authoring_->tempoMap;
+            wb_.tempoMap = ci >= 0 ? authoring_->tempoMap : nullptr; // Session slots: ordinary cache
             wb_.tempoStartBeat = wb_.tempoMap ? target->startBeat : -1.0;
             if (wb_.tempoMap) tempoWarpPlan(*target, wb_.tempoMap, devSR, wb_.renderInputs, frames);
             else { frames = warpCacheFrames(*target, spb, devSR); wb_.renderInputs = warpInputsOf(*target, spb, devSR); }
@@ -567,7 +563,7 @@ int64_t Engine::warpBuildPoll() {
         const AudioClip* c = nullptr;
         if (auto t = findTrackAuthoring(wj_->trackId); t && t->type() == TrackType::Audio)
             c = audioClipRef(*t, wj_->clipIndex);
-        const bool valid = c && warpNeedsBuild(*c) &&
+        const bool valid = c && warpNeedsBuild(*c, wj_->clipIndex >= 0) &&
             (wj_->tempoMap ? authoring_->tempoMap == wj_->tempoMap && c->startBeat == wj_->tempoStartBeat &&
                     warpInputsOf(*c, devSR, devSR) == wj_->cache->inputs
                 : warpInputsOf(*c, spb, devSR) == wj_->cache->inputs);
@@ -593,7 +589,7 @@ int64_t Engine::warpBuildPoll() {
     job->trackId = tid;
     job->clipIndex = ci;
     job->sample = target->sample; // keeps the buffer alive for the worker
-    job->tempoMap = authoring_->tempoMap;
+    job->tempoMap = ci >= 0 ? authoring_->tempoMap : nullptr; // Session slots: ordinary cache
     job->tempoStartBeat = job->tempoMap ? target->startBeat : -1.0;
     job->cache = std::make_shared<WarpCache>();
     if (job->tempoMap) tempoWarpPlan(*target, job->tempoMap, devSR, job->renderInputs, job->cache->frames);
