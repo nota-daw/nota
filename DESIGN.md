@@ -1400,10 +1400,12 @@ it doesn't draw.
 
 ## Nota Remote
 
-The phone page (`src/web/remote`, spec 014) **keeps its own styling for now**: its radii
-(0 / 1 / 2 / 3 / 4 px), its type (Geist for words and Geist Mono for numbers, bundled with
-the page) and its layout are not redrawn by this guide. Only the shared colour tokens it
-reads change, and its guard test (`RunRemote`) keeps passing.
+The phone page (`src/web/remote`, specs 014 and 090) follows this guide at phone sizes.
+Its corners are the corner scale as custom properties (`--r-card` 9 … `--r-fine` 2, docked
+bars and strips 0); its one typeface is `--font-ui` (Geist, with tabular figures on the
+root; no monospace); numbers go through `lib/fmt.ts` (U+2212, thin space, fixed precision).
+A skin's typeface and radii reach it with the theme (`font` and `r` per theme in the
+`theme` message, resolved by `SkinGeometry`); a typeface the phone lacks falls back to Geist.
 
 It holds no colour value: Nota sends the theme it wears and the user's dark-mode and
 light-mode picks with all their tokens (the `theme` message), and the page sets each token
@@ -1416,9 +1418,15 @@ loads), or the Studio Dark fallback that `theme-plugin.ts` builds from the theme
 `npm run build`. Elevation is built the same way: `--bevel` (`ShadowBevel`), `--sunken`
 (`Rule`), `--popover` (`Seam` + `ShadowPopover`), `--scrim` (`ShadowModal`).
 
-Its structure: seams, orange for live or chosen only, solid semantic fills with derived
-ink, sentence case, at phone sizes: touch targets 36–56 px and words 11–16 px (the big
-position and the count-in larger). Its icons are inline SVG with the shared stroke, since
+Its structure: seams, solid semantic fills with derived ink, sentence case, at phone sizes:
+touch targets 36–56 px and words 11–16 px (the big position and the count-in larger).
+Orange in the guide's strengths: **live** solid (Play running, a pad or key under a finger,
+a looping section, the count-in); **picked** the soft tint with `--picked-ink` (`AccentBright`
+in dark themes, `AccentPale` in light ones) for the current screen, a segment, a toggle that
+is on, a chosen row. **Values** on Macros and XY carry the playing track's colour (a phone
+has no device card to hold orange values); the mixer is grey, a fader under a finger
+borrows the soft tint and an orange line. A Session cell draws its clip's name, length and
+content (notes or peaks, the `clips` message) like the desktop slot. Its icons are inline SVG with the shared stroke, since
 `Glyph` is native. `npm run mock` serves the built page against a stand-in Nota with a
 demo project and the real theme messages, for screenshots without the desktop app.
 
@@ -1447,7 +1455,7 @@ drift).
 | `RunIcons` | No path geometry outside `Controls/Glyph.cs`: no `Geometry.Parse` / `StreamGeometry.Parse` / `PathGeometry.Parse`, no axaml `Data="M…"`, no SVG path string (`IconAllowList.txt`, a per-file count) |
 | `RunMenus` | Menu icons through `MenuKit.Icon`, destructive items through `MenuKit.Danger`, no Color / Track height submenus (`MenuAllowList.txt`) |
 | `RunBrowser` | Every built-in device sits in exactly one category of its own tab (`DeviceCategories.cs`); no stale or empty category; names in sentence case; 16 / 27 / 6 devices shelved |
-| `RunRemote` | Nota Remote's page: no colour literal in its sources or `index.html`; the first-paint fallback built from the theme files; no letter-spacing, `uppercase`, `.toUpperCase()` or `.caps`; radii 0 / 1 / 2 / 3 / 4 px or 50 %; every custom property it reads is a theme token or one it defines |
+| `RunRemote` | Nota Remote's page: no colour literal in its sources or `index.html`; the first-paint fallback built from the theme files; no letter-spacing, `uppercase`, `.toUpperCase()` or `.caps`; every radius `var(--r-*)`, 0 or 50 %; no monospace (`Geist Mono`, `monospace`, `.mono`, a Mono font file); `--picked-ink` defined for dark and light themes; every custom property it reads is a theme token or one it defines |
 
 Not enforced by a test yet: the type scale, the sizes in § Shapes, the device layouts in
 § Devices, where orange may appear, the absence of depth in the shell, the
@@ -1492,7 +1500,9 @@ Places where a screen's needs override a general rule, kept on purpose:
 - **Compact mixer meters are 18 px a channel**, 3 apart, against the 11 / 5 meter rule
   (specs/070, #386): the wide meter is what keeps a 72 px compact strip readable, and it is
   also the strip's fader. Zones, the hold mark and the −60…+6 scale are unchanged.
-- **Nota Remote keeps its own styling and Geist Mono** for now (§ Nota Remote).
+- **Nota Remote draws Macros and XY values in the track's colour**, not orange lines
+  (specs/090): outside a device card the phone has no other place for them, and the track
+  colour ties the control to the track it plays (§ Nota Remote).
 
 - **The accent picker's spectrum** (Settings → Appearance → Accent → Custom, specs/084) is
   the one rainbow in the app: a saturation/brightness area and a hue strip, drawn as bitmaps

@@ -71,6 +71,8 @@ public sealed partial class RemoteHub
             if (lit != c.SentLit) { c.Send(lit); c.SentLit = lit; }
         }
 
+        if (screen != "Scenes") c.SentClips = null;
+
         // A screen's live state at 15 Hz (every other UI tick); a new screen gets it at once.
         if (c.SentScreenState is not null && (_tick & 1) == 1) return;
         string? state = screen switch
@@ -83,6 +85,7 @@ public sealed partial class RemoteHub
         };
         if (state is not null && state != c.SentScreenState) { c.Send(state); c.SentScreenState = state; }
         else if (state is null) c.SentScreenState = "";
+        if (screen == "Scenes") PushPreviews(c);
     }
 
     // ---- project ------------------------------------------------------------------
@@ -161,7 +164,8 @@ public sealed partial class RemoteHub
     private string _themeJson = "";
 
     // What the phone wears (specs/014 contracts/theme-message.md): the theme Nota wears, the
-    // dark-mode and light-mode picks, each theme once with every token, and the two inks.
+    // dark-mode and light-mode picks, each theme once with every token and a skin's typeface
+    // and radii (specs/090), and the two inks.
     // Rebuilt only when the host hands over a new appearance; the same string otherwise, so
     // Push's reference check tells a phone that already has it.
     private string ThemeJson(IRemoteHost host)
@@ -189,6 +193,14 @@ public sealed partial class RemoteHub
                 w.WriteStartObject("c");
                 foreach (var (token, css) in t.Colors) w.WriteString(token, css);
                 w.WriteEndObject();
+                // A skin's typeface and corners (specs/090 contracts/theme-message.md G1–G2).
+                if (!string.IsNullOrWhiteSpace(t.Font)) w.WriteString("font", t.Font);
+                if (t.Radii is { Count: > 0 } radii)
+                {
+                    w.WriteStartObject("r");
+                    foreach (var (step, px) in radii) w.WriteNumber(step, px);
+                    w.WriteEndObject();
+                }
                 w.WriteEndObject();
             }
             w.WriteEndObject();
