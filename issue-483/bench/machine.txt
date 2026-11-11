@@ -1,0 +1,7 @@
+date: 2026-11-11T07:07:34Z
+os: Darwin 25.6.0 arm64
+cpu: Apple M4 Max, 14 threads
+macos: 26.6.2
+runs: 3
+build: before=/tmp/bench089/libs/before
+build: after=/tmp/bench089/libs/after
