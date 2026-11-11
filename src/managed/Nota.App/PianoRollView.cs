@@ -2238,10 +2238,10 @@ public sealed partial class PianoRollView : UserControl
                 var r = new Rect(x, y, Math.Max(2, nw - 1), RowH - 1);
                 if (_o.IsGhost(i))   // a tool's preview: brass outline over the clip's own notes
                 {
-                    ctx.DrawRectangle(GhostFill, GhostEdge, r.Deflate(0.5), 2, 2);
+                    ctx.DrawRectangle(GhostFill, GhostEdge, r.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
                     continue;
                 }
-                if (sel) ctx.DrawRectangle(NoteSel, NoteSelEdge, r.Deflate(0.5), 2, 2);
+                if (sel) ctx.DrawRectangle(NoteSel, NoteSelEdge, r.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
                 else
                 {
                     // Track colour, quieter the softer the note — and, with several clips open,
@@ -2255,23 +2255,23 @@ public sealed partial class PianoRollView : UserControl
                         ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender(), _o._owner) : default;
                     double appear = _o._recPreview?.Progress(n.Pitch, _o._recClipStart + n.StartBeat) ?? 1;
                     if (fate.Kind == NoteFateKind.Kept && appear < 1)
-                        ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, 2);
+                        ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, (float)NotaRadius.FineValue);
                     else if (fate.Kind == NoteFateKind.Kept)
-                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
+                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, (float)NotaRadius.FineValue);
                     else
                     {
                         double keepW = fate.Kind == NoteFateKind.Cut ? Math.Min(r.Width, fate.CutLength * ppb) : 0;
                         if (keepW > 0)
-                            ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r.WithWidth(keepW), 2);
+                            ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r.WithWidth(keepW), (float)NotaRadius.FineValue);
                         var doomed = new Rect(r.X + keepW, r.Y, Math.Max(1, r.Width - keepW), r.Height);
-                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a * 0.25), c.R, c.G, c.B)), doomed, 2);
+                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a * 0.25), c.R, c.G, c.B)), doomed, (float)NotaRadius.FineValue);
                         _doomed.Add((doomed, c));   // its dashed edge goes on top of the notes covering it
                     }
                 }
                 if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
                 // FR-014: an articulation the map no longer holds — a warning notch at the note's start.
                 if (n.ArticulationId > 0 && _o.HasMissingArticulation(i))
-                    ctx.FillRectangle(NotaPalette.Warning, new Rect(r.X, r.Y, Math.Min(3, r.Width), r.Height), 1);
+                    ctx.FillRectangle(NotaPalette.Warning, new Rect(r.X, r.Y, Math.Min(3, r.Width), r.Height), (float)NotaSkin.MapRadius(1));
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
                 bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft || (_drag == Mode.Place && _placeKind == PlaceDragKind.Length)) && sel)
                               || (_drag == Mode.None && _hoverNote == i && !_o.IsLocked(i));
@@ -2286,7 +2286,7 @@ public sealed partial class PianoRollView : UserControl
             if (_doomed.Count > 0)
             {
                 foreach (var (d, dc) in _doomed)
-                    ctx.DrawRectangle(null, new Pen(new SolidColorBrush(dc), 1, DashStyle.Dash), d.Deflate(0.5), 2, 2);
+                    ctx.DrawRectangle(null, new Pen(new SolidColorBrush(dc), 1, DashStyle.Dash), d.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
                 _doomed.Clear();
             }
             // Keys held into the recording take (#56): from the key-down to the capture clock,
@@ -2302,7 +2302,7 @@ public sealed partial class PianoRollView : UserControl
                     double p = rp.Progress(hn.Pitch, hn.StartBeat);
                     var hr = new Rect(hx, PitchToY(hn.Pitch), Math.Max(2, hw - 1), RowH - 1);
                     ctx.FillRectangle(p < 1 ? RecordPreview.AppearBrush(c, p)
-                        : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, 2);
+                        : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, (float)NotaRadius.FineValue);
                 }
             _o.DrawOutsideClip(ctx, w, h);
             if (_drag == Mode.Marquee)
@@ -2930,7 +2930,7 @@ public sealed partial class PianoRollView : UserControl
                     b = new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B));
                 }
                 ctx.FillRectangle(b, new Rect(x, h - bh, 2, bh));
-                ctx.FillRectangle(hov && !sel ? EdgeHighlight : b, new Rect(x - 2, h - bh - 2, 6, 3), 1);
+                ctx.FillRectangle(hov && !sel ? EdgeHighlight : b, new Rect(x - 2, h - bh - 2, 6, 3), (float)NotaSkin.MapRadius(1));
             }
             _o.DrawOutsideClip(ctx, w, h);
         }

@@ -62,6 +62,9 @@ public partial class MainWindow
         return items.ToArray();
     }
 
-    /// <summary>Preferences on the Audio page (the input setup lives there, specs/086).</summary>
+    /// <summary>Settings on the Audio page (sample rate, buffer — the format menu's way in).</summary>
     internal void ShowAudioPreferences() => ShowPreferencesPage("Audio");
+
+    /// <summary>Settings on the Inputs page (the input setup, specs/086 and 088).</summary>
+    internal void ShowInputPreferences() => ShowPreferencesPage("Inputs");
 }

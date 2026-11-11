@@ -22,6 +22,7 @@ internal static class RetryTakeTests
         foreach (var r in Catalog()) yield return r;
         foreach (var r in NothingRecording()) yield return r;
         foreach (var r in MidiFromStopWithCountIn()) yield return r;
+        foreach (var r in AudioFromStopWithCountIn()) yield return r;
         foreach (var r in OverdubIntoClip()) yield return r;
         foreach (var r in PunchIn()) yield return r;
         foreach (var r in HeldAcrossRetry()) yield return r;
@@ -618,6 +619,58 @@ internal static class RetryTakeTests
         var r = e.RetryTake();
         yield return (r == RetryTakeResult.None && !e.IsRecording && !e.IsPlaying && e.CanUndo == undo && e.CanRedo == redo && Clips(e, t).Count == 0,
             $"retry: nothing recording changes nothing ({r})");
+    }
+
+    // #521: an audio take on a hardware input counted in from stop, then retried. The retry
+    // counts in again, and the input stays out of the take until the count-in runs out — the new
+    // clip starts at the take start and holds only what came after it, not the count-in too.
+    private static IEnumerable<(bool, string)> AudioFromStopWithCountIn()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetTestInputDevice(2);
+        e.RenderOffline(new float[Chunk * 2], Chunk, Sr);
+        int rec = e.AddAudioTrack();
+        e.SetTrackInput(rec, InputPick.Pair(0));
+        e.SetTrackArmed(rec, true);
+        e.StopTransport();
+        e.Seek(8.0);
+        LiveBeats(e, 0.01);
+        e.SetCountIn(1);
+        e.SetRecording(true);
+        LiveBeats(e, 6.0);                   // the bar of count-in, then two beats of take
+
+        var r = e.RetryTake();
+        LiveBeats(e, 0.01);
+        yield return (r == RetryTakeResult.Arrangement && e.IsRecording && e.CountInBeats > 0 && !e.IsPlaying,
+            $"retry audio count-in: counting in again ({r}, count-in {e.CountInBeats:F2})");
+        LiveBeats(e, 6.0);                   // the bar of count-in again, then two beats
+        e.SetRecording(false);
+        LiveBeats(e, 0.01);
+
+        NotaAudioClipInfo clip = default;
+        double beats = -1.0;
+        bool got = AudioClips(e, rec) == 1 && e.TryGetAudioClipInfo(rec, 0, out clip) && clip.SampleId != 0;
+        if (got && e.TryGetSampleInfo(clip.SampleId, out var info)) beats = info.Frames / Spb;
+        yield return (got && Near(clip.StartBeat, 8.0) && Math.Abs(beats - 2.0) < 0.25,
+            $"retry audio count-in: the take holds what came after the count-in, from the take start (at {clip.StartBeat:F2}, {beats:F2} beats, want 2)");
+        e.StopTransport();
+    }
+
+    // Render and poll as the device would, the input thread handing over a block of input
+    // (both channels at 0.5) before each one — through the capture gate, as a real device does.
+    private static void LiveBeats(NotaEngine e, double beats)
+    {
+        var b = new float[Chunk * 2];
+        var input = Enumerable.Repeat(0.5f, Chunk * 2).ToArray();
+        int frames = (int)Math.Round(beats * Spb);
+        for (int done = 0; done < frames; done += Chunk)
+        {
+            e.InputBlockTest(input, Chunk, 2);
+            e.RenderOffline(b, Chunk, Sr);
+            e.Poll();
+        }
     }
 
     // The issue's case: a take from stop with a count-in. Retry drops it (and the clip it made),

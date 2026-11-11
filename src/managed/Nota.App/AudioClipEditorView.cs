@@ -1801,7 +1801,7 @@ public sealed class AudioClipEditorView : UserControl
                     double cx = Math.Clamp((x0 + x1) / 2, cw / 2 + 2, w - cw / 2 - 2);
                     if (cx < 0 || cx > w) continue;
                     var chip = new Rect(cx - cw / 2, RulerH + 3, cw, chH);
-                    ctx.DrawRectangle(hotChip ? ChipBgHot : ChipBg, hotChip ? ChipEdgeHot : ChipEdge, chip.Deflate(0.5), 3, 3);
+                    ctx.DrawRectangle(hotChip ? ChipBgHot : ChipBg, hotChip ? ChipEdgeHot : ChipEdge, chip.Deflate(0.5), NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     ctx.DrawText(num, new Point(chip.X + 6, chip.Y + (chH - num.Height) / 2));
                     _bpmHot.Add((chip, i, bpm));
                 }
@@ -1819,7 +1819,7 @@ public sealed class AudioClipEditorView : UserControl
                     double cw = ft.Width + 12;
                     double lx = x + 9 + cw > w ? x - 9 - cw : x + 9;
                     var chip = new Rect(lx, RulerH + 3, cw, 16);
-                    ctx.DrawRectangle(ChipBgHot, ChipEdgeHot, chip.Deflate(0.5), 3, 3);
+                    ctx.DrawRectangle(ChipBgHot, ChipEdgeHot, chip.Deflate(0.5), NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     ctx.DrawText(ft, new Point(chip.X + 6, chip.Y + (16 - ft.Height) / 2));
                 }
             }
@@ -1897,7 +1897,7 @@ public sealed class AudioClipEditorView : UserControl
                     var ft = new NotaFormattedText(ClipAdsrKit.Readout(_adsrDrag, adsrFit, _bpm), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, ChipInkHot);
                     double cw = ft.Width + 12;
                     var chip = new Rect(Math.Clamp(adsrF.Left + 8, 2, Math.Max(2, w - cw - 2)), top + 6, cw, 16);
-                    ctx.DrawRectangle(ChipBgHot, ChipEdgeHot, chip.Deflate(0.5), 3, 3);
+                    ctx.DrawRectangle(ChipBgHot, ChipEdgeHot, chip.Deflate(0.5), NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     ctx.DrawText(ft, new Point(chip.X + 6, chip.Y + (16 - ft.Height) / 2));
                 }
             }

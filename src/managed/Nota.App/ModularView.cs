@@ -2564,7 +2564,7 @@ public sealed partial class ModularView : UserControl
         {
             if (_v._nodes.Count == 0) return;
             var bg = NotaPalette.Wash(NotaPalette.BgSunken, 0xB2);
-            ctx.DrawRectangle(bg, new Pen(BorderDef, 1), new Rect(0, 0, Width, Height), 5, 5);
+            ctx.DrawRectangle(bg, new Pen(BorderDef, 1), new Rect(0, 0, Width, Height), NotaRadius.CellValue, NotaRadius.CellValue);
 
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
             foreach (var n in _v._nodes)
@@ -2585,7 +2585,7 @@ public sealed partial class ModularView : UserControl
                 double bw = n.NodeWidth * s, bh = (n.View.Bounds.Height > 0 ? n.View.Bounds.Height : 120) * s;
                 var sc = ((ISolidColorBrush)n.Stripe).Color;
                 var b = new SolidColorBrush(Color.FromArgb(0xB3, sc.R, sc.G, sc.B));
-                ctx.DrawRectangle(b, null, new Rect(p.X, p.Y, bw, bh), 2, 2);
+                ctx.DrawRectangle(b, null, new Rect(p.X, p.Y, bw, bh), NotaRadius.FineValue, NotaRadius.FineValue);
             }
 
             // viewport rectangle (world region currently visible)
@@ -2596,7 +2596,7 @@ public sealed partial class ModularView : UserControl
                 double wx1 = (vw - _v._pan.X) / _v._scale, wy1 = (vh - _v._pan.Y) / _v._scale;
                 var a = M(wx0, wy0); var c = M(wx1, wy1);
                 var rect = new Rect(a, c).Intersect(new Rect(0, 0, Width, Height));
-                ctx.DrawRectangle(null, new Pen(NotaPalette.Wash(NotaPalette.TextPrimary, 0x66), 1), rect, 3, 3);
+                ctx.DrawRectangle(null, new Pen(NotaPalette.Wash(NotaPalette.TextPrimary, 0x66), 1), rect, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             }
         }
     }

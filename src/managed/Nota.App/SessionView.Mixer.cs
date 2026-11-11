@@ -420,8 +420,8 @@ public sealed partial class SessionView
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width;
-            ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, new Rect(0, 0, w, 2), 1, 1);
-            if (_level > 0) ctx.DrawRectangle(NotaPalette.Success, null, new Rect(0, 0, w * _level, 2), 1, 1);
+            ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, new Rect(0, 0, w, 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
+            if (_level > 0) ctx.DrawRectangle(NotaPalette.Success, null, new Rect(0, 0, w * _level, 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
         }
     }
 }

@@ -220,7 +220,7 @@ internal abstract class FilterGraphBase : Control
             double tx = hx + 8 + tw > w ? hx - 8 - tw : hx + 8;
             double ty = Math.Clamp(y - th - 6, r.Y + 2, r.Bottom - th - 2);
             var tip = new Rect(tx, ty, tw, th);
-            ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderDefault, 1), tip, 3, 3);
+            ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderDefault, 1), tip, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             ctx.DrawText(t1, new Point(tx + 5, ty + 2));
             ctx.DrawText(t2, new Point(tx + 5, ty + 3 + t1.Height));
         }
@@ -259,7 +259,7 @@ internal static class FilterAxis
 
     private static Rect DrawPill(DrawingContext ctx, FormattedText ft, Rect box, IBrush fill)
     {
-        ctx.DrawRectangle(fill, null, box, 3, 3);
+        ctx.DrawRectangle(fill, null, box, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
         ctx.DrawText(ft, new Point(box.X + 4, box.Y + (box.Height - ft.Height) / 2));
         return box;
     }

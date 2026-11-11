@@ -3,7 +3,7 @@
 Follows [`DESIGN.md`](../../../DESIGN.md) and the `nota-design` skill: sentence-case labels,
 solid orange for live state (a lit Cue button), the grey shell.
 
-## Settings → Audio → Outputs (new section, above Inputs)
+## Settings → Outputs (new section, above Inputs)
 
 - Rows: **Main** — pair picker; **Cue** — pair picker with "No cue output" first;
   **Click** — Main / Cue / Both (only Main while Cue is "No cue output");
@@ -24,7 +24,7 @@ solid orange for live state (a lit Cue button), the grey shell.
   assigned on this device and no track is cued; with cued tracks but no Cue output it shows
   "No cue output".
 - Unavailable state (routing_state flag 2): the strip shows "Out 3/4 — not on this device"
-  in the warning style; the fader stays usable; the tooltip says how to fix it (Settings → Audio → Outputs).
+  in the warning style; the fader stays usable; the tooltip says how to fix it (Settings → Outputs).
 - Master strip shows its pair label when Main is not on 1/2, and "Out 1/2 (fallback)" with
   a warning when flag 1 is set.
 - Track strips: a **Cue** toggle (headphones glyph + "Cue" tooltip) in the button row next to

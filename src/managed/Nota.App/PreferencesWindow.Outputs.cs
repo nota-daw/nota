@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Preferences → Audio → Outputs (specs/089, #483): which output pair of the playback device
+// Settings → Outputs → Output pairs (specs/089, #483): which output pair of the playback device
 // carries Main (what the audience hears) and which carries the private Cue mix, and where the
 // metronome click goes. Kept per device in the app settings (OutputSetupAccess); edits apply
 // at once, without restarting the device.
@@ -58,7 +58,7 @@ public sealed partial class PreferencesWindow
         var setup = OutputSetupAccess.Current(engine);
         var state = engine.GetOutputRoutingState();
         if (count <= 0)
-            return Section(Loc.T("preferences.outputs"), 8, Caption(Loc.T("preferences.outputs_no_device")));
+            return Section(Loc.T("preferences.outputs_pairs"), 8, Caption(Loc.T("preferences.outputs_no_device")));
 
         var picks = OutputPicks(count);
         var rows = new List<Control>();
@@ -159,6 +159,6 @@ public sealed partial class PreferencesWindow
         };
         rows.Add(Row(Loc.T("preferences.outputs_click_level"), level));
         rows.Add(Row("", Caption(Loc.T("preferences.outputs_hint"), muted: true)));
-        return Section(Loc.T("preferences.outputs"), 6, rows.ToArray());
+        return Section(Loc.T("preferences.outputs_pairs"), 6, rows.ToArray());
     }
 }

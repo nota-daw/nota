@@ -1083,7 +1083,7 @@ public sealed class PreviewWaveform : Control
                                        NotaFonts.Sans, 8, NotaPalette.TextPrimary);
             double tw = ft.Width + 8, th = ft.Height + 2;
             double tx = f > 0.75 ? hx - tw - 4 : hx + 4;
-            ctx.FillRectangle(NotaPalette.TrackOff, new Rect(tx, InsetY, tw, th), 2);
+            ctx.FillRectangle(NotaPalette.TrackOff, new Rect(tx, InsetY, tw, th), (float)NotaRadius.FineValue);
             ctx.DrawText(ft, new Point(tx + 4, InsetY + 1));
         }
 
@@ -1102,7 +1102,7 @@ public sealed class PreviewWaveform : Control
         var spec = NotaGraph.AxisText(Loc.T("preview_player.spec"), _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7, this);
         double lw = wave.Width + 5 + spec.Width, lx = w - lw - 5, ly = 3;
         _toggleRect = new Rect(lx - 4, 0, lw + 9, ly + wave.Height + 3);
-        ctx.FillRectangle(NotaPalette.BgSunken, new Rect(lx - 2, ly - 1, lw + 4, wave.Height + 2), 2);
+        ctx.FillRectangle(NotaPalette.BgSunken, new Rect(lx - 2, ly - 1, lw + 4, wave.Height + 2), (float)NotaRadius.FineValue);
         ctx.DrawText(wave, new Point(lx, ly));
         ctx.DrawText(spec, new Point(lx + wave.Width + 5, ly));
     }
@@ -1174,9 +1174,9 @@ public sealed class PreviewVolume : Control
         double w = Bounds.Width;
         if (w <= 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));   // whole box hit-tests
-        ctx.FillRectangle(NotaPalette.BorderDefault, new Rect(0, 7, w, 3), 2);
+        ctx.FillRectangle(NotaPalette.BorderDefault, new Rect(0, 7, w, 3), (float)NotaRadius.FineValue);
         double x = w * _value;
-        ctx.FillRectangle(NotaPalette.TextSecondary, new Rect(0, 7, x, 3), 2);
-        ctx.FillRectangle(NotaPalette.TextPrimary, new Rect(x - 2, 3, 4, 11), 1);
+        ctx.FillRectangle(NotaPalette.TextSecondary, new Rect(0, 7, x, 3), (float)NotaRadius.FineValue);
+        ctx.FillRectangle(NotaPalette.TextPrimary, new Rect(x - 2, 3, 4, 11), (float)NotaSkin.MapRadius(1));
     }
 }

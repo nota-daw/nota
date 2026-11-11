@@ -135,6 +135,14 @@ public partial class MainWindow
         catch (Exception ex) { _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
     }
 
+    /// <summary>Open a folder itself in the OS file manager (not its parent with it selected).</summary>
+    internal static void OpenFolderInFileManager(string dir)
+    {
+        if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { dir });
+        else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"\"{dir}\"");
+        else Process.Start("xdg-open", new[] { dir });
+    }
+
     internal static void RevealInFileManager(string path)
     {
         if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { "-R", path });
@@ -177,9 +185,7 @@ public partial class MainWindow
         {
             string dir = _vm.Settings.PresetsFolder();
             Directory.CreateDirectory(dir);   // nothing saved yet: open it empty rather than fail
-            if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { dir });
-            else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"\"{dir}\"");
-            else Process.Start("xdg-open", new[] { dir });
+            OpenFolderInFileManager(dir);
         }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
     }

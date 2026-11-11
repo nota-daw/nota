@@ -23,7 +23,7 @@ namespace Nota.App;
 
 internal static class NotaGraph
 {
-    public const double Radius = NotaRadius.FieldValue;   // 6
+    public static double Radius => NotaRadius.FieldValue;   // 6, as the skin draws it
     public const double PrimaryWidth = 1.8, SecondaryWidth = 1.4;
     public const double NodeD = 7, NodeRing = 2;
     public const double AxisSize = NotaType.Axis, TitleSize = 8;   // axis labels 7.5 in ink 4; a graph title 8
@@ -104,7 +104,7 @@ internal static class NotaGraph
     /// off the trace: the trace passes behind the plate instead of through the text.</summary>
     public static void PlateText(DrawingContext ctx, FormattedText ft, Point at)
     {
-        ctx.DrawRectangle(Ground, null, new RoundedRect(new Rect(at.X - 2, at.Y, ft.Width + 4, ft.Height), 3));
+        ctx.DrawRectangle(Ground, null, new RoundedRect(new Rect(at.X - 2, at.Y, ft.Width + 4, ft.Height), NotaRadius.SwitchValue));
         ctx.DrawText(ft, at);
     }
 
@@ -146,7 +146,7 @@ internal static class NotaGraph
             {
                 case Mark.Line: ctx.DrawLine(new Pen(ink, 1.4), new Point(x, cy), new Point(x + 10, cy)); break;
                 case Mark.Dashed: ctx.DrawLine(new Pen(ink, 1.2, new DashStyle(new double[] { 2, 2 }, 0)), new Point(x, cy), new Point(x + 10, cy)); break;
-                default: ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x + 2, cy - 3, 6, 6), 1)); break;
+                default: ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x + 2, cy - 3, 6, 6), NotaSkin.MapRadius(1))); break;
             }
             x -= 8;
         }
@@ -155,7 +155,7 @@ internal static class NotaGraph
     /// <summary>A legend row drawn inside the window: a swatch, a name and its value.</summary>
     public static double LegendRow(DrawingContext ctx, Point at, IBrush swatch, string name, string value)
     {
-        ctx.DrawRectangle(swatch, null, new RoundedRect(new Rect(at.X, at.Y + 5, 8, 2), 1));
+        ctx.DrawRectangle(swatch, null, new RoundedRect(new Rect(at.X, at.Y + 5, 8, 2), NotaSkin.MapRadius(1)));
         var n = new NotaFormattedText(NotaText.Label(name), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, AxisSize, TitleInk, NotaTextSize.InCard);
         var v = AxisText(value, NotaPalette.TextPrimary);
         ctx.DrawText(n, new Point(at.X + 12, at.Y));

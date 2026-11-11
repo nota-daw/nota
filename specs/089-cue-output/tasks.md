@@ -162,7 +162,7 @@ and are registered in `tests/Nota.SmokeTest/Program.cs` next to `MultiInputRecor
 
 - [X] T044 [P] RU strings for every new key in `src/managed/Nota.Application/Localization/ru.json` — *N/A here: the repo ships only en.json; other languages come through the translation sync*
 - [X] T045 [P] `CHANGELOG.md` `[Unreleased]` entries per PR (Added: output pairs for Main; Cue output with tracks in Cue, Cue level and meter; click to Main/Cue/both with a level; MIDI Learn for Cue)
-- [X] T046 [P] `FEATURES.md` via the `nota-features` skill; user docs via `nota-docs` (Preferences → Audio → Outputs, Mixer → Cue) — *FEATURES.md done; the user manual (sibling repo nota-docs) is a separate PR*
+- [X] T046 [P] `FEATURES.md` via the `nota-features` skill; user docs via `nota-docs` (Settings → Outputs, Mixer → Cue) — *FEATURES.md done; the user manual (sibling repo nota-docs) is a separate PR*
 - [X] T047 Performance check SC-007: 64-track project, 64-frame buffer, cue off vs 8 cued tracks — render time within 2 %, no new xruns (bench harness per memory "Bench base build") — *70.3 → 70.8 µs/block (+0.7 %); the render-pool `--perf` guards fail equally on the base build under this machine's load*
 - [ ] T048 Manual hardware pass per [quickstart.md](quickstart.md) § Manual (macOS CoreAudio; Windows WASAPI + ASIO; Linux)
 - [ ] T049 Re-check the Nota Compliance Checklist in spec.md; `scripts/build.sh` green; run `/speckit-converge`
@@ -193,7 +193,7 @@ and closes #483.
 ## Phase 10: Convergence
 
 - [X] T050 Keep the Cue key live on Arrangement headers, the Session mixer and the inspector — call each key's `sync` from their state refresh when Cue changes elsewhere (mixer, MIDI) or the Cue output gets assigned per US2/AC1 (partial)
-- [ ] T051 Update the user manual in nota-docs (EN + RU): Settings → Audio → Outputs and the Mixer's Cue strip / Cue key per Constitution VI (partial)
+- [ ] T051 Update the user manual in nota-docs (EN + RU): Settings → Outputs and the Mixer's Cue strip / Cue key per Constitution VI (partial)
 - [X] T052 Add smoke cases to `tests/Nota.SmokeTest/CueOutputTests.cs`: a frozen cued track, a cued track with input monitoring, recording from Master carries no Cue per T018 (partial) — *monitored input added; frozen and record-from-Master are covered by construction (the tap reads the same `post` buffer freeze fills; Cue is a separate buffer Master recording never reads) and left to the manual pass*
 - [X] T053 Bring `research.md` R4 and `data-model.md` in line with the code: Cue sums into the caller's Cue buffer per segment (`cueSeg_`), no `cueBus_` member per plan: R4 (contradicts)
 - [X] T054 Add `nota_engine_set_test_output_device` and `nota_audio_effective_output_uid` to `contracts/c-abi.md` per contracts/c-abi.md (unrequested)

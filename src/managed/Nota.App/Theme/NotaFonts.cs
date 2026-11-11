@@ -13,6 +13,9 @@
 // view: a name the app does not bundle ("Inter", "Menlo", "monospace") silently resolves
 // to whatever the OS has.
 //
+// A skin may name a system typeface instead (spec 087): NotaSkin coerces controls' Geist to it
+// and NotaFormattedText swaps it in when the text is built, so cached Typeface fields follow.
+//
 // Geist is bundled (assets/fonts, SIL OFL 1.1). Glyphs it lacks — ■ ▾ ✓ ★ — fall back to
 // the system font per character.
 
@@ -65,13 +68,13 @@ public class NotaFormattedText : FormattedText
 {
     public NotaFormattedText(string textToFormat, CultureInfo culture, FlowDirection flowDirection,
                              Typeface typeface, double emSize, IBrush? foreground)
-        : base(textToFormat, culture, flowDirection, typeface, NotaTextSize.Apply(emSize), foreground)
+        : base(textToFormat, culture, flowDirection, NotaSkin.Map(typeface), NotaTextSize.Apply(emSize), foreground)
         => SetFontFeatures(NotaFonts.Tabular);
 
     /// <summary>Text drawn by <paramref name="owner"/>: inside a device card it keeps its size.</summary>
     public NotaFormattedText(string textToFormat, CultureInfo culture, FlowDirection flowDirection,
                              Typeface typeface, double emSize, IBrush? foreground, AvaloniaObject? owner)
-        : base(textToFormat, culture, flowDirection, typeface, NotaTextSize.Apply(emSize, owner), foreground)
+        : base(textToFormat, culture, flowDirection, NotaSkin.Map(typeface), NotaTextSize.Apply(emSize, owner), foreground)
         => SetFontFeatures(NotaFonts.Tabular);
 }
 

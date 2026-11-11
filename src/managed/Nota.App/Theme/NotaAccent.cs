@@ -19,15 +19,22 @@ internal static class NotaAccent
 {
     private static readonly Dictionary<(string Id, AccentChoice Choice), NotaColourTheme> Cache = new();
 
+    /// <summary>A reload may change a user theme under the same id: wear it afresh. Called by
+    /// <see cref="NotaThemes.ReloadUser"/> before it raises ThemesChanged, so no handler can
+    /// wear a stale cached theme (an event handler here could run after NotaThemeService's).</summary>
+    public static void Forget() => Cache.Clear();
+
     /// <summary><paramref name="theme"/> wearing <paramref name="choice"/>. Orange — and a
     /// choice the theme cannot wear, which no preset is — is the theme itself.</summary>
     public static NotaColourTheme Wear(NotaColourTheme theme, AccentChoice choice)
     {
         // Always from the theme file's own colours: a theme already wearing another accent
         // would otherwise be re-coloured relative to that accent.
-        theme = NotaThemes.Find(theme.Id) ?? theme;
+        // A try-on or preview theme (spec 087) is not in the list: it is its own file.
+        bool listed = theme.Source is ThemeSource.BuiltIn or ThemeSource.User;
+        if (listed) theme = NotaThemes.Find(theme.Id) ?? theme;
         if (choice.IsDefault) return theme;
-        if (Cache.TryGetValue((theme.Id, choice), out var worn)) return worn;
+        if (listed && Cache.TryGetValue((theme.Id, choice), out var worn)) return worn;
         var result = AccentColours.Wear(Rgb(theme), choice);
         if (result.Tokens is null) worn = theme;
         else
@@ -39,6 +46,7 @@ internal static class NotaAccent
         // Presets are a fixed set; custom colours are not — a drag in the picker wears a new
         // one every step. Keep only the latest custom colour, so the cache stays at the
         // presets × themes plus one colour × themes.
+        if (!listed) return worn;   // one-off: never cached, so previews don't pile up
         if (choice.Preset == Accent.Custom)
             foreach (var stale in Cache.Keys.Where(k => k.Choice.Preset == Accent.Custom && k.Choice != choice).ToList())
                 Cache.Remove(stale);
@@ -58,8 +66,9 @@ internal static class NotaAccent
 
     private static IReadOnlyDictionary<string, uint> Rgb(NotaColourTheme theme)
     {
-        if (!RgbCache.TryGetValue(theme, out var m))
-            RgbCache[theme] = m = Enumerable.ToDictionary(theme.Colors, c => c.Key, c => c.Value.ToUInt32() & 0xFFFFFF);
+        if (RgbCache.TryGetValue(theme, out var m)) return m;
+        m = Enumerable.ToDictionary(theme.Colors, c => c.Key, c => c.Value.ToUInt32() & 0xFFFFFF);
+        if (theme.Source is ThemeSource.BuiltIn) RgbCache[theme] = m;   // user themes are re-read on reload
         return m;
     }
 

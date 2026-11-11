@@ -69,11 +69,11 @@ internal sealed class VFader : Control
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height, cx = w / 2;
-        ctx.DrawRectangle(Track, null, new Rect(cx - 2, 0, 4, h), 2, 2);
+        ctx.DrawRectangle(Track, null, new Rect(cx - 2, 0, 4, h), NotaRadius.FineValue, NotaRadius.FineValue);
         double frac = _value / Max;
         double capY = (h - CapH) * (1 - frac);
         var cap = new Rect(cx - 13, capY, 26, CapH);
-        ctx.DrawRectangle(Cap, CapBorder, cap, 4, 4);
+        ctx.DrawRectangle(Cap, CapBorder, cap, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         ctx.FillRectangle(_capLine, new Rect(cx - 9, capY + 5, 18, 2));
     }
 }

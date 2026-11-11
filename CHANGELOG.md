@@ -24,7 +24,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ### Added
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
-  two outputs, **Settings → Audio → Outputs** sends Main (what the audience hears) to one
+  two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
   Changing a pair takes effect at once, without restarting the device.
   - **Cue key** (headphones) on every track, in the mixer, the Session mixer, the track
@@ -41,6 +41,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - **What is saved where:** output pairs and click settings are kept per device on this
     computer. The cued tracks and the Cue level are saved with the project (format 32).
   - **MIDI Learn** can map a track's Cue key and the Cue level.
+- **Skins: your own themes** (#336, specs/087). Put a theme file in the **Themes** folder
+  of Nota's data folder and it appears in **Preferences → Appearance**, next to the
+  built-in themes, under Dark or Light. You pick it like any built-in theme, and the choice
+  is kept after a restart.
+  - A theme file sets every colour token. Format 2 can also name a typeface installed on
+    the system and how round the corners are: one roundness from 0 (square) to 2, plus
+    exact values for single steps. The whole app follows it live, device cards and drawn
+    views included; sizes and layout stay the same.
+  - Right-click any theme card and pick **Duplicate** to get a copy to edit. **Open themes
+    folder** and **Reload** are under the cards.
+  - A file that can't be loaded is listed under the cards with the reason, and the token
+    it is about. A theme whose text may be hard to read loads anyway and shows how many
+    warnings it has. A typeface that isn't installed falls back to Geist.
+  - New MCP tools let an AI or a script design a skin:
+    - `list_themes`, `get_theme`, `get_theme_catalogue` and `list_system_fonts` read what
+      there is;
+    - `validate_theme` checks a theme without saving it;
+    - `preview_theme` returns one picture per part of the app in that theme, without
+      changing the window;
+    - `save_theme`, `apply_theme`, `try_on_theme` and `revert_try_on` save it, wear it or
+      try it on.
 - **Custom wavetables in Nota Aurora** (specs/053): drop a WAV, FLAC or MP3 file on either
   oscillator, from the browser or the desktop, or pick **Import…** in its table drop-down.
   Aurora turns it into a table as follows:
@@ -87,7 +108,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track mid-take lands its part and the rest keep going. Arm more tracks with ⌘-click
   (Ctrl-click). For now an audio take records either the hardware inputs or one track's
   output (internal resampling), not both at once.
-- **Name and switch off inputs** (#353, specs/086): Settings → Audio → **Inputs** lists every
+- **Name and switch off inputs** (#353, specs/086): Settings → **Inputs** lists every
   input of the device with the name it gives it, a switch and a name of your own, then the
   stereo pairs, which can be named too. Track input menus list only the inputs that are on,
   under your names (an interface with more than 16 inputs groups them under **Mono inputs**
@@ -135,6 +156,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Settings, reorganised** (#427, specs/088): every setting is on a page named for it.
+  - **Outputs** and **Inputs** are their own pages under Devices: the output device and the
+    test tone on one, the input device and the list of inputs with their switches and names
+    on the other. **Audio** keeps the audio system, sample rate, buffer, latency and the CPU
+    check. With ASIO the driver is still picked on Audio; its output and input pairs are on
+    Outputs and Inputs.
+  - A new **Remote control** group holds **Remote** and **AI control (MCP)**, now its own page.
+  - **Appearance** keeps only the look (theme, accent, waveform, track headers, scale, text
+    size). **Language** is its own page, and a new **Editing** page holds the piano-roll note
+    labels, fades on split audio clips and the detail-panel switch.
+  - The command palette has a **Settings:** command for each new page, and the track input
+    menu's **Audio I/O setup** opens Inputs. Every setting keeps its value.
 - **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
   Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
   for Russian, and the English one otherwise. The choice used to follow the OS language, so a
@@ -475,6 +508,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Discard and retry keeps the count-in out of an audio take** (#521): retrying an audio take
+  that counted in from stop counted in again, but the input was recorded from the moment of the
+  retry, so the new clip began with the count-in and ran late against the playhead by its
+  length. The input is now kept out until the count-in runs out, as on a fresh take.
 - **Compact Mixer: the MIDI-in selector shows its whole name** (#550): the drop-down on an
   instrument strip left 20 px for the chosen name, so "Aucune" read "ucun" and a longer track
   name lost both ends. It now leaves about 29 px, writes the name from the left and ends a longer

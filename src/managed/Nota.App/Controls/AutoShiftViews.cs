@@ -166,7 +166,7 @@ internal sealed class AsTraceView : Control
                 bool now = k >= _n;
                 var r = new Rect(X(s), y - bh / 2, Math.Max(2, X(k - 1) - X(s)), bh);
                 ctx.DrawRectangle(now ? NotaPalette.Wash(NotaPalette.Accent, 0x4C) : NotaPalette.Wash(NotaPalette.VizInk, 0x2E),
-                    new Pen(now ? NotaPalette.AccentBright : NotaPalette.VizInk, now ? 1.2 : 1), new RoundedRect(r, 2));
+                    new Pen(now ? NotaPalette.AccentBright : NotaPalette.VizInk, now ? 1.2 : 1), new RoundedRect(r, NotaRadius.FineValue));
             }
         }
 

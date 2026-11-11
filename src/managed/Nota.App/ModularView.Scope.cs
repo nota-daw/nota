@@ -287,7 +287,7 @@ public sealed partial class ModularView
         {
             double w = Bounds.Width, h = Bounds.Height;
             if (w <= 0 || h <= 0) return;
-            ctx.DrawRectangle(ScopeBg, null, new Rect(0, 0, w, h), 4, 4);
+            ctx.DrawRectangle(ScopeBg, null, new Rect(0, 0, w, h), NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
             double mid = h / 2;
             var grid = new Pen(BorderInner, 1);
             for (int i = 1; i < 4; i++) { double x = Math.Round(w * i / 4) + 0.5; ctx.DrawLine(grid, new Point(x, 2), new Point(x, h - 2)); }

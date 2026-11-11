@@ -99,8 +99,8 @@ internal sealed class PendulumLanesView : Control
                 bool cameFrom = ball.Dir > 0 ? !high : ball.Dir < 0 && high;
                 return cameFrom ? NotaPalette.TextSecondary : NotaPalette.BorderStrong;
             }
-            ctx.DrawRectangle(WallInk(false), null, new RoundedRect(new Rect(laneX0 - 1, wallTop, 2, wallBot - wallTop), 1));
-            ctx.DrawRectangle(WallInk(true), null, new RoundedRect(new Rect(laneX1 - 1, wallTop, 2, wallBot - wallTop), 1));
+            ctx.DrawRectangle(WallInk(false), null, new RoundedRect(new Rect(laneX0 - 1, wallTop, 2, wallBot - wallTop), NotaSkin.MapRadius(1)));
+            ctx.DrawRectangle(WallInk(true), null, new RoundedRect(new Rect(laneX1 - 1, wallTop, 2, wallBot - wallTop), NotaSkin.MapRadius(1)));
 
             double bx = laneX0 + Math.Clamp(ball.Pos, 0, 1) * laneW;
 
@@ -212,7 +212,7 @@ internal sealed class PendulumBarView : Control
                 ink = i == latest ? NotaPalette.Accent : st.Age == 0 ? NotaPalette.VizInk : NotaPalette.Wash(NotaPalette.VizInk, 0x60);
             }
             double bh = Math.Max(2, fullH * frac);
-            ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x, gy1 - bh, Math.Max(1, cw - 1), bh), 1));
+            ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x, gy1 - bh, Math.Max(1, cw - 1), bh), NotaSkin.MapRadius(1)));
         }
         double px = gx0 + Math.Clamp(_s.BarPos, 0, 1) * (gx1 - gx0);
         ctx.DrawLine(new Pen(NotaPalette.Accent, 1), new Point(px, gy0 - 2), new Point(px, gy1 + 2));

@@ -520,7 +520,7 @@ internal sealed class TwinRouteView : TwinParamGraph
         void Box(double x, double y, string name)
         {
             var b = new Rect(Math.Round(x) + 0.5, Math.Round(y) + 0.5, bw, bh);
-            ctx.DrawRectangle(null, pen, b, 2, 2);
+            ctx.DrawRectangle(null, pen, b, NotaRadius.FineValue, NotaRadius.FineValue);
             var ft = NotaGraph.AxisText(name, NotaPalette.TextSecondary);
             ctx.DrawText(ft, new Point(b.X + (bw - ft.Width) / 2, b.Y + (bh - ft.Height) / 2));
         }
@@ -599,12 +599,12 @@ internal sealed class TwinFxView : TwinParamGraph
                 double sec = P("dlysync") >= 0.5f ? DivBeats[Math.Clamp((int)Math.Round(P("dlydiv") * 7), 0, 7)] * 0.5 : Math.Max(0.001, P("dlytime") * 2.0);
                 double step = Math.Max(4, sec / 2.0 * (r.Width - 8)), fb = P("dlyfb"), amp = 0.8, h = r.Height / 2 - 4;
                 bool ping = P("dlypingpong") >= 0.5f;
-                ctx.DrawRectangle(NotaPalette.TextFaint, null, new Rect(4, mid - h, 2, h), 1, 1);
+                ctx.DrawRectangle(NotaPalette.TextFaint, null, new Rect(4, mid - h, 2, h), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 for (int i = 1; 4 + i * step < r.Width - 4 && amp > 0.03; i++, amp *= Math.Max(0.05, fb))
                 {
                     double x = Math.Round(4 + i * step), hh = Math.Max(1, amp * h);
                     bool up = !ping || i % 2 == 1;
-                    ctx.DrawRectangle(ink, null, new Rect(x, up ? mid - hh : mid, 2, hh), 1, 1);
+                    ctx.DrawRectangle(ink, null, new Rect(x, up ? mid - hh : mid, 2, hh), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
                 NotaGraph.Axis(ctx, r, NotaGraph.Corner.TopRight, "L");
                 NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomRight, "R");
@@ -807,7 +807,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
                 var cell = new Rect(RowHdrW + c * cw + 2, y + 2, cw - 4, rh - 4);
                 if (Find(_rows[r], _cols[c]) is { } cb)
                 {
-                    ctx.DrawRectangle(fill, edge, cell, 2, 2);
+                    ctx.DrawRectangle(fill, edge, cell, NotaRadius.FineValue, NotaRadius.FineValue);
                     double mid = cell.X + cell.Width / 2, half = cell.Width / 2 - 2;
                     double bw = half * Math.Abs(cb.Depth);
                     ctx.FillRectangle(bar, new Rect(cb.Depth >= 0 ? mid : mid - bw, cell.Bottom - 3, bw, 2));
@@ -821,7 +821,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
                 }
                 else
                 {
-                    ctx.DrawRectangle(NotaPalette.BgSunken, null, cell, 2, 2);
+                    ctx.DrawRectangle(NotaPalette.BgSunken, null, cell, NotaRadius.FineValue, NotaRadius.FineValue);
                     var v = new NotaFormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextFaint, this);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }

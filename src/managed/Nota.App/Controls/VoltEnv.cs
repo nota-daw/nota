@@ -430,7 +430,7 @@ namespace Nota.App;
             double bw = Math.Max(24, sv.Width + 6);
             var badge = new Rect(w - bw - 2, Math.Clamp(n.sy - sv.Height / 2 - 1, 1, plot.Height - sv.Height - 3), bw, sv.Height + 2);
             ctx.DrawLine(dash, new Point(n.xh, n.sy), new Point(badge.X - 1, n.sy));
-            ctx.DrawRectangle(Wash(ink, 0x26), null, badge, 3, 3);
+            ctx.DrawRectangle(Wash(ink, 0x26), null, badge, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             ctx.DrawText(sv, new Point(badge.X + (badge.Width - sv.Width) / 2, badge.Y + 1));
 
             // The bend handles: a diamond in the middle of decay and release.
@@ -466,7 +466,7 @@ namespace Nota.App;
                 double lx = Math.Clamp(anchor.X - lt.Width / 2 - 4, 1, w - lt.Width - 9), ly = anchor.Y - lt.Height - 12;
                 if (ly < 1) ly = anchor.Y + 10;
                 var tip = new Rect(lx, ly, lt.Width + 8, lt.Height + 3);
-                ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderDefault, 1), tip, 3, 3);
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, new Pen(NotaPalette.BorderDefault, 1), tip, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                 ctx.DrawText(lt, new Point(lx + 4, ly + 1.5));
             }
 
@@ -493,7 +493,7 @@ namespace Nota.App;
                 var (a, b) = segs[k];
                 var r = new Rect(a + 0.5, by, Math.Max(1, b - a - 1), BarH - 2);
                 bool on = active == k;
-                ctx.DrawRectangle(on ? Wash(ink, 0x40) : NotaPalette.SurfaceRaised, null, r, 2, 2);
+                ctx.DrawRectangle(on ? Wash(ink, 0x40) : NotaPalette.SurfaceRaised, null, r, NotaRadius.FineValue, NotaRadius.FineValue);
                 var lt = Text(Letters[k].ToString(), on ? NotaPalette.TextPrimary : NotaPalette.TextTertiary, 8, FontWeight.SemiBold);
                 if (r.Width > lt.Width + 2) ctx.DrawText(lt, new Point(r.X + (r.Width - lt.Width) / 2, r.Y + (r.Height - lt.Height) / 2));
             }

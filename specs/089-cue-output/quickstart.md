@@ -32,7 +32,7 @@ synth notes drift between renders — use a clip, not a synth):
 Prerequisite: an interface with ≥ 4 outputs (or macOS BlackHole 16ch / an aggregate
 device; Windows ASIO4ALL or the interface's ASIO driver).
 
-1. Preferences → Audio → Outputs: Main 1/2, Cue 3/4, Click → Cue. Close.
+1. Settings → Outputs: Main 1/2, Cue 3/4, Click → Cue. Close.
 2. Load a project with a drum loop and a vocal clip. Cue the vocal track, mute it.
    Play: speakers (1/2) — drums, no vocal, no click; headphones (3/4) — vocal + click.
 3. Move the Cue fader end to end: speakers don't change.

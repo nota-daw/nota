@@ -133,7 +133,7 @@ internal sealed class OperatorAlgoMini : Control
             var p = Pt(o);
             var rect = new Rect(p.X - bs / 2, p.Y - bs / 2, bs, bs);
             var pen = new Pen(carrier[o] ? Ink : Teal, _active ? 1.2 : 0.9);
-            ctx.DrawRectangle(carrier[o] && _active ? InkSubtle : Sunken, pen, rect, 1.5, 1.5);
+            ctx.DrawRectangle(carrier[o] && _active ? InkSubtle : Sunken, pen, rect, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
         }
     }
 }
@@ -270,9 +270,9 @@ internal sealed class OperatorRoutingViz : Control
             bool carr = _carrier[o];
             // Opaque ground first: the washes are translucent and a connection line passing
             // behind a box would otherwise strike through its letter.
-            ctx.DrawRectangle(Sunken, null, rect, 3, 3);
+            ctx.DrawRectangle(Sunken, null, rect, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             bool dragged = o == _drag;
-            ctx.DrawRectangle(carr ? InkSubtle : TealSubtle, new Pen(dragged ? Accent : carr ? Ink : Teal, 1.3), rect, 3, 3);
+            ctx.DrawRectangle(carr ? InkSubtle : TealSubtle, new Pen(dragged ? Accent : carr ? Ink : Teal, 1.3), rect, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             var ft = new NotaFormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal, this);
             ctx.DrawText(ft, new Point(c.X - ft.Width / 2, c.Y - ft.Height / 2));
         }

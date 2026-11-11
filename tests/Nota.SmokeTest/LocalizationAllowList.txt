@@ -2131,18 +2131,10 @@ Nota.App/PreferencesWindow.cs	Return	# data: key name shown on a key cap (the ke
 Nota.App/PreferencesWindow.cs	Shortcuts	# data: stable page id (Page.Id); the shown title is translated
 Nota.App/PreferencesWindow.cs	Updates	# data: stable page id (Page.Id); the shown title is translated
 Nota.App/SessionView.Mixer.cs	Ext Out 1/2	# data: hardware output name
-Nota.App/Theme/NotaColourTheme.cs	$"invalid id '{id}'"	# data: diagnostics for people writing a theme file
-Nota.App/Theme/NotaColourTheme.cs	$"kind must be dark or light, not '{kindText}'"	# data: diagnostics for people writing a theme file
-Nota.App/Theme/NotaColourTheme.cs	$"token '{p.Name}' has invalid colour '{hex}'"	# data: diagnostics for people writing a theme file
-Nota.App/Theme/NotaColourTheme.cs	$"token '{p.Name}' must be opaque"	# data: diagnostics for people writing a theme file
-Nota.App/Theme/NotaColourTheme.cs	$"unknown token '{p.Name}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: file declares id '{theme.Id}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: no theme file"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	Bevel	# data: theme token name
 Nota.App/Theme/NotaColourTheme.cs	Well	# data: theme token name
-Nota.App/Theme/NotaColourTheme.cs	colors missing	# data: technical validation message for a theme file
-Nota.App/Theme/NotaColourTheme.cs	name must be 1–40 characters	# data: diagnostics for people writing a theme file
-Nota.App/Theme/NotaColourTheme.cs	the file must hold one JSON object	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaTextSize.cs	Fixed	# data: attached property name
 Nota.App/WelcomeWindow.cs	$"  ·  {NotaNum.Unit(p.Fraction * 100, "	# data: numbers and units only
 Nota.App/WelcomeWindow.cs	$"{(p.Fraction * size).ToString("	# data: numbers and units only
@@ -2522,14 +2514,14 @@ Nota.Application/Palette/CommandCatalog.cs	overdub replace take pass loop record
 Nota.Application/Palette/CommandCatalog.cs	pitch shift	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	play row	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences controller keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
-Nota.Application/Palette/CommandCatalog.cs	preferences device driver sample rate buffer	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences driver asio sample rate buffer latency cpu	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences folders	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences hotkeys keys keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences joystick controller	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences options	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences phone	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences store models sample packs	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
-Nota.Application/Palette/CommandCatalog.cs	preferences theme dark light language langue francais english	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences theme dark light skin accent scale text size waveform	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences update automatic check version	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	quantise grid snap align	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	quit close leave	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2692,3 +2684,51 @@ Nota.Presentation/ViewModels/BrowserViewModel.cs	Nota	# data: identifier compare
 
 Nota.App/Controls/ReverbViews.cs	Decay 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ReverbViews.cs	Decay	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Mcp/ThemeAccess.cs	$"'{id}' is a built-in theme — give the theme its own id"	# data: MCP tools are not translated
+Nota.App/Mcp/ThemeAccess.cs	$"a user theme '{id}' exists — pass overwrite to replace it"	# data: MCP tools are not translated
+Nota.App/Mcp/ThemeAccess.cs	the theme is not valid — see the problems	# data: MCP tools are not translated
+Nota.App/Skins/SampleScene.cs	Bass	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Beat	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Chords	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Drums	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Hook	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Keys	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Lead	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Pad	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Reverb	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SampleScene.cs	Texture	# data: names in the fixed sample project the skin previews draw
+Nota.App/Skins/SkinPreviewRenderer.cs	A confirmation dialog with a primary and a secondary button	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	A track context menu: rows with icons and shortcuts, a submenu, a separator	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	Appearance	# data: a page id and a control name, not shown
+Nota.App/Skins/SkinPreviewRenderer.cs	Arrangement: track headers, MIDI and audio clips in the track colours, an automation lane	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	Browser	# data: a page id and a control name, not shown
+Nota.App/Skins/SkinPreviewRenderer.cs	Device rack: an instrument and two audio effects as device cards	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	Mixer: channel strips with sends, a return and the master	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	Piano roll: chords on the keyboard grid with the velocity lane	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	Preferences → Appearance: the theme cards, accent, scale and text size	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	The browser as it is now: categories, the list and the search field (the user's library)	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	The main window as it is now: top bar, browser, arrangement and the detail panel (the user's open project)	# data: MCP tools are not translated
+Nota.App/Skins/SkinPreviewRenderer.cs	The transport row: transport keys, position, tempo, view switches, CPU (live values)	# data: MCP tools are not translated
+Nota.Application/Themes/ThemeFile.cs	Accent	# data: theme token name
+Nota.Application/Themes/ThemeFile.cs	Mute	# data: theme token name
+Nota.Application/Themes/ThemeFile.cs	Panel	# data: theme token name
+Nota.Application/Themes/ThemeFile.cs	Record	# data: theme token name
+Nota.Application/Themes/ThemeFile.cs	Solo	# data: theme token name
+Nota.Application/Themes/ThemeFile.cs	Success	# data: theme token name
+Nota.App/MainWindow.AudioFormat.cs	Inputs	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Editing	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Inputs	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Language	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Outputs	# data: page id passed to ShowPreferencesPage
+Nota.App/PreferencesWindow.AudioIo.cs	Audio	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.Downloads.cs	Downloads	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.Remote.cs	Remote	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Editing	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Inputs	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Language	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Outputs	# data: stable page id (Page.Id); the shown title is translated
+Nota.Application/Palette/CommandCatalog.cs	preferences ai mcp claude assistant server port	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences input device channels microphone names stereo pairs	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences language langue francais english russian	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences output device speakers headphones test tone	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences piano roll note names labels split fades detail panel	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)

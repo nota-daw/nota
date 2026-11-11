@@ -124,14 +124,19 @@ public static class CommandCatalog
 
         // ---- Settings ---------------------------------------------------------------------
         C("prefs.open", Loc.T("common.settings"), Loc.T("common.settings"), Shortcut.Cmd(','), "preferences options"),
-        C("prefs.audio", Loc.T("commands.settings_audio"), Loc.T("common.settings"), "", "preferences device driver sample rate buffer"),
+        C("prefs.audio", Loc.T("commands.settings_audio"), Loc.T("common.settings"), "", "preferences driver asio sample rate buffer latency cpu"),
+        C("prefs.outputs", Loc.T("commands.settings_outputs"), Loc.T("common.settings"), "", "preferences output device speakers headphones test tone"),
+        C("prefs.inputs", Loc.T("commands.settings_inputs"), Loc.T("common.settings"), "", "preferences input device channels microphone names stereo pairs"),
         C("prefs.midi", Loc.T("commands.settings_midi"), Loc.T("common.settings"), "", "preferences controller keyboard"),
         C("prefs.gamepads", Loc.T("commands.settings_gamepads"), Loc.T("common.settings"), "", "preferences joystick controller"),
         C("prefs.remote", Loc.T("commands.settings_remote"), Loc.T("common.settings"), "", "preferences phone"),
+        C("prefs.mcp", Loc.T("commands.settings_mcp"), Loc.T("common.settings"), "", "preferences ai mcp claude assistant server port"),
         C("prefs.plugins", Loc.T("commands.settings_plug_ins"), Loc.T("common.settings"), "", "preferences vst3 au scan folders"),
         C("prefs.downloads", Loc.T("commands.settings_downloads"), Loc.T("common.settings"), "", "preferences store models sample packs"),
         C("prefs.library", Loc.T("commands.settings_library"), Loc.T("common.settings"), "", "preferences folders"),
-        C("prefs.appearance", Loc.T("commands.settings_appearance"), Loc.T("common.settings"), "", "preferences theme dark light language langue francais english"),
+        C("prefs.appearance", Loc.T("commands.settings_appearance"), Loc.T("common.settings"), "", "preferences theme dark light skin accent scale text size waveform"),
+        C("prefs.language", Loc.T("commands.settings_language"), Loc.T("common.settings"), "", "preferences language langue francais english russian"),
+        C("prefs.editing", Loc.T("commands.settings_editing"), Loc.T("common.settings"), "", "preferences piano roll note names labels split fades detail panel"),
         C("prefs.shortcuts", Loc.T("commands.settings_shortcuts"), Loc.T("common.settings"), "", "preferences hotkeys keys keyboard"),
         C("prefs.updates", Loc.T("commands.settings_updates"), Loc.T("common.settings"), "", "preferences update automatic check version"),
 

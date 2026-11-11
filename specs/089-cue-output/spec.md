@@ -183,7 +183,7 @@ shows Cue unavailable; restoring the device restores Cue without user action.
 **Acceptance Scenarios**:
 
 1. **Given** Cue → 3/4, **When** the current device no longer has outputs 3/4,
-   **Then** Cue is shown as unavailable (in Settings → Audio → Outputs and on the mixer's
+   **Then** Cue is shown as unavailable (in Settings → Outputs and on the mixer's
    Cue strip, which also shows where the click goes), and nothing that was routed to Cue
    is moved to Main.
 2. **Given** Cue is unavailable, **When** the user deliberately picks another pair (or

@@ -89,10 +89,13 @@ internal static partial class DesignTokenCheck
         foreach (Match m in Regex.Matches(theme, """x:Key="(?<key>(?:Radius|Control|Space)\.\w+)">(?<v>[0-9.]+)<"""))
             xaml[m.Groups["key"].Value] = double.Parse(m.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
 
-        // C# side: NotaRadius.<Name>Value, NotaSize.<Name>, NotaSpace.<Name>
+        // C# side: the radius scale (SkinGeometry.Design — spec 087 moved it there so skins can
+        // re-round it; NotaRadius.DockedValue stays a constant), NotaSize.<Name>, NotaSpace.<Name>
         var cs = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (Match m in Regex.Matches(geo, @"\b(?<name>\w+)Value\s*=\s*(?<v>[0-9.]+)"))
             cs["Radius." + m.Groups["name"].Value] = double.Parse(m.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var step in Enum.GetValues<Nota.Application.Themes.RadiusStep>())
+            cs["Radius." + step] = Nota.Application.Themes.SkinGeometry.Design(step);
         foreach (var (cls, prefix) in new[] { ("NotaSize", "Control."), ("NotaSpace", "Space.") })
         {
             var body = Regex.Match(geo, $@"class {cls}\s*\{{(?<b>.*?)\n\}}", RegexOptions.Singleline).Groups["b"].Value;
@@ -390,8 +393,10 @@ internal static partial class DesignTokenCheck
         // Hex strings that are data rather than tokens: tag swatches the library stores, and
         // two device hue tables. Each is only ever painted through NotaPalette.Ink().
         var hexData = new[] { "TagEditorWindow.cs", "DeviceCards/Bodies/StrataDeviceBody.cs", "DeviceCards/Instruments/RhythmInstrumentCard.cs" };
-        // Opacity is allowed for exactly one thing: the ghost of a card being dragged.
-        var dragGhost = new Regex(@"\b(card|_devDragCard|_rcDragCard)\.Opacity = (0\.55|1\.0);");
+        // Opacity is allowed for exactly one thing: the ghost of a card being dragged — and,
+        // not being a look at all, the skin previews' host windows (spec 087), shown off screen
+        // and fully transparent so their views lay out; only their content is drawn.
+        var dragGhost = new Regex(@"\b(card|_devDragCard|_rcDragCard)\.Opacity = (0\.55|1\.0);|^\s*host\.Opacity = 0;");
 
         var rules = new (string Name, Regex Re, Func<string, string, bool>? Allow)[]
         {

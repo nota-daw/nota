@@ -119,6 +119,7 @@ public sealed class McpService(
         s.AddSingleton(mosaicPacks);
         s.AddSingleton(processCpu);
         s.AddSingleton<IProjectKeyAccess>(new ProjectKeyAccess(transport));
+        s.AddSingleton<IThemeAccess>(new ThemeAccess());
     }
 
     /// <summary>Reconcile the server with <see cref="Settings.McpEnabled"/> / <see cref="Settings.McpPort"/>.</summary>

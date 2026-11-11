@@ -621,7 +621,7 @@ public sealed partial class ArrangementView
 
         private void DrawSpan(DrawingContext ctx, ArrangementSection s, Rect r, bool warm)
         {
-            ctx.DrawRectangle(warm ? WarmFill : ColdFill, null, r, 3, 3);
+            ctx.DrawRectangle(warm ? WarmFill : ColdFill, null, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             ctx.FillRectangle(warm ? WarmEdge : ColdEdge, new Rect(r.X, r.Y, 2, r.Height));
             if (r.Width <= 22) return;
             var ft = new NotaFormattedText(_o.SectionDisplayName(s), CultureInfo.InvariantCulture,
@@ -664,7 +664,7 @@ public sealed partial class ArrangementView
                     var r = new Rect(x0, 2, Math.Max(2, x1 - x0), h - 4);
                     if (reorder && i == _from)
                     {
-                        ctx.DrawRectangle(DraftFill, DraftPen, r, 3, 3);   // the landing slot
+                        ctx.DrawRectangle(DraftFill, DraftPen, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);   // the landing slot
                         ctx.FillRectangle(InsertBar, new Rect(r.X - 1, 0, 2, h));
                         continue;
                     }
@@ -678,7 +678,7 @@ public sealed partial class ArrangementView
                     using (ctx.PushOpacity(0.8))
                     {
                         DrawSpan(ctx, me, g, true);
-                        ctx.DrawRectangle(null, GhostPen, g, 3, 3);
+                        ctx.DrawRectangle(null, GhostPen, g, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     }
                 }
             }
@@ -689,7 +689,7 @@ public sealed partial class ArrangementView
                 double a = _o.BeatToX(_o.SnapBar(Math.Min(_pressBeat, _draftEnd)));
                 double b = _o.BeatToX(_o.SnapBar(Math.Max(_pressBeat, _draftEnd)));
                 var r = new Rect(a, 2, Math.Max(2, b - a), h - 4);
-                ctx.DrawRectangle(DraftFill, DraftPen, r, 3, 3);
+                ctx.DrawRectangle(DraftFill, DraftPen, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             }
 
             // Playhead tick, so the lane and the ruler read as one instrument.

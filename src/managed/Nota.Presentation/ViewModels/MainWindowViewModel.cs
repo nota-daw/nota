@@ -327,8 +327,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Why nothing is heard when no output device opened (the engine runs silently
     /// or not at all), else null.</summary>
     public string? NoAudioOutput
-        => !Engine.IsRunning ? Loc.T("main.no_audio_output_could_be")
-         : Engine.AudioSilentFallback ? Loc.T("main.no_audio_output_device_opened")
+        => !Engine.IsRunning ? Loc.T("main.no_audio_output_could_be_opened_outputs")
+         : Engine.AudioSilentFallback ? Loc.T("main.no_audio_output_device_opened_outputs")
          : null;
 
     /// <summary>

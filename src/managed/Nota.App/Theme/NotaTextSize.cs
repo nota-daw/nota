@@ -62,6 +62,16 @@ internal static class NotaTextSize
         FixedProperty.Changed.AddClassHandler<TextPresenter>((tp, _) => tp.CoerceValue(TextElement.FontSizeProperty));
     }
 
+    /// <summary>Build and draw with <paramref name="step"/> for the length of <paramref name="run"/>,
+    /// without touching the open windows — the skin previews (spec 087) draw at the default size.</summary>
+    public static void Scoped(int step, Action run)
+    {
+        int live = _step;
+        _step = TextSize.Normalize(step);
+        try { run(); }
+        finally { _step = live; }
+    }
+
     /// <summary>Wear <paramref name="step"/> (normalised) everywhere, live.</summary>
     public static void Set(int step)
     {
@@ -72,10 +82,13 @@ internal static class NotaTextSize
         foreach (var window in desktop.Windows) Reapply(window);
     }
 
-    private static void Reapply(Visual root)
+    /// <summary>Re-coerce the text in one tree to the current step (a window, or a preview root).</summary>
+    public static void Reapply(Visual root)
     {
         foreach (var v in root.GetSelfAndVisualDescendants())
         {
+            // A popup's content (a ComboBox's items, which its closed box also shows) is outside the tree.
+            if (v is Avalonia.Controls.Primitives.Popup { Child: { } content }) Reapply(content);
             if (v is TextBlock tb) tb.CoerceValue(TextBlock.FontSizeProperty);
             else if (v is TextPresenter tp) tp.CoerceValue(TextElement.FontSizeProperty);
             if (v is Layoutable l) l.InvalidateMeasure();

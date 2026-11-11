@@ -1247,7 +1247,7 @@ public sealed partial class ArrangementView
                             rx1 = Math.Max(rx0, _o.BeatToX(re.AudioRecordStartBeat + re.AudioRecordLengthBeatsOf(rt)));
                         }
                         var rr = new Rect(rx0, ry + 2, Math.Max(2, rx1 - rx0), rh - 4);
-                        ctx.DrawRectangle(RecFill, RecBorder, rr, 4, 4);
+                        ctx.DrawRectangle(RecFill, RecBorder, rr, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
                         // Live waveform of what's being captured, so the take shows real
                         // signal rather than an empty box (clips only materialise on stop).
                         DrawRecPeaks(ctx, re, rr, rt);
@@ -1312,7 +1312,7 @@ public sealed partial class ArrangementView
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
-                ctx.DrawRectangle(TooltipBg, null, new Rect(tx - 5, ty - 3, ft.Width + 10, ft.Height + 6), 3, 3);
+                ctx.DrawRectangle(TooltipBg, null, new Rect(tx - 5, ty - 3, ft.Width + 10, ft.Height + 6), NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                 ctx.DrawText(ft, new Point(tx, ty));
             }
 
@@ -1323,7 +1323,7 @@ public sealed partial class ArrangementView
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
-                ctx.DrawRectangle(TooltipBg, null, new Rect(tx - 5, ty - 3, ft.Width + 10, ft.Height + 6), 3, 3);
+                ctx.DrawRectangle(TooltipBg, null, new Rect(tx - 5, ty - 3, ft.Width + 10, ft.Height + 6), NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                 ctx.DrawText(ft, new Point(tx, ty));
             }
 
@@ -1545,7 +1545,7 @@ public sealed partial class ArrangementView
                     if (x1 < 0 || x0 > w || m.Length <= 0) continue;
                     var (fill, border, _, _) = ClipColors(m.ColorIndex);
                     var r = new Rect(x0, y + padTop + m.Slot * laneH, Math.Max(2, x1 - x0), barH);
-                    ctx.DrawRectangle(fill, border, r, 1.5, 1.5);
+                    ctx.DrawRectangle(fill, border, r, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
                 }
                 return;
             }
@@ -1554,7 +1554,7 @@ public sealed partial class ArrangementView
                 double x0 = _o.BeatToX(m.Start), x1 = _o.BeatToX(m.Start + m.Length);
                 if (x1 < 0 || x0 > w || m.Length <= 0) continue;
                 var (fill, border, _, _) = ClipColors(m.ColorIndex);
-                ctx.DrawRectangle(fill, border, new Rect(x0, y + padTop, Math.Max(2, x1 - x0), innerH), 1.5, 1.5);
+                ctx.DrawRectangle(fill, border, new Rect(x0, y + padTop, Math.Max(2, x1 - x0), innerH), NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
             }
         }
 
@@ -1611,7 +1611,7 @@ public sealed partial class ArrangementView
         private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
         private const double LabelH = 18;       // the clip name's line over the notes and waveform
         private const double NameMinClipH = 30; // a clip taller than this (a row over 34 px) shows its name
-        private const double ClipRadius = 6;
+        private static double ClipRadius => NotaRadius.FieldValue;   // 6, as the skin draws it
 
         // The clip's ADSR: the curve whenever it shapes the clip, the handles while the clip is
         // hovered, selected or being edited. Drawn in the clip's own colour; the hot handle is brass.

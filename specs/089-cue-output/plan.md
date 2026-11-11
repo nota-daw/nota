@@ -81,7 +81,7 @@ Post-design re-check: no violations; Complexity Tracking empty.
 
 | # | PR | Content | Depends on | Closes |
 |---|----|---------|-----------|--------|
-| 1 | Multi-channel output + Main pair | R1–R3: `RenderCallback(main, cue, n)`, `OutputRouting.h` scatter + resolve, all three backends open every output, output channel count/names, hot routing, macOS device-alive event, ABI, `OutputSetups` + Preferences → Audio → Outputs (Main only, Cue picker hidden), ASIO pair migration. Behaviour unchanged on stereo devices | — | — |
+| 1 | Multi-channel output + Main pair | R1–R3: `RenderCallback(main, cue, n)`, `OutputRouting.h` scatter + resolve, all three backends open every output, output channel count/names, hot routing, macOS device-alive event, ABI, `OutputSetups` + Settings → Outputs (Main only, Cue picker hidden), ASIO pair migration. Behaviour unchanged on stereo devices | — | — |
 | 2 | Cue bus + click routing | R4–R5: `Track::cue_`, `cueBus_`, taps (leaf/group/return, muted/solo exemption), Cue level/meter, click destination + level, ABI, smoke cases; Cue picker + click rows in Outputs | 1 | — |
 | 3 | Cue in the mixer, project and MIDI Learn | Cue strip, track Cue toggles on every surface, unavailable/fallback states, project v32, MIDI Learn kinds, EN + RU strings, docs | 2 | #483 |
 
