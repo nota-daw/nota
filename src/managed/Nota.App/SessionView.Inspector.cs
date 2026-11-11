@@ -273,7 +273,7 @@ public sealed partial class SessionView
         if (!follow) { var off = Mono(Loc.T("session.inspector.off_globally"), 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
         else if (bypass) { var off = Mono(Loc.T("session.inspector.bypassed"), 9, NotaPalette.Warning); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
         fa.Children.Add(faHead);
-        var bypassChip = Chip(bypass ? "On" : Loc.T("common.off"), bypass, _ => Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; }));
+        var bypassChip = Chip(bypass ? Loc.T("common.on") : Loc.T("common.off"), bypass, _ => Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; }));
         ToolTip.SetTip(bypassChip, Loc.T("session.inspector.bypass_keeps_this_clips_follow"));
         fa.Children.Add(Row(Loc.T("session.inspector.bypass"), bypassChip));
         var rules = new StackPanel { Spacing = 10 };

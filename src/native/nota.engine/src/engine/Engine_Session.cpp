@@ -1290,15 +1290,19 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
     }
 
     // Follow action: once the slot has played its follow time, pick A or B by weight.
-    if (!sessionFollow_.load(std::memory_order_relaxed)) return;
     if (s.followA == FollowAction::None && s.followB == FollowAction::None) return;
+    // A bypassed clip (#499) keeps counting follow times while the global switch is off too, so
+    // switching Follow back on and Bypass off doesn't fire a time that ran out meanwhile.
+    if (!sessionFollow_.load(std::memory_order_relaxed) && !s.followBypass) return;
     const double due = s.followBeats > 0.0 ? s.followBeats : (s.lengthBeats > 0.0 ? s.lengthBeats : 4.0);
-    if (sp.playedBeats.load(std::memory_order_relaxed) - sp.followFrom + blockBeats * 0.5 < due) return;
-    // Bypassed (#499): the period ends without an action and the next one counts on from here,
-    // so turning the bypass off fires at the end of the period then running — never at once,
-    // for a time that ran out while it was bypassed.
+    const double elapsed = sp.playedBeats.load(std::memory_order_relaxed) - sp.followFrom + blockBeats * 0.5;
+    if (elapsed < due) return;
+    // Bypassed: the periods that ended pass without an action and the next one counts on from
+    // here, so turning the bypass off fires at the end of the period then running, never at
+    // once for a time that ran out while it was bypassed. All of them are counted in one go, as
+    // the follow time may have been shortened meanwhile.
     if (s.followBypass) {
-        sp.followFrom += due;
+        sp.followFrom += std::floor(elapsed / due) * due;
         return;
     }
     const int32_t total = s.chanceA + s.chanceB;

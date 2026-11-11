@@ -5,8 +5,8 @@
 ## Summary
 
 A per-slot `followBypass` flag. The follow check counts the slot's follow time from a moving
-start (`SessionPlayer::followFrom`): a bypassed slot moves it on by one follow time each time
-one ends, instead of firing, so turning the bypass off fires at the end of the time then
+start (`SessionPlayer::followFrom`): a bypassed slot moves it on by the follow times that have
+ended, instead of firing, so turning the bypass off fires at the end of the time then
 running. The clip inspector gets a Bypass row; the flag is saved (format 33) and exposed over
 MCP.
 
@@ -32,7 +32,8 @@ bypass goes off, save → reopen, a v32 project.
 - `SessionPlayer::followFrom` — beats played where the follow time counts from; 0 at a launch
   (`maybeApply`) and when an action of None restarts the count.
 - `Engine::sessionPreApply`: due when `playedBeats - followFrom` reaches the follow time; a
-  bypassed slot then adds the follow time to `followFrom` and returns.
+  bypassed slot then adds the whole follow times that have ended to `followFrom` and returns. A
+  bypassed slot counts with the global Follow switch off too.
 - `SessionSlotDto.FollowBypass`, captured and applied with the other clip properties;
   `CurrentFormatVersion` 33 with a no-op migration. `CueOutputTests` checks "32 or later" and the
   current format, like `AuroraTableTests` did for 31.

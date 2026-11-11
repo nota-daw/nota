@@ -19,6 +19,7 @@ internal static class FollowBypassTests
     {
         foreach (var r in BypassHoldsTheClip()) yield return r;
         foreach (var r in NoCatchUpAfterBypass()) yield return r;
+        foreach (var r in BypassClockKeepsRunning()) yield return r;
         foreach (var r in SavedWithTheProject()) yield return r;
     }
 
@@ -104,6 +105,55 @@ internal static class FollowBypassTests
             $"turned back on, the follow action fires at the end of the follow time then running (playing {e.SessionPlayingSlot(t)})");
         e.StopAllSession();
         e.StopTransport();
+    }
+
+    // The bypass clock keeps counting with the global Follow switch off, and counts every follow
+    // time that ended when the time is shortened while bypassed; turned back on, neither fires
+    // at once.
+    private static IEnumerable<(bool, string)> BypassClockKeepsRunning()
+    {
+        using (var e = Rolling())
+        {
+            int t = FollowTrack(e);
+            Bypass(e, t, true);
+            e.SessionFollow = false;
+            e.Seek(0);
+            e.LaunchSlot(t, 0);
+            Beats(e, 2.5);
+            e.SessionFollow = true;
+            Bypass(e, t, false);
+            Beats(e, 0.3);
+            yield return (e.SessionPlayingSlot(t) == 0,
+                $"a time that ran out with Follow off globally doesn't fire when it and the bypass are turned off (playing {e.SessionPlayingSlot(t)})");
+            Beats(e, 0.5);
+            yield return (e.SessionPlayingSlot(t) == 1,
+                $"the action fires at the end of the follow time then running (playing {e.SessionPlayingSlot(t)})");
+            e.StopAllSession();
+            e.StopTransport();
+        }
+        using (var e = Rolling())
+        {
+            int t = FollowTrack(e);
+            e.TryGetSessionClipProps(t, 0, out var p);
+            p.FollowBeats = 8.0;
+            p.FollowBypass = 1;
+            e.SetSessionClipProps(t, 0, p);
+            e.Seek(0);
+            e.LaunchSlot(t, 0);
+            Beats(e, 2.5);
+            p.FollowBeats = 1.0;
+            e.SetSessionClipProps(t, 0, p);
+            Beats(e, 0.1);
+            Bypass(e, t, false);
+            Beats(e, 0.3);
+            yield return (e.SessionPlayingSlot(t) == 0,
+                $"shortening the follow time while bypassed doesn't fire the times it already covers (playing {e.SessionPlayingSlot(t)})");
+            Beats(e, 0.5);
+            yield return (e.SessionPlayingSlot(t) == 1,
+                $"the action fires at the end of the shortened follow time then running (playing {e.SessionPlayingSlot(t)})");
+            e.StopAllSession();
+            e.StopTransport();
+        }
     }
 
     private static IEnumerable<(bool, string)> SavedWithTheProject()

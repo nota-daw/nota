@@ -83,12 +83,13 @@ the third doesn't fire at once: the action fires where the third time ends.
 ### Edge Cases
 
 - **Global Follow off**: the whole section is dimmed and reads **Off globally**, as before;
-  Bypass can still be set, and takes effect when Follow comes back on.
+  Bypass can still be set, and takes effect when Follow comes back on. A bypassed clip keeps
+  counting its follow times meanwhile, so nothing fires at once when Follow is switched back on and Bypass off.
 - **Both actions None**: nothing fires either way; Bypass changes nothing audible.
 - **Copy, duplicate, capture, scene insert and move**: the bypass travels with the slot, like
   its other properties.
 - **A follow time changed while bypassed**: the count continues against the new time from the
-  last period boundary.
+  last period boundary; periods the new time has already covered are skipped, not fired.
 
 ## Requirements
 
