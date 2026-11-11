@@ -90,7 +90,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track mid-take lands its part and the rest keep going. Arm more tracks with ⌘-click
   (Ctrl-click). For now an audio take records either the hardware inputs or one track's
   output (internal resampling), not both at once.
-- **Name and switch off inputs** (#353, specs/086): Settings → Audio → **Inputs** lists every
+- **Name and switch off inputs** (#353, specs/086): Settings → **Inputs** lists every
   input of the device with the name it gives it, a switch and a name of your own, then the
   stereo pairs, which can be named too. Track input menus list only the inputs that are on,
   under your names (an interface with more than 16 inputs groups them under **Mono inputs**
@@ -138,6 +138,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Settings, reorganised** (#427, specs/088): every setting is on a page named for it.
+  - **Outputs** and **Inputs** are their own pages under Devices: the output device and the
+    test tone on one, the input device and the list of inputs with their switches and names
+    on the other. **Audio** keeps the audio system, sample rate, buffer, latency and the CPU
+    check. With ASIO the driver is still picked on Audio; its output and input pairs are on
+    Outputs and Inputs.
+  - A new **Remote control** group holds **Remote** and **AI control (MCP)**, now its own page.
+  - **Appearance** keeps only the look (theme, accent, waveform, track headers, scale, text
+    size). **Language** is its own page, and a new **Editing** page holds the piano-roll note
+    labels, fades on split audio clips and the detail-panel switch.
+  - The command palette has a **Settings:** command for each new page, and the track input
+    menu's **Audio I/O setup** opens Inputs. Every setting keeps its value.
 - **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
   Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
   for Russian, and the English one otherwise. The choice used to follow the OS language, so a

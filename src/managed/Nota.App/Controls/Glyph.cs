@@ -36,6 +36,7 @@ internal enum GlyphKind
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (24-unit grid, see Paths)
     Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
+    Output, Globe,                 // Settings → Outputs and Language
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
     Expand, Shrink,                // a panel filling the window, and back to its split
@@ -517,6 +518,10 @@ internal sealed class Glyph : Control
         [GlyphKind.Replace] = ("M4 10 H14 V20 H4 Z M9 7 A6 6 0 0 1 20 9.5 V14 M17.5 11.5 L20 14 L22.5 11.5", null),
         // A speaker cone; layer a Speaker* wave kind over it.
         [GlyphKind.Speaker] = ("M4 9 h4 l5 -4 v14 l-5 -4 h-4 z", null),
+        // A speaker with one wave (Settings → Outputs).
+        [GlyphKind.Output] = ("M4 9 h4 l5 -4 v14 l-5 -4 h-4 z M16 9.5 a3.5 3.5 0 0 1 0 5 M18.5 7 a7 7 0 0 1 0 10", null),
+        // A globe: its outline, the equator and one meridian (Settings → Language).
+        [GlyphKind.Globe] = ("M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 Z M3 12 H21 M12 3 A13.5 13.5 0 0 1 12 21 A13.5 13.5 0 0 1 12 3", null),
         // A cross beside the speaker (muted).
         [GlyphKind.SpeakerMute] = ("M16 9 l5 6 M21 9 l-5 6", null),
         // One wave beside the speaker (quiet).

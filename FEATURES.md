@@ -369,7 +369,7 @@ docks as a panel under any of the three, or floats in its own window — see
     while a take is recording.
   - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
     of that pitch; a vertical drag on the keys zooms the rows.
-  - **Key labels**: only C by default; Settings → Appearance → Piano roll labels every note
+  - **Key labels**: only C by default; Settings → Editing → Piano roll labels every note
     (C, C#, D…) instead — an aid for beginners. Folded rows and Drum Rack pads are always
     named either way.
   - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
@@ -612,7 +612,7 @@ docks as a panel under any of the three, or floats in its own window — see
   `get_track_midi_input`.
 - **Several tracks in one pass**: Record records every armed audio track, each its own input,
   aligned, one undo step; a mono input records a mono file.
-- **Inputs setup** (Settings → Audio → Inputs): switch inputs off and name inputs and stereo
+- **Inputs setup** (Settings → Inputs): switch inputs off and name inputs and stereo
   pairs per device; track input menus follow.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
@@ -647,7 +647,7 @@ docks as a panel under any of the three, or floats in its own window — see
   SUSTAIN / RELEASE sliders. The waveform is drawn shaped the way it sounds. By default the
   sample plays its full length at full level; double-click a handle to reset its stage.
   Editing in either place updates the other, each edit is one undo step, split keeps the
-  attack on the left piece and the release on the right, and — unless Settings → Appearance →
+  attack on the left piece and the release on the right, and — unless Settings → Editing →
   **Fade audio clips when splitting** is off — also writes a 4 ms fade at the cut (release on
   the left, attack on the right) so the cut does not click. Drag those corner handles to make
   it longer or shorter. **Fade at splits** (command palette, or an audio clip's menu; no
@@ -1479,8 +1479,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   backends don't yet, so there it never appears.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
-- **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
-  (each page with an icon and a short description), large switches, latency in
+- **Settings** — a larger window with a sidebar grouped into Devices, Remote control,
+  Plug-ins and General (each page with an icon and a short description; every setting on the
+  page named for it), large switches, latency in
   milliseconds, colour themes shown as miniature Nota windows, and key-cap shortcuts with a filter.
 - **Device window** (a device opened from a Drum Rack, Instrument Rack, Audio Effect Rack or
   a Nota Rhythm voice): the title bar carries the device, track, preset picker, bypass and
@@ -1490,7 +1491,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   its devices, a clip or a filled Session slot opens in the Clip tab; also View → Toggle
   detail panel and Show devices. A plain click on a track, clip, mixer strip or slot only
   selects; an open panel follows the selection. A plug-in instrument's own window opens
-  from **Open editor** on its card. Settings → Appearance → **Open the detail panel when
+  from **Open editor** on its card. Settings → Editing → **Open the detail panel when
   you select a track or clip** makes every selection open it.
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
@@ -1518,13 +1519,16 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 ## Preferences
 
-- **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
-  (Windows). On Windows, **Audio system** WASAPI / **ASIO**: the driver, the output and input
-  channel pairs (by the driver's channel names; other outputs silent), **Driver settings…**
-  for the driver's own panel (buffer size changes there are picked up without a restart);
-  the Latency line shows the driver's latency and round trip. Recorded takes are moved
-  earlier by the driver's reported latency; a missing or failed driver falls back to WASAPI
-  with the reason in the status bar, and **Try again** returns to ASIO.
+- **Audio**: sample rate, buffer size (latency), the CPU check; **WASAPI exclusive mode**
+  (Windows). On Windows, **Audio system** WASAPI / **ASIO**: the driver and **Driver
+  settings…** for the driver's own panel (buffer size changes there are picked up without a
+  restart); the Latency line shows the driver's latency and round trip. Recorded takes are
+  moved earlier by the driver's reported latency; a missing or failed driver falls back to
+  WASAPI with the reason in the status bar, and **Try again** returns to ASIO.
+- **Outputs**: the output device (under ASIO, the driver's output channel pair, by its channel
+  names; other outputs silent) and the test tone.
+- **Inputs**: the input device (under ASIO, the driver's input channel pair) and the inputs
+  setup — switch inputs off and name inputs and stereo pairs per device.
 - **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by
   default) and the per-note bend range (±12 / 24 / 48 / 96 semitones).
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
@@ -1553,16 +1557,17 @@ audio effects after it keep running and keep their settings; saved with the proj
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
   layout (device cards keep theirs), live and remembered. **Waveform** —
-  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Fade audio
-  clips when splitting** — on by default; a split then writes a 4 ms fade at the cut, which
-  the corner handles can drag longer or shorter. **Track
-  headers** — Left / Right side of the arrangement's track list. **Open the detail panel
-  when you select a track or clip** (off by default: a double-click opens it). **Label every
-  note in the piano roll** — the keys column names every note instead of only C (off by
-  default; very short rows keep C only). Also
-  **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
-  ready-made client JSON config to the clipboard).
-- **Language** (Appearance): the interface language. Nota ships in **English**; every other
+  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Track
+  headers** — Left / Right side of the arrangement's track list.
+- **Editing**: **Label every note in the piano roll** — the keys column names every note
+  instead of only C (off by default; very short rows keep C only). **Fade audio clips when
+  splitting** — on by default; a split then writes a 4 ms fade at the cut, which the corner
+  handles can drag longer or shorter. **Open the detail panel when you select a track or
+  clip** (off by default: a double-click opens it).
+- **Remote** and **AI control (MCP)** (the Remote control group): Nota Remote (see below);
+  the MCP server on/off, a port field, and "Copy config" (copies a ready-made client JSON
+  config to the clipboard).
+- **Language**: the interface language. Nota ships in **English**; every other
   language is downloaded from [nota-translations](https://github.com/nota-daw/nota-translations).
   The drop-down lists English, the installed languages and those available for download, each
   in its own name with how complete it is for this version; choosing one downloads it
@@ -1587,8 +1592,8 @@ audio effects after it keep running and keep their settings; saved with the proj
 ## MCP / AI control
 
 A built-in **MCP server** (over HTTP, loopback `127.0.0.1` only) lets an AI (Claude Desktop
-or Claude Code) write music directly in the open Nota project. Enable it in Preferences
-(Appearance → "AI control (MCP)"); it is off by default. Every edit goes through undo and
+or Claude Code) write music directly in the open Nota project. Enable it in Settings →
+AI control (MCP); it is off by default. Every edit goes through undo and
 appears in the UI immediately.
 
 Coverage:

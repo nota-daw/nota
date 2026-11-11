@@ -2805,7 +2805,7 @@ public sealed partial class ArrangementView : UserControl
             foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
             recInput.Items.Add(new Separator());
             recInput.Items.Add(MenuKit.Item(Loc.T("record_input_pick.audio_io_setup"), GlyphKind.Levels,
-                () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowAudioPreferences()));
+                () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowInputPreferences()));
         }
 
         // MIDI input ▸ (instrument tracks): which device and channel reach the track (specs/086).

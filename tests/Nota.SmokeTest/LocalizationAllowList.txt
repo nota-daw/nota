@@ -2514,14 +2514,14 @@ Nota.Application/Palette/CommandCatalog.cs	overdub replace take pass loop record
 Nota.Application/Palette/CommandCatalog.cs	pitch shift	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	play row	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences controller keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
-Nota.Application/Palette/CommandCatalog.cs	preferences device driver sample rate buffer	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences driver asio sample rate buffer latency cpu	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences folders	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences hotkeys keys keyboard	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences joystick controller	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences options	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences phone	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	preferences store models sample packs	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
-Nota.Application/Palette/CommandCatalog.cs	preferences theme dark light language langue francais english	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences theme dark light skin accent scale text size waveform	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences update automatic check version	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	quantise grid snap align	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	quit close leave	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
@@ -2715,3 +2715,20 @@ Nota.Application/Themes/ThemeFile.cs	Panel	# data: theme token name
 Nota.Application/Themes/ThemeFile.cs	Record	# data: theme token name
 Nota.Application/Themes/ThemeFile.cs	Solo	# data: theme token name
 Nota.Application/Themes/ThemeFile.cs	Success	# data: theme token name
+Nota.App/MainWindow.AudioFormat.cs	Inputs	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Editing	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Inputs	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Language	# data: page id passed to ShowPreferencesPage
+Nota.App/MainWindow.Commands.cs	Outputs	# data: page id passed to ShowPreferencesPage
+Nota.App/PreferencesWindow.AudioIo.cs	Audio	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.Downloads.cs	Downloads	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.Remote.cs	Remote	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Editing	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Inputs	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Language	# data: stable page id (Page.Id); the shown title is translated
+Nota.App/PreferencesWindow.cs	Outputs	# data: stable page id (Page.Id); the shown title is translated
+Nota.Application/Palette/CommandCatalog.cs	preferences ai mcp claude assistant server port	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences input device channels microphone names stereo pairs	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences language langue francais english russian	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences output device speakers headphones test tone	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	preferences piano roll note names labels split fades detail panel	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)

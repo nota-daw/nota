@@ -66,10 +66,17 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         (Loc.T("preferences.devices_settings"), new[]
         {
-            new Page("Audio", Loc.T("common.audio"), Loc.T("preferences.device_sample_rate_and_buffer"), GlyphKind.Levels),
+            new Page("Audio", Loc.T("common.audio"), Loc.T("preferences.audio_subtitle"), GlyphKind.Levels),
+            new Page("Outputs", Loc.T("preferences.outputs"), Loc.T("preferences.outputs_subtitle"), GlyphKind.Output),
+            new Page("Inputs", Loc.T("preferences.inputs"), Loc.T("preferences.inputs_subtitle"), GlyphKind.Input),
             new Page("MIDI", "MIDI", Loc.T("preferences.controllers_nota_listens_to"), GlyphKind.MidiPort),
             new Page("Gamepads", Loc.T("preferences.gamepads"), Loc.T("preferences.play_notes_or_drive_mapped"), GlyphKind.Gamepad),
+        }),
+        // Things outside Nota that drive it: a phone on the network, an AI assistant over MCP.
+        (Loc.T("preferences.remote_control"), new[]
+        {
             new Page("Remote", Loc.T("preferences.remote"), Loc.T("preferences.phones_and_tablets_on_this"), GlyphKind.Phone),
+            new Page("MCP", Loc.T("preferences.ai_control_mcp"), Loc.T("preferences.mcp_subtitle"), GlyphKind.Action),
         }),
         (Loc.T("preferences.plug_ins"), new[]
         {
@@ -78,8 +85,10 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         (Loc.T("preferences.general"), new[]
         {
+            new Page("Appearance", Loc.T("preferences.appearance"), Loc.T("preferences.appearance_subtitle"), GlyphKind.Appearance),
+            new Page("Language", Loc.T("preferences.language"), Loc.T("preferences.language_subtitle"), GlyphKind.Globe),
+            new Page("Editing", Loc.T("preferences.editing"), Loc.T("preferences.editing_subtitle"), GlyphKind.Edit),
             new Page("Library", Loc.T("preferences.library"), Loc.T("preferences.content_folders_and_version_history"), GlyphKind.Library),
-            new Page("Appearance", Loc.T("preferences.appearance"), Loc.T("preferences.theme_scale_waveforms_and_ai"), GlyphKind.Appearance),
             new Page("Shortcuts", Loc.T("preferences.shortcuts"), Loc.T("preferences.keyboard_reference"), GlyphKind.Shortcuts),
             new Page("Updates", Loc.T("preferences.updates"), Loc.T("preferences.new_versions_of_nota"), GlyphKind.Update),
         }),
@@ -149,7 +158,14 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
         var sidebar = new Border
         {
-            Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0), Child = nav,
+            Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0),
+            // Fifteen pages outgrow the 480 px minimum height: the list scrolls so Shortcuts and
+            // Updates stay reachable in a short window.
+            Child = new ScrollViewer
+            {
+                Content = nav,
+                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            },
         };
 
         // The download dock is its own row under the scrolled pane: it shortens the pane
@@ -186,18 +202,28 @@ public sealed partial class PreferencesWindow : NotaWindow
     public void ShowDownloads(int source)
     {
         _downloadSource = Math.Clamp(source, 0, DownloadSources.Length - 1);
-        Select(DownloadsIndex);
+        Select("Downloads");
     }
 
     private static IEnumerable<Page> Pages => Nav.SelectMany(g => g.Pages);
 
-    /// <summary>Switches to the page with this title ("Audio", "Shortcuts" …) — the palette's
-    /// Settings: … commands.</summary>
-    public void ShowPage(string title)
+    // Pages are found by their stable id, never by position: inserting a page must not send
+    // a caller (palette, Remote pairing, Downloads, Updates) to its neighbour. An unknown id
+    // (an old caller) lands on the first page.
+    private static int IndexOf(string id)
     {
         int i = 0;
-        foreach (var p in Pages) { if (p.Id == title) { Select(i); return; } i++; }
+        foreach (var p in Pages) { if (p.Id == id) return i; i++; }
+        return 0;
     }
+
+    private string SelectedId => _selected >= 0 ? Pages.ElementAt(_selected).Id : "";
+
+    private void Select(string id) => Select(IndexOf(id));
+
+    /// <summary>Switches to the page with this id ("Audio", "Inputs", "MCP" …) — the palette's
+    /// Settings: … commands and every other way into a page.</summary>
+    public void ShowPage(string id) => Select(id);
 
     private Control BuildNavItem(Page page, int idx)
     {
@@ -233,7 +259,10 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private void Select(int index)
     {
-        StopTests();   // the Audio pane is rebuilt on every visit — don't leave a tone / check orphaned
+        StopTests();   // the audio panes are rebuilt on every visit — don't leave a tone / check orphaned
+        // Apply() refreshes latency and the input list only while their page is the one shown.
+        _latencyValue = _latencyDetail = null;
+        _inputsHost = null;
         _selected = index;
         for (int i = 0; i < _navItems.Count; i++)
         {
@@ -245,6 +274,13 @@ public sealed partial class PreferencesWindow : NotaWindow
             n.Label.Foreground = on ? TextPrimary : TextSecondary;
             n.Label.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
         }
+        // A page opened from elsewhere (ShowPage("Updates")) shows its row even when the sidebar is scrolled.
+        // Posted past layout: called before the window is measured, the row has no place to scroll to yet.
+        if (index >= 0 && index < _navItems.Count)
+        {
+            var row = _navItems[index].Root;
+            Dispatcher.UIThread.Post(() => row.BringIntoView(), DispatcherPriority.Loaded);
+        }
 
         var page = Pages.ElementAt(index);
         // The subtitle takes the width left beside the title and wraps: a longer translation must
@@ -255,7 +291,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         Grid.SetColumn(subtitle, 1);
         header.Children.Add(subtitle);
 
-        if (index == DownloadsIndex) { _content.Content = DownloadsPane(header); return; }
+        if (page.Id == "Downloads") { _content.Content = DownloadsPane(header); return; }
 
         // Padding lives inside the scrolled content: a ScrollViewer's own Padding isn't part of
         // its extent, so the last rows of a long pane (Shortcuts) couldn't be scrolled into view.
@@ -264,7 +300,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             Content = new Border
             {
                 Padding = new Thickness(32, 26, 32, 40),
-                Child = new StackPanel { Children = { header, BuildPane(index) } },
+                Child = new StackPanel { Children = { header, BuildPane(page.Id) } },
             },
         };
     }
@@ -272,26 +308,34 @@ public sealed partial class PreferencesWindow : NotaWindow
     // The Downloads item carries the number of registry plugins not installed yet.
     private void UpdateDownloadsBadge(int count)
     {
-        var badge = _navItems[DownloadsIndex].Badge;
+        var badge = _navItems[IndexOf("Downloads")].Badge;
         badge.Text = count.ToString();
         badge.IsVisible = count > 0;
     }
 
-    private Control BuildPane(int index) => index switch
+    private Control BuildPane(string id) => id switch
     {
-        0 => AudioPane(),
-        1 => MidiPane(),
-        2 => GamepadsPane(),
-        RemoteIndex => RemotePane(),
-        4 => PluginsPane(),
-        6 => LibraryPane(),
-        7 => AppearancePane(),
-        UpdatesIndex => UpdatesPane(),
+        "Audio" => AudioPane(),
+        "Outputs" => OutputsPane(),
+        "Inputs" => InputsPane(),
+        "MIDI" => MidiPane(),
+        "Gamepads" => GamepadsPane(),
+        "Remote" => RemotePane(),
+        "MCP" => McpPane(),
+        "Plug-ins" => PluginsPane(),
+        "Appearance" => AppearancePane(),
+        "Language" => LanguagePane(),
+        "Editing" => EditingPane(),
+        "Library" => LibraryPane(),
+        "Updates" => UpdatesPane(),
         _ => ShortcutsPane(),
     };
 
     // ---- Audio ------------------------------------------------------------
 
+    // Audio: how the device runs — audio system and driver (Windows), sample rate, buffer,
+    // exclusive mode, latency and the CPU check. Which output and which inputs are on their
+    // own pages (Outputs, Inputs — specs/088).
     private Control AudioPane()
     {
         if (_main is null) return Caption(Loc.T("preferences.audio_settings_are_unavailable_in"));
@@ -299,14 +343,6 @@ public sealed partial class PreferencesWindow : NotaWindow
         _loading = true;
         var engine = _main.Engine;
         var cfg = engine.GetAudioConfig();
-
-        var outputCombo = Combo(280);
-        FillDeviceCombo(outputCombo, _outputUids, _audioDevices.OutputDevices(), cfg.OutputUid);
-        outputCombo.SelectionChanged += (_, _) => { int i = outputCombo.SelectedIndex; if (i >= 0 && i < _outputUids.Count) { engine.SetAudioOutputDevice(_outputUids[i]); Apply(); } };
-
-        var inputCombo = Combo(280);
-        FillDeviceCombo(inputCombo, _inputUids, _audioDevices.InputDevices(), cfg.InputUid);
-        inputCombo.SelectionChanged += (_, _) => { int i = inputCombo.SelectedIndex; if (i >= 0 && i < _inputUids.Count) { engine.SetAudioInputDevice(_inputUids[i]); Apply(); } };
 
         var srCombo = Combo(150);
         foreach (var sr in SampleRates) srCombo.Items.Add(sr == 0 ? Loc.T("preferences.device_default") : NotaNum.Unit(sr, "0", "Hz"));
@@ -329,41 +365,31 @@ public sealed partial class PreferencesWindow : NotaWindow
         bool asio = asioUi && engine.AudioSystem == AudioSystem.Asio;
         if (asioUi) AudioSystemRows(device, engine, asio);
         if (asio)
-        {
             AsioRows(device, engine, srCombo);
-            device.Add(Row(Loc.T("preferences.latency"), latency));
-            var asioBody = Sections(
-                Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
-                InputsHost(engine),
-                Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
-            _loading = false;
-            return asioBody;
-        }
-        device.AddRange(new[]
+        else
         {
-            Row(Loc.T("common.output"), outputCombo), Row(Loc.T("common.input"), inputCombo),
-            Row(Loc.T("preferences.sample_rate"), srCombo), Row(Loc.T("preferences.buffer_size"), bufCombo),
-        });
-        // WASAPI exclusive (Windows only): lets Nota own the output device for the lowest
-        // latency, at the cost of muting other apps. The device then dictates the sample rate /
-        // buffer, so those are ignored while it's on. If the device refuses exclusive (busy /
-        // not allowed), the backend falls back to shared mode and the latency line says so.
-        if (OperatingSystem.IsWindows())
-        {
-            device.Add(Row(Loc.T("preferences.exclusive_mode"), SwitchRow(Loc.T("preferences.wasapi_exclusive_lowest_latency_mutes"), cfg.WasapiExclusive, on =>
+            device.Add(Row(Loc.T("preferences.sample_rate"), srCombo));
+            device.Add(Row(Loc.T("preferences.buffer_size"), bufCombo));
+            // WASAPI exclusive (Windows only): lets Nota own the output device for the lowest
+            // latency, at the cost of muting other apps. The device then dictates the sample rate /
+            // buffer, so those are ignored while it's on. If the device refuses exclusive (busy /
+            // not allowed), the backend falls back to shared mode and the latency line says so.
+            if (OperatingSystem.IsWindows())
             {
-                if (_loading) return;
-                engine.SetAudioWasapiExclusive(on);
-                Apply();
-            })));
-            device.Add(Row("", Caption(Loc.T("preferences.the_devices_native_sample_rate"))));
+                device.Add(Row(Loc.T("preferences.exclusive_mode"), SwitchRow(Loc.T("preferences.wasapi_exclusive_lowest_latency_mutes"), cfg.WasapiExclusive, on =>
+                {
+                    if (_loading) return;
+                    engine.SetAudioWasapiExclusive(on);
+                    Apply();
+                })));
+                device.Add(Row("", Caption(Loc.T("preferences.the_devices_native_sample_rate"))));
+            }
         }
         device.Add(Row(Loc.T("preferences.latency"), latency));
 
         var body = Sections(
             Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
-            InputsHost(engine),
-            Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
+            Section(Loc.T("preferences.test"), 8, CpuCheckRow(engine)));
         _loading = false;
         return body;
     }
@@ -393,7 +419,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 : Loc.T("preferences.no_asio_driver_found_install"))));
     }
 
-    // Driver · Output pair · Input pair · Sample rate · Buffer size (read-only) under ASIO.
+    // Driver · Sample rate · Buffer size (read-only) under ASIO. The output and input pairs are
+    // on the Outputs and Inputs pages (specs/088).
     // Pairs come from the open driver, so they show once it runs; the buffer size is the
     // driver's own setting (FR-008), changed in its panel ("Driver settings…").
     private void AsioRows(List<Control> device, IAudioEngine engine, ComboBox srCombo)
@@ -435,13 +462,6 @@ public sealed partial class PreferencesWindow : NotaWindow
             RebuildAudioPane();
         };
         device.Add(Row(Loc.T("preferences.driver"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { driverCombo, panel } }));
-
-        if (running)
-        {
-            device.Add(Row(Loc.T("common.output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
-            var ins = engine.AsioChannels(true);
-            device.Add(Row(Loc.T("common.input"), ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption(Loc.T("preferences.no_inputs_on_this_driver"))));
-        }
 
         // Sample rate is a request: a rate the driver refuses is reverted and explained (FR-007).
         // The view model remembers the refusal, so it also shows after an apply that waited for
@@ -513,7 +533,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private void OnAudioDeviceRestarted()
     {
-        if (_selected == 0) RebuildAudioPane();   // 0 = the Audio page
+        if (SelectedId is "Audio" or "Outputs" or "Inputs") RebuildAudioPane();
     }
 
     private Control TestToneRow()
@@ -1321,136 +1341,20 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
-    private Control AppearancePane()
-    {
-        var settings = App.Services.GetService<ISettingsService>();
-        var mcp = App.Services.GetService<McpService>();
-
-        // ---- AI control (MCP server) ----
-        var portBox = new TextBox
-        {
-            Text = (settings?.Current.McpPort ?? 3900).ToString(), Width = 96, Classes = { "field" },
-            FontSize = 11, FontFamily = NotaFonts.UiFamily, HorizontalAlignment = HorizontalAlignment.Left,
-        };
-        var statusDot = Dot(BorderStrong);
-        var status = new TextBlock
-        {
-            FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var copyBtn = Btn(Loc.T("preferences.copy_config"));
-        copyBtn.HorizontalAlignment = HorizontalAlignment.Left;
-        var details = new StackPanel
-        {
-            Spacing = 10,
-            Children =
-            {
-                Row(Loc.T("preferences.port"), portBox),
-                Row(Loc.T("preferences.status"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { statusDot, status } }),
-                Row("", new StackPanel
-                {
-                    Spacing = 10,
-                    Children =
-                    {
-                        copyBtn,
-                        Caption(Loc.T("preferences.add_this_config_or_the")),
-                    },
-                }),
-            },
-        };
-
-        bool Enabled() => settings?.Current.McpEnabled ?? false;
-        void Refresh()
-        {
-            bool on = Enabled();
-            status.Text = on ? Loc.F("preferences.listening_on_http_127_0", settings!.Current.McpPort) : Loc.T("common.off");
-            statusDot.Fill = on ? NotaPalette.SuccessDim : BorderStrong;
-            portBox.IsEnabled = on;
-            portBox.Foreground = on ? TextPrimary : TextDisabled;
-            copyBtn.IsEnabled = on;
-            Inactive.Set(details, !on);
-        }
-        void ApplyMcp(bool on)
-        {
-            if (settings is null) return;
-            settings.Current.McpEnabled = on;
-            if (int.TryParse(portBox.Text, out var p) && p is > 0 and < 65536) settings.Current.McpPort = p;
-            settings.Save();
-            _ = mcp?.ApplyAsync();
-            Refresh();
-        }
-        var enable = SwitchRow(Loc.T("preferences.enable_mcp_server_let_an"), Enabled(), ApplyMcp);
-        portBox.LostFocus += (_, _) => ApplyMcp(Enabled());
-
-        // Copy a ready client-config JSON (Claude Desktop / Claude Code) with the current port.
-        string McpConfigJson()
-        {
-            int port = settings?.Current.McpPort ?? 3900;
-            return "{\n  \"mcpServers\": {\n    \"nota\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:" + port + "/\"\n    }\n  }\n}";
-        }
-        DispatcherTimer? copied = null;
-        copyBtn.Click += async (_, _) =>
-        {
-            var cb = TopLevel.GetTopLevel(this)?.Clipboard;
-            if (cb is null) return;
-            await cb.SetTextAsync(McpConfigJson());
-            copyBtn.Content = Loc.T("preferences.copied");
-            copied?.Stop();
-            copied = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
-            copied.Tick += (_, _) => { copied!.Stop(); copyBtn.Content = Loc.T("preferences.copy_config"); };
-            copied.Start();
-        };
-        // Inactive.Set walks the visual tree, so the dimming waits until the pane is shown.
-        details.AttachedToVisualTree += (_, _) => Refresh();
-
-        // Piano-roll key labels: every note for beginners, C-only by default.
-        var labelAll = SwitchRow(Loc.T("preferences.label_every_note_in_the"), settings?.Current.PianoRollLabelAllNotes ?? false, on =>
-        {
-            if (settings is null) return;
-            settings.Current.PianoRollLabelAllNotes = on;
-            settings.Save();
-        });
-
-        // Detail panel (#308): a selection opens a closed panel only when this is on.
-        var openOnSelect = SwitchRow(Loc.T("preferences.open_the_detail_panel_when"), settings?.Current.OpenDetailOnSelect ?? false, on =>
-        {
-            if (settings is null) return;
-            settings.Current.OpenDetailOnSelect = on;
-            settings.Save();
-        });
-
-        var splitFades = SwitchRow(Loc.T("preferences.fade_audio_clips_when_splitting"), settings?.Current.SplitFades ?? true, on =>
-        {
-            if (settings is null) return;
-            settings.Current.SplitFades = on;
-            settings.Save();
-            _main.Engine.SplitFades = on;
-        });
-
-        return Sections(
-            Section("UI", 10,
-                TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
-                Row("", Caption(Loc.T("preferences.skins.follow_system_hint"))),
-                TopRow(Loc.T("preferences.accent"), AccentPicker()),
-                Row("", Caption(Loc.T("preferences.accent_caption"))),
-                Row(Loc.T("preferences.waveform"), WaveformPicker()),
-                Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
-                Row("", splitFades),
-                Row("", Caption(Loc.T("preferences.splitting_an_audio_clip_adds"))),
-                Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
-                Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
-                Row(Loc.T("preferences.interface_scale"), ScalePicker()),
-                Row("", Caption(Loc.T("preferences.makes_the_whole_interface_larger"))),
-                Row(Loc.T("preferences.text_size"), TextSizePicker()),
-                Row("", Caption(Loc.T("preferences.text_size_caption"))),
-                Row(Loc.T("preferences.language"), LanguagePicker()),
-                Row("", Caption(Loc.T("preferences.the_language_of_menus_panels")))),
-            Section(Loc.T("common.piano_roll"), 10, labelAll,
-                Caption(Loc.T("preferences.shows_every_note_name_c"))),
-            Section(Loc.T("preferences.detail_panel"), 10, openOnSelect,
-                Caption(Loc.T("preferences.off_a_click_only_selects"))),
-            Section(Loc.T("preferences.ai_control_mcp"), 12, enable, details));
-    }
+    private Control AppearancePane() => Sections(
+        Section("UI", 10,
+            TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
+            Row("", Caption(Loc.T("preferences.skins.follow_system_hint"))),
+            TopRow(Loc.T("preferences.accent"), AccentPicker()),
+            Row("", Caption(Loc.T("preferences.accent_caption"))),
+            Row(Loc.T("preferences.waveform"), WaveformPicker()),
+            Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+            Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
+            Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
+            Row(Loc.T("preferences.interface_scale"), ScalePicker()),
+            Row("", Caption(Loc.T("preferences.makes_the_whole_interface_larger"))),
+            Row(Loc.T("preferences.text_size"), TextSizePicker()),
+            Row("", Caption(Loc.T("preferences.text_size_caption")))));
 
     // ---- Shortcuts --------------------------------------------------------
 
