@@ -508,6 +508,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Monitoring a track through an audio track no longer crackles** (#563): an audio track whose
+  input is another track (an instrument, say) played it with clicks while monitoring, though a
+  recording of the same input was clean. It happened whenever the audio device asked for blocks
+  of varying length, as a Bluetooth output or one running at another sample rate does, and once
+  a pass at the loop seam. The monitored signal is now continuous, one block behind its source
+  as before.
 - **Discard and retry keeps the count-in out of an audio take** (#521): retrying an audio take
   that counted in from stop counted in again, but the input was recorded from the moment of the
   retry, so the new clip began with the count-in and ran late against the playhead by its
