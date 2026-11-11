@@ -6,6 +6,7 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import { tiltSupport, requestTilt, followTilt, type Form } from '../lib/device.svelte';
+  import { pct } from '../lib/fmt';
 
   let { form }: { form: Form } = $props();
   const portrait = $derived(form === 'phone');
@@ -20,8 +21,10 @@
   let lastSend = 0;
   let stopTilt: (() => void) | null = null;
   const support = tiltSupport();
-  // The point is live while a finger or the phone's tilt moves it: then, and only then, the accent.
+  // The point is live while a finger or the phone's tilt moves it. Values carry the playing
+  // track's colour (spec 090); live, a quiet tint of it fills the field.
   const live = $derived(dragging || tilt);
+  const tc = $derived(app.track?.color ?? 'var(--viz-ink)');
 
   // Follow Nota's values while the finger is off (automation, the mouse, another phone).
   $effect(() => {
@@ -115,7 +118,7 @@
     const s = app.xy?.[a];
     const v = a === 'x' ? x : y;
     if (s && !s.map && !(tilt && s.tilt) && s.txt && !dragging && !tilt) return s.txt;
-    return Math.round(v * 100) + '\u2009%';
+    return pct(v);
   };
   const note = $derived(
     tilt ? 'Tilt the phone to move the point. Tap Tilt again to use your finger.'
@@ -124,12 +127,13 @@
 </script>
 
 <div class="xy" class:col={portrait}>
-  <div class="field" class:learnable={app.learn.on} role="slider" tabindex="0" aria-label="XY pad" aria-valuenow={Math.round(x * 100)}
+  <div class="field" class:moving={live} class:learnable={app.learn.on} style:--tc={tc} role="slider" tabindex="0" aria-label="XY pad" aria-valuenow={Math.round(x * 100)}
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
+    <div class="tint"></div>
     <div class="gridlines"></div>
-    <div class="vl" class:live style:left="{x * 100}%"></div>
-    <div class="hl" class:live style:top="{(1 - y) * 100}%"></div>
-    <div class="pt" class:live style:left="{x * 100}%" style:top="{(1 - y) * 100}%"><span></span></div>
+    <div class="vl" class:moving={live} style:left="{x * 100}%"></div>
+    <div class="hl" class:moving={live} style:top="{(1 - y) * 100}%"></div>
+    <div class="pt" class:moving={live} style:left="{x * 100}%" style:top="{(1 - y) * 100}%"><span></span></div>
     <span class="ax ax-x">{label('x')} →</span>
     <span class="ax ax-y">↑ {label('y')}</span>
     {#if tilt}<span class="pill">Tilt is moving the point</span>{/if}
@@ -138,9 +142,9 @@
     <div class="axes">
       {#each ['x', 'y'] as const as a}
         <div class="axis" class:learnable={app.learn.on}>
-          <span class="mono an">{a === 'x' ? 'X' : 'Y'}</span>
+          <span class="an">{a === 'x' ? 'X' : 'Y'}</span>
           <span class="names"><span class="pn">{label(a)}</span><span class="pd">{sub(a)}</span></span>
-          <span class="mono av">{value(a)}</span>
+          <span class="av">{value(a)}</span>
         </div>
       {/each}
     </div>
@@ -168,38 +172,41 @@
 <style>
   .xy { flex: 1; min-height: 0; display: flex; gap: 12px; }
   .xy.col { flex-direction: column; }
-  /* A graph window: the well, a rule frame, the viz grid. Crosshair and point neutral at rest. */
-  .field { flex: 1; min-height: 0; min-width: 0; position: relative; border-radius: 3px; background: var(--bg-sunken); box-shadow: var(--sunken); overflow: hidden; touch-action: none; }
+  /* A graph window on a card: the well, a rule frame, the viz grid. The crosshair and point
+     carry the track colour; while live a quiet tint of it fills the field. */
+  .field { flex: 1; min-height: 0; min-width: 0; position: relative; border-radius: var(--r-card); background: var(--bg-sunken); box-shadow: var(--sunken); overflow: hidden; touch-action: none; }
+  .tint { position: absolute; inset: 0; background: var(--tc); opacity: 0; transition: opacity var(--ease); }
+  .field.moving .tint { opacity: .1; }
   .gridlines { position: absolute; inset: 0; background-image: linear-gradient(var(--viz-grid) 1px, transparent 1px), linear-gradient(90deg, var(--viz-grid) 1px, transparent 1px); background-size: 25% 25%; background-position: -1px -1px; }
-  .vl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
-  .hl { position: absolute; left: 0; right: 0; height: 1px; background: var(--rule); }
-  .vl.live, .hl.live { background: var(--accent); }
-  .pt { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid var(--viz-ink); display: flex; align-items: center; justify-content: center; }
-  .pt span { width: 10px; height: 10px; border-radius: 50%; background: var(--viz-ink); }
-  .pt.live { border-color: var(--accent); }
-  .pt.live span { background: var(--accent); }
-  .ax { position: absolute; font-size: 11px; color: var(--text-faint); pointer-events: none; }
+  .vl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--tc); opacity: .45; }
+  .hl { position: absolute; left: 0; right: 0; height: 1px; background: var(--tc); opacity: .45; }
+  .vl.moving, .hl.moving { opacity: 1; }
+  .pt { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid var(--tc); display: flex; align-items: center; justify-content: center; }
+  .pt span { width: 10px; height: 10px; border-radius: 50%; background: var(--tc); }
+  .pt.moving span { width: 14px; height: 14px; }
+  .ax { position: absolute; font-size: 11px; color: var(--text-tertiary); pointer-events: none; }
   .ax-x { right: 10px; bottom: 8px; }
   .ax-y { left: 10px; top: 8px; }
-  .pill { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); height: 24px; display: flex; align-items: center; padding: 0 9px; border-radius: 3px; background: var(--accent); font-size: 11px; font-weight: 600; color: var(--ink-on-accent); white-space: nowrap; }
+  /* Tilt moving the point is live: the solid accent pill. */
+  .pill { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); height: 24px; display: flex; align-items: center; padding: 0 9px; border-radius: min(var(--r-cell), 8px); background: var(--accent); font-size: 11px; font-weight: 600; color: var(--ink-on-accent); white-space: nowrap; }
   .panel { width: 290px; flex: none; display: flex; flex-direction: column; gap: 10px; }
   :global(.tablet) .panel { width: 340px; }
   .col .panel { width: auto; }
-  .axes { border-radius: 3px; overflow: hidden; background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
+  .axes { border-radius: min(var(--r-group), 14px); overflow: hidden; background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
   .axis { height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 12px; outline-offset: -3px; }
   .axis + .axis { border-top: 1px solid var(--rule); }
-  .an { font-size: 13px; color: var(--text-muted); width: 12px; }
+  .an { font-size: 13px; font-weight: 600; color: var(--text-muted); width: 12px; }
   .names { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .pn { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pd { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .av { font-size: 13px; color: var(--text-primary); white-space: nowrap; }
+  .av { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; }
   .row { display: flex; gap: 8px; }
   .row .seg { flex: 1; }
   .row .seg button { height: 44px; }
   .tilt { height: 46px; padding: 0 14px; }
-  .ph { width: 10px; height: 14px; border-radius: 2px; border: 1.5px solid currentColor; transform: rotate(-18deg); }
+  .ph { width: 10px; height: 14px; border-radius: min(var(--r-fine), 3px); border: 1.5px solid currentColor; transform: rotate(-18deg); }
   .note { font-size: 11px; line-height: 1.5; color: var(--text-muted); }
   .note.dim { color: var(--text-tertiary); }
-  .auto { height: 30px; align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); font-size: 11px; font-weight: 600; color: var(--text-primary); }
+  .auto { height: 30px; align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: min(var(--r-cell), 10px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); font-size: 11px; font-weight: 600; color: var(--text-primary); }
   .rd { width: 7px; height: 7px; border-radius: 50%; background: var(--record); }
 </style>

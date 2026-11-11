@@ -5,6 +5,7 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import { device, toggleFullscreen, type Form } from '../lib/device.svelte';
+  import { bpm, unit } from '../lib/fmt';
 
   let { form }: { form: Form } = $props();
 
@@ -31,8 +32,8 @@
   const link = $derived.by(() => {
     const usb = app.via === 'usb' ? 'USB · ' : '';
     switch (app.link) {
-      case 'ok': return { dot: 'var(--success)', ink: 'var(--text-muted)', label: app.rtt >= 0 ? `${usb}${app.rtt}\u2009ms` : 'Connected' };
-      case 'weak': return { dot: 'var(--warning)', ink: 'var(--warning)', label: `Weak · ${app.rtt}\u2009ms` };
+      case 'ok': return { dot: 'var(--success)', ink: 'var(--text-muted)', label: app.rtt >= 0 ? usb + unit(app.rtt, 'ms') : 'Connected' };
+      case 'weak': return { dot: 'var(--warning)', ink: 'var(--warning)', label: `Weak · ${unit(app.rtt, 'ms')}` };
       case 'lost': case 'connecting': return { dot: 'var(--text-tertiary)', ink: 'var(--text-secondary)', label: app.link === 'lost' ? 'Reconnecting' : 'Connecting', blink: true };
       case 'down': return { dot: 'var(--danger)', ink: 'var(--danger-bright)', label: 'No connection', blink: true };
       default: return { dot: 'var(--danger)', ink: 'var(--danger-bright)', label: 'Not paired' };
@@ -84,11 +85,11 @@
 
   <div class="transport">
     <button class="tbtn" aria-label="Stop" onclick={stop}><span class="sq"></span></button>
-    <button class="tbtn play" class:on={app.tp.play} aria-label={app.tp.play ? 'Stop playback' : 'Play'} aria-pressed={app.tp.play} onclick={play}><span class="tri"></span></button>
+    <button class="tbtn play" class:live={app.tp.play} aria-label={app.tp.play ? 'Stop playback' : 'Play'} aria-pressed={app.tp.play} onclick={play}><span class="tri"></span></button>
     <button class="tbtn rec" class:on={app.tp.rec} class:count={app.countIn !== null} aria-label="Record" aria-pressed={app.tp.rec} onclick={rec}><span class="dot"></span></button>
     <button class="pos" class:open={app.bigTransport} aria-label="Big transport" onclick={() => (app.bigTransport = !app.bigTransport)}>
-      <span class="mono p">{pos}</span>
-      <span class="mono bpm">{app.tp.bpm.toFixed(2)}</span>
+      <span class="p">{pos}</span>
+      <span class="bpm">{bpm(app.tp.bpm)}</span>
       <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5 L5 6.5 L8 3.5" /></svg>
     </button>
     {#if !device.standalone}
@@ -105,7 +106,7 @@
   <div class="status">
     <button class="link" onclick={linkTip} aria-label="Connection: {link.label}">
       <span class="ldot" class:blink={link.blink} style:background={link.dot}></span>
-      <span class="mono" style:color={link.ink}>{link.label}</span>
+      <span class="lt" style:color={link.ink}>{link.label}</span>
     </button>
     <button class="menu" class:open={app.sheet === 'menu'} aria-label="Menu" onclick={() => (app.sheet = 'menu')}>
       <span></span><span></span><span></span>
@@ -114,17 +115,17 @@
 </header>
 
 <style>
-  /* A docked bar, like the desktop's transport row: panel, a seam below. */
+  /* A docked bar, like the desktop's transport row: panel, a seam below, square. */
   header { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 10px 10px; border-bottom: 1px solid var(--seam); background: var(--panel); position: relative; z-index: 6; }
   header.phoneLand { flex-wrap: nowrap; padding: 6px 10px; }
   header.tablet { flex-wrap: nowrap; padding: 10px 16px; }
   svg path { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
 
   .picker { order: 1; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
-  .step { width: 36px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 3px; }
+  .step { width: 36px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: min(var(--r-group), 14px); }
   .step:active { background: var(--bg-sunken); }
-  .track { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); border-radius: 3px; text-align: left; }
-  .bar { width: 3px; height: 24px; border-radius: 1px; flex: none; }
+  .track { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); border-radius: min(var(--r-group), 14px); text-align: left; }
+  .bar { width: 3px; height: 24px; border-radius: min(var(--r-fine), 1px); flex: none; }
   .names { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   .name { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sub { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -132,33 +133,36 @@
   .transport { order: 3; flex-basis: 100%; display: flex; align-items: center; gap: 6px; }
   .phoneLand .transport { order: 2; flex: 0 0 330px; }
   .tablet .transport { order: 2; flex: 0 0 460px; }
-  /* Transport keys: raised; Play on is solid accent, Record on solid record — each with derived ink. */
-  .tbtn { width: 44px; height: 40px; border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; align-items: center; justify-content: center; flex: none; color: var(--text-strong); transition: background-color var(--ease), border-color var(--ease), color var(--ease); }
+  /* Transport keys: raised; Play while running is live (solid accent), Record solid record — ink derived. */
+  .tbtn { width: 44px; height: 40px; border-radius: min(var(--r-group), 13px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; align-items: center; justify-content: center; flex: none; color: var(--text-strong); transition: background-color var(--ease), border-color var(--ease), color var(--ease); }
   .tbtn:active { background: var(--bg-sunken); box-shadow: none; }
   .tbtn.play { width: 54px; }
+  .tbtn.live { background: var(--accent); border-color: var(--accent); color: var(--ink-on-accent); box-shadow: none; }
   .fs svg path { stroke: var(--text-secondary); }
-  .sq { width: 11px; height: 11px; border-radius: 1px; background: currentColor; }
+  .sq { width: 11px; height: 11px; border-radius: calc(var(--r-fine) / 2); background: currentColor; }
   .tri { width: 0; height: 0; border-left: 12px solid currentColor; border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px; }
-  .play.on { background: var(--accent); border-color: var(--accent); box-shadow: none; color: var(--ink-on-accent); }
   .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--record); }
   .rec.on, .rec.count { background: var(--record); border-color: var(--record); box-shadow: none; }
-  .rec.on .dot, .rec.count .dot { background: var(--record-ink); }
-  /* The position readout: a well with a rule edge; open (the big transport shows) = the edge turns accent. */
-  .pos { flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 3px; background: var(--bg-sunken); box-shadow: var(--sunken); }
-  .pos.open { box-shadow: inset 0 0 0 1px var(--accent); }
+  .rec.on .dot, .rec.count .dot { background: var(--ink-on-record); }
+  /* The position readout: a well; open (the big transport shows) = picked, the soft tint. */
+  .pos { flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: min(var(--r-field), 13px); background: var(--bg-sunken); box-shadow: var(--sunken); }
+  .pos.open { background: var(--accent-soft); box-shadow: none; }
+  .pos.open .p, .pos.open .bpm { color: var(--picked-ink); }
+  .pos.open path { stroke: var(--picked-ink); }
   .pos.open svg { transform: rotate(180deg); }
   .pos svg { margin-left: auto; }
-  .p { font-size: 16px; color: var(--text-primary); }
+  .p { font-size: 16px; font-weight: 500; color: var(--text-primary); }
   .bpm { font-size: 11px; color: var(--text-muted); }
 
   .status { order: 2; display: flex; align-items: center; gap: 4px; }
   .phoneLand .status, .tablet .status { order: 3; }
-  .link { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 3px; }
-  .link .mono { font-size: 11px; white-space: nowrap; }
+  .link { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: min(var(--r-group), 14px); }
+  .lt { font-size: 11px; white-space: nowrap; }
   .ldot { width: 7px; height: 7px; border-radius: 50%; }
   .blink { animation: blink 800ms steps(1) infinite; }
   @keyframes blink { 50% { opacity: .35; } }
-  .menu { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; gap: 3px; border-radius: 3px; }
-  .menu.open { background: var(--surface-hover); }
+  .menu { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; gap: 3px; border-radius: min(var(--r-group), 14px); }
+  .menu.open { background: var(--accent-soft); }
+  .menu.open span { background: var(--picked-ink); }
   .menu span { width: 4px; height: 4px; border-radius: 50%; background: var(--text-secondary); }
 </style>

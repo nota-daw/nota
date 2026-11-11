@@ -1,0 +1,9 @@
+{
+  "formatVersion": 2,
+  "id": "round-double",
+  "name": "Round Double",
+  "kind": "light",
+  "base": "studio-light",
+  "radius": { "scale": 2, "steps": { "card": 24 } },
+  "colors": {}
+}

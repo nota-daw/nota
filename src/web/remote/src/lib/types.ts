@@ -26,9 +26,22 @@ export interface ThemeMessage {
   light: string;
   /** The dark and light ink text on a solid fill is chosen from. */
   ink: [string, string];
-  /** Each theme named above, once: token → CSS colour. */
-  th: Record<string, { name: string; dark: boolean; c: Record<string, string> }>;
+  /** Each theme named above, once: token → CSS colour, and a skin's typeface and corner
+   * radii (spec 087; specs/090 contracts/theme-message.md) — absent means Geist and the design scale. */
+  th: Record<string, ThemeEntry>;
 }
+
+export interface ThemeEntry {
+  name: string;
+  dark: boolean;
+  c: Record<string, string>;
+  /** The skin's typeface family; the phone wears it when it has it, Geist otherwise. */
+  font?: string;
+  /** Every corner step in px as the desktop draws it under this skin. */
+  r?: Partial<Record<RadiusStep, number>>;
+}
+
+export type RadiusStep = 'card' | 'group' | 'field' | 'cell' | 'valueBar' | 'switch' | 'fine';
 
 export interface Project {
   host: string;
@@ -118,3 +131,26 @@ export const SCREENS: Screen[] = ['Pads', 'Keys', 'XY', 'Mixer', 'Macros', 'Scen
 
 /** ok · weak (> 50 ms) · lost (was connected, retrying) · down (Nota unreachable) · expired (needs a code). */
 export type LinkState = 'connecting' | 'ok' | 'weak' | 'lost' | 'down' | 'expired' | 'left';
+
+/** One Session slot's content as the desktop slot draws it (issue 557; specs/090
+ * contracts/clips-message.md): notes in 1/64 of the clip's length, or 48 peaks 0–99. */
+export interface ClipPreview {
+  /** Track id and scene index. */
+  id: number;
+  i: number;
+  /** 'n' notes, 'p' peaks, 'x' the slot is empty now. */
+  k: 'n' | 'p' | 'x';
+  nm?: string;
+  col?: string;
+  len?: number;
+  n?: [number, number, number][];
+  p?: number[];
+  rec?: boolean;
+}
+
+export interface ClipsMessage {
+  t: 'clips';
+  /** The first batch of a full send: forget previews not in it. */
+  all: boolean;
+  s: ClipPreview[];
+}

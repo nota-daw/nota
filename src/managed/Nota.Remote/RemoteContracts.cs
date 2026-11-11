@@ -53,6 +53,9 @@ public interface IRemoteHost
     RemoteAppearance Appearance { get; }
     /// <summary>The track's colour as Nota draws it, "#RRGGBB".</summary>
     string TrackColor(int trackId);
+    /// <summary>A Session clip's colour as the Session view draws it — its own, else its
+    /// track's — "#RRGGBB" (#557).</summary>
+    string ClipColor(int trackId, int scene);
     /// <summary>The track selected in Nota (0 = none), for "Follow Nota's selection".</summary>
     int SelectedTrackId { get; }
     /// <summary>The project key as a <c>MusicalKey.Code</c>, −1 = none.</summary>
@@ -96,8 +99,13 @@ public interface IRemoteHost
 }
 
 /// <summary>One colour theme as the phone needs it: every token of Theme/Themes/&lt;id&gt;.json
-/// as CSS hex (<c>#RRGGBB</c>, or <c>#RRGGBBAA</c> when translucent).</summary>
-public sealed record RemoteTheme(string Id, string Name, bool Dark, IReadOnlyDictionary<string, string> Colors);
+/// as CSS hex (<c>#RRGGBB</c>, or <c>#RRGGBBAA</c> when translucent), and a skin's typeface
+/// and corner radii (spec 087; specs/090 contracts/theme-message.md).</summary>
+/// <param name="Font">The skin's typeface family; null for Geist.</param>
+/// <param name="Radii">Every radius step by its theme-file key (<c>card</c> … <c>fine</c>) in px,
+/// as the desktop draws it under this skin; null when that is the design scale.</param>
+public sealed record RemoteTheme(string Id, string Name, bool Dark, IReadOnlyDictionary<string, string> Colors,
+    string? Font = null, IReadOnlyDictionary<string, double>? Radii = null);
 
 /// <summary>What the phone is told about colour: the theme Nota wears (Follow Nota), the user's
 /// dark-mode and light-mode picks (Follow phone), and the two inks text on a solid fill is

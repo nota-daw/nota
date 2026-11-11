@@ -4,7 +4,7 @@
 // the link indicator, and Nota releases a silent phone's notes. On a drop it retries on its
 // own — the only state that needs the person is a forgotten device or an expired code.
 
-import type { Project, Transport, Mixer, Xy, Macros, Session, Learn, LinkState, Screen, Track } from './types';
+import type { Project, Transport, Mixer, Xy, Macros, Session, ClipPreview, ClipsMessage, Learn, LinkState, Screen, Track } from './types';
 import { look } from './theme.svelte';
 
 const LS = 'nota-remote:';
@@ -53,6 +53,8 @@ export class App {
   xy = $state<Xy | null>(null);
   mac = $state<Macros | null>(null);
   ses = $state<Session | null>(null);
+  /** Session slot previews by "track:scene" (issue 557), from `clips` messages. */
+  clips = $state<Record<string, ClipPreview>>({});
   learn = $state<Learn>({ on: false, pend: null });
   learned = $state<string | null>(null);
 
@@ -268,6 +270,15 @@ export class App {
       case 'xy': delete m.t; this.xy = m; break;
       case 'mac': delete m.t; this.mac = m; break;
       case 'ses': delete m.t; this.ses = m; break;
+      case 'clips': {
+        const next: Record<string, ClipPreview> = m.all ? {} : { ...this.clips };
+        for (const c of (m as ClipsMessage).s) {
+          if (c.k === 'x') delete next[`${c.id}:${c.i}`];
+          else next[`${c.id}:${c.i}`] = c;
+        }
+        this.clips = next;
+        break;
+      }
       case 'learn':
         this.learn = { on: m.on, pend: m.pend };
         if (!m.on) this.learned = null;
