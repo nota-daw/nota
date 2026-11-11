@@ -282,6 +282,9 @@ public sealed partial class RemoteHub
         if (clients.Count > 0)
         {
             var snap = new Snapshot(this, host);
+            if (_projectJson is null) RefreshProject(host);
+            try { UpdatePreviews(host, clients.Any(c => c.Screen == "Scenes")); }
+            catch (Exception) { /* a track removed mid-tick; next tick sees the new list */ }
             foreach (var c in clients)
             {
                 if (c.Backlog > 16) continue;   // the phone isn't keeping up: let it drain first

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // What the phone wears (spec 014). Nota sends the theme it wears and the user's dark-mode and
-// light-mode picks with all their colours; Follow Nota wears the first, Follow phone one of
+// light-mode picks with all their colours, and a skin's typeface and corner radii (spec 090); Follow Nota wears the first, Follow phone one of
 // the picks by the phone's own scheme. The colours go onto the root as custom properties
 // named after the tokens (palette.ts), so a theme change is one pass over ~110 properties and
 // nothing re-renders. The last one worn is stored for the head script in index.html, which
 // paints a returning phone in it before any of this loads; a new phone starts on the
 // built-in fallback (theme-plugin.ts).
 
-import { cssVars, inkOn, type Colors, type Ink } from './palette';
-import type { ThemeMessage } from './types';
+import { cssVars, geometryVars, inkOn, type Colors, type Ink } from './palette';
+import type { RadiusStep, ThemeMessage } from './types';
 
 const MSG = 'nota-remote:theme', VARS = 'nota-remote:vars';
 const scheme = matchMedia('(prefers-color-scheme: dark)');
@@ -21,7 +21,7 @@ function stored(): ThemeMessage | null {
 }
 
 export type Pref = 'nota' | 'phone';
-interface Worn { id: string; name: string; dark: boolean; c: Colors }
+interface Worn { id: string; name: string; dark: boolean; c: Colors; font?: string; r?: Partial<Record<RadiusStep, number>> }
 
 class Look {
   /** The last theme Nota sent (or the stored one, until Nota answers). */
@@ -66,7 +66,7 @@ class Look {
     const dark = t ? t.dark : this.legacyDark !== false;
     root.dataset.theme = dark ? 'dark' : 'light';
     if (t && this.msg) {
-      const vars = cssVars(t.c, this.msg.ink);
+      const vars = { ...cssVars(t.c, this.msg.ink), ...geometryVars(t.font, t.r) };
       for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
       try { localStorage.setItem(VARS, JSON.stringify({ dark, v: vars })); } catch { /* private mode */ }
     }

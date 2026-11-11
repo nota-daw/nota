@@ -1,16 +1,29 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* Nota Remote in Studio (DESIGN.md, spec 014). No colour value lives here: every colour is a
-   theme token as a custom property (BgApp → --bg-app), set from the theme Nota sends
-   (lib/theme.svelte.ts) over the fallback built from the theme files (theme-plugin.ts).
-   Structure follows the desktop: one accent for what is live or chosen, values neutral at
-   rest, panels on 1 px seams, radii 2 / 3 / 4, sentence case, Geist and Geist Mono. Sizes
+/* Nota Remote in the style guide's look (DESIGN.md, spec 038; specs/090). No colour value
+   lives here: every colour is a theme token as a custom property (BgApp → --bg-app), set
+   from the theme Nota sends (lib/theme.svelte.ts) over the fallback built from the theme
+   files (theme-plugin.ts). The corner scale and the typeface are custom properties too, so a
+   skin (spec 087) re-rounds and re-sets the whole page in one pass. A small part caps its
+   corner at about a third of its short side (min(var(--r-…), Npx)), so a 2× skin rounds it
+   without turning it into a pill. Orange comes in three
+   strengths: solid for what is live, a soft tint with orange text for what is picked, and
+   values carry the track's colour. One typeface with tabular figures; sentence case. Sizes
    stay phone-sized — touch targets 36–56 px. */
 
 @font-face { font-family: 'Geist'; font-weight: 400; font-display: swap; src: url('/fonts/Geist-Regular.woff2') format('woff2'); }
 @font-face { font-family: 'Geist'; font-weight: 500 700; font-display: swap; src: url('/fonts/Geist-SemiBold.woff2') format('woff2'); }
-@font-face { font-family: 'Geist Mono'; font-weight: 400 700; font-display: swap; src: url('/fonts/GeistMono-Medium.woff2') format('woff2'); }
 
 :root {
+  /* The corner scale (DESIGN.md § Corner scale); a skin's `r` overrides it. Docked = 0. */
+  --r-card: 9px;
+  --r-group: 7px;
+  --r-field: 6px;
+  --r-cell: 5px;
+  --r-value-bar: 4px;
+  --r-switch: 3px;
+  --r-fine: 2px;
+  /* The shell typeface; a skin's `font` goes first, Geist stays the fallback. */
+  --font-ui: Geist, system-ui, -apple-system, sans-serif;
   /* Elevation, built from the theme's colours as on the desktop (NotaThemeService). */
   --bevel: inset 0 1px 0 0 var(--shadow-bevel);
   --sunken: inset 0 0 0 1px var(--rule);
@@ -18,11 +31,14 @@
   --scrim: var(--shadow-modal);
   --ease: 120ms ease-out;
 }
+/* A picked option's text: the bright orange in dark themes, the pale (deep) one in light. */
+:root, [data-theme='dark'] { --picked-ink: var(--accent-bright); }
+[data-theme='light'] { --picked-ink: var(--accent-pale); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   height: 100%; overflow: hidden; background: var(--bg-app); color: var(--text-primary);
-  font-family: Geist, system-ui, -apple-system, sans-serif; font-size: 13px;
+  font-family: var(--font-ui); font-size: 13px; font-variant-numeric: tabular-nums;
   -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   overscroll-behavior: none; touch-action: none;
@@ -32,37 +48,41 @@ body { position: fixed; inset: 0; }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; touch-action: manipulation; }
 input { font: inherit; color: inherit; user-select: text; -webkit-user-select: text; touch-action: manipulation; }
 svg path { stroke-linecap: round; stroke-linejoin: round; }
-.mono { font-family: 'Geist Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-/* A section label: sentence case, never tracked (DESIGN.md § Labels). */
-.label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+/* A section label: sentence case, never tracked; the muted ink a phone at arm's length needs. */
+.label { font-size: 11px; font-weight: 400; color: var(--text-muted); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-/* A raised key: seam border, top bevel. On = solid accent with derived ink; pressed sinks into the well. */
+/* The two orange strengths a control wears (the third — values — is the track colour). */
+.live { background: var(--accent); border-color: var(--accent); color: var(--ink-on-accent); box-shadow: none; }
+.picked { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--picked-ink); box-shadow: none; }
+
+/* A raised key: seam border, top bevel. On = picked (soft tint, orange text), never solid;
+   pressed sinks into the well. */
 .btn {
   height: 42px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel);
+  border-radius: min(var(--r-group), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel);
   color: var(--text-strong); font-size: 12px; font-weight: 500;
   transition: background-color var(--ease), border-color var(--ease), color var(--ease);
 }
 .btn:active { background: var(--bg-sunken); box-shadow: none; }
-.btn.on { background: var(--accent); border-color: var(--accent); color: var(--ink-on-accent); box-shadow: none; }
+.btn.on { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--picked-ink); box-shadow: none; }
 @media (hover: hover) { .btn:not(.on):hover { background: var(--surface-hover); } }
 
-/* A segmented group: keys butted on 1 px seams, only the group's outer corners round. */
-.seg { display: flex; gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-radius: 3px; overflow: hidden; }
+/* A segment group: cells in a 2 px well, the chosen one picked. */
+.seg { display: flex; gap: 2px; padding: 2px; background: var(--bg-sunken); box-shadow: var(--sunken); border-radius: min(var(--r-group), 14px); }
 .seg > button {
-  height: 36px; padding: 0 11px; flex: 1; background: var(--surface-raised); box-shadow: var(--bevel);
+  height: 36px; padding: 0 11px; flex: 1; border-radius: min(var(--r-cell), 12px);
   color: var(--text-secondary); font-size: 12px; font-weight: 500;
   transition: background-color var(--ease), color var(--ease);
 }
-.seg > button:active { background: var(--bg-sunken); box-shadow: none; }
-.seg > button.on { background: var(--accent); color: var(--ink-on-accent); box-shadow: none; }
+.seg > button:active { background: var(--surface-hover); }
+.seg > button.on { background: var(--accent-soft); color: var(--picked-ink); }
 
-/* The Settings-size switch: 28 × 16, squared knob 12, inset 2. */
-.switch { width: 28px; height: 16px; border-radius: 2px; background: var(--bg-sunken); box-shadow: var(--sunken); position: relative; flex: none; display: block; transition: background-color var(--ease); }
-.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 1px; background: var(--text-tertiary); transition: left var(--ease), background-color var(--ease); }
+/* The Settings switch, phone-sized: 32 × 18, knob 14, inset 2. On = solid accent (a switch is live). */
+.switch { width: 32px; height: 18px; border-radius: min(var(--r-switch), 6px); background: var(--bg-sunken); box-shadow: var(--sunken); position: relative; flex: none; display: block; transition: background-color var(--ease); }
+.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: min(var(--r-fine), 5px); background: var(--text-tertiary); transition: left var(--ease), background-color var(--ease); }
 .switch.on { background: var(--accent); box-shadow: none; }
-.switch.on::after { left: 14px; background: var(--panel); }
+.switch.on::after { left: 16px; background: var(--ink-on-accent); }
 
 /* A control Nota's MIDI Learn can map, while Learn is on. */
 .learnable { outline: 1px dashed var(--accent); outline-offset: 2px; }

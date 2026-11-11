@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Remote;
 using Nota.Application.Localization;
+using Nota.Application.Themes;
 
 namespace Nota.App;
 
@@ -125,13 +126,33 @@ public partial class MainWindow : IRemoteHost
     private RemoteTheme RemoteThemeOf(NotaColourTheme t)
     {
         if (!_remoteThemes.TryGetValue(t, out var r))
-            _remoteThemes[t] = r = new RemoteTheme(t.Id, t.Name, t.IsDark, Enumerable.ToDictionary(t.Colors, c => c.Key, c => CssHex(c.Value)));
+            _remoteThemes[t] = r = new RemoteTheme(t.Id, t.Name, t.IsDark, Enumerable.ToDictionary(t.Colors, c => c.Key, c => CssHex(c.Value)),
+                t.Geometry.FontFamily, RemoteRadii(t.Geometry));
         return r;
+    }
+
+    // A skin's corners as the desktop draws them (spec 090): every step, or null when the
+    // skin keeps the design scale, so a built-in theme's message is unchanged.
+    private static IReadOnlyDictionary<string, double>? RemoteRadii(SkinGeometry g)
+    {
+        var steps = Enum.GetValues<RadiusStep>();
+        if (steps.All(s => g.RadiusOf(s) == SkinGeometry.Design(s))) return null;
+        return steps.ToDictionary(SkinGeometry.Key, g.RadiusOf);
     }
 
     // CSS order: #RRGGBB, or #RRGGBBAA when translucent (Avalonia writes #AARRGGBB).
     private static string CssHex(Avalonia.Media.Color c) =>
         c.A == 0xFF ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : $"#{c.R:X2}{c.G:X2}{c.B:X2}{c.A:X2}";
+
+    string IRemoteHost.ClipColor(int trackId, int scene)
+    {
+        if (Engine.TryGetSessionClipProps(trackId, scene, out var p) && p.Color >= 0)
+        {
+            var c = ArrangementView.TrackBrush(p.Color).Color;
+            return $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        }
+        return ((IRemoteHost)this).TrackColor(trackId);
+    }
 
     string IRemoteHost.TrackColor(int trackId)
     {
