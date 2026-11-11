@@ -1582,6 +1582,20 @@ bool Engine::passesMidiInput(const Track& t, const MidiEvent& e) const {
     return t.id() == auditionTrackId_.load(std::memory_order_relaxed) || t.acceptsMidiFrom(e.source, e.channel);
 }
 
+// The note-offs of the notes MIDI In started on a track and no longer ends (#504), appended to
+// evs at the block start; the note-ons of a new route at the same offset sort after them.
+int Engine::releaseRouted(Track::LiveHeld& held, MidiEv* evs, int n) {
+    for (int h = 0; h < 2; ++h) {
+        uint64_t bits = held.routedBits[h];
+        held.routedBits[h] = 0;
+        while (bits && n < 1024) {
+            evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
+            bits &= bits - 1;
+        }
+    }
+    return n;
+}
+
 // Live expression bypasses the MIDI FX chain (it is keyed by the pitch the player holds) and
 // reaches an instrument the way live notes do: through its own track, or through the track
 // it takes its MIDI from.
@@ -1726,6 +1740,15 @@ void Engine::renderInstrumentRaw(
         // Recording the destination prints the routed MIDI into its take (arm the destination).
         const int32_t recLane = srcId >= 0 ? midiLaneOfRt(t.id()) : -1; // its MIDI take lane (specs/086)
         const bool captureRouted = recLane >= 0 && (playing || countInActive_) && spb > 0.0;
+        // MIDI In changed since the last render (#504): the notes the old route started end
+        // here, since their note-offs now go nowhere. A route switched away and back between
+        // two renders changed nothing, so its notes end with their own note-offs.
+        Track::LiveHeld* held = t.liveHeld.get();
+        if (held && held->routedFrom != srcId) {
+            n = releaseRouted(*held, evs, n);
+            held->routedFrom = srcId;
+        }
+        bool srcFound = false;
         const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
         for (size_t j = 0; j < nt; ++j) {
             Track* p = g->tracks[j].get();
@@ -1738,6 +1761,15 @@ void Engine::renderInstrumentRaw(
             const int m = rs_->blockMidiN[j];
             const MidiEv* srcEvs = rs_->blockMidi[j].data();
             for (int k = 0; k < m && n < 1024; ++k) evs[n++] = srcEvs[k];
+            if (routed) srcFound = true;
+            if (routed && held)
+                for (int k = 0; k < m; ++k) {
+                    const int pitch = srcEvs[k].pitch;
+                    if (pitch < 0 || pitch >= 128) continue;
+                    const uint64_t bit = 1ull << (pitch & 63);
+                    if (srcEvs[k].on) held->routedBits[pitch >> 6] |= bit;
+                    else held->routedBits[pitch >> 6] &= ~bit;
+                }
             if (j < rs_->blockExprN.size())
                 for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
             if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
@@ -1755,6 +1787,8 @@ void Engine::renderInstrumentRaw(
                     }
             }
         }
+        // MIDI In names a track that is gone (deleted): its notes end too (#504).
+        if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
     } else {
         n = computeInstrumentMidi(t, evs, frames, blockStart, spb, playing,
             arrangementActive_.load(std::memory_order_relaxed), xev, &xn); // fallback: no graph

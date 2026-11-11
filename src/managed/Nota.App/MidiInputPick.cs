@@ -62,7 +62,9 @@ internal static class MidiInputPick
     public readonly record struct Entry(string? Uid, int FromTrack, string Label);
 
     /// <summary>The compact selectors' list: the live inputs (the current one with its channel),
-    /// then "From" each other instrument track; and which entry is current.</summary>
+    /// then "From" each other instrument track; and which entry is current. A MIDI In track that
+    /// was removed stays listed, as "From a removed track" (#504), so the selector never shows
+    /// another source as the one in use.</summary>
     public static (List<Entry> Items, int Current) Compact(IAudioEngine engine, int trackId, IEnumerable<(int Id, string Name)> instruments)
     {
         var cur = engine.GetTrackMidiInput(trackId);
@@ -75,11 +77,17 @@ internal static class MidiInputPick
             if (isCur && from <= 0) current = items.Count;
             items.Add(new Entry(d.Uid, -1, isCur && cur.Channel > 0 ? Loc.F("midi_input.device_channel", d.Label, cur.Channel) : d.Label));
         }
+        bool listed = from <= 0;
         foreach (var (id, name) in instruments)
         {
             if (id == trackId) continue;
-            if (id == from) current = items.Count;
+            if (id == from) { current = items.Count; listed = true; }
             items.Add(new Entry(cur.Uid, id, Loc.F("midi_input.from_track", name)));
+        }
+        if (!listed)
+        {
+            current = items.Count;
+            items.Add(new Entry(cur.Uid, from, Loc.T("midi_input.from_removed_track")));
         }
         return (items, current);
     }

@@ -844,6 +844,14 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// MIDI In switched while a routed note is held alone (fast iteration): `--midi-source`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--midi-source")
+{
+    Console.WriteLine("-- MIDI In switch --");
+    foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MIDI SOURCE PASSED" : $"MIDI SOURCE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Main / Cue outputs alone (fast iteration): `--cue`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--cue")
 {
@@ -15695,6 +15703,8 @@ Console.WriteLine("-- multi-channel input --");
 foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
+Console.WriteLine("-- MIDI In switch --");
+foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
 Console.WriteLine("-- cue output --");
 foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");

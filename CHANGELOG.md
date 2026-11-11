@@ -156,6 +156,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Changing MIDI In ends the notes it was playing** (#504, specs/093). When an instrument
+  track takes its MIDI from another track and you switch its **MIDI In** to None or to another
+  track, or remove that track, while a key is held there, the note it was playing used to keep
+  sounding: its note-off went to the old route. Now the notes the old route started end at the
+  switch, and the new route plays from then on.
+  - Only those notes end: the track's own notes, and the sound of the track it took MIDI from,
+    carry on.
+  - Switched away and back before the next audio block, nothing has changed, so the note ends
+    with its own key.
+  - A MIDI In track that was removed shows as **Removed track** (**From a removed track** in the
+    track header, mixer and Session mixer selectors), not as None or All inputs. Undo brings the
+    track and the route back.
 - **Track headers, a little wider** (#296): the header column now starts at 252 px instead
   of 228, so names and controls breathe in the new look. A width you dragged yourself stays.
   A group's **Link** key now matches M and S in the new look.
