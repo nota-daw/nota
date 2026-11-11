@@ -62,7 +62,7 @@ namespace Nota.App;
     // release → R; Tab walks them), double-click resets them (specs/035-typed-value-entry).
     internal sealed class VoltEnv : Control, IMidiLearnRegions, IValueEntryHost
     {
-        private static readonly Typeface Face = NotaFonts.Sans;
+        private static Typeface Face => NotaFonts.Measure;
         private static string Letters => Loc.T("device.env.stage_letters");   // A D S R
         private const double HoldFrac = 0.18;   // the sustain stretch: held, not timed
         private const double BarH = 11, TickH = 10, BadgeW = 36;   // BadgeW: room for the sustain value

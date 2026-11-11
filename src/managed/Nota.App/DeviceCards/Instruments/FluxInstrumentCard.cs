@@ -109,7 +109,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         };
         static TextBlock Mono(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.UiFamily,
+            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.ValuesFamily,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 

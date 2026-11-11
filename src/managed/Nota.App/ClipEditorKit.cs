@@ -59,7 +59,7 @@ internal static class ClipEditorKit
         var badge = new TextBlock
         {
             Text = kind.Length > 4 ? char.ToUpperInvariant(kind[0]) + kind[1..].ToLowerInvariant() : kind,
-            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Caption,
+            FontFamily = NotaFonts.ValuesFamily, FontSize = NotaType.Caption,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         cell.Children.Add(nameText);
@@ -236,7 +236,7 @@ internal static class ClipEditorKit
 
     public static TextBlock Mono(string text, double size = 11, IBrush? fg = null) => new()
     {
-        Text = text, FontFamily = NotaFonts.UiFamily, FontSize = size, Foreground = fg ?? NotaPalette.TextPrimary,
+        Text = text, FontFamily = NotaFonts.ValuesFamily, FontSize = size, Foreground = fg ?? NotaPalette.TextPrimary,
         VerticalAlignment = VerticalAlignment.Center,
     };
 

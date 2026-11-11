@@ -135,11 +135,11 @@ public sealed partial class ModularView : UserControl
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(14, 0, 0, 14),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         _viewport.Children.Add(hint);
         _viewport.Children.Add(_mini);
         _edgeTip.Child = _edgeTipText;
-        _edgeTipText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _edgeTipText.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         _viewport.Children.Add(_edgeTip);
         _viewport.Children.Add(_dropGlow);
 
@@ -194,8 +194,8 @@ public sealed partial class ModularView : UserControl
         island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = island;
 
-        _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
-        _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
+        _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
 
         _viewport.PointerPressed += OnViewportPressed;
         _viewport.PointerMoved += OnViewportMoved;
@@ -631,7 +631,7 @@ public sealed partial class ModularView : UserControl
         if (cv > 0)
         {
             var cvLabel = new TextBlock { Text = $"{cv} CV", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center };
-            cvLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            cvLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             DockPanel.SetDock(cvLabel, Dock.Right);
             head.Children.Add(cvLabel);
         }
@@ -1338,7 +1338,7 @@ public sealed partial class ModularView : UserControl
     private static TextBlock MonoValue(string s)
     {
         var t = new TextBlock { Text = s, FontSize = 9, Foreground = Text1, HorizontalAlignment = HorizontalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 

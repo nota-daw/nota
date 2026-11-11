@@ -26,6 +26,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Localization;
@@ -65,7 +66,8 @@ internal static class SkinPreviewRenderer
     /// so Loaded handlers, posted work and virtualising lists (realised from the layout manager's
     /// viewport events) settle. Then one job wears the skin, re-skins and lays out every tree,
     /// draws them and puts the live theme back.</summary>
-    public static async Task<(List<Image> Images, List<string> Unknown)> RenderAsync(NotaColourTheme theme, bool themeAccent, IReadOnlyList<string>? names)
+    public static async Task<(List<Image> Images, List<string> Unknown)> RenderAsync(NotaColourTheme theme, bool themeAccent, IReadOnlyList<string>? names,
+        Look? look = null)
     {
         var wanted = names is { Count: > 0 } ? names : Names;
         var unknown = wanted.Where(n => Surfaces.All(s => s.Name != n)).Distinct().ToList();
@@ -83,14 +85,22 @@ internal static class SkinPreviewRenderer
             {
                 foreach (var s in surfaces.Where(s => !s.Live))
                 {
-                    try { if (Host(s, scene!) is { } h) hosts.Add(h); }
+                    try
+                    {
+                        if (Host(s, scene!) is not { } h) continue;
+                        // The clips as the look being previewed draws them (spec 091).
+                        var clips = Looks.ClipStyleOf(App.Services.GetRequiredService<ISettingsService>().Current, look ?? NotaThemeService.Look);
+                        foreach (var av in h.Item3.GetSelfAndVisualDescendants().OfType<ArrangementView>()) av.ClipStyle = clips;
+                        if (h.Item3 is ArrangementView own) own.ClipStyle = clips;   // before it is in a tree
+                        hosts.Add(h);
+                    }
                     catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException) { }
                 }
             });
             for (int i = 0; i < 4; i++) await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
             var live = new List<Visual>();
-            NotaThemeService.RenderScoped(theme, themeAccent, () => NotaTextSize.Scoped(0, () =>
+            NotaThemeService.RenderScoped(theme, themeAccent, look, () => NotaTextSize.Scoped(0, () =>
             {
                 foreach (var s in surfaces)
                 {

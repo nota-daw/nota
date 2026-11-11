@@ -99,6 +99,9 @@ if (args.Contains("--hosted-render-pool"))
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
     Console.WriteLine("-- design: user skins --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunSkins()) Check(ok, label);
+    Console.WriteLine("-- design: classic look --");
+    foreach (var (ok, label) in Nota.SmokeTest.LooksCheck.Run()) Check(ok, label);
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunClassicPalettes()) Check(ok, label);
     Console.WriteLine("-- design: splash art --");
     foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");

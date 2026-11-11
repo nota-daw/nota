@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Themes;
 using Nota.Mcp;
@@ -33,11 +34,30 @@ internal sealed class ThemeAccess : IThemeAccess
                 t.IsUser ? "user" : "built-in", t.Warnings.Count, t.Warnings.Any(w => w.Kind == ThemeWarning.FontMissing),
                 t.Geometry.FontFamily, t.Geometry.Roundness)).ToArray(),
             worn.Id, NotaThemeService.TryOnTheme is not null,
-            new ThemeChoiceInfo(c.FollowSystem, c.Single, c.Dark, c.Light),
+            new ThemeChoiceInfo(c.FollowSystem, c.Single, c.Dark, c.Light, Looks.Id(NotaThemeService.Look)),
             NotaThemes.UserLoadProblems.Select(p => new ThemeFileProblem(p.FileName, p.Reason)).ToArray());
     }
 
-    public string? GetFile(string id) => NotaThemes.Find(id) is { } t ? NotaThemes.ToFile(t) : null;
+    public string? GetFile(string id, string? look = null) =>
+        NotaThemes.Find(id) is { } t ? NotaThemes.ToFile(NotaThemeService.InLook(t, ParseLook(look) ?? Look.New)) : null;
+
+    public string SetLook(string look)
+    {
+        var l = ParseLook(look) ?? NotaThemeService.Look;
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        Looks.Store(settings.Current, l);
+        settings.Save();
+        NotaThemeService.SetLook(l);
+        return NotaThemes.Find(NotaThemeService.WornTheme?.Id)?.Id ?? NotaThemeService.Choice.Single;
+    }
+
+    // "new" | "classic", or null (meaning: the default for the call); anything else is the client's mistake.
+    private static Look? ParseLook(string? look)
+    {
+        if (string.IsNullOrWhiteSpace(look)) return null;
+        return Looks.Parse(look.Trim().ToLowerInvariant())
+            ?? throw new ArgumentException($"Unknown look '{look}' — use \"{Looks.NewId}\" or \"{Looks.ClassicId}\".");
+    }
 
     public ThemeCatalogue Catalogue()
     {
@@ -53,19 +73,24 @@ internal sealed class ThemeAccess : IThemeAccess
                 new[] { SkinGeometry.MinRoundness, SkinGeometry.MaxRoundness },
                 new[] { SkinGeometry.MinStep, SkinGeometry.MaxStep },
                 new[] { 1, SkinGeometry.MaxFamilyLength }),
-            new[] { 1, 2 });
+            new[] { 1, 2, 3 });
     }
 
     public IReadOnlyList<string> SystemFonts() => NotaThemes.SystemFontNames();
 
     public ThemeValidation Validate(string json) => NotaThemes.Validate(json);
 
-    public async Task<ThemePreviews> PreviewAsync(string json, IReadOnlyList<string>? surfaces, bool themeAccent)
+    public async Task<ThemePreviews> PreviewAsync(string json, IReadOnlyList<string>? surfaces, bool themeAccent, string? look = null)
     {
+        var l = ParseLook(look) ?? NotaThemeService.Look;
         var v = NotaThemes.Validate(json);
         if (!v.IsValid) return new ThemePreviews(v, Array.Empty<ThemePreviewImage>(), Array.Empty<string>(), Array.Empty<string>());
         var theme = NotaThemes.FromParsed(v, ThemeSource.Preview);
-        var (images, unknown) = await SkinPreviewRenderer.RenderAsync(theme, themeAccent, surfaces);
+        // A built-in's own file, unchanged, previews as that built-in — so under Classic it shows
+        // the classic palette, as the window would (spec 091). An edited copy keeps its colours.
+        if (NotaThemes.Find(theme.Id) is { Source: ThemeSource.BuiltIn } builtIn && SameColours(builtIn, theme))
+            theme = builtIn;
+        var (images, unknown) = await SkinPreviewRenderer.RenderAsync(theme, themeAccent, surfaces, l);
         return new ThemePreviews(v,
             images.Select(i => new ThemePreviewImage(i.Name, i.Description, i.Png)).ToArray(),
             images.Select(i => i.Name).ToArray(), unknown.ToArray());
@@ -147,6 +172,13 @@ internal sealed class ThemeAccess : IThemeAccess
     {
         NotaThemeService.RevertTryOn();
         return NotaThemes.Find(NotaThemeService.WornTheme?.Id)?.Id ?? NotaThemeService.Choice.Single;
+    }
+
+    private static bool SameColours(NotaColourTheme a, NotaColourTheme b)
+    {
+        var mine = a.Colors;
+        var theirs = b.Colors;
+        return mine.Count == theirs.Count && mine.All(kv => theirs.TryGetValue(kv.Key, out var c) && c == kv.Value);
     }
 
     // What each token is for: Theme/token-roles.json, made from NotaPalette's comments.

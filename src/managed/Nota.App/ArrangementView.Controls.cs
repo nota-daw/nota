@@ -189,7 +189,7 @@ public sealed partial class ArrangementView
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
                 if (bar % labelEvery != 0) continue;
                 var ft = new NotaFormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, RulerText);
+                    FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
         }
@@ -202,7 +202,7 @@ public sealed partial class ArrangementView
             {
                 _charWStep = NotaTextSize.Step;
                 _charW = new NotaFormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    NotaFonts.Sans, NotaType.Axis, RulerText).Width / 10;
+                    NotaFonts.Measure, NotaType.Axis, RulerText).Width / 10;
             }
             double charW = _charW;
             double stepS = RulerLabels.TimeSteps[^1];
@@ -220,7 +220,7 @@ public sealed partial class ArrangementView
                 if (x < 0) continue;
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
                 var ft = new NotaFormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, RulerText);
+                    FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
         }
@@ -277,7 +277,7 @@ public sealed partial class ArrangementView
             if (_o._loopDragging && _o._loopE > _o._loopS)
             {
                 var ft = new NotaFormattedText(_o.LoopReadout(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, ReadoutText);
+                    FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, ReadoutText);
                 double tx = Math.Clamp(_o.BeatToX(_o._loopE) + 6, 2, Math.Max(2, w - ft.Width - 6));
                 var box = new Rect(tx - 3, 2, ft.Width + 6, h - 4);
                 ctx.FillRectangle(ChromeBg, box);

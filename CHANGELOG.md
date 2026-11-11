@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Classic look** (#572, specs/091). **Settings → Appearance → Look** switches between the
+  new look and **Classic**. Classic brings back 0.59's colours, its tighter corners and
+  values in Geist Mono (tempo, position, dB, Hz, counters). It works with any colour theme
+  and takes effect at once, without a restart. The new look stays the default, and the
+  layouts are the same in both looks.
+  - **Clips: Solid | Tinted** (Settings → Appearance). Solid draws Arrangement clips as in
+    0.59: blocks of the track colour with a darker title band. With no pick, Classic draws
+    solid clips and New tinted ones. Your pick stays when you change the look.
+  - A user theme keeps its own colours under Classic, and its own typeface and corners when
+    it sets them. A theme file (format 3) can also set a typeface for values:
+    `"font": { "values": "…" }`.
+  - AI control (MCP): `set_look` switches the look. `list_themes` reports it, and
+    `get_theme` / `preview_theme` take an optional `look`.
 - **Nota Remote shows what is in each clip on the Scenes screen** (#557, specs/090). A filled
   cell reads like the desktop's Session slot: the clip's name and length on top, and below
   them its notes as a small piano roll, or its waveform, in the clip's colour. Editing,

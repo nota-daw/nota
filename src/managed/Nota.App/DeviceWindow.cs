@@ -335,7 +335,7 @@ internal sealed class DeviceWindow : NotaWindow
     private static TextBlock MonoText(double size, IBrush ink)
     {
         var tb = new TextBlock { FontSize = size, Foreground = ink, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return tb;
     }
 

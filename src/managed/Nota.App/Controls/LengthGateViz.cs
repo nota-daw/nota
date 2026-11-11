@@ -148,7 +148,7 @@ internal sealed class LengthGateViz : Control
                 ctx.DrawRectangle(null, new Pen(Outline, 1.5), new RoundedRect(new Rect(ix + 0.75, top + 0.75, Math.Max(1, ie - ix - 1.5), Math.Max(1, hh - 1.5)), radius));
                 if (Full)
                 {
-                    var tag = Text(Ms(nt.Out * msPerBeat), NotaFonts.Sans, NotaType.KnobValue, lit ? FillLit : TagInk);
+                    var tag = Text(Ms(nt.Out * msPerBeat), NotaFonts.Measure, NotaType.KnobValue, lit ? FillLit : TagInk);
                     double tx = Math.Min(Math.Max(Math.Max(oe, ie), X(nt.Start + nt.Hi)), win.X + win.Width * 0.88) + 5;
                     ctx.DrawText(tag, new Point(tx, top + hh / 2 - tag.Height / 2));
                 }
@@ -162,8 +162,8 @@ internal sealed class LengthGateViz : Control
         {
             var inp = Input[i];
             bool lit = !_off && _now >= _notes[i].Start && _now < _notes[i].Start + _notes[i].Out;
-            var name = Text(DeviceCardKit.NoteName(inp.Key), NotaFonts.Sans, NotaType.KnobValue, lit ? FillLit : Label);
-            var vel = Text($"vel {inp.Vel}", NotaFonts.Sans, NotaType.RowLabel, VelInk);
+            var name = Text(DeviceCardKit.NoteName(inp.Key), NotaFonts.Measure, NotaType.KnobValue, lit ? FillLit : Label);
+            var vel = Text($"vel {inp.Vel}", NotaFonts.Measure, NotaType.RowLabel, VelInk);
             double cy = win.Y + (i + 0.5) * rowH, th = name.Height + vel.Height - 2;
             ctx.DrawText(name, new Point(0, cy - th / 2));
             ctx.DrawText(vel, new Point(0, cy - th / 2 + name.Height - 2));
@@ -172,7 +172,7 @@ internal sealed class LengthGateViz : Control
         for (int b = 0; b <= (int)Window; b++)
         {
             string s = b == 0 ? "0" : b * msPerBeat >= 1000 ? $"{b * msPerBeat / 1000:0.0#} s" : $"{b * msPerBeat:0} ms";
-            var ft = Text(s, NotaFonts.Sans, NotaType.RowLabel, Axis);
+            var ft = Text(s, NotaFonts.Measure, NotaType.RowLabel, Axis);
             double x = X(b) - (b == 0 ? 0 : b == (int)Window ? ft.Width : ft.Width / 2);
             ctx.DrawText(ft, new Point(x, win.Bottom + 4));
         }

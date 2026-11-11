@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// User skins (spec 087): the shared theme-file validator (format 1 and 2), the skin
+// User skins (spec 087, 091): the shared theme-file validator (formats 1–3), the skin
 // geometry's radius mapping, and the user themes folder — as data, with no UI. The
 // validator must agree with the independent spec-011 checks above on the built-ins, report
 // every problem in a broken file naming its field, and never throw.
@@ -75,7 +75,7 @@ internal static partial class DesignTokenCheck
             ("system id", With(n => n["id"] = "system"), "id"),
             ("bad kind", With(n => n["kind"] = "dusk"), "kind"),
             ("long name", With(n => n["name"] = new string('x', 41)), "name"),
-            ("format 3", With(n => n["formatVersion"] = 3), "formatVersion"),
+            ("format 4", With(n => n["formatVersion"] = 4), "formatVersion"),
             ("v1 with font", With(n => n["font"] = new JsonObject { ["family"] = "Helvetica" }), "font"),
             ("scale 3", With(n => { n["formatVersion"] = 2; n["radius"] = new JsonObject { ["scale"] = 3 }; }), "radius.scale"),
             ("unknown step", With(n => { n["formatVersion"] = 2; n["radius"] = new JsonObject { ["steps"] = new JsonObject { ["huge"] = 4 } }; }), "radius.steps.huge"),

@@ -326,6 +326,7 @@ public sealed partial class DeviceChainView : UserControl
             string returnName = TrackNames.Of(_engine, ti);
 
             var value = new TextBlock { Text = Pct(_engine.GetTrackSend(_trackId, bus)), Foreground = TextPrimary };
+            value.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0, Format = v => Pct((float)v) };
             int b = bus;
             SendControl.Attach(knob, _engine, _trackId, b, v => value.Text = Pct((float)v));   // undoable, writes automation (specs/072)

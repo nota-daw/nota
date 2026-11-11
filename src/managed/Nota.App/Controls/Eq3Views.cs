@@ -180,7 +180,7 @@ internal sealed class Eq3Fader : Control
         }
         void Lbl(string t, double y, int align)
         {
-            var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, NotaPalette.TextTertiary, this);
+            var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, NotaPalette.TextTertiary, this);
             double ty = align < 0 ? y : align > 0 ? y - ft.Height : y - ft.Height / 2;
             ctx.DrawText(ft, new Point(Math.Max(0, bx - 6 - ft.Width), Math.Clamp(ty, 0, h - ft.Height)));
         }
@@ -443,7 +443,7 @@ internal sealed class Eq3Graph : Control, IValueHandles
         {
             names[b] = new NotaFormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary, this);
             vals[b] = new NotaFormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                NotaFonts.Sans, NotaGraph.AxisSize, _kill[b] ? NotaPalette.TextDisabled : NotaPalette.TextPrimary, this);
+                NotaFonts.Measure, NotaGraph.AxisSize, _kill[b] ? NotaPalette.TextDisabled : NotaPalette.TextPrimary, this);
             lw[b] = names[b].Width + 4 + vals[b].Width;
             lx[b] = centres[b] - lw[b] / 2;
         }

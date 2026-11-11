@@ -1445,12 +1445,21 @@ audio effects after it keep running and keep their settings; saved with the proj
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Classic look** — **Look: Classic** in Preferences → Appearance wears 0.59's look over
+  any theme: the built-in themes in their 0.59 colours, tighter corners (3 px on controls
+  and cards), and values and readouts (tempo, position, dB, Hz, counters) in Geist Mono
+  while words stay in Geist. Layouts are the same as in the new look, which stays the
+  default. Switching is live, in every window, and remembered. A skin keeps its own
+  colours, and its typeface and corners when it sets them. **Clips: Solid | Tinted** draws
+  Arrangement clips as solid blocks of the track colour with a darker title band (0.59) or
+  as a tint; with no pick it follows the look (Classic → Solid).
 - **Skins (user themes)** — theme files in the **Themes** folder of the data folder appear
   next to the built-ins and are worn the same way. A file sets every colour token. Format 2
   can also name an installed system typeface, which replaces Geist for all of Nota's text,
   and a corner roundness from 0 (square) to 2, with optional exact radii per step. All
   three apply live in every window, device cards and drawn views included, without changing
-  sizes. A file that fails is listed with the reason. A theme below the readability bar
+  sizes. Format 3 can also name a typeface for values and readouts (`font.values`). A file
+  that fails is listed with the reason. A theme below the readability bar
   still loads, and shows its warnings. Over MCP an AI can validate a theme, get one picture
   per part of the app in it without the window changing, and save, wear or try it on (see
   [MCP](#mcp--ai-control)).
@@ -1564,7 +1573,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Library**: library folders. Without an explicit choice, the Projects and Samples folders
   sit in the system's Documents and Music locations (Known Folders on Windows and macOS,
   `user-dirs.dirs` on Linux), relocated or translated ones included.
-- **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
+- **Appearance**: **Look** — **New** or **Classic** (0.59's colours, corners and monospaced
+  values, over any theme), applied live. **Clips** — **Solid** or **Tinted** Arrangement
+  clips, following the look until picked. **Colour theme** — **Dark**, **Light** or **Follow system** over two
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
@@ -1650,7 +1661,9 @@ Coverage:
   `list_system_fonts`, `validate_theme` (every problem and readability warning).
   `preview_theme` returns a PNG per part of the app (overview, top bar, arrangement, mixer,
   device rack, piano roll, browser, Preferences, a menu, a dialog) rendered offscreen in that
-  theme. `save_theme`, `apply_theme`, `try_on_theme` / `revert_try_on`.
+  theme. `save_theme`, `apply_theme`, `try_on_theme` / `revert_try_on`. `set_look` switches
+  between the new and the classic look; `list_themes` reports the look, and `get_theme`
+  (a built-in's classic palette) and `preview_theme` take an optional `look`.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch
   mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /

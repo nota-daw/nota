@@ -62,7 +62,7 @@ public sealed partial class SessionView
             Text = MenuKit.Keys(Loc.T("session.inspector.click_selects_the_triangle_launches")),
             FontSize = 8.5, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var dock = new DockPanel();
         DockPanel.SetDock(hint, Dock.Bottom);
         dock.Children.Add(hint);

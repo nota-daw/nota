@@ -151,7 +151,7 @@ internal sealed class ScaleNoteMap : Control
         double r = Mini ? 3 : 5;
         double nameFs = Mini ? 10 : NotaType.KnobValue, subFs = Mini ? 10 : NotaType.RowLabel, padB = Mini ? 4 : 6, gapT = Mini ? 1 : 2;
         var sans = NotaFonts.SansSemiBold;
-        var mono = NotaFonts.Sans;
+        var mono = NotaFonts.Measure;
 
         for (int pc = 0; pc < 12; pc++)
         {

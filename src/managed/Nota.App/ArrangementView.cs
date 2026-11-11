@@ -381,6 +381,7 @@ public sealed partial class ArrangementView : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         // "Zoom" names the two keys. On a header narrowed so far that the range read-out
         // would be cut, the caption steps aside first (the keys keep their tooltips).
         var zoomLabel = new TextBlock
@@ -603,6 +604,14 @@ public sealed partial class ArrangementView : UserControl
         set { if (_clipLabels == value) return; _clipLabels = value; _lanes.InvalidateVisual(); }
     }
     private ClipLabelMode _clipLabels = ClipLabelMode.RunStart;
+    /// <summary>Tinted clips (the new look) or solid ones with a title band (0.59; Settings →
+    /// Appearance → Clips, spec 091).</summary>
+    public ClipStyle ClipStyle
+    {
+        get => _clipStyle;
+        set { if (_clipStyle == value) return; _clipStyle = value; _lanes.InvalidateVisual(); }
+    }
+    private ClipStyle _clipStyle = ClipStyle.Tinted;
     /// <summary>Audio-clip waveform style (Settings → Appearance).</summary>
     public WaveformStyle Waveform
     {
@@ -3627,6 +3636,19 @@ public sealed partial class ArrangementView : UserControl
         return v;
     }
     private static readonly Dictionary<int, SolidColorBrush> _trackBrushes = new();
+
+    // A solid clip's title band: its track colour mixed 30 % toward black; its notes and waveform
+    // 58 % toward black (0.59, the Solid clip style). Theme-following and cached per index.
+    internal static SolidColorBrush ClipBand(int idx) => Shade(_clipBands, idx, 0.30);
+    internal static SolidColorBrush ClipInk(int idx) => Shade(_clipInks, idx, 0.58);
+    private static SolidColorBrush Shade(Dictionary<int, SolidColorBrush> cache, int idx, double t)
+    {
+        if (cache.TryGetValue(idx, out var b)) return b;
+        b = NotaPalette.Derived(() => Mix(TrackColorForIndex(idx), NotaPalette.ShadeDown.Color, t));
+        cache[idx] = b;
+        return b;
+    }
+    private static readonly Dictionary<int, SolidColorBrush> _clipBands = new(), _clipInks = new();
 
     /// <summary>The theme-following brush for a palette index. A view that wants a track's
     /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it

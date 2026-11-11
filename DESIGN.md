@@ -210,6 +210,64 @@ The fifteen style-guide brushes (§ Colour) shipped in both Ember themes at the 
 starting values unchanged; none is in the bar. Look at them by eye when an Ember ground
 changes.
 
+## Classic look
+
+**Settings → Appearance → Look** has two options: **New** (this guide, the default) and
+**Classic**. Classic puts 0.59's colours, corners and type on today's layouts, over any theme
+(spec 091, #572). Shapes, sizes, layouts and orange's three strengths are the same in both
+looks. A user theme keeps whatever it sets: its colours always, and its typefaces and radii
+when it sets them. Classic fills in only what the theme leaves open.
+
+**Colours.** Each built-in has a classic palette, `Theme/Themes/Classic/<id>.json`. Every
+token 0.59.2 had keeps its 0.59.2 value, even where today's readability bar warns (the
+smoke test allows a warning only where 0.59.2 itself had it). The tokens added by the
+style guide take the 0.59.2 colour of the part they now draw:
+
+| Token | Classic value from (0.59.2 token) |
+|---|---|
+| `Well` | `SurfaceRaised` |
+| `WellTrack` | `SurfaceInset` |
+| `KnobTrack` | `BorderStrong` |
+| `Groove` | `BgSunken` |
+| `DeviceSection`, `DeviceHeader` | `SurfaceCard`, `Panel` |
+| `DeviceSectionEdge` | transparent (0.59 had no pressed-in sections) |
+| `Bevel` | `ShadowBevel` |
+| `AccentSoft` | `AccentSubtle` |
+| `KnobCap` | `SurfaceRaised` |
+| `MeterSafe`, `MeterHot`, `MeterOver` | `Success`, `Warning`, `Danger` |
+| `TrackHeaderSelected` | `SelHeaderBg` |
+| `LaneSelected` | `LaneB` |
+
+A new token needs a classic value in all four classic palettes as well; the smoke test
+checks that each one has the full catalogue.
+
+**Corners.** These are 0.59's tighter radii, laid on today's steps (`Looks.ClassicGeometry`):
+
+| Step | New | Classic |
+|---|---|---|
+| Card | 9 | 3 |
+| Group | 7 | 3 |
+| Field | 6 | 3 |
+| Cell | 5 | 2 |
+| ValueBar | 4 | 2 |
+| Switch | 3 | 2 |
+| Fine | 2 | 2 |
+
+Radii off the scale shrink by 0.4, and pills stay round. Three parts now share a step with
+something that 0.59 rounded differently: modal windows (were 4) and clips (were 2) get 3,
+and plot bars (were 1) get 2.
+
+**Type.** Text has two roles. *Words* are always Geist (`Font.UI`, `NotaFonts.Sans*`).
+*Values and readouts* (numbers with their units, tempo, position, counters, badges) use
+`Font.Measure` / `NotaFonts.Measure*`. In XAML these are the `TextBlock.Mono`, `.Readout`,
+`.Value`, `.Eyebrow`, `.KnobValue`, `.Axis` and `.RowTag` classes. In code a control names
+`NotaFonts.ValuesFamily`, and drawn text uses `NotaFonts.Measure*`, read when the text is
+built, never cached in a static field. Under New the values role *is* Geist, so the new look
+stays one typeface. Under Classic it is Geist Mono, or a theme's `font.values`. The role
+covers exactly the values that 0.59.2 set in Geist Mono (`specs/091-classic-look/role-sites.md`).
+A value display added since stays a word: use `TextBlock.Number` or `NotaFonts.Sans`, and
+it is Geist in both looks.
+
 ## Principles
 
 1. **Keep every control.** The layout and every control stay where they are; this guide
@@ -1123,6 +1181,11 @@ A block of notes or audio on a track lane.
 - **Content:** notes, waveform and the name (10.5 / 600) in the full track colour, moved toward
   dark ink (or white) just enough to keep 3 : 1 on the lane. Only a light shade on Studio Light
   needs it.
+- **Solid** (Settings → Appearance → Clips; the classic look's default, spec 091): 0.59's
+  clip. A full track-colour body with no outline, a 12 px title band in the track colour mixed
+  30 % toward `ShadeDown` (the accent when selected) with the name (9.5 / 600) in readable ink,
+  and notes and waveform 58 % toward `ShadeDown`. A row too short for the band keeps a 2 px
+  band. The corner is the Field step.
 - Audio clips draw their waveform as spaced bars by default (a 1 px stroke every 3 px,
   mirrored about the centre); Settings → Appearance → Waveform switches to Solid.
 

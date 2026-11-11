@@ -22,7 +22,7 @@ public sealed class ValueBar : Control
     private static readonly IBrush FillBrass = NotaPalette.Wash(NotaPalette.VizInk, 0x40); // at rest: neutral
     private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C);  // live
     private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
 
     private double _value;                       // normalized 0..1
     private readonly Func<double, string> _fmt;  // formats the normalized value for display

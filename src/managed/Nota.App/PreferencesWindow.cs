@@ -236,7 +236,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         var label = new TextBlock { Text = page.Title, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
         var badge = new TextBlock
         {
-            FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary,
+            FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary,
             VerticalAlignment = VerticalAlignment.Center, IsVisible = false,
         };
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8, Margin = new Thickness(10, 0) };
@@ -354,8 +354,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         bufCombo.SelectedIndex = IndexOf(BufferSizes, cfg.BufferFrames);
         bufCombo.SelectionChanged += (_, _) => { int i = bufCombo.SelectedIndex; if (i >= 0) { engine.SetAudioBufferFrames(BufferSizes[i]); Apply(); } };
 
-        _latencyValue = new TextBlock { FontSize = 11, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary };
-        _latencyDetail = new TextBlock { FontSize = 11, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
+        _latencyValue = new TextBlock { FontSize = 11, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary };
+        _latencyDetail = new TextBlock { FontSize = 11, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
         UpdateLatency();
         var latency = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { _latencyValue, _latencyDetail } };
 
@@ -781,7 +781,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             {
                 var last = new TextBlock
                 {
-                    Text = "—", FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary,
+                    Text = "—", FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary,
                     VerticalAlignment = VerticalAlignment.Center, MinWidth = 64, TextAlignment = TextAlignment.Right,
                 };
                 lastLabels[i] = last;
@@ -838,7 +838,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         {
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*") };
             grid.Children.Add(new TextBlock { Text = input, FontSize = 11, Foreground = TextSecondary, Margin = new Thickness(12, 9) });
-            var a = new TextBlock { Text = action, FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary, Margin = new Thickness(12, 9), VerticalAlignment = VerticalAlignment.Center };
+            var a = new TextBlock { Text = action, FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary, Margin = new Thickness(12, 9), VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(a, 1);
             grid.Children.Add(a);
             map.Add(grid);
@@ -882,7 +882,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
                 grid.Children.Add(new TextBlock
                 {
-                    Text = path, FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = sel ? TextPrimary : TextSecondary,
+                    Text = path, FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = sel ? TextPrimary : TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 });
                 var tag = new TextBlock { Text = IsDefault(path) ? Loc.T("preferences.default") : "", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
@@ -999,7 +999,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         bool custom = !string.IsNullOrWhiteSpace(get());
         var path = new TextBlock
         {
-            Text = custom ? get() : resolved(), FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary,
+            Text = custom ? get() : resolved(), FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var tag = new TextBlock { Text = custom ? Loc.T("preferences.custom") : Loc.T("preferences.default"), FontSize = 9, Foreground = TextTertiary };
@@ -1155,12 +1155,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         public ThemePreview(NotaColourTheme theme) { _theme = theme; Width = W; Height = H; }
 
         // The theme as it is worn with the chosen accent (spec 084), so the card previews the pair.
-        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, NotaThemeService.Worn(_theme)));
+        // Under the classic look a built-in card shows its classic palette (spec 091).
+        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, NotaThemeService.WornForCard(_theme)));
 
         public override void Render(DrawingContext ctx)
         {
             // The theme's own corners (spec 087): a square skin previews square.
-            double fieldR = _theme.Geometry.RadiusOf(RadiusStep.Field);
+            double fieldR = Looks.Compose(_theme.Geometry, NotaThemeService.Look).RadiusOf(RadiusStep.Field);
             var seam = new Pen(B(NotaPalette.Seam), 1);
             void Fill(SolidColorBrush slot, double x, double y, double w, double h) => ctx.FillRectangle(B(slot), new Rect(x, y, w, h));
             void Key(SolidColorBrush slot, double x, double y, double w, double h) =>
@@ -1234,6 +1235,66 @@ public sealed partial class PreferencesWindow : NotaWindow
             strip.Children.Add(btn);
         }
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
+    // New · Classic (spec 091): the look every theme is worn in. Applies at once, like a theme
+    // pick, and is saved; an MCP set_look elsewhere moves the buttons (NotaThemeService.Changed).
+    private static Control LookPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(Look Look, ToggleButton Btn)>();
+        void Show() { foreach (var (l, b) in buttons) b.IsChecked = l == NotaThemeService.Look; }
+        foreach (var (look, label) in new[] { (Look.New, Loc.T("preferences.look_new")), (Look.Classic, Loc.T("preferences.look_classic")) })
+        {
+            var lk = look;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label };
+            btn.Click += (_, _) =>
+            {
+                Looks.Store(settings.Current, lk);
+                settings.Save();
+                NotaThemeService.SetLook(lk);
+                Show();
+            };
+            buttons.Add((lk, btn));
+            strip.Children.Add(btn);
+        }
+        Show();
+        var host = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        void OnChanged() => Dispatcher.UIThread.Post(Show);
+        host.AttachedToVisualTree += (_, _) => NotaThemeService.Changed += OnChanged;
+        host.DetachedFromVisualTree += (_, _) => NotaThemeService.Changed -= OnChanged;
+        return host;
+    }
+
+    // Solid · Tinted Arrangement clips (spec 091). Shows the style in effect — the look's default
+    // until the user picks; a pick is stored and wins over the look. Saving fires
+    // Settings.Changed, which redraws the open Arrangement.
+    private static Control ClipStylePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(ClipStyle Style, ToggleButton Btn)>();
+        void Show() { var now = Looks.ClipStyleOf(settings.Current); foreach (var (st, b) in buttons) b.IsChecked = st == now; }
+        foreach (var (style, label) in new[] { (ClipStyle.Solid, Loc.T("preferences.clips_solid")), (ClipStyle.Tinted, Loc.T("preferences.clips_tinted")) })
+        {
+            var st = style;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label };
+            btn.Click += (_, _) =>
+            {
+                Looks.StoreClipStyle(settings.Current, st);
+                settings.Save();
+                Show();
+            };
+            buttons.Add((st, btn));
+            strip.Children.Add(btn);
+        }
+        Show();
+        var host = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        void OnChanged() => Dispatcher.UIThread.Post(Show);   // a look switch moves the default
+        host.AttachedToVisualTree += (_, _) => NotaThemeService.Changed += OnChanged;
+        host.DetachedFromVisualTree += (_, _) => NotaThemeService.Changed -= OnChanged;
+        return host;
     }
 
     // Left / Right for the arrangement's track-header column (#72). Saving fires
@@ -1344,6 +1405,10 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private Control AppearancePane() => Sections(
         Section("UI", 10,
+            Row(Loc.T("preferences.look"), LookPicker()),
+            Row("", Caption(Loc.T("preferences.look_caption"))),
+            Row(Loc.T("preferences.clips"), ClipStylePicker()),
+            Row("", Caption(Loc.T("preferences.clips_caption"))),
             TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
             Row("", Caption(Loc.T("preferences.skins.follow_system_hint"))),
             TopRow(Loc.T("preferences.accent"), AccentPicker()),
@@ -1645,7 +1710,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                     Children =
                     {
                         new TextBlock { Text = title, Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = shown.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = shown.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
                     },
                 };
                 groups.Children.Add(new StackPanel { Spacing = 6, Children = { head, Table(shown.Select(r => ShortcutRow(r.Key, r.Action)).ToList()) } });
@@ -1726,7 +1791,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         var text = new TextBlock
         {
-            Text = label, FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary,
+            Text = label, FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         return new Border

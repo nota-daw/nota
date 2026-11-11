@@ -697,7 +697,7 @@ public sealed class AudioClipEditorView : UserControl
         private static readonly IPen SelLine = new Pen(NotaPalette.AccentDim, 1);
         private static readonly IPen GridBeatPen = new Pen(NotaPalette.GridSubBeat, 1);
         private static readonly IPen GridBarPen = new Pen(NotaPalette.BorderDefault, 1);
-        private static readonly Typeface GridFace = NotaFonts.Sans;
+        private static Typeface GridFace => NotaFonts.Measure;
         // BPM chip in the marker strip (drag to scrub the segment tempo); the hot one and the
         // selected marker's position chip take Brass Wash with a brass edge.
         private static readonly IBrush ChipBg = NotaPalette.Panel;
