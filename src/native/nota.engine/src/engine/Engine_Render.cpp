@@ -2458,8 +2458,86 @@ void Engine::renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t fr
             }
         a = parent;
     }
+    // The source's post-fader tap, `monitorLag_` frames behind: a continuous stream (#563).
     const int32_t slot = routeSlotForTrack(src);
-    if (slot >= 0) std::copy_n(routeBus_[slot].data(), frames * 2, dst);
+    if (slot < 0 || trackTapRingTrack_[slot] != src) return; // routed this segment: silent once
+    const float* ring = trackTapRing_[slot].data();
+    constexpr int64_t mask = kTrackTapRingFrames - 1;
+    const int64_t from = trackTapRingPos_ - monitorLag_; // before the first lag: the ring's zeros
+    for (int32_t i = 0; i < frames; ++i) {
+        const size_t k = static_cast<size_t>((from + i) & mask) * 2;
+        dst[i * 2] = ring[k];
+        dst[i * 2 + 1] = ring[k + 1];
+    }
+    // A lag that just changed crossfades from the old read position, so the change neither
+    // skips nor repeats frames audibly. The old position stays inside what has been written
+    // (see advanceMonitorLag), so both reads are real signal.
+    if (monitorFadePos_ >= monitorFadeLen_) return;
+    const int64_t old = trackTapRingPos_ - monitorLagFrom_;
+    const int32_t n = std::min(frames, monitorFadeLen_ - monitorFadePos_);
+    for (int32_t i = 0; i < n; ++i) {
+        const float w = static_cast<float>(monitorFadePos_ + i) / static_cast<float>(monitorFadeLen_);
+        const size_t k = static_cast<size_t>((old + i) & mask) * 2;
+        dst[i * 2] = w * dst[i * 2] + (1.0f - w) * ring[k];
+        dst[i * 2 + 1] = w * dst[i * 2 + 1] + (1.0f - w) * ring[k + 1];
+    }
+}
+
+// The monitoring lag for this segment (#563): never shorter than the segment, so a read never
+// reaches frames not yet written. It grows at once and shrinks to the longest segment of the
+// last second, so an export's long chunks or a larger buffer don't keep their latency for good.
+void Engine::advanceMonitorLag(int32_t frames) {
+    const int32_t was = monitorLag_;
+    int32_t lag = std::max(was, frames);
+    if (frames > monitorLagPeak_) monitorLagPeak_ = frames;
+    monitorLagWindow_ += frames;
+    const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
+    if (static_cast<double>(monitorLagWindow_) >= sr) {
+        if (monitorLagPeak_ < lag) lag = monitorLagPeak_;
+        monitorLagPeak_ = 0;
+        monitorLagWindow_ = 0;
+    }
+    if (lag == was) return;
+    monitorLag_ = lag;
+    // Crossfade from the old read position (~10 ms). Shrinking, the old position is further
+    // back: written. Growing, it runs into unwritten frames `was` frames into this segment, so
+    // the fade ends there. From nothing (the first segment) there is nothing to fade from.
+    const int32_t fade = static_cast<int32_t>(0.010 * sr);
+    monitorLagFrom_ = was;
+    monitorFadePos_ = 0;
+    monitorFadeLen_ = lag < was ? fade : std::min(fade, was);
+}
+
+// Append this segment's post-fader taps to the monitoring rings (#563). A slot that now mirrors
+// another source starts from silence rather than the old source's frames.
+void Engine::publishTrackTapRings(int32_t frames) {
+    constexpr int64_t mask = kTrackTapRingFrames - 1;
+    const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+    for (int32_t s = 0; s < kMaxRoutes; ++s) {
+        const int32_t id = s < n ? routeSlotTrackId_[s].load(std::memory_order_relaxed) : -1;
+        if (id < 0) {
+            trackTapRingTrack_[s] = -1;
+            continue;
+        }
+        const uint64_t part = routeSlotPart_[s].load(std::memory_order_relaxed);
+        if (part != 0) { // monitoring hears whole tracks only
+            trackTapRingTrack_[s] = -1;
+            continue;
+        }
+        float* ring = trackTapRing_[s].data();
+        if (trackTapRingTrack_[s] != id) {
+            std::fill_n(ring, static_cast<size_t>(kTrackTapRingFrames) * 2, 0.0f);
+            trackTapRingTrack_[s] = id;
+        }
+        const float* tap = routeBusNext_[s].data();
+        for (int32_t i = 0; i < frames; ++i) {
+            const size_t k = static_cast<size_t>((trackTapRingPos_ + i) & mask) * 2;
+            ring[k] = tap[i * 2];
+            ring[k + 1] = tap[i * 2 + 1];
+        }
+    }
+    trackTapRingPos_ += frames;
+    if (monitorFadePos_ < monitorFadeLen_) monitorFadePos_ = std::min(monitorFadeLen_, monitorFadePos_ + frames);
 }
 
 // Per-leaf DSP for Pass 1 : render the track's dry stereo (pre-fader,
@@ -2635,6 +2713,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // monitoring it), and the set of tracks whose output some monitoring track hears —
         // those keep rendering while solo-gated, feeding only their route tap / record tap.
         pullMonitorInput(frames);
+        advanceMonitorLag(frames); // a monitored track's lag, before any track reads it (#563)
         constexpr int kMaxFeeds = 16;
         int32_t feedIds[kMaxFeeds];
         int numFeeds = 0;
@@ -3346,6 +3425,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         }
 
         // Phase B/D: publish this block's route taps (post + pre) for next block.
+        publishTrackTapRings(frames); // and to the monitoring rings, before the swap (#563)
         for (int s = 0, n = routeSlotCount_.load(std::memory_order_acquire); s < n; ++s)
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
                 routeBus_[s].swap(routeBusNext_[s]);

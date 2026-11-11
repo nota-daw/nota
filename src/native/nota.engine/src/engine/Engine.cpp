@@ -37,6 +37,8 @@ Engine::Engine()
     for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
     for (auto& s : routeSlotPart_) s.store(0, std::memory_order_relaxed);
     silentKey_.assign(kMaxBlock * 2, 0.0f); // the key of a part that is gone (specs/050)
+    for (auto& b : trackTapRing_) b.assign(static_cast<size_t>(kTrackTapRingFrames) * 2, 0.0f); // #563
+    for (auto& s : trackTapRingTrack_) s = -1;
     ensureRenderScratch(authoring_->tracks.size());
     graphHist_.publish(authoring_);
     installRackPluginFactory(); // lets rack blobs rebuild hosted-plugin children on load
