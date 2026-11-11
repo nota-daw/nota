@@ -352,7 +352,7 @@ void clampWarpPlay(AudioClip& c) {
 // Editor edits defer too: the clip keeps its now-stale cache (played clipped to the new
 // length) until the background build replaces it, instead of the UI freezing on a long file.
 void Engine::configureClipWarp(AudioClip& c, double spb, double devSR) {
-    c.tempoWarpCache.reset(); c.tempoWarpMap.reset(); c.tempoWarpStartBeat = -1.0;
+    if (c.tempoWarp) c.tempoWarp.reset();
     if (!c.warpEnabled) {
         c.warpCache = nullptr;
         return;
@@ -366,8 +366,8 @@ void Engine::configureClipWarp(AudioClip& c, double spb, double devSR) {
 void Engine::configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR) {
     if (!map || !c.warpEnabled || !c.sample || c.warpMarkers.size() < 2 || devSR <= 0) return;
     const auto inputs = warpInputsOf(c, devSR, devSR);
-    if (c.tempoWarpMap == map && c.tempoWarpStartBeat == c.startBeat && c.tempoWarpCache &&
-        c.tempoWarpCache->inputs == inputs) return;
+    if (c.tempoWarpCache() && c.tempoWarp->map == map && c.tempoWarp->startBeat == c.startBeat &&
+        c.tempoWarpCache()->inputs == inputs) return;
     if (deferWarpBuild_) return;
     WarpInputs renderInputs;
     int64_t frames = 0;
@@ -378,9 +378,7 @@ void Engine::configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoM
     cache->inputs = inputs;
     cache->samples.assign(static_cast<size_t>(frames) * 2, 0.0f);
     renderWarpWindow(renderInputs, *c.sample, cache->samples.data(), frames);
-    c.tempoWarpCache = std::move(cache);
-    c.tempoWarpMap = map;
-    c.tempoWarpStartBeat = c.startBeat;
+    c.tempoWarp = std::make_shared<const AudioClip::TempoWarp>(AudioClip::TempoWarp{std::move(cache), map, c.startBeat});
 }
 
 bool Engine::warpNeedsBuild(const AudioClip& c) const {
@@ -389,8 +387,8 @@ bool Engine::warpNeedsBuild(const AudioClip& c) const {
         WarpInputs renderInputs;
         int64_t frames = 0;
         if (!tempoWarpPlan(c, authoring_->tempoMap, devSR, renderInputs, frames)) return false;
-        return c.tempoWarpMap != authoring_->tempoMap || c.tempoWarpStartBeat != c.startBeat ||
-            !c.tempoWarpCache || !(c.tempoWarpCache->inputs == warpInputsOf(c, devSR, devSR));
+        return !c.tempoWarpCache() || c.tempoWarp->map != authoring_->tempoMap || c.tempoWarp->startBeat != c.startBeat ||
+            !(c.tempoWarpCache()->inputs == warpInputsOf(c, devSR, devSR));
     }
     if (warpCacheFrames(c, spb, devSR) <= 0) return false;
     return !c.warpCache || !(c.warpCache->inputs == warpInputsOf(c, spb, devSR));
@@ -533,9 +531,8 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
                 auto nt = cloneTrack(*old);
                 auto* built = audioClipRef(*nt, wb_.clipIndex);
                 if (wb_.tempoMap) {
-                    built->tempoWarpCache = std::const_pointer_cast<const WarpCache>(wb_.cache);
-                    built->tempoWarpMap = wb_.tempoMap;
-                    built->tempoWarpStartBeat = wb_.tempoStartBeat;
+                    built->tempoWarp = std::make_shared<const AudioClip::TempoWarp>(AudioClip::TempoWarp{
+                        std::const_pointer_cast<const WarpCache>(wb_.cache), wb_.tempoMap, wb_.tempoStartBeat});
                 } else built->warpCache = std::const_pointer_cast<const WarpCache>(wb_.cache);
                 republishWithTrackRaw(wb_.trackId, nt); // no undo entry — a cache isn't an edit
             }
@@ -581,9 +578,8 @@ int64_t Engine::warpBuildPoll() {
             auto nt = cloneTrack(*findTrackAuthoring(wj_->trackId));
             auto* built = audioClipRef(*nt, wj_->clipIndex);
             if (wj_->tempoMap) {
-                built->tempoWarpCache = std::const_pointer_cast<const WarpCache>(wj_->cache);
-                built->tempoWarpMap = wj_->tempoMap;
-                built->tempoWarpStartBeat = wj_->tempoStartBeat;
+                built->tempoWarp = std::make_shared<const AudioClip::TempoWarp>(AudioClip::TempoWarp{
+                    std::const_pointer_cast<const WarpCache>(wj_->cache), wj_->tempoMap, wj_->tempoStartBeat});
             } else built->warpCache = std::const_pointer_cast<const WarpCache>(wj_->cache);
             republishWithTrackRaw(wj_->trackId, nt); // no undo entry — a cache isn't an edit
         }

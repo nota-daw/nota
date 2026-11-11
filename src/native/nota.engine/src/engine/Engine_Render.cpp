@@ -1467,7 +1467,17 @@ int Engine::gatherInstrumentNotes(
             const double msToS = transport_.sampleRate() / 1000.0;
             const double trackShiftS = t.midiOffsetMs() * msToS;
             const ArticulationTable* artTable = t.articulationTable.get();
-            const auto gatherClip = [&]<bool shifted>() {
+            const bool mapped = transport_.hasTempoMap();
+            // Unmapped keeps the original arithmetic (clipStart + beat * spb) with no per-note branch;
+            // mapped asks the transport for the beat position on the block clock.
+            const double seamEnd = mapped ? blockStart + seamEndSamples_ - transport_.playheadSamples() : seamEndSamples_;
+            const TempoMap* tmap = transport_.tempoMap();
+            const double tsr = transport_.sampleRate(), tplay = transport_.playheadSamples();
+            const auto gatherClip = [&]<bool shifted, bool isMapped>() {
+                const auto at = [&](double clipBeat) {
+                    if constexpr (isMapped) return renderSampleAtBeat(clip.startBeat + clipBeat, blockStart, spb);
+                    else return clipStart + clipBeat * spb;
+                };
                 for (const Note& note : clip.notes) {
                     // FR-018: track offset + the note's articulation offset, applied once (specs/085).
                     double shiftS = 0.0;
@@ -1477,10 +1487,10 @@ int Engine::gatherInstrumentNotes(
                     // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
                     // sounds from the clip start for the part that reaches into it.
                     if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
-                    const double nominalOn = renderSampleAtBeat(clip.startBeat + std::max(0.0, note.startBeat), blockStart, spb);
+                    const double nominalOn = at(std::max(0.0, note.startBeat));
                     // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
                     // shortened) end stops at the boundary instead of sounding its full length.
-                    double nominalOff = renderSampleAtBeat(clip.startBeat + note.startBeat + note.lengthBeats, blockStart, spb);
+                    double nominalOff = at(note.startBeat + note.lengthBeats);
                     if (nominalOff > clipEnd) nominalOff = clipEnd;
                     const double onS = shifted ? nominalOn + shiftS : nominalOn;
                     const double offS = shifted ? nominalOff + shiftS : nominalOff;
@@ -1493,7 +1503,6 @@ int Engine::gatherInstrumentNotes(
                             static_cast<float>((offS - onS) / spb)};
                     // Loop seam: a note still sounding at the loop end releases here, ahead of any
                     // chase re-trigger at the same offset (offs sort first).
-                    const double seamEnd = transport_.hasTempoMap() ? blockStart + seamEndSamples_ - transport_.playheadSamples() : seamEndSamples_;
                     if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
                         evs[n++] = {0, false, note.pitch, 0.0f};
                     // Chase: a note already held at the jump point starts sounding right here.
@@ -1503,14 +1512,17 @@ int Engine::gatherInstrumentNotes(
                         evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
                     // Recorded MPE: the note's curve while it sounds in this block.
                     if (xev && note.expr && clipActive)
-                        noteExprEvents(note, renderSampleAtBeat(clip.startBeat + note.startBeat, blockStart, spb) + shiftS - blockStart,
+                        noteExprEvents(note, at(note.startBeat) + shiftS - blockStart,
                             offS - blockStart, frames, spb,
-                            xev, *xn, kMaxBlockExpr, transport_.tempoMap(), transport_.sampleRate(),
-                            transport_.playheadSamples(), clip.startBeat + note.startBeat, shiftS); // curve timed from the true start
+                            xev, *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS); // curve timed from the true start
                 }
             };
-            if (!artTable && trackShiftS == 0.0) gatherClip.template operator()<false>();
-            else gatherClip.template operator()<true>();
+            const bool unshifted = !artTable && trackShiftS == 0.0;
+            if (mapped) {
+                if (unshifted) gatherClip.template operator()<false, true>();
+                else gatherClip.template operator()<true, true>();
+            } else if (unshifted) gatherClip.template operator()<false, false>();
+            else gatherClip.template operator()<true, false>();
             // The clip's controllers (specs/020).
             if (xev && clipActive)
                 clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr,
@@ -1798,10 +1810,12 @@ void Engine::renderInstrumentRaw(
             if (!clip.active || clip.volumeEnvelope.points.empty()) continue;
             const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
             const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
+            const bool mappedEnv = transport_.hasTempoMap();
+            const double elapsed = transport_.playheadSamples();
             for (int32_t i = 0; i < frames; ++i) {
                 const double p = blockStart + i;
                 if (p < clipStart || p >= clipEnd) continue;
-                const double beat = transport_.hasTempoMap() ? transport_.beatAtSamples(transport_.playheadSamples() + i) - clip.startBeat : (p - clipStart) / spb;
+                const double beat = mappedEnv ? transport_.beatAtSamples(elapsed + i) - clip.startBeat : (p - clipStart) / spb;
                 const float g = std::clamp(clip.volumeEnvelope.valueAt(beat), 0.0f, 1.0f);
                 dst[i * 2] *= g;
                 dst[i * 2 + 1] *= g;
@@ -1967,17 +1981,23 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
 void Engine::renderAudioClipsRaw(
     const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
-    for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames,
-        transport_.hasTempoMap() ? transport_.playheadSamples() : blockStart, spb, 1.0f, transport_.hasTempoMap());
+    if (transport_.hasTempoMap()) {
+        const double elapsed = transport_.playheadSamples();
+        for (const AudioClip& clip : clips) mixAudioClip<true>(clip, dst, frames, elapsed, spb, 1.0f);
+    } else
+        for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f);
 }
 
 // One clip of renderAudioClipsRaw — shared with Session audio slots, which loop a clip on
 // their own clock (renderSessionAudioSlotRaw).
+template <bool mapped>
 void Engine::mixAudioClip(
-    const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain, bool mapped) {
+    const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain) {
     if (!clip.active) return; // deactivated clip (key 0): stays on the timeline but silent
     const double sr = transport_.sampleRate();
-    const double startSamples = mapped ? transport_.samplesAtBeat(clip.startBeat) : clip.startBeat * spb;
+    double startSamples;
+    if constexpr (mapped) startSamples = transport_.samplesAtBeat(clip.startBeat);
+    else startSamples = clip.startBeat * spb;
     // Clip envelopes (M9 follow-up): 0..1 volume + -1..1 pan curves in clip-local
     // beats, applied per sample. Empty = fast path (no cost). Pan uses a balance
     // law (unity at centre) so it composes with the track's own pan stage.
@@ -1987,7 +2007,9 @@ void Engine::mixAudioClip(
     const bool hasEnv = hasVol || hasPan || hasAdsr;
     double lenBeats = 0.0; // played length (beats) for the ADSR release — set per path below
     auto applyEnv = [&](double p, float& l, float& r) {
-        const double b = mapped ? transport_.beatAtSamples(p) - clip.startBeat : (p - startSamples) / spb;
+        double b;
+        if constexpr (mapped) b = transport_.beatAtSamples(p) - clip.startBeat;
+        else b = (p - startSamples) / spb;
         if (hasAdsr) {
             const float g = clip.adsr.gainAt(b, lenBeats);
             l *= g;
@@ -2011,7 +2033,9 @@ void Engine::mixAudioClip(
     // at the device rate, so there is no realtime stretch here — just a memcpy-cheap
     // read (no per-clip-start priming spike). The clip's on-timeline length is the
     // cache's frame count (both are warpPlayLen×spb once rebuilt for the tempo).
-    const auto* readyCache = mapped ? clip.tempoWarpCache.get() : clip.warpCache.get();
+    const WarpCache* readyCache;
+    if constexpr (mapped) readyCache = clip.tempoWarpCache();
+    else readyCache = clip.warpCache.get();
     if (clip.warpEnabled && readyCache && readyCache->frames > 0) {
         const WarpCache& wc = *readyCache;
         // A stale cache (an edit's rebuild still running in the background) keeps playing,
@@ -2019,10 +2043,13 @@ void Engine::mixAudioClip(
         // Both edges sit on whole frames rounded from the timeline (not start + a rounded
         // length), so clips that meet — the halves of a split — leave no frame between them.
         const int64_t startF = std::llround(startSamples);
-        const int64_t endF =
-            std::min<int64_t>(startF + wc.frames, std::llround(mapped ? transport_.samplesAtBeat(clip.startBeat + clip.warpPlayLen()) : startSamples + clip.warpPlayLen() * spb));
+        double endAt;
+        if constexpr (mapped) endAt = transport_.samplesAtBeat(clip.startBeat + clip.warpPlayLen());
+        else endAt = startSamples + clip.warpPlayLen() * spb;
+        const int64_t endF = std::min<int64_t>(startF + wc.frames, std::llround(endAt));
         const double clipDeviceLen = static_cast<double>(endF - startF);
-        lenBeats = mapped ? clip.warpPlayLen() : clipDeviceLen / spb;
+        if constexpr (mapped) lenBeats = clip.warpPlayLen();
+        else lenBeats = clipDeviceLen / spb;
         const double ovStart = std::max(blockStart, static_cast<double>(startF));
         const double ovEnd = std::min(blockStart + frames, static_cast<double>(endF));
         if (ovEnd <= ovStart) return;
@@ -2388,16 +2415,20 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     if (g && g->masterTrack) {
         // The master runs after the transport advanced past this block; recover the
         // block's start beat so tempo-synced master devices line up.
-        const double masterStartBeat = transport_.hasTempoMap() ? transport_.beatAtSamples(presentationStart)
+        const bool mappedMaster = transport_.hasTempoMap();
+        const double masterStartBeat = mappedMaster ? transport_.beatAtSamples(presentationStart)
             : spb > 0.0 ? transport_.positionBeats() - numFrames / spb : 0.0;
         for (auto& d : g->masterTrack->devices) {
             if (!d || d->bypassed()) continue;
             for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
                 const int32_t n = std::min(numFrames - off, kMaxBlock);
                 if (spb > 0.0) {
-                    const double beat = transport_.hasTempoMap() ? transport_.beatAtSamples(presentationStart + off) : masterStartBeat + off / spb;
-                    const double end = transport_.hasTempoMap() ? transport_.beatAtSamples(presentationStart + off + n) : beat + n / spb;
-                    d->setTransport(beat, end > beat ? n / (end - beat) : spb, playing);
+                    if (mappedMaster) {
+                        const double beat = transport_.beatAtSamples(presentationStart + off);
+                        const double end = transport_.beatAtSamples(presentationStart + off + n);
+                        d->setTransport(beat, end > beat ? n / (end - beat) : spb, playing);
+                    } else // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
+                        d->setTransport(masterStartBeat + off / spb, spb, playing);
                 }
                 d->process(out + off * 2, n);
             }

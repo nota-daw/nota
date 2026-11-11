@@ -2079,9 +2079,11 @@ class Engine {
     void syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
     // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
     // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
+    // Mapped = on the tempo map's clock (blockStart is the elapsed-sample clock). The
+    // unmapped instantiation is the plain fixed-tempo path, with no tempo-map test in it.
+    template <bool Mapped = false>
     void mixAudioClip(
-        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain, bool mapped = false);
-
+        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
     std::atomic<int32_t> recordTrackRt_{-1}; // recordTrackId_ for the audio thread
