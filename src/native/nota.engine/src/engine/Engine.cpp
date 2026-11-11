@@ -91,7 +91,7 @@ bool Engine::start() {
         audioFallbackReason_ = "a plug-in stopped responding inside the audio callback — restart Nota";
         return false;
     }
-    bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    bool ok = backend_->start([this](float* main, float* cue, int32_t n) { render(main, cue, n); }, bc);
     if (!ok && activeSystem_ == AudioSystem::Asio) {
         // FR-011: a missing, busy or broken ASIO driver never leaves Nota silent — run WASAPI
         // on the system default device and say why. The saved choice stays ASIO, so the next
@@ -103,9 +103,10 @@ bool Engine::start() {
         BackendConfig fallback;
         fallback.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
         backend_->setXrunCallback([this] { notifyXrun(); });
-        ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, fallback);
+        ok = backend_->start([this](float* main, float* cue, int32_t n) { render(main, cue, n); }, fallback);
     }
     monitorSharedClock_.store(ok && backend_->sharesInputClock(), std::memory_order_relaxed);
+    if (ok && outputRoutingSet_) backend_->setOutputRouting(outputRouting_); // specs/089
     if (ok) {
         transport_.setSampleRate(backend_->sampleRate());
         propagateSampleRate(backend_->sampleRate()); // re-prepare every node (incl. master + racks) at the new rate
@@ -266,6 +267,29 @@ void Engine::setAsioDriver(const std::string& clsid, const std::string& name) {
     config_.asioDriverClsid = clsid;
     config_.asioDriverName = name;
 }
+bool Engine::setOutputRouting(const OutputRouting& r) {
+    if (!validRouting(r)) return false;
+    outputRouting_ = r;
+    outputRoutingSet_ = true;
+    if (backend_) backend_->setOutputRouting(r);
+    return true;
+}
+
+int32_t Engine::outputChannelCount() const {
+    if (outputTestChannels_ > 0) return outputTestChannels_;
+    return backend_ ? std::min(backend_->outputChannelCount(), kMaxOutputChannels) : 0;
+}
+
+std::string Engine::outputChannelName(int32_t index) const {
+    if (outputTestChannels_ > 0)
+        return index >= 0 && index < outputTestChannels_ ? "Test " + std::to_string(index + 1) : std::string{};
+    return backend_ ? backend_->outputChannelName(index) : std::string{};
+}
+
+int32_t Engine::outputRoutingState() const {
+    return resolveRouting(outputRouting_, outputChannelCount()).flags;
+}
+
 void Engine::setAsioPair(bool input, int32_t firstChannel) {
     if (!asioSupported()) return;
     (input ? config_.asioInputPair : config_.asioOutputPair) = std::max(0, firstChannel);
@@ -691,6 +715,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setMute(t.mute());
     nt->setSolo(t.solo());
     nt->setArmed(t.armed());
+    nt->setCue(t.cue());                                             // Cue (specs/089)
     nt->setReturnIndex(t.returnIndex());                             // M6-1
     nt->setGroupId(t.groupId());                                     // group membership
     nt->setRecordInputSource(t.recordInputSource());                 // internal record routing

@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "OutputRouting.h"
+
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -17,9 +19,10 @@
 namespace nota {
 
 // Called from the real-time audio thread. MUST be real-time safe (AR-6):
-// no allocation, no locks, no I/O. Writes `numFrames` of interleaved stereo
-// float samples into `out` (2 channels).
-using RenderCallback = std::function<void(float* out, int32_t numFrames)>;
+// no allocation, no locks, no I/O. Writes `numFrames` of interleaved stereo float samples
+// into `main` (the audience mix) and into `cue` (the private Cue mix, specs/089). The
+// backend places both on the device's outputs by its OutputRouting (OutputRouting.h).
+using RenderCallback = std::function<void(float* main, float* cue, int32_t numFrames)>;
 
 // Requested device configuration (M7-1). Zero fields mean "use the device
 // default": device 0 = system default output, sampleRate 0 / bufferFrames 0 =
@@ -103,6 +106,15 @@ class AudioBackend {
     // null. Plug-ins that run real-time threads of their own join it, so the OS schedules them
     // against the device's deadline. Read after start() succeeds.
     virtual void* ioWorkgroup() const { return nullptr; }
+
+    // Output channels of the open device (specs/089): how many (at most kMaxOutputChannels,
+    // 0 when none is open) and the name the driver gives one ("" when it gives none).
+    // Control thread, after start().
+    virtual int32_t outputChannelCount() const { return isRunning() ? 2 : 0; }
+    virtual std::string outputChannelName(int32_t /*index*/) const { return {}; }
+
+    // Where Main and Cue go. Takes effect on the next callback — no restart. Any thread.
+    virtual void setOutputRouting(const OutputRouting& r) { (void)r; }
 
     // After a reset-requested event: the rate the user picked in the device's own settings
     // (0 = unchanged). The engine then stops requesting its saved rate, so a reopen keeps it.

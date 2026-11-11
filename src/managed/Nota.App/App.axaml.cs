@@ -134,6 +134,9 @@ public partial class App : Avalonia.Application
         // Inputs switched off on the Audio I/O page stay off for takes (specs/086).
         try { InputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
         catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+        // Main and Cue's output pairs and the click (specs/089).
+        try { OutputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
+        catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
 
         // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
@@ -199,6 +202,8 @@ public partial class App : Avalonia.Application
                 {
                     try { InputSetupAccess.Push(vm.Engine); }
                     catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+                    try { OutputSetupAccess.Push(vm.Engine); }
+                    catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
                 };
                 var main = new MainWindow { DataContext = vm, PendingRecovery = pending };
                 desktop.MainWindow = main;

@@ -8,6 +8,8 @@
 #include "AsioDriverList.h"
 #include "ComAsioDriver.h"
 
+#include <algorithm>
+
 namespace nota::asio {
 
 AsioSession& sharedAsioSession() {
@@ -69,6 +71,20 @@ bool AsioBackend::start(RenderCallback render, const BackendConfig& cfg) {
 void AsioBackend::stop() {
     AsioSession& s = sharedAsioSession();
     if (s.state() != AsioSession::State::Closed) s.close();
+}
+
+int32_t AsioBackend::outputChannelCount() const {
+    return std::min<int32_t>(static_cast<int32_t>(sharedAsioSession().channels(false).size()), kMaxOutputChannels);
+}
+
+std::string AsioBackend::outputChannelName(int32_t index) const {
+    const auto& ch = sharedAsioSession().channels(false);
+    if (index < 0 || index >= static_cast<int32_t>(ch.size())) return {};
+    return ch[static_cast<size_t>(index)].name;
+}
+
+void AsioBackend::setOutputRouting(const OutputRouting& r) {
+    sharedAsioSession().setOutputRouting(r);
 }
 
 double AsioBackend::sampleRate() const {

@@ -937,7 +937,7 @@ void Engine::closeCtlRange(MidiClip& clip, int32_t ctl, double atLocal, double s
 
 // --- audio thread ----------------------------------------------------------
 
-void Engine::render(float* out, int32_t numFrames) {
+void Engine::render(float* out, float* cue, int32_t numFrames) {
     // Counted before the suspend check (both seq_cst, paired with start()): once start() has
     // suspended rendering and seen the count at zero, no render can be inside the graph.
     rendersInFlight_.fetch_add(1, std::memory_order_seq_cst);
@@ -948,12 +948,13 @@ void Engine::render(float* out, int32_t numFrames) {
     // start() is still re-preparing the nodes on the control thread: output silence.
     if (renderSuspended_.load(std::memory_order_seq_cst)) {
         std::fill(out, out + static_cast<size_t>(numFrames) * 2, 0.0f);
+        if (cue) std::fill(cue, cue + static_cast<size_t>(numFrames) * 2, 0.0f);
         return;
     }
     dsp::ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
     deviceBlock_ = true; // a deadline, whatever the gap since the last block
-    processBlock(out, numFrames);
+    processBlock(out, cue, numFrames);
     // DSP load = render time / block budget, smoothed (Phase 11). Live-device
     // path only; renderOffline stays untimed.
     const double sr = sampleRate();
@@ -992,7 +993,7 @@ void Engine::renderOffline(float* out, int32_t frames) {
         preparedSR_ = sr;
     }
     deviceBlock_ = false; // export/freeze: no deadline, every render thread
-    processBlock(out, frames);
+    processBlock(out, nullptr, frames); // no Cue in a bounce (specs/089 FR-016)
 }
 
 void Engine::endCountIn() {
@@ -2200,13 +2201,14 @@ void Engine::triggerPassReplace() {
     replaceUpTo_.store(recordPass_, std::memory_order_release);
 }
 
-void Engine::processBlock(float* out, int32_t numFrames) {
+void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
     // live MIDI, capture), so this scope keeps the player it points at alive.
     const SnapshotHistory<SessionPlayer>::RenderScope recordSlotScope(recordSlotHist_);
     const SnapshotHistory<SessionLaneSlots>::RenderScope laneSlotScope(laneSlotsHist_); // specs/086
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
+    if (cue) std::fill(cue, cue + static_cast<size_t>(numFrames) * 2, 0.0f);
 
     const double sr = transport_.sampleRate();
     const double spb = transport_.samplesPerBeat();
@@ -2297,6 +2299,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         }
         chaseNotes_ = chase;
         if (chase) articulationChaseStart_ = segStart;
+        cueSeg_ = cue ? cue + done * 2 : nullptr; // this segment of the Cue bus (specs/089)
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
@@ -2391,6 +2394,34 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         deviceBlock_ && backend_ ? std::max(numFrames, backend_->bufferFrames()) : numFrames);
     masterRmsL_.store(numFrames ? static_cast<float>(std::sqrt(msqL / numFrames)) : 0.0f, std::memory_order_relaxed);
     masterRmsR_.store(numFrames ? static_cast<float>(std::sqrt(msqR / numFrames)) : 0.0f, std::memory_order_relaxed);
+    cueSeg_ = nullptr;
+    if (cue) finishCue(cue, numFrames);
+}
+
+// The Cue bus after every tap and click (specs/089): the Cue level, the same NaN / clip
+// safety net as Main, and the Cue meter. Never through the master chain or master fader.
+void Engine::finishCue(float* cue, int32_t numFrames) {
+    const float gain = cueGain_.load(std::memory_order_relaxed);
+    float pkL = 0.0f, pkR = 0.0f;
+    double sqL = 0.0, sqR = 0.0;
+    for (int32_t i = 0; i < numFrames; ++i) {
+        float l = cue[i * 2] * gain;
+        float r = cue[i * 2 + 1] * gain;
+        if (!std::isfinite(l)) l = 0.0f;
+        if (!std::isfinite(r)) r = 0.0f;
+        l = std::clamp(l, -1.0f, 1.0f);
+        r = std::clamp(r, -1.0f, 1.0f);
+        cue[i * 2] = l;
+        cue[i * 2 + 1] = r;
+        pkL = std::max(pkL, std::fabs(l));
+        pkR = std::max(pkR, std::fabs(r));
+        sqL += l * (double)l;
+        sqR += r * (double)r;
+    }
+    cuePeakL_.store(pkL, std::memory_order_relaxed);
+    cuePeakR_.store(pkR, std::memory_order_relaxed);
+    cueRmsL_.store(numFrames ? static_cast<float>(std::sqrt(sqL / numFrames)) : 0.0f, std::memory_order_relaxed);
+    cueRmsR_.store(numFrames ? static_cast<float>(std::sqrt(sqR / numFrames)) : 0.0f, std::memory_order_relaxed);
 }
 
 // Fill `dst` with what a monitoring audio track hears: the hardware input pulled for this
@@ -2635,6 +2666,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         Track* grpT[kMaxGroups];
         int32_t grpId[kMaxGroups], grpParent[kMaxGroups], grpDepth[kMaxGroups];
         bool grpMuteE[kMaxGroups], grpSoloE[kMaxGroups];
+        // Cue (specs/089): grpFeedMute is the mute that silences a group's children — a cued
+        // group's own mute isn't one (its children keep feeding its Cue tap; the group alone
+        // stays out of its parent). Without cued groups it equals grpMuteE.
+        bool grpFeedMute[kMaxGroups];
         int numGroups = 0, maxDepth = 0;
         for (auto& tptr : g->tracks) {
             if (tptr->type() != TrackType::Group || numGroups >= kMaxGroups) continue;
@@ -2649,18 +2684,21 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (grpId[i] == id) return i;
             return -1;
         };
+        const bool cueOn = cueSeg_ != nullptr;
         for (int i = 0; i < numGroups; ++i) {
-            bool m = false, s = false;
+            bool m = false, s = false, fm = false;
             int depth = 0;
             for (int32_t a = grpId[i]; a >= 0;) { // walk self + ancestor groups
                 int si = slotOf(a);
                 if (si < 0) break;
                 m |= grpT[si]->mute();
+                fm |= grpT[si]->mute() && !(cueOn && grpT[si]->cue());
                 s |= grpT[si]->solo();
                 ++depth;
                 a = grpParent[si];
             }
             grpMuteE[i] = m;
+            grpFeedMute[i] = fm;
             grpSoloE[i] = s;
             grpDepth[i] = depth;
             if (depth > maxDepth) maxDepth = depth;
@@ -2670,7 +2708,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         auto leafMute = [&](Track& t) {
             if (t.mute()) return true;
             int s = slotOf(t.groupId());
-            return s >= 0 && grpMuteE[s];
+            return s >= 0 && grpFeedMute[s];
         };
         auto leafSolo = [&](Track& t) {
             if (t.solo()) return true;
@@ -2728,6 +2766,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // in place of its clips — hardware input this segment, or the source track's
             // post-fader tap from the previous one. Master (-1) would feed back: silent.
             const bool monitoring = !frozenActive && !capturing && t.type() == TrackType::Audio && t.monitor();
+            // Cue (specs/089): a cued track is heard in Cue before its fader, mute and solo, so a
+            // muted or solo-gated one still renders — for the Cue tap only.
+            const bool cueing = cueOn && t.cue();
 
             // 0) Session view (M5-2): apply quantized launch/stop; a playing slot
             //    overrides this track's arrangement content. Requests apply on every track,
@@ -2749,7 +2790,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 sessionActive =
                     !frozenActive && !capturing && !monitoring && sp->playing.load(std::memory_order_relaxed) >= 0;
             }
-            if (!audible && !capturing && !feeding && !keying) {
+            if (!audible && !capturing && !feeding && !keying && !cueing) {
                 // Silent this block, but a playing slot keeps its place in the loop, so it is
                 // in time again when the track is unmuted (and follow actions keep counting).
                 if (sessionActive) {
@@ -2776,6 +2817,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             w.toMix = audible || capturing; // false: render only for the taps
             w.postTapMuted = postTapMuted;
             w.monitoring = monitoring;
+            w.cue = cueing;
+            w.cueOnly = cueing && !audible && !capturing && !feeding && !keying;
             w.frozenActive = frozenActive;
             w.sessionActive = sessionActive;
 
@@ -2817,6 +2860,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (w.sends[b] != 0.0f) w.anySend = true;
             }
             w.tapRec = (recSrc > 0 && t.id() == recSrc); // internal resampling source
+            // Under a group that is muted but cued (specs/089) the leaf only feeds that group's
+            // Cue tap: its sends, sidechain tap and record tap stay as silent as the mute made them.
+            if (destSlot >= 0 && grpMuteE[destSlot] && !grpFeedMute[destSlot]) {
+                w.anySend = false;
+                w.tapRec = false;
+                w.postTapMuted = true;
+            }
 
             // Parallel eligibility is an instance's processing contract, not its
             // hosted identity: independent audited VST3 adapters own their state
@@ -3006,6 +3056,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 freezeCursor_ = c;
             }
 
+            // 2d) Cue tap (specs/089): post-device, pre-fader, pre-mute/solo.
+            if (w.cue) simd_audio::addStereoScaled(cueSeg_, post, 1.0f, 1.0f, frames);
+            if (w.cueOnly) { // heard only in Cue: no fader, sends, taps or meter for Main
+                t.setMeter(0, 0, 0, 0);
+                t.stereoFold(0.0, 0.0, 0.0, frames, stereoA);
+                continue;
+            }
+
             // 3) Channel fader + equal-power pan into the master mix + sends.
             const float vol = t.volume();
             const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
@@ -3115,7 +3173,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             for (int gi = 0; gi < numGroups; ++gi) {
                 if (grpDepth[gi] != depth) continue;
                 Track& t = *grpT[gi];
-                if (grpMuteE[gi]) {
+                if (grpFeedMute[gi]) {
                     t.setMeter(0, 0, 0, 0);
                     continue;
                 } // muted group (or muted ancestor)
@@ -3136,6 +3194,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     }
                 // PDC left verbatim (see renderLeafDsp note).
                 if (t.pdc) t.pdc->process(scratch_.data(), frames);
+                // Cue tap (specs/089): the bus after its devices, before its fader and mute.
+                if (cueOn && t.cue()) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
+                if (grpMuteE[gi]) { // muted but cued: heard in Cue only
+                    t.setMeter(0, 0, 0, 0);
+                    continue;
+                }
 
                 const float vol = t.volume();
                 const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
@@ -3180,7 +3244,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             Track& t = *tptr;
             if (t.type() != TrackType::Return) continue;
             const int32_t bus = t.returnIndex();
-            if (bus < 0 || bus >= numReturns || t.mute()) {
+            const bool returnCue = cueOn && t.cue();
+            if (bus < 0 || bus >= numReturns || (t.mute() && !returnCue)) {
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -3201,6 +3266,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 }
             // PDC left verbatim (see renderLeafDsp note).
             if (t.pdc) t.pdc->process(scratch_.data(), frames);
+            // Cue tap (specs/089): the return after its devices, before its fader and mute.
+            if (returnCue) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
+            if (t.mute()) { // muted but cued: heard in Cue only
+                t.setMeter(0, 0, 0, 0);
+                t.stereoFold(0, 0, 0, frames, stereoA);
+                continue;
+            }
 
             const float vol = t.volume();
             const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
@@ -3272,12 +3344,20 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
     }
 }
 
-void Engine::renderClick(float* out, int32_t i, int clickLen, double sr) {
+// The click goes to Main, Cue or both (specs/089), at kMetroGain × the click level. A click
+// to Cue skips the master chain and fader; without a Cue buffer (offline) it writes nothing.
+void Engine::renderClick(float* out, float* cue, int32_t i, int clickLen, double sr, int32_t dest, float gain) {
     if (clickRemaining_ <= 0) return;
     const float env = static_cast<float>(clickRemaining_) / static_cast<float>(clickLen);
-    const float s = static_cast<float>(std::sin(clickPhase_)) * env * kMetroGain;
-    out[i * 2] += s;
-    out[i * 2 + 1] += s;
+    const float s = static_cast<float>(std::sin(clickPhase_)) * env * kMetroGain * gain;
+    if (dest != 1) {
+        out[i * 2] += s;
+        out[i * 2 + 1] += s;
+    }
+    if (dest != 0 && cue) {
+        cue[i * 2] += s;
+        cue[i * 2 + 1] += s;
+    }
     clickPhase_ += kTwoPi * clickFreq_ / sr;
     if (clickPhase_ >= kTwoPi) clickPhase_ -= kTwoPi;
     --clickRemaining_;
@@ -3289,6 +3369,8 @@ void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSam
     const double spb = transport_.samplesPerBeat();
     const int beatsPerBar = transport_.beatsPerBar();
     const int clickLen = static_cast<int>(0.03 * sr);
+    const int32_t dest = clickDest_.load(std::memory_order_relaxed);
+    const float gain = clickGain_.load(std::memory_order_relaxed);
 
     for (int32_t i = 0; i < numFrames; ++i) {
         const double p = blockStartSamples + i;
@@ -3301,7 +3383,7 @@ void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSam
                 clickFreq_ = (beat % beatsPerBar == 0) ? 1500.0 : 1000.0;
             }
         }
-        renderClick(out, i, clickLen, sr);
+        renderClick(out, cueSeg_, i, clickLen, sr, dest, gain);
     }
 }
 
@@ -3312,6 +3394,8 @@ bool Engine::renderCountIn(float* out, int32_t numFrames, double spb) {
     const int beatsPerBar = std::max(1, transport_.beatsPerBar());
     const int clickLen = static_cast<int>(0.03 * sr);
     const double inc = spb > 0.0 ? 1.0 / spb : 0.0;
+    const int32_t dest = clickDest_.load(std::memory_order_relaxed);
+    const float gain = clickGain_.load(std::memory_order_relaxed);
 
     for (int32_t i = 0; i < numFrames; ++i) {
         if (countInPos_ < countInTotal_) {
@@ -3323,7 +3407,7 @@ bool Engine::renderCountIn(float* out, int32_t numFrames, double spb) {
                 clickFreq_ = (beat % beatsPerBar == 0) ? 1500.0 : 1000.0;
             }
         }
-        renderClick(out, i, clickLen, sr);
+        renderClick(out, cueSeg_, i, clickLen, sr, dest, gain);
         countInPos_ += inc;
     }
     uiCountIn_.store(std::max(0.0, countInTotal_ - countInPos_), std::memory_order_relaxed);

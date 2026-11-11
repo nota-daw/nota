@@ -77,6 +77,17 @@ const char* nota_audio_input_device_uid(int32_t i) {
 const char* nota_audio_input_device_name(int32_t i) {
     return deviceField(g_inputDevices, i, false);
 }
+int32_t nota_audio_effective_output_uid(const NotaEngine* e, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string uid = nota::effectiveAudioDeviceUid(CENG(e)->audioConfig().outputDeviceUid, /*inputScope=*/false);
+    if (out && cap > 0) {
+        const size_t n = std::min(uid.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, uid.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(uid.size());
+}
+
 int32_t nota_audio_effective_input_uid(const NotaEngine* e, char* out, int32_t cap) {
     if (!e) return 0;
     const std::string uid = nota::effectiveAudioDeviceUid(CENG(e)->audioConfig().inputDeviceUid, /*inputScope=*/true);
@@ -368,7 +379,7 @@ void checkRouting(AsioCheck& check) {
         AsioSession::Options opt;
         opt.outputPair = 2;
         check(rig.open(cfg, opt), "8-out fake opens");
-        rig.session.setRenderCallback([](float* out, int32_t n) {
+        rig.session.setRenderCallback([](float* out, float*, int32_t n) {
             for (int32_t i = 0; i < n; ++i) {
                 out[i * 2] = 0.25f;
                 out[i * 2 + 1] = -0.5f;
@@ -394,7 +405,7 @@ void checkRouting(AsioCheck& check) {
     cfg.inputs = 0;
     cfg.outputs = 1;
     check(mono.open(cfg), "1-out fake opens");
-    mono.session.setRenderCallback([](float* out, int32_t n) {
+    mono.session.setRenderCallback([](float* out, float*, int32_t n) {
         for (int32_t i = 0; i < n; ++i) {
             out[i * 2] = 0.2f;
             out[i * 2 + 1] = 0.6f;
@@ -405,6 +416,36 @@ void checkRouting(AsioCheck& check) {
     const auto& m = mono.fake->written(0);
     check(!m.empty() && std::fabs(m.front() - 0.4f) < 1e-6f && std::fabs(m.back() - 0.4f) < 1e-6f,
           "mono output is the down-sum");
+    // Main and Cue on two pairs of a 6-out driver (specs/089); a Cue pair the driver lacks
+    // is silent and never folds into Main.
+    {
+        Rig cueRig;
+        FakeAsioDriver::Config c6;
+        c6.inputs = 0;
+        c6.outputs = 6;
+        check(cueRig.open(c6), "6-out fake opens");
+        cueRig.session.setRenderCallback([](float* main, float* cue, int32_t n) {
+            for (int32_t i = 0; i < n; ++i) {
+                main[i * 2] = 0.25f;
+                main[i * 2 + 1] = 0.25f;
+                cue[i * 2] = -0.5f;
+                cue[i * 2 + 1] = -0.5f;
+            }
+        });
+        cueRig.session.setOutputRouting(nota::OutputRouting{0, 2, 4, 2});
+        check(cueRig.session.start(), "6-out fake starts");
+        cueRig.fake->pump(2);
+        const auto& m0 = cueRig.fake->written(0);
+        const auto& c4 = cueRig.fake->written(4);
+        check(!m0.empty() && std::fabs(m0.back() - 0.25f) < 1e-6f && !c4.empty() && std::fabs(c4.back() + 0.5f) < 1e-6f,
+            "Main on outputs 1/2, Cue on 5/6");
+        check(!cueRig.fake->nonZeroBytes(2) && !cueRig.fake->nonZeroBytes(3), "outputs 3/4 stay zero");
+        cueRig.session.setOutputRouting(nota::OutputRouting{0, 2, 6, 2}); // not on a 6-out driver
+        cueRig.fake->pump(1);
+        const auto& m1 = cueRig.fake->written(0);
+        check(!m1.empty() && std::fabs(m1.back() - 0.25f) < 1e-6f, "a missing Cue pair leaves Main as it is");
+        cueRig.session.close();
+    }
     // An out-of-range pair falls back to the first.
     Rig clamp;
     cfg.outputs = 2;
@@ -433,7 +474,7 @@ void checkDuplex(AsioCheck& check) {
         gotChannels = channels;
         for (int32_t c = 0; c < 4; ++c) got[c] = c < channels ? s[c] : -1.0f;
     };
-    rig.session.setRenderCallback([&](float*, int32_t) { order.push_back('r'); });
+    rig.session.setRenderCallback([&](float*, float*, int32_t) { order.push_back('r'); });
     rig.session.setInputCallback(&in);
     rig.session.start();
     rig.fake->pump(3);
@@ -560,7 +601,7 @@ void checkFailures(AsioCheck& check) {
     Rig late;
     int renders = 0;
     check(late.open(FakeAsioDriver::Config{}), "late-callback fake opens");
-    late.session.setRenderCallback([&](float*, int32_t) { ++renders; });
+    late.session.setRenderCallback([&](float*, float*, int32_t) { ++renders; });
     late.session.start();
     late.fake->pump(2);
     late.session.stop();
@@ -574,7 +615,7 @@ void checkFailures(AsioCheck& check) {
     FakeAsioDriver* fake = drv.get(); // leaked with the session's state when it wedges
     check(stuck.open(std::move(drv), {}), "stall fake opens");
     std::atomic<bool> inRender{false}, release{false};
-    stuck.setRenderCallback([&](float* out, int32_t n) {
+    stuck.setRenderCallback([&](float* out, float*, int32_t n) {
         inRender = true;
         while (!release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         std::fill(out, out + static_cast<size_t>(n) * 2, 0.5f);

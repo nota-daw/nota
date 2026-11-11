@@ -369,6 +369,9 @@ public sealed class MidiLearnService
             case MidiTargetKind.MasterVolume:
                 MixTouch(MixTarget.Master, () => _engine.SetMasterVolume((float)(outv * VolumeMax)));
                 break;
+            case MidiTargetKind.CueVolume: // a listening level: no undo step (specs/089)
+                _engine.CueVolume = (float)(outv * VolumeMax); // the Cue fader's travel
+                break;
             case MidiTargetKind.TrackPan:
                 MixTouch(MixTarget.Pan(t.TrackId), () => _engine.SetTrackPan(t.TrackId, (float)(outv * 2.0 - 1.0)));
                 break;
@@ -423,6 +426,10 @@ public sealed class MidiLearnService
             case MidiTargetKind.TransportRecord: _engine.SetRecording(!_engine.IsRecording); break;
             case MidiTargetKind.TrackMute: _engine.SetTrackMute(t.TrackId, !TrackFlag(t.TrackId, mute: true)); break;
             case MidiTargetKind.TrackSolo: _engine.SetTrackSolo(t.TrackId, !TrackFlag(t.TrackId, mute: false)); break;
+            case MidiTargetKind.TrackCue:
+                _engine.SetTrackCue(t.TrackId, !_engine.GetTrackCue(t.TrackId));
+                CueKey.NotifyChanged();
+                break;
             case MidiTargetKind.RackChainMute when t.DeviceIndex <= MidiTarget.MidiRackBase:
             {
                 int mi = MidiTarget.MidiRackBase - t.DeviceIndex;
@@ -563,6 +570,7 @@ public sealed class MidiLearnService
     private static bool TrackScoped(MidiTargetKind k) => k
         is MidiTargetKind.DeviceParam or MidiTargetKind.PluginParam or MidiTargetKind.MidiDeviceParam
         or MidiTargetKind.TrackVolume or MidiTargetKind.TrackPan or MidiTargetKind.TrackMute or MidiTargetKind.TrackSolo
+        or MidiTargetKind.TrackCue
         or MidiTargetKind.RackVolume or MidiTargetKind.RackChainGain
         or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo;
 

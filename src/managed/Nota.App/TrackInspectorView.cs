@@ -187,6 +187,9 @@ internal sealed class TrackInspectorView : UserControl
         if (audio || ti.IsInstrument)
             state.Children.Add(Toggle(Loc.T("track_inspector.arm"), ti.Armed != 0, NotaPalette.Record, TrackArming.Tip,
                 (on, mods) => { TrackArming.Set(_engine, id, on, mods); Edited(); }));
+        if (CueKey.Shown(_engine))   // Cue (specs/089)
+            state.Children.Add(CueKey.Create(_engine, id, 0, 24, NotaRadius.Field, out _, Edited));
+        state.Columns = state.Children.Count;
         s.Children.Add(state);
 
         if (audio) s.Children.Add(Section(Loc.T("common.input"), InputRows(id)));

@@ -135,6 +135,7 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
     // Pairs: an out-of-range pair falls back to the first; a missing second channel = mono.
     outL_ = (opt.outputPair >= 0 && opt.outputPair < outs) ? opt.outputPair : 0;
     outR_ = outL_ + 1 < outs ? outL_ + 1 : -1;
+    routing_.store(packRouting(OutputRouting{outL_, 2, -1, 2}), std::memory_order_relaxed); // Main = the saved pair
     // Inputs: every one the engine can address (specs/086); the saved pair is the fallback
     // when a driver refuses that many buffers.
     inPair_ = ins > 0 ? ((opt.inputPair >= 0 && opt.inputPair < ins) ? opt.inputPair : 0) : -1;
@@ -170,6 +171,7 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
             io.buffers.push_back(BufferInfo{true, c, {nullptr, nullptr}});
         }
         io.interleaved.assign(static_cast<size_t>(bufferFrames_) * 2, 0.0f);
+        io.cueInterleaved.assign(static_cast<size_t>(bufferFrames_) * 2, 0.0f);
         io.inInterleaved.assign(static_cast<size_t>(bufferFrames_) * static_cast<size_t>(std::max(inCount_, 1)), 0.0f);
     };
 
@@ -342,22 +344,34 @@ void AsioSession::bufferSwitch(int32_t index, int64_t pos) {
         (*in)(ins, n, s.inCount);
     }
 
-    if (s.render) s.render(io, n);
-    else std::fill(io, io + static_cast<size_t>(n) * 2, 0.0f);
+    float* cue = s.cueInterleaved.data();
+    if (s.render) s.render(io, cue, n);
+    else {
+        std::fill(io, io + static_cast<size_t>(n) * 2, 0.0f);
+        std::fill(cue, cue + static_cast<size_t>(n) * 2, 0.0f);
+    }
 
     const auto outBuf = [&](int32_t ch) { return s.buffers[static_cast<size_t>(ch)].buffers[index]; };
     const auto outType = [&](int32_t ch) { return s.outTypes[static_cast<size_t>(ch)]; };
-    if (s.outR >= 0) {
-        fromFloat(io, 2, outType(s.outL), outBuf(s.outL), n);
-        fromFloat(io + 1, 2, outType(s.outR), outBuf(s.outR), n);
-    } else {
-        for (int32_t i = 0; i < n; ++i) io[i * 2] = 0.5f * (io[i * 2] + io[i * 2 + 1]); // mono output: down-sum
-        fromFloat(io, 2, outType(s.outL), outBuf(s.outL), n);
-    }
-    // Drivers may not keep buffer contents: hold every other output at zero each switch.
     const auto outs = static_cast<int32_t>(s.outTypes.size());
+    // Main and Cue by the routing (specs/089): a missing Cue pair is silent, never Main.
+    const ResolvedRouting rr = resolveRouting(unpackRouting(routing_.load(std::memory_order_relaxed)), outs);
+    const auto place = [&](float* src, int32_t first, int32_t width) {
+        if (width == 1) {
+            for (int32_t i = 0; i < n; ++i) src[i * 2] = 0.5f * (src[i * 2] + src[i * 2 + 1]); // mono: down-sum
+        }
+        for (int32_t c = 0; c < width; ++c) {
+            const int32_t ch = first + c;
+            if (isSupported(outType(ch))) fromFloat(src + c, 2, outType(ch), outBuf(ch), n);
+            else clear(outType(ch), outBuf(ch), n);
+        }
+    };
+    if (rr.mainWidth > 0) place(io, rr.mainFirst, rr.mainWidth);
+    if (rr.cueWidth > 0) place(cue, rr.cueFirst, rr.cueWidth);
+    // Drivers may not keep buffer contents: hold every other output at zero each switch.
+    const auto used = [&](int32_t ch, int32_t first, int32_t width) { return ch >= first && ch < first + width; };
     for (int32_t ch = 0; ch < outs; ++ch)
-        if (ch != s.outL && ch != s.outR) clear(outType(ch), outBuf(ch), n);
+        if (!used(ch, rr.mainFirst, rr.mainWidth) && !used(ch, rr.cueFirst, rr.cueWidth)) clear(outType(ch), outBuf(ch), n);
 
     if (s.outputReady) s.driver->outputReady();
     inSwitch_.store(false, std::memory_order_release);

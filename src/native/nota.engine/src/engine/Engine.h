@@ -62,7 +62,21 @@ class Engine {
     double sampleRate() const { return backend_ ? backend_->sampleRate() : 0.0; }
     bool isRunning() const { return backend_ && backend_->isRunning(); }
     // One block through the device callback's path, without a device (tests/benchmarks).
-    void renderDeviceBlock(float* out, int32_t frames) { render(out, frames); }
+    void renderDeviceBlock(float* out, int32_t frames) { render(out, nullptr, frames); }
+    // The same with the Cue bus (specs/089): `cue` may be null.
+    void renderDeviceBlock(float* main, float* cue, int32_t frames) { render(main, cue, frames); }
+
+    // --- output routing (specs/089) ---
+    // Main and Cue's output pairs. Kept across device restarts and pushed to every backend
+    // after it starts; takes effect on the next callback. False for an invalid routing.
+    bool setOutputRouting(const OutputRouting& r);
+    const OutputRouting& outputRouting() const { return outputRouting_; }
+    // The open device's output channels (a test device when one is set).
+    int32_t outputChannelCount() const;
+    std::string outputChannelName(int32_t index) const;
+    // kRoutingMainFellBack | kRoutingCueUnavailable for the routing against the open device.
+    int32_t outputRoutingState() const;
+    void setTestOutputDevice(int32_t channels) { outputTestChannels_ = std::max(0, channels); } // tests
 
     // --- audio device settings (M7-1) ---
     // The chosen device/rate/buffer live in config_ (persisted to audio.json)
@@ -395,6 +409,22 @@ class Engine {
     void setTrackPan(int32_t trackId, float p);
     void setTrackMute(int32_t trackId, bool m);
     void setTrackSolo(int32_t trackId, bool s);
+    // Cue (specs/089): any number of tracks; their post-device, pre-fader signals sum into the
+    // Cue bus at the Cue level. Never changes Main. trackCue: 1 / 0, -1 for no such track.
+    bool setTrackCue(int32_t trackId, bool on);
+    int32_t trackCue(int32_t trackId) const;
+    void setCueVolume(float gain) { cueGain_.store(std::clamp(gain, 0.0f, 2.0f), std::memory_order_relaxed); }
+    float cueVolume() const { return cueGain_.load(std::memory_order_relaxed); }
+    void cueMeter(float& pkL, float& pkR, float& rmsL, float& rmsR) const {
+        pkL = cuePeakL_.load(std::memory_order_relaxed);
+        pkR = cuePeakR_.load(std::memory_order_relaxed);
+        rmsL = cueRmsL_.load(std::memory_order_relaxed);
+        rmsR = cueRmsR_.load(std::memory_order_relaxed);
+    }
+    // Where the metronome and count-in clicks go (0 Main, 1 Cue, 2 both) and their level.
+    void setClickDestination(int32_t d) { clickDest_.store(std::clamp(d, 0, 2), std::memory_order_relaxed); }
+    int32_t clickDestination() const { return clickDest_.load(std::memory_order_relaxed); }
+    void setClickVolume(float gain) { clickGain_.store(std::clamp(gain, 0.0f, 2.0f), std::memory_order_relaxed); }
     int32_t trackCount() const;
     // Track lifecycle (context menu). duplicateTrack deep-copies everything
     // (mixer, sends, clips, session, automation, fresh instrument/devices —
@@ -1507,8 +1537,8 @@ class Engine {
 
   private:
     // audio thread
-    void render(float* out, int32_t numFrames);
-    void processBlock(float* out, int32_t numFrames);
+    void render(float* main, float* cue, int32_t numFrames);
+    void processBlock(float* out, float* cue, int32_t numFrames); // cue may be null (offline)
     // Mixes the graph for one contiguous musical segment (no loop wrap inside):
     // automation + solo + send buses + track pass + return pass. processBlock
     // splits a block at loop boundaries and calls this per segment.
@@ -1558,7 +1588,9 @@ class Engine {
     bool renderCountIn(float* out, int32_t numFrames, double spb);
     void endCountIn();        // audio thread: drop the count-in state and reopen the capture gate
     void launchCountInSlot(); // audio thread: start the Session slot a count-in was waiting for
-    void renderClick(float* out, int32_t i, int clickLen, double sr); // one sample of the click voice
+    void renderClick(float* out, float* cue, int32_t i, int clickLen, double sr, int32_t dest,
+        float gain);                                  // one sample of the click voice, Main and/or Cue
+    void finishCue(float* cue, int32_t numFrames);    // Cue level, safety net, meter (specs/089)
     void renderTone(float* out, int32_t numFrames);
     void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
 
@@ -2368,6 +2400,16 @@ class Engine {
     void updateCaptureLayout(); // recompute + publish when the channel set changed
     int32_t inputTestChannels_ = 0; // tests: a pretend device's channel count (0 = none)
     std::vector<std::string> inputChannelNames_; // the device's channels when last open / probed
+    OutputRouting outputRouting_;                // specs/089: Main / Cue pairs (control thread)
+    // Cue bus (specs/089). cueSeg_ points into the block's Cue buffer at the current segment
+    // (null when the caller renders no Cue: offline, export, plain device-block tests).
+    float* cueSeg_ = nullptr;
+    std::atomic<float> cueGain_{1.0f};
+    std::atomic<int32_t> clickDest_{0};
+    std::atomic<float> clickGain_{1.0f};
+    std::atomic<float> cuePeakL_{0.0f}, cuePeakR_{0.0f}, cueRmsL_{0.0f}, cueRmsR_{0.0f};
+    bool outputRoutingSet_ = false;              // until set, ASIO keeps its saved output pair
+    int32_t outputTestChannels_ = 0;             // tests: a pretend output device
     bool inputProbed_ = false;                   // probed since the input device last changed
     void rememberInputChannels();
     void forgetInputChannels();
@@ -2551,6 +2593,7 @@ class Engine {
         Track* t = nullptr;
         bool audible = false, capturing = false, feeding = false, toMix = false;
         bool monitoring = false, frozenActive = false, sessionActive = false;
+        bool cue = false, cueOnly = false; // Cue tap (specs/089); cueOnly: silent in Main
         bool postTapMuted = false; // sidechain tap muted with its source leaf (vocoder key)
         bool eligible = false;     // worker-capable DSP, no shared writers
         LeafPath path = LeafPath::Skip;

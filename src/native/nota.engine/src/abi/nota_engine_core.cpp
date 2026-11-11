@@ -475,11 +475,47 @@ NotaResult nota_engine_master_meter(const NotaEngine* e, NotaMeter* out) {
     return NOTA_OK;
 }
 
+// ---- Cue (specs/089) --------------------------------------------------------
+
+NotaResult nota_engine_set_cue_volume(NotaEngine* e, float gain) {
+    if (!e || !std::isfinite(gain)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setCueVolume(gain);
+    return NOTA_OK;
+}
+float nota_engine_cue_volume(const NotaEngine* e) {
+    return e ? CENG(e)->cueVolume() : 0.0f;
+}
+NotaResult nota_engine_cue_meter(const NotaEngine* e, NotaMeter* out) {
+    if (!e || !out) return NOTA_ERR_INVALID_ARG;
+    CENG(e)->cueMeter(out->peak_l, out->peak_r, out->rms_l, out->rms_r);
+    return NOTA_OK;
+}
+NotaResult nota_transport_set_click_destination(NotaEngine* e, int32_t dest) {
+    if (!e || dest < 0 || dest > 2) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setClickDestination(dest);
+    return NOTA_OK;
+}
+int32_t nota_transport_click_destination(const NotaEngine* e) {
+    return e ? CENG(e)->clickDestination() : 0;
+}
+NotaResult nota_transport_set_click_volume(NotaEngine* e, float gain) {
+    if (!e || !std::isfinite(gain)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setClickVolume(gain);
+    return NOTA_OK;
+}
+
 // ---- Offline render -------------------------------------------------------
 
 NotaResult nota_engine_render_offline(NotaEngine* e, float* out, int32_t frames) {
     if (!e || !out || frames <= 0) return NOTA_ERR_INVALID_ARG;
     ENG(e)->renderOffline(out, frames);
+    return NOTA_OK;
+}
+
+NotaResult nota_engine_render_device_block_cue(NotaEngine* e, float* main_out, float* cue_out, int32_t frames) {
+    if (!e || !main_out || frames <= 0) return NOTA_ERR_INVALID_ARG;
+    if (ENG(e)->isRunning()) return NOTA_ERR_ALREADY_RUNNING;
+    ENG(e)->renderDeviceBlock(main_out, cue_out, frames);
     return NOTA_OK;
 }
 

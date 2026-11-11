@@ -24,6 +24,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_set_mute")]
     internal static partial NotaResult SetTrackMute(IntPtr engine, int trackId, int mute);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_cue")]
+    internal static partial NotaResult SetTrackCue(IntPtr engine, int trackId, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_cue")]
+    internal static partial int GetTrackCue(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_solo")]
     internal static partial NotaResult SetTrackSolo(IntPtr engine, int trackId, int solo);
 
@@ -344,6 +350,25 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_name")]
     internal static partial int AudioInputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
+
+    // --- output routing (specs/089) ---
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_channel_count")]
+    internal static partial int AudioOutputChannelCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_channel_name")]
+    internal static partial int AudioOutputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_set_output_routing")]
+    internal static partial NotaResult AudioSetOutputRouting(IntPtr engine, int mainFirst, int mainWidth, int cueFirst, int cueWidth);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_routing_state")]
+    internal static partial int AudioOutputRoutingState(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_test_output_device")]
+    internal static partial void EngineSetTestOutputDevice(IntPtr engine, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_scatter_test")]
+    internal static partial int AudioScatterTest(IntPtr engine, float[] mainIn, float[]? cueIn, [Out] float[] deviceOut, int deviceChannels, int frames);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input_uid", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NotaResult TrackSetMidiInputUid(IntPtr engine, int trackId, string? uid, int channel);

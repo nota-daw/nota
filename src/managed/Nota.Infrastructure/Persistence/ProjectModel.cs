@@ -82,6 +82,8 @@ public sealed class MixerDto
 {
     public string PanLaw { get; set; } = "balance";
     public bool PanLawLegacy { get; set; }
+    /// <summary>The Cue mix's level (specs/089), linear; null = 1 (unity, and older files).</summary>
+    public float? CueVolume { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -125,6 +127,7 @@ public sealed class TrackDto
     public bool Mute { get; set; }
     public bool Solo { get; set; }
     public bool Armed { get; set; }
+    public bool? Cue { get; set; }              // in Cue (specs/089); null = not (and older files)
     public int ReturnIndex { get; set; } = -1; // >=0 for return tracks
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position

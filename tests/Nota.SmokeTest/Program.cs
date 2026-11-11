@@ -834,6 +834,14 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Main / Cue outputs alone (fast iteration): `--cue`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--cue")
+{
+    Console.WriteLine("-- cue output --");
+    foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CUE PASSED" : $"CUE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Multi-channel input alone (fast iteration): `--multi-input`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--multi-input")
 {
@@ -15677,6 +15685,8 @@ Console.WriteLine("-- multi-channel input --");
 foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
+Console.WriteLine("-- cue output --");
+foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");
 foreach (var (ok, label) in RcEnvSustainTests.Run()) Check(ok, label);
 Console.WriteLine("-- group link --");

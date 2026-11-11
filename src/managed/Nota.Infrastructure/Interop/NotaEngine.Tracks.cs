@@ -26,6 +26,8 @@ public sealed partial class NotaEngine
     public void SetTrackVolume(int trackId, float volume) { ThrowIfDisposed(); Check(NativeMethods.SetTrackVolume(_handle, trackId, volume)); }
     public void SetTrackPan(int trackId, float pan) { ThrowIfDisposed(); Check(NativeMethods.SetTrackPan(_handle, trackId, pan)); }
     public void SetTrackMute(int trackId, bool mute) { ThrowIfDisposed(); Check(NativeMethods.SetTrackMute(_handle, trackId, mute ? 1 : 0)); }
+    public void SetTrackCue(int trackId, bool on) { ThrowIfDisposed(); NativeMethods.SetTrackCue(_handle, trackId, on ? 1 : 0); }
+    public bool GetTrackCue(int trackId) { ThrowIfDisposed(); return NativeMethods.GetTrackCue(_handle, trackId) == 1; }
     public void SetTrackSolo(int trackId, bool solo) { ThrowIfDisposed(); Check(NativeMethods.SetTrackSolo(_handle, trackId, solo ? 1 : 0)); }
     public int TrackCount { get { ThrowIfDisposed(); return NativeMethods.TrackCount(_handle); } }
 
@@ -614,6 +616,39 @@ public sealed partial class NotaEngine
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     public void SetTestInputDevice(int channels)
     { ThrowIfDisposed(); NativeMethods.EngineSetTestInputDevice(_handle, channels); }
+
+    /// <summary>The playback device's output channel count (0 when none is open).</summary>
+    public int AudioOutputChannelCount()
+    { ThrowIfDisposed(); return NativeMethods.AudioOutputChannelCount(_handle); }
+
+    /// <summary>The name the playback device gives an output channel ("" when it gives none).</summary>
+    public string AudioOutputChannelName(int index)
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioOutputChannelName(_handle, index, b, c)); }
+
+    /// <summary>Where Main and Cue go (specs/089), 0-based; cueFirst &lt; 0 = no Cue output.
+    /// False for an invalid routing (bad width, odd stereo first, overlapping pairs).</summary>
+    public bool SetOutputRouting(int mainFirst, int mainWidth, int cueFirst, int cueWidth)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.AudioSetOutputRouting(_handle, mainFirst, mainWidth, cueFirst, cueWidth)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>The routing against the open device: see <see cref="OutputRoutingState"/>.</summary>
+    public OutputRoutingState GetOutputRoutingState()
+    { ThrowIfDisposed(); return (OutputRoutingState)NativeMethods.AudioOutputRoutingState(_handle); }
+
+    /// <summary>Tests: pretend the output device has this many outputs (0 clears it).</summary>
+    public void SetTestOutputDevice(int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineSetTestOutputDevice(_handle, channels); }
+
+    /// <summary>Tests: place Main and Cue on a device of <paramref name="deviceChannels"/> by the
+    /// current routing, as the backends do; returns the routing state.</summary>
+    public OutputRoutingState ScatterOutputsForTest(float[] main, float[]? cue, float[] deviceOut, int deviceChannels, int frames)
+    {
+        ThrowIfDisposed();
+        return (OutputRoutingState)NativeMethods.AudioScatterTest(_handle, main, cue, deviceOut, deviceChannels, frames);
+    }
 
     /// <summary>Turns live input monitoring on/off for an audio track (hear its record input through the track).</summary>
     public void SetTrackMonitor(int trackId, bool on)

@@ -333,6 +333,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             device.Add(Row(Loc.T("preferences.latency"), latency));
             var asioBody = Sections(
                 Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
+                OutputsHost(engine),
                 InputsHost(engine),
                 Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
             _loading = false;
@@ -361,6 +362,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         var body = Sections(
             Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
+            OutputsHost(engine),
             InputsHost(engine),
             Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
         _loading = false;
@@ -392,7 +394,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 : Loc.T("preferences.no_asio_driver_found_install"))));
     }
 
-    // Driver · Output pair · Input pair · Sample rate · Buffer size (read-only) under ASIO.
+    // Driver · Input pair · Sample rate · Buffer size (read-only) under ASIO; the output pair is
+    // Main in the Outputs section (specs/089).
     // Pairs come from the open driver, so they show once it runs; the buffer size is the
     // driver's own setting (FR-008), changed in its panel ("Driver settings…").
     private void AsioRows(List<Control> device, IAudioEngine engine, ComboBox srCombo)
@@ -437,7 +440,6 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         if (running)
         {
-            device.Add(Row(Loc.T("common.output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
             var ins = engine.AsioChannels(true);
             device.Add(Row(Loc.T("common.input"), ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption(Loc.T("preferences.no_inputs_on_this_driver"))));
         }
@@ -603,6 +605,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         if (_loading || _main is null) return;
         _main.ApplyAudioSettings();             // re-reads the device's input setup (AudioApplied)
         RebuildInputs(_main.Engine);           // ...its own inputs and names on the page (specs/086)
+        RebuildOutputs(_main.Engine);          // ...and its own output pairs (specs/089)
         UpdateLatency();
     }
 

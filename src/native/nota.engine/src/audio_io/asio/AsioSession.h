@@ -87,6 +87,9 @@ class AsioSession {
     bool wedged() const { return wedged_; }
     const std::vector<ChannelInfo>& channels(bool input) const { return input ? inChannels_ : outChannels_; }
     int32_t outputPair() const { return outL_; }
+    // Where Main and Cue go (specs/089); any thread, read by the next buffer switch. Until it
+    // is called, Main is the saved output pair and there is no Cue.
+    void setOutputRouting(const OutputRouting& r) { routing_.store(packRouting(r), std::memory_order_relaxed); }
     int32_t inputPair() const { return inPair_; } // the saved pair: the fallback capture
 
     bool openControlPanel();
@@ -116,7 +119,8 @@ class AsioSession {
         int32_t outL = -1, outR = -1;     // output channels = their indices in buffers; R -1 = mono
         std::vector<int32_t> inBufs;      // per input channel: index into buffers, -1 = silent
         int32_t inCount = 0;              // input channels handed to the callback
-        std::vector<float> interleaved;   // `frames` stereo frames
+        std::vector<float> interleaved;   // `frames` stereo frames: Main
+        std::vector<float> cueInterleaved; // `frames` stereo frames: Cue (specs/089)
         std::vector<float> inInterleaved; // `frames` × inCount input frames
         RenderCallback render;            // copied at start(): never swapped under the switch
     };
@@ -151,6 +155,7 @@ class AsioSession {
     RenderCallback render_;
     std::function<void()> xrun_;
     std::atomic<const InputCallback*> input_{nullptr};
+    std::atomic<uint64_t> routing_{packRouting(OutputRouting{})};
 
     std::atomic<bool> inSwitch_{false};
     std::atomic<bool> resetRequested_{false};
