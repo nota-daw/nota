@@ -7,6 +7,7 @@
 // paints a returning phone in it before any of this loads; a new phone starts on the
 // built-in fallback (theme-plugin.ts).
 
+import { untrack } from 'svelte';
 import { cssVars, geometryVars, inkOn, type Colors, type Ink } from './palette';
 import type { RadiusStep, ThemeMessage } from './types';
 
@@ -30,6 +31,9 @@ class Look {
   phoneDark = $state(scheme.matches);
   /** An older Nota says only dark or light: the fallback's two sides. */
   legacyDark = $state<boolean | null>(null);
+  /** Bumped each time a theme is put on the page, so a canvas that reads the custom
+   * properties (a clip preview) knows to redraw. */
+  applied = $state(0);
 
   constructor() {
     scheme.addEventListener('change', (e) => (this.phoneDark = e.matches));
@@ -70,6 +74,8 @@ class Look {
       for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
       try { localStorage.setItem(VARS, JSON.stringify({ dark, v: vars })); } catch { /* private mode */ }
     }
+    // Untracked: apply runs inside App's effect, which must not come to depend on this counter.
+    untrack(() => this.applied++);
     const ground = getComputedStyle(root).getPropertyValue('--bg-app').trim();
     if (ground) document.querySelector('meta[name=theme-color]')?.setAttribute('content', ground);
   }

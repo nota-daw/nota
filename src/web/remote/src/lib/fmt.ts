@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 // Numbers as the desktop prints them (DESIGN.md § Numbers, NotaNum): a true minus (U+2212),
 // a thin space before the unit, fixed precision so a value's width never jumps (the page
 // draws figures tabular). One place, so every screen writes −3.0 dB, 72 % and 122.00 alike.

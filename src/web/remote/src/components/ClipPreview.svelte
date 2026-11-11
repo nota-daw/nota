@@ -1,4 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
 <!-- What is in a Session clip, drawn as the desktop slot draws it (issue 557, SessionView.Grid.cs):
      a MIDI clip's notes as 3 px bars over the clip's own pitch range, an audio clip's waveform
      as centred bars scaled to its loudest part. One canvas per cell, redrawn only when the
@@ -22,7 +23,7 @@
 
   $effect(() => {
     const c = canvas, p = preview;
-    void look.msg; void look.phoneDark; void ink;   // a theme change re-resolves the ink
+    void look.applied; void ink;   // a theme put on the page (colours, skin corners) redraws
     if (!c || w <= 0 || h <= 0) return;
     const dpr = window.devicePixelRatio || 1;
     c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);

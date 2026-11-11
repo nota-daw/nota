@@ -127,13 +127,13 @@
 </script>
 
 <div class="xy" class:col={portrait}>
-  <div class="field" class:live class:learnable={app.learn.on} style:--tc={tc} role="slider" tabindex="0" aria-label="XY pad" aria-valuenow={Math.round(x * 100)}
+  <div class="field" class:moving={live} class:learnable={app.learn.on} style:--tc={tc} role="slider" tabindex="0" aria-label="XY pad" aria-valuenow={Math.round(x * 100)}
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
     <div class="tint"></div>
     <div class="gridlines"></div>
-    <div class="vl" class:live style:left="{x * 100}%"></div>
-    <div class="hl" class:live style:top="{(1 - y) * 100}%"></div>
-    <div class="pt" class:live style:left="{x * 100}%" style:top="{(1 - y) * 100}%"><span></span></div>
+    <div class="vl" class:moving={live} style:left="{x * 100}%"></div>
+    <div class="hl" class:moving={live} style:top="{(1 - y) * 100}%"></div>
+    <div class="pt" class:moving={live} style:left="{x * 100}%" style:top="{(1 - y) * 100}%"><span></span></div>
     <span class="ax ax-x">{label('x')} →</span>
     <span class="ax ax-y">↑ {label('y')}</span>
     {#if tilt}<span class="pill">Tilt is moving the point</span>{/if}
@@ -176,14 +176,14 @@
      carry the track colour; while live a quiet tint of it fills the field. */
   .field { flex: 1; min-height: 0; min-width: 0; position: relative; border-radius: var(--r-card); background: var(--bg-sunken); box-shadow: var(--sunken); overflow: hidden; touch-action: none; }
   .tint { position: absolute; inset: 0; background: var(--tc); opacity: 0; transition: opacity var(--ease); }
-  .field.live .tint { opacity: .1; }
+  .field.moving .tint { opacity: .1; }
   .gridlines { position: absolute; inset: 0; background-image: linear-gradient(var(--viz-grid) 1px, transparent 1px), linear-gradient(90deg, var(--viz-grid) 1px, transparent 1px); background-size: 25% 25%; background-position: -1px -1px; }
   .vl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--tc); opacity: .45; }
   .hl { position: absolute; left: 0; right: 0; height: 1px; background: var(--tc); opacity: .45; }
-  .vl.live, .hl.live { opacity: 1; }
+  .vl.moving, .hl.moving { opacity: 1; }
   .pt { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid var(--tc); display: flex; align-items: center; justify-content: center; }
   .pt span { width: 10px; height: 10px; border-radius: 50%; background: var(--tc); }
-  .pt.live span { width: 14px; height: 14px; }
+  .pt.moving span { width: 14px; height: 14px; }
   .ax { position: absolute; font-size: 11px; color: var(--text-tertiary); pointer-events: none; }
   .ax-x { right: 10px; bottom: 8px; }
   .ax-y { left: 10px; top: 8px; }

@@ -432,6 +432,40 @@ internal static class RemoteTests
             $"an audio clip's preview is 48 peaks scaled to its loudest part (first {peaks.FirstOrDefault()}, last {peaks.LastOrDefault()})");
         e.RemoveTrack(aud);
         try { File.Delete(rampWav); } catch { }
+
+        // A big grid at the real UI clock (33 ms): an edit that keeps a slot's state and length
+        // (only its notes change) still reaches the phone within a second — the sweep is sized
+        // by time, not by a fixed number of slots per tick.
+        var big = Enumerable.Range(0, 15).Select(_ => e.AddInstrumentTrack()).ToArray();
+        int scenesBefore = e.SceneCount;
+        while (e.SceneCount < 32) e.AddScene();
+        foreach (var bt in big.Prepend(inst))
+            for (int sc = 1; sc < 32; sc++) { e.AddSessionMidiClip(bt, sc, 4); e.SetSessionNotes(bt, sc, new[] { new NotaNote(60, 0, 1, 0.8f) }); }
+        Send(new { t = "sub", s = "Mixer" });
+        Thread.Sleep(60); hub.Tick();
+        Send(new { t = "sub", s = "Scenes" });
+        Wait("clips", 3000);
+        for (int k = 0; k < 40; k++) { hub.Tick(); Thread.Sleep(33); }
+        lock (inbox) inbox.RemoveAll(m => m.GetProperty("t").GetString() == "clips");
+        int far = big[^1];
+        e.SetSessionNotes(far, 31, new[] { new NotaNote(72, 1, 2, 0.8f) });
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        JsonElement? farMsg = null;
+        while (sw.ElapsedMilliseconds < 2500 && farMsg is null)
+        {
+            hub.Tick();
+            lock (inbox)
+            {
+                var hit = inbox.FirstOrDefault(m => m.GetProperty("t").GetString() == "clips"
+                    && m.GetProperty("s").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() == far && x.GetProperty("i").GetInt32() == 31));
+                if (hit.ValueKind != JsonValueKind.Undefined) farMsg = hit;
+            }
+            Thread.Sleep(33);
+        }
+        long farMs = sw.ElapsedMilliseconds;
+        yield return (farMsg is not null && farMs < 1000, $"on a 16 × 32 grid at a 33 ms tick a note edit reaches the phone within a second ({farMs} ms)");
+        foreach (var bt in big) e.RemoveTrack(bt);
+        while (e.SceneCount > scenesBefore && e.RemoveScene(e.SceneCount - 1)) { }
         Send(new { t = "sub", s = "Mixer" });
 
         Send(new { t = "ping", c = 1 });

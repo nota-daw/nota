@@ -20,7 +20,12 @@ namespace Nota.Remote;
 public sealed partial class RemoteHub
 {
     internal const int PreviewGrid = 64, PreviewMaxNotes = 128, PreviewPeaks = 48;
-    private const int PreviewReadsPerTick = 24, PreviewBatch = 64;
+    // The whole grid is re-read within PreviewSweepMs whatever the UI clock runs at (a 32 × 32
+    // grid at a 33 ms tick: ~48 slots a tick), so an edit that keeps a slot's state and length —
+    // notes, name, colour — still reaches the phone within a second. A recording slot is read
+    // at most every PreviewRecordMs.
+    internal const long PreviewSweepMs = 700;
+    private const int PreviewMinReads = 8, PreviewMaxReads = 128, PreviewBatch = 64;
     private const long PreviewRecordMs = 250;
 
     /// <summary>One slot's preview as its JSON object; <c>Empty</c> for a slot with no clip.</summary>
@@ -31,7 +36,8 @@ public sealed partial class RemoteHub
     private readonly float[] _peakBuf = new float[PreviewPeaks * 2];
     private int _previewCursor;
     private bool _previewsFresh;
-    private long _previewRecordAt;
+    private long _previewRecordAt, _previewSweepAt;
+    private double _previewReadCredit;
 
     private static int SlotKey(int trackId, int scene) => trackId * 4096 + scene;
 
@@ -64,6 +70,7 @@ public sealed partial class RemoteHub
         {
             foreach (var (t, s) in slots) ReadPreview(host, t, s);
             _previewsFresh = true;
+            _previewSweepAt = Environment.TickCount64;
             return;
         }
 
@@ -71,6 +78,7 @@ public sealed partial class RemoteHub
         bool recordDue = now - _previewRecordAt >= PreviewRecordMs;
         if (recordDue) _previewRecordAt = now;
         var done = new HashSet<int>();
+        var recordingSlots = new HashSet<int>();
         foreach (var (t, s) in slots)
         {
             int key = SlotKey(t.Id, s);
@@ -78,14 +86,23 @@ public sealed partial class RemoteHub
             double len = st == 0 ? 0 : _engine.SessionSlotLength(t.Id, s);
             bool moved = !_previewSlotSeen.TryGetValue(key, out var seen) || seen.State != st || Math.Abs(seen.Len - len) > 1e-6;
             bool recording = st is 4 or 5;
+            if (recording) recordingSlots.Add(key);
             if (moved || (recording && recordDue)) { ReadPreview(host, t, s, st, len); done.Add(key); }
         }
         if (slots.Count == 0) return;
-        for (int n = 0; n < Math.Min(PreviewReadsPerTick, slots.Count); n++)
+        // Read as many slots as the time since the last tick earns, so one sweep takes
+        // PreviewSweepMs at any tick rate; recording slots keep their own 4 Hz pace.
+        long dt = Math.Clamp(now - _previewSweepAt, 0, PreviewSweepMs);
+        _previewSweepAt = now;
+        _previewReadCredit += slots.Count * (double)dt / PreviewSweepMs;
+        int reads = Math.Clamp((int)_previewReadCredit, PreviewMinReads, PreviewMaxReads);
+        _previewReadCredit = Math.Max(0, _previewReadCredit - reads);
+        for (int n = 0; n < Math.Min(reads, slots.Count); n++)
         {
             _previewCursor = (_previewCursor + 1) % slots.Count;
             var (t, s) = slots[_previewCursor];
-            if (!done.Contains(SlotKey(t.Id, s))) ReadPreview(host, t, s);
+            int key = SlotKey(t.Id, s);
+            if (!done.Contains(key) && !recordingSlots.Contains(key)) ReadPreview(host, t, s);
         }
     }
 
