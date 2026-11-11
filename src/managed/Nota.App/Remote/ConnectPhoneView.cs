@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Connect Phone (design 5a): the popup under the top bar's Remote button and View → Connect
-// Phone…. One switch when Remote is off; when on, a large QR, the address and the four-digit
+// Phone…. One switch when Remote is off; when on, a large QR, the address (open it in the
+// browser, copy it; another address of the computer is a click away, #85) and the four-digit
 // code with its countdown ring, then the connected phones (signal, name, latency and screen,
 // the track each plays, ✕ to drop it).
 
@@ -11,8 +12,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -56,8 +59,7 @@ internal sealed class ConnectPhoneView : Border
     {
         // The code rotating or a phone's latency moving only updates text; a phone coming or
         // going, or the network's addresses changing (a cable plugged in), rebuilds.
-        string sig = string.Join("|", _remote.Hub.Devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}"))
-            + ";" + string.Join("|", _remote.Links.Select(l => l.Address));
+        string sig = string.Join("|", _remote.Hub.Devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}")) + ";" + LinksSig();
         if (sig != _lastDevices || _qr is null != !_remote.Running) Build();
         else Tick();
     });
@@ -108,7 +110,7 @@ internal sealed class ConnectPhoneView : Border
         _left = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
         info.Children.Add(Field(Loc.T("remote.connect.code"), codeRow));
-        bool usb = _remote.Links is { Count: > 0 } links && links[0].Usb;
+        bool usb = _remote.Link is { Usb: true };
         info.Children.Add(Note(usb
             ? Loc.T("remote.connect.point_the_phone_camera_at")
             : Loc.T("remote.connect.point_the_phone_camera_at_2"),
@@ -119,8 +121,7 @@ internal sealed class ConnectPhoneView : Border
         _body.Children.Add(top);
 
         var devices = _remote.Hub.Devices;
-        _lastDevices = string.Join("|", devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}"))
-            + ";" + string.Join("|", _remote.Links.Select(l => l.Address));
+        _lastDevices = string.Join("|", devices.Select(d => $"{d.ConnectionId}:{d.Name}:{d.TrackId}")) + ";" + LinksSig();
         if (devices.Count > 0)
         {
             var list = new StackPanel();
@@ -183,28 +184,87 @@ internal sealed class ConnectPhoneView : Border
         _ring.SweepAngle = 360 * left.TotalSeconds / RemotePairing.CodeLifetime.TotalSeconds;
     }
 
-    // The addresses, best first: a "USB" pill on the cable link, the rest dimmer under it.
+    // The addresses and the interface chosen for the QR: a change to either rebuilds.
+    private string LinksSig() => string.Join("|", _remote.Links.Select(l => l.Address)) + ";" + _settings.Current.RemoteInterface;
+
+    // The address in the QR — a "USB" pill on the cable link, then open in the browser and copy —
+    // and the computer's other addresses dimmer under it: a click puts one in the QR (#85), and
+    // "Automatic" goes back to the best one once an address has been chosen.
     private Control AddressRows()
     {
         var links = _remote.Links;
-        var host = _remote.Url!.Replace("http://", "");
+        var chosen = _remote.Link;
+        var url = _remote.Url!;
         var first = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        first.Children.Add(new TextBlock { Text = host, FontSize = 12, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
-        if (links.Count > 0 && links[0].Usb)
+        first.Children.Add(new TextBlock { Text = url.Replace("http://", ""), FontSize = 12, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        if (chosen is { Usb: true })
             first.Children.Add(new Border
             {
                 Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
                 Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
                 Child = new TextBlock { Text = Loc.T("remote.connect.usb_caps"), FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
             });
-        var rows = new StackPanel { Spacing = links.Count > 1 ? 3 : 0, Children = { first } };
-        for (int i = 1; i < links.Count; i++)
-            rows.Children.Add(new TextBlock
+        first.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center,
+            Children =
             {
-                Text = $"{links[i].Name}  {links[i].Address}:{_settings.Current.RemotePort}", FontSize = 9, FontFamily = NotaFonts.UiFamily,
-                Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
-            });
+                LinkKey(GlyphKind.PopOut, Loc.T("remote.connect.open_in_the_browser"), _ => Host?.Launcher.LaunchUriAsync(new Uri(url))),
+                LinkKey(GlyphKind.Copy, Loc.T("remote.connect.copy_the_link"), g =>
+                {
+                    if (Host?.Clipboard is not { } cb) return;
+                    _ = cb.SetTextAsync(url);
+                    g.Kind = GlyphKind.Check;   // copied: a tick for a moment
+                    DispatcherTimer.RunOnce(() => g.Kind = GlyphKind.Copy, TimeSpan.FromSeconds(1.5));
+                }),
+            },
+        });
+        var rows = new StackPanel { Spacing = 3, Children = { first } };
+        foreach (var l in links)
+        {
+            if (chosen is { } c && l.Address == c.Address) continue;
+            string iface = l.Interface;
+            rows.Children.Add(OtherRow($"{l.Name}  {l.Address}:{_settings.Current.RemotePort}", Loc.T("remote.connect.show_this_address_in_the"), () => _remote.ChooseInterface(iface)));
+        }
+        if (_settings.Current.RemoteInterface is not null)
+            rows.Children.Add(OtherRow(Loc.T("remote.connect.automatic"), Loc.T("remote.connect.show_the_best_address_usb"), () => _remote.ChooseInterface(null)));
         return rows;
+    }
+
+    // The window the popup opens from: it reaches the browser and the clipboard, which a popup's
+    // own root may not.
+    private TopLevel? Host => (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow
+        ?? TopLevel.GetTopLevel(this);
+
+    // A dim address row that takes a click.
+    private static Control OtherRow(string text, string tip, Action click)
+    {
+        var t = new TextBlock
+        {
+            Text = text, FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
+            Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        ToolTip.SetTip(t, tip);
+        t.PointerEntered += (_, _) => t.Foreground = NotaPalette.TextPrimary;
+        t.PointerExited += (_, _) => t.Foreground = NotaPalette.TextTertiary;
+        t.PointerPressed += (_, e) => { if (e.GetCurrentPoint(t).Properties.IsLeftButtonPressed) { e.Handled = true; click(); } };
+        return t;
+    }
+
+    // A small glyph key beside the address; the click gets the glyph, to show what it did.
+    private static Control LinkKey(GlyphKind glyph, string tip, Action<Glyph> click)
+    {
+        var g = new Glyph(glyph, 10) { Foreground = NotaPalette.TextMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var k = new Border
+        {
+            Width = 20, Height = 20, CornerRadius = NotaRadius.Group, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Child = g,
+        };
+        ToolTip.SetTip(k, tip);
+        k.PointerEntered += (_, _) => k.Background = NotaPalette.SurfaceHover;
+        k.PointerExited += (_, _) => k.Background = Brushes.Transparent;
+        k.PointerPressed += (_, e) => { if (e.GetCurrentPoint(k).Properties.IsLeftButtonPressed) { e.Handled = true; click(g); } };
+        return k;
     }
 
     private static Control Field(string label, Control value)

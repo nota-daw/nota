@@ -83,6 +83,21 @@ internal static class RemoteTests
         yield return (!RemoteLinks.InSubnet(IPAddress.Parse("::1"), IPAddress.Parse("10.0.0.1"), 24)
             && !RemoteLinks.InSubnet(IPAddress.Parse("10.0.0.5"), IPAddress.Parse("10.0.0.1"), 33),
             "nonsense prefixes and IPv6 match nothing");
+
+        // The address in the link and QR (#85): the chosen interface while it is up, else the best.
+        var links = new List<RemoteLink>
+        {
+            new("172.20.10.2", true, "USB", "en7"),
+            new("192.168.1.20", false, "Wi-Fi", "en0"),
+            new("192.168.1.21", false, "Wi-Fi", "en0"),
+            new("10.0.0.5", false, "Ethernet", "en1"),
+        };
+        yield return (RemoteLinks.Pick(links, null)?.Address == "172.20.10.2" && RemoteLinks.Pick(links, "")?.Address == "172.20.10.2",
+            "Automatic shows the best address (USB first)");
+        yield return (RemoteLinks.Pick(links, "en1")?.Address == "10.0.0.5", "a chosen interface's address goes in the QR");
+        yield return (RemoteLinks.Pick(links, "en0")?.Address == "192.168.1.20", "an interface with two addresses shows its first");
+        yield return (RemoteLinks.Pick(links, "utun3")?.Address == "172.20.10.2", "a chosen interface that isn't up falls back to Automatic");
+        yield return (RemoteLinks.Pick(new List<RemoteLink>(), "en0") is null, "no network, no address");
     }
 
     private static IEnumerable<(bool, string)> Engine()

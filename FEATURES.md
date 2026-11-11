@@ -571,6 +571,10 @@ docks as a panel under any of the three, or floats in its own window — see
   permissions (play only / play and control) in **Settings → Remote**. Phone notes record like
   the computer keyboard's; knobs and XY axes map through MIDI Learn (XY and tilt per track);
   several phones play at once, each on its own track, with players' names on the tracks.
+  On a computer with several networks, the address in the link and QR is chosen
+  automatically (USB, then Wi-Fi, then Ethernet) or by hand, in Settings → Remote or with a
+  click on another address in Connect phone; the link opens in the browser or copies with a
+  click.
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the

@@ -14,8 +14,9 @@ using System.Runtime.InteropServices;
 namespace Nota.Remote;
 
 /// <summary>One address a phone could open. <paramref name="Name"/> says what it is ("USB",
-/// "Wi-Fi") for the popup's rows.</summary>
-public readonly record struct RemoteLink(string Address, bool Usb, string Name);
+/// "Wi-Fi") for the popup's rows; <paramref name="Interface"/> is the system's name for its
+/// network interface (en0, eth0, "Wi-Fi"), which a chosen address is remembered by (#85).</summary>
+public readonly record struct RemoteLink(string Address, bool Usb, string Name, string Interface);
 
 public static class RemoteLinks
 {
@@ -38,12 +39,25 @@ public static class RemoteLinks
                     if (b[0] == 169 && b[1] == 254) continue;   // link-local: no DHCP
                     bool wifi = ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211;
                     int rank = (isUsb ? 0 : 1) * 4 + (HasGateway(ni) ? 0 : 2) + (wifi ? 0 : 1);
-                    links.Add((new RemoteLink(ua.Address.ToString(), isUsb, isUsb ? "USB" : wifi ? "Wi-Fi" : "Ethernet"), rank));
+                    links.Add((new RemoteLink(ua.Address.ToString(), isUsb, isUsb ? "USB" : wifi ? "Wi-Fi" : "Ethernet", ni.Name), rank));
                 }
             }
         }
         catch (NetworkInformationException) { }
         return links.OrderBy(l => l.Rank).Select(l => l.Link).ToList();
+    }
+
+    /// <summary>The link the QR and the shown address use (#85): the first address of the
+    /// interface named <paramref name="chosen"/> while it is up, else the best one
+    /// (<paramref name="links"/>[0], as <see cref="All"/> ranks them) — so a chosen interface
+    /// that goes away falls back to Automatic, and comes back with it. Null without a network.</summary>
+    public static RemoteLink? Pick(IReadOnlyList<RemoteLink> links, string? chosen)
+    {
+        if (links.Count == 0) return null;
+        if (!string.IsNullOrEmpty(chosen))
+            foreach (var l in links)
+                if (l.Interface == chosen) return l;
+        return links[0];
     }
 
     /// <summary>Whether <paramref name="ip"/> sits on a USB link (the device rows and the

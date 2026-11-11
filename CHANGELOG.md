@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Choose the address Nota Remote shows** (#85, specs/095). On a computer with several
+  networks (Wi-Fi and Ethernet, a VPN, a virtual machine's network), Nota could put an address
+  in the QR code that the phone can't reach. Now you can choose it.
+  - **Settings → Remote → Address in the QR**: Automatic (as before: USB, then Wi-Fi, then
+    Ethernet) or one network interface. The choice is kept after a restart, by the
+    interface's name. While that interface is down, Automatic stands in, and the list says so.
+  - **Connect phone**: the other addresses under the main one take a click, which puts that
+    address in the link and QR code; **Automatic** under them goes back.
+  - Next to the address, **Open in the browser** opens the Remote page on this computer, and
+    **Copy the link** copies it.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
