@@ -1248,6 +1248,7 @@ public partial class MainWindow
         ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the")));
         if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
         LayoutBottomPanels();
+        SyncMixerToggle();   // a docked Mixer folds away while the editor fills the window
     }
 
     // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):

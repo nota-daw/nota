@@ -33,6 +33,8 @@ public partial class MainWindow
     private static ISettingsService MixerSettings => App.Services.GetRequiredService<ISettingsService>();
     private static bool MixerFloating => MixerSettings.Current.MixerFloating;
     internal bool IsMixerShown => _mixerDocked || _mixerWindow is not null;
+    // On screen: a docked Mixer folds away while the clip editor fills the window (#516).
+    private bool IsMixerVisible => _mixerWindow is not null || (_mixerDocked && !_detailMaximized);
 
     private double MixerPanelMin => MixerPanelChrome + (_mixer?.MinContentHeight ?? 0);
     private double MixerPanelNatural => MixerPanelChrome + (_mixer?.NaturalContentHeight ?? 0);
@@ -67,16 +69,18 @@ public partial class MainWindow
         SyncMixerToggle();
     }
 
-    /// <summary>The toolbar's Mixer button reads as on while the Mixer is shown, docked or in
+    /// <summary>The toolbar's Mixer button reads as on while the Mixer is on screen, docked or in
     /// its own window — however it was opened or closed (button, menu, ⌘⇧M, the panel's or
-    /// the window's close button, a switch of placement, launch): docking, undocking and the
-    /// window opening and closing all end here.</summary>
-    private void SyncMixerToggle() => MixerToggle.IsChecked = IsMixerShown;
+    /// the window's close button, a switch of placement, launch): docking, undocking, the
+    /// window opening and closing, and the clip editor filling the window all end here.</summary>
+    private void SyncMixerToggle() => MixerToggle.IsChecked = IsMixerVisible;
 
-    /// <summary>Show the Mixer in its remembered placement, or hide it (⌘⇧M / View → Mixer).</summary>
+    /// <summary>Show the Mixer in its remembered placement, or hide it (⌘⇧M / View → Mixer).
+    /// A docked Mixer hidden by the clip editor filling the window comes back instead.</summary>
     internal void ToggleMixer()
     {
-        if (IsMixerShown) HideMixer();
+        if (_mixerDocked && _detailMaximized) SetDetailMaximized(false);
+        else if (IsMixerShown) HideMixer();
         else ShowMixer();
     }
 

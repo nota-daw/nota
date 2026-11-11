@@ -69,6 +69,8 @@ Mixer opens where it was last (docked or in its window). Clicking it again hides
 - **Narrow window**: the button folds away with the other tools, right after Automation; the
   menu and the shortcut stay.
 - **No Mixer view yet**: a click changes nothing and the button stays off.
+- **Clip editor filling the window**: a docked Mixer folds away, so the button reads as off;
+  a click (or ⌘⇧M) brings the editor back to the split and the Mixer with it.
 
 ## Requirements
 
