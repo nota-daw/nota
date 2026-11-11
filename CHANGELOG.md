@@ -156,6 +156,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Track headers, a little wider** (#296): the header column now starts at 252 px instead
+  of 228, so names and controls breathe in the new look. A width you dragged yourself stays.
+  A group's **Link** key now matches M and S in the new look.
 - **Settings, reorganised** (#427, specs/088): every setting is on a page named for it.
   - **Outputs** and **Inputs** are their own pages under Devices: the output device and the
     test tone on one, the input device and the list of inputs with their switches and names
