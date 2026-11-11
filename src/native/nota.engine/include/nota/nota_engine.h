@@ -1723,6 +1723,28 @@ NOTA_API void       nota_engine_set_test_input_device(NotaEngine* engine, int32_
 /* Tests: `frames` of `channels`-wide device frames into the capture ring, then drained into
  * the running take as poll() would. */
 NOTA_API void       nota_engine_feed_input_test(NotaEngine* engine, const float* interleaved, int32_t frames, int32_t channels);
+/* Output channels of the open playback device (specs/089): how many (0 = none), at most 64,
+ * and the UTF-8 name the device gives one ("" when it gives none; copied into `out`, returns
+ * its length). Message thread. */
+NOTA_API int32_t    nota_audio_output_channel_count(const NotaEngine* engine);
+NOTA_API int32_t    nota_audio_output_channel_name(const NotaEngine* engine, int32_t index, char* out, int32_t cap);
+/* Where Main (the audience mix) and Cue (the private cue mix) go: 0-based first channel and
+ * width (1 or 2; width 2 needs an even first). cue_first < 0 = no Cue output. Takes effect on
+ * the next audio block, no device restart; kept across nota_audio_apply. NOTA_ERR_INVALID_ARG
+ * for a bad width, an odd stereo first or overlapping pairs. Until it is called, ASIO keeps
+ * its saved output pair. */
+NOTA_API NotaResult nota_audio_set_output_routing(NotaEngine* engine, int32_t main_first, int32_t main_width,
+                                                  int32_t cue_first, int32_t cue_width);
+/* The routing against the open device: bit 1 = Main's pair is missing, Main plays on outputs
+ * 1/2; bit 2 = a Cue pair is set but missing (or would overlap Main): Cue is silent and
+ * nothing moves to Main. */
+NOTA_API int32_t    nota_audio_output_routing_state(const NotaEngine* engine);
+/* Tests: pretend the output device has `channels` outputs ("Test N"); 0 clears it. */
+NOTA_API void       nota_engine_set_test_output_device(NotaEngine* engine, int32_t channels);
+/* Tests: place `frames` of Main and Cue (interleaved stereo; cue may be null) on a device of
+ * `device_channels` by the current routing, as every backend does. Returns the state bits. */
+NOTA_API int32_t    nota_audio_scatter_test(const NotaEngine* engine, const float* main_in, const float* cue_in,
+                                            float* device_out, int32_t device_channels, int32_t frames);
 /* Input monitoring (audio tracks, Monitor "In"): while on, the track plays its record-input
  * source live through its devices + fader instead of its clips. A master source stays
  * silent (it would feed back). push_monitor_frames feeds the hardware-monitor ring without
@@ -2560,6 +2582,25 @@ NOTA_API int32_t    nota_pdc_selftest(void);
 NOTA_API int32_t    nota_engine_track_meter(const NotaEngine* engine, int32_t track_id, NotaMeter* out);
 NOTA_API NotaResult nota_engine_master_meter(const NotaEngine* engine, NotaMeter* out);
 
+/* Cue (specs/089): a private mix for the performer on its own output pair (see
+ * nota_audio_set_output_routing). Any number of tracks — audio, instrument, group or return —
+ * can be in Cue; each adds its signal after its devices and before its fader, pan, mute and
+ * solo. A muted cued track is heard in Cue only. Cue never changes Main, a recording or a
+ * bounce. get_cue: 1 / 0, -1 for no such track. */
+NOTA_API NotaResult nota_track_set_cue(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t    nota_track_get_cue(const NotaEngine* engine, int32_t track_id);
+/* Cue level: linear gain 0 … 2 (+6 dB), default 1. */
+NOTA_API NotaResult nota_engine_set_cue_volume(NotaEngine* engine, float gain);
+NOTA_API float      nota_engine_cue_volume(const NotaEngine* engine);
+/* Cue meter, after the Cue level. */
+NOTA_API NotaResult nota_engine_cue_meter(const NotaEngine* engine, NotaMeter* out);
+/* Where the metronome and count-in clicks go: 0 Main (default, through the master chain as
+ * before), 1 Cue (past the master chain and fader, at the Cue level), 2 both. */
+NOTA_API NotaResult nota_transport_set_click_destination(NotaEngine* engine, int32_t dest);
+NOTA_API int32_t    nota_transport_click_destination(const NotaEngine* engine);
+/* Click level: linear gain 0 … 2, default 1 (the click as it always sounded). */
+NOTA_API NotaResult nota_transport_set_click_volume(NotaEngine* engine, float gain);
+
 /* ---- Offline render (tests / export) ------------------------------------- */
 /* Renders `frames` of interleaved stereo into out (length >= 2*frames) without
  * an audio device. Uses the engine's current sample rate. */
@@ -2577,6 +2618,9 @@ NOTA_API NotaResult nota_engine_render_offline_at(NotaEngine* engine, float* out
  * nota_engine_render_offline_at once first to prepare the nodes at a rate. The device
  * must be stopped (NOTA_ERR_ALREADY_RUNNING otherwise). */
 NOTA_API NotaResult nota_engine_render_device_block(NotaEngine* engine, float* out, int32_t frames);
+/* The same, rendering the Cue bus (specs/089) into `cue_out` too (stereo; may be null). */
+NOTA_API NotaResult nota_engine_render_device_block_cue(NotaEngine* engine, float* main_out, float* cue_out,
+                                                        int32_t frames);
 
 /* ---- Audio file encoders (export) -----------------------------------------
  * Streaming FLAC / MP3 writers behind the same ABI as the offline render above:
@@ -2722,6 +2766,8 @@ NOTA_API const char* nota_audio_input_device_name(int32_t index);
  * is connected, else the system default ("" when there is none). Copied into `out`; returns
  * its length. Settings kept per input device key on it. */
 NOTA_API int32_t     nota_audio_effective_input_uid(const NotaEngine* engine, char* out, int32_t cap);
+/* The same for the output device (specs/089): per-device output setups key on it. */
+NOTA_API int32_t     nota_audio_effective_output_uid(const NotaEngine* engine, char* out, int32_t cap);
 
 /* Stage the desired config. Pass "" for a device to mean "system default",
  * 0 for sample_rate / buffer_frames to mean "device default". */

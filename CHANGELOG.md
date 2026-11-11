@@ -23,6 +23,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
+  two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
+  output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
+  Changing a pair takes effect at once, without restarting the device.
+  - **Cue key** (headphones) on every track, in the mixer, the Session mixer, the track
+    headers and the inspector. Several tracks can be in Cue at once. Each is heard after its
+    devices and before its fader, pan, mute and solo, so a track muted in Main is still
+    heard in Cue. Cue never changes Main, a recording or an export.
+  - **Cue strip** next to Master: the Cue output pair, the cued tracks, the Cue level and a
+    meter.
+  - **Click to Cue:** the metronome and count-in can go to Main, Cue or both, with their own
+    level. A click sent to Cue skips the master chain and never reaches the audience.
+  - **When the Cue outputs disappear** (another device, or the interface unplugged), Cue goes
+    silent and says so. Nothing is moved into Main. If Main's own pair is missing, Main plays
+    on 1/2 and the Master strip says so.
+  - **What is saved where:** output pairs and click settings are kept per device on this
+    computer. The cued tracks and the Cue level are saved with the project (format 32).
+  - **MIDI Learn** can map a track's Cue key and the Cue level.
 - **Skins: your own themes** (#336, specs/087). Put a theme file in the **Themes** folder
   of Nota's data folder and it appears in **Preferences → Appearance**, next to the
   built-in themes, under Dark or Light. You pick it like any built-in theme, and the choice

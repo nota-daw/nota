@@ -1007,6 +1007,16 @@ void Engine::setTrackMute(int32_t id, bool m) {
 void Engine::setTrackSolo(int32_t id, bool s) {
     if (auto t = findTrackAuthoring(id)) t->setSolo(s);
 }
+bool Engine::setTrackCue(int32_t id, bool on) {
+    auto t = findTrackAuthoring(id);
+    if (!t) return false;
+    t->setCue(on);
+    return true;
+}
+int32_t Engine::trackCue(int32_t id) const {
+    auto t = findTrackAuthoring(id);
+    return t ? (t->cue() ? 1 : 0) : -1;
+}
 int32_t Engine::trackCount() const {
     return static_cast<int32_t>(authoring_->tracks.size());
 }
@@ -3671,6 +3681,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setMute(src.mute());
     nt->setSolo(src.solo());
     nt->setArmed(src.armed());
+    nt->setCue(src.cue());
     nt->setReturnIndex(src.returnIndex());
     nt->setGroupId(src.groupId()); // keep membership on duplicate (paste resets to top-level)
     nt->setRecordInputSource(src.recordInputSource());

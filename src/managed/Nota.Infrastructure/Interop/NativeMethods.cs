@@ -126,6 +126,25 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_master_meter")]
     internal static partial NotaResult MasterMeter(IntPtr engine, out NotaMeter meter);
 
+    // --- Cue (specs/089) ---
+    [LibraryImport(Lib, EntryPoint = "nota_engine_cue_meter")]
+    internal static partial NotaResult CueMeter(IntPtr engine, out NotaMeter meter);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_cue_volume")]
+    internal static partial NotaResult SetCueVolume(IntPtr engine, float gain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_cue_volume")]
+    internal static partial float CueVolume(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_set_click_destination")]
+    internal static partial NotaResult SetClickDestination(IntPtr engine, int dest);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_click_destination")]
+    internal static partial int ClickDestination(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_set_click_volume")]
+    internal static partial NotaResult SetClickVolume(IntPtr engine, float gain);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_note_on")]
     internal static partial NotaResult NoteOn(IntPtr engine, int pitch, float velocity);
 
@@ -300,6 +319,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_device_block")]
     internal static partial NotaResult RenderDeviceBlock(IntPtr engine, [Out] float[] outBuffer, int frames);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_device_block_cue")]
+    internal static partial NotaResult RenderDeviceBlockCue(IntPtr engine, [Out] float[] mainOut, [Out] float[]? cueOut, int frames);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_offline_at")]
     internal static partial NotaResult RenderOfflineAt(IntPtr engine, [Out] float[] outBuffer, int frames, double sampleRate);

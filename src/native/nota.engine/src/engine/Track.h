@@ -214,12 +214,15 @@ class Track {
     void setMute(bool m) { mute_.store(m, std::memory_order_relaxed); }
     void setSolo(bool s) { solo_.store(s, std::memory_order_relaxed); }
     void setArmed(bool a) { armed_.store(a, std::memory_order_relaxed); }
+    // In Cue (specs/089): the track's post-device, pre-fader signal also goes to the Cue bus.
+    void setCue(bool c) { cue_.store(c, std::memory_order_relaxed); }
 
     float volume() const { return volume_.load(std::memory_order_relaxed); }
     float pan() const { return pan_.load(std::memory_order_relaxed); }
     bool mute() const { return mute_.load(std::memory_order_relaxed); }
     bool solo() const { return solo_.load(std::memory_order_relaxed); }
     bool armed() const { return armed_.load(std::memory_order_relaxed); }
+    bool cue() const { return cue_.load(std::memory_order_relaxed); }
 
     // MIDI → CV (modular editor): the track's latest MIDI-derived control values,
     // updated from the post-FX note stream each block (see computeInstrumentMidi) and
@@ -441,6 +444,7 @@ class Track {
     std::atomic<bool> mute_{false};
     std::atomic<bool> solo_{false};
     std::atomic<bool> armed_{false};
+    std::atomic<bool> cue_{false};
     std::atomic<float> midiVel_{0.0f};  // MIDI→CV: last note-on velocity 0..1
     std::atomic<float> midiNote_{0.0f}; // last note pitch, normalized 0..1
     std::atomic<int32_t> midiHeld_{0};  // held-note count (gate = >0)

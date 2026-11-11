@@ -76,6 +76,10 @@ public sealed partial class NotaEngine
     public string EffectiveInputUid()
     { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioEffectiveInputUid(_handle, b, c)); }
 
+    /// <summary>The uid of the output device the staged config opens (specs/089).</summary>
+    public string EffectiveOutputUid()
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioEffectiveOutputUid(_handle, b, c)); }
+
     /// <summary>Persists the staged config and restarts the backend. Throws on device failure.</summary>
     public void ApplyAudio()
     { ThrowIfDisposed(); Check(NativeMethods.AudioApply(_handle)); }

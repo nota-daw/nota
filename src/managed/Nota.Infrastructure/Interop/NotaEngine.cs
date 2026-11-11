@@ -135,6 +135,28 @@ public sealed partial class NotaEngine : IAudioEngine
         return m;
     }
 
+    /// <summary>Peak/RMS of the Cue bus after the Cue level (specs/089).</summary>
+    public NotaMeter CueMeter()
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.CueMeter(_handle, out var m));
+        return m;
+    }
+
+    public float CueVolume
+    {
+        get { ThrowIfDisposed(); return NativeMethods.CueVolume(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetCueVolume(_handle, value)); }
+    }
+
+    public ClickDestination ClickDestination
+    {
+        get { ThrowIfDisposed(); return (ClickDestination)NativeMethods.ClickDestination(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetClickDestination(_handle, (int)value)); }
+    }
+
+    public void SetClickVolume(float gain) { ThrowIfDisposed(); Check(NativeMethods.SetClickVolume(_handle, gain)); }
+
     // --- Live MIDI, arming & recording -------------------------------------
 
     public void SetTrackArmed(int trackId, bool armed) { ThrowIfDisposed(); Check(NativeMethods.SetTrackArmed(_handle, trackId, armed ? 1 : 0)); }
@@ -296,6 +318,13 @@ public sealed partial class NotaEngine : IAudioEngine
     {
         ThrowIfDisposed();
         Check(NativeMethods.RenderDeviceBlock(_handle, outBuffer, frames));
+    }
+
+    /// <summary>Tests: one device block into Main and the Cue bus (specs/089); both stereo.</summary>
+    public void RenderDeviceBlockCue(float[] main, float[]? cue, int frames)
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.RenderDeviceBlockCue(_handle, main, cue, frames));
     }
 
     /// <summary>

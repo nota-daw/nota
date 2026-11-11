@@ -140,6 +140,7 @@ public sealed partial class SessionView
 
         Action meter = () => { };
         var follow = new List<Action<NotaTrackInfo>>();
+        bool cueShown = CueKey.Shown(_engine);   // Cue keys (specs/089)
         if (_showMixer)
         {
             Control panRow;
@@ -190,6 +191,13 @@ public sealed partial class SessionView
                 btns.Children.Add(MixToggle("M", ti.Muted != 0, false, (v, _) => _engine.SetTrackMute(id, v), out var syncMute));
                 btns.Children.Add(MixToggle("S", ti.Soloed != 0, false, (v, _) => _engine.SetTrackSolo(id, v), out var syncSolo));
                 follow.Add(t => { syncMute(t.Muted != 0); syncSolo(t.Soloed != 0); });
+                if (cueShown)   // Cue (specs/089)
+                {
+                    var cue = CueKey.Create(_engine, id, 0, 20, NotaRadius.Cell, out var syncCue);
+                    cue.Margin = new Thickness(1.5, 0);
+                    btns.Children.Add(cue);
+                    follow.Add(t => syncCue(_engine.GetTrackCue(t.Id)));
+                }
                 if (c.Kind == ColKind.Track)
                 {
                     btns.Children.Add(MixToggle(null, ti.Armed != 0, true, (v, additive) =>

@@ -41,7 +41,8 @@ public sealed class ProjectService
     /// v29 (specs/067) adds Takes on audio tracks and TakeId on audio clips.
     /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
     /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
-    public const int CurrentFormatVersion = 31;
+    /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
+    public const int CurrentFormatVersion = 32;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -85,6 +86,7 @@ public sealed class ProjectService
             {
                 PanLaw = engine.PanLaw == PanLaw.Stereo ? "stereo" : "balance",
                 PanLawLegacy = transport.PanLawLegacy,
+                CueVolume = Math.Abs(engine.CueVolume - 1f) > 1e-6f ? engine.CueVolume : null,
             },
             // Always written ([] when none), so a load can tell "no sections" from "older file".
             Sections = engine.Sections.Select(s => new SectionDto { Start = s.StartBeat, Length = s.LengthBeats, Name = s.Name }).ToList(),
@@ -108,6 +110,7 @@ public sealed class ProjectService
                 Mute = ti.Muted != 0,
                 Solo = ti.Soloed != 0,
                 Armed = ti.Armed != 0,
+                Cue = engine.GetTrackCue(ti.Id) ? true : null,
                 ReturnIndex = engine.TrackReturnIndex(ti.Id),
                 GroupId = ti.GroupId >= 0 && idToIndex.TryGetValue(ti.GroupId, out var gix) ? gix : -1,   // parent → doc index
                 ColorIndex = engine.GetTrackColorIndex(ti.Id),
@@ -595,6 +598,8 @@ public sealed class ProjectService
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
         engine.SetPanLaw(ParsePanLaw(doc.Mixer?.PanLaw, warnings), checkpoint: false);
+        // The Cue level (specs/089): a listening level, not part of the mix — no undo step.
+        engine.CueVolume = doc.Mixer?.CueVolume is float cv && float.IsFinite(cv) ? Math.Clamp(cv, 0f, 2f) : 1f;
 
         // Arrangement sections (specs/016), also a baseline. A file from before they moved into
         // the project keeps them in the bundle's sidecar.
@@ -762,6 +767,7 @@ public sealed class ProjectService
             engine.SetTrackPan(id, t.Pan);
             engine.SetTrackMute(id, t.Mute);
             engine.SetTrackSolo(id, t.Solo);
+            engine.SetTrackCue(id, t.Cue == true);
             engine.SetTrackArmed(id, t.Armed);
             if (t.Name is { Length: > 0 } trackName) engine.SetTrackName(id, trackName);
             if (t.ColorIndex >= 0) engine.SetTrackColorIndex(id, t.ColorIndex);

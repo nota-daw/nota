@@ -67,6 +67,15 @@ public interface IAudioEngine : IDisposable
     void SetTrackPan(int trackId, float pan);
     void SetTrackMute(int trackId, bool mute);
     void SetTrackSolo(int trackId, bool solo);
+    /// <summary>Cue (specs/089): the track's signal after its devices, before its fader, pan,
+    /// mute and solo, also goes to the private Cue mix. Any number of tracks.</summary>
+    void SetTrackCue(int trackId, bool on);
+    bool GetTrackCue(int trackId);
+    /// <summary>The Cue mix's level, linear 0–2 (+6 dB). Never changes Main.</summary>
+    float CueVolume { get; set; }
+    /// <summary>Where the metronome and count-in clicks go, and their level (linear 0–2).</summary>
+    ClickDestination ClickDestination { get; set; }
+    void SetClickVolume(float gain);
     int TrackCount { get; }
     int DuplicateTrack(int trackId);   // deep copy after the source; new id or -1
     int AddTrackLike(int trackId);     // empty track with the source's instrument, devices and mix, before the returns; new id or -1
@@ -374,6 +383,16 @@ public interface IAudioEngine : IDisposable
     void SetDisabledInputs(int[] channels);
     /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
     void SetTestInputDevice(int channels);
+    /// <summary>The playback device's output channels (0 when none is open) and their names
+    /// ("" where the device gives none) — specs/089.</summary>
+    int AudioOutputChannelCount();
+    string AudioOutputChannelName(int index);
+    /// <summary>Where Main (the audience mix) and Cue (the private cue mix) go: 0-based first
+    /// channel and width (1 or 2); cueFirst &lt; 0 = no Cue output. Takes effect at once, no
+    /// device restart. False for a bad width, an odd stereo first or overlapping pairs.</summary>
+    bool SetOutputRouting(int mainFirst, int mainWidth, int cueFirst, int cueWidth);
+    /// <summary>The routing against the open device.</summary>
+    OutputRoutingState GetOutputRoutingState();
     /// <summary>Tests: device frames into the capture ring, drained into the running take as poll() would.</summary>
     void FeedInputForTest(float[] interleaved, int frames, int channels);
     /// <summary>Tests: record <paramref name="frames"/> of <paramref name="channels"/>-wide
@@ -1136,6 +1155,8 @@ public interface IAudioEngine : IDisposable
     // --- Level meters (M6-2) -----------------------------------------------
     bool TryGetTrackMeter(int trackId, out NotaMeter meter);
     NotaMeter MasterMeter();
+    /// <summary>The Cue bus after the Cue level (specs/089).</summary>
+    NotaMeter CueMeter();
 
     // --- MIDI clip notes ---------------------------------------------------
     void SetClipNotes(int trackId, int clipIndex, NotaNote[] notes);
@@ -1342,6 +1363,8 @@ public interface IAudioEngine : IDisposable
     /// is connected, else the system default ("" when there is none). Per-device input settings
     /// key on it, so "System default" and a missing device never share another's (specs/086).</summary>
     string EffectiveInputUid();
+    /// <summary>The same for the output device: per-device output setups key on it (specs/089).</summary>
+    string EffectiveOutputUid();
     /// <summary>Channel names of the open ASIO driver; empty when ASIO isn't running.</summary>
     IReadOnlyList<string> AsioChannels(bool input);
     int AsioPair(bool input);

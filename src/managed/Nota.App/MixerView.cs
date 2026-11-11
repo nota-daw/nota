@@ -102,6 +102,7 @@ public sealed partial class MixerView : UserControl
         public PanKnob? Pan;
         public PanBar? PanBar;           // compact strips
         public Action<bool>? Mute, Solo, Arm, Link;   // Link: a group's Link key (specs/076)
+        public Action<bool>? Cue;                     // the Cue key (specs/089)
     }
     private readonly Dictionary<int, StripSync> _syncs = new();
     private StripSync SyncOf(int id) => _syncs.TryGetValue(id, out var s) ? s : _syncs[id] = new StripSync();
@@ -307,6 +308,8 @@ public sealed partial class MixerView : UserControl
         _strips.Clear();
         _stripById.Clear();
         _masterFader = null; _masterMeterFader = null;
+        _cueFader = null; _cueMeterFader = null; _cueDb = null; _cueOutput = _cueSources = null;
+        _builtCueShown = CueShown();   // Cue keys and the Cue strip (specs/089)
         int returns = _engine.ReturnTrackCount;
         int n = _engine.TrackCount;
         // As in the arrangement: the tracks in its hierarchical order (each group, then its
@@ -323,6 +326,7 @@ public sealed partial class MixerView : UserControl
         foreach (int i in ArrangementView.DisplayOrder(_engine))
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsReturn) AddStrip(ti, 0, -1, returns);
         _row.Children.Add(_compact ? CompactMasterStrip() : MasterStrip());
+        if (_builtCueShown) _row.Children.Add(_compact ? CompactCueStrip() : CueStrip());
         CollectDescendants(rows);
         _clipLatched.RemoveWhere(id => !_stripById.TryGetValue(id, out var g) || !g.IsGroup);   // a group that is gone
         _row.Margin = new Thickness(10, 10 + BandsH, 10, 10);
@@ -505,9 +509,11 @@ public sealed partial class MixerView : UserControl
         foreach (var (id, ctl, push) in _meters)
         {
             if (!ctl.IsEffectivelyVisible) continue;   // a folded strip reads nothing
-            if (id < 0) push(_engine.MasterMeter());
+            if (id == CueMeterId) push(_engine.CueMeter());
+            else if (id < 0) push(_engine.MasterMeter());
             else if (_engine.TryGetTrackMeter(id, out var m)) push(m);
         }
+        UpdateCue();
         // Follow master volume changes made elsewhere (MST, Master row, Remote, project load).
         if (GetMasterVolume is { } get && _masterDb is { } db)
         {
@@ -552,6 +558,7 @@ public sealed partial class MixerView : UserControl
             s.Mute?.Invoke(ti.Muted != 0);
             s.Solo?.Invoke(ti.Soloed != 0);
             s.Arm?.Invoke(ti.Armed != 0);
+            s.Cue?.Invoke(_engine.GetTrackCue(ti.Id));
             if (ti.IsGroup) s.Link?.Invoke(_engine.GetTrackEditLink(ti.Id));
         }
     }
@@ -599,7 +606,8 @@ public sealed partial class MixerView : UserControl
     {
         var col = new StackPanel();
         col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
-        var ioRow = IoRow(Loc.T("mixer.sum_bus"), Loc.T("mixer.output"));
+        _mainOutputShown = MainOutputText();   // specs/089: the pair Main plays on
+        var ioRow = IoRow(Loc.T("mixer.sum_bus"), _mainOutputShown);
         ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
@@ -1113,6 +1121,7 @@ public sealed partial class MixerView : UserControl
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
+        if (_builtCueShown) row.Children.Add(CueToggle(id, out sync.Cue));
         if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
         if (ti.IsGroup) { row.Children.Add(LinkKey(id, out var linkSync)); sync.Link = linkSync; }   // group Link (specs/076)
         else sync.Link = null;

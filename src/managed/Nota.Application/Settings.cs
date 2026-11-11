@@ -204,6 +204,9 @@ public sealed class Settings
     /// <summary>Audio I/O setup per capture device (specs/086): switched-off inputs and their
     /// names, keyed by <see cref="InputSetups.KeyOf"/>. A device never set up has no entry.</summary>
     public Dictionary<string, InputSetup> InputSetups { get; set; } = new();
+    /// <summary>Output setup per playback device (specs/089): Main and Cue pairs and where the
+    /// click goes, keyed by <see cref="OutputSetups.KeyOf"/>. A device never set up has no entry.</summary>
+    public Dictionary<string, OutputSetup> OutputSetups { get; set; } = new();
     /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
     /// the velocity; true — wheel up lowers it.</summary>
     public bool PianoRollVelocityWheelReversed { get; set; }

@@ -624,6 +624,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         if (_loading || _main is null) return;
         _main.ApplyAudioSettings();             // re-reads the device's input setup (AudioApplied)
         RebuildInputs(_main.Engine);           // ...its own inputs and names on the page (specs/086)
+        RebuildOutputs(_main.Engine);          // ...and its own output pairs (specs/089)
         UpdateLatency();
     }
 

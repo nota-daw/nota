@@ -9,6 +9,8 @@
 #import <CoreAudio/CoreAudio.h>
 #include <os/workgroup.h>
 
+#include <atomic>
+#include <string>
 #include <vector>
 
 namespace nota {
@@ -16,6 +18,10 @@ namespace nota {
 struct CoreAudioBackend::Impl {
     AudioUnit outputUnit = nullptr;
     RenderCallback render;                      // copied from the backend on start()
+    OutputStage stage;                          // Main/Cue scratch + routing (specs/089)
+    int32_t channels = 2;                       // client format = every device output (≤ 64)
+    std::vector<std::string> names;             // the device's output channel names
+    std::atomic<bool> deviceDied{false};        // set by the alive listener, read by pollDeviceEvent
     AudioDeviceID device = kAudioObjectUnknown; // for the overload listener (M7-8)
     void* workgroup = nullptr;                  // os_workgroup_t of the device's IO thread (retained)
 };
@@ -31,16 +37,31 @@ static OSStatus overloadProc(AudioObjectID, UInt32, const AudioObjectPropertyAdd
     return noErr;
 }
 
+// The device went away (unplugged, aggregate torn down): ask the app to re-apply, which
+// re-opens the default device and re-resolves Main/Cue against its outputs (specs/089).
+static const AudioObjectPropertyAddress kAliveAddr{
+    kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+
+static OSStatus aliveProc(AudioObjectID dev, UInt32, const AudioObjectPropertyAddress*, void* refCon) {
+    auto* impl = static_cast<CoreAudioBackend::Impl*>(refCon);
+    UInt32 alive = 1;
+    UInt32 size = sizeof(alive);
+    if (AudioObjectGetPropertyData(dev, &kAliveAddr, 0, nullptr, &size, &alive) == noErr && !alive)
+        impl->deviceDied.store(true, std::memory_order_relaxed);
+    return noErr;
+}
+
 // Real-time audio callback. Runs on the CoreAudio thread — no allocation,
-// no locks, no I/O (AR-6). We set up an interleaved stereo float stream, so
-// ioData has a single buffer of frames*2.
+// no locks, no I/O (AR-6). The client format is interleaved float with one channel per
+// device output, so ioData has a single buffer of frames × channels; the engine renders
+// Main and Cue into the stage's stereo scratch and the stage places them.
 static OSStatus renderCallback(void* inRefCon, AudioUnitRenderActionFlags* /*ioActionFlags*/,
     const AudioTimeStamp* /*inTimeStamp*/, UInt32 /*inBusNumber*/, UInt32 inNumberFrames, AudioBufferList* ioData) {
     auto* impl = static_cast<CoreAudioBackend::Impl*>(inRefCon);
     float* out = static_cast<float*>(ioData->mBuffers[0].mData);
-    if (impl->render) impl->render(out, static_cast<int32_t>(inNumberFrames));
+    if (impl->render) impl->stage.process(impl->render, out, impl->channels, static_cast<int32_t>(inNumberFrames));
     else
-        for (UInt32 i = 0; i < inNumberFrames * 2; ++i) out[i] = 0.0f;
+        for (UInt32 i = 0; i < inNumberFrames * static_cast<UInt32>(impl->channels); ++i) out[i] = 0.0f;
     return noErr;
 }
 
@@ -135,6 +156,8 @@ bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
         // Listen for device overloads/dropouts (M7-8); non-fatal, off the RT thread.
         impl_->device = dev;
         AudioObjectAddPropertyListener(dev, &kOverloadAddr, &overloadProc, this);
+        impl_->deviceDied.store(false, std::memory_order_relaxed);
+        AudioObjectAddPropertyListener(dev, &kAliveAddr, &aliveProc, impl_);
     }
 
     // Apply requested nominal sample rate + buffer size on the device (best effort).
@@ -155,7 +178,32 @@ bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
         AudioObjectSetPropertyData(dev, &a, 0, nullptr, sizeof(bf), &bf);
     }
 
-    // Interleaved stereo 32-bit float client format. Run the graph at the
+    // One client channel per device output (specs/089), so Main and Cue can land on any pair;
+    // a stereo device stays at 2, as before. The unit's output-scope format is the device's.
+    impl_->channels = 2;
+    {
+        AudioStreamBasicDescription hw{};
+        UInt32 hsz = sizeof(hw);
+        if (AudioUnitGetProperty(impl_->outputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &hw,
+                &hsz) == noErr &&
+            hw.mChannelsPerFrame > 0)
+            impl_->channels = std::min<int32_t>(static_cast<int32_t>(hw.mChannelsPerFrame), kMaxOutputChannels);
+    }
+    impl_->names.assign(static_cast<size_t>(impl_->channels), std::string{});
+    for (int32_t c = 0; c < impl_->channels && dev != kAudioObjectUnknown; ++c) {
+        AudioObjectPropertyAddress na{
+            kAudioObjectPropertyElementName, kAudioDevicePropertyScopeOutput, static_cast<UInt32>(c + 1)};
+        CFStringRef name = nullptr;
+        UInt32 nsz = sizeof(name);
+        if (AudioObjectHasProperty(dev, &na) && AudioObjectGetPropertyData(dev, &na, 0, nullptr, &nsz, &name) == noErr &&
+            name) {
+            char buf[256] = {};
+            if (CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8)) impl_->names[static_cast<size_t>(c)] = buf;
+            CFRelease(name);
+        }
+    }
+
+    // Interleaved 32-bit float client format. Run the graph at the
     // requested rate (falling back to the device's nominal rate) so no hidden
     // sample-rate conversion sneaks in.
     double clientSr = cfg.sampleRate > 0.0 ? cfg.sampleRate : deviceNominalSampleRate(dev);
@@ -166,7 +214,7 @@ bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
     fmt.mFormatID = kAudioFormatLinearPCM;
     fmt.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
     fmt.mFramesPerPacket = 1;
-    fmt.mChannelsPerFrame = 2;
+    fmt.mChannelsPerFrame = static_cast<UInt32>(impl_->channels);
     fmt.mBitsPerChannel = 32;
     fmt.mBytesPerFrame = fmt.mChannelsPerFrame * sizeof(float);
     fmt.mBytesPerPacket = fmt.mBytesPerFrame;
@@ -235,6 +283,7 @@ bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
 void CoreAudioBackend::stop() {
     if (impl_->device != kAudioObjectUnknown) {
         AudioObjectRemovePropertyListener(impl_->device, &kOverloadAddr, &overloadProc, this);
+        AudioObjectRemovePropertyListener(impl_->device, &kAliveAddr, &aliveProc, impl_);
         impl_->device = kAudioObjectUnknown;
     }
     if (impl_->outputUnit) {
@@ -252,6 +301,23 @@ void CoreAudioBackend::stop() {
 
 void* CoreAudioBackend::ioWorkgroup() const {
     return impl_->workgroup;
+}
+
+int32_t CoreAudioBackend::outputChannelCount() const {
+    return running_ ? impl_->channels : 0;
+}
+
+std::string CoreAudioBackend::outputChannelName(int32_t index) const {
+    if (index < 0 || index >= static_cast<int32_t>(impl_->names.size())) return {};
+    return impl_->names[static_cast<size_t>(index)];
+}
+
+void CoreAudioBackend::setOutputRouting(const OutputRouting& r) {
+    impl_->stage.setRouting(r);
+}
+
+int32_t CoreAudioBackend::pollDeviceEvent() {
+    return impl_->deviceDied.exchange(false, std::memory_order_relaxed) ? 1 : 0;
 }
 
 } // namespace nota

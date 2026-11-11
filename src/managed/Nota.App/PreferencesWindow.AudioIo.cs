@@ -7,7 +7,7 @@
 // user's; then the stereo pairs, which can be named too. Track input pickers list only
 // switched-on inputs, under these names. Kept per device in the app settings
 // (InputSetupAccess); edits apply at once. Under ASIO one driver is both sides: it is picked
-// on the Audio page, and these pages pick its output / input pair.
+// on the Audio page; Outputs picks its Main and Cue pairs (specs/089), Inputs its input pair.
 
 using System;
 using System.Collections.Generic;
@@ -33,9 +33,7 @@ public sealed partial class PreferencesWindow
         var rows = new List<Control>();
         if (IsAsio(engine))
         {
-            rows.Add(AsioDeviceRow(engine));
-            if (engine.ActiveAudioSystem == AudioSystem.Asio)
-                rows.Add(Row(Loc.T("common.output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
+            rows.Add(AsioDeviceRow(engine));   // the output pair is Main, below (specs/089)
         }
         else
         {
@@ -46,6 +44,7 @@ public sealed partial class PreferencesWindow
         }
         var body = Sections(
             Section(Loc.T("preferences.audio_device"), 6, rows.ToArray()),
+            OutputsHost(engine),   // Main and Cue pairs, the click (specs/089)
             Section(Loc.T("preferences.test"), 8, TestToneRow()));
         _loading = false;
         return body;

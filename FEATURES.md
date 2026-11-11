@@ -27,6 +27,8 @@ Contents
 
 ## Platforms and distribution
 
+- **Multi-output audio interfaces**: every backend opens all of the device's outputs (up
+  to 64), so Main and Cue can play on any two pairs.
 - **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
   hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
 - **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency) or **ASIO**
@@ -102,6 +104,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
+  The click goes to Main, to Cue (past the master chain, never to the audience) or to both,
+  at its own level (**Settings → Outputs**).
 - **Discard and retry take** (⌘. / Ctrl+., Transport menu, palette, MCP `retry_take`): drops
   the take being recorded — audio, loop passes, notes, controllers, automation, with no undo
   step — and records again. The Arrangement goes back to where the transport was started
@@ -290,6 +294,15 @@ docks as a panel under any of the three, or floats in its own window — see
     screen, with the same controls — one-line I/O, A/B send bars, a pan bar, a wide stereo
     meter that is also the fader (drag anywhere on it; a triangle marks the volume on the
     meter's scale), the dB value, and full-width M / S / Arm.
+- **Cue — a private mix on its own outputs**: with a Cue pair set in **Settings →
+  Outputs**, every track gets a **Cue** key (headphones) on its mixer strip, Session mixer
+  strip, header and inspector. Any number of tracks, groups and returns can be in Cue. Each is
+  heard after its devices and before its fader, pan, mute and solo, so a track muted in Main
+  still plays in your ears. The **Cue** strip next to Master shows the output pair, what feeds
+  Cue (the cued tracks and the click), the Cue level and a meter. Cue never changes Main, a
+  recording or an export. A Cue pair the device doesn't have goes silent and is flagged on
+  the strip, and nothing moves into Main. Cued tracks and the Cue level are saved with the
+  project. MIDI Learn maps a track's Cue key and the Cue level.
 - **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
   channels play from one side; under Balance the opposite channel fades out. Mono
@@ -1525,8 +1538,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   restart); the Latency line shows the driver's latency and round trip. Recorded takes are
   moved earlier by the driver's reported latency; a missing or failed driver falls back to
   WASAPI with the reason in the status bar, and **Try again** returns to ASIO.
-- **Outputs**: the output device (under ASIO, the driver's output channel pair, by its channel
-  names; other outputs silent) and the test tone.
+- **Outputs**: the output device (under ASIO, the driver) and the test tone, and the output
+  pairs, kept per device: **Main**, the pair the audience mix plays on (default 1/2); **Cue**,
+  a second pair for the private Cue mix, or **No cue output**; **Click** (Main / Cue / Both)
+  and **Click level**. Pairs are listed by the device's channel names, change without
+  restarting the device, and a pair the device lacks is marked. If Main's pair is missing,
+  Main plays on 1/2. Other outputs stay silent.
 - **Inputs**: the input device (under ASIO, the driver's input channel pair) and the inputs
   setup — switch inputs off and name inputs and stereo pairs per device.
 - **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by

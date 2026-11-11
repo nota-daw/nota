@@ -2299,6 +2299,8 @@ public sealed partial class ArrangementView : UserControl
                 LinkToggle(t),
             },
         };
+        if (_engine is { } groupEngine && CueKey.Shown(groupEngine))   // Cue (specs/089)
+            chips.Children.Insert(2, CueKey.Create(groupEngine, t.Id, 18, 18, NotaRadius.Field, out _, offFill: NotaPalette.Well));
         var kind = TypeTag(Loc.T("common.group"));
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), VerticalAlignment = VerticalAlignment.Center };
@@ -2398,6 +2400,8 @@ public sealed partial class ArrangementView : UserControl
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = ChipGap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }));
         btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }));
+        if (_engine is { } cueEngine && CueKey.Shown(cueEngine))   // Cue (specs/089)
+            btnRow.Children.Add(CueKey.Create(cueEngine, t.Id, 18, 18, NotaRadius.Field, out _, offFill: NotaPalette.Well));
         if (t.IsGroup) btnRow.Children.Add(LinkToggle(t));   // group Link (specs/076)
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.

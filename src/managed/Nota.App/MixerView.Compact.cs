@@ -65,7 +65,8 @@ public sealed partial class MixerView
     {
         var col = new StackPanel();
         col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
-        var io = CompactIoRow(Loc.T("mixer.sum_bus") + " " + Loc.T("mixer.output"));
+        _mainOutputShown = MainOutputText();   // specs/089
+        var io = CompactIoRow(Loc.T("mixer.sum_bus") + " " + _mainOutputShown);
         io.IsVisible = IoShown;
         _ioSections.Add(io);
         col.Children.Add(io);
@@ -200,6 +201,7 @@ public sealed partial class MixerView
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         stack.Children.Add(Wide(mute));
         stack.Children.Add(Wide(solo));
+        if (_builtCueShown) stack.Children.Add(Wide(CueToggle(id, out sync.Cue)));
         if (!isReturn) stack.Children.Add(Wide(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm)));
         if (ti.IsGroup) { stack.Children.Add(Wide(LinkKey(id, out var linkSync))); sync.Link = linkSync; }   // group Link (specs/076)
         else sync.Link = null;

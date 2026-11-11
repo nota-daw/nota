@@ -201,12 +201,18 @@ public partial class App : Avalonia.Application
                 recovery.BeginSession();
 
                 var vm = Services.GetRequiredService<MainWindowViewModel>();   // constructs the engine
+                // Main and Cue's output pairs and the click (specs/089), once the device runs: the
+                // setup is keyed on the backend that actually started (ASIO, or its WASAPI fallback).
+                try { OutputSetupAccess.Push(vm.Engine); }
+                catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
                 // Every audio restart may open another device (the system default changed):
                 // its own input names and switched-off inputs (specs/086).
                 vm.AudioApplied += () =>
                 {
                     try { InputSetupAccess.Push(vm.Engine); }
                     catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+                    try { OutputSetupAccess.Push(vm.Engine); }
+                    catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
                 };
                 var main = new MainWindow { DataContext = vm, PendingRecovery = pending };
                 desktop.MainWindow = main;

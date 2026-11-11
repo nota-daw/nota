@@ -806,6 +806,47 @@ void nota_engine_feed_input_test(NotaEngine* e, const float* interleaved, int32_
 void nota_engine_set_test_input_device(NotaEngine* e, int32_t channels) {
     if (e) ENG(e)->setTestInputDevice(channels);
 }
+
+// --- Cue and output routing (specs/089) ---------------------------------------------------
+NotaResult nota_track_set_cue(NotaEngine* e, int32_t track_id, int32_t on) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackCue(track_id, on != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_cue(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackCue(track_id) : -1;
+}
+int32_t nota_audio_output_channel_count(const NotaEngine* e) {
+    return e ? CENG(e)->outputChannelCount() : 0;
+}
+int32_t nota_audio_output_channel_name(const NotaEngine* e, int32_t index, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string name = CENG(e)->outputChannelName(index);
+    if (out && cap > 0) {
+        const size_t n = std::min(name.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, name.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(name.size());
+}
+NotaResult nota_audio_set_output_routing(NotaEngine* e, int32_t main_first, int32_t main_width, int32_t cue_first,
+    int32_t cue_width) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    const nota::OutputRouting r{main_first, main_width, cue_first < 0 ? -1 : cue_first, cue_width};
+    return ENG(e)->setOutputRouting(r) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_audio_output_routing_state(const NotaEngine* e) {
+    return e ? CENG(e)->outputRoutingState() : 0;
+}
+void nota_engine_set_test_output_device(NotaEngine* e, int32_t channels) {
+    if (e) ENG(e)->setTestOutputDevice(channels);
+}
+int32_t nota_audio_scatter_test(const NotaEngine* e, const float* main_in, const float* cue_in, float* device_out,
+    int32_t device_channels, int32_t frames) {
+    if (!e || !main_in || !device_out || device_channels <= 0 || frames <= 0) return 0;
+    const nota::ResolvedRouting r = nota::resolveRouting(CENG(e)->outputRouting(), device_channels);
+    nota::scatterOutputs(main_in, r.cueWidth > 0 ? cue_in : nullptr, device_out, device_channels, frames, r);
+    return r.flags;
+}
 NotaResult nota_track_set_monitor(NotaEngine* e, int32_t track_id, int32_t on) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMonitor(track_id, on != 0);
