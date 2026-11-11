@@ -40,6 +40,7 @@ internal static class NotaSkin
 {
     private static SkinGeometry _geometry = SkinGeometry.Default;
     private static FontFamily? _family;
+    private static bool _ownValues;   // the skin names its own values face (font.values), installed
     private static bool _installed;
 
     /// <summary>The worn skin's typeface and radii.</summary>
@@ -62,6 +63,9 @@ internal static class NotaSkin
     public static FontFamily MapFamily(FontFamily family)
     {
         if (IsValues(family)) family = NotaFonts.MeasureFamily;
+        // A values face the skin chose itself stays, even when it is Geist and the skin's words
+        // face is something else.
+        if (_ownValues && ReferenceEquals(family, NotaFonts.MeasureFamily)) return family;
         return _family is not null && IsGeist(family) ? _family : family;
     }
 
@@ -186,8 +190,12 @@ internal static class NotaSkin
     {
         var family = geometry.FontFamily is { } name && NotaThemes.IsFontInstalled(name) ? new FontFamily(name) : null;
         bool changed = !_geometry.Equals(geometry) || _family?.Name != family?.Name;
+        bool ownValues = geometry.ValuesFamily is { } values && NotaThemes.IsFontInstalled(values);
+        changed |= ownValues != _ownValues;
+        if (_family?.Name != family?.Name || ownValues != _ownValues) NotaFonts.TouchFaces();
         _geometry = geometry;
         _family = family;
+        _ownValues = ownValues;
         return changed;
     }
 

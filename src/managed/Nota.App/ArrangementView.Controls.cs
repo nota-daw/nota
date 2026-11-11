@@ -198,9 +198,9 @@ public sealed partial class ArrangementView
         private void RenderTime(DrawingContext ctx, double w, double h, double bpm)
         {
             double pxPerSec = _o._pixelsPerBeat * bpm / 60.0;
-            if (_charW <= 0 || _charWStep != NotaTextSize.Step)   // re-measure when Text size changes
+            if (_charW <= 0 || _charWKey != (NotaTextSize.Step, NotaFonts.FaceStamp))   // re-measure when Text size or the face changes
             {
-                _charWStep = NotaTextSize.Step;
+                _charWKey = (NotaTextSize.Step, NotaFonts.FaceStamp);
                 _charW = new NotaFormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                     NotaFonts.Measure, NotaType.Axis, RulerText).Width / 10;
             }
@@ -225,7 +225,7 @@ public sealed partial class ArrangementView
             }
         }
         private double _charW;
-        private int _charWStep;   // the Text size step _charW was measured at
+        private (int Step, int Face) _charWKey;   // the Text size step and face _charW was measured at
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {

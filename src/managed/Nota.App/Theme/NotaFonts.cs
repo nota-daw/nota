@@ -65,11 +65,20 @@ public static class NotaFonts
     public static Typeface MeasureMedium => _measureMedium;
     public static Typeface MeasureBold => _measureBold;
 
+    /// <summary>Changes whenever a typeface text is drawn in changes — the values face (a look
+    /// switch, a skin's font.values) or the words face (a skin's font.family). A view that caches
+    /// a measured text width keys it on this as well as on the Text size step.</summary>
+    public static int FaceStamp { get; private set; }
+
+    /// <summary>Mark the faces changed (NotaSkin calls it when a skin's typeface changes).</summary>
+    internal static void TouchFaces() => FaceStamp++;
+
     /// <summary>Wear <paramref name="family"/> for values and readouts: the Measure* faces here and
     /// the Font.Measure resource every values text style reads. Returns whether it changed.</summary>
     public static bool SetMeasure(FontFamily family)
     {
         bool changed = !Equals(family, _measure) && family.ToString() != _measure.ToString();
+        if (changed) FaceStamp++;
         _measure = family;
         _measureFace = new Typeface(family);
         _measureMedium = new Typeface(family, FontStyle.Normal, FontWeight.Medium);

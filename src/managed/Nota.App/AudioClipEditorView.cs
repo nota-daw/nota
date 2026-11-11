@@ -1662,14 +1662,14 @@ public sealed class AudioClipEditorView : UserControl
             return (f0 * TotalBeats, f1 * TotalBeats);
         }
         private double _monoCharW;
-        private int _monoCharWStep;   // the Text size step _monoCharW was measured at
+        private (int Step, int Face) _monoCharWKey;   // the Text size step and face _monoCharW was measured at
         private double MonoCharW
         {
             get
             {
-                if (_monoCharW <= 0 || _monoCharWStep != NotaTextSize.Step)   // re-measure when Text size changes
+                if (_monoCharW <= 0 || _monoCharWKey != (NotaTextSize.Step, NotaFonts.FaceStamp))   // re-measure when Text size or the face changes
                 {
-                    _monoCharWStep = NotaTextSize.Step;
+                    _monoCharWKey = (NotaTextSize.Step, NotaFonts.FaceStamp);
                     _monoCharW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
                 }
                 return _monoCharW;

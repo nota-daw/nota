@@ -87,8 +87,10 @@ internal sealed class ThemeAccess : IThemeAccess
         if (!v.IsValid) return new ThemePreviews(v, Array.Empty<ThemePreviewImage>(), Array.Empty<string>(), Array.Empty<string>());
         var theme = NotaThemes.FromParsed(v, ThemeSource.Preview);
         // A built-in's own file, unchanged, previews as that built-in — so under Classic it shows
-        // the classic palette, as the window would (spec 091). An edited copy keeps its colours.
-        if (NotaThemes.Find(theme.Id) is { Source: ThemeSource.BuiltIn } builtIn && SameColours(builtIn, theme))
+        // the classic palette, as the window would (spec 091). An edited copy — other colours, or a
+        // typeface or radii added — is previewed as written.
+        if (NotaThemes.Find(theme.Id) is { Source: ThemeSource.BuiltIn } builtIn && SameColours(builtIn, theme)
+            && theme.Geometry.Equals(builtIn.Geometry))
             theme = builtIn;
         var (images, unknown) = await SkinPreviewRenderer.RenderAsync(theme, themeAccent, surfaces, l);
         return new ThemePreviews(v,
