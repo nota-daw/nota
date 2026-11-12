@@ -41,6 +41,7 @@ internal enum GlyphKind
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
     Expand, Shrink,                // a panel filling the window, and back to its split
     Home, Drive, AudioFile,        // the Files browse view: home folder, a drive, an audio file (spec 092)
+    Menu,                          // the transport bar's Menu key: the whole app menu on Windows / Linux (#518)
 }
 
 internal sealed class Glyph : Control
@@ -468,6 +469,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Sidebar] = ("M3.5 5.5 h17 v13 h-17 zM9.5 5.5 v13", null),
         // Three centred rules, shortening downward (view options).
         [GlyphKind.Options] = ("M4 7 H20 M7 12 H17 M10 17 H14", null),
+        // Three equal rules: the application menu (#518).
+        [GlyphKind.Menu] = ("M4 6.5 H20 M4 12 H20 M4 17.5 H20", null),
         // A magnifier.
         [GlyphKind.Search] = ("M10.5 4 A6.5 6.5 0 1 0 10.5 17 A6.5 6.5 0 1 0 10.5 4 M15.5 15.5 L21 21", null),
         // A small solid triangle pointing right (a closed disclosure).

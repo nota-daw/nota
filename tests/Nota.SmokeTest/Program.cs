@@ -190,6 +190,14 @@ if (args.Length >= 1 && args[0] == "--palette")
     Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Menu key's menu copy alone: `--menu-mirror`.
+if (args.Length >= 1 && args[0] == "--menu-mirror")
+{
+    Console.WriteLine("-- menu key --");
+    foreach (var (ok, label) in MenuMirrorTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MENU MIRROR PASSED" : $"MENU MIRROR FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Shortcut builder alone: `--shortcuts`.
 if (args.Length >= 1 && args[0] == "--shortcuts")
 {
@@ -392,6 +400,14 @@ if (args.Length >= 1 && args[0] == "--bend-range")
     Console.WriteLine("-- bend lane range --");
     foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "BEND RANGE PASSED" : $"BEND RANGE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Arrangement phrase lines alone: `--phrase-lines`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--phrase-lines")
+{
+    Console.WriteLine("-- phrase lines --");
+    foreach (var (ok, label) in PhraseLinesTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PHRASE LINES PASSED" : $"PHRASE LINES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Filter knob glide alone: `--glide`. Also part of the full run.
@@ -15764,6 +15780,8 @@ Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");
 foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
+Console.WriteLine("-- phrase lines --");
+foreach (var (ok, label) in PhraseLinesTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 
@@ -15901,6 +15919,10 @@ foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");
 foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
+
+// --- the Menu key's copy of the application menu (#518, specs/093) ---
+Console.WriteLine("-- menu key --");
+foreach (var (ok, label) in MenuMirrorTests.Run()) Check(ok, label);
 
 // --- context menus: "Add track ▸ Recent" list rules (spec 034) ---
 Console.WriteLine("-- recent instruments --");

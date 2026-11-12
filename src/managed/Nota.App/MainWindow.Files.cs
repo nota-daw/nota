@@ -163,9 +163,11 @@ public partial class MainWindow
     {
         string title = Loc.F("main.files.nota", ProjectDisplayName());
         Title = title;
-        // The frameless header's caption is the project's name; the OS window title keeps the
-        // app too, for the Dock and window switcher.
-        DocTitleText.Text = ProjectDisplayName();
+        // macOS: the frameless header's caption is the project's name; the OS window title keeps
+        // the app too, for the Dock and window switcher. Windows: the caption is the window title
+        // itself, "Nota — My song" — with the menu row gone it is where the app is named (#518).
+        // (Linux shows the native frame, whose title is Title.)
+        DocTitleText.Text = OperatingSystem.IsWindows() ? title : ProjectDisplayName();
     }
 
     /// <summary>A crash-recovery snapshot to offer on open (set by App at launch). M7-7.</summary>

@@ -68,6 +68,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   replacing or recording a clip on the computer updates its cell on the phone within a
   second; a take being recorded grows as it records. Previews are sent only to a phone on
   Scenes and only for the clips that changed.
+- **Phrase lines in the arrangement** (#517, specs/092). **Settings → Appearance → Phrase
+  lines** draws a heavier grid line every 4, 8, 16 or 32 bars, counted from bar 1, across
+  the lanes, the return and master rows and the ruler, so you can see where an 8- or 16-bar
+  phrase starts and ends. The line is a neutral grey a step above the bar line, works in
+  every colour theme (your own too) and stays behind the clips. It counts bars, so it
+  follows the time signature. Off by default, and remembered for every project.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
@@ -201,6 +207,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **The menu under a Menu key, and the menu bar hidden** (Windows / Linux, #518, specs/093).
+  The row of File, Edit, View, Transport and Help no longer sits between the title bar and
+  the transport bar, so the work area gains its height. The whole menu — the same items,
+  shortcuts and check marks, Open recent included — is under the new **☰ Menu** key at the
+  start of the transport bar; **Alt** (pressed and released on its own) or **F10** opens it
+  from the keyboard. **View ▸ Show menu bar**, or **Settings → Appearance → Menu bar**, brings
+  the row back (the key then steps aside). On Windows the title bar now reads
+  "Nota — *project*", as the taskbar does. macOS is unchanged.
 - **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
   follows the style guide the desktop wears: the same corner scale, one typeface with
   fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin

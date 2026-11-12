@@ -622,6 +622,20 @@ public sealed partial class ArrangementView : UserControl
         set { if (_waveform == value) return; _waveform = value; _lanes.InvalidateVisual(); }
     }
     private WaveformStyle _waveform = WaveformStyle.Smooth;
+    /// <summary>A heavier grid line every this many bars, counted from bar 1; 0 = off
+    /// (Settings → Appearance, specs/092). Drawn on the lanes, the footer rows and the ruler.</summary>
+    public int PhraseBars
+    {
+        get => _phraseBars;
+        set
+        {
+            value = PhraseLines.Normalize(value);
+            if (_phraseBars == value) return;
+            _phraseBars = value;
+            Redraw();
+        }
+    }
+    private int _phraseBars;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -3465,6 +3479,11 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
+    // Phrase lines (specs/092): a step above the bar line, a neutral grey moved from the bar
+    // line toward the tertiary text — derived, so it follows every theme (user themes too) without
+    // a token of its own, and never the accent.
+    private static readonly IPen PhrasePen = new Pen(NotaPalette.Derived(
+        () => SliderTrack.Mix(NotaPalette.GridBar.Color, NotaPalette.TextTertiary.Color, 0.35)), 1);
     private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
     // Playhead: a 1px accent line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
@@ -3686,8 +3705,9 @@ public sealed partial class ArrangementView : UserControl
     private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
 
     /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
-    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
-    /// sub-beat. Shared by the lanes and the footer rows.</summary>
+    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted phrase › bar ›
+    /// beat › sub-beat. A phrase line is always one of those lines (every bar step divides a
+    /// phrase), so it only changes the pen. Shared by the lanes and the footer rows.</summary>
     private void DrawGrid(DrawingContext ctx, double w, double h)
     {
         if (_pixelsPerBeat <= 0) return;
@@ -3696,7 +3716,8 @@ public sealed partial class ArrangementView : UserControl
         foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
         {
             double x = BeatToX(b);
-            var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
+            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, _beatsPerBar) ? PhrasePen
+                : IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
             ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
         }
 

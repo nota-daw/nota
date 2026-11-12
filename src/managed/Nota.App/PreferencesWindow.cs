@@ -29,6 +29,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Localization;
 using Nota.Application.Themes;
 using Nota.Presentation;
@@ -1294,6 +1295,33 @@ public sealed partial class PreferencesWindow : NotaWindow
         return host;
     }
 
+    // Off / 4 / 8 / 16 / 32 for the arrangement's phrase lines (specs/092, #517): a heavier
+    // grid line every N bars from bar 1. Saving fires Settings.Changed, which repaints the
+    // arrangement at once.
+    private static Control PhraseLinesPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Bars, ToggleButton Btn)>();
+        int current = PhraseLines.Normalize(settings.Current.ArrangementPhraseBars);
+        foreach (int bars in PhraseLines.Choices)
+        {
+            var n = bars;
+            var label = n == 0 ? Loc.T("common.off") : n.ToString(NotaNum.Culture);
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label, IsChecked = current == n };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bn, bb) in buttons) bb.IsChecked = bn == n;
+                if (settings.Current.ArrangementPhraseBars == n) return;
+                settings.Current.ArrangementPhraseBars = n;
+                settings.Save();
+            };
+            buttons.Add((n, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     // Left / Right for the arrangement's track-header column (#72). Saving fires
     // Settings.Changed, which moves the column at once and ticks the View menu item.
     // The same event repaints these buttons, so a change from the View menu updates an
@@ -1319,6 +1347,67 @@ public sealed partial class PreferencesWindow : NotaWindow
                 settings.Save();
             };
             buttons.Add((r, btn));
+            strip.Children.Add(btn);
+        }
+        ShowSaved();
+        var box = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        var listening = false;
+        void OnChanged() => ShowSaved();
+        box.AttachedToVisualTree += (_, _) =>
+        {
+            ShowSaved();
+            if (listening) return;
+            listening = true;
+            settings.Changed += OnChanged;
+        };
+        box.DetachedFromVisualTree += (_, _) =>
+        {
+            if (!listening) return;
+            listening = false;
+            settings.Changed -= OnChanged;
+        };
+        return box;
+    }
+
+    // Windows / Linux: Hidden / Shown for the in-window menu row (#518). Hidden, the Menu key at
+    // the start of the transport bar gives the menu. Saving fires Settings.Changed, which shows or
+    // hides the row and ticks View ▸ Show menu bar; the same event repaints these buttons, so a
+    // change from the View menu updates an open Appearance pane. Not on macOS (system menu bar).
+    private static Control MenuBarRows()
+    {
+        if (!MainWindow.HasMenuKey) return new Panel { IsVisible = false };
+        return new StackPanel
+        {
+            Spacing = 10,
+            Children =
+            {
+                Row(Loc.T("preferences.menu_bar"), MenuBarPicker()),
+                Row("", Caption(Loc.T("preferences.menu_bar_caption"))),
+            },
+        };
+    }
+
+    private static Control MenuBarPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(bool Shown, ToggleButton Btn)>();
+        void ShowSaved()
+        {
+            bool shown = settings.Current.ShowMenuBar;
+            foreach (var (bs, bb) in buttons) bb.IsChecked = bs == shown;
+        }
+        foreach (var (shown, label) in new[] { (false, Loc.T("preferences.menu_bar_hidden")), (true, Loc.T("preferences.menu_bar_shown")) })
+        {
+            var v = shown;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
+            btn.Click += (_, _) =>
+            {
+                if (settings.Current.ShowMenuBar == v) { ShowSaved(); return; }
+                settings.Current.ShowMenuBar = v;
+                settings.Save();
+            };
+            buttons.Add((v, btn));
             strip.Children.Add(btn);
         }
         ShowSaved();
@@ -1412,8 +1501,11 @@ public sealed partial class PreferencesWindow : NotaWindow
             Row("", Caption(Loc.T("preferences.accent_caption"))),
             Row(Loc.T("preferences.waveform"), WaveformPicker()),
             Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+            Row(Loc.T("preferences.phrase_lines"), PhraseLinesPicker()),
+            Row("", Caption(Loc.T("preferences.phrase_lines_caption"))),
             Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
             Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
+            MenuBarRows(),
             Row(Loc.T("preferences.interface_scale"), ScalePicker()),
             Row("", Caption(Loc.T("preferences.makes_the_whole_interface_larger"))),
             Row(Loc.T("preferences.text_size"), TextSizePicker()),
@@ -1427,6 +1519,11 @@ public sealed partial class PreferencesWindow : NotaWindow
     // (the Files tab's sample player). Written with the macOS glyphs; MenuKit.Keys spells them
     // Ctrl / Alt / Shift on Windows and Linux. A Key made only of
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
+    // Windows / Linux: Alt (pressed and released alone) or F10 opens the menu — the Menu key's
+    // while the menu row is hidden (#518). macOS has its menu in the system bar, so Render leaves
+    // the row out there. (A plain row in the list, so the docs' shortcuts generator reads it.)
+    private const string MenuKeysRow = "⌥   F10";
+
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
         (Loc.T("common.file"), new[]
@@ -1440,6 +1537,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         (Loc.T("preferences.window"), new[]
         {
+            ("⌥   F10", Loc.T("preferences.open_the_menu")),   // = MenuKeysRow
             ("F11", Loc.T("preferences.enter_leave_full_screen_the")),
             ("⌘⇧F", Loc.T("preferences.the_clip_editor_fills_the")),
             (Loc.T("preferences.double_click_a_panel_edge"), Loc.T("preferences.reset_the_detail_panel_the")),
@@ -1704,7 +1802,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var (title, rows) in ShortcutGroups)
             {
-                var shown = rows.Where(r => words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
+                var shown = rows.Where(r => (MainWindow.HasMenuKey || r.Key != MenuKeysRow) && words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
                                                            || MenuKit.Keys(r.Action).Contains(w, StringComparison.OrdinalIgnoreCase)
                                                            || MenuKit.Keys(r.Key).Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
                 if (shown.Count == 0) continue;

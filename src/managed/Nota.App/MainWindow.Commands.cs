@@ -95,6 +95,7 @@ public partial class MainWindow
         B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));
         B("view.headersRight", ToggleHeadersRight);
+        B("view.menuBar", ToggleMenuBar);
         B("view.automation", () =>
         {
             AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
