@@ -2123,15 +2123,19 @@ bool laneInsertGap(AutomationLane& lane, double at, double len, const std::vecto
     out.reserve(p.size() + (fill ? fill->size() + 1 : 2));
     out.insert(out.end(), p.begin(), mid);
     if (before) endSegmentAt(out, p, at);
+    // After the gap the lane resumes the segment that ran through `at`, its curve scaled to
+    // what is left of it, so the tail keeps its shape (#591).
+    const float tail = AutomationLane::pieceCurve(p, at, std::numeric_limits<double>::infinity());
     if (fill) {
         out.push_back({at, v, 0.0f}); // a step from the left side into the copy
         for (auto q : *fill) {
             q.beat += at;
             out.push_back(q);
         }
+        if (!fill->empty()) out.back().curve = tail;
     } else if (before) {
         out.push_back({at, v, 0.0f});
-        out.push_back({at + len, v, 0.0f});
+        out.push_back({at + len, v, tail});
     }
     for (auto it = mid; it != p.end(); ++it) {
         auto q = *it;

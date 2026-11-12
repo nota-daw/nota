@@ -937,7 +937,11 @@ void Engine::closeCtlRange(MidiClip& clip, int32_t ctl, double atLocal, double s
         // Hold the range's last value up to the junction, then hand back to the old curve.
         if (!ctlIsSwitch(ctl) && atLocal - kCtlJunction > lastL + 1e-9 && old != f.committed.value)
             out.push_back({atLocal - kCtlJunction, f.committed.value, 0.0f});
-        out.push_back({atLocal, old, 0.0f});
+        // ...and from there on the old curve plays its own shape (#591).
+        const float tail = f.before && !ctlIsSwitch(ctl)
+                               ? ctlPieceCurve(f.before->points, atLocal, std::numeric_limits<double>::infinity())
+                               : 0.0f;
+        out.push_back({atLocal, old, tail});
     }
     clip.setController(ctl, std::move(out));
     f.before.reset();
