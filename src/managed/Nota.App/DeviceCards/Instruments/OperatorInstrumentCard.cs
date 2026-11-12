@@ -37,7 +37,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "FM";
-    public double CardWidth => 700;
+    public double CardWidth => 740;
 
     private const double WheelsW = 56, RailW = 186, TabH = 20, StatusH = 18;
 
@@ -53,7 +53,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     private static readonly string[] RailTabs = { "Global" };
     private static readonly string[] TabHints =
     {
-        "wave · ratio · fine · level",
+        "wave · ratio · semi · fine · level",
         Loc.T("device.operator.11_topologies_feedback_on_a"),
         Loc.T("device.operator.env_tab_hint"),
         "type · freq · reso · key track",
@@ -73,6 +73,11 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         return "×" + NotaNum.Str(r, r < 1 ? "0.0#" : "0");
     }
     private static int BendRange(float v) => (int)Math.Round(1 + v * 11);
+
+    // The Semitones knob: whole steps, 0 at centre (±12 st of travel, as Volt's Semi knob) —
+    // the engine rounds to OperatorSynth::kSemisRange.
+    private const int SemisRange = 12;
+    private static string Semis(float v) => NotaNum.Str(Math.Round((v - 0.5f) * 2 * SemisRange), "+0;−0;0");
 
     public Control Build(DeviceCardContext ctx)
     {
@@ -251,7 +256,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         // own content and the headers would drift off the cells they name.
         var opsGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("62,Auto,64,64,*"), ColumnSpacing = 6,
+            ColumnDefinitions = new ColumnDefinitions("58,Auto,64,58,64,*"), ColumnSpacing = 5,
             RowDefinitions = new RowDefinitions("Auto,*,*,*,*"),
         };
         void Cell(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); opsGrid.Children.Add(c); }
@@ -259,7 +264,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var levelHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var dbCap = Cap("dB"); Grid.SetColumn(dbCap, 1);
         levelHead.Children.Add(Cap("LEVEL")); levelHead.Children.Add(dbCap);
-        var headCells = new Control[] { Cap("OP"), Cap("WAVE"), Cap("CRS"), Cap("FINE"), levelHead };
+        var headCells = new Control[] { Cap("OP"), Cap("WAVE"), Cap("CRS"), Cap("SEMI"), Cap("FINE"), levelHead };
         for (int c = 0; c < headCells.Length; c++) Cell(headCells[c], 0, c);
 
         for (int o = 0; o < 4; o++)
@@ -290,7 +295,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             if (op > 0)
             {
                 var rule = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0) };
-                Grid.SetRow(rule, op + 1); Grid.SetColumnSpan(rule, 5); opsGrid.Children.Add(rule);
+                Grid.SetRow(rule, op + 1); Grid.SetColumnSpan(rule, 6); opsGrid.Children.Add(rule);
             }
             string lid = pre + "level";
             Cell(new StackPanel
@@ -300,8 +305,9 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             }, op + 1, 0);
             Cell(Chips(pre + "wave", WaveShort), op + 1, 1);
             Cell(TableKnob(pre + "coarse", OperatorTopo.Names[op] + " Coarse", RatioText), op + 1, 2);
-            Cell(TableKnob(pre + "fine", OperatorTopo.Names[op] + " Fine", Cents, arc: Teal), op + 1, 3);
-            Cell(Slider("", lid, () => Level(G(lid)), labelW: 0, valueW: 42), op + 1, 4);
+            Cell(TableKnob(pre + "semi", OperatorTopo.Names[op] + " Semi", Semis), op + 1, 3);
+            Cell(TableKnob(pre + "fine", OperatorTopo.Names[op] + " Fine", Cents, arc: Teal), op + 1, 4);
+            Cell(Slider("", lid, () => Level(G(lid)), labelW: 0, valueW: 36), op + 1, 5);
         }
         var opsBody = new Border { Padding = new Thickness(7, 3), Child = opsGrid };
 

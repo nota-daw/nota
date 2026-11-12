@@ -3724,7 +3724,7 @@ Console.WriteLine("-- Nota Operator --");
     Check(oe.DeviceName(t, -1) == "Nota Operator", $"instrument is Nota Operator (got '{oe.DeviceName(t, -1)}')");
 
     int pc = oe.PluginParamCount(t, -1);
-    Check(pc == 60, $"Nota Operator exposes 60 params (got {pc})");
+    Check(pc == 64, $"Nota Operator exposes 64 params (got {pc})");
     int algoI = -1; bool idsOk = true;
     var opIds = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++)
@@ -3740,6 +3740,8 @@ Console.WriteLine("-- Nota Operator --");
     Check(opIds.Contains("bend") && opIds.Contains("bendrange") && opIds.Contains("modwheel")
           && opIds.Contains("filkeytrk") && opIds.Contains("veltolevel"),
           "wheel + tracking params present (bend/bendrange/modwheel/filkeytrk/veltolevel)");
+    Check(opIds.Contains("asemi") && opIds.Contains("bsemi") && opIds.Contains("csemi") && opIds.Contains("dsemi"),
+          "the Semitones knobs are present (asemi…dsemi)");
 
     // State round-trips to another track.
     int dlvl = -1; for (int i = 0; i < pc; i++) if (oe.PluginParamId(t, -1, i) == "dlevel") dlvl = i;
@@ -3777,6 +3779,53 @@ Console.WriteLine("-- Nota Operator --");
         bool ok = sn == 32; float mx = 0;
         for (int i = 0; i < sn; i++) { if (!float.IsFinite(sbuf[i]) || sbuf[i] < 0 || sbuf[i] > 1.001f) ok = false; mx = Math.Max(mx, sbuf[i]); }
         Check(ok && mx > 0.01f, $"Operator spectrum scope returns 32 partials (n={sn}, peak {mx:F2})");
+    }
+
+    // The Semitones knob (asemi…dsemi): a per-operator offset from its coarse ratio. +7 on a
+    // ×1 operator is a fifth — the interval the 16-ratio table cannot reach — and +12 an
+    // octave; both show up in the rendered fundamental. Its own engine: the measurement
+    // reads the whole mix, so no other track may sound.
+    {
+        using var se = new NotaEngine();
+        se.SetBpm(120); se.SetTimeSignature(4, 4);
+        int ts = se.AddOperatorSynthTrack();
+        int Ps(string id) { for (int i = 0; i < se.PluginParamCount(ts, -1); i++) if (se.PluginParamId(ts, -1, i) == id) return i; return -1; }
+        se.PluginParamSet(ts, -1, Ps("algo"), 1f);            // the 11th algorithm: all parallel, A is a carrier
+        se.PluginParamSet(ts, -1, Ps("alevel"), 0.8f);
+        se.PluginParamSet(ts, -1, Ps("blevel"), 0f);
+        se.PluginParamSet(ts, -1, Ps("clevel"), 0f);
+        se.PluginParamSet(ts, -1, Ps("dlevel"), 0f);
+        se.PluginParamSet(ts, -1, Ps("acoarse"), 1f / 15f);   // ratio ×1 (index 1 of the 16)
+        se.PluginParamSet(ts, -1, Ps("afine"), 0.5f);         // no cents
+        se.PluginParamSet(ts, -1, Ps("asus"), 1f);            // hold the tone through the measurement
+        se.PluginParamSet(ts, -1, Ps("fmdepth"), 0.5f);       // ×1 modulation index
+        se.PluginParamSet(ts, -1, Ps("filfreq"), 1f);         // filter wide open
+        se.PluginParamSet(ts, -1, Ps("volume"), 1f);
+        se.AddMidiClip(ts, 0.0, 4.0);
+        se.SetClipNotes(ts, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+
+        // The engine's map: 0.5 = 0 st, the travel ±12 st, so v = 0.5 + semis / 24. Render at an
+        // explicit rate — a fresh engine has negotiated none, so SampleRate is 0 until audio runs.
+        const double Sr = 44100;
+        double F0(double semis)
+        {
+            se.PluginParamSet(ts, -1, Ps("asemi"), (float)(0.5 + semis / 24.0));
+            var b = new float[8192 * 2];
+            se.Seek(0.0); se.Play(); se.RenderOffline(b, 8192, Sr); se.StopTransport();
+            int rising = 0, first = -1, last = -1;
+            for (int i = 1; i < 8192; i++)
+            {
+                if (b[(i - 1) * 2] <= 0f && b[i * 2] > 0f) { if (first < 0) first = i; last = i; rising++; }
+            }
+            return rising > 2 && last > first ? (rising - 1) * Sr / (last - first) : 0;
+        }
+
+        double plain = F0(0), fifth = F0(7), octave = F0(12);
+        Check(Math.Abs(plain - 261.63) < 5, $"Operator Semitones 0 sounds the written note (f0 {plain:F1} Hz)");
+        Check(plain > 0 && Math.Abs(fifth / plain - 1.4983) < 0.02,
+              $"Operator Semitones +7 sounds a fifth above its ratio (×{(plain > 0 ? fifth / plain : 0):F3})");
+        Check(plain > 0 && Math.Abs(octave / plain - 2.0) < 0.02,
+              $"Operator Semitones +12 sounds an octave above its ratio (×{(plain > 0 ? octave / plain : 0):F3})");
     }
 
     // Mono + glide render stays finite (legato voice path).
