@@ -2905,6 +2905,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (sp->maybeApply(
                         blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed), seamOffs_)) {
                     if (t.instrument) t.instrument->allNotesOff();
+                    if (t.liveHeld) t.liveHeld->forgetRouted(); // #504: the voices are gone
                     for (auto& md : t.midiEffects)
                         if (md) md->reset(); // clock switch → flush arp
                 }
@@ -2918,7 +2919,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     // The clip moves on without its note-offs reaching the instrument: release
                     // what it holds, or a note crossed while silent would sound on after unmute.
                     // Once, on going silent: a hosted plug-in queues each release until it renders.
-                    if (t.instrument && !t.sessionSilentReleased) t.instrument->allNotesOff();
+                    if (t.instrument && !t.sessionSilentReleased) {
+                        t.instrument->allNotesOff();
+                        if (t.liveHeld) t.liveHeld->forgetRouted(); // #504
+                    }
                     // Those voices were flushed; an old latching release must not survive the
                     // silent interval and cut a new momentary hold after mute/solo is lifted.
                     t.sessionPlayer->articulationReleases.count = 0;
