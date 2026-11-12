@@ -388,6 +388,7 @@ public sealed partial class BrowserView
     public void RevealFile(string path)
     {
         if (_vm is null) return;
+        _revealWaiting = null;   // a newer Locate replaces one still waiting for the tree
         SetCollapsed(false, persist: true);
         SelectTab(FilesTab);
         var inFolder = _settings?.ResolvedSampleFolders().Any(f => f.Available && SampleFolderRules.IsSameOrInside(path, f.Path)) == true;
@@ -400,11 +401,10 @@ public sealed partial class BrowserView
             {
                 // The tree is still being walked (startup, a big folder just added): try
                 // again once it is in.
-                if (_vm.SamplesBuilding && !_revealPending)
+                if (_vm.SamplesBuilding)
                 {
-                    _revealPending = true;
-                    void Retry() { _vm.SamplesRebuilt -= Retry; _revealPending = false; RevealFile(path); }
-                    _vm.SamplesRebuilt += Retry;
+                    _revealWaiting = path;   // the latest request wins
+                    if (!_revealHooked) { _revealHooked = true; _vm.SamplesRebuilt += RevealWaiting; }
                 }
                 return;
             }
@@ -422,5 +422,16 @@ public sealed partial class BrowserView
     }
 
     private bool _suppressPreview;
-    private bool _revealPending;
+    private string? _revealWaiting;
+    private bool _revealHooked;
+
+    // The tree came in: reveal the last file asked for while it was being walked, if any.
+    private void RevealWaiting()
+    {
+        if (_vm is not null) _vm.SamplesRebuilt -= RevealWaiting;
+        _revealHooked = false;
+        var p = _revealWaiting;
+        _revealWaiting = null;
+        if (p is not null) RevealFile(p);
+    }
 }
