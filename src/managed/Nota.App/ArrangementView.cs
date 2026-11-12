@@ -3560,9 +3560,9 @@ public sealed partial class ArrangementView : UserControl
         return b;
     }
 
-    // Power-curve shaping, mirroring native AutomationLane::shape (M9-D).
+    // Segment shaping (M9-D, #591): the shared AutomationCurve, mirroring native AutomationLane::shape.
     internal static double Shape(double t, float curve)
-        => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        => AutomationCurve.Shape(t, curve);
 
     // ---- data colours (mirror the tokens in NotaTheme.axaml) --
     private static readonly IBrush LaneBgA = NotaPalette.BgApp;    // lanes on the ground

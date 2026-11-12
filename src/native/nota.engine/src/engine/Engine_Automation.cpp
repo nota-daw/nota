@@ -91,8 +91,21 @@ bool Engine::automationCurveSelfTest() {
     if (std::fabs(lane.valueAt(2.0) - 0.5f) > 1e-4f) return false; // linear baseline
     lane.points[0].curve = 1.0f;                                   // ease-out
     if (lane.valueAt(2.0) < 0.6f) return false;
+    // No jump at the start (#591): the old power curve was ~75 % there by 1 % of the span.
+    if (lane.valueAt(0.04) > 0.1f) return false;
+    const float easeOutMid = lane.valueAt(2.0);
     lane.points[0].curve = -1.0f; // ease-in
     if (lane.valueAt(2.0) > 0.4f) return false;
+    // Ease-in and ease-out mirror each other.
+    if (std::fabs(lane.valueAt(2.0) - (1.0f - easeOutMid)) > 1e-4f) return false;
+    // A piece of a shaped segment, with subCurve, reads the same values (shift-invariance).
+    {
+        TrackLane cut;
+        cut.target = AutomationTarget::Volume;
+        cut.points = {{1.0, lane.valueAt(1.0), AutomationLane::subCurve(-1.0f, 0.5)}, {3.0, lane.valueAt(3.0), 0.0f}};
+        for (double b = 1.0; b <= 3.0; b += 0.25)
+            if (std::fabs(cut.valueAt(b) - lane.valueAt(b)) > 1e-4f) return false;
+    }
     // Endpoints unaffected by curvature.
     if (std::fabs(lane.valueAt(0.0) - 0.0f) > 1e-4f) return false;
     if (std::fabs(lane.valueAt(4.0) - 1.0f) > 1e-4f) return false;

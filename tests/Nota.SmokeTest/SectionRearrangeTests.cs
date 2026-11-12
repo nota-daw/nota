@@ -69,7 +69,7 @@ internal static class SectionRearrangeTests
     }
 
     // The lane's value at `beat` as the engine plays it: each segment shaped by its start point's
-    // curve (t^e, e = 2^(−4·curve)); at a step, the later point wins.
+    // curve (AutomationCurve.Shape, #591); at a step, the later point wins.
     private static float At(AutomationPoint[] pts, double beat)
     {
         if (pts.Length == 0) return 0;
@@ -78,7 +78,7 @@ internal static class SectionRearrangeTests
             if (beat < pts[i].Beat)
             {
                 double t = (beat - pts[i - 1].Beat) / (pts[i].Beat - pts[i - 1].Beat);
-                double shaped = pts[i - 1].Curve == 0 ? t : Math.Pow(t, Math.Pow(2, -pts[i - 1].Curve * 4));
+                double shaped = Nota.Application.Editing.AutomationCurve.Shape(t, pts[i - 1].Curve);
                 return (float)(pts[i - 1].Value + (pts[i].Value - pts[i - 1].Value) * shaped);
             }
         return pts[^1].Value;
@@ -117,13 +117,13 @@ internal static class SectionRearrangeTests
         }
 
         // A curved automation segment cut by a move keeps its shape on both sides (a 0 → 1 ramp
-        // over [0,16) with curve −0.25 is (b/16)²), and a cut clip keeps its deactivation and
+        // over [0,16) with curve −0.25 is AutomationCurve.Shape(b/16, −0.25)), and a cut clip keeps its deactivation and
         // its envelopes, re-based to each piece.
         {
             var s = Build();
             using var e = s.E;
             e.SetAutomationPoints(s.B, s.Lane, new[] { new AutomationPoint(0, 0f, -0.25f), new AutomationPoint(16, 1f) });
-            float Sq(double b) => (float)Math.Pow(Math.Clamp(b, 0, 16) / 16.0, 2);
+            float Sq(double b) => (float)Nota.Application.Editing.AutomationCurve.Shape(Math.Clamp(b, 0, 16) / 16.0, -0.25f);
             e.SetClipActive(s.A, 0, false);
             e.SetMidiClipEnvelope(s.A, 0, MidiClipEnvelope.Volume, new[] { P(0, 0f), P(12, 1f) });
             string wav = Path.Combine(Path.GetTempPath(), "nota_smoke_sections_env.wav");
@@ -145,13 +145,13 @@ internal static class SectionRearrangeTests
                 "section move: a cut audio clip's envelope is re-based to each piece");
         }
 
-        // Duplicate with content keeps a curved lane's shape around the copy too: the quadratic
-        // ramp reads at beat 16 what it read at 12 (0.5625), the copy plays B's curve.
+        // Duplicate with content keeps a curved lane's shape around the copy too: the eased-in
+        // ramp reads at beat 16 what it read at 12, the copy plays B's curve.
         {
             var s = Build();
             using var e = s.E;
             e.SetAutomationPoints(s.B, s.Lane, new[] { new AutomationPoint(0, 0f, -0.25f), new AutomationPoint(16, 1f) });
-            float Sq(double b) => (float)Math.Pow(Math.Clamp(b, 0, 16) / 16.0, 2);
+            float Sq(double b) => (float)Nota.Application.Editing.AutomationCurve.Shape(Math.Clamp(b, 0, 16) / 16.0, -0.25f);
             bool dup = e.DuplicateSectionWithContent(1);   // B [4,8): copy at 8, the rest +4
             yield return (dup && LaneFollows(e.GetAutomationPoints(s.B, s.Lane), Sq, (3, 3), (6, 6), (9, 5), (11.5, 7.5), (13, 9), (16, 12), (19, 15), (21, 17)),
                 "section duplicate: curved automation keeps its shape before, in and after the copy");

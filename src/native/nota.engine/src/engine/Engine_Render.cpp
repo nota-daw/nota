@@ -866,7 +866,15 @@ void Engine::commitCtlRun(MidiClip& clip, int32_t ctl, double slotLen, bool fina
     if (!f.hasCommitted && f.before && !f.before->points.empty() &&
         f.before->points.front().beat < loL - kCtlJunction) {
         const double j = loL - kCtlJunction;
-        if (!kept.empty() && f.before->valueAt(j) != kept.front().value) out.push_back({j, f.before->valueAt(j), 0.0f});
+        const bool junction = !kept.empty() && f.before->valueAt(j) != kept.front().value;
+        // The last point before the range now ends its segment early: shorten its curve so the
+        // stretch before the range keeps its values (#591).
+        for (auto it = out.rbegin(); it != out.rend(); ++it)
+            if (it->beat < loL - 1e-9) {
+                it->curve = ctlPieceCurve(f.before->points, it->beat, junction ? j : loL);
+                break;
+            }
+        if (junction) out.push_back({j, f.before->valueAt(j), 0.0f});
     }
     for (const auto& p : kept) {
         out.push_back({local(p.beat), p.value, 0.0f});

@@ -74,12 +74,25 @@ std::vector<AutomationPoint> thinCtlCurve(const std::vector<AutomationPoint>& p,
     return out;
 }
 
+float ctlPieceCurve(const std::vector<AutomationPoint>& p, double from, double to) {
+    return AutomationLane::pieceCurve(p, from, to);
+}
+
 std::vector<AutomationPoint> sliceCtlPoints(const ControllerCurve& c, double from, double to) {
     std::vector<AutomationPoint> out;
-    if (!c.points.empty() && from >= c.points.front().beat) out.push_back({0.0, c.valueAt(from), 0.0f});
+    double lastAt = from; // the source beat of out.back()
+    if (!c.points.empty() && from >= c.points.front().beat)
+        out.push_back({0.0, c.valueAt(from), ctlPieceCurve(c.points, from, to)});
     for (const auto& p : c.points)
-        if (p.beat > from && p.beat < to) out.push_back({p.beat - from, p.value, p.curve});
-    if (to > from && !ctlIsSwitch(c.ctl) && c.movesIn(from, to)) out.push_back({to - from, c.valueAt(to), 0.0f});
+        if (p.beat > from && p.beat < to) {
+            out.push_back({p.beat - from, p.value, p.curve});
+            lastAt = p.beat;
+        }
+    if (to > from && !ctlIsSwitch(c.ctl) && c.movesIn(from, to)) {
+        // The last point's segment now ends at `to`: shorten its curve to match.
+        if (!out.empty()) out.back().curve = ctlPieceCurve(c.points, lastAt, to);
+        out.push_back({to - from, c.valueAt(to), 0.0f});
+    }
     if (out.size() > 1 && ctlIsSwitch(c.ctl)) out = dedupeSwitch(out);
     // A piece that never leaves rest carries nothing.
     for (const auto& p : out)
