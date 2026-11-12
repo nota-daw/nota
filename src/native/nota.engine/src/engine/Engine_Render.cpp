@@ -2343,19 +2343,22 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
         }
         const double segStart = transport_.playheadSamples();
-        const double beatStart = transport_.positionBeats();
-        if (playing && g && g->tempoMap) {
-            const auto& points = g->tempoMap->points;
-            auto next = std::upper_bound(points.begin(), points.end(), beatStart + 1e-8,
-                [](double b, const auto& p) { return b < p.beat; });
-            if (next != points.end()) {
-                const double until = transport_.samplesAtBeat(next->beat) - segStart;
-                if (until > .5 && until < seg) seg = std::max(1, static_cast<int32_t>(std::ceil(until)));
+        double localSpb = spb, musicalStart = segStart;
+        if (transport_.hasTempoMap()) {
+            const double beatStart = transport_.positionBeats();
+            if (playing) {
+                const auto& points = g->tempoMap->points;
+                auto next = std::upper_bound(points.begin(), points.end(), beatStart + 1e-8,
+                    [](double b, const auto& p) { return b < p.beat; });
+                if (next != points.end()) {
+                    const double until = transport_.samplesAtBeat(next->beat) - segStart;
+                    if (until > .5 && until < seg) seg = std::max(1, static_cast<int32_t>(std::ceil(until)));
+                }
+                const double beatEnd = transport_.beatAtSamples(segStart + seg);
+                if (beatEnd > beatStart) localSpb = seg / (beatEnd - beatStart);
             }
+            musicalStart = beatStart * localSpb;
         }
-        const double beatEnd = transport_.beatAtSamples(segStart + seg);
-        const double localSpb = transport_.hasTempoMap() && playing && beatEnd > beatStart ? seg / (beatEnd - beatStart) : spb;
-        const double musicalStart = transport_.hasTempoMap() ? beatStart * localSpb : segStart;
         if (playing) {
             if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
             presentationFrames += seg;

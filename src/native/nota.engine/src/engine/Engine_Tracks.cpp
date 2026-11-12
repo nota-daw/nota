@@ -3077,7 +3077,9 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return -1;
         const double spb = transport_.samplesPerBeat();
         const double devSR = transport_.sampleRate();
-        const AudioClip src = nt->clips[clipIndex];
+        // The old graph owns an immutable source throughout the split. Reading it
+        // avoids copying its markers, envelopes and cache ownership a third time.
+        const AudioClip& src = old->clips[clipIndex];
         const double local = atBeat - src.startBeat;
         if (local <= 0.0 || local >= audioDisplayLenBeats(src, spb, devSR)) return -1;
         // The same carves the range ops use: they cut in played time, so warped halves

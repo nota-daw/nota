@@ -110,6 +110,30 @@ internal static class TempoMapTests
                 "tempo: a 6/8 count-in lasts six eighth notes before playback starts");
         }
 
+        using (var clock = new NotaEngine())
+        {
+            foreach (var (rate, bpm) in new[] { (44100, 90.0), (96000, 137.5), (48000, 120.0) })
+            {
+                clock.SetBpm(bpm); clock.Seek(2); clock.Play();
+                clock.RenderOffline(new float[rate * 2], rate, rate);
+                yield return (Math.Abs(clock.PositionBeats - 2 - bpm / 60) < 1e-9,
+                    $"tempo: fixed clock follows BPM and sample-rate changes at {rate} Hz / {bpm} BPM");
+                clock.StopTransport(); clock.RenderOffline(new float[2], 1, rate);
+                yield return (Math.Abs(clock.PositionBeats - 2) < 1e-9,
+                    "tempo: fixed clock retains its stop anchor after conversion-factor changes");
+            }
+            clock.SetTempoPoints(steps); clock.Seek(4); clock.Play(); Render(clock, Sr);
+            yield return (Math.Abs(clock.PositionBeats - 5) < 1e-9,
+                "tempo: fixed clock switches to mapped timing after sample-rate changes");
+            clock.SetTempoPoints(Array.Empty<TempoPoint>());
+            clock.SetBpm(150); clock.Seek(2); Render(clock, Sr);
+            yield return (Math.Abs(clock.PositionBeats - 4.5) < 1e-9 && Math.Abs(clock.Bpm - 150) < 1e-9,
+                "tempo: removing the map restores the updated fixed conversion factor and BPM");
+            clock.SetLoop(true, 2, 4); clock.Seek(3); Render(clock, Sr * 3 / 5);
+            yield return (Math.Abs(clock.PositionBeats - 2.5) < 1e-9,
+                "tempo: fixed loop endpoints use the updated conversion factor");
+        }
+
         using (var midi = new NotaEngine())
         {
             midi.SetTempoPoints(steps);

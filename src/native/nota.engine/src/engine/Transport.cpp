@@ -9,6 +9,18 @@
 
 namespace nota {
 
+double Transport::mappedBpm() const {
+    return map_ ? map_->clockBpm(mappedBeatAtSamples(playheadSamples_)) : uiBpm();
+}
+
+double Transport::mappedSamplesAtBeat(double beat) const {
+    return map_->secondsAt(beat) * sampleRate_;
+}
+
+double Transport::mappedBeatAtSamples(double sample) const {
+    return map_->beatAt(sample / sampleRate_);
+}
+
 void Transport::setLoop(bool enabled, double startBeat, double endBeat) {
     ++presentationEpoch_;
     loopEnabled_ = enabled && endBeat > startBeat;
@@ -37,6 +49,15 @@ TransportInfo Transport::transportInfo(double blockStartSamples) const {
 }
 
 void Transport::publish() {
+    // The ordinary clock needs one conversion factor, without querying mapped
+    // state separately for each published value.
+    if (!map_ && !lastMap_) {
+        uiBpm_.store(bpm_, std::memory_order_relaxed);
+        uiBeats_.store(playheadSamples_ / fixedSpb_, std::memory_order_relaxed);
+        uiPlaying_.store(playing_, std::memory_order_relaxed);
+        uiAnchorBeats_.store(startAnchorSamples_ / fixedSpb_, std::memory_order_relaxed);
+        return;
+    }
     uiBpm_.store(bpm(), std::memory_order_relaxed);
     uiBeats_.store(positionBeats(), std::memory_order_relaxed);
     uiPlaying_.store(playing_, std::memory_order_relaxed);

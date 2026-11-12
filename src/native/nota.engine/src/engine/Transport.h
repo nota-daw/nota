@@ -18,7 +18,11 @@ namespace nota {
 
 class Transport {
   public:
-    void setSampleRate(double sr) { sampleRate_ = sr; ++presentationEpoch_; }
+    void setSampleRate(double sr) {
+        sampleRate_ = sr;
+        fixedSpb_ = sampleRate_ * 60.0 / bpm_;
+        ++presentationEpoch_;
+    }
     double sampleRate() const { return sampleRate_; }
 
     // --- control (applied on the audio thread) ---
@@ -37,10 +41,14 @@ class Transport {
         publish();
     }
     void setBpm(double bpm) {
-        if (bpm > 0 && bpm != bpm_) { bpm_ = bpm; ++presentationEpoch_; }
+        if (bpm > 0 && bpm != bpm_) {
+            bpm_ = bpm;
+            fixedSpb_ = sampleRate_ * 60.0 / bpm_;
+            ++presentationEpoch_;
+        }
         publish();
     }
-    double bpm() const { return map_ ? map_->clockBpm(positionBeats()) : lastMap_ ? uiBpm() : bpm_; }
+    double bpm() const { return map_ || lastMap_ ? mappedBpm() : bpm_; }
     const TempoMap* tempoMap() const { return map_; }
     // Called only inside the graph render scope, before draining commands. No
     // previous map is dereferenced: its graph may already have been retired.
@@ -53,8 +61,8 @@ class Transport {
     }
     void detachTempoMap() { map_ = nullptr; }
     bool hasTempoMap() const { return map_ != nullptr; }
-    double samplesAtBeat(double beat) const { return map_ ? map_->secondsAt(beat) * sampleRate_ : beat * sampleRate_ * 60.0 / bpm_; }
-    double beatAtSamples(double sample) const { return map_ ? map_->beatAt(sample / sampleRate_) : sample * bpm_ / (sampleRate_ * 60.0); }
+    double samplesAtBeat(double beat) const { return map_ ? mappedSamplesAtBeat(beat) : beat * fixedSpb_; }
+    double beatAtSamples(double sample) const { return map_ ? mappedBeatAtSamples(sample) : sample / fixedSpb_; }
     void setTimeSignature(int num, int denom) {
         if (num > 0 && denom > 0) {
             tsNum_ = num;
@@ -73,7 +81,7 @@ class Transport {
     }
 
     // --- queries ---
-    double samplesPerBeat() const { return sampleRate_ * 60.0 / bpm(); }
+    double samplesPerBeat() const { return map_ || lastMap_ ? sampleRate_ * 60.0 / bpm() : fixedSpb_; }
     double positionBeats() const { return !map_ && lastMap_ ? uiPositionBeats() : beatAtSamples(playheadSamples_); }
     double playheadSamples() const { return playheadSamples_; }
     bool isPlaying() const { return playing_; }
@@ -113,9 +121,15 @@ class Transport {
 
   private:
     void publish();
+    // Keep map searches out of these small fixed-clock accessors, so callers can
+    // inline the ordinary arithmetic without pulling in the compiled-map lookup.
+    double mappedBpm() const;
+    double mappedSamplesAtBeat(double beat) const;
+    double mappedBeatAtSamples(double sample) const;
 
     double sampleRate_ = 44100.0;
     double bpm_ = 120.0;
+    double fixedSpb_ = 22050.0; // fixed tempo: recompute only on sample-rate/BPM changes
     const TempoMap* map_ = nullptr; // only dereferenced during a protected render
     const TempoMap* lastMap_ = nullptr; // identity only, never dereferenced
     int tsNum_ = 4, tsDenom_ = 4;
