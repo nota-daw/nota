@@ -2376,13 +2376,13 @@ public sealed partial class ArrangementView : UserControl
         }
         else
         {
-            var meter = HeaderMeter(GroupRowHeight - GroupTrayLayout.ClosingBand(slice.Closings));
+            var meter = HeaderMeter(GroupRowHeight - GroupTrayLayout.ClosingBand(slice.Closings, GroupRowHeight));
             _meters[t.Id] = meter;
             DockPanel.SetDock(meter, Dock.Right);
             body = new DockPanel
             {
                 LastChildFill = true, Children = { meter, row },
-                Margin = new Thickness(x + 2, 0, GroupTrayLayout.TrayInsetR, GroupTrayLayout.ClosingBand(slice.Closings)),
+                Margin = new Thickness(x + 2, 0, GroupTrayLayout.TrayInsetR, GroupTrayLayout.ClosingBand(slice.Closings, GroupRowHeight)),
             };
         }
         var card = new Border
@@ -2597,7 +2597,7 @@ public sealed partial class ArrangementView : UserControl
 
         // The meter down the right edge: two 3px channels, inside the card on every row height
         // (specs/094). New look: above any closing strips of the trays that end on this row.
-        double band = ClassicHeaders ? 0 : GroupTrayLayout.ClosingBand(SliceOf(t).Closings);
+        double band = ClassicHeaders ? 0 : GroupTrayLayout.ClosingBand(SliceOf(t).Closings, rowH);
         MeterBar meter = ClassicHeaders
             ? new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, MinHeight = 0, Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6) }
             : HeaderMeter(rowH - band);
@@ -2705,7 +2705,7 @@ public sealed partial class ArrangementView : UserControl
         double x = slice.ContentLeft;
         if (own && !t.IsGroup)
         {
-            double band = GroupTrayLayout.ClosingBand(slice.Closings);
+            double band = GroupTrayLayout.ClosingBand(slice.Closings, IsSlimRow(t) ? GroupRowHeight : TrackRowHeight(t));
             bar = new Border
             {
                 Width = OwnBarW, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(OwnBarW / 2),

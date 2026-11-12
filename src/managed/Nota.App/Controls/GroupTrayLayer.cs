@@ -49,7 +49,9 @@ internal sealed class GroupTrayLayer : Control
         var chain = _slice.Chain;
         if (w <= 0 || h <= 0 || chain.Length == 0) return;
         int n = chain.Length;
-        double band = GroupTrayLayout.ClosingBand(_slice.Closings);
+        var strips = GroupTrayLayout.ClosingStrips(_slice.Closings, h);
+        double band = 0;
+        foreach (var s in strips) band += s;
         double bodyBottom = Math.Max(0, h - band);
         // Only the right corners round, by the field step, where a tray opens and closes; the
         // left side is square against the tray edge and the column.
@@ -67,7 +69,7 @@ internal sealed class GroupTrayLayer : Control
             if (closes)
             {
                 bottom = bodyBottom;
-                for (int m = 0; m <= fromInside; m++) bottom += GroupTrayLayout.ClosingStrip(m);
+                for (int m = 0; m <= fromInside; m++) bottom += strips[m];
                 bottom = Math.Min(h, bottom);
             }
             var rect = new Rect(x0, 0, Math.Max(0, w - x0), bottom);

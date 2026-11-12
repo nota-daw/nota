@@ -56,15 +56,25 @@ internal static class GroupTrayTests
         yield return (e[0].Closings == 1 && e[1].Closings == 0, "trays: an empty group's tray closes under its header");
 
         // Closing strips must leave the name row on the smallest rows, four levels deep: a Compact
-        // track closing four trays keeps 20 px; a slim folded group (one line of 18 px chips)
-        // closing its own tray and two more keeps 18.
+        // track closing four trays keeps its natural 10 px band and 20 px; a slim group row (one
+        // line of 18 px chips) closing four trays — the innermost folded or empty — keeps 18.
         int most = 0;
         var deep = new List<TrayRow>();
         for (int d = 0; d < 4; d++) deep.Add(new(100 + d, d == 0 ? -1 : 99 + d, true, false, d, 1));
         deep.Add(new(200, 103, false, false, 4, 0));
         foreach (var x in GroupTrayLayout.Compute(deep, false)) most = Math.Max(most, x.Closings);
-        yield return (most == 4 && 30 - GroupTrayLayout.ClosingBand(most) >= 20 && 26 - GroupTrayLayout.ClosingBand(3) >= 18,
-            $"trays: closing strips leave room for the name row (most {most} on one row, band {GroupTrayLayout.ClosingBand(most)})");
+        yield return (most == 4 && GroupTrayLayout.ClosingBand(most, 30) == 10 && 30 - GroupTrayLayout.ClosingBand(most, 30) >= 20,
+            $"trays: a Compact track closing four trays keeps its name row (band {GroupTrayLayout.ClosingBand(most, 30)})");
+
+        var slim = new List<TrayRow>();
+        for (int d = 0; d < 4; d++) slim.Add(new(300 + d, d == 0 ? -1 : 299 + d, true, d == 3, d, 1));
+        int slimClosings = GroupTrayLayout.Compute(slim, false)[3].Closings;
+        var strips = GroupTrayLayout.ClosingStrips(slimClosings, 26);
+        yield return (slimClosings == 4 && 26 - strips.Sum() >= 18 && strips.All(x => x >= 1) && strips[0] >= strips[^1],
+            $"trays: a slim group row closing four trays keeps 18 px for its buttons (strips {string.Join("/", strips)})");
+        var many = GroupTrayLayout.ClosingStrips(12, 26);
+        yield return (many.Length == 12 && 26 - many.Sum() >= 18 && many.All(x => x >= 0),
+            "trays: even a dozen closings never eat into a row's content");
 
         // Classic: 0.59.2's staircase of each row's own spine.
         var c = GroupTrayLayout.Compute(rows, classic: true);

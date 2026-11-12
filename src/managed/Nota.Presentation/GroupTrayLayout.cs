@@ -34,15 +34,40 @@ public static class GroupTrayLayout
     public const double EdgeW = 3, Gap = 3, Step = EdgeW + Gap;
 
     /// <summary>New look: the strip that closes the innermost tray under its last row, taken out
-    /// of that row; each further tray closing on the same row adds a thinner one, so even a
-    /// Compact row closing four trays keeps its 20 px name row.</summary>
+    /// of that row; each further tray closing on the same row adds a thinner one.</summary>
     public const double ClosingH = 4, ClosingNestH = 2;
 
-    /// <summary>The height at the bottom of a row taken by <paramref name="closings"/> closing strips.</summary>
-    public static double ClosingBand(int closings) => closings <= 0 ? 0 : ClosingH + (closings - 1) * ClosingNestH;
+    /// <summary>What a row keeps above its closing strips whatever closes on it: one line of
+    /// 18 px chips on a slim group row, so the strips never run under its buttons.</summary>
+    public const double MinRowContent = 18;
 
-    /// <summary>The height of the <paramref name="k"/>-th closing strip from the inside (0 = innermost).</summary>
-    public static double ClosingStrip(int k) => k == 0 ? ClosingH : ClosingNestH;
+    /// <summary>The heights of the <paramref name="closings"/> closing strips on a row of
+    /// <paramref name="rowH"/>, innermost first. Natural sizes are 4 px, then 2 px each; when they
+    /// would eat into <see cref="MinRowContent"/>, the outer strips thin to 1 px first, then the
+    /// innermost, and only past that do the outermost go to nothing.</summary>
+    public static double[] ClosingStrips(int closings, double rowH)
+    {
+        if (closings <= 0) return [];
+        var strips = new double[closings];
+        for (int k = 0; k < closings; k++) strips[k] = k == 0 ? ClosingH : ClosingNestH;
+        double excess = strips.Sum() - Math.Max(0, rowH - MinRowContent);
+        for (int k = closings - 1; k >= 0 && excess > 0; k--)
+        {
+            double cut = Math.Min(excess, strips[k] - 1);
+            strips[k] -= cut;
+            excess -= cut;
+        }
+        for (int k = closings - 1; k >= 0 && excess > 0; k--)
+        {
+            double cut = Math.Min(excess, strips[k]);
+            strips[k] -= cut;
+            excess -= cut;
+        }
+        return strips;
+    }
+
+    /// <summary>The height at the bottom of a row of <paramref name="rowH"/> taken by its closing strips.</summary>
+    public static double ClosingBand(int closings, double rowH) => ClosingStrips(closings, rowH).Sum();
 
     /// <summary>New look: member cards stop this far from the column's right edge so the tray shows.</summary>
     public const double TrayInsetR = 4;
