@@ -1160,8 +1160,9 @@ public sealed partial class ArrangementView
                 // A group row reads as chrome between its children, not as another lane.
                 ctx.FillRectangle(_o.IsSlimRowAt(i) ? GroupLaneBg : (i & 1) == 0 ? LaneBgA : LaneBgB,
                     new Rect(0, y, w, rh));
-                // A group's lane carries the same 16% tint of its colour as its header.
-                if (_o._tracks[i].IsGroup) ctx.FillRectangle(TrackTint(_o._tracks[i].ColorIndex, 0.16), new Rect(0, y, w, rh));
+                // A group's lane carries the same 16% tint of its colour as its header (new look;
+                // 0.59.2's classic lanes have none — specs/094).
+                if (_o._tracks[i].IsGroup && !_o.ClassicHeaders) ctx.FillRectangle(TrackTint(_o._tracks[i].ColorIndex, 0.16), new Rect(0, y, w, rh));
                 ctx.DrawLine(BeatPen, new Point(0, y + rh), new Point(w, y + rh));
             }
             if (_o._tracks.Count == 0)
