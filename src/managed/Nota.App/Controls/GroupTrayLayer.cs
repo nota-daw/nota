@@ -24,11 +24,16 @@ internal sealed class GroupTrayLayer : Control
 
     private readonly TraySlice _slice;
     private IBrush? _body;
+    private readonly double[] _strips;
 
     /// <param name="body">A member track's card fill; null for a group's own row (the trays show).</param>
-    public GroupTrayLayer(TraySlice slice, IBrush? body)
+    /// <param name="rowH">The row height the card's controls were laid out for; the closing strips
+    /// are sized for it and keep that size while a seam drag resizes the row live, so they always
+    /// match the space the controls leave for them.</param>
+    public GroupTrayLayer(TraySlice slice, IBrush? body, double rowH)
     {
         _slice = slice;
+        _strips = GroupTrayLayout.ClosingStrips(slice.Closings, rowH);
         _body = body;
         IsHitTestVisible = false;
     }
@@ -49,7 +54,7 @@ internal sealed class GroupTrayLayer : Control
         var chain = _slice.Chain;
         if (w <= 0 || h <= 0 || chain.Length == 0) return;
         int n = chain.Length;
-        var strips = GroupTrayLayout.ClosingStrips(_slice.Closings, h);
+        var strips = _strips;
         double band = 0;
         foreach (var s in strips) band += s;
         double bodyBottom = Math.Max(0, h - band);

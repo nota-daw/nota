@@ -115,6 +115,9 @@ public sealed partial class ArrangementView : UserControl
     }
 
     /// <summary>Height of arrangement row <paramref name="i"/>: its clip area plus any open take lanes.</summary>
+    /// <summary>The height a row's header card is laid out for: the slim group bar or the track row.</summary>
+    private double HeaderRowHeight(TrackVM t) => IsSlimRow(t) ? GroupRowHeight : TrackRowHeight(t);
+
     internal double RowHeightAt(int i)
         => ClipAreaHeightAt(i) + (i >= 0 && i < _tracks.Count ? TakesHeight(_tracks[i]) : 0);
 
@@ -2698,14 +2701,16 @@ public sealed partial class ArrangementView : UserControl
 
         if (slice.Chain.Length > 0)
         {
-            var layer = new GroupTrayLayer(slice, t.IsGroup ? null : Brush("Brush.Panel"));
+            // The strips are sized for the row height the controls were laid out for, so a
+            // seam drag (which resizes the card without a rebuild) can't move them apart.
+            var layer = new GroupTrayLayer(slice, t.IsGroup ? null : Brush("Brush.Panel"), HeaderRowHeight(t));
             _trayLayers[t.Id] = layer;
             canvas.Children.Add(layer);
         }
         double x = slice.ContentLeft;
         if (own && !t.IsGroup)
         {
-            double band = GroupTrayLayout.ClosingBand(slice.Closings, IsSlimRow(t) ? GroupRowHeight : TrackRowHeight(t));
+            double band = GroupTrayLayout.ClosingBand(slice.Closings, HeaderRowHeight(t));
             bar = new Border
             {
                 Width = OwnBarW, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(OwnBarW / 2),
