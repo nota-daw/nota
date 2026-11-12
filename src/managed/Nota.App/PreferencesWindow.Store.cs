@@ -75,7 +75,7 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < StoreFilters.Length; i++)
         {
             int idx = i;
-            var count = new TextBlock { FontSize = 8.5, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+            var count = new TextBlock { FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, VerticalAlignment = VerticalAlignment.Center };
             _storeCounts[i] = count;
             var b = new ToggleButton
             {
@@ -183,7 +183,7 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = h.Title, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = h.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = h.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
             }),
@@ -309,7 +309,7 @@ public sealed partial class PreferencesWindow
     private Control StoreDock()
     {
         _dockTitle = new TextBlock { FontSize = 11, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-        _dockDetail = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _dockDetail = new TextBlock { FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _dockBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 0 };
         _dockCancel = StoreButton(Loc.T("common.cancel"), enabled: true, Jobs.Cancel);
         _dockCancel.VerticalAlignment = VerticalAlignment.Center;
@@ -380,11 +380,11 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = p.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = here ? TextPrimary : TextSecondary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                         PlatformIcons(p.Platforms),
                     },
                 },
-                new TextBlock { Text = $"{p.Developer} · {p.Version} · {p.License}", FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = here ? TextTertiary : TextDisabled },
+                new TextBlock { Text = $"{p.Developer} · {p.Version} · {p.License}", FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = here ? TextTertiary : TextDisabled },
                 new TextBlock { Text = p.Description, FontSize = 11, LineHeight = 18, Foreground = here ? TextSecondary : TextTertiary, TextWrapping = TextWrapping.Wrap },
             },
         };
@@ -420,7 +420,7 @@ public sealed partial class PreferencesWindow
         if (inst is null && p.Asset is { Size: > 0 } asset)
             actions.Children.Add(new TextBlock
             {
-                Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 9, FontFamily = NotaFonts.UiFamily,
+                Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 9, FontFamily = NotaFonts.ValuesFamily,
                 Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
             });
         var source = StoreLink(Loc.T("preferences.source"), GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Repo)));

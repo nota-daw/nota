@@ -148,7 +148,7 @@ internal static class MacroPanel
         string pid = RhythmModel.MacroId(m);
 
         var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned, Format = v => Pct((float)v) };
-        var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.UiFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
+        var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.ValuesFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
         knob.ValueChanged += v =>
         {
             e.PluginParamSet(track, di, pi, (float)v);
@@ -297,7 +297,7 @@ internal static class MacroPanel
     public static Control Detail(DeviceCardContext ctx, IMacroSurface s, int m, List<Action> tick)
     {
         var e = ctx.Engine;
-        var val = new TextBlock { FontSize = 7, FontFamily = NotaFonts.UiFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var val = new TextBlock { FontSize = 7, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         tick.Add(() => val.Text = Pct(Value(e, s, m)));
         var head = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, Margin = new Thickness(8, 0) };
         head.Children.Add(Cap($"Macro {m + 1}"));
@@ -315,7 +315,7 @@ internal static class MacroPanel
         var rows = new StackPanel { Spacing = 6 };
         var capRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         capRow.Children.Add(Cap("RECEIVERS"));
-        var mm2 = new TextBlock { Text = "min → max", FontSize = 7, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var mm2 = new TextBlock { Text = "min → max", FontSize = 7, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         Avalonia.Controls.Grid.SetColumn(mm2, 1); capRow.Children.Add(mm2);
         rows.Children.Add(capRow);
         // One receiver per row. When a macro drives several params on each slot, the rows say which.
@@ -395,7 +395,7 @@ internal static class MacroPanel
             Height = 9, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeWestEast), VerticalAlignment = VerticalAlignment.Center,
             Children = { new Border { Height = 3, CornerRadius = NotaRadius.Fine, Background = NotaPalette.BgSunken, VerticalAlignment = VerticalAlignment.Center }, band, now },
         };
-        var vals = new TextBlock { FontSize = 7, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, Width = 46, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var vals = new TextBlock { FontSize = 7, FontFamily = NotaFonts.ValuesFamily, Foreground = TextSecondary, Width = 46, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         string unit = s.TargetUnit(mm);
         void Text() => vals.Text = $"{s.FormatTarget(mm, (float)(min + fLo * span))}–{s.FormatTarget(mm, (float)(min + fHi * span))}"
                                    + (unit.Length > 0 ? "\u2009" + unit : "");

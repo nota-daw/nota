@@ -102,10 +102,10 @@ internal sealed class ConnectPhoneView : Border
         _qr = new QrView { Width = 150, Height = 150, Text = _remote.QrText };
         var info = new StackPanel { Spacing = 10 };
         info.Children.Add(Field(Loc.T("remote.connect.address"), AddressRows()));
-        _code = new TextBlock { FontSize = 23, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
+        _code = new TextBlock { FontSize = 23, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
         _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.VizInk, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
         var ringBack = new Ellipse { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.TrackOff };
-        _left = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _left = new TextBlock { FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
         info.Children.Add(Field(Loc.T("remote.connect.code"), codeRow));
         bool usb = _remote.Links is { Count: > 0 } links && links[0].Usb;
@@ -145,7 +145,7 @@ internal sealed class ConnectPhoneView : Border
             : Loc.F("remote.connect.ms", d.RttMs, screen);
         var names = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(new TextBlock { Text = d.Name, FontSize = 11, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis });
-        names.Children.Add(new TextBlock { Text = sub, FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
+        names.Children.Add(new TextBlock { Text = sub, FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
 
         var trackBar = new Border { Width = 4, Height = 18, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center, Background = d.TrackId > 0 ? TrackColorBrush(d.TrackId) : NotaPalette.BorderStrong };
         var trackName = new TextBlock { Text = d.TrackId > 0 ? _engine.GetTrackName(d.TrackId) : "—", FontSize = 10, Foreground = NotaPalette.TextSecondary, Width = 70, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -189,7 +189,7 @@ internal sealed class ConnectPhoneView : Border
         var links = _remote.Links;
         var host = _remote.Url!.Replace("http://", "");
         var first = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        first.Children.Add(new TextBlock { Text = host, FontSize = 12, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        first.Children.Add(new TextBlock { Text = host, FontSize = 12, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
         if (links.Count > 0 && links[0].Usb)
             first.Children.Add(new Border
             {
@@ -201,7 +201,7 @@ internal sealed class ConnectPhoneView : Border
         for (int i = 1; i < links.Count; i++)
             rows.Children.Add(new TextBlock
             {
-                Text = $"{links[i].Name}  {links[i].Address}:{_settings.Current.RemotePort}", FontSize = 9, FontFamily = NotaFonts.UiFamily,
+                Text = $"{links[i].Name}  {links[i].Address}:{_settings.Current.RemotePort}", FontSize = 9, FontFamily = NotaFonts.ValuesFamily,
                 Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
             });
         return rows;

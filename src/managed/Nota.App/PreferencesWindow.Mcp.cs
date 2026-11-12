@@ -27,12 +27,12 @@ public sealed partial class PreferencesWindow
         var portBox = new TextBox
         {
             Text = (settings?.Current.McpPort ?? 3900).ToString(), Width = 96, Classes = { "field" },
-            FontSize = 11, FontFamily = NotaFonts.UiFamily, HorizontalAlignment = HorizontalAlignment.Left,
+            FontSize = 11, FontFamily = NotaFonts.ValuesFamily, HorizontalAlignment = HorizontalAlignment.Left,
         };
         var statusDot = Dot(BorderStrong);
         var status = new TextBlock
         {
-            FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary,
+            FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextSecondary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var copyBtn = Btn(Loc.T("preferences.copy_config"));

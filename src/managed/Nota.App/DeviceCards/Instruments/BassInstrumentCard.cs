@@ -107,7 +107,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
+            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.ValuesFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
@@ -131,7 +131,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
         static TextBlock Section(string t) => new()
         {
@@ -152,7 +152,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.ValuesFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };

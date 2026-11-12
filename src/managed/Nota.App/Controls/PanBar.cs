@@ -25,7 +25,7 @@ public sealed class PanBar : Control, IInlineReadout
     private static readonly IBrush ArcLive = NotaPalette.Accent;       // under the pointer or in the hand
     private static readonly IBrush Pointer = NotaPalette.TextPrimary;
     private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
 
     public const double KnobD = 14;
     private const double StartDeg = 135, SweepDeg = 270, Stroke = 2;

@@ -181,7 +181,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
-            Text = t, FontSize = fs, Foreground = c ?? TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
+            Text = t, FontSize = fs, Foreground = c ?? TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
 
         // ---- shared builders ------------------------------------------------------------------
@@ -1187,7 +1187,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Children =
                 {
                     Caps("Source"),
-                    new TextBlock { Text = where, FontSize = 8, Foreground = TextPrimary, FontFamily = NotaFonts.UiFamily, TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = where, FontSize = 8, Foreground = TextPrimary, FontFamily = NotaFonts.ValuesFamily, TextWrapping = TextWrapping.Wrap },
                     new TextBlock { Text = Loc.T("device.mosaic.samples_are_not_copied_into"), FontSize = 7.5, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap },
                 },
             };

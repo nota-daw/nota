@@ -95,7 +95,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
 
         // ---- shared builders ----------------------------------------------------------

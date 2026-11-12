@@ -23,7 +23,46 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
-- **Bypass one Session clip's follow actions** (#499, specs/094). The Follow action section of
+- **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
+  lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
+  Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
+  The Files tab adds folders the same ways. With more than one folder each is a top-level
+  node with its own menu; every folder is indexed (tempo, key, loop or one-shot, similar
+  sounds) and searched. One folder is the default: downloaded sample packs go there. A
+  folder on an unplugged drive stays listed as unavailable and comes back with the drive.
+  A folder already in the list, or inside or around one, is refused with a note.
+- **Browse the whole computer from the Files tab** (#580, specs/092). A **Tree | Browse**
+  switch: Browse shows one folder at a time, starting at the default sample folder, with
+  **Back / Forward / Up** (⌘[ ⌘] ⌘↑; Ctrl or Alt elsewhere) up to the list of drives, **Home**
+  (back to the default sample folder), a path bar whose segments jump there, **Copy path**,
+  and a path you type or paste (⌘L), a file path selecting that file. Every row has an icon
+  for what it is (folder, drive, audio, MIDI, other file); files show their extension and size
+  in their own columns, and files Nota can't add are listed in a faded ink and can't be
+  dragged or opened. Audio files preview and drag as in the tree; a folder can be added to
+  the browser from its menu. Every file and folder row in the Files tab has **Copy path**.
+- **Locate a clip's file** (#581, specs/092). An audio clip's menu in the arrangement and in
+  Session has **Locate ▸ In browser / In Finder** (In Explorer, In file manager). In browser
+  opens the Files tab at the file (the tree if it lies in a sample folder, else the browse
+  view); with a clip selected, its file is marked in the Files list whenever its folder is
+  open. Projects now remember the file each audio clip came from, so Locate still works after
+  reopening; a recording or a project from before shows the project's own copy instead.
+- **The Projects tab shows your newest work first** (#582, specs/092): projects sorted by the
+  last save (or by name, remembered), each with its date, tempo, key, length and number of
+  tracks, read in the background and cached. The open project is marked.
+- **Classic look** (#572, specs/091). **Settings → Appearance → Look** switches between the
+  new look and **Classic**. Classic brings back 0.59's colours, its tighter corners and
+  values in Geist Mono (tempo, position, dB, Hz, counters). It works with any colour theme
+  and takes effect at once, without a restart. The new look stays the default, and the
+  layouts are the same in both looks.
+  - **Clips: Solid | Tinted** (Settings → Appearance). Solid draws Arrangement clips as in
+    0.59: blocks of the track colour with a darker title band. With no pick, Classic draws
+    solid clips and New tinted ones. Your pick stays when you change the look.
+  - A user theme keeps its own colours under Classic, and its own typeface and corners when
+    it sets them. A theme file (format 3) can also set a typeface for values:
+    `"font": { "values": "…" }`.
+  - AI control (MCP): `set_look` switches the look. `list_themes` reports it, and
+    `get_theme` / `preview_theme` take an optional `look`.
+- **Bypass one Session clip's follow actions** (#499, specs/095). The Follow action section of
   the clip inspector has a **Bypass** key. While it is on, the clip keeps looping and neither
   follow action fires, but its A and B actions, their chances, the Jump target and the time
   stay as you set them, dimmed, and the section reads **Bypassed**. Other clips and the global
@@ -39,6 +78,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   replacing or recording a clip on the computer updates its cell on the phone within a
   second; a take being recorded grows as it records. Previews are sent only to a phone on
   Scenes and only for the clips that changed.
+- **Phrase lines in the arrangement** (#517, specs/092). **Settings → Appearance → Phrase
+  lines** draws a heavier grid line every 4, 8, 16 or 32 bars, counted from bar 1, across
+  the lanes, the return and master rows and the ruler, so you can see where an 8- or 16-bar
+  phrase starts and ends. The line is a neutral grey a step above the bar line, works in
+  every colour theme (your own too) and stays behind the clips. It counts bars, so it
+  follows the time signature. Off by default, and remembered for every project.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
@@ -172,6 +217,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Groups in the Arrangement read as trays** (#584, specs/094). In the new look a group's
+  header row and its tracks now sit on one tray of the group's colour, with its edge down the
+  left, and the tray closes under the group's last track, so a track after the group is
+  clearly outside it. A track inside a group shows only its own colour bar, and nested groups
+  are trays inside trays, a few pixels further in each, instead of a stripe per level. A
+  folded group shows how many tracks it holds ("Instruments · 4"). The controls stay in the
+  same columns however deep a track sits. In the classic look the headers draw groups as
+  0.59 did: each row's own colour stripe, stepped in per level, and no group tints.
+- **The menu under a Menu key, and the menu bar hidden** (Windows / Linux, #518, specs/093).
+  The row of File, Edit, View, Transport and Help no longer sits between the title bar and
+  the transport bar, so the work area gains its height. The whole menu — the same items,
+  shortcuts and check marks, Open recent included — is under the new **☰ Menu** key at the
+  start of the transport bar; **Alt** (pressed and released on its own) or **F10** opens it
+  from the keyboard. **View ▸ Show menu bar**, or **Settings → Appearance → Menu bar**, brings
+  the row back (the key then steps aside). On Windows the title bar now reads
+  "Nota — *project*", as the taskbar does. macOS is unchanged.
 - **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
   follows the style guide the desktop wears: the same corner scale, one typeface with
   fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin
@@ -535,6 +596,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Track header meters stay inside the header** (#584): on a Compact or a low Standard row a
+  track's level meter ran into the bottom edge of its header, and a folded group's meter ran
+  under its name and buttons. Every header meter now fits its row, and a group's meter stands
+  at the right in the same column as the tracks'.
+- **The Files icon in the browser rail is the same size as its neighbours** (#579): the
+  folder is drawn on the same grid as the other rail icons.
 - **Monitoring a track through an audio track no longer crackles** (#563): an audio track whose
   input is another track (an instrument, say) played it with clicks while monitoring, though a
   recording of the same input was clean. It happened whenever the audio device asked for blocks

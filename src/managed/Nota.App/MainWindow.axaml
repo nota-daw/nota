@@ -88,6 +88,7 @@
             <NativeMenuItem Header="{app:T 'main.toggle_overview'}" app:Commands.Id="view.toggleOverview"/>
             <NativeMenuItem Header="{app:T 'main.toggle_sections'}" app:Commands.Id="view.toggleSections"/>
             <NativeMenuItem Header="{app:T 'main.toggle_full_screen'}" app:Commands.Id="view.fullscreen"/>
+            <NativeMenuItem Header="{app:T 'main.show_menu_bar'}" app:Commands.Id="view.menuBar" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
@@ -145,9 +146,11 @@
     </Border>
 
     <!-- In-window menu bar for Windows/Linux (empty on macOS: menus go to the system bar):
-         a menubar-style row — the ground, with a seam under it. -->
-    <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.BgApp}">
-      <NativeMenuBar/>
+         a menubar-style row — the ground, with a seam under it. Hidden by default there: the
+         Menu key at the start of the transport bar gives the same menu, and View ▸ Show menu
+         bar / Settings → Appearance bring the row back (#518, MainWindow.MenuButton.cs). -->
+    <Border x:Name="MenuBarRow" DockPanel.Dock="Top" Background="{DynamicResource Brush.BgApp}">
+      <NativeMenuBar x:Name="MenuBarHost"/>
     </Border>
 
     <!-- Transport (44) under the header, above the work area — a flat docked row on the
@@ -162,8 +165,16 @@
       <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
         <!-- The view group: three 28px icon cells in a 2px well (corner 9). The project's name
-             is the window title, centred in the header above. -->
+             is the window title, centred in the header above. On Windows / Linux, with the menu
+             row hidden, the Menu key leads it: one cell of the same kind holding the whole
+             application menu (#518). -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="2,0,0,0" VerticalAlignment="Center">
+          <Border x:Name="MenuKeyWell" Classes="segmented view" VerticalAlignment="Center" IsVisible="False">
+            <ToggleButton x:Name="MenuBtn" Classes="seg view" Click="OnMenuKeyClick"
+                          ToolTip.Tip="{app:T 'main.menu'}" AutomationProperties.Name="{app:T 'main.menu'}">
+              <app:Glyph Kind="Menu" Size="16"/>
+            </ToggleButton>
+          </Border>
           <Border Classes="segmented view" VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <!-- The views as icon keys (spec 012): the tooltip and the accessible name carry

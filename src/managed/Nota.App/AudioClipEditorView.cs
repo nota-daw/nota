@@ -697,7 +697,7 @@ public sealed class AudioClipEditorView : UserControl
         private static readonly IPen SelLine = new Pen(NotaPalette.AccentDim, 1);
         private static readonly IPen GridBeatPen = new Pen(NotaPalette.GridSubBeat, 1);
         private static readonly IPen GridBarPen = new Pen(NotaPalette.BorderDefault, 1);
-        private static readonly Typeface GridFace = NotaFonts.Sans;
+        private static Typeface GridFace => NotaFonts.Measure;
         // BPM chip in the marker strip (drag to scrub the segment tempo); the hot one and the
         // selected marker's position chip take Brass Wash with a brass edge.
         private static readonly IBrush ChipBg = NotaPalette.Panel;
@@ -1662,14 +1662,14 @@ public sealed class AudioClipEditorView : UserControl
             return (f0 * TotalBeats, f1 * TotalBeats);
         }
         private double _monoCharW;
-        private int _monoCharWStep;   // the Text size step _monoCharW was measured at
+        private (int Step, int Face) _monoCharWKey;   // the Text size step and face _monoCharW was measured at
         private double MonoCharW
         {
             get
             {
-                if (_monoCharW <= 0 || _monoCharWStep != NotaTextSize.Step)   // re-measure when Text size changes
+                if (_monoCharW <= 0 || _monoCharWKey != (NotaTextSize.Step, NotaFonts.FaceStamp))   // re-measure when Text size or the face changes
                 {
-                    _monoCharWStep = NotaTextSize.Step;
+                    _monoCharWKey = (NotaTextSize.Step, NotaFonts.FaceStamp);
                     _monoCharW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
                 }
                 return _monoCharW;

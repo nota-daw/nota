@@ -684,7 +684,7 @@ public sealed class ArticulationMapManager : NotaWindow
         string shown = Show(value);
         var box = new TextBox
         {
-            Text = shown, FontSize = 11, FontFamily = NotaFonts.UiFamily, Height = NotaSize.Shell, MinHeight = 0, Width = 52,
+            Text = shown, FontSize = 11, FontFamily = NotaFonts.ValuesFamily, Height = NotaSize.Shell, MinHeight = 0, Width = 52,
             VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Right,
         };
         ToolTip.SetTip(box, tip);

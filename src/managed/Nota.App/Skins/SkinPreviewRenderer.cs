@@ -26,6 +26,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Localization;
@@ -65,7 +66,8 @@ internal static class SkinPreviewRenderer
     /// so Loaded handlers, posted work and virtualising lists (realised from the layout manager's
     /// viewport events) settle. Then one job wears the skin, re-skins and lays out every tree,
     /// draws them and puts the live theme back.</summary>
-    public static async Task<(List<Image> Images, List<string> Unknown)> RenderAsync(NotaColourTheme theme, bool themeAccent, IReadOnlyList<string>? names)
+    public static async Task<(List<Image> Images, List<string> Unknown)> RenderAsync(NotaColourTheme theme, bool themeAccent, IReadOnlyList<string>? names,
+        Look? look = null)
     {
         var wanted = names is { Count: > 0 } ? names : Names;
         var unknown = wanted.Where(n => Surfaces.All(s => s.Name != n)).Distinct().ToList();
@@ -83,21 +85,29 @@ internal static class SkinPreviewRenderer
             {
                 foreach (var s in surfaces.Where(s => !s.Live))
                 {
-                    try { if (Host(s, scene!) is { } h) hosts.Add(h); }
+                    try
+                    {
+                        if (Host(s, scene!) is not { } h) continue;
+                        // The clips as the look being previewed draws them (spec 091).
+                        var clips = ClipsIn(look);
+                        foreach (var av in h.Item3.GetSelfAndVisualDescendants().OfType<ArrangementView>()) av.ClipStyle = clips;
+                        if (h.Item3 is ArrangementView own) own.ClipStyle = clips;   // before it is in a tree
+                        hosts.Add(h);
+                    }
                     catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException) { }
                 }
             });
             for (int i = 0; i < 4; i++) await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
             var live = new List<Visual>();
-            NotaThemeService.RenderScoped(theme, themeAccent, () => NotaTextSize.Scoped(0, () =>
+            NotaThemeService.RenderScoped(theme, themeAccent, look, () => NotaTextSize.Scoped(0, () =>
             {
                 foreach (var s in surfaces)
                 {
                     byte[]? png = null;
                     try
                     {
-                        if (s.Live) png = RenderLive(s, live);
+                        if (s.Live) png = RenderLive(s, live, ClipsIn(look));
                         else if (hosts.FirstOrDefault(h => h.Surface == s) is { Host: not null } h) png = Snap(h.Host, h.Content);
                     }
                     catch (Exception e) when (e is InvalidOperationException or ArgumentException or NullReferenceException)
@@ -119,7 +129,11 @@ internal static class SkinPreviewRenderer
 
     // ── the live window's own parts ─────────────────────────────────────────────────────
 
-    private static byte[]? RenderLive(Surface s, List<Visual> touched)
+    // The clip style the previewed look draws (spec 091): the user's pick, or that look's default.
+    private static ClipStyle ClipsIn(Look? look) =>
+        Looks.ClipStyleOf(App.Services.GetRequiredService<ISettingsService>().Current, look ?? NotaThemeService.Look);
+
+    private static byte[]? RenderLive(Surface s, List<Visual> touched, ClipStyle clips)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime { MainWindow: MainWindow main })
             return null;
@@ -132,6 +146,15 @@ internal static class SkinPreviewRenderer
         };
         if (target is null || target.Bounds.Width < 1 || target.Bounds.Height < 1) return null;
         touched.Add(target);
+        // The open arrangement wears the previewed look's clip style for the picture only.
+        var arrangements = target.GetSelfAndVisualDescendants().OfType<ArrangementView>().Select(a => (View: a, Was: a.ClipStyle)).ToList();
+        foreach (var (a, _) in arrangements) a.ClipStyle = clips;
+        try { return SnapLive(target); }
+        finally { foreach (var (a, was) in arrangements) a.ClipStyle = was; }
+    }
+
+    private static byte[]? SnapLive(Control target)
+    {
         NotaSkin.Reapply(target);
         NotaTextSize.Reapply(target);   // built at the user's text size; the preview draws at the default
         // Layout with the skin's typeface, at the size it has on screen.

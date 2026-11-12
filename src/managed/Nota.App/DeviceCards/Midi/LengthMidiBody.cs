@@ -113,7 +113,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.ValuesFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------

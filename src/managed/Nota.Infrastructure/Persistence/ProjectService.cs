@@ -42,7 +42,7 @@ public sealed class ProjectService
     /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
     /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
     /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
-    /// v33 (#499, specs/094) adds FollowBypass on Session slots.
+    /// v33 (#499, specs/095) adds FollowBypass on Session slots.
     public const int CurrentFormatVersion = 33;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
@@ -261,6 +261,7 @@ public sealed class ProjectService
                     if (rel == null) continue;
                     var dto = AudioClipState.Capture(engine, ti.Id, c, ac);
                     dto.Sample = rel;
+                    dto.Source = SourceOf(engine, ac.SampleId);
                     int take = engine.ClipTakeId(ti.Id, c);
                     if (take != 0) dto.TakeId = take;
                     int joined = engine.ClipJoinedEdges(ti.Id, c);
@@ -274,7 +275,7 @@ public sealed class ProjectService
                     if (rel == null) continue;
                     (t.Takes ??= new List<AudioTakeDto>()).Add(new AudioTakeDto
                     {
-                        Id = tk.Id, Number = tk.Number, Group = tk.Group, Sample = rel,
+                        Id = tk.Id, Number = tk.Number, Group = tk.Group, Sample = rel, Source = SourceOf(engine, tk.SampleId),
                         OriginBeat = tk.OriginBeat, SourceOffsetFrames = tk.SourceOffsetFrames, LengthFrames = tk.LengthFrames,
                     });
                 }
@@ -308,6 +309,7 @@ public sealed class ProjectService
                         ? AudioClipState.Capture(engine, ti.Id, SessionClip.Index(s), sac)
                         : new AudioClipDto { SourceOffsetFrames = sa.SourceOffsetFrames, LengthFrames = sa.LengthFrames, Gain = sa.Gain };
                     audio.Sample = rel;
+                    audio.Source = SourceOf(engine, sa.SampleId);
                     audio.Name = null;   // the slot carries its own name
                     t.SessionSlots.Add(WithClipProps(engine, ti.Id, new SessionSlotDto
                     {
@@ -846,6 +848,7 @@ public sealed class ProjectService
                         if (engine.TryGetTakeInfo(id, k, out var lti) && lti.Id == nid)
                         {
                             BundleContent.SeedSample(engine, lti.SampleId, tk.Sample);
+                            if (tk.Source is { Length: > 0 } tsrc) engine.SetSampleSource(lti.SampleId, tsrc);
                             break;
                         }
                 }
@@ -858,7 +861,11 @@ public sealed class ProjectService
                 if (ac.TakeId is int oldTake && takeIds.TryGetValue(oldTake, out int newTake))
                     engine.SetClipTakeId(id, ci, newTake);
                 if (ac.JoinedEdges is int je && je != 0) joinedEdges.Add((ci, je));
-                if (engine.TryGetAudioClipInfo(id, ci, out var lci)) BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
+                if (engine.TryGetAudioClipInfo(id, ci, out var lci))
+                {
+                    BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
+                    if (ac.Source is { Length: > 0 } src) engine.SetSampleSource(lci.SampleId, src);
+                }
             }
             // After every clip is in: a join is kept only where both of its clips are there.
             if (joinedEdges.Count > 0)
@@ -887,7 +894,10 @@ public sealed class ProjectService
                     else
                     {
                         if (engine.TryGetSessionAudioSlot(id, sl.Scene, out var lsa))
+                        {
                             BundleContent.SeedSample(engine, lsa.SampleId, sa.Sample);
+                            if (sa.Source is { Length: > 0 } ssrc) engine.SetSampleSource(lsa.SampleId, ssrc);
+                        }
                         AudioClipState.ApplyShape(engine, id, SessionClip.Index(sl.Scene), sa);
                         engine.SetSessionSlotLength(id, sl.Scene, sl.LengthBeats);   // clip edits resync it; the saved loop wins
                     }
@@ -1186,6 +1196,10 @@ public sealed class ProjectService
     // Records `sampleId` under a bundle-relative path named by its content hash
     // (identical audio shares one file) and returns that path, or null if the sample
     // is missing from the live graph.
+    // The file a clip's audio came from (spec 092, #581), or null when unknown.
+    private static string? SourceOf(IAudioEngine engine, long sampleId)
+        => sampleId > 0 && engine.SampleSource(sampleId) is { Length: > 0 } p ? p : null;
+
     private static string? RegisterSample(ProjectDocument doc, IAudioEngine engine, long sampleId, List<string> warnings)
     {
         if (sampleId <= 0) return null;

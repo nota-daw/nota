@@ -88,7 +88,7 @@ internal sealed class OperatorAlgoMini : Control
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush InkSubtle = NotaPalette.Wash(NotaPalette.VizInk, 0x30);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
 
     private readonly int _algo;
     private bool _active;
@@ -151,7 +151,7 @@ internal sealed class OperatorRoutingViz : Control
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
     private static readonly IBrush TextPrimary = NotaPalette.TextPrimary;
     private static readonly Typeface Semi = NotaFonts.SansSemiBold;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
 
     private int _algo;
     private double[] _x = new double[4], _y = new double[4];

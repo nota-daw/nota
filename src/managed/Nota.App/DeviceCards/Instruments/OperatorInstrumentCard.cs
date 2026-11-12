@@ -128,7 +128,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8)
         {
             var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c ?? TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-            tb.FontFamily = NotaFonts.UiFamily;
+            tb.FontFamily = NotaFonts.ValuesFamily;
             return tb;
         }
 
@@ -142,7 +142,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.ValuesFamily,
                 Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
             };
             var knob = new Nota.App.Knob(G(id), 1.0)

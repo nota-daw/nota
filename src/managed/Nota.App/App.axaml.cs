@@ -88,6 +88,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<RemoteService>();
         // Presentation.
         services.AddSingleton<TransportViewModel>();
+        services.AddSingleton<Nota.Application.Browser.IProjectSummaries, ProjectSummaryReader>();   // spec 092
         services.AddSingleton<BrowserViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         Services = services.BuildServiceProvider();
@@ -118,7 +119,8 @@ public partial class App : Avalonia.Application
         var startSettings = Services.GetRequiredService<ISettingsService>().Current;
         NotaThemeService.StoredChoice = () => Appearance.Resolve(
             Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes);
-        NotaThemeService.Set(Appearance.Resolve(startSettings, NotaThemeService.KnownThemes));
+        // The look (spec 091) too: a classic first frame, not a new one that switches.
+        NotaThemeService.Start(Appearance.Resolve(startSettings, NotaThemeService.KnownThemes), Looks.Resolve(startSettings));
         NotaThemeService.SetAccent(Accent.Resolve(startSettings));
         // Interface scale (spec 027), likewise before the first window: windows and every
         // popup they open take it from here.

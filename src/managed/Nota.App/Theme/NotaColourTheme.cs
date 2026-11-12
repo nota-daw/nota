@@ -69,6 +69,7 @@ internal static class NotaThemes
     };
 
     private static IReadOnlyList<NotaColourTheme>? _builtIn;
+    private static Dictionary<string, NotaColourTheme>? _classic;
     private static readonly List<string> _loadErrors = new();
     private static IReadOnlyList<NotaColourTheme> _user = Array.Empty<NotaColourTheme>();
     private static IReadOnlyList<NotaColourTheme>? _all;
@@ -77,7 +78,7 @@ internal static class NotaThemes
     private static HashSet<string>? _systemFonts;
 
     /// <summary>Why a built-in theme file was left out, if any was. Logged at startup.</summary>
-    public static IReadOnlyList<string> LoadErrors { get { _ = BuiltIn; return _loadErrors; } }
+    public static IReadOnlyList<string> LoadErrors { get { _ = BuiltIn; _ = Classic(""); return _loadErrors; } }
 
     /// <summary>Every built-in theme that loaded and validated, in <see cref="BuiltInOrder"/>.</summary>
     public static IReadOnlyList<NotaColourTheme> BuiltIn => _builtIn ??= LoadBuiltIn();
@@ -100,6 +101,28 @@ internal static class NotaThemes
     public static NotaColourTheme? Find(string? id) => id is null ? null : All.FirstOrDefault(t => t.Id == id);
 
     public static bool IsBuiltIn(string id) => BuiltIn.Any(t => t.Id == id);
+
+    /// <summary>A built-in theme's classic palette (spec 091): 0.59's colours, same id, name and
+    /// kind. Never listed — the Look switch puts it on in place of the built-in. Null for a user
+    /// theme or an id without one.</summary>
+    public static NotaColourTheme? Classic(string id) =>
+        (_classic ??= LoadClassic()).TryGetValue(id, out var t) ? t : null;
+
+    private static Dictionary<string, NotaColourTheme> LoadClassic()
+    {
+        var catalogue = new HashSet<string>(Catalogue);
+        var map = new Dictionary<string, NotaColourTheme>();
+        foreach (var id in BuiltInOrder)
+        {
+            var json = ReadResource($"Classic.{id}");
+            if (json is null) { _loadErrors.Add($"{id}: no classic palette"); continue; }
+            var theme = Parse(json, catalogue, out var error);
+            if (theme is null) { _loadErrors.Add($"{id}: {error}"); continue; }
+            if (theme.Id != id) { _loadErrors.Add($"{id}: file declares id '{theme.Id}'"); continue; }
+            map[id] = theme with { Warnings = Array.Empty<ThemeWarning>() };
+        }
+        return map;
+    }
 
     public static IEnumerable<NotaColourTheme> OfKind(NotaThemeKind kind) => All.Where(t => t.Kind == kind);
 
@@ -152,7 +175,7 @@ internal static class NotaThemes
     /// <summary>The theme as a file (format 1 or 2), tokens in catalogue order.</summary>
     public static string ToFile(NotaColourTheme theme) =>
         ThemeFile.Write(new ParsedTheme(theme.Id, theme.Name, theme.IsDark,
-            theme.Colors.ToDictionary(kv => kv.Key, kv => kv.Value.ToUInt32()), theme.Geometry, theme.Geometry.IsDefault ? 1 : 2),
+            theme.Colors.ToDictionary(kv => kv.Key, kv => kv.Value.ToUInt32()), theme.Geometry, ThemeFile.FormatFor(theme.Geometry)),
             CatalogueList);
 
     /// <summary>Re-read the user themes folder. Never throws; a bad file goes to

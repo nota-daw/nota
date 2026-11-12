@@ -1,6 +1,6 @@
 # Feature Specification: Bypass one Session clip's follow actions
 
-**Feature Branch**: `094-follow-bypass`
+**Feature Branch**: `095-follow-bypass`
 
 **Created**: 2026-11-11
 

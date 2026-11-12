@@ -1,6 +1,6 @@
 # Implementation Plan: Bypass one Session clip's follow actions
 
-**Branch**: `094-follow-bypass` | **Date**: 2026-11-11 | **Spec**: [spec.md](spec.md)
+**Branch**: `095-follow-bypass` | **Date**: 2026-11-11 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 

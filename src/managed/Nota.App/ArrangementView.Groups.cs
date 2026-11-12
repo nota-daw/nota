@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Presentation;
 
 namespace Nota.App;
 
@@ -140,6 +141,26 @@ public sealed partial class ArrangementView
     /// <summary>True if the group subtree is collapsed (children hidden). Used by the lane
     /// renderer to pick the stacked-clip vs. span-strip preview.</summary>
     internal bool IsGroupCollapsed(int groupId) => _fold.IsFolded(groupId);
+
+    // Each visible row's share of the group drawing (specs/094), worked out once per header
+    // rebuild from the hierarchy order ApplyHierarchy left in _tracks.
+    private readonly Dictionary<int, TraySlice> _traySlices = new();
+    private static readonly TraySlice NoTray = new(0, Array.Empty<TrayRef>(), false, 0, 0, 0, null);
+
+    private void ComputeTraySlices()
+    {
+        _traySlices.Clear();
+        var rows = new TrayRow[_tracks.Count];
+        for (int i = 0; i < _tracks.Count; i++)
+        {
+            var t = _tracks[i];
+            rows[i] = new TrayRow(t.Id, t.GroupId, t.IsGroup, t.IsGroup && _fold.IsFolded(t.Id), t.ColorIndex, t.IsGroup ? t.GroupSlotCount : 0);
+        }
+        var slices = GroupTrayLayout.Compute(rows, ClassicHeaders);
+        for (int i = 0; i < rows.Length; i++) _traySlices[rows[i].Id] = slices[i];
+    }
+
+    private TraySlice SliceOf(TrackVM t) => _traySlices.TryGetValue(t.Id, out var s) ? s : NoTray;
 
     private void ToggleCollapse(int groupId) => _fold.Toggle(groupId);   // Changed → Refresh
 
