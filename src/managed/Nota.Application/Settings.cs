@@ -11,6 +11,9 @@ namespace Nota.Application;
 
 public enum ToolbarSide { Left, Right }
 
+/// <summary>How the browser's Projects tab orders projects (spec 092, #582).</summary>
+public enum ProjectsSortOrder { Date, Name }
+
 /// <summary>The appearance before colour themes (spec 011). Still written, in step with
 /// the chosen theme's kind, so an older Nota opening this settings file gets a sensible
 /// variant; read only to migrate (see <see cref="Appearance"/>).</summary>
@@ -49,8 +52,21 @@ public sealed class Settings
     /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
     /// folding it gives the clip grid its width back on small windows.</summary>
     public bool SessionInspectorOpen { get; set; } = true;
-    /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.</summary>
+    /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.
+    /// Since spec 092 a mirror of the default <see cref="SampleFolders"/> entry, rewritten on
+    /// every save: older versions and Nota Mosaic's <c>samples:</c> refs read it.</summary>
     public string SamplesFolder { get; set; } = "";
+    /// <summary>The sample folders the browser's Files tab shows (spec 092, #346 / #268), in
+    /// order; exactly one is the default (packs install there). Null in settings written by
+    /// older versions — migrated from <see cref="SamplesFolder"/> on load.</summary>
+    public List<SampleFolderEntry>? SampleFolders { get; set; }
+    /// <summary>The Files tab shows the file-system browse view instead of the folder tree
+    /// (spec 092, #580).</summary>
+    public bool FilesBrowseMode { get; set; }
+    /// <summary>The folder the Files tab's browse view showed last ("" = the default folder).</summary>
+    public string FilesBrowseFolder { get; set; } = "";
+    /// <summary>The Projects tab's order: newest first (the default) or by name (#582).</summary>
+    public ProjectsSortOrder ProjectsSort { get; set; } = ProjectsSortOrder.Date;
     /// <summary>Browser projects folder ("" = default ~/Documents/Nota Projects). M7-4.</summary>
     public string ProjectsFolder { get; set; } = "";
     /// <summary>Last app version whose "What's New" the user has already seen ("" = never).
@@ -242,6 +258,28 @@ public sealed class Settings
     public bool PianoRollLabelAllNotes { get; set; } = false;
 }
 
+/// <summary>One sample folder in <see cref="Settings.SampleFolders"/>. <see cref="Path"/> is
+/// absolute and normalised; <see cref="Name"/> is only the label Nota shows (null = the
+/// folder's name) — renaming never touches the disk.</summary>
+public sealed class SampleFolderEntry
+{
+    public string Path { get; set; } = "";
+    public string? Name { get; set; }
+    public bool IsDefault { get; set; }
+}
+
+/// <summary>A sample folder as the UI sees it: list index, absolute path, label, default
+/// flag, and whether the folder could be found at the last look.</summary>
+public sealed record ResolvedSampleFolder(int Index, string Path, string Label, bool IsDefault, bool Available);
+
+public enum SampleFolderOutcome { Added, AlreadyPresent, Inside, Contains, NotADirectory }
+
+/// <summary>What adding a folder did; <see cref="Other"/> is the index of the entry it clashed with (−1 otherwise).</summary>
+public readonly record struct SampleFolderResult(SampleFolderOutcome Outcome, int Other = -1)
+{
+    public bool Ok => Outcome == SampleFolderOutcome.Added;
+}
+
 public interface ISettingsService
 {
     Settings Current { get; }
@@ -249,8 +287,26 @@ public interface ISettingsService
     /// <summary>Fired after Save() so views can re-apply settings live.</summary>
     event Action? Changed;
 
-    /// <summary>The sample library folder to browse (resolved default, created). M7-4.</summary>
+    /// <summary>The default sample folder (resolved, created) — where packs install and what
+    /// Nota Mosaic's <c>samples:</c> refs resolve against. M7-4; spec 092.</summary>
     string ResolvedSamplesFolder();
+
+    // --- sample folders (spec 092) -------------------------------------------------------
+    // Defaults keep simple implementations (test doubles) working with one folder.
+
+    /// <summary>Every sample folder, in list order. Never creates
+    /// folders other than the default.</summary>
+    IReadOnlyList<ResolvedSampleFolder> ResolvedSampleFolders()
+    {
+        var p = ResolvedSamplesFolder();
+        return new[] { new ResolvedSampleFolder(0, p, System.IO.Path.GetFileName(p.TrimEnd('/', '\\')), true, System.IO.Directory.Exists(p)) };
+    }
+    SampleFolderResult AddSampleFolder(string path) => new(SampleFolderOutcome.NotADirectory);
+    bool RemoveSampleFolder(int index) => false;
+    void RenameSampleFolder(int index, string? name) { }
+    void SetDefaultSampleFolder(int index) { }
+    /// <summary>Raised after the list of sample folders changed (added, removed, renamed, default moved).</summary>
+    event Action? SampleFoldersChanged { add { } remove { } }
     /// <summary>The projects folder to browse (resolved default, created). M7-4.</summary>
     string ResolvedProjectsFolder();
     /// <summary>App-managed presets folder (created). M7-4.</summary>

@@ -40,6 +40,7 @@ internal enum GlyphKind
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
     Expand, Shrink,                // a panel filling the window, and back to its split
+    Home, Drive, AudioFile,        // the Files browse view: home folder, a drive, an audio file (spec 092)
 }
 
 internal sealed class Glyph : Control
@@ -338,22 +339,6 @@ internal sealed class Glyph : Control
                 Stroke(ctx, pen, new Point(cx - d + hd, y2 - hd), new Point(cx - d, y2), new Point(cx - d + hd, y2 + hd));
                 break;
             }
-            case GlyphKind.Folder:
-            {
-                var g = new StreamGeometry();
-                using (var c = g.Open())
-                {
-                    c.BeginFigure(new Point(cx - s * 0.42, cy + s * 0.34), false);
-                    c.LineTo(new Point(cx - s * 0.42, cy - s * 0.34));
-                    c.LineTo(new Point(cx - s * 0.1, cy - s * 0.34));
-                    c.LineTo(new Point(cx + s * 0.02, cy - s * 0.2));
-                    c.LineTo(new Point(cx + s * 0.42, cy - s * 0.2));
-                    c.LineTo(new Point(cx + s * 0.42, cy + s * 0.34));
-                    c.EndFigure(true);
-                }
-                ctx.DrawGeometry(null, pen, g);
-                break;
-            }
             case GlyphKind.Ungroup:
             {
                 // Two blocks pulled apart.
@@ -463,6 +448,13 @@ internal sealed class Glyph : Control
         // A five-point star, solid (a favourite).
         [GlyphKind.StarFilled] = (null, "M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z"),
         // A bookmark (a saved preset).
+        // A folder with its tab (Files, groups, "show in Finder"): drawn on the shared grid with
+        // the rail's padding, so it is no bigger than its neighbours (#579).
+        [GlyphKind.Folder] = ("M4 7 a1.5 1.5 0 0 1 1.5 -1.5 h4.2 l2 2 h6.8 a1.5 1.5 0 0 1 1.5 1.5 v8 a1.5 1.5 0 0 1 -1.5 1.5 h-13 a1.5 1.5 0 0 1 -1.5 -1.5 z", null),
+        // The Files browse view (spec 092): home, a drive, an audio file's waveform.
+        [GlyphKind.Home] = ("M4 11.2 L12 4.5 L20 11.2 M6.5 9.4 V19.5 H17.5 V9.4 M10 19.5 V14.5 H14 V19.5", null),
+        [GlyphKind.Drive] = ("M3.5 13.5 h17 v5 a1 1 0 0 1 -1 1 h-15 a1 1 0 0 1 -1 -1 z M3.5 13.5 l2.6 -7.4 a1 1 0 0 1 0.95 -0.7 h9.9 a1 1 0 0 1 0.95 0.7 l2.6 7.4 M16 16.5 h1.5", null),
+        [GlyphKind.AudioFile] = ("M4 12 h1 M7.5 9 v6 M10.5 5.5 v13 M13.5 8.5 v7 M16.5 6.5 v11 M19.5 10 v4", null),
         [GlyphKind.Bookmark] = ("M6.5 4 h11 v16 l-5.5 -4.399 l-5.5 4.399 z", null),
         // A document with a dog-ear and two lines (a project).
         [GlyphKind.Doc] = ("M6 3.5 h7.601 l4.8 4.8 v12.199 h-12.4 zM13.601 3.5 v4.8 h4.8 M9.2 13.399 h6 M9.2 16.8 h6", null),

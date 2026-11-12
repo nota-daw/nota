@@ -59,7 +59,7 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
     private readonly Dictionary<string, Entry> _entries = new(PathComparer);
     private readonly List<string> _priority = new();
     private bool _loaded;
-    private string? _root;
+    private IReadOnlyList<string> _roots = Array.Empty<string>();   // the sample folders (spec 092)
     private CancellationTokenSource? _scanCts;
     private int _scanGen;
     private int _done, _total;
@@ -124,35 +124,38 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
         return info;
     }
 
-    public void Watch(string root)
+    public void Watch(string root) => Watch(new[] { root });
+
+    public void Watch(IReadOnlyList<string> roots)
     {
+        var list = roots.Where(r => !string.IsNullOrEmpty(r)).ToList();
         CancellationTokenSource cts;
         int gen;
         lock (_gate)
         {
-            if (_root is null || !PathComparer.Equals(_root, root))
+            if (!list.SequenceEqual(_roots, PathComparer))
             {
-                _root = root;
+                _roots = list;
                 foreach (var e in _entries.Values) e.Info = null;   // folder hints are relative to the root
             }
             _scanCts?.Cancel();
             _scanCts = cts = new CancellationTokenSource();
             gen = ++_scanGen;
         }
-        var thread = new Thread(() => Scan(root, gen, cts.Token)) { IsBackground = true, Name = "Sample index", Priority = ThreadPriority.BelowNormal };
+        var thread = new Thread(() => Scan(list, gen, cts.Token)) { IsBackground = true, Name = "Sample index", Priority = ThreadPriority.BelowNormal };
         thread.Start();
     }
 
     public void Prioritize(string folder)
     {
-        string? root;
+        IReadOnlyList<string> roots;
         lock (_gate)
         {
             _priority.Remove(folder);
             _priority.Insert(0, folder);
-            root = _root;
+            roots = _roots;
         }
-        if (root is not null) Watch(root);   // re-scan: the new files sort to the front
+        if (roots.Count > 0) Watch(roots);   // re-scan: the new files sort to the front
     }
 
     public IReadOnlyList<SimilarSample> Similar(string path, int count)
@@ -205,14 +208,19 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
 
     // --- scan -----------------------------------------------------------------------------
 
-    private void Scan(string root, int gen, CancellationToken ct)
+    private void Scan(IReadOnlyList<string> roots, int gen, CancellationToken ct)
     {
         try
         {
             List<string> pending;
             lock (_gate) EnsureLoaded();
             WarmInfos(gen, ct);
-            var found = Enumerate(root, ct);
+            // Folders that are there now; one that is missing (an unplugged drive) keeps its
+            // analyses for when it comes back.
+            var live = roots.Where(r => { try { return Directory.Exists(r); } catch { return false; } }).ToList();
+            var away = roots.Except(live, PathComparer).ToList();
+            var found = new List<string>();
+            foreach (var r in live) found.AddRange(Enumerate(r, ct));
             var present = new HashSet<string>(found, PathComparer);
             var stamps = new Dictionary<string, (long Size, long Ticks)>(found.Count, PathComparer);
             foreach (var p in found)
@@ -226,7 +234,10 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
                 if (gen != _scanGen) return;
                 // Forget files that left the library (anything outside it, dragged in from
                 // elsewhere, stays until its file is gone).
-                var gone = _entries.Keys.Where(p => IsUnder(p, root) ? !present.Contains(p) : !File.Exists(p)).ToList();
+                var gone = _entries.Keys.Where(p =>
+                    away.Any(r => IsUnder(p, r)) ? false
+                    : live.Any(r => IsUnder(p, r)) ? !present.Contains(p)
+                    : !File.Exists(p)).ToList();
                 foreach (var p in gone) _entries.Remove(p);
                 if (gone.Count > 0) { _mutations++; _dirty = true; }
 
@@ -359,7 +370,14 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
     private static bool Fresh(Entry e, FileInfo fi) => e.Size == fi.Length && e.Ticks == fi.LastWriteTimeUtc.Ticks;
 
     private SampleInfo InfoOf(string path, Entry e)
-        => e.Info ??= SampleClassifier.Classify(path, SampleNameHints.Parse(path, _root), e.Analysis);
+        => e.Info ??= SampleClassifier.Classify(path, SampleNameHints.Parse(path, RootOf(path)), e.Analysis);
+
+    // The sample folder holding `path` — folder-name hints are read below it.
+    private string? RootOf(string path)
+    {
+        foreach (var r in _roots) if (IsUnder(path, r)) return r;
+        return null;
+    }
 
     // Per-dimension mean / spread over the library, so a dB band and a 0..1 flatness weigh alike.
     private (float[] Mean, float[] Std) Stats()

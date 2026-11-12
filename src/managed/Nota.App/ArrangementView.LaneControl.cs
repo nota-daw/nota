@@ -1134,7 +1134,13 @@ public sealed partial class ArrangementView
                 else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
             }, MenuKit.DeleteKey);
 
-            MenuKit.AddGroups(flyout.Items, new Control[] { header }, new Control[] { rename }, edits, audio, session,
+            // Locate ▸ In browser / In Finder: the file the audio came from (spec 092, #581).
+            var locate = new List<Control>();
+            if (!inGroup && !clip.IsMidi && _o.Locate is { } hooks && _o._engine is { } leng
+                && leng.TryGetAudioClipInfo(trackId, idx, out var lai))
+                locate.Add(LocateMenu.Build(hooks, lai.SampleId));
+
+            MenuKit.AddGroups(flyout.Items, new Control[] { header }, new Control[] { rename }, locate, edits, audio, session,
                               clipboard, new Control[] { del });
             return flyout;
         }

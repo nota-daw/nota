@@ -446,6 +446,7 @@ public partial class MainWindow : Window
         Browser.ItemActivated += OnBrowserItemActivated;
         Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
         Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        Browser.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // Files: path copied, folder not added (spec 092)
         Browser.RevealRequested += OnBrowserReveal;
         Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
@@ -494,6 +495,7 @@ public partial class MainWindow : Window
         };
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         _session.SlotSelected += OnSessionSlotSelected;
+        InitLocate();   // clip menus' Locate ▸ and the Files highlight (spec 092)
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 

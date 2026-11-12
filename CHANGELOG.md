@@ -23,6 +23,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
+  lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
+  Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
+  The Files tab adds folders the same ways. With more than one folder each is a top-level
+  node with its own menu; every folder is indexed (tempo, key, loop or one-shot, similar
+  sounds) and searched. One folder is the default: downloaded sample packs go there. A
+  folder on an unplugged drive stays listed as unavailable and comes back with the drive.
+  A folder already in the list, or inside or around one, is refused with a note.
+- **Browse the whole computer from the Files tab** (#580, specs/092). A **Tree | Browse**
+  switch: Browse shows one folder at a time, starting at the default sample folder, with
+  **Back / Forward / Up** (⌘[ ⌘] ⌘↑; Ctrl or Alt elsewhere) up to the list of drives, **Home**
+  (back to the default sample folder), a path bar whose segments jump there, **Copy path**,
+  and a path you type or paste (⌘L), a file path selecting that file. Every row has an icon
+  for what it is (folder, drive, audio, MIDI, other file); files show their extension and size
+  in their own columns, and files Nota can't add are listed in a faded ink and can't be
+  dragged or opened. Audio files preview and drag as in the tree; a folder can be added to
+  the browser from its menu. Every file and folder row in the Files tab has **Copy path**.
+- **Locate a clip's file** (#581, specs/092). An audio clip's menu in the arrangement and in
+  Session has **Locate ▸ In browser / In Finder** (In Explorer, In file manager). In browser
+  opens the Files tab at the file (the tree if it lies in a sample folder, else the browse
+  view); with a clip selected, its file is marked in the Files list whenever its folder is
+  open. Projects now remember the file each audio clip came from, so Locate still works after
+  reopening; a recording or a project from before shows the project's own copy instead.
+- **The Projects tab shows your newest work first** (#582, specs/092): projects sorted by the
+  last save (or by name, remembered), each with its date, tempo, key, length and number of
+  tracks, read in the background and cached. The open project is marked.
 - **Classic look** (#572, specs/091). **Settings → Appearance → Look** switches between the
   new look and **Classic**. Classic brings back 0.59's colours, its tighter corners and
   values in Geist Mono (tempo, position, dB, Hz, counters). It works with any colour theme
@@ -538,6 +564,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **The Files icon in the browser rail is the same size as its neighbours** (#579): the
+  folder is drawn on the same grid as the other rail icons.
 - **Monitoring a track through an audio track no longer crackles** (#563): an audio track whose
   input is another track (an instrument, say) played it with clicks while monitoring, though a
   recording of the same input was clean. It happened whenever the audio device asked for blocks
