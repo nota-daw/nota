@@ -190,6 +190,14 @@ if (args.Length >= 1 && args[0] == "--palette")
     Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Menu key's menu copy alone: `--menu-mirror`.
+if (args.Length >= 1 && args[0] == "--menu-mirror")
+{
+    Console.WriteLine("-- menu key --");
+    foreach (var (ok, label) in MenuMirrorTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MENU MIRROR PASSED" : $"MENU MIRROR FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Shortcut builder alone: `--shortcuts`.
 if (args.Length >= 1 && args[0] == "--shortcuts")
 {
@@ -15893,6 +15901,10 @@ foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");
 foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
+
+// --- the Menu key's copy of the application menu (#518, specs/093) ---
+Console.WriteLine("-- menu key --");
+foreach (var (ok, label) in MenuMirrorTests.Run()) Check(ok, label);
 
 // --- context menus: "Add track ▸ Recent" list rules (spec 034) ---
 Console.WriteLine("-- recent instruments --");

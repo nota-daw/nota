@@ -181,6 +181,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **The menu under a Menu key, and the menu bar hidden** (Windows / Linux, #518, specs/093).
+  The row of File, Edit, View, Transport and Help no longer sits between the title bar and
+  the transport bar, so the work area gains its height. The whole menu — the same items,
+  shortcuts and check marks, Open recent included — is under the new **☰ Menu** key at the
+  start of the transport bar; **Alt** (pressed and released on its own) or **F10** opens it
+  from the keyboard. **View ▸ Show menu bar**, or **Settings → Appearance → Menu bar**, brings
+  the row back (the key then steps aside). On Windows the title bar now reads
+  "Nota — *project*", as the taskbar does. macOS is unchanged.
 - **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
   follows the style guide the desktop wears: the same corner scale, one typeface with
   fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin

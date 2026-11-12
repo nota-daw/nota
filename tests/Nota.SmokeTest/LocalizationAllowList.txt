@@ -2509,6 +2509,7 @@ Nota.Application/Palette/CommandCatalog.cs	map controller	# data: search keyword
 Nota.Application/Palette/CommandCatalog.cs	markers locators	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	maximize immersive hide chrome	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	maximize maximise full detail panel piano roll restore split	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	menu bar menubar hamburger file edit row classic	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	multi clip several open piano roll	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	mute disable	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	overdub replace take pass loop record	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)

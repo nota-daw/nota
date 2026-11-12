@@ -1486,6 +1486,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
   on Windows and Linux — hides the title bar and its separator so the workspace fills the
   screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
+- **The menu under a Menu key** (Windows / Linux): the menu bar is hidden by default and the
+  whole menu — File, Edit, View, Transport, Help with the same items, shortcuts and check
+  marks — opens from the **☰** key at the start of the transport bar, or from the keyboard
+  with **Alt** (alone) or **F10**. **View ▸ Show menu bar** or Settings → Appearance → **Menu
+  bar** brings the row back, and the key steps aside. The Windows title bar reads
+  "Nota — *project*". On macOS the menu stays in the system menu bar.
 - **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
   release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
@@ -1598,7 +1604,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   layout (device cards keep theirs), live and remembered. **Waveform** —
   **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Phrase
   lines** — Off / 4 / 8 / 16 / 32 bars (see Snap grid). **Track headers** — Left / Right
-  side of the arrangement's track list.
+  side of the arrangement's track list. **Menu bar** (Windows / Linux) — Hidden (default;
+  the ☰ key gives the menu) or Shown.
 - **Editing**: **Label every note in the piano roll** — the keys column names every note
   instead of only C (off by default; very short rows keep C only). **Fade audio clips when
   splitting** — on by default; a split then writes a 4 ms fade at the cut, which the corner

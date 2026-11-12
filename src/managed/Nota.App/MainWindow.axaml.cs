@@ -91,6 +91,7 @@ public partial class MainWindow : Window
         InitBottomPanels();    // BodyGrid rows for the docked Mixer + Detail panels (specs/054)
         InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
         InitRecentMenu();      // File → Open recent (#443)
+        InitMenuButton();      // the Menu key in place of the menu row on Windows / Linux (#518)
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
         // decorations on macOS/Windows (traffic lights / caption buttons overlay it).
@@ -437,6 +438,7 @@ public partial class MainWindow : Window
             Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
             vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
+            ApplyMenuBar(vm.Settings.Current.ShowMenuBar);
         };
         Browser.SetViewModel(vm.Browser);
         InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
