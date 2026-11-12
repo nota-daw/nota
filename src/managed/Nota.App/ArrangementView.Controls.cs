@@ -13,6 +13,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 using Nota.Application.Localization;
 
@@ -186,7 +187,10 @@ public sealed partial class ArrangementView
                 double x = _o.BeatToX(beat);
                 if (x > w) break;
                 if (x < 0) continue;
-                ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
+                // A phrase bar (specs/092) runs its heavier line the ruler's full height, so the
+                // phrase reads from the bar numbers down through the lanes.
+                if (PhraseLines.StartsPhrase(bar, _o._phraseBars)) ctx.DrawLine(PhrasePen, new Point(x, 0), new Point(x, h));
+                else ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
                 if (bar % labelEvery != 0) continue;
                 var ft = new NotaFormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, RulerText);
