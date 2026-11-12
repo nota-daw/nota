@@ -182,6 +182,10 @@ public sealed class Settings
     /// <summary>The arrangement's track-header column sits on the right of the lanes (#72);
     /// off = on the left. View ▸ Track headers on the right, or Settings → Appearance.</summary>
     public bool ArrangementHeadersRight { get; set; }
+    /// <summary>Windows / Linux: the in-window menu row (File, Edit, View…) is shown (#518).
+    /// Off — the default — the Menu key at the start of the transport bar gives the whole menu,
+    /// and Alt / F10 open it. View ▸ Show menu bar, or Settings → Appearance. Ignored on macOS.</summary>
+    public bool ShowMenuBar { get; set; }
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
     /// 0 smooth — the peak outline around its RMS body (default; was bars before #267, so a
     /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced

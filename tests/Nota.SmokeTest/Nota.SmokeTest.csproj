@@ -43,6 +43,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
     <Compile Include="..\..\src\managed\Nota.App\Input\ShortcutAvaloniaExtensions.cs" Link="ShortcutAvaloniaExtensions.cs" />
+    <!-- The Menu key's copy of the application menu (specs/093; Avalonia base only). -->
+    <Compile Include="..\..\src\managed\Nota.App\MenuMirror.cs" Link="MenuMirror.cs" />
     <!-- What's New's changelog / release-notes parsers (no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\Changelog.cs" Link="Changelog.cs" />
     <!-- Which language of the manual the app opens (nota#539; no Avalonia inside). -->
