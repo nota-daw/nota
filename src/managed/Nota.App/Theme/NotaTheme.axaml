@@ -16,6 +16,9 @@
            (NotaFonts.InstallTabular). Bundled from assets/fonts (SIL OFL 1.1); mirrored by
            Theme/NotaFonts.cs. -->
       <FontFamily x:Key="Font.UI">avares://Nota.App/Assets/Fonts#Geist</FontFamily>
+      <!-- Values and readouts (spec 091): Geist, the same face, under the new look; NotaThemeService
+           sets Geist Mono under the classic look, or a skin's font.values, over this default. -->
+      <FontFamily x:Key="Font.Measure">avares://Nota.App/Assets/Fonts#Geist</FontFamily>
 
       <!-- ===== Geometry ========================================================
            Mirrored in Theme/NotaGeometry.cs for code-built views; the smoke test
@@ -130,7 +133,7 @@
                                     VerticalAlignment="Center" HorizontalAlignment="Right"/>
                   <TextBlock Name="PART_InputGestureText" Grid.Column="3"
                              Text="{Binding InputGesture, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static app:MenuGestureConverter.Instance}}"
-                             FontFamily="{StaticResource Font.UI}" FontSize="10"
+                             FontFamily="{DynamicResource Font.Measure}" FontSize="10"
                              Foreground="{DynamicResource Brush.TextMuted}"
                              Margin="16,0,0,0"
                              VerticalAlignment="Center" HorizontalAlignment="Right"/>
@@ -1019,22 +1022,27 @@
     <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.Mono">           <!-- kept for older markup: numbers are Geist like everything else -->
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
+  <Style Selector="TextBlock.Mono">           <!-- the values role, family only (spec 091) -->
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
   </Style>
   <Style Selector="TextBlock.Readout">        <!-- toolbar values: 16 / 500 -->
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
     <Setter Property="FontSize" Value="16"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
   <Style Selector="TextBlock.Value">          <!-- a number on a button or in a row: 10.5 / 400 -->
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
+    <Setter Property="FontSize" Value="10.5"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+  </Style>
+  <Style Selector="TextBlock.Number">         <!-- a number added after 0.59: Geist in both looks (spec 091) -->
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
     <Setter Property="FontSize" Value="10.5"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
   <Style Selector="TextBlock.Eyebrow">        <!-- format badge: 9.5 / 400, muted, as written -->
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
     <Setter Property="FontSize" Value="9.5"/>
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
@@ -1060,11 +1068,13 @@
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
   <Style Selector="TextBlock.KnobValue">      <!-- parameter value: 10 / 400, ink 1 -->
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
     <Setter Property="FontSize" Value="10"/>
     <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
   <Style Selector="TextBlock.Axis">           <!-- tick label inside a graph: 10, ink 4 -->
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
     <Setter Property="FontSize" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextAxis}"/>
   </Style>
@@ -1223,7 +1233,7 @@
   </Style>
   <!-- Row metadata on the right: the label scale, 11 / 400 in ink 3. -->
   <Style Selector="TextBlock.RowTag">
-    <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>
     <Setter Property="FontSize" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>

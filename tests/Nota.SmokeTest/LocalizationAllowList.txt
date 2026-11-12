@@ -2133,6 +2133,7 @@ Nota.App/PreferencesWindow.cs	Updates	# data: stable page id (Page.Id); the show
 Nota.App/SessionView.Mixer.cs	Ext Out 1/2	# data: hardware output name
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: file declares id '{theme.Id}'"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	$"{id}: no theme file"	# data: diagnostics for people writing a theme file
+Nota.App/Theme/NotaColourTheme.cs	$"{id}: no classic palette"	# data: diagnostics for people writing a theme file
 Nota.App/Theme/NotaColourTheme.cs	Bevel	# data: theme token name
 Nota.App/Theme/NotaColourTheme.cs	Well	# data: theme token name
 Nota.App/Theme/NotaTextSize.cs	Fixed	# data: attached property name

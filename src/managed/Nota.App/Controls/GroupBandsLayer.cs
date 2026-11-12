@@ -78,7 +78,7 @@ internal sealed class GroupBandsLayer : Control, ICustomHitTest
             if (maxW <= 4) continue;
             var count = b.Hidden > 0
                 ? new NotaFormattedText("+" + b.Hidden.ToString(CultureInfo.CurrentCulture), CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Sans, 9, NotaPalette.TextSecondary)
+                    FlowDirection.LeftToRight, NotaFonts.Measure, 9, NotaPalette.TextSecondary)
                 : null;
             double countW = count is null ? 0 : count.Width + 4;
             var name = new NotaFormattedText(b.Name, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,

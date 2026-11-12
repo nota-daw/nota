@@ -424,6 +424,7 @@ public partial class MainWindow : Window
             vm.Settings.Save();
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+        Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);
         vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
@@ -431,6 +432,7 @@ public partial class MainWindow : Window
         vm.Settings.Changed += () =>
         {
             Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+            Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);   // a pick, or the look's default
             vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         };

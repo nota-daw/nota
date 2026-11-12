@@ -39,7 +39,7 @@ public sealed class DragNumber : UserControl
 
         _display.FontSize = fontSize;
         if (fontSize >= NotaType.Readout) _display.FontWeight = FontWeight.Medium;   // a toolbar value: 17 / 500
-        _display.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _display.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         _display.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
 
         _editor = new TextBox
@@ -48,7 +48,7 @@ public sealed class DragNumber : UserControl
             Background = Brushes.Transparent, BorderThickness = new Avalonia.Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
         };
-        _editor.BindResource(TextBox.FontFamilyProperty, "Font.UI");
+        _editor.BindResource(TextBox.FontFamilyProperty, "Font.Measure");
         _editor.KeyDown += (_, e) => { if (e.Key == Key.Enter) CommitEditor(); else if (e.Key == Key.Escape) CancelEditor(); };
         _editor.LostFocus += (_, _) => CommitEditor();
 

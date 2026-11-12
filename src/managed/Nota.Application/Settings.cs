@@ -38,6 +38,14 @@ public sealed class Settings
     /// <summary>The last custom accent, #RRGGBB — kept while a preset is worn, so Custom
     /// offers it again.</summary>
     public string CustomAccent { get; set; } = "";
+    /// <summary>The look (spec 091, Settings → Appearance): empty or "new" for the current look,
+    /// "classic" for 0.59's colours, corners and Geist Mono values. Worn over every theme. An
+    /// unknown value reads as New and is never rewritten on read (<see cref="Nota.Application.Looks.Resolve"/>).</summary>
+    public string Look { get; set; } = "";
+    /// <summary>How Arrangement clips are drawn (spec 091, Settings → Appearance → Clips): empty to
+    /// follow the look (Classic → solid, New → tinted), or the user's pick, "solid" or "tinted",
+    /// which wins over the look (<see cref="Nota.Application.Looks.ClipStyleOf"/>).</summary>
+    public string ClipStyle { get; set; } = "";
     /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
     /// folding it gives the clip grid its width back on small windows.</summary>
     public bool SessionInspectorOpen { get; set; } = true;

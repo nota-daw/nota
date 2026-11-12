@@ -1566,6 +1566,11 @@ public sealed partial class ArrangementView
             double x0 = _o.BeatToX(c.StartBeat);
             double x1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
             if (x1 < 0 || x0 > w || c.LengthBeats <= 0) return;
+            if (_o.ClipStyle == ClipStyle.Solid)
+            {
+                DrawSolidClipBody(ctx, colorIndex, label, c, x0, x1, y, rowH, selected, edgeHi, pitches, trackId, row, appear);
+                return;
+            }
             var (_, edge, tint, content) = ClipColors(colorIndex);
             // The clip (style guide): a 20% tint of the track colour over the lane, corner 6, a
             // thin edge in the track colour; its notes, waveform and name in the full colour.
@@ -1608,6 +1613,53 @@ public sealed partial class ArrangementView
                 ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), ClipRadius, ClipRadius);
         }
 
+        // The Solid clip style (0.59, spec 091): a flat body in the track colour with no outline,
+        // its notes and waveform in a deeper shade of it, and a title band across the top — the
+        // colour mixed 30 % toward black, the accent when selected — with the name in readable
+        // ink. A row too short for the band keeps a 2 px band. Corners follow the clip step.
+        private void DrawSolidClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double x0, double x1,
+                                       double y, double rowH, bool selected, Drag edgeHi, (int lo, int hi)? pitches,
+                                       int trackId, int row, RecordPreview? appear)
+        {
+            var body = TrackBrush(colorIndex);
+            var content = ClipInk(colorIndex);
+            var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), rowH - 4);
+            ctx.DrawRectangle(body, selected ? ClipSelBorder : null, rect, ClipRadius, ClipRadius);
+
+            if (edgeHi != Drag.None)
+            {
+                double ex = edgeHi == Drag.TrimL ? rect.X : rect.Right - 2.5;
+                ctx.FillRectangle(EdgeHighlight, new Rect(ex, rect.Y, 2.5, rect.Height));
+            }
+
+            var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
+            if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches, appear);
+            else DrawWaveform(ctx, c, contentRect, content, trackId);
+
+            bool tall = rect.Height > TitleBandH * 2.5;
+            var band = selected ? NotaPalette.Accent : ClipBand(colorIndex);
+            if (rect.Width > 3)
+            {
+                using var bc = ctx.PushClip(new RoundedRect(rect, ClipRadius));
+                ctx.FillRectangle(band, new Rect(rect.X, rect.Y, rect.Width, tall ? TitleBandH : BandH + 1));
+            }
+
+            if (tall && rect.Width > 24 && ShowsLabel(c))
+            {
+                string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
+                var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaType.Eyebrow, NotaPalette.InkOn(band))
+                { MaxTextWidth = Math.Max(8, rect.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+                using var _ = ctx.PushClip(rect);
+                ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + (TitleBandH - ft.Height) / 2));
+            }
+
+            if (!c.IsMidi && row >= 0) DrawAdsr(ctx, c, trackId, row, selected, content, NotaPalette.BgSunken);
+            if (!c.Active)
+                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), ClipRadius, ClipRadius);
+        }
+
+        private const double TitleBandH = 12;   // the Solid style's title band over the top of the content
         private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
         private const double LabelH = 18;       // the clip name's line over the notes and waveform
         private const double NameMinClipH = 30; // a clip taller than this (a row over 34 px) shows its name

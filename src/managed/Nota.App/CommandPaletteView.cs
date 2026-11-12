@@ -208,7 +208,7 @@ internal sealed class CommandPaletteView : UserControl
             _layoutText.Inlines = new InlineCollection
             {
                 new Run(Loc.T("command_palette.showing_results_for")),
-                new Run(_results.LayoutHint) { FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary },
+                new Run(_results.LayoutHint) { FontFamily = NotaFonts.MeasureFamily, Foreground = NotaPalette.TextPrimary },
                 new Run(Loc.T("command_palette.typed_in_the_other_keyboard")),
             };
         }
@@ -510,14 +510,14 @@ internal sealed class CommandPaletteView : UserControl
         BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1, 1, 1, 2), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
-            Text = label, FontSize = fontSize, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextStrong,
+            Text = label, FontSize = fontSize, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextStrong,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         },
     };
 
     private static TextBlock Mono(double size, IBrush ink, string text = "") => new()
     {
-        Text = text, FontSize = size, FontFamily = NotaFonts.UiFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
+        Text = text, FontSize = size, FontFamily = NotaFonts.ValuesFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
     };
 
     // A shared-set icon in a square box: the 16-unit grid scaled as a whole, so the kinds keep
@@ -551,7 +551,7 @@ internal sealed class PaletteToast : Border
             Children =
             {
                 new TextBlock { Text = Loc.T("common.undo"), FontSize = 10, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         _undo = new Border

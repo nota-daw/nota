@@ -173,8 +173,10 @@ internal static partial class DesignTokenCheck
         yield return (true, $"radius allow-list: {list.Distinct().Count()} entries (ratchet: may only shrink)");
     }
 
-    /// <summary>Type: the theme and NotaFonts point at the same bundled Geist files, and no
-    /// view names a font of its own or sets text below the 7px floor. See DESIGN.md § Type.</summary>
+    /// <summary>Type: the theme and NotaFonts point at the same bundled Geist files; two roles —
+    /// words and values — where values are Geist under the new look and Geist Mono only by the
+    /// classic look's choice (spec 091); no view names a font of its own or sets text below the
+    /// 7px floor. See DESIGN.md § Type.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunType()
     {
         var root = RepoRoot();
@@ -188,19 +190,26 @@ internal static partial class DesignTokenCheck
         var ui = XamlFont("Font.UI");
         yield return (ui.Length > 0 && ui == CsFont("UiUri"), $"Font.UI matches NotaFonts ({ui})");
 
-        // One typeface (spec 038): Geist with tabular figures; no monospace family anywhere.
+        // Two roles (specs 038, 091): words (Font.UI) and values (Font.Measure). The theme's
+        // Font.Measure is Geist itself, so the new look is still one typeface; Geist Mono is
+        // named once, in NotaFonts, for the classic look to choose.
         var families = Regex.Matches(theme, """<FontFamily x:Key="(?<k>[^"]+)">""").Select(m => m.Groups["k"].Value).ToArray();
-        yield return (families.SequenceEqual(new[] { "Font.UI" }) && !Regex.IsMatch(fonts, @"const string \w+Uri\s*=\s*""[^""]*Mono"),
-            $"one typeface: Font.UI is the only family ({string.Join(", ", families)})");
+        yield return (families.SequenceEqual(new[] { "Font.UI", "Font.Measure" }),
+            $"two roles: Font.UI and Font.Measure are the only families ({string.Join(", ", families)})");
+        yield return (XamlFont("Font.Measure") == ui, $"the new look is one typeface: Font.Measure defaults to Geist ({XamlFont("Font.Measure")})");
+        var monoUris = Regex.Matches(fonts, @"const string (?<n>\w+Uri)\s*=\s*""(?<v>[^""]*Mono[^""]*)""")
+            .Select(m => m.Groups["n"].Value + "=" + m.Groups["v"].Value).ToArray();
+        yield return (monoUris.SequenceEqual(new[] { "MeasureMonoUri=avares://Nota.App/Assets/Fonts#Geist Mono" }),
+            $"Geist Mono is named once, as NotaFonts.MeasureMonoUri ({string.Join(", ", monoUris)})");
         yield return (fonts.Contains("\"+tnum\""), "tabular figures are on (NotaFonts.Tabular)");
 
         var weights = new[] { "Regular", "Medium", "SemiBold", "Bold" };
-        var files = weights.Select(w => $"Geist-{w}.ttf")
-            .Where(f => !File.Exists(Path.Combine(root, "assets/fonts", f))).ToArray();
+        var expected = weights.SelectMany(w => new[] { $"Geist-{w}.ttf", $"GeistMono-{w}.ttf" }).ToHashSet();
+        var files = expected.Where(f => !File.Exists(Path.Combine(root, "assets/fonts", f))).ToArray();
         yield return (files.Length == 0,
-            files.Length == 0 ? "all four Geist weights are bundled" : $"missing font files: {string.Join(", ", files)}");
+            files.Length == 0 ? "all four Geist and Geist Mono weights are bundled" : $"missing font files: {string.Join(", ", files)}");
         var stray = Directory.GetFiles(Path.Combine(root, "assets/fonts"), "*.ttf")
-            .Select(Path.GetFileName).Where(f => !f!.StartsWith("Geist-")).ToArray();
+            .Select(Path.GetFileName).Where(f => !expected.Contains(f!)).ToArray();
         yield return (stray.Length == 0,
             stray.Length == 0 ? "no other typeface is bundled" : $"other font files bundled: {string.Join(", ", stray)}");
         yield return (File.Exists(Path.Combine(root, "LICENSES/OFL-1.1-Geist.txt")), "the Geist OFL licence ships with the fonts");

@@ -562,7 +562,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         int di = a.AutomationDeviceIndex;
         float v = E.PluginParamGet(T, di, m);
         var val = new TextBlock { Text = Pct(v), FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Right };
-        val.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        val.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         top.Children.Add(new TextBlock { Text = "M" + (m + 1), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary });
         Grid.SetColumn(val, 1); top.Children.Add(val);
@@ -708,7 +708,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         float val = a.ChainDeviceParamGet(c, d, p);
         double span = Math.Max(1e-6, max - min);
         var value = new TextBlock { Text = DeviceParamControls.Fmt(val), FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 4, 0) };
-        value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        value.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
         top.Children.Add(new TextBlock { Text = NotaText.Label(name), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(value, 1); top.Children.Add(value);
@@ -732,7 +732,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         string name = a.ChainInstrumentParamName(c, p);
         float val = a.ChainInstrumentParamGet(c, p);
         var value = new TextBlock { Text = Pct(val), FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 4, 0) };
-        value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        value.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
         top.Children.Add(new TextBlock { Text = NotaText.Label(name), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(value, 1); top.Children.Add(value);

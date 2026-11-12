@@ -75,7 +75,7 @@ internal static class DeviceCardKit
     {
         value.FontSize = NotaType.KnobValue;
         value.LineHeight = 9;
-        value.FontFamily = NotaFonts.UiFamily;
+        value.FontFamily = NotaFonts.ValuesFamily;
         var lbl = new TextBlock
         {
             Text = NotaText.Label(name), FontSize = NotaType.KnobLabel,
@@ -233,7 +233,7 @@ internal static class DeviceCardKit
         if (!double.IsNaN(trackWidth)) track.Width = trackWidth;
         var val = new TextBlock
         {
-            FontFamily = NotaFonts.UiFamily, FontSize = 9, TextAlignment = TextAlignment.Right,
+            FontFamily = NotaFonts.ValuesFamily, FontSize = 9, TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.None,
         };
         if (valueWidth > 0) val.Width = valueWidth;

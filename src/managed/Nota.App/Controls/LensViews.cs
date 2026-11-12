@@ -156,11 +156,11 @@ internal static class LensInk
 
     public static void Text(DrawingContext ctx, string s, double x, double y, IBrush ink, double size = 7, bool mono = true)
         => ctx.DrawText(new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, ink, NotaTextSize.InCard), new Point(x, y));
+            mono ? NotaFonts.Measure : NotaFonts.SansMedium, size, ink, NotaTextSize.InCard), new Point(x, y));
 
     public static double TextW(string s, double size = 7, bool mono = true)
         => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, NotaPalette.TextPrimary, NotaTextSize.InCard).Width;
+            mono ? NotaFonts.Measure : NotaFonts.SansMedium, size, NotaPalette.TextPrimary, NotaTextSize.InCard).Width;
 }
 
 // ===========================================================================
