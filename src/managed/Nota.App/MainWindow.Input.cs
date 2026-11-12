@@ -63,6 +63,11 @@ public partial class MainWindow
             _commands.Run((e.KeyModifiers & KeyModifiers.Shift) != 0 ? "transport.playPause" : "transport.playStop");
             e.Handled = true;
         }
+        else if (e.Key == Key.Return && Browser.TakesReturn(e.Source))
+        {
+            // A Modular node selected in the browser: Return adds it (specs/095), so leave the
+            // key to the list rather than stopping the transport.
+        }
         else if (e.Key == Key.Return)
         {
             // In the Session grid Return launches the selected slot or scene (design 1a);

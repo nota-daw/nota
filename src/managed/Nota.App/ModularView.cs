@@ -77,6 +77,10 @@ public sealed partial class ModularView : UserControl
     public event Action<bool>? ConnectHintChanged;
     /// <summary>A line for the status bar (why a node couldn't be added, …).</summary>
     public event Action<string>? StatusRequested;
+    /// <summary>Global view (islands) is shown.</summary>
+    public bool IsGlobal => _global;
+    /// <summary>Track ↔ Global switched — the host hides or shows the header column.</summary>
+    public event Action<bool>? GlobalChanged;
     /// <summary>Nodes can be added: Track view with a track shown.</summary>
     public bool CanAddNodes => !_global && _trackId > 0;
 
@@ -257,6 +261,7 @@ public sealed partial class ModularView : UserControl
         _globalBtn.IsChecked = global;
         if (_global == global) return;
         _global = global;
+        GlobalChanged?.Invoke(global);
         Rebuild();           // island / chain-node keys don't collide, so kept positions survive
         RefreshSidebar();
         FitToScreen();

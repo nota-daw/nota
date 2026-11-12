@@ -539,6 +539,7 @@ public partial class MainWindow : Window
         _modular.StatusRequested += msg => { if (_vm is not null) _vm.StatusText = msg; };
         Timeline.ModularTrackId = () => _modular?.TrackId ?? -1;
         Timeline.HeaderColumnWidthChanged += FitModularBesideHeaders;
+        _modular.GlobalChanged += _ => FitModularBesideHeaders();   // Global hides the column
         Timeline.ShowInModularRequested += ShowInModular;
         MainContent.Children.Add(_modular);
         WireMixerGroups();   // fold state, selection and compact strips (specs/070)
@@ -756,8 +757,8 @@ public partial class MainWindow : Window
         bool session = view == MainView.Session, modular = view == MainView.Modular;
         // Modular keeps the arrangement's header column beside its canvas (specs/095).
         Timeline.HeadersOnly = modular;
-        Timeline.IsVisible = view == MainView.Arrangement || modular;
-        FitModularBesideHeaders();
+        Timeline.IsVisible = view == MainView.Arrangement;
+        FitModularBesideHeaders();   // in Modular: the column, unless Global view is up
         Browser.SetModularContext(modular);
         _session.IsVisible = session;
         _modular.IsVisible = modular;
@@ -782,7 +783,11 @@ public partial class MainWindow : Window
     private void FitModularBesideHeaders()
     {
         if (_modular is null) return;
-        double w = Timeline.HeadersOnly ? Timeline.HeaderColumnWidth : 0;
+        // Track view shows the header column beside the canvas; Global view hides it (the
+        // islands are the tracks) and gives the canvas the whole width.
+        bool column = Timeline.HeadersOnly && !_modular.IsGlobal;
+        if (Timeline.HeadersOnly) Timeline.IsVisible = column;
+        double w = column ? Timeline.HeaderColumnWidth : 0;
         _modular.Margin = Timeline.HeadersOnRight ? new Thickness(0, 0, w, 0) : new Thickness(w, 0, 0, 0);
     }
 

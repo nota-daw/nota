@@ -29,6 +29,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Nota.Application;
 using Nota.Application.Input;
 using Nota.Application.Samples;
@@ -1283,8 +1284,23 @@ public sealed partial class BrowserView : UserControl
         ItemTemplate = itemTemplate,
     };
 
+    /// <summary>A Return pressed on the Modular tab's list with a node selected adds it
+    /// (spec 095): the window's transport keys leave that Return to the list.</summary>
+    public bool TakesReturn(object? source)
+        => source is Visual v && _active == ModularTab
+           && _pages[ModularTab].SelectedItem is BrowserItem { Kind: BrowserItemKind.ModularNode }
+           && (v == _pages[ModularTab] || v.GetVisualAncestors().Contains(_pages[ModularTab]));
+
     private void HookActivation(ListBox list)
     {
+        // Enter / Return on a Modular node adds it, as a double-click does (spec 095).
+        list.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Return) || e.KeyModifiers != KeyModifiers.None) return;
+            if (list.SelectedItem is not BrowserItem { Kind: BrowserItemKind.ModularNode } node) return;
+            ItemActivated?.Invoke(node, e.KeyModifiers);
+            e.Handled = true;
+        };
         list.DoubleTapped += (_, e) =>
         {
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;

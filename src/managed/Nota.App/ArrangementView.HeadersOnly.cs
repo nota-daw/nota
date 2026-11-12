@@ -103,7 +103,10 @@ public sealed partial class ArrangementView
                 return (id, anchor);
             }
         }
-        if (top.TranslatePoint(windowPoint, _footerHeaders) is { } fp && fp.X >= 0 && fp.X <= _headerW)
+        // The pinned footer scrolls when returns are tall: only its visible part counts.
+        if (_footerScroller.TranslatePoint(new Point(0, 0), top) is { } fo
+            && windowPoint.Y >= fo.Y && windowPoint.Y <= fo.Y + _footerScroller.Bounds.Height
+            && top.TranslatePoint(windowPoint, _footerHeaders) is { } fp && fp.X >= 0 && fp.X <= _headerW)
             for (int i = 0; i < _returns.Count && i < _footerCards.Count; i++)
             {
                 var card = _footerCards[i].card;
