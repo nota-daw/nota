@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 #
 # Where 0.59.2 set values in Geist Mono (spec 091, FR-009). The style guide commit (#296)
 # replaced every Mono use with Sans in one go; its hunks are the inventory of the values
