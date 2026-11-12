@@ -220,6 +220,9 @@ Appearance with the previous release: identical.
   standard behaviour of that popup applies.
 - Alt pressed then released after a mouse button press or wheel event in between (e.g.
   Alt+wheel zoom): no menu.
+- Alt tapped in the middle of a clip drag (to switch snapping off and on): no menu — the drag
+  owns Alt until the button is released.
+- Alt or F10 while the command palette is open: the palette keeps the keyboard; no menu.
 - The setting file from an older version has no "Show menu bar" value: the row is hidden
   (the new default), the user can turn it on.
 - Changing the menu row's visibility changes the height of the work area: the arrangement,
@@ -269,7 +272,9 @@ Appearance with the previous release: identical.
   navigation (arrows, Enter, Escape) working in it.
 - **FR-014**: With the menu row hidden, pressing and releasing Alt with no other key, mouse
   button or wheel input in between MUST open the Menu button's menu; any Alt combination
-  (Alt+key, Alt+click, Alt+drag, Alt+wheel) MUST NOT open it.
+  (Alt+key, Alt+click, Alt+drag, Alt+wheel) MUST NOT open it, nor Alt pressed or released
+  while a mouse button is down (during a drag Alt toggles snapping). Neither F10 nor Alt opens
+  it while the command palette is open.
 - **FR-015**: Closing the menu without picking an item MUST return keyboard focus to the
   control that had it before.
 - **FR-016**: With the menu row shown, Alt and F10 MUST keep their current behaviour for the

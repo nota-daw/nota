@@ -153,3 +153,6 @@ MVP = Phases 1–3 (the Menu key, row hidden). Then US2 (the way back), US3 (key
   `--perf`, twice each, base `eec6a4ff` vs this branch on the same engine build: base 52 / 303
   late blocks of 4125, branch 233 / 311; the VST3 deadline guard flips on both. The failures
   are the machine's, not this change's; a fully idle run is still to do.
+- Review on #585 (2026-11-12): Alt during a drag no longer arms the tap (pointer button state
+  tracked; a move with a button down disarms), and Alt / F10 do nothing while the command
+  palette is open. Harness: 15 checks, all pass.

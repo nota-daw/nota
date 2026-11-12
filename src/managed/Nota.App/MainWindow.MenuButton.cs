@@ -10,7 +10,8 @@
 //
 // Keyboard: with the row hidden, F10 or Alt pressed and released on its own opens the key's
 // menu. Any other key, click or wheel turn while Alt is down (Alt+drag to move freely,
-// Alt+wheel, ⌥ chords) cancels that, so those keep working. The hidden row is taken out of the
+// Alt+wheel, ⌥ chords) cancels that, and so does Alt pressed during a click or drag (where it
+// toggles snapping), so those keep working. Neither key acts while the command palette is open. The hidden row is taken out of the
 // visual tree, not just hidden: an attached menu bar stays the window's main menu for Avalonia's
 // access keys and would take Alt / F10 while invisible.
 //
@@ -32,6 +33,7 @@ public partial class MainWindow
     private ContextMenu? _menuKeyMenu;
     private bool _menuBarShown;
     private bool _altTapArmed;
+    private bool _pointerButtonDown;   // a click or drag in progress: Alt then belongs to it
     private bool _menuFromKeyboard;
     private IInputElement? _focusBeforeMenu;
     private DateTime _menuKeyClosedAt;
@@ -86,7 +88,19 @@ public partial class MainWindow
 
         AddHandler(KeyDownEvent, OnMenuKeyKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyUpEvent, OnMenuKeyKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
-        AddHandler(PointerPressedEvent, (_, _) => _altTapArmed = false, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, (_, _) => { _altTapArmed = false; _pointerButtonDown = true; },
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, (_, e) => _pointerButtonDown = AnyButton(e.GetCurrentPoint(this).Properties),
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerCaptureLostEvent, (_, _) => _pointerButtonDown = false, RoutingStrategies.Tunnel, handledEventsToo: true);
+        // Alt pressed or released during a drag toggles snapping there; a move with a button
+        // held is a drag, whatever started it.
+        AddHandler(PointerMovedEvent, (_, e) =>
+        {
+            if (!AnyButton(e.GetCurrentPoint(this).Properties)) return;
+            _pointerButtonDown = true;
+            _altTapArmed = false;
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerWheelChangedEvent, (_, _) => _altTapArmed = false, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         ApplyMenuBar(App.Services.GetRequiredService<ISettingsService>().Current.ShowMenuBar);
@@ -134,13 +148,20 @@ public partial class MainWindow
             foreach (var entry in MenuMirror.Build(source)) _menuKeyMenu.Items.Add(entry);
     }
 
+    private static bool AnyButton(PointerPointProperties p) =>
+        p.IsLeftButtonPressed || p.IsRightButtonPressed || p.IsMiddleButtonPressed;
+
     private void OnMenuKeyKeyDown(object? sender, KeyEventArgs e)
     {
         if (_menuBarShown || _menuKeyMenu is null) return;
+        // The command palette has the keyboard while it is open (as for the transport keys).
+        if (PaletteOpen) { _altTapArmed = false; return; }
         if (e.Key is Key.LeftAlt or Key.RightAlt)
         {
-            // Alt alone (not AltGr, which arrives as Ctrl+Alt, nor Alt under another modifier).
-            _altTapArmed = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Meta)) == 0;
+            // Alt alone (not AltGr, which arrives as Ctrl+Alt, nor Alt under another modifier),
+            // and not during a click or drag, where Alt toggles snapping.
+            _altTapArmed = !_pointerButtonDown
+                           && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Meta)) == 0;
             return;
         }
         _altTapArmed = false;
@@ -156,7 +177,7 @@ public partial class MainWindow
         if (e.Key is not (Key.LeftAlt or Key.RightAlt)) return;
         bool tap = _altTapArmed;
         _altTapArmed = false;
-        if (!tap || _menuBarShown || _menuKeyMenu is null || _menuKeyMenu.IsOpen) return;
+        if (!tap || _pointerButtonDown || PaletteOpen || _menuBarShown || _menuKeyMenu is null || _menuKeyMenu.IsOpen) return;
         OpenMenuKeyMenu(fromKeyboard: true);
         e.Handled = true;
     }
