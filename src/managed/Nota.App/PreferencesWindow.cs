@@ -29,6 +29,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Localization;
 using Nota.Application.Themes;
 using Nota.Presentation;
@@ -1297,6 +1298,33 @@ public sealed partial class PreferencesWindow : NotaWindow
         return host;
     }
 
+    // Off / 4 / 8 / 16 / 32 for the arrangement's phrase lines (specs/092, #517): a heavier
+    // grid line every N bars from bar 1. Saving fires Settings.Changed, which repaints the
+    // arrangement at once.
+    private static Control PhraseLinesPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Bars, ToggleButton Btn)>();
+        int current = PhraseLines.Normalize(settings.Current.ArrangementPhraseBars);
+        foreach (int bars in PhraseLines.Choices)
+        {
+            var n = bars;
+            var label = n == 0 ? Loc.T("common.off") : n.ToString(NotaNum.Culture);
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label, IsChecked = current == n };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bn, bb) in buttons) bb.IsChecked = bn == n;
+                if (settings.Current.ArrangementPhraseBars == n) return;
+                settings.Current.ArrangementPhraseBars = n;
+                settings.Save();
+            };
+            buttons.Add((n, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     // Left / Right for the arrangement's track-header column (#72). Saving fires
     // Settings.Changed, which moves the column at once and ticks the View menu item.
     // The same event repaints these buttons, so a change from the View menu updates an
@@ -1476,6 +1504,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             Row("", Caption(Loc.T("preferences.accent_caption"))),
             Row(Loc.T("preferences.waveform"), WaveformPicker()),
             Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+            Row(Loc.T("preferences.phrase_lines"), PhraseLinesPicker()),
+            Row("", Caption(Loc.T("preferences.phrase_lines_caption"))),
             Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
             Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
             MenuBarRows(),

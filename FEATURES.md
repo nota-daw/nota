@@ -210,6 +210,10 @@ docks as a panel under any of the three, or floats in its own window — see
   on the editor used last (the arrangement while the audio clip editor shows ADSR or an
   unwarped clip, which follow no grid). Hold ⌥ to drag freely; clip edges still attract a
   dragged clip.
+- **Phrase lines** (Settings → Appearance; off by default, remembered app-wide): a heavier
+  neutral grid line every 4, 8, 16 or 32 bars, counted from bar 1, across the arrangement's
+  lanes, return / master rows and ruler, so the song's phrase structure reads at a glance.
+  It counts bars, so it follows the time signature, and it follows every colour theme.
 - **Session View** — a clip grid (tracks × scenes) with an inspector that the toolbar's
   **Inspector** key (the sidebar icon) shows or hides (remembered); on a narrow window the least-used
   toolbar controls fold into a **⋯** menu. Named, coloured clips with note / waveform
@@ -1598,9 +1602,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
   layout (device cards keep theirs), live and remembered. **Waveform** —
-  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Track
-  headers** — Left / Right side of the arrangement's track list. **Menu bar** (Windows /
-  Linux) — Hidden (default; the ☰ key gives the menu) or Shown.
+  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Phrase
+  lines** — Off / 4 / 8 / 16 / 32 bars (see Snap grid). **Track headers** — Left / Right
+  side of the arrangement's track list. **Menu bar** (Windows / Linux) — Hidden (default;
+  the ☰ key gives the menu) or Shown.
 - **Editing**: **Label every note in the piano roll** — the keys column names every note
   instead of only C (off by default; very short rows keep C only). **Fade audio clips when
   splitting** — on by default; a split then writes a 4 ms fade at the cut, which the corner
