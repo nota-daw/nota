@@ -731,6 +731,7 @@ public sealed partial class BrowserView : UserControl
         RebuildCategoryChips();
         UpdateFilesBars();
         UpdateProjectsBar();
+        if (index == FilesTab) _vm?.RefreshSampleAvailability();   // a drive plugged in or pulled out meanwhile
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
         // The shared search box may have changed on another tab (#342).
@@ -941,6 +942,16 @@ public sealed partial class BrowserView : UserControl
         // (a plug-in's format, a sample's folder, tempo and key).
         string tip = item.Tip.Length > 0 ? item.Tip : item.Sub;
         ToolTip.SetTip(row, tip.Length > 0 ? $"{item.Name} · {tip}" : item.Name);
+        // Every other file row still follows Locate's mark as the selected clip changes.
+        if (!sample && item.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile)
+        {
+            void Relocate(object? _, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(BrowserItem.Located)) MarkLocated();
+            }
+            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Relocate; item.PropertyChanged += Relocate; MarkLocated(); };
+            row.DetachedFromVisualTree += (_, _) => item.PropertyChanged -= Relocate;
+        }
         if (sample)
         {
             void Retag(object? _, System.ComponentModel.PropertyChangedEventArgs e)

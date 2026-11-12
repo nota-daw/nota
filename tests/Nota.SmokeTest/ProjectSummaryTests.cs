@@ -38,6 +38,17 @@ internal static class ProjectSummaryTests
             yield return (s is not null && Math.Abs(s.LengthBeats - 34) < 0.01 && s.LengthText == "0:17",
                 $"summary: length runs to the end of the last clip — MIDI, warped and unwarped audio ({s?.LengthBeats:0.##} beats, {s?.LengthText})");
 
+            // The same 2 s clip an octave up plays in 1 s (2 beats), as the engine resamples it: → 32.
+            string up = Bundle(dir, "Up", """
+                { "transport": { "bpm": 120 },
+                  "tracks": [ { "type": 0, "audioClips": [ { "sample": "samples/x.wav", "startBeat": 30, "lengthFrames": 0, "pitchSemitones": 12 } ] } ] }
+                """);
+            Directory.CreateDirectory(Path.Combine(up, "samples"));
+            WavWriter.WriteSine(Path.Combine(up, "samples", "x.wav"), 2.0, 220, 44100);
+            var su = ProjectSummaryReader.Read(up);
+            yield return (su is not null && Math.Abs(su.LengthBeats - 32) < 0.01, $"summary: a transposed unwarped clip is as long as it plays ({su?.LengthBeats:0.##} beats)");
+            Directory.Delete(up, true);   // the Projects list below counts this folder's bundles
+
             string bad = Bundle(dir, "Broken", "{ not json");
             yield return (ProjectSummaryReader.Read(bad) is null, "summary: an unreadable project gives none");
 

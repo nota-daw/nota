@@ -35,15 +35,17 @@ internal static class SampleFoldersTests
 
     private static IEnumerable<(bool, string)> Rules()
     {
+        // Expected paths go through the same normalising: on Windows "/x/A" becomes "C:\x\A".
+        string xa = SampleFolderRules.Normalize("/x/A"), xb = SampleFolderRules.Normalize("/x/B");
         var (m1, _) = SampleFolderRules.Repair(null, "/x/A");
-        yield return (m1.Count == 1 && m1[0].Path == "/x/A" && m1[0].IsDefault, "folders: an old settings file becomes one default folder");
+        yield return (m1.Count == 1 && m1[0].Path == xa && m1[0].IsDefault, "folders: an old settings file becomes one default folder");
 
         var (m2, dropped) = SampleFolderRules.Repair(new List<SampleFolderEntry>
         {
             new() { Path = "/x/A", IsDefault = true }, new() { Path = "/x/B/", IsDefault = true },
             new() { Path = "/x/A/Drums" }, new() { Path = "/x/A" },
         }, "/ignored");
-        yield return (m2.Count == 2 && m2[1].Path == "/x/B" && m2.Count(e => e.IsDefault) == 1 && m2[0].IsDefault && dropped.Count == 2,
+        yield return (m2.Count == 2 && m2[1].Path == xb && m2.Count(e => e.IsDefault) == 1 && m2[0].IsDefault && dropped.Count == 2,
             "folders: on load, one default survives, trailing separators go, nested and duplicate entries are dropped");
 
         var (m3, _) = SampleFolderRules.Repair(new List<SampleFolderEntry> { new() { Path = "/x/A" }, new() { Path = "/x/B" } }, "/ignored");
@@ -165,6 +167,14 @@ internal static class SampleFoldersTests
             vm.FilterTree(3, "loop");
             yield return (vm.Samples.Any(r => r.Name == "loop.wav") && !vm.Samples.Any(r => r.Name == "kick.wav"), "tree: search finds files in the second folder");
             vm.FilterTree(3, "");
+
+            s.SetDefaultSampleFolder(1);
+            vm.RebuildSamples();
+            var swapped = vm.Samples.Where(r => r.Depth == 0).ToList();
+            yield return (swapped.Count == 2 && swapped[0].Name == "Loops" && swapped[0].PlaceIndex == 1 && swapped[1].PlaceIndex == 0,
+                "tree: a new default moves to the top and keeps its place in the list");
+            s.SetDefaultSampleFolder(0);
+            vm.RebuildSamples();
 
             Directory.Delete(b, true);
             vm.RebuildSamples();

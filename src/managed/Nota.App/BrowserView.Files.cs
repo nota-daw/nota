@@ -174,8 +174,11 @@ public sealed partial class BrowserView
             RenderPath();
             if (vm.BrowseSelect is { } sel && vm.BrowseItems.FirstOrDefault(r => SampleFolderRules.PathComparer.Equals(r.Path, sel)) is { } row)
             {
+                // Selected for the eye, not the ear: Locate doesn't audition (#581).
+                _suppressPreview = true;
                 _pages[FilesTab].SelectedItem = row;
                 _pages[FilesTab].ScrollIntoView(row);
+                _suppressPreview = false;
             }
             RefreshCounts();
         };
@@ -393,7 +396,18 @@ public sealed partial class BrowserView
             if (BrowseOn) { _vm.BrowseMode = false; ApplyBrowseMode(); }
             _search.Text = "";
             var row = _vm.RevealSample(path);
-            if (row is null) return;
+            if (row is null)
+            {
+                // The tree is still being walked (startup, a big folder just added): try
+                // again once it is in.
+                if (_vm.SamplesBuilding && !_revealPending)
+                {
+                    _revealPending = true;
+                    void Retry() { _vm.SamplesRebuilt -= Retry; _revealPending = false; RevealFile(path); }
+                    _vm.SamplesRebuilt += Retry;
+                }
+                return;
+            }
             _suppressPreview = true;
             _pages[FilesTab].SelectedItem = row;
             _pages[FilesTab].ScrollIntoView(row);
@@ -401,10 +415,12 @@ public sealed partial class BrowserView
         }
         else
         {
+            _search.Text = "";   // a query that misses the file would filter it out of view
             if (!BrowseOn) { _vm.BrowseMode = true; ApplyBrowseMode(); }
             _vm.BrowseTo(System.IO.Path.GetDirectoryName(path) ?? path, path);
         }
     }
 
     private bool _suppressPreview;
+    private bool _revealPending;
 }

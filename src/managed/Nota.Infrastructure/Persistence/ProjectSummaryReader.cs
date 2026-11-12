@@ -110,7 +110,8 @@ public sealed class ProjectSummaryReader : IProjectSummaries
         var (rate, total) = sample is { Length: > 0 } ? WavInfo(Path.Combine(bundle, sample)) : (0, 0L);
         if (frames <= 0) frames = Math.Max(0, total - (long)Num(c, "sourceOffsetFrames"));
         if (rate <= 0) rate = 48000;
-        return frames / (double)rate * bpm / 60.0;
+        // Transposing an unwarped clip resamples it, as the engine does: +12 st plays it in half the time.
+        return frames / (double)rate * bpm / 60.0 / Math.Pow(2.0, Num(c, "pitchSemitones") / 12.0);
     }
 
     // Sample rate and frame count from a WAV header; (0, 0) when it isn't one.

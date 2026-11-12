@@ -706,8 +706,14 @@ public sealed partial class BrowserViewModel : ObservableObject
             return;
         }
         var cts = _samplesCts = new CancellationTokenSource();
-        var folders = _settings.ResolvedSampleFolders();
-        _index?.Watch(folders.Where(f => f.Available).Select(f => f.Path).ToList());   // analyses whatever it doesn't know yet, in the background
+        SamplesBuilding = true;
+        var all = _settings.ResolvedSampleFolders();
+        // Every root, unplugged ones too: the index keeps an offline folder's analyses for
+        // when its drive comes back, and only knows it's offline if it's in the list.
+        _index?.Watch(all.Select(f => f.Path).ToList());   // analyses whatever it doesn't know yet, in the background
+        _sampleAvailability = Availability(all);
+        // The default folder leads the Files tab (FR-004); each keeps its own PlaceIndex.
+        var folders = all.OrderByDescending(f => f.IsDefault).ToList();
         var expanded = new HashSet<string>(_expandedTreeKeys, StringComparer.OrdinalIgnoreCase);
         var ctx = SynchronizationContext.Current;
 
@@ -731,11 +737,23 @@ public sealed partial class BrowserViewModel : ObservableObject
             catch (OperationCanceledException) { return; }
         }
         if (cts.IsCancellationRequested) return;
+        SamplesBuilding = false;   // before the swap: SamplesRebuilt handlers see a whole tree
         ApplySampleTree(built.Tree, built.Leaves);
     }
 
     private void ApplySampleTree(List<BrowserItem> tree, List<BrowserItem> leaves)
     {
+        // The walk used the folders open when it began; keep what was opened or closed since.
+        void Reopen(List<BrowserItem> nodes)
+        {
+            foreach (var n in nodes)
+                if (n.Kind == BrowserItemKind.Folder)
+                {
+                    n.IsExpanded = _expandedTreeKeys.Contains(n.Path);
+                    Reopen(n.Children);
+                }
+        }
+        Reopen(tree);
         _sampleTree.Clear();
         _sampleTree.AddRange(tree);
         _sampleLeaves.Clear();
@@ -751,6 +769,24 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     /// <summary>Raised after the Files tree was rebuilt (folders changed, rescan).</summary>
     public event Action? SamplesRebuilt;
+
+    /// <summary>True while a Files tree rebuild is walking the disk; the tree on show may not
+    /// hold every file yet.</summary>
+    public bool SamplesBuilding { get; private set; }
+
+    // Which folders were reachable at the last rebuild ("1" / "0" per folder, in list order).
+    private string _sampleAvailability = "";
+
+    private static string Availability(IReadOnlyList<ResolvedSampleFolder> folders)
+        => string.Concat(folders.Select(f => f.Available ? '1' : '0'));
+
+    /// <summary>The Files tab came into view: rebuilds the tree when a folder's drive was
+    /// plugged in or pulled out since the last rebuild.</summary>
+    public void RefreshSampleAvailability()
+    {
+        if (_settings is null || SamplesBuilding) return;
+        if (Availability(_settings.ResolvedSampleFolders()) != _sampleAvailability) RebuildSamples();
+    }
 
     // Walks every folder (worker thread; touches no shared state). One folder keeps today's
     // flat tree; with several, each becomes a top-level node holding its files.
