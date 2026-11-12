@@ -494,7 +494,7 @@ internal sealed partial class RackCardView
     private Border MixBtn(string text, Func<bool> on, SolidColorBrush accent, Action toggle, bool choke = false)
     {
         var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        if (choke) tb.FontFamily = NotaFonts.UiFamily;
+        if (choke) tb.FontFamily = NotaFonts.ValuesFamily;
         var b = new Border { Width = 13, Height = 11, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
         void Paint()
         {
@@ -909,7 +909,7 @@ internal sealed partial class RackCardView
 
     private static TextBlock DrumMono(string t, IBrush ink, double fs) => new()
     {
-        Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center,
+        Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.ValuesFamily, VerticalAlignment = VerticalAlignment.Center,
     };
 
     // An empty state: one Ink 5 line, centred.

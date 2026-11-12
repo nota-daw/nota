@@ -45,7 +45,7 @@ internal static partial class MenuKit
         {
             var tag = new TextBlock
             {
-                Text = badge, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Value,
+                Text = badge, FontFamily = NotaFonts.ValuesFamily, FontSize = NotaType.Value,
                 Foreground = NotaPalette.TextTertiary, Margin = new Thickness(12, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };

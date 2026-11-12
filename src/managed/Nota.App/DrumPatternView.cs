@@ -634,7 +634,7 @@ public sealed class DrumPatternView : UserControl
     private static TextBlock Mono(string text, IBrush colour, double size = 8)
     {
         var tb = new TextBlock { Text = text, FontSize = size, Foreground = colour, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return tb;
     }
 

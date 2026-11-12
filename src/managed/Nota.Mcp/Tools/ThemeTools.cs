@@ -21,9 +21,11 @@ public sealed class ThemeTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     : EngineTools(engine, dispatch, refresh)
 {
     private const string Format =
-        "A theme is the JSON text of a theme file: { \"formatVersion\": 1 or 2, \"id\": \"lower-case-hyphenated\", \"name\": \"1–40 chars\", "
+        "A theme is the JSON text of a theme file: { \"formatVersion\": 1, 2 or 3, \"id\": \"lower-case-hyphenated\", \"name\": \"1–40 chars\", "
         + "\"kind\": \"dark\"|\"light\", \"colors\": { every token: \"#RRGGBB\" (or #AARRGGBB where the catalogue allows translucency) } }. "
-        + "Format 2 may add \"font\": { \"family\": \"<installed font>\" } and \"radius\": { \"scale\": 0–2, \"steps\": { \"card\": px, … } }.";
+        + "Format 2 may add \"font\": { \"family\": \"<installed font>\" } and \"radius\": { \"scale\": 0–2, \"steps\": { \"card\": px, … } }; "
+        + "format 3 also \"font\": { \"values\": \"<installed font>\" } for values and readouts (family then optional). "
+        + "A skin that sets radius keeps its corners under the classic look; one that doesn't takes the classic corners.";
 
     public sealed record Problem(
         [property: Description("Rule broken: F1–F6 (format, id, name, kind, tokens, colours), V1–V4 (font/radius), JSON")] string Rule,
@@ -47,6 +49,7 @@ public sealed class ThemeTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     public sealed record TryOnResult(ValidationResult Validation, bool Wearing);
 
     public sealed record WornResult(string Worn);
+    public sealed record LookResult(string Look, string Worn);
 
     private static ValidationResult Result(ThemeValidation v) => new(
         v.IsValid,
@@ -55,15 +58,29 @@ public sealed class ThemeTools(IAudioEngine engine, IEngineDispatch dispatch, IA
 
     [McpServerTool(Name = "list_themes"), Description(
         "List Nota's colour themes (skins): the built-ins and the user themes in the themes folder, with kind, warnings, "
-        + "typeface and roundness; which one is worn now (and whether it is a try-on); the stored Appearance choice; and "
+        + "typeface and roundness; which one is worn now (and whether it is a try-on); the stored Appearance choice, with "
+        + "the look (\"new\" or \"classic\"); and "
         + "the theme files that could not be loaded, with the reason.")]
     public Task<ThemeListing> ListThemes() => Read(themes.List);
 
     [McpServerTool(Name = "get_theme"), Description(
         "Read one theme's file (JSON text, tokens in catalogue order). Use a built-in as the template for a new skin: "
-        + "change the id and name, then the colours (and, in formatVersion 2, font and radius).")]
-    public async Task<string> GetTheme([Description("Theme id from list_themes, e.g. studio-dark")] string id) =>
-        await Read(() => themes.GetFile(id)) ?? throw new ArgumentException($"No theme '{id}' — see list_themes.");
+        + "change the id and name, then the colours (and, in formatVersion 2, font and radius). With look \"classic\" a "
+        + "built-in comes back in its classic palette (Nota 0.59's colours) — a start for a classic skin.")]
+    public async Task<string> GetTheme(
+        [Description("Theme id from list_themes, e.g. studio-dark")] string id,
+        [Description("\"new\" (default): the file as it is; \"classic\": a built-in's classic palette")] string? look = null) =>
+        await Read(() => themes.GetFile(id, look)) ?? throw new ArgumentException($"No theme '{id}' — see list_themes.");
+
+    [McpServerTool(Name = "set_look"), Description(
+        "Switch Nota's look and store it, as Preferences → Appearance → Look does: \"new\" (the current look) or "
+        + "\"classic\" (Nota 0.59's colours, tighter corners and values in Geist Mono, over any theme; a user skin keeps "
+        + "what it sets). Live, no restart. Returns the look and the theme worn.")]
+    public async Task<LookResult> SetLook([Description("\"new\" or \"classic\"")] string look)
+    {
+        var worn = await Read(() => themes.SetLook(look));
+        return new LookResult(look.Trim().ToLowerInvariant(), worn);
+    }
 
     [McpServerTool(Name = "get_theme_catalogue"), Description(
         "The colour tokens every theme must define, in file order, each with its group, what it colours, and whether it may "
@@ -92,9 +109,10 @@ public sealed class ThemeTools(IAudioEngine engine, IEngineDispatch dispatch, IA
         [Description("The theme file's JSON text")] string theme,
         [Description("Only these parts (names as listed above); all when omitted")] string[]? surfaces = null,
         [Description("\"user\" (default): with the accent colour the user picked, as the skin would really look; "
-                     + "\"theme\": with the theme's own accent")] string? accent = null)
+                     + "\"theme\": with the theme's own accent")] string? accent = null,
+        [Description("\"new\" or \"classic\"; the look the user wears when omitted")] string? look = null)
     {
-        var result = await await Read(() => themes.PreviewAsync(theme, surfaces, string.Equals(accent, "theme", StringComparison.OrdinalIgnoreCase)));
+        var result = await await Read(() => themes.PreviewAsync(theme, surfaces, string.Equals(accent, "theme", StringComparison.OrdinalIgnoreCase), look));
         var head = new
         {
             validation = Result(result.Validation),

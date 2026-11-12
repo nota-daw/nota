@@ -91,6 +91,7 @@ public partial class MainWindow : Window
         InitBottomPanels();    // BodyGrid rows for the docked Mixer + Detail panels (specs/054)
         InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
         InitRecentMenu();      // File → Open recent (#443)
+        InitMenuButton();      // the Menu key in place of the menu row on Windows / Linux (#518)
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
         // decorations on macOS/Windows (traffic lights / caption buttons overlay it).
@@ -424,15 +425,24 @@ public partial class MainWindow : Window
             vm.Settings.Save();
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+        Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);
+        // Groups in the track headers follow the worn look (specs/094); a theme or accent
+        // change leaves them be — the setter rebuilds only when the look itself moved.
+        Timeline.HeaderLook = NotaThemeService.Look;
+        NotaThemeService.Changed += () => Timeline.HeaderLook = NotaThemeService.Look;
+        Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
         vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
-        // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
+        // Settings → Appearance can switch the waveform style, the phrase lines and the header side while the arrangement is open.
         vm.Settings.Changed += () =>
         {
             Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+            Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);   // a pick, or the look's default
+            Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
             vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
+            ApplyMenuBar(vm.Settings.Current.ShowMenuBar);
         };
         Browser.SetViewModel(vm.Browser);
         InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
@@ -444,6 +454,7 @@ public partial class MainWindow : Window
         Browser.ItemActivated += OnBrowserItemActivated;
         Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
         Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        Browser.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // Files: path copied, folder not added (spec 092)
         Browser.RevealRequested += OnBrowserReveal;
         Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
@@ -492,6 +503,7 @@ public partial class MainWindow : Window
         };
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         _session.SlotSelected += OnSessionSlotSelected;
+        InitLocate();   // clip menus' Locate ▸ and the Files highlight (spec 092)
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 

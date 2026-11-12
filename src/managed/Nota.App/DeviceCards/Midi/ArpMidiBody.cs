@@ -67,7 +67,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.ValuesFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
 
     private static string RateLabel(IAudioEngine e, int t, int mi)
         => e.MidiEffectGetParam(t, mi, GSync) > 0.5f ? RateNames[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, mi, GRate)), 0, 7)]

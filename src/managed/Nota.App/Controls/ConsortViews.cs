@@ -248,7 +248,7 @@ internal sealed class ConsortFilterCurve : FilterGraphBase
 // ---- BBD taps: the L lane on top, R below; bar height = level of each repeat ----
 internal sealed class ConsortDelayView : Control
 {
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private double _tl = 0.26, _tr = 0.39, _fb = 0.6, _mix = 0.4;
     private bool _ping = true, _digital;
     public ConsortDelayView() { ClipToBounds = true; }
@@ -298,7 +298,7 @@ internal sealed class ConsortDelayView : Control
 // ---- the 16 step cells: type (note / ratchet / tie / rest), playhead, length. Click / drag paints ----
 internal sealed class ConsortStepGrid : Control
 {
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private readonly int[] _type = new int[16];
     private int _len = 16, _play = -1, _ratchet = 3;
     private bool _drag; private int _last = -1;
@@ -362,7 +362,7 @@ internal sealed class ConsortStepGrid : Control
 internal sealed class ConsortPitchLane : Control
 {
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private readonly int[] _p = new int[16], _t = new int[16];
     private int _len = 16, _play = -1, _dragStep = -1;
     private bool _arp;
@@ -443,7 +443,7 @@ internal sealed class ConsortPitchLane : Control
 //      jack to pull its cables, right-click for its cable list. ----
 internal sealed class ConsortJackField : Control
 {
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansSemiBold = NotaFonts.SansSemiBold;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;
@@ -651,7 +651,7 @@ internal sealed class ConsortJackField : Control
 // double-click or the menu's Clear pulls the cable (specs/035).
 internal sealed class ConsortPatchMatrix : Control, IValueEntryHost
 {
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansSemiBold = NotaFonts.SansSemiBold;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;

@@ -24,10 +24,16 @@ public enum BrowserItemKind
     Group,
     /// <summary>A Standard MIDI File (.mid) — drops as MIDI clip(s).</summary>
     MidiFile,
+    /// <summary>A file the Files browse view lists but Nota can't add (spec 092): shown
+    /// faded, never dragged, opened or auditioned.</summary>
+    OtherFile,
 }
 
 /// <summary>Active library filter for the device tabs (Instr / FX / MIDI).</summary>
 public enum BrowserFilter { None, Favorites, Tag }
+
+/// <summary>The Files browse view's list: filled, an empty folder, or a folder Nota can't read.</summary>
+public enum BrowseListState { Ok, Empty, Unreadable }
 
 public sealed class BrowserItem : INotifyPropertyChanged
 {
@@ -83,6 +89,58 @@ public sealed class BrowserItem : INotifyPropertyChanged
     public bool IsExpanded { get; set; }                       // toggled by the view-model
     /// <summary>The Files tab's Downloaded folder (installed sample packs): its own icon, listed first.</summary>
     public bool IsDownloads { get; init; }
+    /// <summary>A top-level sample folder of the Files tab (spec 092): its index in the
+    /// settings' folder list, or −1 for any other row.</summary>
+    public int PlaceIndex { get; init; } = -1;
+    /// <summary>A sample folder that can't be found (an unplugged drive): shown dimmed, empty.</summary>
+    public bool Unavailable { get; init; }
+    /// <summary>A drive / volume row of the browse view's Computer level.</summary>
+    public bool IsVolume { get; init; }
+    /// <summary>A browse-view file's size in bytes (shown in its own column); null elsewhere.</summary>
+    public long? Size { get; init; }
+
+    /// <summary>Projects tab (spec 092, #582): when the project was last saved; null if unknown.</summary>
+    public DateTime? Modified { get; init; }
+
+    private Nota.Application.Browser.ProjectSummary? _summary;
+    /// <summary>Projects tab: tempo, key, length, tracks — read in the background, null until then.</summary>
+    public Nota.Application.Browser.ProjectSummary? Summary
+    {
+        get => _summary;
+        set
+        {
+            if (ReferenceEquals(_summary, value)) return;
+            _summary = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Summary)));
+        }
+    }
+
+    private bool _isOpen;
+    /// <summary>Projects tab: this is the project open in Nota.</summary>
+    public bool IsOpen
+    {
+        get => _isOpen;
+        set
+        {
+            if (_isOpen == value) return;
+            _isOpen = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOpen)));
+        }
+    }
+
+    private bool _located;
+    /// <summary>The row is the source file of the clip selected in the arrangement / Session
+    /// (spec 092, #581): the view marks it.</summary>
+    public bool Located
+    {
+        get => _located;
+        set
+        {
+            if (_located == value) return;
+            _located = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Located)));
+        }
+    }
 
     public string Display => string.IsNullOrEmpty(Sub) ? Name : $"{Name}  ·  {Sub}";
     public override string ToString() => Display;
@@ -198,8 +256,10 @@ public sealed partial class BrowserViewModel : ObservableObject
 
     public BrowserViewModel(IPluginCatalog catalog, IPresetLibrary presets, IFactoryPresets factory,
                             ISettingsService? settings = null, IBrowserLibrary? library = null,
-                            IDrumKits? kits = null, ISampleIndex? sampleIndex = null, IMosaicPacks? mosaic = null)
+                            IDrumKits? kits = null, ISampleIndex? sampleIndex = null, IMosaicPacks? mosaic = null,
+                            Nota.Application.Browser.IProjectSummaries? projectSummaries = null)
     {
+        _projectSummaries = projectSummaries;
         _mosaic = mosaic;
         _index = sampleIndex;
         _catalog = catalog;
@@ -493,7 +553,7 @@ public sealed partial class BrowserViewModel : ObservableObject
     public void FilterTree(int tab, string query)
     {
         if (tab >= 0 && tab < _treeQuery.Length) _treeQuery[tab] = query ?? "";
-        if (tab == 3) RebuildSampleVisible();
+        if (tab == 3) { RebuildSampleVisible(); RebuildBrowseVisible(); }
         else if (tab == 4) RebuildPresetVisible();
         else RebuildVisible(tab);
     }
@@ -624,42 +684,214 @@ public sealed partial class BrowserViewModel : ObservableObject
     /// <summary>Scans the configured samples folder into a navigable folder tree (M7-4a).
     /// Folders become expandable parent nodes; audio and MIDI files are leaves. Only folders
     /// on a path to such a file appear.</summary>
+    // A newer rebuild cancels the one still walking the disk.
+    private CancellationTokenSource? _samplesCts;
+
+    /// <summary>Rebuilds the Files tree from every sample folder (spec 092). On the UI thread
+    /// the folders are walked in the background and the tree swapped in when done; without a
+    /// synchronisation context (tests) it runs inline.</summary>
     public void RebuildSamples()
     {
-        _sampleTree.Clear();
-        _sampleLeaves.Clear();
-        Samples.Clear();
-        if (_settings is null) return;
-        var root = _settings.ResolvedSamplesFolder();
-        _index?.Watch(root);   // analyses whatever it doesn't know yet, in the background
+        if (SynchronizationContext.Current is null) { RebuildSamplesAsync().GetAwaiter().GetResult(); return; }
+        _ = RebuildSamplesAsync();
+    }
 
-        // Folder nodes keyed by absolute directory path (reused while placing files).
-        var folders = new Dictionary<string, BrowserItem>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in EnumerateFilesSafe(root)
-                     .Where(p => SampleExts.Contains(Path.GetExtension(p).ToLowerInvariant())
-                                 || Nota.Application.Midi.MidiFileReader.IsMidiFile(p))
-                     .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-                     .Take(MaxSamples))
+    /// <summary>The background form of <see cref="RebuildSamples"/>; completes once the new tree is shown.</summary>
+    public async Task RebuildSamplesAsync()
+    {
+        _samplesCts?.Cancel();
+        if (_settings is null)
         {
-            var dir = Path.GetDirectoryName(path) ?? root;
-            var parentChildren = GetOrCreateFolder(root, dir, folders, out int depth);
-            var leaf = new BrowserItem
-            {
-                Name = Path.GetFileName(path),
-                Kind = Nota.Application.Midi.MidiFileReader.IsMidiFile(path) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
-                Sub = "",
-                Path = path,
-                Depth = depth,
-            };
-            if (leaf.Kind == BrowserItemKind.Sample) { leaf.Sample = _index?.Get(path); _sampleLeaves.Add(leaf); }
-            parentChildren.Add(leaf);
+            ApplySampleTree(new List<BrowserItem>(), new List<BrowserItem>());
+            return;
         }
+        var cts = _samplesCts = new CancellationTokenSource();
+        SamplesBuilding = true;
+        var all = _settings.ResolvedSampleFolders();
+        // Every root, unplugged ones too: the index keeps an offline folder's analyses for
+        // when its drive comes back, and only knows it's offline if it's in the list.
+        _index?.Watch(all.Select(f => f.Path).ToList());   // analyses whatever it doesn't know yet, in the background
+        _sampleAvailability = Availability(all);
+        // The default folder leads the Files tab (FR-004); each keeps its own PlaceIndex.
+        var folders = all.OrderByDescending(f => f.IsDefault).ToList();
+        var expanded = new HashSet<string>(_expandedTreeKeys, StringComparer.OrdinalIgnoreCase);
+        var ctx = SynchronizationContext.Current;
+
+        (List<BrowserItem> Tree, List<BrowserItem> Leaves) built;
+        if (ctx is null) built = BuildSampleTree(folders, expanded, cts.Token);
+        else
+        {
+            // A first build over a big library: show the folders' first level at once, the
+            // files follow when the walk ends (SC-005).
+            if (_sampleTree.Count == 0)
+            {
+                try
+                {
+                    var skeleton = await Task.Run(() => BuildSampleSkeleton(folders, expanded), cts.Token);
+                    if (cts.IsCancellationRequested) return;
+                    if (_sampleTree.Count == 0) ApplySampleTree(skeleton, new List<BrowserItem>());
+                }
+                catch (OperationCanceledException) { return; }
+            }
+            try { built = await Task.Run(() => BuildSampleTree(folders, expanded, cts.Token), cts.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        if (cts.IsCancellationRequested) return;
+        SamplesBuilding = false;   // before the swap: SamplesRebuilt handlers see a whole tree
+        ApplySampleTree(built.Tree, built.Leaves);
+    }
+
+    private void ApplySampleTree(List<BrowserItem> tree, List<BrowserItem> leaves)
+    {
+        // The walk used the folders open when it began; keep what was opened or closed since.
+        void Reopen(List<BrowserItem> nodes)
+        {
+            foreach (var n in nodes)
+                if (n.Kind == BrowserItemKind.Folder)
+                {
+                    n.IsExpanded = _expandedTreeKeys.Contains(n.Path);
+                    Reopen(n.Children);
+                }
+        }
+        Reopen(tree);
+        _sampleTree.Clear();
+        _sampleTree.AddRange(tree);
+        _sampleLeaves.Clear();
+        _sampleLeaves.AddRange(leaves);
+        foreach (var leaf in _sampleLeaves) leaf.Sample = _index?.Get(leaf.Path);
         AppendKitFolders();
-        SortSampleTree(_sampleTree);
         _similarAnchor = null;   // the anchor row is gone; its list would point at stale rows
         _similarRows.Clear();
+        ApplyLocated();
         RebuildSampleVisible();
+        SamplesRebuilt?.Invoke();
     }
+
+    /// <summary>Raised after the Files tree was rebuilt (folders changed, rescan).</summary>
+    public event Action? SamplesRebuilt;
+
+    /// <summary>True while a Files tree rebuild is walking the disk; the tree on show may not
+    /// hold every file yet.</summary>
+    public bool SamplesBuilding { get; private set; }
+
+    // Which folders were reachable at the last rebuild ("1" / "0" per folder, in list order).
+    private string _sampleAvailability = "";
+
+    private static string Availability(IReadOnlyList<ResolvedSampleFolder> folders)
+        => string.Concat(folders.Select(f => f.Available ? '1' : '0'));
+
+    /// <summary>The Files tab came into view: rebuilds the tree when a folder's drive was
+    /// plugged in or pulled out since the last rebuild.</summary>
+    public void RefreshSampleAvailability()
+    {
+        if (_settings is null || SamplesBuilding) return;
+        if (Availability(_settings.ResolvedSampleFolders()) != _sampleAvailability) RebuildSamples();
+    }
+
+    // Walks every folder (worker thread; touches no shared state). One folder keeps today's
+    // flat tree; with several, each becomes a top-level node holding its files.
+    private static (List<BrowserItem> Tree, List<BrowserItem> Leaves) BuildSampleTree(
+        IReadOnlyList<ResolvedSampleFolder> folders, HashSet<string> expanded, CancellationToken ct)
+    {
+        var tree = new List<BrowserItem>();
+        var leaves = new List<BrowserItem>();
+        bool places = folders.Count > 1;
+        foreach (var f in folders)
+        {
+            ct.ThrowIfCancellationRequested();
+            List<BrowserItem> top = tree;
+            int baseDepth = 0;
+            if (places)
+            {
+                var place = new BrowserItem
+                {
+                    Name = f.Label,
+                    Kind = BrowserItemKind.Folder,
+                    Sub = "",
+                    Tip = f.Available ? f.Path : Loc.F("browser.unavailable_tip", f.Path),
+                    Path = f.Path,
+                    Depth = 0,
+                    PlaceIndex = f.Index,
+                    Unavailable = !f.Available,
+                    IsExpanded = expanded.Contains(f.Path),
+                };
+                tree.Add(place);
+                top = place.Children;
+                baseDepth = 1;
+            }
+            if (!f.Available) continue;
+
+            // Folder nodes keyed by absolute directory path (reused while placing files).
+            var nodes = new Dictionary<string, BrowserItem>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in EnumerateFilesSafe(f.Path)
+                         .Where(IsSampleOrMidi)
+                         .Take(MaxSamples)
+                         .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            {
+                ct.ThrowIfCancellationRequested();
+                var dir = Path.GetDirectoryName(path) ?? f.Path;
+                var parentChildren = GetOrCreateFolder(f.Path, dir, nodes, top, baseDepth, expanded, out int depth);
+                var leaf = new BrowserItem
+                {
+                    Name = Path.GetFileName(path),
+                    Kind = Nota.Application.Midi.MidiFileReader.IsMidiFile(path) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
+                    Sub = "",
+                    Path = path,
+                    Depth = depth,
+                };
+                if (leaf.Kind == BrowserItemKind.Sample) leaves.Add(leaf);
+                parentChildren.Add(leaf);
+            }
+        }
+        foreach (var n in tree)
+            if (places) SortSampleTree(n.Children);
+        if (!places) SortSampleTree(tree);
+        return (tree, leaves);
+    }
+
+    // The first level only: each folder's subfolders (and, with several folders, the folder
+    // nodes themselves) — what a big library shows while its files are still being found.
+    private static List<BrowserItem> BuildSampleSkeleton(IReadOnlyList<ResolvedSampleFolder> folders, HashSet<string> expanded)
+    {
+        var tree = new List<BrowserItem>();
+        bool places = folders.Count > 1;
+        var opts = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };
+        foreach (var f in folders)
+        {
+            List<BrowserItem> top = tree;
+            if (places)
+            {
+                var place = new BrowserItem
+                {
+                    Name = f.Label, Kind = BrowserItemKind.Folder, Sub = "", Path = f.Path, Depth = 0,
+                    Tip = f.Available ? f.Path : Loc.F("browser.unavailable_tip", f.Path),
+                    PlaceIndex = f.Index, Unavailable = !f.Available, IsExpanded = expanded.Contains(f.Path),
+                };
+                tree.Add(place);
+                top = place.Children;
+            }
+            if (!f.Available) continue;
+            try
+            {
+                foreach (var d in Directory.EnumerateDirectories(f.Path, "*", opts).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+                {
+                    var name = Path.GetFileName(d);
+                    top.Add(new BrowserItem
+                    {
+                        Name = name, Kind = BrowserItemKind.Folder, Sub = "", Path = d, Depth = places ? 1 : 0,
+                        IsDownloads = string.Equals(name, SamplePacks.FolderName, StringComparison.OrdinalIgnoreCase),
+                    });
+                }
+            }
+            catch { /* unreadable: the full walk says what it can */ }
+        }
+        foreach (var n in tree) if (places) SortSampleTree(n.Children);
+        if (!places) SortSampleTree(tree);
+        return tree;
+    }
+
+    private static bool IsSampleOrMidi(string p)
+        => SampleExts.Contains(Path.GetExtension(p).ToLowerInvariant()) || Nota.Application.Midi.MidiFileReader.IsMidiFile(p);
 
     // --- smart samples: tags, filter, similar ------------------------------------------
 
@@ -701,13 +933,13 @@ public sealed partial class BrowserViewModel : ObservableObject
         var index = _index;
         string path = item.Path;
         var hits = await Task.Run(() => index.Similar(path, count));
-        var root = _settings?.ResolvedSamplesFolder();
+        var roots = _settings?.ResolvedSampleFolders().Select(f => f.Path).ToList() ?? new List<string>();
         _similarRows = hits.Select(h => new BrowserItem
         {
             Name = Path.GetFileName(h.Info.Path),
             Kind = BrowserItemKind.Sample,
             Sub = "",
-            Tip = FolderOf(h.Info.Path, root),
+            Tip = FolderOf(h.Info.Path, roots.FirstOrDefault(r => Nota.Application.Browser.SampleFolderRules.IsSameOrInside(h.Info.Path, r))),
             Path = h.Info.Path,
             Depth = 0,
         }).ToList();
@@ -733,6 +965,176 @@ public sealed partial class BrowserViewModel : ObservableObject
         if (root is null) return dir;
         var rel = Path.GetRelativePath(root, dir);
         return rel == "." ? "" : rel.StartsWith("..", StringComparison.Ordinal) ? dir : rel;
+    }
+
+    // --- Files: browse mode (spec 092, #580) -------------------------------------------------
+
+    private List<BrowserItem> _browseAll = new();
+    private CancellationTokenSource? _browseCts;
+
+    /// <summary>The browse view's rows: the current folder's subfolders, then its audio and
+    /// MIDI files (or, at the Computer level, the drives), filtered by the Files search.</summary>
+    public BulkObservableCollection<BrowserItem> BrowseItems { get; } = new();
+
+    /// <summary>Where the browse view is; created on first use at the remembered folder.</summary>
+    public Nota.Application.Browser.FileBrowseState Browse
+        => _browse ??= CreateBrowseState();
+    private Nota.Application.Browser.FileBrowseState? _browse;
+
+    /// <summary>Why the browse list is empty: <see cref="BrowseListState.Ok"/>, an empty folder
+    /// or one Nota can't read.</summary>
+    public BrowseListState BrowseState { get; private set; }
+
+    /// <summary>The file a navigation asked to select (a pasted file path, Locate), or null.</summary>
+    public string? BrowseSelect { get; private set; }
+
+    /// <summary>Raised on the UI thread after <see cref="BrowseItems"/> was refilled.</summary>
+    public event Action? BrowseRefreshed;
+
+    /// <summary>The Files tab shows the browse view instead of the tree (remembered).</summary>
+    public bool BrowseMode
+    {
+        get => _settings?.Current.FilesBrowseMode ?? _browseModeNoSettings;
+        set
+        {
+            if (BrowseMode == value) return;
+            if (_settings is not null) { _settings.Current.FilesBrowseMode = value; _settings.Save(); }
+            else _browseModeNoSettings = value;
+            if (value) _ = RefreshBrowseAsync();
+        }
+    }
+    private bool _browseModeNoSettings;
+
+    private Nota.Application.Browser.FileBrowseState CreateBrowseState()
+    {
+        string start = _settings?.Current.FilesBrowseFolder ?? "";
+        try { if (start.Length == 0 || !Directory.Exists(start)) start = _settings?.ResolvedSamplesFolder() ?? Nota.Application.Browser.FileBrowseState.Computer; }
+        catch { start = Nota.Application.Browser.FileBrowseState.Computer; }
+        var b = new Nota.Application.Browser.FileBrowseState(start);
+        b.Changed += () =>
+        {
+            if (!b.IsComputer && _settings is not null && _settings.Current.FilesBrowseFolder != b.Location)
+            {
+                _settings.Current.FilesBrowseFolder = b.Location;
+                _settings.Save();
+            }
+            _ = RefreshBrowseAsync();
+        };
+        return b;
+    }
+
+    /// <summary>Home: back to the default sample folder, where browsing starts (one Back step returns).</summary>
+    public void BrowseHome()
+    {
+        if (_settings is null) return;
+        Browse.Go(_settings.ResolvedSamplesFolder());
+    }
+
+    /// <summary>The browse view already shows the default sample folder.</summary>
+    public bool BrowseAtHome => _settings is not null
+        && Nota.Application.Browser.SampleFolderRules.PathComparer.Equals(Browse.Location,
+            Nota.Application.Browser.SampleFolderRules.Normalize(_settings.ResolvedSamplesFolder()));
+
+    /// <summary>Opens <paramref name="folder"/> in the browse view, selecting
+    /// <paramref name="selectFile"/> once listed.</summary>
+    public void BrowseTo(string folder, string? selectFile = null)
+    {
+        BrowseSelect = selectFile;
+        if (Nota.Application.Browser.SampleFolderRules.PathComparer.Equals(
+                Nota.Application.Browser.SampleFolderRules.Normalize(folder), Browse.Location))
+            _ = RefreshBrowseAsync();
+        else Browse.Go(folder);
+    }
+
+    /// <summary>Re-lists the current browse location (worker thread when on the UI thread).</summary>
+    public async Task RefreshBrowseAsync()
+    {
+        _browseCts?.Cancel();
+        var cts = _browseCts = new CancellationTokenSource();
+        string loc = Browse.Location;
+        (List<BrowserItem> Rows, BrowseListState State) listed;
+        if (SynchronizationContext.Current is null) listed = ListBrowse(loc);
+        else
+        {
+            try { listed = await Task.Run(() => ListBrowse(loc), cts.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        if (cts.IsCancellationRequested) return;
+        _browseAll = listed.Rows;
+        foreach (var r in _browseAll) if (r.Kind == BrowserItemKind.Sample) r.Sample = _index?.Get(r.Path);
+        BrowseState = listed.State;
+        RebuildBrowseVisible();
+        ApplyLocated();
+        BrowseRefreshed?.Invoke();
+        BrowseSelect = null;
+    }
+
+    // One folder's usable entries (worker thread): subfolders, then audio + MIDI files,
+    // each by name; hidden entries skipped. The Computer level lists the volumes.
+    public static (List<BrowserItem> Rows, BrowseListState State) ListBrowse(string location)
+    {
+        var rows = new List<BrowserItem>();
+        if (location.Length == 0)
+        {
+            foreach (var (label, path) in Nota.Application.Browser.FileBrowseState.Volumes())
+                rows.Add(new BrowserItem { Name = label, Kind = BrowserItemKind.Folder, Sub = "", Tip = path, Path = path, Depth = 0, IsVolume = true });
+            return (rows, BrowseListState.Ok);
+        }
+        var opts = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };
+        try
+        {
+            if (!Directory.Exists(location)) return (rows, BrowseListState.Unreadable);
+            foreach (var d in Directory.EnumerateDirectories(location, "*", opts).OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase))
+                rows.Add(new BrowserItem { Name = Path.GetFileName(d), Kind = BrowserItemKind.Folder, Sub = "", Path = d, Depth = 0 });
+            // Every file is listed; what Nota can't add is marked so the view fades it (spec 092).
+            foreach (var f in Directory.EnumerateFiles(location, "*", opts).OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+            {
+                long size;
+                try { size = new FileInfo(f).Length; } catch { size = 0; }
+                rows.Add(new BrowserItem
+                {
+                    Name = Path.GetFileName(f),
+                    Kind = !IsSampleOrMidi(f) ? BrowserItemKind.OtherFile
+                         : Nota.Application.Midi.MidiFileReader.IsMidiFile(f) ? BrowserItemKind.MidiFile : BrowserItemKind.Sample,
+                    Sub = "",
+                    Path = f,
+                    Depth = 0,
+                    Size = size,
+                });
+            }
+        }
+        catch (UnauthorizedAccessException) { return (new List<BrowserItem>(), BrowseListState.Unreadable); }
+        catch (IOException) { return (new List<BrowserItem>(), BrowseListState.Unreadable); }
+        return (rows, rows.Count == 0 ? BrowseListState.Empty : BrowseListState.Ok);
+    }
+
+    // The Files search filters the current folder only (no recursive walk).
+    private void RebuildBrowseVisible()
+    {
+        string q = _treeQuery[3].Trim();
+        BrowseItems.ReplaceAll(q.Length == 0 ? _browseAll : _browseAll.Where(r => Matches(r, q)).ToList());
+    }
+
+    // --- Locate (spec 092, #581) -----------------------------------------------------------
+
+    private string? _locatedPath;
+
+    /// <summary>The source file of the clip selected in the arrangement / Session, or null.
+    /// Marks the matching Files row (tree or browse list) — never expands, scrolls or
+    /// switches tabs: a row the user can't see stays unmarked until they open its folder.</summary>
+    public void SetLocatedPath(string? path)
+    {
+        _locatedPath = string.IsNullOrEmpty(path) ? null : path;
+        ApplyLocated();
+    }
+
+    public string? LocatedPath => _locatedPath;
+
+    private void ApplyLocated()
+    {
+        var cmp = Nota.Application.Browser.SampleFolderRules.PathComparer;
+        foreach (var leaf in _sampleLeaves) leaf.Located = _locatedPath is not null && cmp.Equals(leaf.Path, _locatedPath);
+        foreach (var row in BrowseItems) row.Located = _locatedPath is not null && cmp.Equals(row.Path, _locatedPath);
     }
 
     // Files rows the sample filter lets through: audio the index has analysed and that
@@ -787,16 +1189,17 @@ public sealed partial class BrowserViewModel : ObservableObject
         if (rootNode.Children.Count > 0) _sampleTree.Add(rootNode);
     }
 
-    // Ensures the folder chain from root down to `dir` exists, returning the child list the
-    // file should join and the file's tree depth. Root-level files land directly in the roots.
-    private List<BrowserItem> GetOrCreateFolder(string root, string dir,
-                                                Dictionary<string, BrowserItem> folders, out int fileDepth)
+    // Ensures the folder chain from root down to `dir` exists under `top` (the tree, or a
+    // sample folder's node), returning the child list the file should join and the file's
+    // tree depth. Files right in the root land directly in `top`.
+    private static List<BrowserItem> GetOrCreateFolder(string root, string dir, Dictionary<string, BrowserItem> folders,
+                                                       List<BrowserItem> top, int baseDepth, HashSet<string> expanded, out int fileDepth)
     {
         var rel = Path.GetRelativePath(root, dir);
-        if (rel == "." || rel.StartsWith("..", StringComparison.Ordinal)) { fileDepth = 0; return _sampleTree; }
+        if (rel == "." || rel.StartsWith("..", StringComparison.Ordinal)) { fileDepth = baseDepth; return top; }
 
         var segments = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        List<BrowserItem> children = _sampleTree;
+        List<BrowserItem> children = top;
         string abs = root;
         for (int i = 0; i < segments.Length; i++)
         {
@@ -811,8 +1214,8 @@ public sealed partial class BrowserViewModel : ObservableObject
                     Sub = "",
                     Tip = downloads ? Loc.T("browser.sample_packs_installed_from_settings") : "",
                     Path = abs,
-                    Depth = i,
-                    IsExpanded = _expandedTreeKeys.Contains(abs),
+                    Depth = baseDepth + i,
+                    IsExpanded = expanded.Contains(abs),
                     IsDownloads = downloads,
                 };
                 folders[abs] = node;
@@ -820,7 +1223,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             }
             children = node.Children;
         }
-        fileDepth = segments.Length;
+        fileDepth = baseDepth + segments.Length;
         return children;
     }
 
@@ -898,29 +1301,140 @@ public sealed partial class BrowserViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>Scans the configured projects folder for .nota bundles (M7-4b).</summary>
+    // --- Projects tab (M7-4b; spec 092, #582) --------------------------------------------------
+
+    private readonly Nota.Application.Browser.IProjectSummaries? _projectSummaries;
+    private CancellationTokenSource? _projectsCts;
+    private string? _openProjectPath;
+
+    /// <summary>The project open in Nota (its bundle path), marked in the Projects tab.</summary>
+    public string? OpenProjectPath
+    {
+        get => _openProjectPath;
+        set
+        {
+            _openProjectPath = value;
+            foreach (var p in Projects) p.IsOpen = IsOpenProject(p.Path);
+        }
+    }
+
+    private bool IsOpenProject(string path)
+        => _openProjectPath is { Length: > 0 } open
+           && Nota.Application.Browser.SampleFolderRules.PathComparer.Equals(
+               Nota.Application.Browser.SampleFolderRules.Normalize(open), Nota.Application.Browser.SampleFolderRules.Normalize(path));
+
+    /// <summary>The Projects tab's order (remembered in settings).</summary>
+    public ProjectsSortOrder ProjectsSort
+    {
+        get => _settings?.Current.ProjectsSort ?? _projectsSortNoSettings;
+        set
+        {
+            if (ProjectsSort == value) return;
+            if (_settings is not null) { _settings.Current.ProjectsSort = value; _settings.Save(); }
+            else _projectsSortNoSettings = value;
+            RebuildProjects();
+        }
+    }
+    private ProjectsSortOrder _projectsSortNoSettings;
+
+    /// <summary>Scans the configured projects folder for .nota bundles: newest first (or by
+    /// name), each with its save date; tempo, key, length and tracks follow from a background
+    /// read (cached), filling the rows in place.</summary>
     public void RebuildProjects()
     {
+        _projectsCts?.Cancel();
         Projects.Clear();
         if (_settings is null) return;
         var root = _settings.ResolvedProjectsFolder();
+        var rows = new List<BrowserItem>();
         try
         {
             foreach (var dir in Directory.EnumerateDirectories(root)
-                         .Where(d => d.EndsWith(".nota", StringComparison.OrdinalIgnoreCase))
-                         .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+                         .Where(d => d.EndsWith(".nota", StringComparison.OrdinalIgnoreCase)))
             {
-                Projects.Add(new BrowserItem
+                var modified = Nota.Application.Browser.ProjectDates.Modified(dir);
+                rows.Add(new BrowserItem
                 {
                     Name = Path.GetFileNameWithoutExtension(dir),
                     Kind = BrowserItemKind.Project,
-                    Sub = "project",
+                    Sub = modified is { } m ? Nota.Application.Browser.ProjectDates.Format(m) : "",
                     Path = dir,
+                    Modified = modified,
+                    IsOpen = IsOpenProject(dir),
                 });
             }
         }
         catch { /* folder missing/unreadable — empty list */ }
+
+        IEnumerable<BrowserItem> ordered = ProjectsSort == ProjectsSortOrder.Name
+            ? rows.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            : rows.OrderByDescending(r => r.Modified.HasValue).ThenByDescending(r => r.Modified).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var r in ordered) Projects.Add(r);
+        FillProjectSummaries();
     }
+
+    /// <summary>Completes once every visible project's details were read (tests).</summary>
+    public Task ProjectSummariesTask { get; private set; } = Task.CompletedTask;
+
+    private void FillProjectSummaries()
+    {
+        if (_projectSummaries is null || Projects.Count == 0) return;
+        var reader = _projectSummaries;
+        var rows = Projects.ToList();
+        var cts = _projectsCts = new CancellationTokenSource();
+        var ctx = SynchronizationContext.Current;
+        ProjectSummariesTask = Task.Run(() =>
+        {
+            foreach (var row in rows)
+            {
+                if (cts.IsCancellationRequested) return;
+                Nota.Application.Browser.ProjectSummary? sum;
+                try { sum = reader.Get(row.Path); } catch { sum = null; }
+                if (sum is null) continue;
+                if (ctx is null) row.Summary = sum;
+                else ctx.Post(_ => row.Summary = sum, null);
+            }
+        });
+    }
+
+    // --- Locate in the tree ------------------------------------------------------------------
+
+    /// <summary>Opens the Files tree down to <paramref name="path"/> (search, filters and
+    /// "similar" cleared) and returns its row in <see cref="Samples"/>, or null when the tree
+    /// doesn't hold it.</summary>
+    public BrowserItem? RevealSample(string path)
+    {
+        var cmp = Nota.Application.Browser.SampleFolderRules.PathComparer;
+        var chain = new List<BrowserItem>();
+        bool Find(List<BrowserItem> nodes)
+        {
+            foreach (var n in nodes)
+            {
+                if (n.Kind != BrowserItemKind.Folder)
+                {
+                    if (cmp.Equals(n.Path, path)) { chain.Add(n); return true; }
+                    continue;
+                }
+                chain.Add(n);
+                if (Find(n.Children)) return true;
+                chain.RemoveAt(chain.Count - 1);
+            }
+            return false;
+        }
+        if (!Find(_sampleTree)) return null;
+        foreach (var folder in chain.Take(chain.Count - 1))
+        {
+            folder.IsExpanded = true;
+            _expandedTreeKeys.Add(folder.Path);
+        }
+        _treeQuery[3] = "";
+        _sampleFilter = SampleFilter.Empty;
+        _similarAnchor = null;
+        _similarRows.Clear();
+        RebuildSampleVisible();
+        return chain[^1];
+    }
+
 
     /// <summary>Lists saved presets from the app presets folder, grouped into a tree:
     /// category (Instruments / Audio Effects / MIDI Effects) → device → preset (M7-4c).</summary>
@@ -989,9 +1503,18 @@ public sealed partial class BrowserViewModel : ObservableObject
         return node;
     }
 
+    // Unreadable subfolders (permissions, a drive going away mid-walk) are skipped, not fatal;
+    // hidden and system entries stay out of the tree.
+    private static readonly EnumerationOptions WalkOptions = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+    };
+
     private static IEnumerable<string> EnumerateFilesSafe(string root)
     {
-        try { return Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories); }
+        try { return Directory.EnumerateFiles(root, "*", WalkOptions); }
         catch { return Enumerable.Empty<string>(); }
     }
 }

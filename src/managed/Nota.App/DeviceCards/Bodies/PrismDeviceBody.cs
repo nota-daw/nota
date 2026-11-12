@@ -122,7 +122,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
         static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure"); return tb; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         static Control GRow(Control c, int row) { Grid.SetRow(c, row); return c; }

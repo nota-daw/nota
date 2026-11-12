@@ -30,7 +30,7 @@ internal static class ChamberInk
 {
     public static readonly IBrush Veil = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xB8);
     public static readonly IBrush GridLine = NotaPalette.SurfaceCard;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
     public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);

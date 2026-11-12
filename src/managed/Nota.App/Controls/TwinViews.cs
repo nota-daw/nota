@@ -468,7 +468,7 @@ internal sealed class TwinStepGrid : Control
         NotaGraph.Window(ctx, r);
         if (Pattern is null) return;
         double cw = CellW, top = 18, barH = r.Height - top - 16;
-        var mono = NotaFonts.Sans;
+        var mono = NotaFonts.Measure;
         for (int c = 0; c < 16; c++)
         {
             int st = Page * 16 + c;
@@ -655,7 +655,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
 {
     internal readonly record struct Cell(int Slot, int Src, int Dst, float Depth, float Other);
 
-    private static readonly Typeface Mono = NotaFonts.Sans;
+    private static Typeface Mono => NotaFonts.Measure;
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;
     private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();

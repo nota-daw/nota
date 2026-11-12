@@ -211,7 +211,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             FontSize = NotaType.Axis, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var tabStrip = new Grid
         {
             Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*"),
@@ -403,7 +403,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
     private static TextBlock Axis(string text)
     {
         var tb = new TextBlock { Text = text, FontSize = NotaType.Axis, Foreground = NotaPalette.TextAxis };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return tb;
     }
 

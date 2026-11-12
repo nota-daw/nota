@@ -417,7 +417,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
     // ---- render ----
     private static FormattedText Text(string s, IBrush ink, double size, bool bold = false, bool mono = true)
         => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? (bold ? NotaFonts.SansBold : NotaFonts.Sans) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink, NotaTextSize.InCard);
+            mono ? (bold ? NotaFonts.MeasureBold : NotaFonts.Measure) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {

@@ -42,7 +42,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
     private static readonly IBrush Ink = NotaPalette.VizInk;   // curves at rest: neutral ink
     private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush Ghost = NotaPalette.Wash(NotaPalette.VizInk, 0x40);
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
 
     private const double Pad = 6;
 

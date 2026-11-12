@@ -82,7 +82,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         {
             if (I(id) is not (var i and >= 0)) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), FontSize = 8, Foreground = TxtC, Width = valW, VerticalAlignment = VerticalAlignment.Center };
-            value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            value.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, ArcColor = mod ? TealC : null, Default = engine.InstrumentParamDefault(track, i) };
             knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
@@ -171,7 +171,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
             host.SizeChanged += (_, _) => Vis(G(id));
             var valTxt = new TextBlock { FontSize = 7, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
-            valTxt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            valTxt.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             readouts.Add(() => { if (!drag) Vis(G(id)); valTxt.Text = fmt(G(id)); });
             var col2 = new DockPanel { HorizontalAlignment = HorizontalAlignment.Center };
             var nm = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
@@ -232,7 +232,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             g.Children.Add(Cell(WaveChips($"{p}wave", n == 3), 3));
             string modTxt = n == 3 ? "free" : "kbd";
             var mt = new TextBlock { Text = modTxt, FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            mt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            mt.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             if (n == 3) readouts.Add(() => mt.Text = G("osc3kbd") > 0.5f ? "kbd" : "free");
             g.Children.Add(Cell(mt, 4));
             return new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 0, n < 3 ? 1 : 0), Height = 40, Child = g };

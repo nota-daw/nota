@@ -36,10 +36,10 @@ public sealed partial class PreferencesWindow
         var portBox = new TextBox
         {
             Text = settings.Current.RemotePort.ToString(), Width = 90, Classes = { "field" },
-            FontSize = 11, FontFamily = NotaFonts.UiFamily, HorizontalAlignment = HorizontalAlignment.Left,
+            FontSize = 11, FontFamily = NotaFonts.ValuesFamily, HorizontalAlignment = HorizontalAlignment.Left,
         };
         var statusDot = Dot(BorderStrong);
-        var status = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var status = new TextBlock { FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
 
         // Phones may: play notes only, or play and control the project.
         var access = new StackPanel { Spacing = 6 };
@@ -94,7 +94,7 @@ public sealed partial class PreferencesWindow
             {
                 bool live = connected.Contains(d.Id) && remote.Running;
                 var name = new TextBlock { Text = d.Name, FontSize = 11, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-                var seen = new TextBlock { Text = live ? Loc.T("preferences.remote.now") : Ago(d.LastSeen), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var seen = new TextBlock { Text = live ? Loc.T("preferences.remote.now") : Ago(d.LastSeen), FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 var forget = Btn(Loc.T("preferences.remote.forget"));
                 forget.Height = 24; forget.FontSize = 10; forget.Padding = new Thickness(10, 0);
                 ToolTip.SetTip(forget, Loc.T("preferences.remote.disconnect_it_and_make_it"));

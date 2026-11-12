@@ -100,7 +100,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
 
         var hint = Mono("", TextTertiary);

@@ -99,6 +99,9 @@ if (args.Contains("--hosted-render-pool"))
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
     Console.WriteLine("-- design: user skins --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunSkins()) Check(ok, label);
+    Console.WriteLine("-- design: classic look --");
+    foreach (var (ok, label) in Nota.SmokeTest.LooksCheck.Run()) Check(ok, label);
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunClassicPalettes()) Check(ok, label);
     Console.WriteLine("-- design: splash art --");
     foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
@@ -187,6 +190,14 @@ if (args.Length >= 1 && args[0] == "--palette")
     Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Menu key's menu copy alone: `--menu-mirror`.
+if (args.Length >= 1 && args[0] == "--menu-mirror")
+{
+    Console.WriteLine("-- menu key --");
+    foreach (var (ok, label) in MenuMirrorTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MENU MIRROR PASSED" : $"MENU MIRROR FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Shortcut builder alone: `--shortcuts`.
 if (args.Length >= 1 && args[0] == "--shortcuts")
 {
@@ -201,6 +212,17 @@ if (args.Length >= 1 && args[0] == "--browser")
     Console.WriteLine("-- browser: device categories --");
     foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "BROWSER PASSED" : $"BROWSER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Browser files (spec 092: sample folders, browse mode, clip sources, Projects tab) alone: `--browser-files`.
+if (args.Length >= 1 && args[0] == "--browser-files")
+{
+    Console.WriteLine("-- browser files (spec 092) --");
+    foreach (var (ok, label) in SampleFoldersTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in FileBrowseTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ClipSourceTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ProjectSummaryTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "BROWSER FILES PASSED" : $"BROWSER FILES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Get Plug-ins alone: `--store`; live installs from a registry index: `--store-live <index> <id>…`.
@@ -378,6 +400,14 @@ if (args.Length >= 1 && args[0] == "--bend-range")
     Console.WriteLine("-- bend lane range --");
     foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "BEND RANGE PASSED" : $"BEND RANGE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Arrangement phrase lines alone: `--phrase-lines`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--phrase-lines")
+{
+    Console.WriteLine("-- phrase lines --");
+    foreach (var (ok, label) in PhraseLinesTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PHRASE LINES PASSED" : $"PHRASE LINES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Filter knob glide alone: `--glide`. Also part of the full run.
@@ -826,6 +856,14 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine("-- nota vocoder --");
     foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Arrangement group trays alone (fast iteration): `--group-trays`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--group-trays")
+{
+    Console.WriteLine("-- arrangement group trays --");
+    foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GROUP TRAYS PASSED" : $"GROUP TRAYS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Piano roll Fold alone (fast iteration): `--piano-fold`. Also part of the full run.
@@ -15643,9 +15681,20 @@ Console.WriteLine("-- background audio import --");
 Console.WriteLine("-- browser: device categories --");
 foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
 
+// --- browser files (spec 092): sample folders, browse mode, clip sources, Projects tab ---
+Console.WriteLine("-- browser files (spec 092) --");
+foreach (var (ok, label) in SampleFoldersTests.Run()) Check(ok, label);
+foreach (var (ok, label) in FileBrowseTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ClipSourceTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ProjectSummaryTests.Run()) Check(ok, label);
+
 // --- piano roll Fold (specs/045): scale rows, Drum Rack pads, saved per track ---
 Console.WriteLine("-- piano roll fold --");
 foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
+
+// --- Arrangement group trays (specs/094): the header column's group slices ---
+Console.WriteLine("-- arrangement group trays --");
+foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
 
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
@@ -15753,6 +15802,8 @@ Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");
 foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
+Console.WriteLine("-- phrase lines --");
+foreach (var (ok, label) in PhraseLinesTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 
@@ -15890,6 +15941,10 @@ foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");
 foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
+
+// --- the Menu key's copy of the application menu (#518, specs/093) ---
+Console.WriteLine("-- menu key --");
+foreach (var (ok, label) in MenuMirrorTests.Run()) Check(ok, label);
 
 // --- context menus: "Add track ▸ Recent" list rules (spec 034) ---
 Console.WriteLine("-- recent instruments --");

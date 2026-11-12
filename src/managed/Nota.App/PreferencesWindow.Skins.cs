@@ -141,7 +141,9 @@ public sealed partial class PreferencesWindow
     // A copy of any theme in the themes folder, under a free id and "<name> copy", then worn.
     private static void DuplicateTheme(NotaColourTheme t)
     {
-        var source = NotaThemes.Find(t.Id) ?? t;   // the file's own colours, not the accented ones
+        // The file's own colours, not the accented ones — in the look being worn, so a built-in
+        // duplicated under Classic starts a skin from 0.59's colours (spec 091).
+        var source = NotaThemeService.InLook(NotaThemes.Find(t.Id) ?? t, NotaThemeService.Look);
         var name = Loc.F("preferences.skins.copy_name", source.Name);
         if (name.Length > ThemeFile.MaxNameLength) name = name[..ThemeFile.MaxNameLength].TrimEnd();
         var folder = NotaThemes.ThemesFolder;
