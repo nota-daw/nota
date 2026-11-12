@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A Semitones knob on every Operator** (#589). Each of the four operators gains a SEMI
+  knob between CRS and FINE: a whole-semitone offset from that operator's coarse ratio, ±12
+  st, 0 at centre. CRS stays the ratio and FINE the cents, so a ×1 operator at +7 sounds the
+  1.5 fifth the 16-ratio table cannot reach, and a modulator can be placed at any interval
+  without transposing the clip. Saved projects and factory presets read 0 st and are unchanged.
 - **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
   lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
   Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
