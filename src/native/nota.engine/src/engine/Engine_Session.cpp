@@ -1290,9 +1290,10 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
     }
 
     // Follow action: once the slot has played its follow time, pick A or B by weight.
-    if (s.followA == FollowAction::None && s.followB == FollowAction::None) return;
-    // A bypassed clip (#499) keeps counting follow times while the global switch is off too, so
-    // switching Follow back on and Bypass off doesn't fire a time that ran out meanwhile.
+    // A bypassed clip (#499) keeps counting follow times while the global switch is off too, and
+    // with both actions None, so switching Follow on, Bypass off or an action in doesn't fire a
+    // time that ran out meanwhile.
+    if (s.followA == FollowAction::None && s.followB == FollowAction::None && !s.followBypass) return;
     if (!sessionFollow_.load(std::memory_order_relaxed) && !s.followBypass) return;
     const double due = s.followBeats > 0.0 ? s.followBeats : (s.lengthBeats > 0.0 ? s.lengthBeats : 4.0);
     const double elapsed = sp.playedBeats.load(std::memory_order_relaxed) - sp.followFrom + blockBeats * 0.5;

@@ -154,6 +154,30 @@ internal static class FollowBypassTests
             e.StopAllSession();
             e.StopTransport();
         }
+        // Both actions None while bypassed still counts the times; an action set later with the
+        // bypass off waits for the end of the time then running.
+        using (var e = Rolling())
+        {
+            int t = FollowTrack(e);
+            e.TryGetSessionClipProps(t, 0, out var p);
+            p.FollowA = (int)SessionFollowAction.None;
+            p.FollowBypass = 1;
+            e.SetSessionClipProps(t, 0, p);
+            e.Seek(0);
+            e.LaunchSlot(t, 0);
+            Beats(e, 2.5);
+            p.FollowA = (int)SessionFollowAction.Next;
+            p.FollowBypass = 0;
+            e.SetSessionClipProps(t, 0, p);
+            Beats(e, 0.3);
+            yield return (e.SessionPlayingSlot(t) == 0,
+                $"an action set after the bypassed times ran out with none doesn't fire at once (playing {e.SessionPlayingSlot(t)})");
+            Beats(e, 0.5);
+            yield return (e.SessionPlayingSlot(t) == 1,
+                $"the action fires at the end of the follow time then running (playing {e.SessionPlayingSlot(t)})");
+            e.StopAllSession();
+            e.StopTransport();
+        }
     }
 
     private static IEnumerable<(bool, string)> SavedWithTheProject()
