@@ -1156,14 +1156,28 @@ The controls at the left of each track in the arrangement.
   in ink 3, M, S, arm (monitor on audio tracks). Controls row (20): volume (a flat slider
   with its value inside), the pan knob and its value, the input picker. Every control the
   header had stays.
-- **Colour:** a 3 px bar in the track colour down the left edge. Inside a group the member
-  is indented 14: the group's 4 px bar runs down through it, then its own 3 px bar.
+- **Colour:** a 3 px bar in the track colour down the left edge.
+- **Groups** (specs/094) — a group is a **tray**: a 16 % wash of its colour on its own row,
+  8 % on the rest of the tray, a 3 px edge in the group colour down the tray's left side,
+  the right corners rounded where it opens and closes. Its tracks sit in it as plain cards
+  (`Panel`, inset 4 from the right) carrying only their own 3 px bar — no stripe per
+  enclosing group, no tint on the card. A nested group is a tray inside the tray, 6 further
+  in (3 edge + 3 gap). A tray closes under its last row with a 4 px strip (2 px for each
+  further tray closing on the same row), taken out of that row so rows stay aligned with
+  their lanes. The group row: chevron, name, M / S / (Cue) / Link and the meter in the
+  tracks' column; folded, " · N" after the name (the tracks it hides, nested ones
+  included). The group's lane keeps the 16 % wash; its tracks' lanes have none.
+  **Classic look:** 0.59's staircase — each row's own 3 px spine, 10 further in per level,
+  full height (the accent when selected); group rows on `SurfaceRaised`, tracks on
+  `SurfaceCard`; no tints; the slim group row has the "Group" tag and its meter as a rail on
+  a line of its own under the title.
 - **Keys:** M, S and arm are 18 × 18, 4 apart; the type tag is Label 11 in ink 3; the
   input picker is 66 wide (a custom picker, not a ComboBox, so its text never truncates),
   and the monitor key goes ink 4 while Master is the input.
 - **Selected:** the header takes `TrackHeaderSelected` (background only, no outline) and its
   lane `LaneSelected`.
-- **Meter** down the right edge.
+- **Meter** down the right edge, inside the header on every row height (6 from the top and
+  bottom, less on a Compact row), in one column for tracks and groups.
 - **Large** (from 100): a third row with the input picker, then the track's send to each
   return, two per row as the height allows: the return's colour square and letter (tooltip
   "Send to Reverb"), then a value bar with the amount inside ("–" at 0), double-click to
