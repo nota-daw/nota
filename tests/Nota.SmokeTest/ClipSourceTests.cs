@@ -44,6 +44,17 @@ internal static class ClipSourceTests
             yield return (src.AddSessionAudioFile(trk, 0, wav) && src.TryGetSessionAudioSlot(trk, 0, out var sa) && src.SampleSource(sa.SampleId) == wav,
                 "source: a Session take remembers its file too");
 
+            // Double-click, drop and File → Import decode in the background, then place the clip.
+            using (var imp = new NotaEngine())
+            {
+                int it = imp.AddAudioTrack();
+                using var job = imp.OpenAudioImport(wav);
+                while (job is not null && job.Step(1 << 16) > 0) { }
+                int ic = job is null ? -1 : imp.AddImportedAudioClip(it, job, 0);
+                yield return (ic >= 0 && imp.TryGetAudioClipInfo(it, ic, out var ii) && imp.SampleSource(ii.SampleId) == Path.GetFullPath(wav),
+                    "source: a clip imported in the background remembers its file");
+            }
+
             var w = new List<string>();
             ProjectService.Save(ProjectService.Capture(src, transport, w), bundle, src);
             var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(bundle, ProjectService.ManifestName))).RootElement;

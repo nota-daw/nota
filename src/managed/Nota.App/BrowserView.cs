@@ -1265,7 +1265,8 @@ public sealed partial class BrowserView : UserControl
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
             if (item.Kind == BrowserItemKind.OtherFile) return;   // listed, but nothing Nota can open
             // Folders (sample dirs, preset categories) are navigation: double-click opens them.
-            if (item.Kind == BrowserItemKind.Folder && list == _pages[FilesTab] && BrowseOn) _vm?.BrowseTo(item.Path);
+            // In Browse a single click already opened it; a second open would go one deeper.
+            if (item.Kind == BrowserItemKind.Folder && list == _pages[FilesTab] && BrowseOn) return;
             else if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
             else { DismissPreview(); ItemActivated?.Invoke(item, e.KeyModifiers); }
         };
@@ -1292,8 +1293,13 @@ public sealed partial class BrowserView : UserControl
         list.AddHandler(InputElement.PointerPressedEvent, OnRowPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerMovedEvent, OnRowMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerReleasedEvent,
-            (object? _, PointerReleasedEventArgs _) =>
+            (object? _, PointerReleasedEventArgs e) =>
             {
+                // A Browse folder opens on a click (contracts/ui.md), released on the row it was pressed on.
+                if (_pressedFolder is { } folder && list == _pages[FilesTab] && BrowseOn
+                    && (e.Source as StyledElement)?.DataContext == folder && !folder.Unavailable)
+                    _vm?.BrowseTo(folder.Path);
+                _pressedFolder = null;
                 _pressedItem = null; _pressArgs = null;
                 if (_listPointerDown && _active <= PresetsTab && list == _pages[_active]) ShowPreview(true);
                 _listPointerDown = false;
@@ -1304,13 +1310,18 @@ public sealed partial class BrowserView : UserControl
         list.ContextRequested += (_, e) => ShowContextMenu(list, e);
     }
 
+    private BrowserItem? _pressedFolder;   // a Browse folder row pressed; opens on release
+
     private void OnRowPressed(object? sender, PointerPressedEventArgs e)
     {
         _pressedItem = null;
         _pressArgs = null;
+        _pressedFolder = null;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (InButton(e.Source as StyledElement)) return;          // preview button etc.
         var item = (e.Source as StyledElement)?.DataContext as BrowserItem;
+        if (item is { Kind: BrowserItemKind.Folder, IsGroup: false } && e.ClickCount == 1 && BrowseOn && IsBrowseRow(item))
+            _pressedFolder = item;
         // Projects, folders and section headers aren't draggable (folders are navigation,
         // not payload; headers are chrome).
         if (item is null || item.IsGroup || item.Kind is BrowserItemKind.Project or BrowserItemKind.Folder or BrowserItemKind.OtherFile) return;

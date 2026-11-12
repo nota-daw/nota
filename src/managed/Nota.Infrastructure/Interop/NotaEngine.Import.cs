@@ -13,7 +13,7 @@ public sealed partial class NotaEngine
     {
         ThrowIfDisposed();
         var h = NativeMethods.AudioImportOpen(path);
-        return h == IntPtr.Zero ? null : new AudioImport(h);
+        return h == IntPtr.Zero ? null : new AudioImport(h, path);
     }
 
     /// <summary>Places a finished import on a track. Returns the clip index, or -1.</summary>
@@ -21,7 +21,9 @@ public sealed partial class NotaEngine
     {
         ThrowIfDisposed();
         if (import is not AudioImport ai) throw new ArgumentException("Not a NotaEngine import.", nameof(import));
-        return NativeMethods.TrackAddImportedClip(_handle, trackId, ai.Handle, startBeat);
+        int c = NativeMethods.TrackAddImportedClip(_handle, trackId, ai.Handle, startBeat);
+        RememberClipSource(trackId, c, ai.Path);   // Locate finds it, and it saves as the clip's source (#581)
+        return c;
     }
 
     /// <summary>Auto-warp with an already-detected tempo. Returns the BPM used (0 = failed).</summary>
@@ -31,7 +33,10 @@ public sealed partial class NotaEngine
     private sealed class AudioImport : IAudioImport
     {
         private IntPtr _h;
-        public AudioImport(IntPtr h) => _h = h;
+        public AudioImport(IntPtr h, string path) { _h = h; Path = path; }
+
+        /// <summary>The file being decoded.</summary>
+        internal string Path { get; }
 
         internal IntPtr Handle => _h != IntPtr.Zero ? _h : throw new ObjectDisposedException(nameof(AudioImport));
 
