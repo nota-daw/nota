@@ -5,7 +5,8 @@
 // started on the destination ends at the switch, whether MIDI In goes to None or to another
 // track, or its track is removed; the new route plays; switching away and back before the next
 // block leaves the note to end with its own note-off; the destination's own notes keep sounding;
-// a transport stop ends the voices, so a later switch has no old note left to release.
+// a transport stop ends the voices, and a switched-off instrument never heard the route's
+// notes, so a later switch has no old note left to release.
 // The source tracks are muted, so what reaches the master is the destination alone.
 
 using Nota.Application;
@@ -27,6 +28,7 @@ internal static class MidiSourceSwitchTests
         foreach (var r in RemovedSourceReleases()) yield return r;
         foreach (var r in OwnNotesKeepSounding()) yield return r;
         foreach (var r in StopForgetsRoutedNotes()) yield return r;
+        foreach (var r in BypassedForgetsRoutedNotes()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats)
@@ -179,5 +181,27 @@ internal static class MidiSourceSwitchTests
         float released = Peak(e, 0.5);
         yield return (own > 0.01f && released < 1e-4f,
             $"a switch after a transport stop doesn't cut the destination's new note (peak {own:F3} → {released:G2})");
+    }
+
+    // A key held on the source while the destination's instrument is switched off: the instrument
+    // never heard it, so a note played on the destination after switching it on survives a switch.
+    private static IEnumerable<(bool, string)> BypassedForgetsRoutedNotes()
+    {
+        using var e = Routed(out _, out _, out int d);
+        e.SetDeviceBypassed(d, -1, true);
+        e.NoteOn(60, 0.9f);
+        Beats(e, 0.5);
+        e.SetDeviceBypassed(d, -1, false);
+        e.TrackNoteOn(d, 60, 0.9f);
+        Beats(e, 0.5);
+        e.SetTrackMidiSource(d, -1);
+        Beats(e, 2.0);
+        float own = Peak(e, 0.5);
+        e.TrackNoteOff(d, 60);
+        e.NoteOff(60);
+        Beats(e, 2.0);
+        float released = Peak(e, 0.5);
+        yield return (own > 0.01f && released < 1e-4f,
+            $"a switch doesn't cut a note after the instrument was switched off while the route held one (peak {own:F3} → {released:G2})");
     }
 }

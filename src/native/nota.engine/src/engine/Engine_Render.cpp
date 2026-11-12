@@ -1789,6 +1789,9 @@ void Engine::renderInstrumentRaw(
         }
         // MIDI In names a track that is gone (deleted): its notes end too (#504).
         if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
+        // A switched-off instrument drops this block's events (playEvents), so nothing the route
+        // started is sounding on it: forget those notes rather than release them later (#504).
+        if (held && inst->bypassed()) held->forgetRouted();
     } else {
         n = computeInstrumentMidi(t, evs, frames, blockStart, spb, playing,
             arrangementActive_.load(std::memory_order_relaxed), xev, &xn); // fallback: no graph
