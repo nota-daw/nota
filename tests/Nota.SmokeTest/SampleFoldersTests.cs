@@ -142,6 +142,7 @@ internal static class SampleFoldersTests
             WavWriter.WriteSine(Path.Combine(a, "top.wav"), 0.1, 60, 44100);
             WavWriter.WriteSine(Path.Combine(b, "loop.wav"), 0.1, 60, 44100);
             File.WriteAllText(Path.Combine(b, ".hidden.wav"), "x");
+            TestFiles.Hide(Path.Combine(b, ".hidden.wav"));
 
             string file = Path.Combine(dir, "settings.json");
             File.WriteAllText(file, $"{{ \"SamplesFolder\": {System.Text.Json.JsonSerializer.Serialize(a)} }}");

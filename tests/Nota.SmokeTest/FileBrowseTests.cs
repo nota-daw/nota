@@ -71,6 +71,8 @@ internal static class FileBrowseTests
             File.WriteAllText(Path.Combine(a, "notes.txt"), "x");
             File.WriteAllText(Path.Combine(a, ".secret.wav"), "x");
             Directory.CreateDirectory(Path.Combine(a, ".git"));
+            TestFiles.Hide(Path.Combine(a, ".secret.wav"));
+            TestFiles.Hide(Path.Combine(a, ".git"));
             Directory.CreateDirectory(Path.Combine(a, "a-first"));
             WavWriter.WriteSine(Path.Combine(a, "Zed.wav"), 0.05, 220, 44100);
             var (rows, state) = BrowserViewModel.ListBrowse(a);
