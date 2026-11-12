@@ -584,6 +584,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Tempo-map rendering** (#535): reversed warped clips keep their musical positions,
+  Consolidate captures the full mapped range, and natural-rate clip releases fade at
+  the mapped ending. Warped split/undo avoids temporary marker copies.
 - **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
   mapped source boundaries. Loop recording, freeze and range bounce retain audio across
   tempo changes; saved freezes retain their timing. Transport BPM edits stay in the tempo

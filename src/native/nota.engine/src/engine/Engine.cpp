@@ -875,7 +875,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             if (!c.warpEnabled || !c.sample) continue;
             const auto* cache = c.tempoWarpCache();
             if (cache && c.tempoWarp->map == g->tempoMap && cache->devSR == transport_.sampleRate() &&
-                c.tempoWarp->startBeat == c.startBeat &&
+                c.tempoWarp->startBeat == c.startBeat && c.tempoWarp->reversed == c.reversed &&
                 cache->inputs.sample == c.sample.get() && cache->inputs.markers == c.warpMarkers &&
                 cache->inputs.playStart == c.warpPlayStart && cache->inputs.playEnd == c.warpPlayEndEff() &&
                 cache->inputs.pitch == c.pitchSemitones && cache->inputs.mode == c.warpMode) continue;

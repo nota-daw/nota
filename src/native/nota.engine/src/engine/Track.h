@@ -94,6 +94,7 @@ struct AudioClip {
         std::shared_ptr<const WarpCache> cache;
         std::shared_ptr<const class TempoMap> map; // the map it was built for (identity)
         double startBeat = -1.0;                   // the clip start it was built for
+        bool reversed = false;                    // direction was baked before mapped stretching
     };
     std::shared_ptr<const TempoWarp> tempoWarp;
     const WarpCache* tempoWarpCache() const { return tempoWarp ? tempoWarp->cache.get() : nullptr; }

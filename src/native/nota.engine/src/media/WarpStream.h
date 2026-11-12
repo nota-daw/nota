@@ -31,7 +31,8 @@ class ClipWarpStream {
     // (tempo/markers are read live in render()). srcSR is the sample's own rate — the
     // stretcher is a same-rate processor, so a src≠device rate would pitch the output
     // by devSR/srcSR; we cancel that in the transpose so warp stays at natural pitch.
-    void configure(int channels, WarpMode mode, float pitchSemitones, double srcSR, double devSR);
+    void configure(int channels, WarpMode mode, float pitchSemitones, double srcSR, double devSR,
+        bool reverseSource = false);
     bool ready() const;
 
     // --- audio thread ---

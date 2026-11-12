@@ -1587,6 +1587,8 @@ class Engine {
     void renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, double spb); // M5-4
     void renderAudioClipsRaw(
         const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb);
+    void renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
+        const Transport& clock);
     // Consolidate (audio): bounce the clips covering [start,end) into one new clip.
     AudioClip consolidateAudioClips(const std::vector<AudioClip>& clips, double start, double end);
     // Freeze playback (M7): fill dst with the track's frozen buffer for this segment,
@@ -1654,7 +1656,7 @@ class Engine {
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
-    void configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR);
+    void configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR, bool force = false);
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
     void reconfigureAllWarpStreams();                         // rebuild warp caches for the current tempo + device SR
     void reconfigureAllWarpStreams(double spb, double devSR); // …for an explicit tempo (tempo-change path)
@@ -2083,7 +2085,8 @@ class Engine {
     // unmapped instantiation is the plain fixed-tempo path, with no tempo-map test in it.
     template <bool Mapped = false>
     void mixAudioClip(
-        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
+        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
+        const Transport& clock);
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
     std::atomic<int32_t> recordTrackRt_{-1}; // recordTrackId_ for the audio thread
@@ -2733,6 +2736,7 @@ class Engine {
         WarpInputs renderInputs;
         std::shared_ptr<const TempoMap> tempoMap;
         double tempoStartBeat = -1.0;
+        bool reverseSource = false;
         int64_t offset = 0;
     } wb_;
     // The ONE clip being stretched on a worker thread (warpBuildPoll). The worker only reads
@@ -2746,6 +2750,7 @@ class Engine {
         WarpInputs renderInputs;
         std::shared_ptr<const TempoMap> tempoMap;
         double tempoStartBeat = -1.0;
+        bool reverseSource = false;
         std::atomic<int64_t> done{0};
         std::atomic<bool> cancel{false};
         std::atomic<bool> finished{false};

@@ -1969,7 +1969,7 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
         const double toEnd = (L - local) * spb;
         int32_t seg = static_cast<int32_t>(std::min<double>(frames - done, std::ceil(toEnd - 1e-9)));
         if (seg <= 0) seg = 1;
-        mixAudioClip(s.audio, dst + done * 2, seg, local * spb, spb, sp.gain);
+        mixAudioClip(s.audio, dst + done * 2, seg, local * spb, spb, sp.gain, transport_);
         done += seg;
         p += seg / spb;
     }
@@ -1983,20 +1983,31 @@ void Engine::renderAudioClipsRaw(
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
     if (transport_.hasTempoMap()) {
         const double elapsed = transport_.playheadSamples();
-        for (const AudioClip& clip : clips) mixAudioClip<true>(clip, dst, frames, elapsed, spb, 1.0f);
+        for (const AudioClip& clip : clips) mixAudioClip<true>(clip, dst, frames, elapsed, spb, 1.0f, transport_);
     } else
-        for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f);
+        for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f, transport_);
+}
+
+// Consolidation owns this clock; rendering must neither attach to nor advance the live one.
+void Engine::renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
+    const Transport& clock) {
+    std::fill_n(dst, frames * 2, 0.0f);
+    for (const AudioClip& clip : clips) {
+        if (clock.hasTempoMap()) mixAudioClip<true>(clip, dst, frames, clock.playheadSamples(), clock.samplesPerBeat(), 1.0f, clock);
+        else mixAudioClip(clip, dst, frames, clock.playheadSamples(), clock.samplesPerBeat(), 1.0f, clock);
+    }
 }
 
 // One clip of renderAudioClipsRaw — shared with Session audio slots, which loop a clip on
 // their own clock (renderSessionAudioSlotRaw).
 template <bool mapped>
 void Engine::mixAudioClip(
-    const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain) {
+    const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
+    const Transport& clock) {
     if (!clip.active) return; // deactivated clip (key 0): stays on the timeline but silent
-    const double sr = transport_.sampleRate();
+    const double sr = clock.sampleRate();
     double startSamples;
-    if constexpr (mapped) startSamples = transport_.samplesAtBeat(clip.startBeat);
+    if constexpr (mapped) startSamples = clock.samplesAtBeat(clip.startBeat);
     else startSamples = clip.startBeat * spb;
     // Clip envelopes (M9 follow-up): 0..1 volume + -1..1 pan curves in clip-local
     // beats, applied per sample. Empty = fast path (no cost). Pan uses a balance
@@ -2008,7 +2019,7 @@ void Engine::mixAudioClip(
     double lenBeats = 0.0; // played length (beats) for the ADSR release — set per path below
     auto applyEnv = [&](double p, float& l, float& r) {
         double b;
-        if constexpr (mapped) b = transport_.beatAtSamples(p) - clip.startBeat;
+        if constexpr (mapped) b = clock.beatAtSamples(p) - clip.startBeat;
         else b = (p - startSamples) / spb;
         if (hasAdsr) {
             const float g = clip.adsr.gainAt(b, lenBeats);
@@ -2038,13 +2049,15 @@ void Engine::mixAudioClip(
     else readyCache = clip.warpCache.get();
     if (clip.warpEnabled && readyCache && readyCache->frames > 0) {
         const WarpCache& wc = *readyCache;
+        bool reverseRead = clip.reversed;
+        if constexpr (mapped) reverseRead = clip.reversed != clip.tempoWarp->reversed;
         // A stale cache (an edit's rebuild still running in the background) keeps playing,
         // clipped to the clip's new played length so it never spills past the clip's end.
         // Both edges sit on whole frames rounded from the timeline (not start + a rounded
         // length), so clips that meet — the halves of a split — leave no frame between them.
         const int64_t startF = std::llround(startSamples);
         double endAt;
-        if constexpr (mapped) endAt = transport_.samplesAtBeat(clip.startBeat + clip.warpPlayLen());
+        if constexpr (mapped) endAt = clock.samplesAtBeat(clip.startBeat + clip.warpPlayLen());
         else endAt = startSamples + clip.warpPlayLen() * spb;
         const int64_t endF = std::min<int64_t>(startF + wc.frames, std::llround(endAt));
         const double clipDeviceLen = static_cast<double>(endF - startF);
@@ -2081,7 +2094,7 @@ void Engine::mixAudioClip(
             }
             if (head > tail) head = tail = segLen; // edges overlap: the whole block fades
             for (int32_t j = 0; j < head; ++j) {
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 applyEnv(ovStart + j, l, r);
@@ -2089,14 +2102,14 @@ void Engine::mixAudioClip(
                 dst[(dstOff + j) * 2 + 1] += r * g;
             }
             for (int32_t j = head; j < tail; ++j) {
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 const float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 dst[(dstOff + j) * 2] += l * g;
                 dst[(dstOff + j) * 2 + 1] += r * g;
             }
             for (int32_t j = tail; j < segLen; ++j) {
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 applyEnv(ovStart + j, l, r);
@@ -2105,9 +2118,9 @@ void Engine::mixAudioClip(
             }
         } else {
             for (int32_t j = 0; j < segLen; ++j) {
-                // Reverse reads the same cache back-to-front: the window is already the
-                // played length, so mirroring the index is exact (no resample).
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                // Ordinary caches mirror their read index. Mapped caches already hold
+                // the requested direction, baked into the source mapping before stretch.
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 if (hasEnv) applyEnv(ovStart + j, l, r);
@@ -2129,7 +2142,8 @@ void Engine::mixAudioClip(
     const double ratio = sb.sourceSampleRate / sr * clip.pitchRatio();
     const int64_t len = clip.effectiveLength();
     const double clipDeviceLen = len / ratio;
-    lenBeats = clipDeviceLen / spb;
+    if constexpr (mapped) lenBeats = clock.beatAtSamples(startSamples + clipDeviceLen) - clip.startBeat;
+    else lenBeats = clipDeviceLen / spb;
     for (int32_t i = 0; i < frames; ++i) {
         const double p = blockStart + i;
         if (p < startSamples || p >= startSamples + clipDeviceLen) continue;
