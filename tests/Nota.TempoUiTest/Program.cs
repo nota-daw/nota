@@ -8,11 +8,14 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Nota.App;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Infrastructure;
+using SkiaSharp;
 
 string scratch = Path.Combine(Path.GetTempPath(), "nota-tempo-ui-" + Guid.NewGuid().ToString("N"));
 Environment.SetEnvironmentVariable("NOTA_DATA_DIR", scratch);
@@ -37,6 +40,24 @@ void SendKey(Key key, RawInputModifiers mods = RawInputModifiers.None) { window.
 double X(double beat) => (double)Invoke(timeline, "BeatToX", beat)!;
 double Y(double bpm) => (double)Invoke(lane, "Y", bpm)!;
 void Reset() { engine.SetTempoPoints(original); engine.ClearUndoHistory(); timeline.Refresh(); Pump(); }
+
+engine.SetBpm(135); timeline.Refresh(rebuildHeaders: false); Pump();
+Check(Math.Abs(Get<List<TempoPoint>>(lane, "_points")[0].Bpm - 135) < 1e-9,
+    "BPM-only refresh reloads tempo-lane points");
+Down(X(4), Y(80), MouseButton.Left); Move(X(4), Y(100), RawInputModifiers.LeftMouseButton); Up(X(4), Y(100), MouseButton.Left);
+Check(Math.Abs(engine.TempoPoints[0].Bpm - 135) < 1e-9,
+    "a subsequent lane gesture preserves a transport BPM edit");
+Reset();
+var savedGrid = EditorGrids.Shared.Get(EditorKind.Arrangement);
+EditorGrids.Shared.Set(EditorKind.Arrangement, new GridSetting { Adaptive = false, FixedIndex = 5 });
+foreach (var (num, den, beats) in new[] { (6, 8, 3.0), (3, 8, 1.5) })
+{
+    timeline.BeatsPerBar = num; timeline.TimeSignatureDenominator = den;
+    Check(Math.Abs((double)Invoke(timeline, "Snap", beats - .1)! - beats) < 1e-9,
+        $"{num}/{den} one-bar snapping matches the mapped ruler");
+}
+timeline.BeatsPerBar = 4; timeline.TimeSignatureDenominator = 4;
+EditorGrids.Shared.Set(EditorKind.Arrangement, savedGrid); Reset();
 
 Check(lane.Bounds.Height >= 64 && lane.Bounds.Width > 400, "tempo lane lays out at a usable height");
 var stepEdge = ((Point HoldEnd, Point JumpEnd))Invoke(lane, "StepEdge", 1)!;
@@ -130,9 +151,67 @@ Check(!lane.IsVisible, "tempo track collapses");
 toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
 Check(lane.IsVisible && lane.Bounds.Height > beforeHeight, "tempo track restores expanded height");
 
+string pulsePath = Path.Combine(scratch, "waveform-pulse.wav");
+using (var writer = new BinaryWriter(File.Create(pulsePath)))
+{
+    const int frames = 4 * 48000, bytes = frames * 2;
+    writer.Write("RIFF"u8.ToArray()); writer.Write(36 + bytes); writer.Write("WAVEfmt "u8.ToArray());
+    writer.Write(16); writer.Write((short)1); writer.Write((short)1);
+    writer.Write(48000); writer.Write(96000); writer.Write((short)2); writer.Write((short)16);
+    writer.Write("data"u8.ToArray()); writer.Write(bytes);
+    for (int i = 0; i < frames; ++i)
+        writer.Write((short)(Math.Abs(i - 48000) < 2800 ? 28000 * Math.Sin(2 * Math.PI * 440 * i / 48000) : 0));
+}
+using (var waveEngine = new NotaEngine())
+{
+    waveEngine.RenderOffline(new float[2], 1, 48000);
+    int track = waveEngine.AddAudioTrack(); waveEngine.AddAudioClip(track, pulsePath, 0);
+    waveEngine.SetClipWarp(track, 0, true, 0); waveEngine.SetClipWarpLength(track, 0, 8);
+    waveEngine.SetTempoPoints(new[] { new TempoPoint(0, 120), new TempoPoint(4, 60) });
+    foreach (bool reverse in new[] { false, true })
+    foreach (bool detail in new[] { false, true })
+    foreach (var style in new[] { WaveformStyle.Smooth, WaveformStyle.Solid })
+    {
+        waveEngine.SetClipReverse(track, 0, reverse);
+        var view = new ArrangementView { Engine = waveEngine, Waveform = style };
+        var waveWindow = new Window { Width = 1100, Height = 600, Content = view };
+        waveWindow.Show(); view.Refresh(); Pump();
+        double peakBeat = reverse ? 6 : 2;
+        if (detail) { Invoke(view, "ZoomAtBeat", 20.0, 0.0); Invoke(view, "ScrollByBeats", peakBeat - .2); Pump(); }
+        var canvas = view.GetVisualDescendants().OfType<Control>().Single(c => c.GetType().Name == "LaneControl");
+        double px = (double)Invoke(view, "BeatToX", peakBeat)!;
+        var at = canvas.TranslatePoint(new Point(px, 0), waveWindow)!.Value;
+        using var frame = waveWindow.CaptureRenderedFrame();
+        using var encoded = new MemoryStream(); frame!.Save(encoded, PngBitmapEncoderOptions.Default); encoded.Position = 0;
+        using var bitmap = SKBitmap.Decode(encoded);
+        int ColorCount(int cx)
+        {
+            int count = 0;
+            for (int x = Math.Max(0, cx - 5); x < Math.Min(bitmap.Width, cx + 6); ++x)
+            for (int y = (int)at.Y; y < Math.Min(bitmap.Height, (int)at.Y + 90); ++y)
+            {
+                var color = bitmap.GetPixel(x, y);
+                if (Math.Max(color.Red, Math.Max(color.Green, color.Blue)) - Math.Min(color.Red, Math.Min(color.Green, color.Blue)) > 45)
+                    ++count;
+            }
+            return count;
+        }
+        double x0 = (double)Invoke(view, "BeatToX", 0.0)!, x8 = (double)Invoke(view, "BeatToX", 8.0)!;
+        int wrong = (int)(at.X - px + x0 + (x8 - x0) * (reverse ? .75 : .25));
+        int correctPixels = ColorCount((int)at.X), linearPixels = wrong >= 0 && wrong < bitmap.Width ? ColorCount(wrong) : 0;
+        Check(correctPixels > linearPixels + 12,
+            $"mapped {style} waveform {(detail ? "detail" : "overview")} {(reverse ? "reversed" : "forward")} peak follows its audible beat ({correctPixels}/{linearPixels})");
+        if (!detail && !reverse && style == WaveformStyle.Smooth)
+        {
+            Directory.CreateDirectory("out"); frame.Save("out/tempo-waveform-mapped.png", PngBitmapEncoderOptions.Default);
+        }
+        waveWindow.Close();
+    }
+}
+
 string output = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.GetFullPath("out/tempo-ui.png");
 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-using (var image = window.CaptureRenderedFrame()) image?.Save(output);
+using (var image = window.CaptureRenderedFrame()) image?.Save(output, PngBitmapEncoderOptions.Default);
 Console.WriteLine("Screenshot: " + output);
 window.Close();
 return failures == 0 ? 0 : 1;

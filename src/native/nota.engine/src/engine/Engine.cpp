@@ -760,6 +760,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
+    nt->frozenTiming = t.frozenTiming;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
     nt->pianoFold = t.pianoFold;
@@ -1328,11 +1329,16 @@ bool Engine::setTempoPoints(std::vector<NotaTempoPoint> points, bool checkpoint)
     // Natural-rate recordings are physical-time anchors. Reproject their beat
     // placement, never their source samples, when the musical ruler changes.
     for (auto& t : g->tracks) {
-        if (std::none_of(t->clips.begin(), t->clips.end(), [](const auto& c) { return !c.warpEnabled; })) continue;
+        if (t->takes.empty() && std::none_of(t->clips.begin(), t->clips.end(), [](const auto& c) { return !c.warpEnabled; })) continue;
         t = cloneTrack(*t);
         for (auto& c : t->clips) if (!c.warpEnabled) {
             const double seconds = beatToSeconds(c.startBeat);
             c.startBeat = g->tempoMap ? g->tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
+        }
+        for (auto& take : t->takes) {
+            const double seconds = beatToSeconds(take.originBeat);
+            take.originBeat = g->tempoMap ? g->tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
+            take.tempoMap = g->tempoMap;
         }
     }
     if (checkpoint) publish(std::move(g)); else publishRaw(std::move(g));

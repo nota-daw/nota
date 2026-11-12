@@ -145,6 +145,9 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Scroll the track list so <paramref name="trackId"/>'s whole row is in view. Runs
     /// after the next layout pass, so it also works straight after a Refresh that added the
     /// row (the scroll extent isn't updated until then). A row already fully visible doesn't move.</summary>
+    /// <summary>Set by the main window: what an audio clip's Locate submenu does (spec 092).</summary>
+    internal LocateHooks? Locate { get; set; }
+
     public void RevealTrack(int trackId)
     {
         Dispatcher.UIThread.Post(() =>
@@ -589,13 +592,13 @@ public sealed partial class ArrangementView : UserControl
     /// every clip edit snaps to and the finest line drawn. Resolved on demand — it is a few
     /// comparisons and allocates nothing — so zoom, time signature and setting changes can
     /// never leave a stale cache behind. Snap off (the transport magnet, ⌘4) keeps the lines.</summary>
-    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.Arrangement), _pixelsPerBeat, _beatsPerBar);
+    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.Arrangement), _pixelsPerBeat, GridBarLength);
 
     /// <summary>The step in effect changed (zoom, time signature or the grid setting) — the
     /// toolbar's snap chip relabels.</summary>
     public event Action? GridChanged;
 
-    private double SnapStepBeats => SnapGridState.Snap.Beats(_beatsPerBar);
+    private double SnapStepBeats => SnapGridState.Snap.Beats(GridBarLength);
 
     /// <summary>How many clips print their name on the lane (View ▸ Clip names). The default
     /// names only the head of each run, so a repeating pattern reads as one block.</summary>
@@ -1125,7 +1128,7 @@ public sealed partial class ArrangementView : UserControl
                     if (!c.IsMidi && c.Peaks is not null) oldClips[(t.Id, c.ClipIndex)] = c;
         }
         if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
-        if (rebuildHeaders) ReloadTempo();
+        if (!movedOnly) ReloadTempo();
         _tracks.Clear();
         _returns.Clear();
         _link = null;   // group Link sets (specs/076): rebuilt on next use
@@ -1228,6 +1231,7 @@ public sealed partial class ArrangementView : UserControl
                     }
                     if (audioInfo)
                     {
+                        cvm.Warped = ai.WarpEnabled != 0 && ai.WarpBeats > 0;
                         cvm.Gain = ai.Gain;
                         cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
                         cvm.TakeId = eng.ClipTakeId(ti.Id, c);
@@ -1576,7 +1580,7 @@ public sealed partial class ArrangementView : UserControl
     internal double Snap(double beat)
     {
         var g = SnapGridState;
-        return g.SnapOn ? SnapGrid.SnapBeat(beat, g.Snap.Beats(_beatsPerBar), _beatsPerBar) : beat;
+        return g.SnapOn ? SnapGrid.SnapBeat(beat, g.Snap.Beats(GridBarLength), GridBarLength) : beat;
     }
 
     /// <summary>Snap unless Alt is held (Alt = free/fine positioning). Reads the live
@@ -3712,13 +3716,13 @@ public sealed partial class ArrangementView : UserControl
     private void DrawGrid(DrawingContext ctx, double w, double h)
     {
         if (_pixelsPerBeat <= 0) return;
-        double step = SnapGridState.Draw.Beats(_beatsPerBar);
+        double step = SnapGridState.Draw.Beats(GridBarLength);
         double bar = TempoAxis ? TempoBarLength : _beatsPerBar > 0 ? _beatsPerBar : 4;
         double first = XToBeat(0), last = XToBeat(w);
-        foreach (double b in SnapGrid.GridLines(first, last, step, _beatsPerBar))
+        foreach (double b in SnapGrid.GridLines(first, last, step, GridBarLength))
         {
             double x = BeatToX(b);
-            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, _beatsPerBar) ? PhrasePen
+            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, GridBarLength) ? PhrasePen
                 : IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
             ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
         }

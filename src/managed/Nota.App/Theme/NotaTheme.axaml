@@ -1231,6 +1231,24 @@
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
+  <!-- Files (spec 092): the selected clip's source file wears the accent edge and name
+       (the selection adds its tint); a sample folder that can't be found is dimmed. -->
+  <Style Selector="Border.RowEdge.located">
+    <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
+  </Style>
+  <Style Selector="TextBlock.RowName.located">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+  </Style>
+  <Style Selector="TextBlock.RowName.unavailable">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
+  </Style>
+  <!-- A browse-view file Nota can't add: listed, inert, in the disabled ink. -->
+  <Style Selector="TextBlock.RowName.inert">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+  </Style>
+  <Style Selector="TextBlock.RowTag.inert">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+  </Style>
   <!-- Row metadata on the right: the label scale, 11 / 400 in ink 3. -->
   <Style Selector="TextBlock.RowTag">
     <Setter Property="FontFamily" Value="{DynamicResource Font.Measure}"/>

@@ -448,7 +448,7 @@ class Engine {
     // have the backend stopped and then pump renderOffline() for the returned frame
     // count (the capture is filled inside mixGraph). endFreeze publishes the frozen
     // track; cancelFreeze aborts without freezing. Not undoable (a view toggle).
-    int64_t beginFreeze(int32_t trackId, double lengthBeats, double tailSec = 2.0); // capture frames, or 0 on failure
+    int64_t beginFreeze(int32_t trackId, double lengthBeats, double tailSec = 2.0, double startBeat = 0.0); // capture frames, or 0 on failure
     void endFreeze(int32_t trackId);
     void cancelFreeze();
     // Paste Bounced Audio (⌘⇧V): copies the armed capture's rendered frames into out (up to
@@ -2471,6 +2471,7 @@ class Engine {
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
     double captureLoopStartBeat_ = 0.0;
+    std::shared_ptr<const TempoMap> captureTempoMap_; // authoring-side immutable clock of this take
     // Take lanes (specs/067): each finished loop pass, copied out of the loop buffer when the
     // cursor wraps (message thread), in a zeroed loop-length buffer holding [from, to).
     struct LoopPass {
@@ -2712,6 +2713,7 @@ class Engine {
     int64_t freezeCapFrames_ = 0;         // capacity in frames
     int64_t freezeCursor_ = 0;            // frames written so far
     double freezeCaptureSpb_ = 0.0;       // samples-per-beat at capture
+    std::shared_ptr<const Track::FrozenTiming> freezeCaptureTiming_;
     // Sample rate every node was last prepared at (propagateSampleRate). The offline render
     // re-prepares only when it changes, so a chunked export doesn't reset DSP state per block.
     double preparedSR_ = 0.0;

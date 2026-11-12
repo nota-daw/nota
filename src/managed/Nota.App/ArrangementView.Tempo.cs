@@ -44,6 +44,7 @@ public sealed partial class ArrangementView
     }
     public int TimeSignatureDenominator { get; set; } = 4;
     private double TempoBarLength => _beatsPerBar * 4.0 / Math.Max(1, TimeSignatureDenominator);
+    private double GridBarLength => TempoAxis ? TempoBarLength : _beatsPerBar;
 
     private Control BuildTempoRow()
     {

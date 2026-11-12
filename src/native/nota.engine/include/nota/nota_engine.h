@@ -1836,6 +1836,8 @@ NOTA_API void       nota_track_unfreeze(NotaEngine* engine, int32_t track_id);
  * an audio track at at_beat as a new clip, overwriting what it covers (one undo step);
  * returns the clip index or -1. name_utf8 may be NULL. */
 NOTA_API int64_t    nota_track_bounce_begin(NotaEngine* engine, int32_t track_id, double length_beats);
+/* Range-aware bounce: capture precisely [start_beat, end_beat), including tempo changes. */
+NOTA_API int64_t    nota_track_bounce_range_begin(NotaEngine* engine, int32_t track_id, double start_beat, double end_beat);
 NOTA_API int64_t    nota_track_freeze_take(NotaEngine* engine, float* out, int64_t cap_frames);
 NOTA_API int32_t    nota_track_paste_audio_frames(NotaEngine* engine, int32_t track_id, const float* interleaved,
                                                   int64_t frames, double at_beat, const char* name_utf8);

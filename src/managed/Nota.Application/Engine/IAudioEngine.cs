@@ -436,6 +436,8 @@ public interface IAudioEngine : IDisposable
     void CancelFreeze();
     /// <summary>Arms a capture exactly <paramref name="lengthBeats"/> long (no ring-out tail); returns frames.</summary>
     long BeginBounce(int trackId, double lengthBeats);
+    /// <summary>Arms a capture over both mapped range endpoints, without a tail.</summary>
+    long BeginBounceRange(int trackId, double startBeat, double endBeat);
     /// <summary>Paste Bounced Audio: copies the armed capture's frames into <paramref name="outFrames"/>
     /// (interleaved stereo) and disarms it without freezing the track. Returns frames copied.</summary>
     long TakeFreezeCapture(float[] outFrames);
@@ -624,6 +626,12 @@ public interface IAudioEngine : IDisposable
     string SampleName(long sampleId);
     /// <summary>Remember the source name of a sample (a project reload restores it).</summary>
     void SetSampleName(long sampleId, string name);
+    /// <summary>The full path the sample was loaded from, or "" when unknown (a recording, a
+    /// render, a project's own copy). Managed-side only, like <see cref="SampleName"/>; Locate
+    /// uses it and projects save it (spec 092, #581).</summary>
+    string SampleSource(long sampleId) => "";
+    /// <summary>Restore a sample's source path (project load).</summary>
+    void SetSampleSource(long sampleId, string path) { }
     int AddMidiClip(int trackId, double startBeat, double lengthBeats);
 
     // --- Hosted plugins (M3-3) ---------------------------------------------

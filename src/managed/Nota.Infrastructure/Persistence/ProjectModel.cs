@@ -446,6 +446,9 @@ public sealed class AudioClipDto
     // Ends that play at full level where take sections meet: 1 head, 2 tail (v29, optional;
     // absent = both fade). A flatten keeps such a join after its takes are gone.
     public int? JoinedEdges { get; set; }
+    /// <summary>The file the clip's audio came from (spec 092, #581) — Locate opens it.
+    /// Optional; absent for recordings, renders and projects saved before it existed.</summary>
+    public string? Source { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -458,6 +461,8 @@ public sealed class AudioTakeDto
     public int Number { get; set; }            // "Take N" as shown on the lane
     public int Group { get; set; }             // takes of one recording share a group
     public string Sample { get; set; } = "";
+    /// <summary>The file the take's audio came from (spec 092); absent for a recording.</summary>
+    public string? Source { get; set; }
     public double OriginBeat { get; set; }     // beat of the sample's frame 0
     public double SourceOffsetFrames { get; set; }
     public long LengthFrames { get; set; }

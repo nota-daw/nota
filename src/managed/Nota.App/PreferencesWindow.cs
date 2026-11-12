@@ -966,11 +966,8 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         if (_main is null) return Caption(Loc.T("preferences.content_folders_are_unavailable_in"));
         var settings = _main.Settings;
-        return Sections(Section(Loc.T("preferences.content_folders"), 10, Table(new List<Control>
+        return Sections(SampleFoldersSection(settings), Section(Loc.T("preferences.content_folders"), 10, Table(new List<Control>
         {
-            FolderRow(Loc.T("preferences.samples"),
-                () => settings.Current.SamplesFolder, () => settings.ResolvedSamplesFolder(),
-                path => { settings.Current.SamplesFolder = path; settings.Save(); _main.Browser.RebuildSamples(); }),
             FolderRow(Loc.T("preferences.projects"),
                 () => settings.Current.ProjectsFolder, () => settings.ResolvedProjectsFolder(),
                 path => { settings.Current.ProjectsFolder = path; settings.Save(); _main.Browser.RebuildProjects(); }),
@@ -1637,6 +1634,13 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.drag_a_selected_devices_header"), Loc.T("preferences.move_the_selected_devices_of")),
             (Loc.T("preferences.drag_a_device_onto_a"), Loc.T("preferences.move_it_there_out_of")),
             (Loc.T("preferences.drag_a_device_onto_a_2"), Loc.T("preferences.copy_it_there")),
+        }),
+        (Loc.T("preferences.browser_files_after_a_click"), new[]
+        {
+            ("⌘[   ⌘]", Loc.T("preferences.back_forward_in_the_browse")),
+            ("⌘↑", Loc.T("preferences.up_to_the_parent_folder")),
+            ("⌘L", Loc.T("preferences.type_or_paste_a_path")),
+            ("Return", Loc.T("preferences.open_the_selected_folder_browse")),
         }),
         (Loc.T("preferences.racks"), new[]
         {

@@ -2167,9 +2167,17 @@ void Engine::fillFrozen(Track& t, float* dst, int32_t frames, double blockStart,
     }
     const std::vector<float>& buf = *bufPtr;
     const int64_t n = static_cast<int64_t>(buf.size() / 2);
+    const auto* timing = t.frozenTiming.get();
+    const bool mappedClock = transport_.hasTempoMap();
+    const double elapsed = transport_.playheadSamples();
+    const double origin = timing && timing->map ? timing->map->secondsAt(timing->startBeat) * timing->sampleRate : 0.0;
+    const bool sameMap = timing && timing->map && timing->map.get() == transport_.tempoMap();
     for (int32_t i = 0; i < frames; ++i) {
-        const double beat = (blockStart + i) / spb;
-        const double srcF = beat * t.frozenSpb;
+        const double beat = !sameMap && mappedClock ? transport_.beatAtSamples(elapsed + i) : (blockStart + i) / spb;
+        const double srcF = timing && timing->map
+            ? sameMap ? (elapsed + i) * timing->sampleRate / transport_.sampleRate() - origin
+                : timing->map->secondsAt(beat) * timing->sampleRate - origin
+            : (beat - (timing ? timing->startBeat : 0.0)) * t.frozenSpb;
         const int64_t i0 = static_cast<int64_t>(srcF);
         if (srcF < 0.0 || i0 >= n) {
             dst[i * 2] = 0.0f;

@@ -33,6 +33,7 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
 if (args.Contains("--tempo"))
 {
     foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
@@ -218,6 +219,17 @@ if (args.Length >= 1 && args[0] == "--browser")
     Console.WriteLine("-- browser: device categories --");
     foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "BROWSER PASSED" : $"BROWSER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Browser files (spec 092: sample folders, browse mode, clip sources, Projects tab) alone: `--browser-files`.
+if (args.Length >= 1 && args[0] == "--browser-files")
+{
+    Console.WriteLine("-- browser files (spec 092) --");
+    foreach (var (ok, label) in SampleFoldersTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in FileBrowseTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ClipSourceTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in ProjectSummaryTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "BROWSER FILES PASSED" : $"BROWSER FILES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Get Plug-ins alone: `--store`; live installs from a registry index: `--store-live <index> <id>…`.
@@ -15660,6 +15672,13 @@ Console.WriteLine("-- background audio import --");
 Console.WriteLine("-- browser: device categories --");
 foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
 
+// --- browser files (spec 092): sample folders, browse mode, clip sources, Projects tab ---
+Console.WriteLine("-- browser files (spec 092) --");
+foreach (var (ok, label) in SampleFoldersTests.Run()) Check(ok, label);
+foreach (var (ok, label) in FileBrowseTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ClipSourceTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ProjectSummaryTests.Run()) Check(ok, label);
+
 // --- piano roll Fold (specs/045): scale rows, Drum Rack pads, saved per track ---
 Console.WriteLine("-- piano roll fold --");
 foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
@@ -15731,6 +15750,7 @@ foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
 Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");

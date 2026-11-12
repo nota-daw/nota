@@ -1134,7 +1134,13 @@ public sealed partial class ArrangementView
                 else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
             }, MenuKit.DeleteKey);
 
-            MenuKit.AddGroups(flyout.Items, new Control[] { header }, new Control[] { rename }, edits, audio, session,
+            // Locate ▸ In browser / In Finder: the file the audio came from (spec 092, #581).
+            var locate = new List<Control>();
+            if (!inGroup && !clip.IsMidi && _o.Locate is { } hooks && _o._engine is { } leng
+                && leng.TryGetAudioClipInfo(trackId, idx, out var lai))
+                locate.Add(LocateMenu.Build(hooks, lai.SampleId));
+
+            MenuKit.AddGroups(flyout.Items, new Control[] { header }, new Control[] { rename }, locate, edits, audio, session,
                               clipboard, new Control[] { del });
             return flyout;
         }
@@ -1846,6 +1852,15 @@ public sealed partial class ArrangementView
             // falls in the span it stands for, so nothing between strokes is skipped.
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
             if (vx1 <= vx0) return;
+            bool mapped = c.Warped && _o.TempoAxis && c.LengthBeats > 0;
+            double startSeconds = mapped ? _o.TempoSeconds(c.StartBeat) : 0;
+            double secondsSpan = mapped ? _o.TempoSeconds(c.StartBeat + c.LengthBeats) - startSeconds : 1;
+            double FractionAt(double x) => mapped
+                ? (_o.TempoBeat(startSeconds + (x - r.X) / r.Width * secondsSpan) - c.StartBeat) / c.LengthBeats
+                : (x - r.X) / r.Width;
+            double XAt(double f) => mapped
+                ? r.X + (_o.TempoSeconds(c.StartBeat + f * c.LengthBeats) - startSeconds) / secondsSpan * r.Width
+                : r.X + f * r.Width;
             // The whole-clip overview, or — when the clip is drawn wider than it has buckets —
             // peaks for just the visible slice at one bucket per pixel (#299).
             float[] pk = c.Peaks;
@@ -1855,26 +1870,27 @@ public sealed partial class ArrangementView
             // Smooth resolves to device pixels, so a HiDPI screen gets twice the detail.
             bool smooth = _o.Waveform == WaveformStyle.Smooth;
             double scale = smooth ? WaveformPainter.Scale(this) : 1;
-            if (r.Width * scale > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
+            if (r.Width * scale > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, FractionAt(vx0), FractionAt(vx1),
                     (int)Math.Ceiling((vx1 - vx0) * scale), r.Width))
             {
                 (pk, rms, count, fa, fb) = (c.DetailPeaks!, c.DetailRms, c.DetailCount, c.DetailF0, c.DetailF1);
             }
-            double span = (fb - fa) * r.Width;
+            double span = fb - fa;
             var adsr = c.Adsr.Fit(c.LengthBeats);
             bool shaped = !adsr.IsIdentity;
             if (smooth)
             {
-                double ox = r.X + fa * r.Width, bw = span / count;
-                int i0 = Math.Max(0, (int)Math.Floor((vx0 - ox) / bw) - 1);
-                int i1 = Math.Min(count, (int)Math.Ceiling((vx1 - ox) / bw) + 1);
+                double bf = span / count;
+                int i0 = Math.Max(0, (int)Math.Floor((FractionAt(vx0) - fa) / bf) - 1);
+                int i1 = Math.Min(count, (int)Math.Ceiling((FractionAt(vx1) - fa) / bf) + 1);
                 _painter.Begin(scale);
                 for (int i = i0; i < i1; i++)
                 {
-                    double x0 = ox + i * bw;
+                    double fraction = fa + i * bf;
+                    double x0 = XAt(fraction), x1 = XAt(fraction + bf);
                     float g = c.Gain;
-                    if (shaped) g *= (float)adsr.GainAt((x0 + bw / 2 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
-                    _painter.Add(x0, x0 + bw, Math.Clamp(pk[i * 2] * g, -1f, 1f), Math.Clamp(pk[i * 2 + 1] * g, -1f, 1f),
+                    if (shaped) g *= (float)adsr.GainAt((fraction + bf / 2) * c.LengthBeats, c.LengthBeats);
+                    _painter.Add(x0, x1, Math.Clamp(pk[i * 2] * g, -1f, 1f), Math.Clamp(pk[i * 2 + 1] * g, -1f, 1f),
                                  rms is null ? -1f : Math.Min(1f, rms[i] * g));
                 }
                 using (ctx.PushClip(new Rect(vx0, r.Y, vx1 - vx0, r.Height)))
@@ -1885,15 +1901,14 @@ public sealed partial class ArrangementView
             using (var gc = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
-                    double ox = r.X + fa * r.Width;
-                    int b0 = Math.Clamp((int)((cx0 - ox) / span * count), 0, count - 1);
-                    int b1 = Math.Clamp((int)Math.Ceiling((cx1 - ox) / span * count), b0 + 1, count);
+                    int b0 = Math.Clamp((int)((FractionAt(cx0) - fa) / span * count), 0, count - 1);
+                    int b1 = Math.Clamp((int)Math.Ceiling((FractionAt(cx1) - fa) / span * count), b0 + 1, count);
                     float min = 1f, max = -1f;
                     for (int b = b0; b < b1; b++) { min = Math.Min(min, pk[b * 2]); max = Math.Max(max, pk[b * 2 + 1]); }
                     if (min > max) return;
                     // Clip gain (and the ADSR shape) scales the drawn waveform, matching the clip editor.
                     float g = c.Gain;
-                    if (shaped) g *= (float)adsr.GainAt((x + 0.5 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
+                    if (shaped) g *= (float)adsr.GainAt(FractionAt(x + 0.5) * c.LengthBeats, c.LengthBeats);
                     min = Math.Clamp(min * g, -1f, 1f); max = Math.Clamp(max * g, -1f, 1f);
                     AddWaveColumn(gc, x, mid, amp, min, max);
                 });
@@ -1906,8 +1921,15 @@ public sealed partial class ArrangementView
         private bool EnsureDetailPeaks(ClipVM c, int trackId, double f0, double f1, int n, double widthPx)
         {
             n = Math.Clamp(n, 1, 8192);
+            double PixelDistance(double a, double b)
+            {
+                if (!c.Warped || !_o.TempoAxis) return Math.Abs(a - b) * widthPx;
+                double start = _o.TempoSeconds(c.StartBeat), end = _o.TempoSeconds(c.StartBeat + c.LengthBeats);
+                return Math.Abs(_o.TempoSeconds(c.StartBeat + a * c.LengthBeats)
+                    - _o.TempoSeconds(c.StartBeat + b * c.LengthBeats)) / (end - start) * widthPx;
+            }
             if (c.DetailPeaks is not null && c.DetailCount == n
-                && Math.Abs(c.DetailF0 - f0) * widthPx < 0.5 && Math.Abs(c.DetailF1 - f1) * widthPx < 0.5)
+                && PixelDistance(c.DetailF0, f0) < 0.5 && PixelDistance(c.DetailF1, f1) < 0.5)
                 return true;
             var eng = _o._engine;
             if (eng is null || trackId <= 0 || !eng.TryGetAudioClipInfo(trackId, c.ClipIndex, out var ai)) return false;

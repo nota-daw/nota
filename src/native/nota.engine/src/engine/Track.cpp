@@ -2,8 +2,21 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 #include "Track.h"
+#include "TempoMap.h"
 
 namespace nota {
+
+double AudioTake::beatAtFrame(double frame) const {
+    return tempoMap && sample && sample->sourceSampleRate > 0
+        ? tempoMap->beatAt(tempoMap->secondsAt(originBeat) + frame / sample->sourceSampleRate)
+        : originBeat + frame * beatsPerFrame;
+}
+
+double AudioTake::frameAtBeat(double beat) const {
+    return tempoMap && sample && sample->sourceSampleRate > 0
+        ? (tempoMap->secondsAt(beat) - tempoMap->secondsAt(originBeat)) * sample->sourceSampleRate
+        : beatsPerFrame > 0 ? (beat - originBeat) / beatsPerFrame : 0.0;
+}
 
 float ClipAdsr::gainAt(double t, double len) const {
     double g;
