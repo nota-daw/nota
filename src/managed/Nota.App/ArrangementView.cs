@@ -145,6 +145,9 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Scroll the track list so <paramref name="trackId"/>'s whole row is in view. Runs
     /// after the next layout pass, so it also works straight after a Refresh that added the
     /// row (the scroll extent isn't updated until then). A row already fully visible doesn't move.</summary>
+    /// <summary>Set by the main window: what an audio clip's Locate submenu does (spec 092).</summary>
+    internal LocateHooks? Locate { get; set; }
+
     public void RevealTrack(int trackId)
     {
         Dispatcher.UIThread.Post(() =>

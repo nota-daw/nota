@@ -678,6 +678,12 @@ docks as a panel under any of the three, or floats in its own window — see
   shortcut) writes that fade onto a join where the selected clips already touch, without
   shortening a longer one, in one undo step. MIDI clips are left alone. The shape is saved
   with the project.
+- **Locate** (right-click an audio clip, in the arrangement or a Session slot): **In
+  browser** opens the Files tab at the file the clip was made from (the tree when it is in a
+  sample folder, else the browse view); **In Finder** (In Explorer / In file manager) reveals
+  it, or the project's own copy when the source is unknown (a recording) or gone. While an
+  audio clip is selected, its file is marked in the Files list whenever its folder is open.
+  Projects keep each clip's source path, so this works after reopening.
 - **Separate Stems** (right-click an audio clip): the **htdemucs** AI model (Demucs v4)
   splits the clip into Drums, Bass, Other and Vocals — a group of four audio tracks under the
   clip's track. Each stem clip copies the original's shape exactly (region, warp markers, trim,
@@ -1337,7 +1343,23 @@ audio effects after it keep running and keep their settings; saved with the proj
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
-- **Smart samples**: the Samples folder is analysed in the background — tempo, key, loop or
+- **Sample folders**: the Files tab shows every folder in the list (Settings → Library, or
+  **+ Add folder…** and folders dropped on the tab). One folder looks as it always did;
+  with several, each is a top-level node — **Rename** (the label only), **Set as default**,
+  Reveal, **Remove from browser** (files stay on disk). The default folder is where sample
+  packs install. A folder on an unplugged drive stays listed, dimmed, until it is back; a
+  folder already in the list, or inside or around one, is refused with a note.
+- **Browse view** (Files → **Tree | Browse**): one folder at a time anywhere on the
+  computer, starting at the default sample folder — **Back / Forward / Up** (⌘[ ⌘] ⌘↑) up
+  to the drives, **Home**, a path bar whose segments jump, **Copy path**, and ⌘L to type or
+  paste a path (a file path selects the file). Rows carry a kind icon (folder, drive, audio,
+  MIDI, other file); files show extension and size in their own columns, and files Nota
+  can't add are listed faded and inert. Audio and MIDI files preview, drag and open as in
+  the tree; a folder's menu adds it to the sample folders. Search filters the folder shown.
+- **Projects tab**: newest save first (or by name — a **Date | Name** switch, remembered),
+  each project with its save date, tempo, key, length and track count (read in the
+  background and cached); the open project carries a dot.
+- **Smart samples**: every sample folder is analysed in the background — tempo, key, loop or
   one-shot, and a timbre fingerprint — once per file (results kept across launches, a newly
   installed pack first; the status line shows the progress). Names win over the analysis
   ("Loop_124_Am", "Pad C#m 90bpm", a "One Shots" folder), and a loop's exact tempo comes from
@@ -1386,7 +1408,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
-  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder
+  confirmation); Files — Show similar sounds / Reveal in Finder / Copy path; Presets — Reveal in Finder
   and Delete… (to the Trash) on a saved preset, Reveal in Finder on a folder row (opens the
   presets folder).
   On Windows and Linux the reveal item reads Show in Explorer / Show in file manager.
@@ -1580,7 +1602,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
-- **Library**: library folders. Without an explicit choice, the Projects and Samples folders
+- **Library**: **Sample folders** — the list the browser's Files tab shows (Add folder…,
+  drop folders, Set as default, Rename, Show, Remove) — and the Projects folder. Without an
+  explicit choice, the Projects and Samples folders
   sit in the system's Documents and Music locations (Known Folders on Windows and macOS,
   `user-dirs.dirs` on Linux), relocated or translated ones included.
 - **Appearance**: **Look** — **New** or **Classic** (0.59's colours, corners and monospaced

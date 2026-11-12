@@ -884,6 +884,12 @@ public sealed partial class SessionView
 
     // ---- context menus -------------------------------------------------------------------
 
+    // Locate ▸ for an audio take (spec 092, #581); nothing for a MIDI clip.
+    private Control[] LocateItems(int trackId, int scene)
+        => Locate is { } hooks && _engine.TryGetSessionAudioSlot(trackId, scene, out var sa)
+            ? new Control[] { LocateMenu.Build(hooks, sa.SampleId) }
+            : Array.Empty<Control>();
+
     private void ShowSlotMenu(Control anchor, Column c, int scene)
     {
         bool filled = SlotFilled(c.TrackId, scene);
@@ -899,6 +905,7 @@ public sealed partial class SessionView
                     MenuKit.Item(Loc.T("common.edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
                     MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
                 },
+                LocateItems(c.TrackId, scene),
                 new Control[] { MenuKit.Item(Loc.T("session.grid.copy_to_arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
                 new Control[] { AddTrackSubmenu(c.TrackId) },
                 MenuKit.ClipboardGroup(() => CopySelection(), () => CutSelection(), () => PasteSelection(), () => DuplicateSelection(), CanPaste),

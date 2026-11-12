@@ -38,7 +38,7 @@ using Nota.Application.Localization;
 
 namespace Nota.App;
 
-public sealed class BrowserView : UserControl
+public sealed partial class BrowserView : UserControl
 {
     // The browser drag payload. macOS's native drag session requires exactly one
     // pasteboard item per drag image, and Avalonia makes one drag image per data
@@ -415,7 +415,7 @@ public sealed class BrowserView : UserControl
         contentHost.Children.Add(_emptyWrap);
 
         var right = new DockPanel();
-        var topStack = new StackPanel { Children = { headerRow, _categoryChipsHost, _chipsHost, _sampleChipsHost } };
+        var topStack = new StackPanel { Children = { headerRow, BuildFilesBars(), BuildProjectsBar(), _categoryChipsHost, _chipsHost, _sampleChipsHost } };
         DockPanel.SetDock(topStack, Dock.Top);
         DockPanel.SetDock(_statusBar, Dock.Bottom);
         DockPanel.SetDock(_previewFooter, Dock.Bottom);
@@ -565,6 +565,8 @@ public sealed class BrowserView : UserControl
             if (!ReferenceEquals(_chipsAnchor, vm.SimilarAnchor) || _chipsFilter != vm.SampleFilter) RebuildSampleChips();
         };
         RebuildSampleChips();
+        HookBrowse(vm);
+        HookProjects(vm);
         RefreshCounts();
     }
 
@@ -573,7 +575,7 @@ public sealed class BrowserView : UserControl
         0 => _vm?.Instruments,
         1 => _vm?.Effects,
         2 => _vm?.MidiEffects,
-        3 => _vm?.Samples,
+        3 => _vm is null ? null : _vm.BrowseMode ? _vm.BrowseItems : _vm.Samples,
         4 => _vm?.Presets,
         _ => null,
     };
@@ -642,6 +644,10 @@ public sealed class BrowserView : UserControl
         bool sampleFilter = tab == FilesTab && _vm is not null && (!_vm.SampleFilter.IsEmpty || _vm.SimilarAnchor is not null);
         if (sampleFilter && _vm!.IndexProgress.Total > 0)
             return (Loc.T("browser.no_matches_yet"), Loc.T("browser.nota_is_still_analysing_your"));
+        if (tab == FilesTab && BrowseOn && !searching)
+            return _vm!.BrowseState == BrowseListState.Unreadable
+                ? (Loc.T("browser.folder_unreadable"), "")
+                : (Loc.T("browser.folder_empty"), "");
         if (searching || filtering || sampleFilter) return (Loc.T("browser.no_matches"), Loc.T("browser.try_a_different_search_or"));
         return tab switch
         {
@@ -677,6 +683,8 @@ public sealed class BrowserView : UserControl
         }
         int n = VisibleCount(tab);
         // Filtered, the folders on screen are only there to hold the matches: count those.
+        if (tab == FilesTab && BrowseOn)
+            return Loc.Plural("browser.samples", System.Linq.Enumerable.Count(_vm.BrowseItems, s => s.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile));
         if (tab == FilesTab && _vm.SimilarAnchor is not null || tab == FilesTab && !_vm.SampleFilter.IsEmpty)
             n = System.Linq.Enumerable.Count(_vm.Samples, s => s.Kind != BrowserItemKind.Folder);
         return tab switch
@@ -721,7 +729,9 @@ public sealed class BrowserView : UserControl
         // Favorite/tag filter chips apply only to the device tabs.
         _chipsHost.IsVisible = index is 0 or 1 or 2;
         RebuildCategoryChips();
-        _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
+        UpdateFilesBars();
+        UpdateProjectsBar();
+        if (index == FilesTab) _vm?.RefreshSampleAvailability();   // a drive plugged in or pulled out meanwhile
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
         // The shared search box may have changed on another tab (#342).
@@ -773,7 +783,7 @@ public sealed class BrowserView : UserControl
     private IDataTemplate BuildItemTemplate() => new FuncDataTemplate<BrowserItem>((item, _) =>
     {
         if (item is null) return new Control();
-        return item.IsGroup ? GroupRow(item) : IndexRow(item);
+        return item.IsGroup ? GroupRow(item) : item.Kind == BrowserItemKind.Project ? ProjectRow(item) : IndexRow(item);
     }, supportsRecycling: false);
 
     // A section header: caption, a hairline filling the gap, and the section's count.
@@ -859,24 +869,54 @@ public sealed class BrowserView : UserControl
         {
             icon = RailIcon(GlyphKind.Downloads, 13, "Brush.TextSecondary");
         }
+        // The Files browse view (spec 092): every row says what it is — folder, drive, audio,
+        // MIDI or another file — since folders open with a click rather than a caret.
+        else if (IsBrowseRow(item))
+        {
+            var kind = item.IsVolume ? GlyphKind.Drive
+                     : item.Kind switch
+                     {
+                         BrowserItemKind.Folder => GlyphKind.Folder,
+                         BrowserItemKind.Sample => GlyphKind.AudioFile,
+                         BrowserItemKind.MidiFile => GlyphKind.Midi,
+                         _ => GlyphKind.Doc,
+                     };
+            icon = RailIcon(kind, 14, item.Kind switch
+            {
+                BrowserItemKind.Folder => "Brush.TextSecondary",
+                BrowserItemKind.OtherFile => "Brush.TextDisabled",
+                _ => "Brush.TextTertiary",
+            });
+        }
 
         // A built-in row shows its distinctive word only ("Aurora", not "Nota Aurora"): the
         // family name would repeat down the whole list. Search still matches the full name.
         var name = new TextBlock
         {
-            Text = item.Prefix.Length > 0 ? item.ShortName : item.Name,
+            // Files and folders keep their real names ("Nota Samples" is a folder, not a device).
+            // (The factory kits' node is Nota's own and keeps its short name.)
+            Text = item.Prefix.Length > 0 && (item.Sub == "factory" || item.Kind is not (BrowserItemKind.Folder or BrowserItemKind.Sample or BrowserItemKind.MidiFile))
+                ? item.ShortName : item.Name,
             Classes = { "RowName" },
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        if (child) name.Classes.Add("child");
+        if (child || item.Size is not null) name.Classes.Add("child");
+        if (item.Unavailable) name.Classes.Add("unavailable");
+        // The selected clip's source file (spec 092, #581): an orange edge and name.
+        void MarkLocated() { edge.Classes.Set("located", item.Located); name.Classes.Set("located", item.Located); }
+        MarkLocated();
 
         // The type, as a quiet tag on the right edge (toggleable in the ⋮ menu). A sample's
         // tag is what the index heard — "124 · Am" — and fills in as the scan reaches it.
-        bool sample = item.Kind == BrowserItemKind.Sample;
-        string tag = sample ? SampleTag(item) : item.Kind == BrowserItemKind.MidiFile ? RowTag(item) : Capital(RowTag(item));
+        bool browseFile = item.Size is not null;
+        bool sample = item.Kind == BrowserItemKind.Sample && !browseFile;
+        string tag = browseFile ? Extension(item) : sample ? SampleTag(item) : item.Kind == BrowserItemKind.MidiFile ? RowTag(item) : Capital(RowTag(item));
         TextBlock? tagText = null;
-        if (sample || (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true)))
+        if (sample || browseFile || (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true)))
             tagText = new TextBlock { Text = tag, Classes = { "RowTag" }, TextTrimming = TextTrimming.CharacterEllipsis };
+        TextBlock? sizeText = item.Size is { } bytes
+            ? new TextBlock { Text = FileSize(bytes), Classes = { "RowTag" }, TextAlignment = TextAlignment.Right }
+            : null;
 
         var row = new IndexRowPanel
         {
@@ -888,22 +928,41 @@ public sealed class BrowserView : UserControl
             Name2 = name,
             Markers = BuildRowMarkers(item),   // brass ★ + tag colour dots
             Tag2 = tagText,
+            Size2 = sizeText,
         };
+        // A file Nota can't add stays in the list, in the disabled ink (spec 092).
+        if (item.Kind == BrowserItemKind.OtherFile)
+        {
+            name.Classes.Add("inert");
+            tagText?.Classes.Add("inert");
+            sizeText?.Classes.Add("inert");
+        }
 
         // The row's full identity lives in the tooltip, where the tag has no room for it
         // (a plug-in's format, a sample's folder, tempo and key).
         string tip = item.Tip.Length > 0 ? item.Tip : item.Sub;
         ToolTip.SetTip(row, tip.Length > 0 ? $"{item.Name} · {tip}" : item.Name);
+        // Every other file row still follows Locate's mark as the selected clip changes.
+        if (!sample && item.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile)
+        {
+            void Relocate(object? _, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(BrowserItem.Located)) MarkLocated();
+            }
+            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Relocate; item.PropertyChanged += Relocate; MarkLocated(); };
+            row.DetachedFromVisualTree += (_, _) => item.PropertyChanged -= Relocate;
+        }
         if (sample)
         {
-            void Retag(object? _, System.ComponentModel.PropertyChangedEventArgs __)
+            void Retag(object? _, System.ComponentModel.PropertyChangedEventArgs e)
             {
+                if (e.PropertyName == nameof(BrowserItem.Located)) { MarkLocated(); return; }
                 tagText!.Text = SampleTag(item);
                 row.InvalidateArrange();
             }
             // Subscribe only while shown: the item outlives its rows (they are rebuilt on every
             // scroll), so a lasting handler would pin every row ever drawn.
-            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Retag; item.PropertyChanged += Retag; tagText!.Text = SampleTag(item); };
+            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Retag; item.PropertyChanged += Retag; tagText!.Text = SampleTag(item); MarkLocated(); };
             row.DetachedFromVisualTree += (_, _) => item.PropertyChanged -= Retag;
             row.PointerEntered += (_, _) =>
             {
@@ -915,6 +974,25 @@ public sealed class BrowserView : UserControl
             };
         }
         return row;
+    }
+
+    // A browse row (spec 092): a listed folder / drive / file of the browse view.
+    private static bool IsBrowseRow(BrowserItem item)
+        => item.Size is not null || item.IsVolume
+           || item.Kind == BrowserItemKind.Folder && !item.HasChildren && item.PlaceIndex < 0 && item.Path.Length > 0
+              && System.IO.Path.IsPathRooted(item.Path) && item.Sub != "factory";
+
+    private static string Extension(BrowserItem item)
+        => System.IO.Path.GetExtension(item.Path).TrimStart('.').ToLowerInvariant();
+
+    // "820 KB", "12.4 MB" — the browse view's size column.
+    private static string FileSize(long bytes)
+    {
+        const double K = 1024;
+        if (bytes < K) return Loc.F("browser.size_b", bytes);
+        if (bytes < K * K) return Loc.F("browser.size_kb", Math.Round(bytes / K).ToString("0", NotaNum.Culture));
+        if (bytes < K * K * K) return Loc.F("browser.size_mb", (bytes / (K * K)).ToString(bytes < 10 * K * K ? "0.0" : "0", NotaNum.Culture));
+        return Loc.F("browser.size_gb", (bytes / (K * K * K)).ToString("0.0", NotaNum.Culture));
     }
 
     // "124 · Am", a hit's note, or (until analysed, or with nothing to say) the file type.
@@ -941,6 +1019,9 @@ public sealed class BrowserView : UserControl
         public TextBlock Name2 { get; init; } = null!;
         public Control? Markers { get; init; }
         public TextBlock? Tag2 { get; init; }
+        /// <summary>The browse view's size column: fixed width, so sizes line up.</summary>
+        public TextBlock? Size2 { get; init; }
+        private const double SizeW = 54;
 
         protected override Size MeasureOverride(Size availableSize)
         {
@@ -960,6 +1041,7 @@ public sealed class BrowserView : UserControl
             Children.Add(Name2);
             if (Markers is not null) Children.Add(Markers);
             if (Tag2 is not null) Children.Add(Tag2);
+            if (Size2 is not null) Children.Add(Size2);
         }
 
         protected override Size ArrangeOverride(Size finalSize)
@@ -979,6 +1061,11 @@ public sealed class BrowserView : UserControl
             }
 
             double right = Math.Max(left, finalSize.Width - Gutter);
+            if (Size2 is not null)
+            {
+                Size2.Arrange(new Rect(right - SizeW, (h - Size2.DesiredSize.Height) / 2, SizeW, Size2.DesiredSize.Height));
+                right = Math.Max(left, right - SizeW - 8);
+            }
             double markersW = Markers?.DesiredSize.Width ?? 0;
             double avail = Math.Max(0, right - left - (markersW > 0 ? markersW + 6 : 0));
 
@@ -1159,7 +1246,7 @@ public sealed class BrowserView : UserControl
         {
             int i = rows.IndexOf(item);
             for (int j = i + 1; i >= 0 && j < rows.Count; j++)
-                if (rows[j] is BrowserItem { IsGroup: false } r && r.Kind != BrowserItemKind.Folder) { next = r; break; }
+                if (rows[j] is BrowserItem { IsGroup: false } r && r.Kind is not (BrowserItemKind.Folder or BrowserItemKind.OtherFile)) { next = r; break; }
         }
         _previewFooter.SetItem(item, next);
     }
@@ -1176,14 +1263,18 @@ public sealed class BrowserView : UserControl
         list.DoubleTapped += (_, e) =>
         {
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
+            if (item.Kind == BrowserItemKind.OtherFile) return;   // listed, but nothing Nota can open
             // Folders (sample dirs, preset categories) are navigation: double-click opens them.
-            if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
+            // In Browse a single click already opened it; a second open would go one deeper.
+            if (item.Kind == BrowserItemKind.Folder && list == _pages[FilesTab] && BrowseOn) return;
+            else if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
             else { DismissPreview(); ItemActivated?.Invoke(item, e.KeyModifiers); }
         };
         list.SelectionChanged += (_, _) =>
         {
             // Section headers are chrome: never let one become the selection.
             if (list.SelectedItem is BrowserItem { IsGroup: true }) { list.SelectedItem = null; return; }
+            if (_suppressPreview) return;   // Locate selects a row without auditioning it
             if (_active <= PresetsTab && list == _pages[_active])
             {
                 SyncPreview(list);
@@ -1202,8 +1293,13 @@ public sealed class BrowserView : UserControl
         list.AddHandler(InputElement.PointerPressedEvent, OnRowPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerMovedEvent, OnRowMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerReleasedEvent,
-            (object? _, PointerReleasedEventArgs _) =>
+            (object? _, PointerReleasedEventArgs e) =>
             {
+                // A Browse folder opens on a click (contracts/ui.md), released on the row it was pressed on.
+                if (_pressedFolder is { } folder && list == _pages[FilesTab] && BrowseOn
+                    && (e.Source as StyledElement)?.DataContext == folder && !folder.Unavailable)
+                    _vm?.BrowseTo(folder.Path);
+                _pressedFolder = null;
                 _pressedItem = null; _pressArgs = null;
                 if (_listPointerDown && _active <= PresetsTab && list == _pages[_active]) ShowPreview(true);
                 _listPointerDown = false;
@@ -1214,16 +1310,21 @@ public sealed class BrowserView : UserControl
         list.ContextRequested += (_, e) => ShowContextMenu(list, e);
     }
 
+    private BrowserItem? _pressedFolder;   // a Browse folder row pressed; opens on release
+
     private void OnRowPressed(object? sender, PointerPressedEventArgs e)
     {
         _pressedItem = null;
         _pressArgs = null;
+        _pressedFolder = null;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (InButton(e.Source as StyledElement)) return;          // preview button etc.
         var item = (e.Source as StyledElement)?.DataContext as BrowserItem;
+        if (item is { Kind: BrowserItemKind.Folder, IsGroup: false } && e.ClickCount == 1 && BrowseOn && IsBrowseRow(item))
+            _pressedFolder = item;
         // Projects, folders and section headers aren't draggable (folders are navigation,
         // not payload; headers are chrome).
-        if (item is null || item.IsGroup || item.Kind is BrowserItemKind.Project or BrowserItemKind.Folder) return;
+        if (item is null || item.IsGroup || item.Kind is BrowserItemKind.Project or BrowserItemKind.Folder or BrowserItemKind.OtherFile) return;
         _pressedItem = item;
         _pressPoint = e.GetPosition(this);
         _pressArgs = e;   // DoDragDropAsync needs the PointerPressed args
@@ -1588,6 +1689,7 @@ public sealed class BrowserView : UserControl
         BrowserItemKind.Project => Loc.T("browser.project"),
         BrowserItemKind.Preset => Loc.T("browser.preset"),
         BrowserItemKind.Folder => Loc.T("browser.folder"),
+        BrowserItemKind.OtherFile => Loc.T("browser.file"),
         _ => "",
     };
 
@@ -1634,6 +1736,7 @@ public sealed class BrowserView : UserControl
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(similar);
                 flyout.Items.Add(reveal);
+                flyout.Items.Add(CopyPathItem(item));
                 return flyout;
             }
             // A saved preset file on disk (#234). Synthetic rows (factory presets, drum kits)
@@ -1658,21 +1761,29 @@ public sealed class BrowserView : UserControl
             }
             case BrowserItemKind.Sample:
             case BrowserItemKind.MidiFile:
+            case BrowserItemKind.OtherFile:
             {
                 var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(reveal);
+                flyout.Items.Add(CopyPathItem(item));
                 return flyout;
             }
             case BrowserItemKind.Folder when _active == FilesTab:   // real sample folders (preset folders are synthetic)
             {
-                var multi = new MenuItem { Header = Loc.T("browser.create_multisample") };
-                multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
-                ToolTip.SetTip(multi, Loc.T("browser.map_the_folders_samples_by"));
-                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
+                if (BrowseOn) AddBrowseFolderItems(flyout, item);
+                if (!item.Unavailable && !item.IsVolume)
+                {
+                    var multi = new MenuItem { Header = Loc.T("browser.create_multisample") };
+                    multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
+                    ToolTip.SetTip(multi, Loc.T("browser.map_the_folders_samples_by"));
+                    flyout.Items.Add(multi);
+                }
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel, IsEnabled = !item.Unavailable };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
-                flyout.Items.Add(multi);
                 flyout.Items.Add(reveal);
+                flyout.Items.Add(CopyPathItem(item));
+                if (!BrowseOn && item.PlaceIndex >= 0) { flyout.Items.Add(new Separator()); AddPlaceItems(flyout, item); }
                 return flyout;
             }
             case BrowserItemKind.Project:

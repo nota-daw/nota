@@ -194,6 +194,7 @@ public partial class MainWindow
         _vm.Transport.KeyCode = -1;
         _panLawLegacy = false;     // new projects use the Stereo pan law (set by the template)
         _projectPath = null;
+        if (_vm is not null) _vm.Browser.OpenProjectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
         Timeline.ResetTrackView();  // …at the default track sizes
         Nota.Infrastructure.ProjectTemplate.ApplyDefault(Engine);   // instrument, audio, Reverb + Delay returns

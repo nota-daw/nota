@@ -88,6 +88,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<RemoteService>();
         // Presentation.
         services.AddSingleton<TransportViewModel>();
+        services.AddSingleton<Nota.Application.Browser.IProjectSummaries, ProjectSummaryReader>();   // spec 092
         services.AddSingleton<BrowserViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         Services = services.BuildServiceProvider();
