@@ -39,6 +39,7 @@ public partial class MainWindow
             RemoveWithSeparatorAbove(menu, "file.exit");
             RemoveWithSeparatorAbove(menu, "prefs.open");
         }
+        if (!HasMenuKey) RemoveWithSeparatorAbove(menu, "view.menuBar");   // macOS: the menu is in the system bar (#518)
         Collect(menu);
 
         void Collect(NativeMenu m)

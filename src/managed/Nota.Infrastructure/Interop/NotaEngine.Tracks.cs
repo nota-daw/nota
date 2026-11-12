@@ -20,7 +20,9 @@ public sealed partial class NotaEngine
     public int AddAudioClip(int trackId, string path, double startBeat)
     {
         ThrowIfDisposed();
-        return NativeMethods.AddAudioClip(_handle, trackId, path, startBeat);
+        int c = NativeMethods.AddAudioClip(_handle, trackId, path, startBeat);
+        RememberClipSource(trackId, c, path);
+        return c;
     }
 
     public void SetTrackVolume(int trackId, float volume) { ThrowIfDisposed(); Check(NativeMethods.SetTrackVolume(_handle, trackId, volume)); }
@@ -917,6 +919,51 @@ public sealed partial class NotaEngine
     {
         if (sampleId == 0) return;
         lock (_sampleNames) _sampleNames[sampleId] = System.IO.Path.GetFileNameWithoutExtension(path);
+        RememberSampleSource(sampleId, path);
+    }
+
+    // Where each loaded sample came from on disk (spec 092, #581): Locate finds the file a
+    // clip was made from, and the project keeps the path across a reload. A project's own
+    // copy (…/X.nota/samples/…) isn't a source: loading a project restores the real one.
+    private readonly Dictionary<long, string> _sampleSources = new();
+
+    private void RememberSampleSource(long sampleId, string path)
+    {
+        if (sampleId == 0 || string.IsNullOrEmpty(path) || IsBundleCopy(path)) return;
+        string full;
+        try { full = System.IO.Path.GetFullPath(path); } catch { return; }
+        // Freezes, stems and other renders are written to the temp folder and loaded from
+        // there: a scratch file, not a source anyone should be led back to.
+        if (Nota.Application.Browser.SampleFolderRules.IsSameOrInside(full, System.IO.Path.GetTempPath())) return;
+        lock (_sampleSources) _sampleSources[sampleId] = full;
+    }
+
+    private void RememberClipSource(int trackId, int clipIndex, string path)
+    {
+        if (clipIndex >= 0 && NativeMethods.GetAudioClipInfo(_handle, trackId, clipIndex, out var info) != 0)
+            RememberSampleSource(info.SampleId, path);
+    }
+
+    /// <summary>A path inside a project bundle's samples folder (a copy, not a source).</summary>
+    internal static bool IsBundleCopy(string path)
+    {
+        var dir = System.IO.Path.GetDirectoryName(path);
+        if (dir is null || !string.Equals(System.IO.Path.GetFileName(dir), "samples", StringComparison.OrdinalIgnoreCase)) return false;
+        var bundle = System.IO.Path.GetDirectoryName(dir);
+        return bundle is not null && bundle.EndsWith(".nota", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public string SampleSource(long sampleId)
+    { lock (_sampleSources) return _sampleSources.TryGetValue(sampleId, out var p) ? p : ""; }
+
+    public void SetSampleSource(long sampleId, string path)
+    {
+        if (sampleId == 0) return;
+        lock (_sampleSources)
+        {
+            if (string.IsNullOrEmpty(path)) _sampleSources.Remove(sampleId);
+            else _sampleSources[sampleId] = path;
+        }
     }
 
     public string SampleName(long sampleId)
@@ -994,7 +1041,12 @@ public sealed partial class NotaEngine
 
     /// <summary>Adds an audio clip restoring its source offset/length/gain. Returns clip index or -1.</summary>
     public int AddAudioClipEx(int trackId, string path, double startBeat, double sourceOffsetFrames, long lengthFrames, float gain)
-    { ThrowIfDisposed(); return NativeMethods.AddAudioClipEx(_handle, trackId, path, startBeat, sourceOffsetFrames, lengthFrames, gain); }
+    {
+        ThrowIfDisposed();
+        int c = NativeMethods.AddAudioClipEx(_handle, trackId, path, startBeat, sourceOffsetFrames, lengthFrames, gain);
+        RememberClipSource(trackId, c, path);
+        return c;
+    }
 
     /// <summary>Decoded-sample metadata by id. False if the id isn't found in the live graph.</summary>
     public bool TryGetSampleInfo(long sampleId, out NotaSampleInfo info)

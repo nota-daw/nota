@@ -53,6 +53,8 @@ public sealed class RemoteClient
     internal string? SentLit;
     internal string? SentLearn;
     internal string? SentScreenState;
+    /// <summary>Clip previews this phone has, by slot, while it shows Scenes (#557); null off Scenes.</summary>
+    internal Dictionary<int, ulong>? SentClips;
 
     public bool Authenticated => Device is not null;
 

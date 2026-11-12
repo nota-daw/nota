@@ -78,6 +78,8 @@ public static class CommandCatalog
         C("view.history", Loc.T("commands.show_version_history"), Loc.T("commands.view"), "", "undo history versions snapshots"),
         C("view.midiLearn", Loc.T("commands.midi_learn"), Loc.T("commands.view"), "", "map controller"),
         C("view.fullscreen", Loc.T("commands.toggle_full_screen"), Loc.T("commands.view"), Shortcut.None("F11"), "maximize immersive hide chrome"),
+        C("view.menuBar", Loc.T("commands.show_menu_bar"), Loc.T("commands.view"), "", "menu bar menubar hamburger file edit row classic",
+            hide: OperatingSystem.IsMacOS()),   // macOS keeps its menu in the system bar (#518)
         C(Palette, Loc.T("commands.command_palette"), Loc.T("commands.view"), Shortcut.CmdShift('P'), "search", hide: true),
 
         // ---- Transport --------------------------------------------------------------------

@@ -8,6 +8,8 @@
 // the tempo, the metronome and the view switch never go. The DSP meter is what you look at
 // when the audio starts to crackle and isn't shown anywhere else, so it only folds to its
 // number early on and goes last of all (#303).
+// The Menu key (Windows / Linux, #518) is never in the order either: with the menu row hidden
+// it is the only way to the menu by mouse.
 
 using System;
 using System.Collections.Generic;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// One typeface: Geist for every word and every number (style guide, spec 038). Geist's
+// Geist for every word and every number (style guide, spec 038). Geist's
 // digits are proportional by default, so the app turns on its tabular figures ("tnum")
 // everywhere: TextElement.FontFeatures on every top level for controls, and
 // NotaFormattedText for the custom-drawn layer. Digits then all have the same width and
@@ -16,8 +16,16 @@
 // A skin may name a system typeface instead (spec 087): NotaSkin coerces controls' Geist to it
 // and NotaFormattedText swaps it in when the text is built, so cached Typeface fields follow.
 //
-// Geist is bundled (assets/fonts, SIL OFL 1.1). Glyphs it lacks — ■ ▾ ✓ ★ — fall back to
-// the system font per character.
+// Two roles (spec 091): words, and values and readouts — the numbers with their units, tempo,
+// position and counters that 0.59 set in Geist Mono. The values role is Font.Measure in XAML and
+// Measure* here. Under the new look it IS Geist (the same family object, so nothing renders
+// differently and a skin's typeface reaches it as before); under the classic look it is Geist
+// Mono; a skin may name its own (format 3, font.values). NotaThemeService sets it with
+// SetMeasure; read Measure* when the text is built, never into a static readonly field, or a
+// live switch passes the text by.
+//
+// Geist and Geist Mono are bundled (assets/fonts, SIL OFL 1.1). Glyphs they lack — ■ ▾ ✓ ★,
+// and Cyrillic in Geist Mono — fall back to the system font per character.
 
 using System.Globalization;
 using Avalonia;
@@ -34,6 +42,50 @@ public static class NotaFonts
     public const string UiUri = "avares://Nota.App/Assets/Fonts#Geist";
 
     public static readonly FontFamily UiFamily = new(UiUri);
+
+    /// <summary>Geist Mono: the values role under the classic look (spec 091).</summary>
+    public const string MeasureMonoUri = "avares://Nota.App/Assets/Fonts#Geist Mono";
+    public static readonly FontFamily MonoFamily = new(MeasureMonoUri);
+
+    /// <summary>What a code-built control names to take the values role: Geist Mono as written,
+    /// worn by NotaSkin as the look's values face — Geist under New, Geist Mono under Classic, or
+    /// a skin's font.values — and re-worn live on every switch, like a skin's typeface. (A Run is
+    /// not re-worn: give it <see cref="MeasureFamily"/> when it is built.)</summary>
+    public static FontFamily ValuesFamily => MonoFamily;
+
+    private static FontFamily _measure = UiFamily;
+    private static Typeface _measureFace = new(UiFamily),
+                            _measureMedium = new(UiFamily, FontStyle.Normal, FontWeight.Medium),
+                            _measureBold = new(UiFamily, FontStyle.Normal, FontWeight.Bold);
+
+    /// <summary>The family values and readouts are set in now: Geist (new look), Geist Mono
+    /// (classic) or a skin's values typeface.</summary>
+    public static FontFamily MeasureFamily => _measure;
+    public static Typeface Measure => _measureFace;
+    public static Typeface MeasureMedium => _measureMedium;
+    public static Typeface MeasureBold => _measureBold;
+
+    /// <summary>Changes whenever a typeface text is drawn in changes — the values face (a look
+    /// switch, a skin's font.values) or the words face (a skin's font.family). A view that caches
+    /// a measured text width keys it on this as well as on the Text size step.</summary>
+    public static int FaceStamp { get; private set; }
+
+    /// <summary>Mark the faces changed (NotaSkin calls it when a skin's typeface changes).</summary>
+    internal static void TouchFaces() => FaceStamp++;
+
+    /// <summary>Wear <paramref name="family"/> for values and readouts: the Measure* faces here and
+    /// the Font.Measure resource every values text style reads. Returns whether it changed.</summary>
+    public static bool SetMeasure(FontFamily family)
+    {
+        bool changed = !Equals(family, _measure) && family.ToString() != _measure.ToString();
+        if (changed) FaceStamp++;
+        _measure = family;
+        _measureFace = new Typeface(family);
+        _measureMedium = new Typeface(family, FontStyle.Normal, FontWeight.Medium);
+        _measureBold = new Typeface(family, FontStyle.Normal, FontWeight.Bold);
+        if (Avalonia.Application.Current is { } app) app.Resources["Font.Measure"] = family;
+        return changed;
+    }
 
     // Geist 400 · 500 · 600 · 700
     public static readonly Typeface Sans = new(UiFamily);

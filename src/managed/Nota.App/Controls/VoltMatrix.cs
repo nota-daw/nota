@@ -33,7 +33,7 @@ internal sealed class VoltMatrix : Control, IValueEntryHost
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush CellBg = NotaPalette.BgSunken;
-    private static readonly Typeface Face = NotaFonts.Sans;
+    private static Typeface Face => NotaFonts.Measure;
     // How far the pointer travels for the full ±range — the knob's own feel.
     private const double Travel = 140;
 

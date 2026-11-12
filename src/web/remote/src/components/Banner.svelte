@@ -31,7 +31,7 @@
 {/if}
 
 <style>
-  /* A docked strip under the header. MIDI Learn listening is live, so its dot is the accent. */
+  /* A docked strip under the header (square). MIDI Learn listening is live, so its dot is the accent. */
   .banner { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 16px; background: var(--panel); border-bottom: 1px solid var(--seam); }
   .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--accent); }
   .quiet .dot { background: var(--text-tertiary); }
@@ -39,4 +39,6 @@
   @keyframes blink { 50% { opacity: .35; } }
   .t { font-size: 12px; font-weight: 600; color: var(--text-primary); }
   .s { font-size: 11px; color: var(--text-secondary); }
+  .learn { background: var(--accent-soft); }
+  .learn .t { color: var(--picked-ink); }
 </style>

@@ -87,6 +87,8 @@ public sealed partial class SessionView : UserControl
     /// <summary>Raised when the selection lands on another slot, or on a Return / Master column
     /// (trackId, scene).</summary>
     public event Action<int, int>? SlotSelected;
+    /// <summary>Set by the main window: what an audio take's Locate submenu does (spec 092).</summary>
+    internal LocateHooks? Locate { get; set; }
     /// <summary>Raised after slots are copied / moved into the arrangement (M5-6) or a track is renamed.</summary>
     public event Action? ArrangementChanged;
     /// <summary>A context menu asked for a new track (kind, the track to place it after, or -1 = at the end).</summary>

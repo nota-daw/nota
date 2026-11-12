@@ -94,7 +94,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Mono(string t, double fs, IBrush c) => new()
-        { Text = t, FontSize = fs, Foreground = c, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+        { Text = t, FontSize = fs, Foreground = c, FontFamily = NotaFonts.ValuesFamily, VerticalAlignment = VerticalAlignment.Center };
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
 
         Grid Slider(string label, int p, Func<double, string> fmt, string tip, Func<bool>? dim = null, bool bipolar = false, int steps = 0)

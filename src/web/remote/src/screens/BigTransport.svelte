@@ -4,6 +4,7 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
+  import { bpm } from '../lib/fmt';
 
   let { form }: { form: Form } = $props();
   let pos = $state('1.1.1');
@@ -54,24 +55,24 @@
     clearTimeout(holdTimer);
     if (!held) ctl({ t: 'seek', v: sections[i][1] });
   }
-  const bpmText = $derived(app.tp.bpm.toFixed(2));
+  const bpmText = $derived(bpm(app.tp.bpm));
 </script>
 
 <div class="big {form}">
   <div class="top">
     <div class="pblock">
       <span class="label">Position</span>
-      <span class="mono pos" class:rec={app.tp.rec}>{pos}</span>
+      <span class="pos" class:rec={app.tp.rec}>{pos}</span>
     </div>
     <button class="tap" onclick={tap}>
-      <span class="mono">{bpmText}</span>
+      <span class="tv">{bpmText}</span>
       <span class="tl">Tap tempo</span>
     </button>
   </div>
   <div class="btns" style:grid-template-columns="repeat({form === 'phone' ? 3 : 6}, minmax(0, 1fr))">
-    <button class="b play" class:on={app.tp.play} aria-pressed={app.tp.play} onclick={() => ctl({ t: app.tp.play ? 'stop' : 'play' })}><span class="tri"></span>Play</button>
+    <button class="b play" class:live={app.tp.play} aria-pressed={app.tp.play} onclick={() => ctl({ t: app.tp.play ? 'stop' : 'play' })}><span class="tri"></span>Play</button>
     <button class="b" onclick={() => ctl({ t: 'stop' })}><span class="sq"></span>Stop</button>
-    <button class="b recb" class:on={app.tp.rec} aria-pressed={app.tp.rec} onclick={() => app.canControl ? app.record() : ctl({})}><span class="dot"></span>Record</button>
+    <button class="b recb" class:live={app.tp.rec} aria-pressed={app.tp.rec} onclick={() => app.canControl ? app.record() : ctl({})}><span class="dot"></span>Record</button>
     <button class="b" class:on={app.tp.loop} aria-pressed={app.tp.loop} onclick={() => ctl({ t: 'loop', on: !app.tp.loop })}>
       <svg width="30" height="26" viewBox="0 0 30 26"><path d="M7 9 H21 A5 5 0 0 1 21 19 H9 M9 19 L12 16 M9 19 L12 22 M7 9 A5 5 0 0 0 5 14" /></svg>Loop
     </button>
@@ -89,7 +90,7 @@
         {#each sections as s, i}
           <button class="sec" class:cur={current === i} class:looping={loopSec === i} onpointerdown={() => secDown(i)} onpointerup={() => secUp(i)} onpointercancel={() => clearTimeout(holdTimer)}>
             <span class="sn">{s[0]}</span>
-            <span class="si">{#if loopSec === i}Looping{:else}Bar <span class="mono">{Math.floor(s[1] / 4) + 1}</span>{/if}</span>
+            <span class="si">{#if loopSec === i}Looping{:else}Bar {Math.floor(s[1] / 4) + 1}{/if}</span>
           </button>
         {/each}
       </div>
@@ -103,33 +104,36 @@
   .tablet.big { padding: 18px; }
   .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
   .pblock { display: flex; flex-direction: column; gap: 4px; }
-  .pos { font-size: 52px; line-height: 1; color: var(--text-primary); }
+  .pos { font-size: 52px; font-weight: 500; line-height: 1; color: var(--text-primary); }
   .phoneLand .pos { font-size: 40px; }
   .tablet .pos { font-size: 88px; }
   .pos.rec { color: var(--record); }
-  .tap { height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 16px; border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); }
+  .tap { height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 16px; border-radius: min(var(--r-group), 16px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); }
   .tap:active { background: var(--bg-sunken); box-shadow: none; }
-  .tap .mono { font-size: 18px; color: var(--text-primary); }
-  .tl { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+  .tv { font-size: 18px; font-weight: 500; color: var(--text-primary); }
+  .tl { font-size: 11px; color: var(--text-muted); }
   .btns { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 6px; }
-  /* Keys sized for a hand on a guitar neck. On: solid accent; Record on: solid record — derived ink. */
-  .b { min-height: 0; border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--text-strong); transition: background-color var(--ease), color var(--ease); }
+  /* Keys sized for a hand on a guitar neck, on cards. Play running is live (solid accent),
+     Record solid record; Loop and Click on are picked — the soft tint with orange icon and text. */
+  .b { min-height: 0; border-radius: var(--r-card); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--text-strong); transition: background-color var(--ease), color var(--ease); }
   .b:active { background: var(--bg-sunken); box-shadow: none; }
   .b svg path { fill: none; stroke: currentColor; stroke-width: 2; }
-  .b.on { background: var(--accent); border-color: var(--accent); box-shadow: none; color: var(--ink-on-accent); }
+  .b.on { background: var(--accent-soft); border-color: var(--accent-soft); box-shadow: none; color: var(--picked-ink); }
+  .b.live { background: var(--accent); border-color: var(--accent); box-shadow: none; color: var(--ink-on-accent); }
   .b.dim { color: var(--text-faint); }
   .tri { width: 0; height: 0; border-left: 26px solid currentColor; border-top: 16px solid transparent; border-bottom: 16px solid transparent; margin-left: 6px; }
-  .sq { width: 26px; height: 26px; border-radius: 2px; background: currentColor; }
+  .sq { width: 26px; height: 26px; border-radius: var(--r-fine); background: currentColor; }
   .dot { width: 28px; height: 28px; border-radius: 50%; background: var(--record); }
-  .recb.on { background: var(--record); border-color: var(--record); color: var(--ink-on-record); }
-  .recb.on .dot { background: var(--ink-on-record); }
+  .recb.live { background: var(--record); border-color: var(--record); color: var(--ink-on-record); }
+  .recb.live .dot { background: var(--ink-on-record); }
   .secs { display: flex; flex-direction: column; gap: 6px; }
   .sgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-  /* Sections: the playhead's one carries the accent tick; a looping one is the solid accent. */
-  .sec { height: 52px; position: relative; border-radius: 2px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
-  .sec.cur::before { content: ''; position: absolute; left: 6px; right: 6px; top: -1px; height: 2px; background: var(--accent); }
+  /* Sections: the playhead's one is picked (soft tint, orange name); a looping one is live (solid). */
+  .sec { height: 52px; position: relative; border-radius: min(var(--r-cell), 16px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .sec.cur { background: var(--accent-soft); border-color: var(--accent-soft); box-shadow: none; }
+  .sec.cur .sn { color: var(--picked-ink); }
   .sec.looping { background: var(--accent); border-color: var(--accent); box-shadow: none; }
   .sn { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 92%; }
   .si { font-size: 11px; color: var(--text-tertiary); }
-  .looping .sn, .looping .si { color: var(--ink-on-accent); }
+  .sec.looping .sn, .sec.looping .si { color: var(--ink-on-accent); }
 </style>

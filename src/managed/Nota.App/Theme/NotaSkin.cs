@@ -14,6 +14,10 @@
 // the base value (GetBaseValue) whenever that changes and on every skin change, and cleared
 // again — by a flag, never touching anyone else's animation — when it matches the base. The custom-drawn layer takes the
 // same skin from NotaRadius.*Value and NotaFormattedText, which it reads at render time.
+//
+// The values role rides on the same overlay (spec 091): a control written with Geist Mono
+// (NotaFonts.ValuesFamily) wears the look's values face — Geist under the new look, Geist Mono
+// under the classic one, or a skin's font.values — so a look switch re-wears it like a skin.
 
 using System;
 using System.Collections.Generic;
@@ -36,6 +40,7 @@ internal static class NotaSkin
 {
     private static SkinGeometry _geometry = SkinGeometry.Default;
     private static FontFamily? _family;
+    private static bool _ownValues;   // the skin names its own values face (font.values), installed
     private static bool _installed;
 
     /// <summary>The worn skin's typeface and radii.</summary>
@@ -53,13 +58,32 @@ internal static class NotaSkin
     public static CornerRadius Map(CornerRadius r) => _geometry.IsDefault ? r
         : new CornerRadius(MapRadius(r.TopLeft), MapRadius(r.TopRight), MapRadius(r.BottomRight), MapRadius(r.BottomLeft));
 
-    /// <summary>Geist (by URI, by name, or as the app's default family) becomes the skin's typeface.</summary>
-    public static FontFamily MapFamily(FontFamily family) =>
-        _family is not null && IsGeist(family) ? _family : family;
+    /// <summary>The values role (written as Geist Mono, spec 091) becomes the look's values face;
+    /// then Geist (by URI, by name, or as the app's default family) becomes the skin's typeface.</summary>
+    public static FontFamily MapFamily(FontFamily family)
+    {
+        if (IsValues(family)) family = NotaFonts.MeasureFamily;
+        // A values face the skin chose itself stays, even when it is Geist and the skin's words
+        // face is something else.
+        if (_ownValues && ReferenceEquals(family, NotaFonts.MeasureFamily)) return family;
+        return _family is not null && IsGeist(family) ? _family : family;
+    }
 
-    /// <summary>A Geist typeface in the skin's family, same weight and style — for NotaFormattedText.</summary>
-    public static Typeface Map(Typeface face) =>
-        _family is not null && IsGeist(face.FontFamily) ? new Typeface(_family, face.Style, face.Weight, face.Stretch) : face;
+    /// <summary>The same for a typeface, same weight and style — for NotaFormattedText.</summary>
+    public static Typeface Map(Typeface face)
+    {
+        var family = MapFamily(face.FontFamily);
+        return ReferenceEquals(family, face.FontFamily) ? face : new Typeface(family, face.Style, face.Weight, face.Stretch);
+    }
+
+    // The values role as written: Geist Mono, by URI or by name.
+    private static bool IsValues(FontFamily? f)
+    {
+        if (f is null) return false;
+        if (ReferenceEquals(f, NotaFonts.MonoFamily)) return true;
+        var first = f.FamilyNames.Count > 0 ? f.FamilyNames[0] : f.Name;
+        return first == NotaFonts.MonoFamily.Name;
+    }
 
     // Geist by any of its names: Font.UI, the app's default family, and Fluent's own default
     // ("fonts:Inter#Inter, $Default"), which the window templates carry. Nota ships no Inter,
@@ -166,8 +190,12 @@ internal static class NotaSkin
     {
         var family = geometry.FontFamily is { } name && NotaThemes.IsFontInstalled(name) ? new FontFamily(name) : null;
         bool changed = !_geometry.Equals(geometry) || _family?.Name != family?.Name;
+        bool ownValues = geometry.ValuesFamily is { } values && NotaThemes.IsFontInstalled(values);
+        changed |= ownValues != _ownValues;
+        if (_family?.Name != family?.Name || ownValues != _ownValues) NotaFonts.TouchFaces();
         _geometry = geometry;
         _family = family;
+        _ownValues = ownValues;
         return changed;
     }
 

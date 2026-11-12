@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The theme file (spec 011, format 1; spec 087, format 2) as data: one validator for the
+// The theme file (spec 011, format 1; spec 087, format 2; spec 091, format 3) as data: one validator for the
 // built-in loader, the user themes folder, the MCP tools and the smoke test. It never throws
 // and reports every problem it finds, so a hand-written file can be fixed in one pass. The
 // readability pairings of spec 011 (T3) are warnings here: a user may choose a low-contrast
@@ -72,10 +72,10 @@ public static class ThemeFile
                 return new(problems, warnings, null);
             }
 
-            // F1′ — format version 1 (colours) or 2 (colours + typeface + radius).
+            // F1″ — format version 1 (colours), 2 (+ typeface + radius) or 3 (+ values typeface).
             int version = 0;
             if (!root.TryGetProperty("formatVersion", out var fv) || fv.ValueKind != JsonValueKind.Number
-                || !fv.TryGetInt32(out version) || version is not (1 or 2))
+                || !fv.TryGetInt32(out version) || version is not (1 or 2 or 3))
                 P("F1", "formatVersion", Loc.T("themes.problem.format_version"));
 
             static string? Str(JsonElement root, string key) =>
@@ -121,7 +121,7 @@ public static class ThemeFile
                 foreach (var t in missing) P("F5", $"colors.{t}", Loc.F("themes.problem.missing_token", t));
             }
 
-            // V1–V4 — the format-2 parts.
+            // V1–V4 — the format-2 and format-3 parts.
             var geometry = ReadGeometry(root, version, P);
 
             if (problems.Count > 0) return new(problems, warnings, null);
@@ -131,6 +131,9 @@ public static class ThemeFile
             if (geometry.FontFamily is { } family && fontInstalled is not null && !fontInstalled(family))
                 warnings.Add(new(ThemeWarning.FontMissing, null, new[] { family }, 0, 0,
                     Loc.F("themes.warning.font_missing", family)));
+            if (geometry.ValuesFamily is { } values && fontInstalled is not null && !fontInstalled(values))
+                warnings.Add(new(ThemeWarning.FontMissing, null, new[] { values }, 0, 0,
+                    Loc.F("themes.warning.values_font_missing", values)));
             return new(problems, warnings, theme);
         }
     }
@@ -146,7 +149,7 @@ public static class ThemeFile
             return SkinGeometry.Default;
         }
 
-        string? family = null;
+        string? family = null, values = null;
         if (hasFont)
         {
             if (fontEl.ValueKind != JsonValueKind.Object)
@@ -154,11 +157,32 @@ public static class ThemeFile
             else
             {
                 foreach (var p in fontEl.EnumerateObject())
-                    if (p.Name != "family") P("V2", $"font.{p.Name}", Loc.F("themes.problem.unknown_key", $"font.{p.Name}"));
-                var f = fontEl.TryGetProperty("family", out var fe) && fe.ValueKind == JsonValueKind.String ? fe.GetString()?.Trim() : null;
-                if (string.IsNullOrEmpty(f) || f.Length > SkinGeometry.MaxFamilyLength)
-                    P("V2", "font.family", Loc.F("themes.problem.font_family", SkinGeometry.MaxFamilyLength));
-                else family = f;
+                {
+                    if (p.Name == "family") continue;
+                    if (p.Name == "values" && version < 3) P("V1", "font.values", Loc.F("themes.problem.needs_v3", "font.values"));
+                    else if (p.Name != "values") P("V2", $"font.{p.Name}", Loc.F("themes.problem.unknown_key", $"font.{p.Name}"));
+                }
+                // V2′ — each name 1–100 characters after trimming; format 3 may name only the values face.
+                string? Name(string key, out bool present)
+                {
+                    present = fontEl.TryGetProperty(key, out var e);
+                    return present && e.ValueKind == JsonValueKind.String ? e.GetString()?.Trim() : null;
+                }
+                var f = Name("family", out var hasFamily);
+                var v = Name("values", out var hasValues);
+                hasValues &= version >= 3;
+                if (hasFamily || !hasValues)
+                {
+                    if (string.IsNullOrEmpty(f) || f.Length > SkinGeometry.MaxFamilyLength)
+                        P("V2", "font.family", Loc.F("themes.problem.font_family", SkinGeometry.MaxFamilyLength));
+                    else family = f;
+                }
+                if (hasValues)
+                {
+                    if (string.IsNullOrEmpty(v) || v.Length > SkinGeometry.MaxFamilyLength)
+                        P("V2", "font.values", Loc.F("themes.problem.font_values", SkinGeometry.MaxFamilyLength));
+                    else values = v;
+                }
             }
         }
 
@@ -206,8 +230,14 @@ public static class ThemeFile
             }
         }
 
-        return family is null && scale == 1 && steps.Count == 0 ? SkinGeometry.Default : new SkinGeometry(family, scale, steps);
+        bool radiusSet = hasRadius && radiusEl.ValueKind == JsonValueKind.Object;
+        return family is null && values is null && !radiusSet ? SkinGeometry.Default
+             : new SkinGeometry(family, scale, steps, values, radiusSet);
     }
+
+    /// <summary>The lowest format that holds <paramref name="g"/>: 3 with a values typeface, 2 with
+    /// a typeface or radii, else 1.</summary>
+    public static int FormatFor(SkinGeometry g) => g.ValuesFamily is not null ? 3 : g.IsDefault ? 1 : 2;
 
     /// <summary>The file text for <paramref name="theme"/>: tokens in catalogue order, 2-space
     /// indent, format 1 when it only has colours.</summary>
@@ -218,17 +248,18 @@ public static class ThemeFile
         {
             var g = theme.Geometry;
             w.WriteStartObject();
-            w.WriteNumber("formatVersion", g.IsDefault ? 1 : 2);
+            w.WriteNumber("formatVersion", FormatFor(g));
             w.WriteString("id", theme.Id);
             w.WriteString("name", theme.Name);
             w.WriteString("kind", theme.IsDark ? "dark" : "light");
-            if (g.FontFamily is { } family)
+            if (g.FontFamily is not null || g.ValuesFamily is not null)
             {
                 w.WriteStartObject("font");
-                w.WriteString("family", family);
+                if (g.FontFamily is { } family) w.WriteString("family", family);
+                if (g.ValuesFamily is { } values) w.WriteString("values", values);
                 w.WriteEndObject();
             }
-            if (g.Roundness != 1 || g.StepOverrides.Count > 0)
+            if (g.HasRadius || g.Roundness != 1 || g.StepOverrides.Count > 0)
             {
                 w.WriteStartObject("radius");
                 if (g.Roundness != 1) w.WriteNumber("scale", g.Roundness);

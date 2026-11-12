@@ -127,6 +127,43 @@ public partial class MainWindow
         }
     }
 
+    // --- Locate (spec 092, #581) ------------------------------------------------------------
+
+    // The arrangement and Session clip menus' Locate submenu, and the Files-tab highlight of
+    // the selected clip's source file.
+    private void InitLocate()
+    {
+        var hooks = new LocateHooks
+        {
+            Source = id => ClipFiles.Source(Engine, id),
+            BundleCopy = id => ClipFiles.BundleCopy(Engine, id, _projectPath),
+            InBrowser = path => Browser.RevealFile(path),
+            InFileManager = path =>
+            {
+                try { RevealInFileManager(path); }
+                catch (Exception ex) { if (_vm is not null) _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
+            },
+        };
+        Timeline.Locate = hooks;
+        if (_session is not null)
+        {
+            _session.Locate = hooks;
+            _session.SlotSelected += (t, s) => MarkLocated(SessionSource(t, s));
+        }
+        Timeline.ClipSelectionChanged += () => MarkLocated(ArrangementSource());
+    }
+
+    private void MarkLocated(string? path) => _vm?.Browser.SetLocatedPath(path);
+
+    // The selected arrangement clip's source file, when it is one audio clip with a known source.
+    private string? ArrangementSource()
+        => SelectedClip(out int t, out int c, out bool midi) && !midi && Engine.TryGetAudioClipInfo(t, c, out var ai)
+            ? ClipFiles.Source(Engine, ai.SampleId) : null;
+
+    private string? SessionSource(int trackId, int scene)
+        => trackId > 0 && scene >= 0 && Engine.TryGetSessionAudioSlot(trackId, scene, out var sa)
+            ? ClipFiles.Source(Engine, sa.SampleId) : null;
+
     // Reveal a sample / folder / project in the OS file manager (Finder / Explorer / files).
     private void OnBrowserReveal(BrowserItem item)
     {

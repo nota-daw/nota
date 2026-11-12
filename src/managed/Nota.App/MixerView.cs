@@ -817,7 +817,7 @@ public sealed partial class MixerView : UserControl
     private static Border Tag(string text, double size, double tracking, double height, string tip)
     {
         var t = new TextBlock { Text = text, FontSize = size, LetterSpacing = tracking, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var b = new Border
         {
             Height = height, Padding = new Thickness(size >= 9 ? 6 : 3, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(1),
@@ -1087,7 +1087,7 @@ public sealed partial class MixerView : UserControl
         for (int i = 0; i < 4; i++)
         {
             var t = new TextBlock { Text = marks[i], FontSize = 7, Foreground = TextDisabled, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = i == 0 ? VerticalAlignment.Top : i == 3 ? VerticalAlignment.Bottom : VerticalAlignment.Center };
-            t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             Grid.SetRow(t, i);
             scaleGrid.Children.Add(t);
         }
@@ -1101,7 +1101,7 @@ public sealed partial class MixerView : UserControl
         {
             // The letter is wider than its 3px column, so it borrows room either side
             // (a cell clips what it can't fit, which cut R down to an F).
-            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, TextAlignment = TextAlignment.Center, Margin = new Thickness(-5, 0, -5, 0) };
+            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextTertiary, TextAlignment = TextAlignment.Center, Margin = new Thickness(-5, 0, -5, 0) };
             Grid.SetColumn(t, col); letters.Children.Add(t);
         }
         DockPanel.SetDock(letters, Dock.Bottom);
@@ -1169,7 +1169,7 @@ public sealed partial class MixerView : UserControl
     private TextBlock Mono(string text, IBrush fg)
     {
         var t = new TextBlock { Text = text, FontSize = 8, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 

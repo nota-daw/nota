@@ -104,7 +104,7 @@ public sealed partial class PreferencesWindow
         row.Children.Add(customRing);
 
         var readout = new TextBlock { FontSize = 12, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-        var readoutHex = new TextBlock { FontSize = 12, Foreground = TextMuted, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+        var readoutHex = new TextBlock { FontSize = 12, Foreground = TextMuted, FontFamily = NotaFonts.ValuesFamily, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { readout, readoutHex } });
 
         void Show()
@@ -188,7 +188,7 @@ public sealed partial class PreferencesWindow
             Height = 22, CornerRadius = NotaRadius.Field, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), ClipToBounds = true,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { oldHalf, newHalf } },
         };
-        var hex = new TextBox { Classes = { "field" }, FontSize = 12, FontFamily = NotaFonts.UiFamily, Height = 22, MinHeight = 22, Width = 216 - 38 - 6, MaxLength = 7 };
+        var hex = new TextBox { Classes = { "field" }, FontSize = 12, FontFamily = NotaFonts.ValuesFamily, Height = 22, MinHeight = 22, Width = 216 - 38 - 6, MaxLength = 7 };
         var hexRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { chip, hex } };
 
         var themes = NotaThemes.BuiltIn;

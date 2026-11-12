@@ -132,7 +132,7 @@ public sealed partial class SessionView
     private static TextBlock Mono(string text, double size, IBrush ink)
     {
         var t = new TextBlock { Text = text, FontSize = size, Foreground = ink, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 
@@ -255,7 +255,7 @@ public sealed partial class SessionView
             if (c.Kind == ColKind.Track)
             {
                 var arrText = new TextBlock { Text = Loc.T("session.grid.arr"), FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.Accent };
-                arrText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+                arrText.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
                 _arr = new Border
                 {
                     BorderBrush = NotaPalette.AccentDim, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
@@ -270,7 +270,7 @@ public sealed partial class SessionView
             top.Children.Add(name);
 
             var kind = new TextBlock { Text = c.KindLabel, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis };
-            kind.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            kind.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };
 
@@ -538,7 +538,7 @@ public sealed partial class SessionView
                 DrawTriangle(ctx, lc, 8, 9, tri);
             }
 
-            var lenFt = Ft(_len, NotaFonts.Sans, 10, playing ? NotaPalette.TextStrong : NotaPalette.TextTertiary);
+            var lenFt = Ft(_len, NotaFonts.Measure, 10, playing ? NotaPalette.TextStrong : NotaPalette.TextTertiary);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
             var nameFt = Ft(_name, NotaFonts.SansSemiBold, NotaType.ClipName, _brush, lenX - 27 - 4);
@@ -588,7 +588,7 @@ public sealed partial class SessionView
             FillCell(ctx, r, NotaPalette.Wash(NotaPalette.Record, 0x33), NotaPalette.Record);
             var lc = LaunchZone.Center;
             ctx.DrawEllipse(waiting && !_o._blinkOn ? NotaPalette.Wash(NotaPalette.Record, 0x66) : NotaPalette.Record, null, lc, 4.5, 4.5);
-            var lenFt = Ft(FormatDuration(waiting ? 0 : _o._recElapsed), NotaFonts.Sans, 9, NotaPalette.DangerBright);
+            var lenFt = Ft(FormatDuration(waiting ? 0 : _o._recElapsed), NotaFonts.Measure, 9, NotaPalette.DangerBright);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
             var nameFt = Ft(waiting ? Loc.T("session.grid.rec_in") : Loc.T("session.recording"), NotaFonts.SansMedium, 11, NotaPalette.TextHeading, lenX - 31);
@@ -868,13 +868,13 @@ public sealed partial class SessionView
             double right = r.Width - 8;
             if (_badge.Length > 0)
             {
-                var b = Ft(_badge, NotaFonts.Sans, 9, NotaPalette.TextSecondary);
+                var b = Ft(_badge, NotaFonts.Measure, 9, NotaPalette.TextSecondary);
                 var box = new Rect(right - b.Width - 8, r.Height / 2 - 8, b.Width + 8, 16);
                 ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), box.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
                 ctx.DrawText(b, new Point(box.X + 4, box.Y + (16 - b.Height) / 2));
                 right = box.X - 6;
             }
-            var idx = Ft((_scene + 1).ToString("00", CultureInfo.CurrentCulture), NotaFonts.Sans, 9, NotaPalette.TextDisabled);
+            var idx = Ft((_scene + 1).ToString("00", CultureInfo.CurrentCulture), NotaFonts.Measure, 9, NotaPalette.TextDisabled);
             var name = Ft(_name, NotaFonts.SansSemiBold, 12, _named ? NotaPalette.TextPrimary : NotaPalette.TextTertiary, Math.Max(10, right - x - idx.Width - 6));
             ctx.DrawText(name, new Point(x, (r.Height - name.Height) / 2));
             ctx.DrawText(idx, new Point(x + name.Width + 6, (r.Height - name.Height) / 2 + (name.Baseline - idx.Baseline)));
@@ -883,6 +883,12 @@ public sealed partial class SessionView
     }
 
     // ---- context menus -------------------------------------------------------------------
+
+    // Locate ▸ for an audio take (spec 092, #581); nothing for a MIDI clip.
+    private Control[] LocateItems(int trackId, int scene)
+        => Locate is { } hooks && _engine.TryGetSessionAudioSlot(trackId, scene, out var sa)
+            ? new Control[] { LocateMenu.Build(hooks, sa.SampleId) }
+            : Array.Empty<Control>();
 
     private void ShowSlotMenu(Control anchor, Column c, int scene)
     {
@@ -899,6 +905,7 @@ public sealed partial class SessionView
                     MenuKit.Item(Loc.T("common.edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
                     MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
                 },
+                LocateItems(c.TrackId, scene),
                 new Control[] { MenuKit.Item(Loc.T("session.grid.copy_to_arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
                 new Control[] { AddTrackSubmenu(c.TrackId) },
                 MenuKit.ClipboardGroup(() => CopySelection(), () => CutSelection(), () => PasteSelection(), () => DuplicateSelection(), CanPaste),

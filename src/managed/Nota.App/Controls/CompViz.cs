@@ -18,7 +18,7 @@ namespace Nota.App;
         private static readonly IBrush Ink = NotaPalette.VizInk;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush Grid = NotaGraph.Grid;
-        private static readonly Typeface Face = NotaFonts.Sans;
+        private static Typeface Face => NotaFonts.Measure;
         private float _thr = -18f, _ratio = 3f, _makeup;
         public CompViz() { MinWidth = 120; MinHeight = 70; }
         public void Set(float thr, float ratio, float makeup)

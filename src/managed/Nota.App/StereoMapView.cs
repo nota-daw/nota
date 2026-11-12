@@ -254,13 +254,13 @@ public sealed class StereoMapView : Control, IValueEntryHost
         {
             double x = Math.Round(PanX(p, pan)) + 0.5;
             ctx.DrawLine(pan == 0 ? strong : weak, new Point(x, p.Top), new Point(x, p.Bottom));
-            DrawText(ctx, label, NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, p.Bottom + 6), hCenter: true);
+            DrawText(ctx, label, NotaFonts.Measure, 8, NotaPalette.TextTertiary, new Point(x, p.Bottom + 6), hCenter: true);
         }
         foreach (var (db, label) in new[] { (20 * Math.Log10(FaderScale.Max), "+3.5"), (0.0, "0 dB"), (-6.0, "−6"), (-12.0, "−12"), (-24.0, "−24") })
         {
             double y = Math.Round(VolY(p, Math.Pow(10, db / 20))) + 0.5;
             ctx.DrawLine(db == 0 ? strong : weak, new Point(p.Left, y), new Point(p.Right, y));
-            DrawText(ctx, label, NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(p.Left - 6, y), vCenter: true, rightAlign: true);
+            DrawText(ctx, label, NotaFonts.Measure, 8, NotaPalette.TextTertiary, new Point(p.Left - 6, y), vCenter: true, rightAlign: true);
         }
     }
 
@@ -323,7 +323,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, y0), new Point(b.Width, y0));
         double x = 10;
         x += DrawText(ctx, Loc.T("stereo_map.correlation"), NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
-        x += DrawText(ctx, "−1", NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
+        x += DrawText(ctx, "−1", NotaFonts.Measure, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
         var bar = new Rect(x, cy - 3, 180, 6);
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), bar, NotaRadius.FineValue, NotaRadius.FineValue);
         double mid = bar.Left + bar.Width / 2;
@@ -334,8 +334,8 @@ public sealed class StereoMapView : Control, IValueEntryHost
         ctx.DrawRectangle(fill, null, new Rect(corr < 0 ? mid - w : mid, bar.Top + 1, w, bar.Height - 2));
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(mid, bar.Top - 2), new Point(mid, bar.Bottom + 2));
         x = bar.Right + 6;
-        x += DrawText(ctx, "+1", NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
-        DrawText(ctx, Signed(corr, 2), NotaFonts.Sans, 10, corr < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary, new Point(x, cy), vCenter: true);
+        x += DrawText(ctx, "+1", NotaFonts.Measure, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
+        DrawText(ctx, Signed(corr, 2), NotaFonts.Measure, 10, corr < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary, new Point(x, cy), vCenter: true);
         DrawText(ctx, MenuKit.Keys(Loc.T("stereo_map.drag_pan_volume_shift_locks")),
                  NotaFonts.Sans, 10, NotaPalette.TextTertiary, new Point(b.Width - 10, cy), vCenter: true, rightAlign: true);
     }
@@ -391,7 +391,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         foreach (var (k, v, ink) in rows)
         {
             DrawText(ctx, k, NotaFonts.SansBold, 7, NotaPalette.TextTertiary, new Point(r.Left + Pad, ty + 6), vCenter: true);
-            DrawText(ctx, v, NotaFonts.Sans, 9, ink, new Point(r.Left + Pad + 62, ty + 6), vCenter: true);
+            DrawText(ctx, v, NotaFonts.Measure, 9, ink, new Point(r.Left + Pad + 62, ty + 6), vCenter: true);
             ty += RowH;
         }
         for (int i = 0; i < notes.Count; i++)

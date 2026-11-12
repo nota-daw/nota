@@ -250,7 +250,7 @@ public sealed partial class SessionView
     private static TextBlock ReadoutText()
     {
         var t = new TextBlock { FontSize = 8.5, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 
@@ -396,7 +396,7 @@ public sealed partial class SessionView
                 HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(compact ? 4 : 8, 0),
                 FontSize = compact ? 9 : 10, Height = compact ? 16 : 20, MinWidth = 0,
             };
-            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.UI");
+            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.Measure");
             tb.Click += (_, _) =>
             {
                 foreach (var b in buttons) b.IsChecked = ReferenceEquals(b, tb);

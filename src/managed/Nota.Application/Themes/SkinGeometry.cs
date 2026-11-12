@@ -4,7 +4,9 @@
 // What a skin does to type and corners (spec 087): an optional system typeface and a corner
 // roundness over the style guide's radius scale (spec 038). The design scale stays the base
 // every control is written against; MapRadius turns a design value into the skin's value, so
-// mapping never compounds and the default geometry is an exact no-op.
+// mapping never compounds and the default geometry is an exact no-op. Format 3 (spec 091) adds
+// a typeface for values and readouts, and remembers whether the file set its radii at all —
+// a skin that did keeps them under the classic look; one that did not takes the classic scale.
 
 namespace Nota.Application.Themes;
 
@@ -12,7 +14,12 @@ namespace Nota.Application.Themes;
 /// not a step: they meet their neighbours on a seam and never round.</summary>
 public enum RadiusStep { Card, Group, Field, Cell, ValueBar, Switch, Fine }
 
-public sealed record SkinGeometry(string? FontFamily, double Roundness, IReadOnlyDictionary<RadiusStep, double> StepOverrides)
+/// <param name="ValuesFamily">The typeface for values and readouts (format 3 <c>font.values</c>), or null
+/// for the look's own (Geist under New, Geist Mono under Classic).</param>
+/// <param name="HasRadius">The file carried a <c>radius</c> object — even one equal to the design
+/// scale — so its radii are worn under both looks.</param>
+public sealed record SkinGeometry(string? FontFamily, double Roundness, IReadOnlyDictionary<RadiusStep, double> StepOverrides,
+    string? ValuesFamily = null, bool HasRadius = false)
 {
     public const double MinRoundness = 0, MaxRoundness = 2, MinStep = 0, MaxStep = 24;
     public const int MaxFamilyLength = 100;
@@ -42,7 +49,11 @@ public sealed record SkinGeometry(string? FontFamily, double Roundness, IReadOnl
     public static RadiusStep? FromKey(string key) =>
         Enum.GetValues<RadiusStep>().Cast<RadiusStep?>().FirstOrDefault(s => Key(s!.Value) == key);
 
-    public bool IsDefault => FontFamily is null && Roundness == 1 && StepOverrides.Count == 0;
+    public bool IsDefault => FontFamily is null && Roundness == 1 && StepOverrides.Count == 0
+                             && ValuesFamily is null && !HasRadius;
+
+    /// <summary>The radii are the design scale (whatever the typefaces): mapping a radius is a no-op.</summary>
+    public bool IsDesignScale => Roundness == 1 && StepOverrides.Count == 0;
 
     /// <summary>The radius this skin gives <paramref name="step"/>, in whole pixels.</summary>
     public double RadiusOf(RadiusStep step) =>
@@ -52,7 +63,7 @@ public sealed record SkinGeometry(string? FontFamily, double Roundness, IReadOnl
     /// square, a value on the scale takes its step's radius, any other is scaled by roundness.</summary>
     public double MapRadius(double designValue)
     {
-        if (designValue <= 0 || IsDefault) return designValue;
+        if (designValue <= 0 || IsDesignScale) return designValue;
         foreach (var step in Enum.GetValues<RadiusStep>())
             if (designValue == Design(step)) return RadiusOf(step);
         return Math.Round(designValue * Roundness, MidpointRounding.AwayFromZero);
@@ -62,8 +73,9 @@ public sealed record SkinGeometry(string? FontFamily, double Roundness, IReadOnl
     // values are.
     public bool Equals(SkinGeometry? other) =>
         other is not null && FontFamily == other.FontFamily && Roundness == other.Roundness
+        && ValuesFamily == other.ValuesFamily && HasRadius == other.HasRadius
         && StepOverrides.Count == other.StepOverrides.Count
         && StepOverrides.All(kv => other.StepOverrides.TryGetValue(kv.Key, out var v) && v == kv.Value);
 
-    public override int GetHashCode() => HashCode.Combine(FontFamily, Roundness, StepOverrides.Count);
+    public override int GetHashCode() => HashCode.Combine(FontFamily, Roundness, StepOverrides.Count, ValuesFamily, HasRadius);
 }
