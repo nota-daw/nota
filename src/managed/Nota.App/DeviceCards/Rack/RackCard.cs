@@ -242,7 +242,7 @@ internal sealed partial class RackCardView
 
     private static TextBlock RcMono(string text, IBrush ink, double size = NotaType.KnobValue) => new()
     {
-        Text = text, FontFamily = NotaFonts.UiFamily, FontSize = size, Foreground = ink,
+        Text = text, FontFamily = NotaFonts.ValuesFamily, FontSize = size, Foreground = ink,
         VerticalAlignment = VerticalAlignment.Center,
     };
 

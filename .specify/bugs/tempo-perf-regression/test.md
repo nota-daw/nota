@@ -73,3 +73,24 @@ The final `silent-32` timing is 9.41 ms base / 9.83 ms patched, within the limit
 
 The fix is ready to commit and push for PR #568's CI rerun. Retain the normal
 performance thresholds and require that CI pass before merging.
+
+## Integration with current develop
+
+After the performance fix was pushed, fetching the live `develop` branch found
+new upstream commits through `83c17874`. The PR's reported base SHA still pointed
+to `c613167d`, so checking only that SHA had missed the actual merge conflicts.
+
+- Merged `83c17874` while retaining both the Tempo Track and Classic look
+  changelog entries.
+- Resolved `ArrangementView.Controls.cs` by keeping tempo-aware seconds spacing
+  together with the new `(NotaTextSize.Step, NotaFonts.FaceStamp)` measurement
+  cache key. Phrase-line and Classic look changes remain intact.
+- `scripts/build-win.ps1` on the merged tree: passed, including the complete smoke
+  suite and scan-scale test. Log: `build/tempo-conflict-build.log`.
+- `dotnet run --project tests/Nota.TempoUiTest -c Release -- out/tempo-ui-merged.png`:
+  all 28 checks passed. The resulting screenshot was visually inspected.
+- No unmerged index entries or whitespace errors remain.
+- Native engine sources, `tests/perf`, and both performance-gate scripts are
+  unchanged by this merge. Upstream's native source tree at `83c17874` is identical
+  to that at `c613167d`, so the recorded 64-scenario performance comparison remains
+  applicable.

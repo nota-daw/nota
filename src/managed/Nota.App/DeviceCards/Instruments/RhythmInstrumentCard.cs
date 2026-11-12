@@ -121,7 +121,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
 
 
@@ -325,7 +325,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             Text = sampleMode ? sampleName : "Load file…", FontSize = 7, FontWeight = FontWeight.SemiBold, MaxWidth = 90,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
-        if (sampleMode) fileText.FontFamily = NotaFonts.UiFamily;
+        if (sampleMode) fileText.FontFamily = NotaFonts.ValuesFamily;
         var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { folder, fileText } }, fileText,
             () => LoadSample(kit, sel), () => sampleMode);
         readouts.Add(() => folder.Foreground = sampleMode ? NotaPalette.TextPrimary : NotaPalette.TextStrong);

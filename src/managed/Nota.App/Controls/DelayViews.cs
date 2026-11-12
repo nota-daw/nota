@@ -188,7 +188,7 @@ internal sealed class DelayTaps : Control
     }
 
     private static FormattedText Text(string t, IBrush ink, double size = NotaType.Axis)
-        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Measure, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {

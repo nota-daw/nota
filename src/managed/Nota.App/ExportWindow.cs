@@ -315,7 +315,7 @@ public sealed class ExportWindow : NotaWindow
     {
         var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 10, PlaceholderText = "bar.beat" };
         ToolTip.SetTip(box, Loc.T("export.bar_beat_sixteenth_counted_from"));
-        box.BindResource(TextBox.FontFamilyProperty, "Font.UI");
+        box.BindResource(TextBox.FontFamilyProperty, "Font.Measure");
         return box;
     }
 
@@ -361,7 +361,7 @@ public sealed class ExportWindow : NotaWindow
     private TextBlock Mono(string text, IBrush fg)
     {
         var t = new TextBlock { Text = text, FontSize = 9, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 

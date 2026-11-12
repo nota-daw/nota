@@ -29,12 +29,31 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
   recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
   save with the project, and playback follows their integrated timing.
+- **Classic look** (#572, specs/091). **Settings → Appearance → Look** switches between the
+  new look and **Classic**. Classic brings back 0.59's colours, its tighter corners and
+  values in Geist Mono (tempo, position, dB, Hz, counters). It works with any colour theme
+  and takes effect at once, without a restart. The new look stays the default, and the
+  layouts are the same in both looks.
+  - **Clips: Solid | Tinted** (Settings → Appearance). Solid draws Arrangement clips as in
+    0.59: blocks of the track colour with a darker title band. With no pick, Classic draws
+    solid clips and New tinted ones. Your pick stays when you change the look.
+  - A user theme keeps its own colours under Classic, and its own typeface and corners when
+    it sets them. A theme file (format 3) can also set a typeface for values:
+    `"font": { "values": "…" }`.
+  - AI control (MCP): `set_look` switches the look. `list_themes` reports it, and
+    `get_theme` / `preview_theme` take an optional `look`.
 - **Nota Remote shows what is in each clip on the Scenes screen** (#557, specs/090). A filled
   cell reads like the desktop's Session slot: the clip's name and length on top, and below
   them its notes as a small piano roll, or its waveform, in the clip's colour. Editing,
   replacing or recording a clip on the computer updates its cell on the phone within a
   second; a take being recorded grows as it records. Previews are sent only to a phone on
   Scenes and only for the clips that changed.
+- **Phrase lines in the arrangement** (#517, specs/092). **Settings → Appearance → Phrase
+  lines** draws a heavier grid line every 4, 8, 16 or 32 bars, counted from bar 1, across
+  the lanes, the return and master rows and the ruler, so you can see where an 8- or 16-bar
+  phrase starts and ends. The line is a neutral grey a step above the bar line, works in
+  every colour theme (your own too) and stays behind the clips. It counts bars, so it
+  follows the time signature. Off by default, and remembered for every project.
 - **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
   two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
   output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
@@ -168,6 +187,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **The menu under a Menu key, and the menu bar hidden** (Windows / Linux, #518, specs/093).
+  The row of File, Edit, View, Transport and Help no longer sits between the title bar and
+  the transport bar, so the work area gains its height. The whole menu — the same items,
+  shortcuts and check marks, Open recent included — is under the new **☰ Menu** key at the
+  start of the transport bar; **Alt** (pressed and released on its own) or **F10** opens it
+  from the keyboard. **View ▸ Show menu bar**, or **Settings → Appearance → Menu bar**, brings
+  the row back (the key then steps aside). On Windows the title bar now reads
+  "Nota — *project*", as the taskbar does. macOS is unchanged.
 - **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
   follows the style guide the desktop wears: the same corner scale, one typeface with
   fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin

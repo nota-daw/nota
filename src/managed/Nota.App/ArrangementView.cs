@@ -381,6 +381,7 @@ public sealed partial class ArrangementView : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         // "Zoom" names the two keys. On a header narrowed so far that the range read-out
         // would be cut, the caption steps aside first (the keys keep their tooltips).
         var zoomLabel = new TextBlock
@@ -604,6 +605,14 @@ public sealed partial class ArrangementView : UserControl
         set { if (_clipLabels == value) return; _clipLabels = value; _lanes.InvalidateVisual(); }
     }
     private ClipLabelMode _clipLabels = ClipLabelMode.RunStart;
+    /// <summary>Tinted clips (the new look) or solid ones with a title band (0.59; Settings →
+    /// Appearance → Clips, spec 091).</summary>
+    public ClipStyle ClipStyle
+    {
+        get => _clipStyle;
+        set { if (_clipStyle == value) return; _clipStyle = value; _lanes.InvalidateVisual(); }
+    }
+    private ClipStyle _clipStyle = ClipStyle.Tinted;
     /// <summary>Audio-clip waveform style (Settings → Appearance).</summary>
     public WaveformStyle Waveform
     {
@@ -611,6 +620,20 @@ public sealed partial class ArrangementView : UserControl
         set { if (_waveform == value) return; _waveform = value; _lanes.InvalidateVisual(); }
     }
     private WaveformStyle _waveform = WaveformStyle.Smooth;
+    /// <summary>A heavier grid line every this many bars, counted from bar 1; 0 = off
+    /// (Settings → Appearance, specs/092). Drawn on the lanes, the footer rows and the ruler.</summary>
+    public int PhraseBars
+    {
+        get => _phraseBars;
+        set
+        {
+            value = PhraseLines.Normalize(value);
+            if (_phraseBars == value) return;
+            _phraseBars = value;
+            Redraw();
+        }
+    }
+    private int _phraseBars;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -3457,6 +3480,11 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
+    // Phrase lines (specs/092): a step above the bar line, a neutral grey moved from the bar
+    // line toward the tertiary text — derived, so it follows every theme (user themes too) without
+    // a token of its own, and never the accent.
+    private static readonly IPen PhrasePen = new Pen(NotaPalette.Derived(
+        () => SliderTrack.Mix(NotaPalette.GridBar.Color, NotaPalette.TextTertiary.Color, 0.35)), 1);
     private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
     // Playhead: a 1px accent line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
@@ -3632,6 +3660,19 @@ public sealed partial class ArrangementView : UserControl
     }
     private static readonly Dictionary<int, SolidColorBrush> _trackBrushes = new();
 
+    // A solid clip's title band: its track colour mixed 30 % toward black; its notes and waveform
+    // 58 % toward black (0.59, the Solid clip style). Theme-following and cached per index.
+    internal static SolidColorBrush ClipBand(int idx) => Shade(_clipBands, idx, 0.30);
+    internal static SolidColorBrush ClipInk(int idx) => Shade(_clipInks, idx, 0.58);
+    private static SolidColorBrush Shade(Dictionary<int, SolidColorBrush> cache, int idx, double t)
+    {
+        if (cache.TryGetValue(idx, out var b)) return b;
+        b = NotaPalette.Derived(() => Mix(TrackColorForIndex(idx), NotaPalette.ShadeDown.Color, t));
+        cache[idx] = b;
+        return b;
+    }
+    private static readonly Dictionary<int, SolidColorBrush> _clipBands = new(), _clipInks = new();
+
     /// <summary>The theme-following brush for a palette index. A view that wants a track's
     /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it
     /// in the variant that was active when the view was built.</summary>
@@ -3665,8 +3706,9 @@ public sealed partial class ArrangementView : UserControl
     private double BeatToX(double beat) => TempoAxis ? SecondsToX(TempoSeconds(beat)) : (beat - _scrollBeats) * _pixelsPerBeat;
 
     /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
-    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
-    /// sub-beat. Shared by the lanes and the footer rows.</summary>
+    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted phrase › bar ›
+    /// beat › sub-beat. A phrase line is always one of those lines (every bar step divides a
+    /// phrase), so it only changes the pen. Shared by the lanes and the footer rows.</summary>
     private void DrawGrid(DrawingContext ctx, double w, double h)
     {
         if (_pixelsPerBeat <= 0) return;
@@ -3676,7 +3718,8 @@ public sealed partial class ArrangementView : UserControl
         foreach (double b in SnapGrid.GridLines(first, last, step, _beatsPerBar))
         {
             double x = BeatToX(b);
-            var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
+            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, _beatsPerBar) ? PhrasePen
+                : IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
             ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
         }
 
