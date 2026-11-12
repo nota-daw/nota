@@ -74,10 +74,12 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     }
     private static int BendRange(float v) => (int)Math.Round(1 + v * 11);
 
-    // The Semitones knob: whole steps, 0 at centre (±12 st of travel, as Volt's Semi knob) —
-    // the engine rounds to OperatorSynth::kSemisRange.
+    // The Semitones knob: whole steps, 0 at centre (±12 st of travel, as Volt's Semi knob) — and
+    // the same rounding as the engine (std::round: halves away from zero, in double), or a value
+    // at a half step would read +4 while the operator already plays +5.
     private const int SemisRange = 12;
-    private static string Semis(float v) => NotaNum.Str(Math.Round((v - 0.5f) * 2 * SemisRange), "+0;−0;0");
+    private static string Semis(float v)
+        => NotaNum.Str(Math.Round(((double)v - 0.5) * 2 * SemisRange, MidpointRounding.AwayFromZero), "+0;−0;0");
 
     public Control Build(DeviceCardContext ctx)
     {
