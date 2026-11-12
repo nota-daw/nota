@@ -170,7 +170,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => new()
         { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static bool Left(PointerPressedEventArgs e, Control c) => e.GetCurrentPoint(c).Properties.IsLeftButtonPressed;
 
@@ -491,7 +491,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 double lmn = log ? Math.Log(mn) : mn, lspan = (log ? Math.Log(mx) : mx) - lmn;
                 double NormOf(double v) { double x = log ? Math.Log(Math.Clamp(v, mn, mx)) : Math.Clamp(v, mn, mx); return (x - lmn) / Math.Max(1e-9, lspan); }
                 double ValOf(double n) { double x = lmn + Math.Clamp(n, 0, 1) * lspan; return log ? Math.Exp(x) : x; }
-                var val = new TextBlock { Foreground = TextPrimary };
+                var val = new TextBlock { Foreground = TextPrimary, FontFamily = NotaFonts.ValuesFamily };
                 var knob = new Knob(NormOf(P(p)), 1.0) { Accent = true, Default = NormOf(engine.DeviceParamDefault(track, di, p)), Width = 34, Height = 34 };
                 knob.ValueChanged += n => { SetR(p, (float)ValOf(n)); val.Text = fmt(P(p)); };
                 knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");

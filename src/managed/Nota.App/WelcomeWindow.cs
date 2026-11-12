@@ -80,7 +80,7 @@ public sealed class WelcomeWindow : NotaWindow
         brand.Children.Add(new TextBlock
         {
             Text = Loc.F("welcome.version_engine_desktop_daw", AppInfo.Version, App.Services.GetRequiredService<EngineBuildInfo>().Version),
-            FontFamily = NotaFonts.UiFamily,
+            FontFamily = NotaFonts.ValuesFamily,
             FontSize = NotaType.Value,
             Foreground = NotaPalette.TextMuted,
         });
@@ -110,7 +110,7 @@ public sealed class WelcomeWindow : NotaWindow
         recentHead.Children.Add(new TextBlock
         {
             Text = recent.Count.ToString(NotaNum.Culture),
-            FontFamily = NotaFonts.UiFamily,
+            FontFamily = NotaFonts.ValuesFamily,
             FontSize = NotaType.Eyebrow,
             Foreground = NotaPalette.TextDisabled,
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -534,7 +534,7 @@ public sealed class WelcomeWindow : NotaWindow
             _meta = new TextBlock
             {
                 Text = item.Modified,
-                FontFamily = NotaFonts.UiFamily,
+                FontFamily = NotaFonts.ValuesFamily,
                 FontSize = NotaType.Value,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(12, 0, 0, 0),

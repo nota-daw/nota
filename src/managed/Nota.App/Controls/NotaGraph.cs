@@ -65,7 +65,7 @@ internal static class NotaGraph
     /// <summary>An axis label at the column-head size, faint ink. Text size leaves it alone (devices'
     /// graphs); a view outside a card passes itself as <paramref name="owner"/> to take the step.</summary>
     public static FormattedText AxisText(string text, IBrush? ink = null, double size = AxisSize, AvaloniaObject? owner = null)
-        => new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink ?? AxisInk, owner ?? NotaTextSize.InCard);
+        => new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Measure, size, ink ?? AxisInk, owner ?? NotaTextSize.InCard);
 
     public enum Corner { TopLeft, TopRight, BottomLeft, BottomRight }
 
@@ -137,7 +137,7 @@ internal static class NotaGraph
         for (int i = items.Length - 1; i >= 0; i--)
         {
             var (label, ink, mark) = items[i];
-            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, AxisSize, ink, NotaTextSize.InCard);
+            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Measure, AxisSize, ink, NotaTextSize.InCard);
             x -= ft.Width;
             ctx.DrawText(ft, new Point(x, y));
             double cy = y + ft.Height / 2;

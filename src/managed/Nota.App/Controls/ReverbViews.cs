@@ -179,7 +179,7 @@ internal sealed class ReverbTailView : Control, IValueHandles
     }
 
     private static FormattedText Text(string t, IBrush ink, double size = NotaGraph.AxisSize)
-        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Measure, size, ink, NotaTextSize.InCard);
     private static string SecF(double s) => s >= 1 ? NotaNum.F($"{s:0.##} s") : NotaNum.F($"{s * 1000:0} ms");
 
     public override void Render(DrawingContext ctx)

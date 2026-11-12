@@ -210,6 +210,64 @@ The fifteen style-guide brushes (§ Colour) shipped in both Ember themes at the 
 starting values unchanged; none is in the bar. Look at them by eye when an Ember ground
 changes.
 
+## Classic look
+
+**Settings → Appearance → Look** has two options: **New** (this guide, the default) and
+**Classic**. Classic puts 0.59's colours, corners and type on today's layouts, over any theme
+(spec 091, #572). Shapes, sizes, layouts and orange's three strengths are the same in both
+looks. A user theme keeps whatever it sets: its colours always, and its typefaces and radii
+when it sets them. Classic fills in only what the theme leaves open.
+
+**Colours.** Each built-in has a classic palette, `Theme/Themes/Classic/<id>.json`. Every
+token 0.59.2 had keeps its 0.59.2 value, even where today's readability bar warns (the
+smoke test allows a warning only where 0.59.2 itself had it). The tokens added by the
+style guide take the 0.59.2 colour of the part they now draw:
+
+| Token | Classic value from (0.59.2 token) |
+|---|---|
+| `Well` | `SurfaceRaised` |
+| `WellTrack` | `SurfaceInset` |
+| `KnobTrack` | `BorderStrong` |
+| `Groove` | `BgSunken` |
+| `DeviceSection`, `DeviceHeader` | `SurfaceCard`, `Panel` |
+| `DeviceSectionEdge` | transparent (0.59 had no pressed-in sections) |
+| `Bevel` | `ShadowBevel` |
+| `AccentSoft` | `AccentSubtle` |
+| `KnobCap` | `SurfaceRaised` |
+| `MeterSafe`, `MeterHot`, `MeterOver` | `Success`, `Warning`, `Danger` |
+| `TrackHeaderSelected` | `SelHeaderBg` |
+| `LaneSelected` | `LaneB` |
+
+A new token needs a classic value in all four classic palettes as well; the smoke test
+checks that each one has the full catalogue.
+
+**Corners.** These are 0.59's tighter radii, laid on today's steps (`Looks.ClassicGeometry`):
+
+| Step | New | Classic |
+|---|---|---|
+| Card | 9 | 3 |
+| Group | 7 | 3 |
+| Field | 6 | 3 |
+| Cell | 5 | 2 |
+| ValueBar | 4 | 2 |
+| Switch | 3 | 2 |
+| Fine | 2 | 2 |
+
+Radii off the scale shrink by 0.4, and pills stay round. Three parts now share a step with
+something that 0.59 rounded differently: modal windows (were 4) and clips (were 2) get 3,
+and plot bars (were 1) get 2.
+
+**Type.** Text has two roles. *Words* are always Geist (`Font.UI`, `NotaFonts.Sans*`).
+*Values and readouts* (numbers with their units, tempo, position, counters, badges) use
+`Font.Measure` / `NotaFonts.Measure*`. In XAML these are the `TextBlock.Mono`, `.Readout`,
+`.Value`, `.Eyebrow`, `.KnobValue`, `.Axis` and `.RowTag` classes. In code a control names
+`NotaFonts.ValuesFamily`, and drawn text uses `NotaFonts.Measure*`, read when the text is
+built, never cached in a static field. Under New the values role *is* Geist, so the new look
+stays one typeface. Under Classic it is Geist Mono, or a theme's `font.values`. The role
+covers exactly the values that 0.59.2 set in Geist Mono (`specs/091-classic-look/role-sites.md`).
+A value display added since stays a word: use `TextBlock.Number` or `NotaFonts.Sans`, and
+it is Geist in both looks.
+
 ## Principles
 
 1. **Keep every control.** The layout and every control stay where they are; this guide
@@ -1098,14 +1156,28 @@ The controls at the left of each track in the arrangement.
   in ink 3, M, S, arm (monitor on audio tracks). Controls row (20): volume (a flat slider
   with its value inside), the pan knob and its value, the input picker. Every control the
   header had stays.
-- **Colour:** a 3 px bar in the track colour down the left edge. Inside a group the member
-  is indented 14: the group's 4 px bar runs down through it, then its own 3 px bar.
+- **Colour:** a 3 px bar in the track colour down the left edge.
+- **Groups** (specs/094) — a group is a **tray**: a 16 % wash of its colour on its own row,
+  8 % on the rest of the tray, a 3 px edge in the group colour down the tray's left side,
+  the right corners rounded where it opens and closes. Its tracks sit in it as plain cards
+  (`Panel`, inset 4 from the right) carrying only their own 3 px bar — no stripe per
+  enclosing group, no tint on the card. A nested group is a tray inside the tray, 6 further
+  in (3 edge + 3 gap). A tray closes under its last row with a 4 px strip (2 px for each
+  further tray closing on the same row), taken out of that row so rows stay aligned with
+  their lanes. The group row: chevron, name, M / S / (Cue) / Link and the meter in the
+  tracks' column; folded, " · N" after the name (the tracks it hides, nested ones
+  included). The group's lane keeps the 16 % wash; its tracks' lanes have none.
+  **Classic look:** 0.59's staircase — each row's own 3 px spine, 10 further in per level,
+  full height (the accent when selected); group rows on `SurfaceRaised`, tracks on
+  `SurfaceCard`; no tints; the slim group row has the "Group" tag and its meter as a rail on
+  a line of its own under the title.
 - **Keys:** M, S and arm are 18 × 18, 4 apart; the type tag is Label 11 in ink 3; the
   input picker is 66 wide (a custom picker, not a ComboBox, so its text never truncates),
   and the monitor key goes ink 4 while Master is the input.
 - **Selected:** the header takes `TrackHeaderSelected` (background only, no outline) and its
   lane `LaneSelected`.
-- **Meter** down the right edge.
+- **Meter** down the right edge, inside the header on every row height (6 from the top and
+  bottom, less on a Compact row), in one column for tracks and groups.
 - **Large** (from 100): a third row with the input picker, then the track's send to each
   return, two per row as the height allows: the return's colour square and letter (tooltip
   "Send to Reverb"), then a value bar with the amount inside ("–" at 0), double-click to
@@ -1123,6 +1195,11 @@ A block of notes or audio on a track lane.
 - **Content:** notes, waveform and the name (10.5 / 600) in the full track colour, moved toward
   dark ink (or white) just enough to keep 3 : 1 on the lane. Only a light shade on Studio Light
   needs it.
+- **Solid** (Settings → Appearance → Clips; the classic look's default, spec 091): 0.59's
+  clip. A full track-colour body with no outline, a 12 px title band in the track colour mixed
+  30 % toward `ShadeDown` (the accent when selected) with the name (9.5 / 600) in readable ink,
+  and notes and waveform 58 % toward `ShadeDown`. A row too short for the band keeps a 2 px
+  band. The corner is the Field step.
 - Audio clips draw their waveform as spaced bars by default (a 1 px stroke every 3 px,
   mirrored about the centre); Settings → Appearance → Waveform switches to Solid.
 

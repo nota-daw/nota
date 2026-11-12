@@ -120,7 +120,7 @@ internal sealed class PentadFilterCurve : FilterGraphBase
 // N voice cells, lit (accent) while a voice sounds, brightness following its level.
 internal sealed class PentadVoiceStrip : Control
 {
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private readonly float[] _lv = new float[16];
     private int _n = 5;
 

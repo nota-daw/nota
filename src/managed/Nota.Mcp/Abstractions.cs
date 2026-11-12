@@ -78,14 +78,15 @@ public interface IProjectKeyAccess
 public interface IThemeAccess
 {
     ThemeListing List();
-    /// <summary>A listed theme's file text (format 1 or 2), or null for an unknown id.</summary>
-    string? GetFile(string id);
+    /// <summary>A listed theme's file text (format 1–3), or null for an unknown id. With
+    /// <paramref name="look"/> "classic", a built-in's classic palette (spec 091).</summary>
+    string? GetFile(string id, string? look = null);
     ThemeCatalogue Catalogue();
     IReadOnlyList<string> SystemFonts();
     Nota.Application.Themes.ThemeValidation Validate(string json);
     /// <summary>Images of <paramref name="json"/> worn on the named surfaces (all when null),
     /// rendered offscreen; the live window does not change. Nothing is rendered for an invalid theme.</summary>
-    Task<ThemePreviews> PreviewAsync(string json, IReadOnlyList<string>? surfaces, bool themeAccent);
+    Task<ThemePreviews> PreviewAsync(string json, IReadOnlyList<string>? surfaces, bool themeAccent, string? look = null);
     ThemeSaveResult Save(string json, bool overwrite);
     /// <summary>Wear a listed theme and store it, as a pick in Preferences. Null, or why not.</summary>
     string? Apply(string id);
@@ -93,12 +94,15 @@ public interface IThemeAccess
     bool TryOn(string json, out Nota.Application.Themes.ThemeValidation validation);
     /// <summary>End a try-on; the id worn afterwards.</summary>
     string RevertTryOn();
+    /// <summary>Wear and store a look ("new" | "classic", spec 091), as Preferences does; the id
+    /// worn afterwards. An unknown look throws ArgumentException naming the allowed ones.</summary>
+    string SetLook(string look);
 }
 
 public sealed record ThemeListing(ThemeListEntry[] Themes, string Worn, bool TryOn, ThemeChoiceInfo Choice, ThemeFileProblem[] Problems);
 public sealed record ThemeListEntry(string Id, string Name, string Kind, string Source, int Warnings, bool FontMissing,
     string? FontFamily, double Roundness);
-public sealed record ThemeChoiceInfo(bool FollowSystem, string Single, string Dark, string Light);
+public sealed record ThemeChoiceInfo(bool FollowSystem, string Single, string Dark, string Light, string Look);
 public sealed record ThemeFileProblem(string File, string Reason);
 public sealed record ThemeTokenInfo(string Name, string Group, string Role, bool Translucent);
 public sealed record ThemeRadiusStepInfo(string Name, double Design);

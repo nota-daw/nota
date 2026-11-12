@@ -56,7 +56,7 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < PackFilters.Length; i++)
         {
             int idx = i;
-            var count = new TextBlock { FontSize = 8.5, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+            var count = new TextBlock { FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, VerticalAlignment = VerticalAlignment.Center };
             _packCounts[i] = count;
             var b = new ToggleButton
             {
@@ -253,10 +253,10 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = p.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = PackKindLabel(p.Kind), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = PackKindLabel(p.Kind), FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
-                new TextBlock { Text = $"{p.Author} · {p.Version} · {p.License}", FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary },
+                new TextBlock { Text = $"{p.Author} · {p.Version} · {p.License}", FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary },
                 new TextBlock { Text = p.Description, FontSize = 11, LineHeight = 18, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap },
             },
         };

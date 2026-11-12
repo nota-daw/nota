@@ -110,7 +110,7 @@ internal sealed class ArpGrid : Control
     private static readonly IBrush ColMajor = NotaPalette.GraphBorder;
     private static readonly IBrush Head = NotaPalette.Wash(NotaPalette.Accent, 0x14);
     private static readonly IBrush Zero = NotaPalette.BorderDefault;
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private const double GutterW = 24, NumsH = 14;
 
     private readonly IAudioEngine _e; private readonly int _t, _mi;

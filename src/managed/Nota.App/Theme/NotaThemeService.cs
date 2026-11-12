@@ -23,6 +23,11 @@
 // change re-coerces every window. User themes join the list from the themes folder; a reload
 // re-wears the active one. A try-on (MCP) is worn without being stored, and RenderScoped
 // wears a theme for the length of one call — the skin previews — and puts the live one back.
+//
+// Every theme is worn in a look (spec 091): New, or Classic — a built-in's classic palette in its
+// place, 0.59's corners and Geist Mono for values. ApplyActive composes theme × look × skin in
+// one place (Looks.Compose: the skin wins wherever it sets something). Nota Remote keeps the new
+// look: Worn() stays look-free, and the theme cards ask WornForCard().
 
 using System;
 using System.Collections.Generic;
@@ -34,6 +39,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Nota.Application;
+using Nota.Application.Themes;
 
 namespace Nota.App;
 
@@ -44,6 +50,8 @@ internal static class NotaThemeService
     private static AppearanceChoice _choice = new(false, Appearance.StudioDark, Appearance.StudioDark, Appearance.StudioLight);
 
     private static AccentChoice _accent = AccentChoice.Default;
+    private static Look _look = Look.New;
+    private static Look? _wornLook;
     private static NotaColourTheme? _tryOn;
 
     /// <summary>The appearance being followed.</summary>
@@ -52,12 +60,42 @@ internal static class NotaThemeService
     /// <summary>The accent every theme is worn with.</summary>
     public static AccentChoice Accent => _accent;
 
+    /// <summary>The look every theme is worn in (spec 091).</summary>
+    public static Look Look => _look;
+
     /// <summary>Raised after a theme or accent change has been applied and repainted.</summary>
     public static event Action? Changed;
 
     /// <summary><paramref name="theme"/> as it is worn with the current accent — for the theme
     /// cards and Nota Remote, so they show what the window would wear.</summary>
     public static NotaColourTheme Worn(NotaColourTheme theme) => NotaAccent.Wear(theme, _accent);
+
+    /// <summary><paramref name="theme"/> as a theme card shows it: in the worn look's colours
+    /// (a built-in's classic palette under Classic) and the user's accent.</summary>
+    public static NotaColourTheme WornForCard(NotaColourTheme theme) => Worn(InLook(theme, _look));
+
+    /// <summary>A built-in theme's colours in <paramref name="look"/>: under Classic its classic
+    /// palette; a user theme (and a try-on) keeps its own colours.</summary>
+    public static NotaColourTheme InLook(NotaColourTheme theme, Look look) =>
+        look == Look.Classic && theme.Source == ThemeSource.BuiltIn && NotaThemes.Classic(theme.Id) is { } classic
+            ? classic : theme;
+
+    /// <summary>The geometry and values typeface <paramref name="theme"/> is worn with in <paramref name="look"/>.</summary>
+    private static (SkinGeometry Geometry, FontFamily Values) WearOf(NotaColourTheme theme, Look look)
+    {
+        var g = Looks.Compose(theme.Geometry, look);
+        var values = g.ValuesFamily is { } name && NotaThemes.IsFontInstalled(name) ? new FontFamily(name)
+                   : look == Look.Classic ? NotaFonts.MonoFamily : NotaFonts.UiFamily;
+        return (g, values);
+    }
+
+    /// <summary>Wear a new look in whichever theme is active. Live; saving is the caller's.</summary>
+    public static void SetLook(Look look)
+    {
+        if (look == _look) return;
+        _look = look;
+        ApplyActive();
+    }
 
     /// <summary>Wear a new accent in whichever theme is active. Live; saving is the caller's.</summary>
     public static void SetAccent(AccentChoice accent)
@@ -102,19 +140,23 @@ internal static class NotaThemeService
     /// length of <paramref name="render"/>, then put the live theme back — all inside the caller's
     /// UI-thread job, so the compositor never sends a frame of it to the screen. Live windows are
     /// neither repainted nor re-coerced; <paramref name="render"/> re-coerces its own trees.</summary>
-    public static void RenderScoped(NotaColourTheme theme, bool themeAccent, Action render)
+    public static void RenderScoped(NotaColourTheme theme, bool themeAccent, Action render, Look? look = null)
     {
         var app = Avalonia.Application.Current;
         if (app is null) { render(); return; }
         var live = NotaPalette.Theme;
         var liveGeometry = NotaSkin.Geometry;
-        var scoped = themeAccent ? theme : Worn(theme);
+        var liveValues = NotaFonts.MeasureFamily;
+        var inLook = InLook(theme, look ?? _look);
+        var scoped = themeAccent ? inLook : Worn(inLook);
+        var (geometry, values) = WearOf(theme, look ?? _look);
         InScope = true;
         try
         {
             NotaPalette.Apply(scoped);
             ApplyResources(app, scoped);
-            NotaSkin.Set(scoped.Geometry);
+            NotaSkin.Set(geometry);
+            NotaFonts.SetMeasure(values);
             render();
         }
         finally
@@ -126,14 +168,27 @@ internal static class NotaThemeService
             }
             // Resource changes inside the scope make live controls re-evaluate their typeface and
             // radii against the scoped skin; give every live window its own skin back.
+            NotaFonts.SetMeasure(liveValues);
             if (NotaSkin.Set(liveGeometry)) NotaSkin.Reapply();
             InScope = false;
         }
     }
 
+    /// <summary><see cref="RenderScoped(NotaColourTheme, bool, Action, Look?)"/> in a named look (null: the worn one).</summary>
+    public static void RenderScoped(NotaColourTheme theme, bool themeAccent, Look? look, Action render) =>
+        RenderScoped(theme, themeAccent, render, look);
+
     /// <summary>True while <see cref="RenderScoped"/> wears a theme for a picture: views built
     /// then must not reload or re-wear themes (that would put the live theme back mid-picture).</summary>
     public static bool InScope { get; private set; }
+
+    /// <summary>Wear <paramref name="choice"/> in <paramref name="look"/> and keep following it — at
+    /// startup, before the first window, so the first frame is already in the stored look.</summary>
+    public static void Start(AppearanceChoice choice, Look look)
+    {
+        _look = look;
+        Set(choice);
+    }
 
     /// <summary>Wear <paramref name="choice"/> and keep following it. Safe to call repeatedly.</summary>
     public static void Set(AppearanceChoice choice)
@@ -172,17 +227,24 @@ internal static class NotaThemeService
         if (app is null) return;
         // With no OS signal Avalonia reports Light, which is the spec's fallback too.
         bool osDark = app.ActualThemeVariant == ThemeVariant.Dark;
-        var theme = _tryOn is not null ? Worn(_tryOn) : Worn(NotaThemes.Find(_choice.Active(osDark)) ?? FallbackFor(osDark));
+        var picked = _tryOn ?? NotaThemes.Find(_choice.Active(osDark)) ?? FallbackFor(osDark);
+        var theme = Worn(InLook(picked, _look));
 
         if (!_choice.FollowSystem || _tryOn is not null)
             app.RequestedThemeVariant = theme.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
         else
             app.RequestedThemeVariant = ThemeVariant.Default;
-        if (ReferenceEquals(NotaPalette.Theme, theme)) return;
+        // A user skin keeps its colours in either look, so the same theme object can need a new
+        // geometry and values typeface: compare the look too.
+        if (ReferenceEquals(NotaPalette.Theme, theme) && _wornLook == _look) return;
+        _wornLook = _look;
 
         NotaPalette.Apply(theme);
         ApplyResources(app, theme);
-        if (NotaSkin.Set(theme.Geometry)) NotaSkin.Reapply();
+        var (geometry, values) = WearOf(picked, _look);
+        bool reshaped = NotaSkin.Set(geometry);
+        reshaped |= NotaFonts.SetMeasure(values);
+        if (reshaped) NotaSkin.Reapply();
         RepaintEverything();
         Changed?.Invoke();
     }

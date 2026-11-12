@@ -43,7 +43,7 @@ public sealed class NaBadge : Border
         Height = 16;
         VerticalAlignment = VerticalAlignment.Center;
         Child = _label;
-        _label.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _label.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         Apply();
     }
 

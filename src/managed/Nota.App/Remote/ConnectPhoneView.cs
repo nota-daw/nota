@@ -104,10 +104,10 @@ internal sealed class ConnectPhoneView : Border
         _qr = new QrView { Width = 150, Height = 150, Text = _remote.QrText };
         var info = new StackPanel { Spacing = 10 };
         info.Children.Add(Field(Loc.T("remote.connect.address"), AddressRows()));
-        _code = new TextBlock { FontSize = 23, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
+        _code = new TextBlock { FontSize = 23, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
         _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.VizInk, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
         var ringBack = new Ellipse { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.TrackOff };
-        _left = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _left = new TextBlock { FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
         info.Children.Add(Field(Loc.T("remote.connect.code"), codeRow));
         bool usb = _remote.Link is { Usb: true };
@@ -146,7 +146,7 @@ internal sealed class ConnectPhoneView : Border
             : Loc.F("remote.connect.ms", d.RttMs, screen);
         var names = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(new TextBlock { Text = d.Name, FontSize = 11, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis });
-        names.Children.Add(new TextBlock { Text = sub, FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
+        names.Children.Add(new TextBlock { Text = sub, FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
 
         var trackBar = new Border { Width = 4, Height = 18, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center, Background = d.TrackId > 0 ? TrackColorBrush(d.TrackId) : NotaPalette.BorderStrong };
         var trackName = new TextBlock { Text = d.TrackId > 0 ? _engine.GetTrackName(d.TrackId) : "—", FontSize = 10, Foreground = NotaPalette.TextSecondary, Width = 70, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -195,18 +195,11 @@ internal sealed class ConnectPhoneView : Border
         var links = _remote.Links;
         var chosen = _remote.Link;
         var url = _remote.Url!;
-        var first = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        first.Children.Add(new TextBlock { Text = url.Replace("http://", ""), FontSize = 12, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
-        if (chosen is { Usb: true })
-            first.Children.Add(new Border
-            {
-                Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
-                Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = Loc.T("remote.connect.usb_caps"), FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
-            });
-        first.Children.Add(new StackPanel
+        // Keys and badge stay docked right, so a long address gives way to them (trimmed), not they to it.
+        var first = new DockPanel { LastChildFill = true };
+        var keys = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0),
             Children =
             {
                 LinkKey(GlyphKind.PopOut, Loc.T("remote.connect.open_in_the_browser"), _ => Host?.Launcher.LaunchUriAsync(new Uri(url))),
@@ -218,7 +211,21 @@ internal sealed class ConnectPhoneView : Border
                     DispatcherTimer.RunOnce(() => g.Kind = GlyphKind.Copy, TimeSpan.FromSeconds(1.5));
                 }),
             },
-        });
+        };
+        DockPanel.SetDock(keys, Dock.Right);
+        first.Children.Add(keys);
+        if (chosen is { Usb: true })
+        {
+            var usb = new Border
+            {
+                Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0),
+                Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
+                Child = new TextBlock { Text = Loc.T("remote.connect.usb_caps"), FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
+            };
+            DockPanel.SetDock(usb, Dock.Right);
+            first.Children.Add(usb);
+        }
+        first.Children.Add(new TextBlock { Text = url.Replace("http://", ""), FontSize = 12, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
         var rows = new StackPanel { Spacing = 3, Children = { first } };
         foreach (var l in links)
         {
@@ -241,7 +248,7 @@ internal sealed class ConnectPhoneView : Border
     {
         var t = new TextBlock
         {
-            Text = text, FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
+            Text = text, FontSize = 9, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
             Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Left,
         };
         ToolTip.SetTip(t, tip);

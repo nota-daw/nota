@@ -299,7 +299,7 @@ public sealed class MosaicCreateWindow : NotaWindow
     }
 
     // ---- pieces ------------------------------------------------------------------------------------
-    private static TextBlock Mono(string t, IBrush ink, double fs) => new() { Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Mono(string t, IBrush ink, double fs) => new() { Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.ValuesFamily, VerticalAlignment = VerticalAlignment.Center };
 
     private static Border Box(Control child) => new()
     {

@@ -129,11 +129,26 @@ public sealed partial class NotaEngine
 
     /// <summary>Loads a file into a session audio slot (looped over lengthBeats). False on failure.</summary>
     public bool AddSessionAudioClip(int trackId, int scene, string path, double lengthBeats, double sourceOffsetFrames, long lengthFrames, float gain)
-    { ThrowIfDisposed(); return NativeMethods.SessionAddAudioClip(_handle, trackId, scene, path, lengthBeats, sourceOffsetFrames, lengthFrames, gain) != 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.SessionAddAudioClip(_handle, trackId, scene, path, lengthBeats, sourceOffsetFrames, lengthFrames, gain) != 0;
+        if (ok) RememberSlotSource(trackId, scene, path);
+        return ok;
+    }
 
     /// <summary>Drops a whole audio file into a session slot, auto-computing loop length (M7-5).</summary>
     public bool AddSessionAudioFile(int trackId, int scene, string path)
-    { ThrowIfDisposed(); return NativeMethods.SessionAddAudioFile(_handle, trackId, scene, path) != 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.SessionAddAudioFile(_handle, trackId, scene, path) != 0;
+        if (ok) RememberSlotSource(trackId, scene, path);
+        return ok;
+    }
+
+    private void RememberSlotSource(int trackId, int scene, string path)
+    {
+        if (NativeMethods.SessionGetAudioSlot(_handle, trackId, scene, out var info) != 0) RememberSampleSource(info.SampleId, path);
+    }
 
     // --- Session P0 -------------------------------------------------------------
 

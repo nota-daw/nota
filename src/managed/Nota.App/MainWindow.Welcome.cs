@@ -84,8 +84,8 @@ public partial class MainWindow
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) continue;
             var name = Path.GetFileNameWithoutExtension(path.TrimEnd('/', '\\'));
             string modified;
-            try { modified = Directory.GetLastWriteTime(path).ToString("MM/dd/yyyy HH:mm", NotaNum.Culture); }
-            catch { modified = ""; }
+            // The same date the browser's Projects tab shows (spec 092): the last save.
+            modified = Nota.Application.Browser.ProjectDates.Modified(path) is { } m ? Nota.Application.Browser.ProjectDates.Format(m) : "";
             items.Add(new RecentProjectItem(name, path, modified));
         }
         return items;
@@ -104,6 +104,11 @@ public partial class MainWindow
             if (list.Count > MaxRecentProjects) list.RemoveRange(MaxRecentProjects, list.Count - MaxRecentProjects);
             settings.Save();
             RefreshRecentMenu();   // File → Open recent follows the same list
+            if (_vm is not null)
+            {
+                _vm.Browser.OpenProjectPath = dir;   // the Projects tab marks it, newest first
+                _vm.Browser.RebuildProjects();
+            }
         }
         catch { /* recent list is best-effort — never disrupt the open/save */ }
     }

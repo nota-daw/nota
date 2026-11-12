@@ -36,7 +36,7 @@ internal static class PrismInk
     public static readonly string[] Names = { "Low", "Mid", "High" };
     public static readonly IBrush InnerBorder = NotaPalette.GraphBorder;
     public static readonly IPen InnerPen = new Pen(InnerBorder, 1);
-    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));

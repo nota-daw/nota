@@ -115,6 +115,9 @@ public sealed partial class ArrangementView : UserControl
     }
 
     /// <summary>Height of arrangement row <paramref name="i"/>: its clip area plus any open take lanes.</summary>
+    /// <summary>The height a row's header card is laid out for: the slim group bar or the track row.</summary>
+    private double HeaderRowHeight(TrackVM t) => IsSlimRow(t) ? GroupRowHeight : TrackRowHeight(t);
+
     internal double RowHeightAt(int i)
         => ClipAreaHeightAt(i) + (i >= 0 && i < _tracks.Count ? TakesHeight(_tracks[i]) : 0);
 
@@ -145,6 +148,9 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Scroll the track list so <paramref name="trackId"/>'s whole row is in view. Runs
     /// after the next layout pass, so it also works straight after a Refresh that added the
     /// row (the scroll extent isn't updated until then). A row already fully visible doesn't move.</summary>
+    /// <summary>Set by the main window: what an audio clip's Locate submenu does (spec 092).</summary>
+    internal LocateHooks? Locate { get; set; }
+
     public void RevealTrack(int trackId)
     {
         Dispatcher.UIThread.Post(() =>
@@ -381,6 +387,7 @@ public sealed partial class ArrangementView : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         // "Zoom" names the two keys. On a header narrowed so far that the range read-out
         // would be cut, the caption steps aside first (the keys keep their tooltips).
         var zoomLabel = new TextBlock
@@ -603,6 +610,29 @@ public sealed partial class ArrangementView : UserControl
         set { if (_clipLabels == value) return; _clipLabels = value; _lanes.InvalidateVisual(); }
     }
     private ClipLabelMode _clipLabels = ClipLabelMode.RunStart;
+    /// <summary>Tinted clips (the new look) or solid ones with a title band (0.59; Settings →
+    /// Appearance → Clips, spec 091).</summary>
+    public ClipStyle ClipStyle
+    {
+        get => _clipStyle;
+        set { if (_clipStyle == value) return; _clipStyle = value; _lanes.InvalidateVisual(); }
+    }
+    private ClipStyle _clipStyle = ClipStyle.Tinted;
+    /// <summary>How groups are drawn in the track headers (specs/094): trays in the new look,
+    /// 0.59.2's staircase of spines in the classic one. Follows the worn look.</summary>
+    public Look HeaderLook
+    {
+        get => _headerLook;
+        set
+        {
+            if (_headerLook == value) return;
+            _headerLook = value;
+            RebuildHeaders();
+            _lanes.InvalidateVisual();   // a group lane's wash follows the look
+        }
+    }
+    private Look _headerLook = Look.New;
+    private bool ClassicHeaders => _headerLook == Look.Classic;
     /// <summary>Audio-clip waveform style (Settings → Appearance).</summary>
     public WaveformStyle Waveform
     {
@@ -610,6 +640,20 @@ public sealed partial class ArrangementView : UserControl
         set { if (_waveform == value) return; _waveform = value; _lanes.InvalidateVisual(); }
     }
     private WaveformStyle _waveform = WaveformStyle.Smooth;
+    /// <summary>A heavier grid line every this many bars, counted from bar 1; 0 = off
+    /// (Settings → Appearance, specs/092). Drawn on the lanes, the footer rows and the ruler.</summary>
+    public int PhraseBars
+    {
+        get => _phraseBars;
+        set
+        {
+            value = PhraseLines.Normalize(value);
+            if (_phraseBars == value) return;
+            _phraseBars = value;
+            Redraw();
+        }
+    }
+    private int _phraseBars;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -2233,20 +2277,23 @@ public sealed partial class ArrangementView : UserControl
         QueueSelectionNotify();   // every clip-selection change repaints the headers
         foreach (var (id, h) in _headerCards)
         {
-            // Selected row (style guide): a slightly lighter background; the colour bar stays.
-            bool selected = IsTrackMultiSelected(id);
-            h.card.Background = selected ? SelHeaderBg : Brush("Brush.Panel");
+            // Selected row (style guide): a slightly lighter background; the colour bar stays
+            // (classic: the spine goes accent, as in 0.59.2).
+            if (_tracks.Find(v => v.Id == id) is { } t)
+                PaintHeaderFill(h.card, t, IsTrackMultiSelected(id), h.spine, h.spineIdle);
         }
     }
 
     private void RebuildHeaders()
     {
+        ComputeTraySlices();
         _headers.Children.Clear();
         _meters.Clear();
         _volFaders.Clear();
         _sendFaders.Clear();
         _panBars.Clear();
         _headerCards.Clear();
+        _trayLayers.Clear();
         _cardTiers.Clear();
         _cardSends.Clear();
         _sendKnobs.Clear();
@@ -2273,25 +2320,29 @@ public sealed partial class ArrangementView : UserControl
     // A group's row, collapsed to a title bar: disclosure, name, its own mute/solo, kind tag.
     // The fader, pan and meter live on the same card when the group is selected (BuildTrackCard),
     // so nothing is lost — it just stops costing a full row while you work on its children.
-    // Style guide: the row is tinted 16% in the group colour, and the group's 4px bar starts
-    // here and runs down through every member.
+    // New look (specs/094): the row heads the group's tray (its 16 % wash, the tray's edge), and
+    // its meter stands at the right in the tracks' column. Classic: 0.59.2's slim row — the
+    // "Group" tag and the level as a rail on its own line under the title.
     private Control BuildGroupBar(TrackVM t)
     {
         bool selected = IsTrackMultiSelected(t.Id);
         var spineBrush = TrackBrush(t.ColorIndex);
+        bool classic = ClassicHeaders;
+        var slice = SliceOf(t);
 
         var tri = new Border
         {
-            Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, 6, 0),
+            Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, classic ? 0 : 6, 0),
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 9) { Foreground = Brush("Brush.TextSecondary") },
+            Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, classic ? 8 : 9) { Foreground = Brush("Brush.TextSecondary") },
         };
         tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
 
         var name = HeaderName(t.Name);
+        if (classic) { name.FontSize = NotaType.Name; name.Margin = new Thickness(4, 0, 0, 0); }
         var chips = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = ChipGap, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = classic ? ClassicChipGap : ChipGap, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
                 ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }),
@@ -2301,35 +2352,64 @@ public sealed partial class ArrangementView : UserControl
         };
         if (_engine is { } groupEngine && CueKey.Shown(groupEngine))   // Cue (specs/089)
             chips.Children.Insert(2, CueKey.Create(groupEngine, t.Id, 18, 18, NotaRadius.Field, out _, offFill: NotaPalette.Well));
-        var kind = TypeTag(Loc.T("common.group"));
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(name, 1);
+        var title = NameWithCount(name, slice);
+        Grid.SetColumn(title, 1);
         Grid.SetColumn(chips, 2);
-
-        Grid.SetColumn(kind, 3);
         row.Children.Add(tri);
-        row.Children.Add(name);
+        row.Children.Add(title);
         row.Children.Add(chips);
-        row.Children.Add(kind);
+        if (classic)
+        {
+            var kind = TypeTag(Loc.T("common.group"));
+            Grid.SetColumn(kind, 3);
+            row.Children.Add(kind);
+        }
 
-        // A group keeps its level readable on the slim row as a thin rail under the title.
-        var meter = new MeterBar(horizontal: true) { Height = 3, MinWidth = 0, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2) };
-        _meters[t.Id] = meter;
         var (bars, spine, x) = HeaderBars(t, own: false);
-        var body = new Panel { Margin = new Thickness(x + 6, 0, HeaderRightPad, 0), Children = { row, meter } };
+        Control body;
+        if (classic)
+        {
+            // 0.59.2: the level as a rail on a line of its own under the title.
+            var meter = new MeterBar(horizontal: true) { Height = 4, MinWidth = 0, Margin = new Thickness(0, 0, 0, 3) };
+            _meters[t.Id] = meter;
+            DockPanel.SetDock(meter, Dock.Bottom);
+            body = new DockPanel { LastChildFill = true, Margin = new Thickness(x + 8, 0, 8, 0), Children = { meter, row } };
+        }
+        else
+        {
+            var meter = HeaderMeter(GroupRowHeight - GroupTrayLayout.ClosingBand(slice.Closings, GroupRowHeight));
+            _meters[t.Id] = meter;
+            DockPanel.SetDock(meter, Dock.Right);
+            body = new DockPanel
+            {
+                LastChildFill = true, Children = { meter, row },
+                Margin = new Thickness(x + 2, 0, GroupTrayLayout.TrayInsetR, GroupTrayLayout.ClosingBand(slice.Closings, GroupRowHeight)),
+            };
+        }
         var card = new Border
         {
             Width = HeaderW, Height = GroupRowHeight, ClipToBounds = true,
-            Background = selected ? SelHeaderBg : Brush("Brush.Panel"),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = CardBorder,
-            Child = new Panel { Children = { new Border { Background = TrackTint(t.ColorIndex, 0.16) }, bars, body } },
+            BorderThickness = CardBorderFor(t),
+            Child = new Panel { Children = { bars, body } },
         };
         _headerCards[t.Id] = (card, name, true, spine, spineBrush);
+        PaintHeaderFill(card, t, selected, spine, spineBrush);
         AttachHeaderGestures(card, t);
         ValueEntry.SetScope(card, true);   // Tab in a value box: volume → pan on this header
         return card;
+    }
+
+    // A group's name with " · N" after it while it is folded (specs/094): the tracks it hides,
+    // nested groups' tracks included. The name trims first; the count stays beside it.
+    private Control NameWithCount(TextBlock name, TraySlice slice)
+    {
+        if (slice.FoldedCount is not { } n) return name;
+        var count = TypeTag("· " + n.ToString(CultureInfo.CurrentCulture));
+        count.Margin = new Thickness(6, 1, 0, 0);
+        return new NameTagPanel { Children = { name, count } };
     }
 
     // One builder, three layouts picked by the row's height (specs/015, style guide): compact is
@@ -2381,7 +2461,8 @@ public sealed partial class ArrangementView : UserControl
         }
         // The name trims before it can push M / S / ● out of the card; the tag stays beside it.
         // A member linked with its group carries the link mark before its name (specs/076).
-        Control nameCell = name;
+        Control nameCell = t.IsGroup ? NameWithCount(name, SliceOf(t)) : name;   // a folded group's count (specs/094)
+        if (t.IsGroup && !ClassicHeaders) typeTag.IsVisible = false;   // the tray says it's a group
         if (LinkMemberMark(t) is { } mark)
         {
             var dock = new DockPanel { LastChildFill = true };
@@ -2496,7 +2577,7 @@ public sealed partial class ArrangementView : UserControl
                 // and a sliver of volume can't sit beside the pan does it go to the context menu.
                 if (picker is not null)
                 {
-                    double room = HeaderW - x - NameGap - MeterW - PanBar.W - 2 * 6;
+                    double room = HeaderW - x - NameGap - MeterW - PanBar.W - 2 * 6 - ContentRightInset;
                     double pickerW = Math.Clamp(room - MiniFader.MinW, PickerMinW, PickerW);
                     double faderMin = Math.Min(MiniFader.MinW, room - pickerW);
                     if (faderMin < FaderSqueezeW)
@@ -2517,33 +2598,30 @@ public sealed partial class ArrangementView : UserControl
                 break;
         }
 
-        // The meter down the right edge: two 3px channels.
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 7, Margin = new Thickness(6, 6, 4, 6) };   // MeterW in all
+        // The meter down the right edge: two 3px channels, inside the card on every row height
+        // (specs/094). New look: above any closing strips of the trays that end on this row.
+        double band = ClassicHeaders ? 0 : GroupTrayLayout.ClosingBand(SliceOf(t).Closings, rowH);
+        MeterBar meter = ClassicHeaders
+            ? new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, MinHeight = 0, Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6) }
+            : HeaderMeter(rowH - band);
         _meters[t.Id] = meter;
         DockPanel.SetDock(meter, Dock.Right);
-        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(x + NameGap, 0, 0, 0), Children = { meter, stack } };
-
-        // Inside a group: a 6% wash of the group's colour under the card's content.
-        var layers = new Panel();
-        if (t.IsGroup) layers.Children.Add(new Border { Background = TrackTint(t.ColorIndex, 0.16) });
-        else if (GroupOf(t) is { } g) layers.Children.Add(new Border { Background = TrackTint(g.ColorIndex, 0.06) });
-        layers.Children.Add(bars);
-        layers.Children.Add(body);
+        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(x + NameGap, 0, ContentRightInset, band), Children = { meter, stack } };
 
         var card = new Border
         {
             Width = HeaderW,
             Height = rowH,
             ClipToBounds = true,
-            Background = selected ? SelHeaderBg : (t.Frozen || t.LiveRole != 0) ? FrozenHeaderBg : Brush("Brush.Panel"),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = CardBorder,
-            Child = layers,
+            BorderThickness = CardBorderFor(t),
+            Child = new Panel { Children = { bars, body } },
         };
         // A background import is still filling the track: the disabled look (by colour, not
         // opacity), still clickable so the track can be deleted to cancel.
         if (IsProcessingTrack(t.Id)) card.AttachedToVisualTree += (_, _) => Inactive.Set(card, true, interactive: true);
         _headerCards[t.Id] = (card, name, t.IsGroup, spine, spineBrush);   // for in-place selection repaint
+        PaintHeaderFill(card, t, selected, spine, spineBrush);
         AttachHeaderGestures(card, t);
         ValueEntry.SetScope(card, true);   // Tab in a value box: volume → pan on this header
         return card;
@@ -2594,49 +2672,88 @@ public sealed partial class ArrangementView : UserControl
         TextTrimming = TextTrimming.CharacterEllipsis,
     };
 
-    private TrackVM? GroupOf(TrackVM t) => t.GroupId < 0 ? null : _tracks.FirstOrDefault(v => v.Id == t.GroupId);
+    // Nesting (specs/094). New look: the row's slice of every group tray it sits in
+    // (GroupTrayLayer) — a member keeps only its own 3 px bar, at the start of its card. Classic
+    // look: 0.59.2's staircase — the row's own 3 px spine, stepped in per nesting level, full
+    // height, nothing for the groups around it. Returns the layer, the row's own stripe (the
+    // selection repaint's handle) and where the row's content starts.
+    private const double OwnBarW = 3, ClassicChipGap = 3;
+    private readonly Dictionary<int, GroupTrayLayer> _trayLayers = new();
 
-    // Nesting reads from the bars (style guide § Groups): every group a row sits in draws its
-    // 4px bar down the row's left edge, one GroupIndent further in per level, so a group's bar
-    // runs unbroken from its own row through its last member. A track then shows its own
-    // colour on a 3px bar just past them, inset 6 from the top and bottom; a group's own bar is
-    // the 4px one, full height. Returns the bars, the track's own bar and where content starts.
-    private const double GroupIndent = 14, GroupBarW = 4, OwnBarW = 3;
+    // Every row's controls end at the same x (FR-007): the trays' right inset in the new look.
+    private double ContentRightInset => ClassicHeaders ? 0 : GroupTrayLayout.TrayInsetR;
 
     private (Control bars, Border own, double contentX) HeaderBars(TrackVM t, bool own)
     {
-        var canvas = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
-        var chain = new List<TrackVM>();
-        for (var g = GroupOf(t); g is not null && chain.Count < 8; g = GroupOf(g)) chain.Insert(0, g);
-        for (int k = 0; k < chain.Count; k++)
-            canvas.Children.Add(new Border
-            {
-                Width = GroupBarW, HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(k * GroupIndent, 0, 0, 0), Background = TrackBrush(chain[k].ColorIndex),
-            });
-        double x = chain.Count * GroupIndent;
+        var slice = SliceOf(t);
+        var canvas = new Panel();
         Border bar;
+        if (ClassicHeaders)
+        {
+            bar = new Border
+            {
+                Width = GroupTrayLayout.ClassicSpineW, HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(slice.SpineX, 0, 0, 0), Background = TrackBrush(t.ColorIndex),
+            };
+            canvas.Children.Add(bar);
+            return (canvas, bar, slice.ContentLeft);
+        }
+
+        if (slice.Chain.Length > 0)
+        {
+            // The strips are sized for the row height the controls were laid out for, so a
+            // seam drag (which resizes the card without a rebuild) can't move them apart.
+            var layer = new GroupTrayLayer(slice, t.IsGroup ? null : Brush("Brush.Panel"), HeaderRowHeight(t));
+            _trayLayers[t.Id] = layer;
+            canvas.Children.Add(layer);
+        }
+        double x = slice.ContentLeft;
         if (own && !t.IsGroup)
         {
-            if (chain.Count > 0) x += GroupBarW;
+            double band = GroupTrayLayout.ClosingBand(slice.Closings, HeaderRowHeight(t));
             bar = new Border
             {
                 Width = OwnBarW, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(OwnBarW / 2),
-                Margin = new Thickness(x, 6, 0, 6), Background = TrackBrush(t.ColorIndex),
+                Margin = new Thickness(x, 6, 0, 6 + band), Background = TrackBrush(t.ColorIndex),
             };
+            canvas.Children.Add(bar);
             x += OwnBarW;
         }
         else
-        {
-            bar = new Border
-            {
-                Width = GroupBarW, HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(x, 0, 0, 0), Background = TrackBrush(t.ColorIndex),
-            };
-            x += GroupBarW;
-        }
-        canvas.Children.Add(bar);
+            bar = new Border { Width = 0 };   // a group's stripe is its tray's edge
         return (canvas, bar, x);
+    }
+
+    // The header meter (specs/094): a vertical stereo bar at the right, inside the card on every
+    // row height — MeterBar's 40 px floor is for the mixer, a Compact header has 18 px for it.
+    private static MeterBar HeaderMeter(double rowInner)
+    {
+        double v = Math.Clamp((rowInner - 12) / 2, 3, 6);
+        return new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 7, MinHeight = 0, Margin = new Thickness(6, v, 4, v) };   // MeterW in all
+    }
+
+    // A row inside a tray draws its own seam under its card body; the card keeps only the
+    // column divider so the tray runs unbroken from row to row.
+    private Thickness CardBorderFor(TrackVM t)
+    {
+        var b = CardBorder;
+        return !ClassicHeaders && SliceOf(t).Chain.Length > 0 ? new Thickness(b.Left, 0, b.Right, 0) : b;
+    }
+
+    // The header's fill for its state. New look: a member's card body is painted by its tray
+    // layer (the card itself stays the panel the trays wash over); classic: 0.59.2's raised
+    // group rows and card-surface tracks, the selected row's spine in the accent.
+    private void PaintHeaderFill(Border card, TrackVM t, bool selected, Border spine, IBrush spineIdle)
+    {
+        IBrush rest = ClassicHeaders ? Brush(t.IsGroup ? "Brush.SurfaceRaised" : "Brush.SurfaceCard") : Brush("Brush.Panel");
+        IBrush fill = selected ? SelHeaderBg : (t.Frozen || t.LiveRole != 0) ? FrozenHeaderBg : rest;
+        if (_trayLayers.TryGetValue(t.Id, out var layer) && layer.IsMember)
+        {
+            card.Background = Brush("Brush.Panel");
+            layer.Body = fill;
+        }
+        else card.Background = fill;
+        if (ClassicHeaders) spine.Background = selected ? NotaPalette.Accent : spineIdle;
     }
 
     // Select / reorder / context-menu gestures shared by a full track card and a slim group bar.
@@ -3453,6 +3570,11 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
+    // Phrase lines (specs/092): a step above the bar line, a neutral grey moved from the bar
+    // line toward the tertiary text — derived, so it follows every theme (user themes too) without
+    // a token of its own, and never the accent.
+    private static readonly IPen PhrasePen = new Pen(NotaPalette.Derived(
+        () => SliderTrack.Mix(NotaPalette.GridBar.Color, NotaPalette.TextTertiary.Color, 0.35)), 1);
     private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
     // Playhead: a 1px accent line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
@@ -3628,6 +3750,19 @@ public sealed partial class ArrangementView : UserControl
     }
     private static readonly Dictionary<int, SolidColorBrush> _trackBrushes = new();
 
+    // A solid clip's title band: its track colour mixed 30 % toward black; its notes and waveform
+    // 58 % toward black (0.59, the Solid clip style). Theme-following and cached per index.
+    internal static SolidColorBrush ClipBand(int idx) => Shade(_clipBands, idx, 0.30);
+    internal static SolidColorBrush ClipInk(int idx) => Shade(_clipInks, idx, 0.58);
+    private static SolidColorBrush Shade(Dictionary<int, SolidColorBrush> cache, int idx, double t)
+    {
+        if (cache.TryGetValue(idx, out var b)) return b;
+        b = NotaPalette.Derived(() => Mix(TrackColorForIndex(idx), NotaPalette.ShadeDown.Color, t));
+        cache[idx] = b;
+        return b;
+    }
+    private static readonly Dictionary<int, SolidColorBrush> _clipBands = new(), _clipInks = new();
+
     /// <summary>The theme-following brush for a palette index. A view that wants a track's
     /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it
     /// in the variant that was active when the view was built.</summary>
@@ -3661,8 +3796,9 @@ public sealed partial class ArrangementView : UserControl
     private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
 
     /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
-    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
-    /// sub-beat. Shared by the lanes and the footer rows.</summary>
+    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted phrase › bar ›
+    /// beat › sub-beat. A phrase line is always one of those lines (every bar step divides a
+    /// phrase), so it only changes the pen. Shared by the lanes and the footer rows.</summary>
     private void DrawGrid(DrawingContext ctx, double w, double h)
     {
         if (_pixelsPerBeat <= 0) return;
@@ -3671,7 +3807,8 @@ public sealed partial class ArrangementView : UserControl
         foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
         {
             double x = BeatToX(b);
-            var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
+            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, _beatsPerBar) ? PhrasePen
+                : IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
             ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
         }
 
