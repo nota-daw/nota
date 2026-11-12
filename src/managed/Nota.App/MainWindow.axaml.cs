@@ -491,6 +491,7 @@ public partial class MainWindow : Window
             RecordPreview = _recordPreview,
         };
         _session.SlotEditRequested += OpenSessionClipEditor;
+        _session.ShowInModularRequested += id => ShowInModular(id);   // specs/095
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
         HookSessionDeviceMoves(_session);                             // a device card dropped on a column (specs/043)
         _session.ArrangementChanged += () => Timeline.Refresh();      // M5-6
@@ -532,6 +533,13 @@ public partial class MainWindow : Window
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
+        // The track column beside the canvas is the arrangement's header column (specs/095).
+        _modular.TrackAtPoint = p => Timeline.TrackAtHeaderPoint(p);
+        _modular.ConnectHintChanged += on => Timeline.SetColumnHint(on);
+        _modular.StatusRequested += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        Timeline.ModularTrackId = () => _modular?.TrackId ?? -1;
+        Timeline.HeaderColumnWidthChanged += FitModularBesideHeaders;
+        Timeline.ShowInModularRequested += ShowInModular;
         MainContent.Children.Add(_modular);
         WireMixerGroups();   // fold state, selection and compact strips (specs/070)
 
@@ -746,7 +754,11 @@ public partial class MainWindow : Window
         if (_session is null || _modular is null) return;
         SetDetailMaximized(false);   // a view picked is a view to see
         bool session = view == MainView.Session, modular = view == MainView.Modular;
-        Timeline.IsVisible = view == MainView.Arrangement;
+        // Modular keeps the arrangement's header column beside its canvas (specs/095).
+        Timeline.HeadersOnly = modular;
+        Timeline.IsVisible = view == MainView.Arrangement || modular;
+        FitModularBesideHeaders();
+        Browser.SetModularContext(modular);
         _session.IsVisible = session;
         _modular.IsVisible = modular;
         ArrangeBtn.IsChecked = view == MainView.Arrangement;
@@ -757,10 +769,30 @@ public partial class MainWindow : Window
         if (modular)
         {
             int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
-            if (t <= 0) t = _modular.FirstPatchableTrack();   // after opening a project nothing is selected (F3)
-            _modular.Show(t);                                   // Show(-1) still builds the sidebar and its empty state
+            if (t <= 0 || t == Engine.MasterTrackId) t = _modular.FirstPatchableTrack();   // after opening a project nothing is selected (F3)
+            _modular.Show(t);                                   // Show(-1) still shows the empty state
         }
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)
+    }
+
+    /// <summary>The arrangement is the shown view — not just its header column in Modular.</summary>
+    private bool ArrangementShown => Timeline.IsVisible && !Timeline.HeadersOnly;
+
+    // Modular's canvas sits beside the header column, on the side the column takes.
+    private void FitModularBesideHeaders()
+    {
+        if (_modular is null) return;
+        double w = Timeline.HeadersOnly ? Timeline.HeaderColumnWidth : 0;
+        _modular.Margin = Timeline.HeadersOnRight ? new Thickness(0, 0, w, 0) : new Thickness(w, 0, 0, 0);
+    }
+
+    // Show in Modular (a track menu, specs/095): Modular, Track view, that track's graph.
+    private void ShowInModular(int trackId)
+    {
+        if (_modular is null || trackId <= 0) return;
+        SetView(MainView.Modular);
+        if (Timeline.SelectedTrackId != trackId) Timeline.SelectTrackFromOutside(trackId);
+        _modular.ShowTrack(trackId);
     }
 
     private void OnPickProjectKey(object? sender, RoutedEventArgs e)

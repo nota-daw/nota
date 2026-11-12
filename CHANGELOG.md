@@ -23,6 +23,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A Modular tab in the browser** (#592, specs/095). While Modular is the view the browser's
+  rail carries a **Modular** tab (a patch-cable icon, after MIDI effects) listing every node
+  Modular offers — LFO, Envelope Follower, MIDI → CV, ADSR, Macro, Math, Scope — with its
+  category and a description, searchable by name, category or alias ("wobble" finds LFO).
+  Drag a node onto the canvas and it lands there, unconnected; double-click (or Enter) puts
+  it in the middle of the view. The browser remembers its own last tab for Modular (the
+  Modular tab the first time) and goes back to the other one when you leave.
+- **The arrangement's track headers in Modular** (#592, specs/095). Modular's Track view shows
+  the same track column as the arrangement — group trays, every control, the context menu,
+  drag to reorder, meters, both looks — on the side **Track headers on the right** picks, and
+  it moves at once when that changes. Click a header to see that track's graph; drop a CV
+  cable on another track's header to modulate it from here.
+- **Group graphs in Modular** (#592, specs/095). A group's header opens the group's own effect
+  chain (Tracks in → effects → out); modulators patch its effects like any track's.
+- **Show in Modular** (#592, specs/095) in the track menus of the arrangement and the Session
+  view: Modular opens in Track view on that track.
 - **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
   lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
   Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
@@ -686,6 +702,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   while hovered or dragged. Operator's OUT drop zone is the
   bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
   graph tooltips that named colours no longer drawn now describe what is on screen.
+
+### Removed
+- **Modular's + Add menu and its Tracks list** (#592, specs/095): nodes come from the browser's
+  Modular tab and the command palette; the track column is the arrangement's headers.
 
 ## [0.59.2] — 2026-11-08
 

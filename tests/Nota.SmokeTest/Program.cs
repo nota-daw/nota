@@ -858,6 +858,14 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Modular browser tab alone (fast iteration): `--modular-browser`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--modular-browser")
+{
+    Console.WriteLine("-- modular browser tab --");
+    foreach (var (ok, label) in ModularBrowserTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODULAR BROWSER PASSED" : $"MODULAR BROWSER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Arrangement group trays alone (fast iteration): `--group-trays`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--group-trays")
 {
@@ -15687,6 +15695,10 @@ foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
 // --- Arrangement group trays (specs/094): the header column's group slices ---
 Console.WriteLine("-- arrangement group trays --");
 foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
+
+// --- Modular browser tab (specs/095): catalogue rows, search, per-view tab memory ---
+Console.WriteLine("-- modular browser tab --");
+foreach (var (ok, label) in ModularBrowserTests.Run()) Check(ok, label);
 
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");

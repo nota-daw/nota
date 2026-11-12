@@ -245,7 +245,14 @@ docks as a panel under any of the three, or floats in its own window — see
   (param → param). A **CV Scope** oscilloscope reads any modulator signal: drag its trace
   taller (76–320 px) or open it in its own window, set its time window in ms or in beats,
   zoom it 1–8×, hold a repeating shape still with a rising-edge trigger, or freeze it. CV
-  ports are drawn only where they actually work.
+  ports are drawn only where they actually work. Nodes come from the browser's **Modular**
+  tab (dragged to a spot on the canvas, or double-clicked into the middle) and the command
+  palette. Beside the canvas, Track view shows the arrangement's own track headers — every
+  control, menu, tray and meter, on the side **Track headers on the right** picks: click one
+  to see its graph, or drop a CV cable on another track's header to modulate it. A group's
+  header opens the group's effect chain (Tracks in → effects → out), patched like any
+  track's. **Show in Modular** in the arrangement's and Session's track menus opens a track
+  here.
 
 ---
 
@@ -1308,7 +1315,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 ## Browser and assets
 
 - An **island panel** with an icon rail down its left edge: **Instruments / Audio Effects /
-  MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
+  MIDI Effects** (and, while Modular is the view, **Modular** — its nodes with category and
+  description, searchable by name, category or alias; the browser keeps a separate last tab
+  for Modular), then **Files** (with folder tree navigation), **Presets** (a tree of
   category → device → preset), **Projects**, **Map** (MIDI Learn mappings), **History**
   (the open project's versions) and the **Track inspector**. A hairline
   separates the device tabs from the library tabs, and the active one carries an orange edge.
