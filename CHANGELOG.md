@@ -213,6 +213,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   notes in their articulation's colour instead of the track's.
 
 ### Changed
+- **Groups in the Arrangement read as trays** (#584, specs/094). In the new look a group's
+  header row and its tracks now sit on one tray of the group's colour, with its edge down the
+  left, and the tray closes under the group's last track, so a track after the group is
+  clearly outside it. A track inside a group shows only its own colour bar, and nested groups
+  are trays inside trays, a few pixels further in each, instead of a stripe per level. A
+  folded group shows how many tracks it holds ("Instruments · 4"). The controls stay in the
+  same columns however deep a track sits. In the classic look the headers draw groups as
+  0.59 did: each row's own colour stripe, stepped in per level, and no group tints.
 - **The menu under a Menu key, and the menu bar hidden** (Windows / Linux, #518, specs/093).
   The row of File, Edit, View, Transport and Help no longer sits between the title bar and
   the transport bar, so the work area gains its height. The whole menu — the same items,
@@ -586,13 +594,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - **Tempo-map rendering** (#535): reversed warped clips keep their musical positions,
   Consolidate captures the full mapped range, and natural-rate clip releases fade at
-  the mapped ending. Warped split/undo avoids temporary marker copies.
+  the mapped ending.
 - **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
   mapped source boundaries. Loop recording, freeze and range bounce retain audio across
   tempo changes; saved freezes retain their timing. Transport BPM edits stay in the tempo
   lane, bar snapping respects the time-signature denominator, and warped waveforms align
   with the audible content at every zoom level.
 - Starting or seeking between beats no longer produces an immediate extra metronome click.
+- **Track header meters stay inside the header** (#584): on a Compact or a low Standard row a
+  track's level meter ran into the bottom edge of its header, and a folded group's meter ran
+  under its name and buttons. Every header meter now fits its row, and a group's meter stands
+  at the right in the same column as the tracks'.
 - **The Files icon in the browser rail is the same size as its neighbours** (#579): the
   folder is drawn on the same grid as the other rail icons.
 - **Monitoring a track through an audio track no longer crackles** (#563): an audio track whose

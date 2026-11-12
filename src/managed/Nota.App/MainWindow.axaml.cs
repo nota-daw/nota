@@ -428,6 +428,10 @@ public partial class MainWindow : Window
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
         Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);
+        // Groups in the track headers follow the worn look (specs/094); a theme or accent
+        // change leaves them be — the setter rebuilds only when the look itself moved.
+        Timeline.HeaderLook = NotaThemeService.Look;
+        NotaThemeService.Changed += () => Timeline.HeaderLook = NotaThemeService.Look;
         Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
         vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);

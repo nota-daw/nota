@@ -47,8 +47,12 @@ warp-cache identity before allocating marker copies in split/undo.
 
 ## Deviations from Assessment
 
-- None. Deferred consolidation source preparation and stale-direction worker tests
-  are included because both were identified as risks in the assessment.
+- Deferred consolidation source preparation and stale-direction worker tests are
+  included because both were identified as risks in the assessment.
+- Develop advanced to 39c7857c during verification. Its Arrangement group-tray changes
+  are merged, retaining both branches' changelog entries. The merged Windows build,
+  smoke suite and 40 tempo UI checks pass. Native/performance sources in develop
+  39c7857c are identical to e191a57b; the native test snapshot is unchanged by this merge.
 
 ## Follow-ups
 

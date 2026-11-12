@@ -194,7 +194,10 @@ docks as a panel under any of the three, or floats in its own window — see
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
     group's hue, shaded per sibling. The disclosure folds the group here and in the Mixer
-    alike; folded groups are saved with the project.
+    alike; folded groups are saved with the project, and a folded group shows how many tracks
+    it holds. In the new look a group is a **tray** of its colour holding its tracks (nested
+    groups are trays inside trays, closing under their last track); in the classic look the
+    rows step in per level as in 0.59 (specs/094).
   - **Return and Master rows stay pinned** under the tracks, each with a level meter, a
     volume fader and its dB value (the Master fader is the same master volume as the
     transport's and the Mixer's). They start Compact and resize like tracks — drag the
