@@ -96,7 +96,7 @@ logic gets `KeyBindingTests` in `tests/Nota.SmokeTest/`.
 - [X] T026 [P] Tooltips (the snap chip's ⌘1–⌘5 line stays static text — follow-up with #60): `KeyTips.Set(control, text, id)` swaps the default glyph for the current key and re-applies on `Changed` in `src/managed/Nota.App/Input/Keys.cs`; use it in `src/managed/Nota.App/MainWindow.MenuKeys.cs` (record, loop record, metronome, maximize, automation) and the snap chip / loop tips
 - [X] T027 [P] Palette hints: current key from `KeyBindings` in `src/managed/Nota.Presentation/PaletteProviders.cs`; refresh the index on `Changed`
 - [X] T028 [P] `CHANGELOG.md` `[Unreleased]` entry and `FEATURES.md` (nota-features skill)
-- [ ] T029 User docs: shortcuts page EN + RU in `../nota-docs` and its `scripts/shortcuts.mjs` reading the new layout (nota-docs skill; separate nota-docs PR)
+- [X] T029 User docs (nota-daw/nota-docs#99): shortcuts page EN + RU in `../nota-docs` and its `scripts/shortcuts.mjs` reading the new layout (nota-docs skill; separate nota-docs PR)
 - [ ] T030 `scripts/build.sh` green; walk quickstart.md in the app (macOS) with `NOTA_DATA_DIR=/tmp/n096data`, screenshots of the editor
 
 ---
