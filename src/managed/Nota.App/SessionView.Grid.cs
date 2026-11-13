@@ -985,7 +985,11 @@ public sealed partial class SessionView
         MenuKit.AddGroups(f.Items,
             new Control[] { MenuKit.Header(c.Name, c.Brush, pos >= 0 ? $"{c.KindLabel} · {pos + 1}" : c.KindLabel) },
             new Control[] { colour },
-            new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)) },
+            new Control[]
+            {
+                MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)),
+                MenuKit.Item(Loc.T("common.show_in_modular"), GlyphKind.Modular, () => ShowInModularRequested?.Invoke(c.TrackId)),   // specs/095
+            },
             new Control[] { AddTrackSubmenu(c.TrackId) },
             new Control[]
             {

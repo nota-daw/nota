@@ -153,7 +153,7 @@ public partial class MainWindow
 
     private void OnMenuKeyKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_menuBarShown || _menuKeyMenu is null) return;
+        if (_menuBarShown || _menuKeyMenu is null || Nota.App.Input.Keys.Capturing) return;
         // The command palette has the keyboard while it is open (as for the transport keys).
         if (PaletteOpen) { _altTapArmed = false; return; }
         if (e.Key is Key.LeftAlt or Key.RightAlt)
@@ -165,7 +165,8 @@ public partial class MainWindow
             return;
         }
         _altTapArmed = false;
-        if (e.Key == Key.F10 && e.KeyModifiers == KeyModifiers.None && !_menuKeyMenu.IsOpen)
+        // Open the menu (F10 by default — a binding since specs/096; the Alt tap stays fixed).
+        if (Nota.App.Input.Keys.Is(e, "view.openMenu") && !_menuKeyMenu.IsOpen)
         {
             OpenMenuKeyMenu(fromKeyboard: true);
             e.Handled = true;

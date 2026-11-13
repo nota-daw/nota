@@ -27,6 +27,9 @@ public enum BrowserItemKind
     /// <summary>A file the Files browse view lists but Nota can't add (spec 092): shown
     /// faded, never dragged, opened or auditioned.</summary>
     OtherFile,
+    /// <summary>A Modular-only node (LFO, Envelope Follower, …; spec 095): the browser's
+    /// Modular tab lists them and only the Modular canvas takes one.</summary>
+    ModularNode,
 }
 
 /// <summary>Active library filter for the device tabs (Instr / FX / MIDI).</summary>
@@ -67,6 +70,8 @@ public sealed class BrowserItem : INotifyPropertyChanged
     /// <summary>Long-form description for the row's tooltip, where <see cref="Sub"/> (the
     /// narrow tag column) has no room for it. Falls back to Sub when empty.</summary>
     public string Tip { get; init; } = "";
+    /// <summary>Extra search words a row matches on but doesn't show (Modular nodes' aliases).</summary>
+    public string Keywords { get; init; } = "";
 
     /// <summary>Section-header row (see <see cref="BrowserItemKind.Group"/>): Name is the
     /// caption and <see cref="GroupCount"/> how many rows it heads.</summary>

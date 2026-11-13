@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -48,12 +49,29 @@ struct AutomationLane {
     // hold before the first / after the last. Caller guarantees points non-empty & sorted.
     float valueAt(double beat) const;
 
-    // Power-curve shaping of a 0..1 fraction. curve 0 -> linear; endpoints exact.
+    // Steepness of curve ±1 (#591). Mirrored by Nota.Application.Editing.AutomationCurve.
+    static constexpr double kCurveSteepness = 8.0;
+
+    // Exponential shaping of a 0..1 fraction (#591): expm1(k·t)/expm1(k), k = −curve·K.
+    // curve 0 -> linear, >0 ease-out, <0 ease-in (mirror images); endpoints exact and the
+    // slope finite at both ends, so no curve jumps. The family is shift-invariant: the part
+    // of a segment over [t0, t1] is the same shape with curve·(t1 − t0) (see subCurve).
     static double shape(double t, float curve) {
-        if (curve == 0.0f) return t;
-        const double e = std::pow(2.0, -curve * 4.0); // >0: <1 (ease-out), <0: >1 (ease-in)
-        return std::pow(t, e);
+        const double k = -static_cast<double>(curve) * kCurveSteepness;
+        if (std::fabs(k) < 1e-6) return t;
+        return std::expm1(k * t) / std::expm1(k);
     }
+
+    // The curve of a piece of a segment spanning `fraction` (0..1) of it, exact for any
+    // piece: a segment cut short or a tail starting part-way keeps its values.
+    static float subCurve(float curve, double fraction) {
+        return static_cast<float>(curve * std::clamp(fraction, 0.0, 1.0));
+    }
+
+    // The curve a piece of `p` starting at `from` needs when it runs to its next point or is
+    // cut at `to`, whichever comes first: the segment's curve scaled to that share of it.
+    // 0 before the first / from the last point on. `p` sorted by beat.
+    static float pieceCurve(const std::vector<AutomationPoint>& p, double from, double to);
 };
 
 // A track's own automation lane (specs/044): it may point at a device grouped into a rack.

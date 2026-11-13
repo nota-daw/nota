@@ -198,11 +198,28 @@ if (args.Length >= 1 && args[0] == "--menu-mirror")
     Console.WriteLine(failures == 0 ? "MENU MIRROR PASSED" : $"MENU MIRROR FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Shortcuts page as JSON for the user manual (nota-docs `npm run shortcuts`, specs/096):
+// `--shortcuts-dump <file> [language.json]` — groups, rows, the default keys in macOS glyphs,
+// editable or fixed; with a language file, its texts (English where it lacks one).
+if (args.Length >= 2 && args[0] == "--shortcuts-dump")
+{
+    if (args.Length >= 3)
+    {
+        var table = Nota.Application.Localization.TranslationTable.Parse(File.ReadAllText(args[2]), out var langError);
+        if (table is null) { Console.Error.WriteLine($"{args[2]}: {langError}"); return 1; }
+        Nota.Application.Localization.Loc.Install(table, table.Code);
+    }
+    File.WriteAllText(args[1], KeyBindingTests.Dump());
+    Console.WriteLine($"wrote {args[1]}");
+    return 0;
+}
 // Shortcut builder alone: `--shortcuts`.
 if (args.Length >= 1 && args[0] == "--shortcuts")
 {
     Console.WriteLine("-- shortcut builder --");
     foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+    Console.WriteLine("-- custom shortcuts --");
+    foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -856,6 +873,14 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine("-- nota vocoder --");
     foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Modular browser tab alone (fast iteration): `--modular-browser`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--modular-browser")
+{
+    Console.WriteLine("-- modular browser tab --");
+    foreach (var (ok, label) in ModularBrowserTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODULAR BROWSER PASSED" : $"MODULAR BROWSER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Arrangement group trays alone (fast iteration): `--group-trays`. Also part of the full run.
@@ -13363,6 +13388,40 @@ Console.WriteLine("-- insert time --");
               "duplicate: automation ramp copied into the gap, the rest holds");
         Check(!e.InsertTime(1.0, 2.0, duplicate: true), "duplicate with a range before 0 is rejected");
     }
+
+    // A curved segment cut by Insert Silence / Duplicate Time keeps its shape on both sides
+    // (#591): before the cut, and after the gap where the tail resumes.
+    foreach (bool dup in new[] { false, true })
+    {
+        using var e = new NotaEngine();
+        int a = e.AddInstrumentTrack();
+        e.AddMidiClip(a, 0.0, 12.0);
+        int lane = e.AddAutomationLane(a, AutomationTarget.Volume, -1, -1);
+        var orig = new[] { new Nota.Application.AutomationPoint(0, 0.0f, -1f), new Nota.Application.AutomationPoint(8, 1.0f, 0f) };
+        e.SetAutomationPoints(a, lane, orig);
+        e.InsertTime(4.0, 2.0, duplicate: dup);
+        var pts = e.GetAutomationPoints(a, lane);
+        static float Read(Nota.Application.AutomationPoint[] p, double beat)
+        {
+            if (beat <= p[0].Beat) return p[0].Value;
+            for (int i = 1; i < p.Length; i++)
+                if (beat < p[i].Beat)
+                {
+                    double span = p[i].Beat - p[i - 1].Beat;
+                    if (span <= 0) return p[i].Value;
+                    return (float)(p[i - 1].Value + (p[i].Value - p[i - 1].Value)
+                        * Nota.Application.Editing.AutomationCurve.Shape((beat - p[i - 1].Beat) / span, p[i - 1].Curve));
+                }
+            return p[^1].Value;
+        }
+        float worst = 0;
+        foreach (double b in new[] { 1.0, 2.5, 3.9, 6.1, 7.0, 8.5, 9.9 })
+        {
+            double was = b < 4 ? b : b - 2;
+            worst = Math.Max(worst, Math.Abs(Read(pts, b) - Read(orig, was)));
+        }
+        Check(worst < 1e-4f, $"{(dup ? "duplicate time" : "insert silence")}: a curved segment keeps its shape on both sides of the gap (off by {worst:0.0000})");
+    }
 }
 
 // ============ track/clip names + colour + track clipboard ==================
@@ -15688,6 +15747,10 @@ foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
 Console.WriteLine("-- arrangement group trays --");
 foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
 
+// --- Modular browser tab (specs/095): catalogue rows, search, per-view tab memory ---
+Console.WriteLine("-- modular browser tab --");
+foreach (var (ok, label) in ModularBrowserTests.Run()) Check(ok, label);
+
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
@@ -15927,6 +15990,10 @@ foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
 // --- shortcut builder: canonical ordering, platform strings, key caps, gestures ---
 Console.WriteLine("-- shortcut builder --");
 foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+
+// --- custom keyboard shortcuts: catalog, conflicts, overrides, reset (specs/096) ---
+Console.WriteLine("-- custom shortcuts --");
+foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

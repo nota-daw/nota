@@ -35,7 +35,7 @@ internal enum GlyphKind
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (24-unit grid, see Paths)
-    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Mixer, Apple, Windows, Linux, ChainLink, Update,
+    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, PatchCable, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Mixer, Apple, Windows, Linux, ChainLink, Update,
     Output, Globe,                 // Settings → Outputs and Language
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
@@ -504,6 +504,8 @@ internal sealed class Glyph : Control
         // A bookmark (a preset).
         [GlyphKind.Preset] = ("M7 4 H17 V20 L12 16 L7 20 Z", null),
         // Two nodes joined by a cable (a modular patch).
+        // Two jacks and the cable sagging between them: the browser's Modular tab (spec 095).
+        [GlyphKind.PatchCable] = ("M2.5 7 A2.5 2.5 0 1 0 7.5 7 A2.5 2.5 0 1 0 2.5 7 Z M16.5 7 A2.5 2.5 0 1 0 21.5 7 A2.5 2.5 0 1 0 16.5 7 Z M5 9.5 C5 21 19 21 19 9.5", null),
         [GlyphKind.Patch] = ("M4 7 A2.501 2.501 0 1 0 9 7 A2.501 2.501 0 1 0 4 7 M15 17 A2.501 2.501 0 1 0 20 17 A2.501 2.501 0 1 0 15 17 M8.5 8.5 L15.5 15.5", null),
         // Two arrows chasing each other (loop).
         [GlyphKind.Loop] = ("M17 3 l3 3 l-3 3 M20 6 H8 a4 4 0 0 0 -4 4 v1.001 M7 21 l-3 -3 l3 -3 M4 18 h12 a4 4 0 0 0 4 -4 v-1.001", null),
