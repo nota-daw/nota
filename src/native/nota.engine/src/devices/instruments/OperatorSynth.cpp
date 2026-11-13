@@ -286,8 +286,10 @@ void OperatorSynth::render(float* out, int32_t frames) {
             bool anyOn = false;
             for (int o = 0; o < 4; ++o) {
                 // Loop-invariant (a block's shapes), so the compiler keeps the straight loop as lean as it was.
-                if (allStraight) advanceStraightEnv(v.env[o], v.stage[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o]);
-                else
+                if (allStraight) {
+                    advanceStraightEnv(v.env[o], v.stage[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o]);
+                    v.shape[o].p = -1.0f; // a bend that comes back starts from the level (EnvShape.h)
+                } else
                     advanceShapedEnv(v.env[o], v.stage[o], v.shape[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o], bend[o]);
                 if (v.stage[o] != Stage::Off) anyOn = true;
                 double pmod = modIn[o];
