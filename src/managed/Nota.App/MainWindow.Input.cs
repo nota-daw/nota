@@ -388,10 +388,11 @@ public partial class MainWindow
         foreach (var a in Keys.Bindings.Actions)
         {
             if (!a.IsCommand || !(a.Scope.IsWindowLayer() || a.Scope == focus)) continue;
-            // The shared editing actions (copy, cut, paste, delete, duplicate, select all, cancel)
-            // are always handled by the window and the focused views above, which know what is
-            // selected: their menu handlers would act on an editor that no longer has focus.
-            if (KeyActionCatalog.Shared.Contains(a.Id)) continue;
+            // Copy, cut, paste and delete are always handled by the window and the focused views
+            // above, which know what is selected; their menu handlers act on the clip editor even
+            // when it no longer has focus. (Duplicate and Select all go to theirs: those route by
+            // focus — Session, the piano-roll grid, track headers, the arrangement.)
+            if (a.NoMenuKey) continue;
             if (!Keys.Bindings.Matches(a.Id, chord) || _commands.Get(a.Id) is not { IsBound: true }) continue;
             if (_heldKeys.Contains(e.Key)) return true;   // one run per press, not per auto-repeat
             _heldKeys.Add(e.Key);
