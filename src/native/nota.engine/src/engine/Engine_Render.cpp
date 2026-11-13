@@ -185,8 +185,8 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
 inline void deliverArt(Instrument& inst, const ArtEv& e) {
     inst.eventChannel = e.channel;
     switch (e.kind) {
-    case ArtEvKind::KeyOn: inst.noteOn(e.data1, static_cast<float>(std::max<int>(1, e.data2)) / 127.0f); break;
-    case ArtEvKind::KeyOff: inst.noteOff(e.data1); break;
+    case ArtEvKind::KeyOn: inst.keyswitchOn(e.data1, static_cast<float>(std::max<int>(1, e.data2)) / 127.0f); break;
+    case ArtEvKind::KeyOff: inst.keyswitchOff(e.data1); break;
     case ArtEvKind::Control: inst.controller(e.data1, static_cast<float>(e.data2) / 127.0f); break;
     case ArtEvKind::Program: inst.programChange(e.data1); break;
     }
@@ -866,7 +866,15 @@ void Engine::commitCtlRun(MidiClip& clip, int32_t ctl, double slotLen, bool fina
     if (!f.hasCommitted && f.before && !f.before->points.empty() &&
         f.before->points.front().beat < loL - kCtlJunction) {
         const double j = loL - kCtlJunction;
-        if (!kept.empty() && f.before->valueAt(j) != kept.front().value) out.push_back({j, f.before->valueAt(j), 0.0f});
+        const bool junction = !kept.empty() && f.before->valueAt(j) != kept.front().value;
+        // The last point before the range now ends its segment early: shorten its curve so the
+        // stretch before the range keeps its values (#591).
+        for (auto it = out.rbegin(); it != out.rend(); ++it)
+            if (it->beat < loL - 1e-9) {
+                it->curve = ctlPieceCurve(f.before->points, it->beat, junction ? j : loL);
+                break;
+            }
+        if (junction) out.push_back({j, f.before->valueAt(j), 0.0f});
     }
     for (const auto& p : kept) {
         out.push_back({local(p.beat), p.value, 0.0f});
@@ -929,7 +937,11 @@ void Engine::closeCtlRange(MidiClip& clip, int32_t ctl, double atLocal, double s
         // Hold the range's last value up to the junction, then hand back to the old curve.
         if (!ctlIsSwitch(ctl) && atLocal - kCtlJunction > lastL + 1e-9 && old != f.committed.value)
             out.push_back({atLocal - kCtlJunction, f.committed.value, 0.0f});
-        out.push_back({atLocal, old, 0.0f});
+        // ...and from there on the old curve plays its own shape (#591).
+        const float tail = f.before && !ctlIsSwitch(ctl)
+                               ? ctlPieceCurve(f.before->points, atLocal, std::numeric_limits<double>::infinity())
+                               : 0.0f;
+        out.push_back({atLocal, old, tail});
     }
     clip.setController(ctl, std::move(out));
     f.before.reset();
@@ -4123,6 +4135,36 @@ int32_t Engine::articulationSelfTest() {
         if (target->sessionPlayer->articulationReleases.count != 0 ||
             std::count(capture->events.begin(), capture->events.end(), E5{1, 24, 100, 357, 0}) != 1 ||
             std::any_of(capture->events.begin(), capture->events.end(), [](const E5& e) { return e[0] == 0 && e[1] == 24; })) return 38;
+    }
+    // 39: a rack hands a keyswitch to its plug-in chains even behind a chain MIDI effect, on its
+    // channel and ahead of the note; a built-in chain gets none.
+    {
+        auto rack = std::make_shared<RackInstrument>();
+        rack->setSampleRate(sr);
+        auto plug = std::make_shared<Probe>();
+        plug->articulations = true;
+        auto builtin = std::make_shared<Probe>();
+        const int32_t pc = rack->addChainInstrument(plug);
+        rack->addChainInstrument(builtin);
+        if (rack->addChainMidiDevice(pc, 4) < 0) return 39; // Velocity: a pass-through MIDI effect
+        if (!rack->takesBlockMidi() || !rack->takesArticulations()) return 39;
+        const MidiEv on[] = {{100, true, 60, 0.5f}};
+        const ArtEv ks[] = {{100, 0, ArtEvKind::KeyOn, 2, 24, 100}};
+        playEvents(*rack, dst, B, on, 1, nullptr, 0, ks, 1, 0.0, spb, true, [] {});
+        const auto plugOn = [&](int32_t pitch) {
+            return std::find_if(plug->events.begin(), plug->events.end(),
+                [&](const E5& e) { return e[0] == 1 && e[1] == pitch; }) - plug->events.begin();
+        };
+        const auto ksAt = plugOn(24), noteAt = plugOn(60);
+        if (ksAt >= (std::ptrdiff_t)plug->events.size() || plug->events[ksAt][4] != 2) return 39;
+        if (noteAt >= (std::ptrdiff_t)plug->events.size() || noteAt < ksAt) return 39;
+        if (std::any_of(builtin->events.begin(), builtin->events.end(), [](const E5& e) { return e[1] == 24; })) return 39;
+        if (plug->eventChannel != 0) return 39;
+        // The keyswitch's release reaches the plug-in too, and the note it selected plays on.
+        const ArtEv ksOff[] = {{10, 0, ArtEvKind::KeyOff, 2, 24, 0}};
+        plug->events.clear();
+        playEvents(*rack, dst, B, nullptr, 0, nullptr, 0, ksOff, 1, 0.0, spb, true, [] {});
+        if (plug->events != std::vector<E5>{{0, 24, 0, 0, 2}}) return 39;
     }
     return 0;
 }

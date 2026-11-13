@@ -1350,27 +1350,17 @@ float curveThrough(const AutomationLane& lane, double t) {
     return c;
 }
 
-// Append the lane from `t` up to (not including) its next point, shifted by `shift`, stopping
-// before `limit`. Cut at its end a power curve keeps its shape with the same curve (t^e
-// scales), but cut at its start it is no power curve any more: that partial segment is laid
-// as short straight pieces, well under 0.1 % off.
+// Append the lane from `t` up to (not including) its next point, shifted by `shift`: one point
+// carrying the rest of the segment through `t`, its curve scaled to end at the next point or at
+// `limit`, whichever comes first — exact, as the segment shape is shift-invariant (#591).
 void appendLaneFrom(std::vector<AutomationPoint>& out, const AutomationLane& lane, double t, double limit, double shift) {
-    constexpr double eps = 1e-9;
-    constexpr int pieces = 32;
-    const auto& p = lane.points;
-    const auto next = std::find_if(p.begin(), p.end(), [&](const AutomationPoint& q) { return q.beat > t + eps; });
-    const bool before = next != p.begin(), onPoint = before && std::abs(std::prev(next)->beat - t) < eps;
-    const float k = before ? std::prev(next)->curve : 0.0f;
-    if (k == 0.0f || onPoint || next == p.end()) {
-        out.push_back({t + shift, lane.valueAt(t), onPoint ? k : 0.0f});
-        return;
-    }
-    out.push_back({t + shift, lane.valueAt(t), 0.0f});
-    for (int i = 1; i < pieces; ++i) {
-        const double b = t + (next->beat - t) * i / pieces;
-        if (b >= limit - eps) break;
-        out.push_back({b + shift, lane.valueAt(b), 0.0f});
-    }
+    out.push_back({t + shift, lane.valueAt(t), AutomationLane::pieceCurve(lane.points, t, limit)});
+}
+
+// The last point of `out` (an original point of `src` at its own beat) now ends its segment at
+// `end`: shorten its curve so the stretch before `end` keeps its values (#591).
+void endSegmentAt(std::vector<AutomationPoint>& out, const std::vector<AutomationPoint>& src, double end) {
+    if (!out.empty()) out.back().curve = AutomationLane::pieceCurve(src, out.back().beat, end);
 }
 
 // The lane over [a,b] re-based so `a` is 0, playing as it did: the value at each edge plus
@@ -1383,7 +1373,7 @@ std::vector<AutomationPoint> laneSliceExact(const AutomationLane& lane, double a
     for (const auto& q : lane.points)
         if (q.beat > a + eps && q.beat < b - eps) {
             if (!out.empty() && q.beat - a <= out.back().beat + eps) continue;
-            out.push_back({q.beat - a, q.value, q.curve});
+            out.push_back({q.beat - a, q.value, AutomationLane::pieceCurve(lane.points, q.beat, b)});
         }
     out.push_back({b - a, lane.valueAt(b), 0.0f});
     return out;
@@ -2112,8 +2102,8 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
 
 // --- insert time (Insert Silence ⌘⇧I / Duplicate Time ⌘⇧D) ----------------------
 namespace {
-// The lane's curve over [a,b] re-based so `a` is 0 (laneSliceExact: the value at each edge,
-// every point strictly inside, a curved segment cut at its start laid as short straight pieces).
+// The lane's curve over [a,b] re-based so `a` is 0 (laneSliceExact: the value at each edge and
+// every point strictly inside, a curved segment cut at either end keeping its shape).
 std::vector<AutomationPoint> laneSlice(const AutomationLane& lane, double a, double b) {
     return laneSliceExact(lane, a, b);
 }
@@ -2132,15 +2122,20 @@ bool laneInsertGap(AutomationLane& lane, double at, double len, const std::vecto
     std::vector<AutomationPoint> out;
     out.reserve(p.size() + (fill ? fill->size() + 1 : 2));
     out.insert(out.end(), p.begin(), mid);
+    if (before) endSegmentAt(out, p, at);
+    // After the gap the lane resumes the segment that ran through `at`, its curve scaled to
+    // what is left of it, so the tail keeps its shape (#591).
+    const float tail = AutomationLane::pieceCurve(p, at, std::numeric_limits<double>::infinity());
     if (fill) {
         out.push_back({at, v, 0.0f}); // a step from the left side into the copy
         for (auto q : *fill) {
             q.beat += at;
             out.push_back(q);
         }
+        if (!fill->empty()) out.back().curve = tail;
     } else if (before) {
         out.push_back({at, v, 0.0f});
-        out.push_back({at + len, v, 0.0f});
+        out.push_back({at + len, v, tail});
     }
     for (auto it = mid; it != p.end(); ++it) {
         auto q = *it;
@@ -2345,6 +2340,7 @@ bool laneRemap(AutomationLane& lane, double lo, double hi, const std::vector<Tim
     out.reserve(p.size() + 2 * rs.size() + 2);
     for (const auto& q : p)
         if (q.beat < lo - eps) out.push_back(q);
+    endSegmentAt(out, p, lo);
     out.push_back({lo, lane.valueAt(lo), 0.0f}); // the left side ends (or holds) as it did
 
     std::vector<const TimeRegion*> order;
@@ -2390,6 +2386,7 @@ bool laneDuplicate(AutomationLane& lane, double a, double b) {
     out.reserve(p.size() * 2 + 4);
     for (const auto& q : p)
         if (q.beat < b - eps) out.push_back(q);
+    endSegmentAt(out, p, b);
     out.push_back({b, lane.valueAt(b), 0.0f}); // the left side ends as it did
     for (auto q : laneSliceExact(lane, a, b)) {
         q.beat += b;
@@ -2646,11 +2643,13 @@ AutomationLane stitchEnvelopes(const std::vector<EnvSpan>& spans, double start, 
             add(a, 1.0f);
         }
         const bool has = s.lane && !s.lane->points.empty();
-        add(a, has ? s.lane->valueAt(a - s.clipStart) : 1.0f);
+        // Each piece keeps its curve scaled to the part of its segment inside the span (#591).
+        const double la = a - s.clipStart, lb = b - s.clipStart;
+        add(a, has ? s.lane->valueAt(la) : 1.0f, has ? AutomationLane::pieceCurve(s.lane->points, la, lb) : 0.0f);
         if (has)
             for (const auto& p : s.lane->points) {
                 const double x = s.clipStart + p.beat;
-                if (x > a && x < b) add(x, p.value, p.curve);
+                if (x > a && x < b) add(x, p.value, AutomationLane::pieceCurve(s.lane->points, p.beat, lb));
             }
         add(b, has ? s.lane->valueAt(b - s.clipStart) : 1.0f);
         cursor = b;

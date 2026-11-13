@@ -1245,9 +1245,10 @@ public partial class MainWindow
         _detailRow.Height = on ? new GridLength(1, GridUnitType.Star) : new GridLength(_detailWanted > 120 ? _detailWanted : _detailDefault);
         DetailSplitter.IsVisible = !on;
         DetailMaximizeGlyph.Kind = on ? GlyphKind.Shrink : GlyphKind.Expand;
-        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the")));
+        Nota.App.Input.Keys.SetTip(DetailMaximizeBtn, on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the"), "view.maximizeDetail");
         if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
         LayoutBottomPanels();
+        SyncMixerToggle();   // a docked Mixer folds away while the editor fills the window
     }
 
     // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):

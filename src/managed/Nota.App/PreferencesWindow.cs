@@ -90,7 +90,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             new Page("Language", Loc.T("preferences.language"), Loc.T("preferences.language_subtitle"), GlyphKind.Globe),
             new Page("Editing", Loc.T("preferences.editing"), Loc.T("preferences.editing_subtitle"), GlyphKind.Edit),
             new Page("Library", Loc.T("preferences.library"), Loc.T("preferences.content_folders_and_version_history"), GlyphKind.Library),
-            new Page("Shortcuts", Loc.T("preferences.shortcuts"), Loc.T("preferences.keyboard_reference"), GlyphKind.Shortcuts),
+            new Page("Shortcuts", Loc.T("preferences.shortcuts"), Loc.T("preferences.shortcuts_subtitle"), GlyphKind.Shortcuts),
             new Page("Updates", Loc.T("preferences.updates"), Loc.T("preferences.new_versions_of_nota"), GlyphKind.Update),
         }),
     };
@@ -260,6 +260,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private void Select(int index)
     {
+        EndShortcutEdit();   // a row recording a key must not keep taking keys on another page
         StopTests();   // the audio panes are rebuilt on every visit — don't leave a tone / check orphaned
         // Apply() refreshes latency and the input list only while their page is the one shown.
         _latencyValue = _latencyDetail = null;
@@ -1453,6 +1454,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             buttons.Add((p, btn));
             strip.Children.Add(btn);
         }
+        // The scale can also change from the transport bar's ⋯ menu (#520) while Settings is open.
+        void Follow()
+        {
+            int now = InterfaceScale.Normalize(settings.Current.InterfaceScale);
+            foreach (var (bp, bb) in buttons) bb.IsChecked = bp == now;
+        }
+        strip.AttachedToVisualTree += (_, _) => NotaUiScale.Changed += Follow;
+        strip.DetachedFromVisualTree += (_, _) => NotaUiScale.Changed -= Follow;
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
@@ -1513,318 +1522,6 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     // ---- Shortcuts --------------------------------------------------------
 
-    // NB: this list mirrors the real key handlers — keep the two in sync (see the
-    // `nota-shortcuts` skill). Bindings live in MainWindow.Input.cs (transport, global
-    // editing, computer-keyboard notes), PianoRollView.cs (note editing) and PreviewPlayer.cs
-    // (the Files tab's sample player). Written with the macOS glyphs; MenuKit.Keys spells them
-    // Ctrl / Alt / Shift on Windows and Linux. A Key made only of
-    // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
-    // Windows / Linux: Alt (pressed and released alone) or F10 opens the menu — the Menu key's
-    // while the menu row is hidden (#518). macOS has its menu in the system bar, so Render leaves
-    // the row out there. (A plain row in the list, so the docs' shortcuts generator reads it.)
-    private const string MenuKeysRow = "⌥   F10";
-
-    private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
-    {
-        (Loc.T("common.file"), new[]
-        {
-            ("⌘N   ⌘O", Loc.T("preferences.new_project_open_a_project")),
-            ("⌘S   ⌘⇧S", Loc.T("preferences.save_records_a_version_save")),
-            ("⌥⌘S", Loc.T("preferences.save_a_version_with_a")),
-            ("⌘⇧E", Loc.T("preferences.export_audio")),
-            ("⌘,", Loc.T("common.settings")),
-            ("⌘Q", Loc.T("preferences.quit_nota_asks_about_unsaved")),
-        }),
-        (Loc.T("preferences.window"), new[]
-        {
-            ("⌥   F10", Loc.T("preferences.open_the_menu")),   // = MenuKeysRow
-            ("F11", Loc.T("preferences.enter_leave_full_screen_the")),
-            ("⌘⇧F", Loc.T("preferences.the_clip_editor_fills_the")),
-            (Loc.T("preferences.double_click_a_panel_edge"), Loc.T("preferences.reset_the_detail_panel_the")),
-        }),
-        (Loc.T("preferences.command_palette"), new[]
-        {
-            ("⌘⇧P", Loc.T("preferences.open_close_the_command_palette")),
-            ("↑ ↓   PgUp PgDn", Loc.T("preferences.move_through_the_results")),
-            ("Return", Loc.T("preferences.apply_where_the_palette_was")),
-            ("⌘Return", Loc.T("preferences.an_instrument_or_instrument_preset")),
-            ("⌥Return", Loc.T("preferences.replace_the_selected_device_instead")),
-            ("⇧Return", Loc.T("preferences.apply_and_keep_the_palette")),
-            ("Tab   ⇧Tab", Loc.T("preferences.filter_all_actions_tracks_devices")),
-            ("> @ + # ~", Loc.T("preferences.type_first_to_filter_actions")),
-            ("Esc", Loc.T("preferences.close_and_go_back_where")),
-        }),
-        (Loc.T("common.transport"), new[]
-        {
-            ("Space", Loc.T("preferences.play_stop_stop_goes_back")),
-            ("⇧Space", Loc.T("preferences.play_pause_the_playhead_stays")),
-            ("Return", Loc.T("preferences.stop_again_back_to_the")),
-            ("⌘R", Loc.T("common.record")),
-            ("⌘.", Loc.T("preferences.discard_the_take_and_record")),
-            ("⌘M", Loc.T("common.metronome")),
-            ("⌘L", Loc.T("preferences.loop_on_off_loop_the")),
-            (Loc.T("preferences.double_click_loop_brace"), Loc.T("preferences.loop_on_off_in_the")),
-            (Loc.T("preferences.drag_loop_edge_drag_loop"), Loc.T("preferences.resize_that_end_of_the")),
-            (Loc.T("preferences.right_click_ruler"), Loc.T("preferences.loop_on_off_loop_the_2")),
-            ("P", Loc.T("preferences.show_playhead_scroll_the_arrangement")),
-            ("⌘⇧R", Loc.T("preferences.loop_recording_overdub_every_pass")),
-            (Loc.T("preferences.click_the_position_read_out"), Loc.T("preferences.switch_it_between_bars_and")),
-        }),
-        (Loc.T("preferences.arrangement_editing"), new[]
-        {
-            ("⌘Z   ⌘⇧Z", Loc.T("preferences.undo_redo")),
-            ("⌘A", Loc.T("preferences.select_all_clips")),
-            ("⌘⇧A", Loc.T("preferences.toggle_automation_mode")),
-            ("⌘⇧M", Loc.T("preferences.toggle_the_mixer_view")),
-            ("Tab", Loc.T("preferences.cycle_devices_pattern_clip_in")),
-            ("Esc", Loc.T("preferences.cancel_the_current_gesture_clear")),
-            ("⌘G   ⌘⇧G", Loc.T("preferences.group_ungroup_selected_tracks_on")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_clips_a")),
-            ("⌘⇧C", Loc.T("preferences.copy_the_selected_clips_to")),
-            ("⌘⇧V", Loc.T("preferences.paste_the_last_range_as")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_clip_s")),
-            ("⌘⇧D", Loc.T("preferences.duplicate_time_insert_a_copy")),
-            ("⌘⇧I", Loc.T("preferences.insert_silence_push_everything_from")),
-            ("⌘E", Loc.T("preferences.split_at_the_playhead_at")),
-            ("⌘J", Loc.T("preferences.consolidate_the_selection_into_one")),
-            ("0", Loc.T("preferences.deactivate_activate_the_selected_clip")),
-            ("←   →", Loc.T("preferences.nudge_the_selected_clips_by_2")),
-            ("⌥←   ⌥→", Loc.T("preferences.nudge_the_selected_clips_by")),
-            ("⌥↑   ⌥↓", Loc.T("preferences.move_the_selected_clips_to")),
-            (Loc.T("preferences.drag_below_the_last_track"), Loc.T("preferences.move_the_clips_to_a")),
-            ("Delete", Loc.T("preferences.delete_the_selected_clip_range")),
-        }),
-        (Loc.T("preferences.grid_arrangement_or_clip_editor"), new[]
-        {
-            ("⌘1   ⌘2", Loc.T("preferences.narrow_widen_the_grid_in")),
-            ("⌘3", Loc.T("preferences.triplet_grid_on_off")),
-            ("⌘4", Loc.T("preferences.snap_to_grid_on_off")),
-            ("⌘5", Loc.T("preferences.switch_between_the_adaptive_auto")),
-            (Loc.T("preferences.alt_while_dragging"), Loc.T("preferences.move_freely_ignoring_the_grid")),
-            (Loc.T("preferences.audio_clip_editor_on_adsr"), Loc.T("preferences.cmd_1_5_act_on_the_arrangement")),
-        }),
-        (Loc.T("preferences.tracks_after_a_click_in"), new[]
-        {
-            ("⌘A", Loc.T("preferences.select_all_tracks")),
-            ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_tracks")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected_2")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_tracks")),
-            ("Delete", Loc.T("preferences.delete_the_selected_tracks_a")),
-        }),
-        (Loc.T("preferences.devices_after_a_click_on"), new[]
-        {
-            ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_devices")),
-            ("Esc", Loc.T("preferences.clear_the_device_selection_so")),
-            ("Esc", Loc.T("preferences.in_the_xl_panel_return")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_devices_each")),
-            ("⌘G", Loc.T("preferences.group_the_selected_devices_into")),
-            ("⌘⇧G", Loc.T("preferences.take_the_devices_out_of")),
-            ("Delete", Loc.T("preferences.delete_the_selected_devices_with")),
-            (Loc.T("preferences.drag_a_selected_devices_header"), Loc.T("preferences.move_the_selected_devices_of")),
-            (Loc.T("preferences.drag_a_device_onto_a"), Loc.T("preferences.move_it_there_out_of")),
-            (Loc.T("preferences.drag_a_device_onto_a_2"), Loc.T("preferences.copy_it_there")),
-        }),
-        (Loc.T("preferences.browser_files_after_a_click"), new[]
-        {
-            ("⌘[   ⌘]", Loc.T("preferences.back_forward_in_the_browse")),
-            ("⌘↑", Loc.T("preferences.up_to_the_parent_folder")),
-            ("⌘L", Loc.T("preferences.type_or_paste_a_path")),
-            ("Return", Loc.T("preferences.open_the_selected_folder_browse")),
-        }),
-        (Loc.T("preferences.racks"), new[]
-        {
-            ("Esc", Loc.T("preferences.end_macro_mapping_map_on")),
-            (Loc.T("preferences.drag_a_zone_edge"), Loc.T("preferences.set_a_chains_key_velocity")),
-            (Loc.T("preferences.hover_the_zones"), Loc.T("preferences.see_which_chains_a_note")),
-            (Loc.T("preferences.double_click_a_chain_or"), Loc.T("preferences.rename_it")),
-            (Loc.T("preferences.right_click_a_macro"), Loc.T("preferences.map_it_to_a_parameter")),
-            (Loc.T("preferences.drag_a_devices_header"), Loc.T("preferences.move_it_within_its_chain")),
-            (Loc.T("preferences.click_a_device"), Loc.T("preferences.select_it_for_c_x")),
-        }),
-        (Loc.T("preferences.modular_after_a_click_on"), new[]
-        {
-            ("F", Loc.T("preferences.fit_every_node_on_screen")),
-            ("B", Loc.T("preferences.bypass_the_selected_device")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_device_with")),
-            ("Delete", Loc.T("preferences.delete_the_selected_device_modulator")),
-            ("Esc", Loc.T("preferences.show_fewer_parameters_on_every")),
-        }),
-        (Loc.T("preferences.session_after_a_click_in"), new[]
-        {
-            ("← → ↑ ↓", Loc.T("preferences.move_the_selection_between_slots")),
-            ("Return", Loc.T("preferences.launch_the_selected_clip_or")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_a_clip")),
-            ("⌘⇧C", Loc.T("preferences.copy_the_selected_clip_group")),
-            ("⌘D", Loc.T("preferences.duplicate_a_clip_into_the")),
-            ("⌘I", Loc.T("preferences.insert_a_scene_below_the")),
-            ("F2", Loc.T("preferences.rename_the_selected_clip_or")),
-            ("Delete", Loc.T("preferences.delete_the_selected_clip_or")),
-            (Loc.T("preferences.drag_clip"), Loc.T("preferences.move_it_to_another_slot")),
-            (Loc.T("preferences.drag_scene"), Loc.T("preferences.reorder_scenes")),
-            (Loc.T("preferences.double_click_slot"), Loc.T("preferences.edit_the_clip_an_empty")),
-            (Loc.T("preferences.double_click_header"), Loc.T("preferences.rename_the_track")),
-            (Loc.T("preferences.right_click_header_or_grid"), Loc.T("preferences.add_an_instrument_audio_or")),
-        }),
-        (Loc.T("common.piano_roll"), new[]
-        {
-            ("← →", Loc.T("preferences.move_notes_by_the_grid")),
-            ("↑ ↓", Loc.T("preferences.transpose_by_a_semitone")),
-            ("⇧↑  ⇧↓", Loc.T("preferences.transpose_by_an_octave")),
-            ("⇧←  ⇧→", Loc.T("preferences.shorten_lengthen_the_notes_by")),
-            ("⌥↑  ⌥↓", Loc.T("preferences.velocity_10_10_by_1")),
-            (Loc.T("preferences.wheel_over_a_note"), Loc.T("preferences.change_its_velocity_the_whole")),
-            ("⌘A", Loc.T("preferences.select_all_notes")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selection_replaces_the")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_notes_paste")),
-            ("Esc", Loc.T("preferences.deselect_moved_or_pasted_notes")),
-            ("Delete", Loc.T("preferences.delete_the_selected_notes")),
-            (Loc.T("preferences.double_click_empty_grid"), Loc.T("preferences.add_a_note_with_the")),
-            (Loc.T("preferences.double_click_and_hold_drag"), Loc.T("preferences.shape_the_new_note_move")),
-            (Loc.T("preferences.drag_note_edge"), Loc.T("preferences.change_the_notes_start_or")),
-            (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag_2")),
-            (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead_on_the")),
-            (Loc.T("preferences.drag_velocity_stem"), Loc.T("preferences.set_velocity_selected_notes_move")),
-            (Loc.T("preferences.double_click_velocity_stem"), Loc.T("preferences.put_the_note_back_to")),
-            (Loc.T("preferences.right_click_velocity_stem"), Loc.T("preferences.reset_velocity_from_a_menu")),
-            (Loc.T("preferences.drag_in_the_bend_pres"), Loc.T("preferences.draw_the_selected_notes_mpe")),
-            (Loc.T("preferences.double_click_in_an_mpe"), Loc.T("preferences.add_a_point_on_a")),
-            (Loc.T("preferences.click_the_bend_lanes_range"), Loc.T("preferences.pick_how_far_the_bend")),
-            (Loc.T("preferences.click_the_controller_tab"), Loc.T("preferences.show_primary_controller_lane")),
-            (Loc.T("preferences.click_lane_controller_dropdown"), Loc.T("preferences.choose_lane_controller")),
-            (Loc.T("preferences.controller_lane_buttons"), Loc.T("preferences.manage_controller_lanes")),
-            (Loc.T("preferences.drag_in_the_sustain_lane"), Loc.T("preferences.draw_a_pedal_block_on")),
-            (Loc.T("preferences.drag_in_a_controller_lane"), Loc.T("preferences.draw_the_controllers_curve_draws")),
-            (Loc.T("preferences.drag_lane_divider"), Loc.T("preferences.resize_lane_remember_height")),
-            (Loc.T("preferences.click_a_clip_in_the"), Loc.T("preferences.make_it_the_active_clip")),
-            (Loc.T("preferences.cmd_alt_wheel"), Loc.T("preferences.zoom_rows_vertical_zoom")),
-            (Loc.T("preferences.click_a_key"), Loc.T("preferences.play_it_on_the_tracks")),
-            (Loc.T("preferences.drag_on_the_keys"), Loc.T("preferences.zoom_rows_down_taller_up")),
-            ("⌥ + pinch", Loc.T("preferences.zoom_rows_trackpad")),
-            ("⇧F", Loc.T("preferences.fit_to_notes")),
-            ("⌥⇧F", Loc.T("preferences.fold_only_the_scales_notes")),
-        }),
-        (Loc.T("preferences.audio_clip_editor"), new[]
-        {
-            (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag")),
-            (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead")),
-            (Loc.T("preferences.double_click_the_wave"), Loc.T("preferences.add_a_warp_marker_on")),
-            (Loc.T("preferences.drag_a_warp_marker"), Loc.T("preferences.align_the_audio_to_the")),
-            ("Esc", Loc.T("preferences.while_dragging_a_warp_marker")),
-            (Loc.T("preferences.drag_double_click_tempo"), Loc.T("preferences.set_the_tempo_the_clip")),
-        }),
-        (Loc.T("preferences.play_notes_computer_keyboard"), new[]
-        {
-            ("A S D F G H J K", Loc.T("preferences.white_keys_from_c4")),
-            ("W E · T Y U", Loc.T("preferences.black_keys_sharps")),
-            ("Z / X", Loc.T("preferences.shift_octave_down_up")),
-            ("C / V", Loc.T("preferences.lower_raise_velocity")),
-        }),
-        (Loc.T("preferences.browser_preview"), new[]
-        {
-            ("↑ ↓", Loc.T("preferences.move_through_samples_presets_and")),
-            (Loc.T("preferences.click_play_button"), Loc.T("preferences.play_stop_the_selected_sample")),
-            (Loc.T("preferences.click_waveform"), Loc.T("preferences.play_from_that_point")),
-            (Loc.T("preferences.click_wave_spec"), Loc.T("preferences.switch_the_well_between_the")),
-            (Loc.T("preferences.scroll_on_the_track_button"), Loc.T("preferences.step_through_the_demo_tracks")),
-            (Loc.T("preferences.alt_click_volume"), Loc.T("preferences.type_the_preview_volume_double")),
-        }),
-        (Loc.T("preferences.gamepad_macos"), new[]
-        {
-            (Loc.T("preferences.face_buttons"), Loc.T("preferences.play_c4_d4_e4_f4")),
-            (Loc.T("preferences.shoulder_buttons"), Loc.T("preferences.play_g4_a4_b4_c5")),
-            ("D-pad ↑ / ↓", Loc.T("preferences.shift_the_gamepad_octave")),
-            ("D-pad ← / →", Loc.T("preferences.lower_raise_velocity")),
-            (Loc.T("preferences.any_button"), Loc.T("preferences.mappable_through_midi_learn_a")),
-            (Loc.T("preferences.sticks_triggers"), Loc.T("preferences.mappable_as_continuous_controls_a")),
-        }),
-        (Loc.T("preferences.mouse"), new[]
-        {
-            (Loc.T("preferences.double_click_clip"), Loc.T("preferences.open_in_the_clip_editor")),
-            (Loc.T("preferences.double_click_a_track_header"), Loc.T("preferences.open_its_devices_in_the")),
-            (Loc.T("preferences.double_click_a_browser_instrument"), Loc.T("preferences.swap_it_onto_the_selected")),
-            (Loc.T("preferences.alt_double_click_a_browser"), Loc.T("preferences.always_start_a_new_track")),
-            (Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_play_record")),
-            (Loc.T("preferences.drag_an_audio_clips_adsr"), Loc.T("preferences.shape_attack_decay_sustain_release")),
-            (Loc.T("preferences.click_track_header"), Loc.T("preferences.add_the_track_to_the")),
-            (Loc.T("preferences.click_a_groups_link_key"), Loc.T("preferences.link_the_groups_tracks_arming")),
-            (Loc.T("preferences.click_a_clip_or_arm"), Loc.T("preferences.in_a_linked_group_select")),
-            (Loc.T("preferences.right_click_track_headers"), Loc.T("preferences.a_multi_selection_gets_its")),
-            (Loc.T("preferences.drag_a_tracks_bottom_edge"), Loc.T("preferences.resize_the_track_header_or")),
-            (Loc.T("preferences.drag_a_tracks_bottom_edge_2"), Loc.T("preferences.resize_every_track_at_once")),
-            (Loc.T("preferences.double_click_a_tracks_bottom"), Loc.T("preferences.back_to_the_standard_height")),
-            (Loc.T("preferences.drag_a_returns_or_the"), Loc.T("preferences.resize_that_row_header_or")),
-            ("⌘-click / ⇧-click return headers", Loc.T("preferences.select_several_returns_they_resize")),
-            (Loc.T("preferences.click_a_height_key_in"), Loc.T("preferences.set_every_track_to_compact")),
-            (Loc.T("preferences.drag_the_track_list_edge"), Loc.T("preferences.widen_or_narrow_the_track")),
-            (Loc.T("preferences.drag_sections_lane"), Loc.T("preferences.mark_a_new_section_over")),
-            (Loc.T("preferences.click_section"), Loc.T("preferences.jump_the_playhead_to_its")),
-            (Loc.T("preferences.double_click_section"), Loc.T("preferences.rename_it_right_click_reset")),
-            (Loc.T("preferences.return_esc_renaming_a_section"), Loc.T("preferences.keep_the_name_empty_automatic")),
-            (Loc.T("preferences.drag_section"), Loc.T("preferences.rearrange_the_song_it_and")),
-            (Loc.T("preferences.drag_section_2"), Loc.T("preferences.move_only_the_section_marker")),
-            (Loc.T("preferences.drag_section_edge"), Loc.T("preferences.resize_it_snapped_to_bars")),
-            (Loc.T("preferences.right_click_section"), Loc.T("preferences.move_earlier_later_duplicate_or")),
-            (Loc.T("preferences.drag_overview_strip"), Loc.T("preferences.drag_sideways_to_scroll_up")),
-            (Loc.T("preferences.drag_overview_edge"), Loc.T("preferences.zoom_by_resizing_the_viewport")),
-            (Loc.T("preferences.double_click_overview"), Loc.T("preferences.fit_the_whole_project_on")),
-            (Loc.T("preferences.drag_a_device_header"), Loc.T("preferences.reorder_devices_or_right_click")),
-            (Loc.T("preferences.right_click_a_device_header"), Loc.T("preferences.a_b_compare_move_copy")),
-            (Loc.T("preferences.delete_device_selected"), Loc.T("preferences.remove_the_selected_device_the")),
-            (Loc.T("preferences.drag_an_audio_clip_onto"), Loc.T("preferences.load_its_audio_into_the")),
-            (Loc.T("preferences.drag_an_audio_clip_out"), Loc.T("preferences.take_it_as_a_sample")),
-            (Loc.T("preferences.drag_clip_2"), Loc.T("preferences.position_freely_ignoring_the_grid")),
-            (Loc.T("preferences.wheel_over_the_device_chain"), Loc.T("preferences.scroll_it_sideways_over_an")),
-            (Loc.T("preferences.drag_knob"), Loc.T("preferences.change_a_device_value_hold")),
-            (Loc.T("preferences.drag_slider"), Loc.T("preferences.left_right_or_up_down")),
-            (Loc.T("preferences.click_a_knob_fader_or"), Loc.T("preferences.type_a_value_units_like")),
-            (Loc.T("preferences.return_esc_tab_tab_typing"), Loc.T("preferences.set_it_cancel_set_it")),
-            (Loc.T("preferences.click_a_graph_handle_envelope"), Loc.T("preferences.type_its_values_a_node")),
-            (Loc.T("preferences.double_click_a_knob_fader"), Loc.T("preferences.reset_the_value_to_its")),
-            (Loc.T("preferences.double_click_a_mod_matrix"), Loc.T("preferences.clear_the_route_volt_aurora")),
-            (Loc.T("preferences.right_click_a_knob_fader"), Loc.T("preferences.type_value_reset_to_default")),
-            (Loc.T("preferences.drag_jack_jack"), Loc.T("preferences.patch_a_cable_in_nota")),
-            (Loc.T("preferences.click_a_rhythm_step"), Loc.T("preferences.step_on_off_accent_quiet")),
-            (Loc.T("preferences.click_a_rhythm_voice"), Loc.T("preferences.select_and_play_it_drop")),
-        }),
-    };
-
-    private Control ShortcutsPane()
-    {
-        var groups = new StackPanel { Spacing = 18 };
-        var filter = new TextBox { PlaceholderText = Loc.T("preferences.filter_shortcuts"), Text = _shortcutFilter, Classes = { "search" }, FontSize = 11 };
-
-        void Render()
-        {
-            groups.Children.Clear();
-            // Each word must appear in the row's action, its keys or its group's title, so
-            // "keyboard" finds the whole "Play notes (computer keyboard)" group (#40).
-            var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            foreach (var (title, rows) in ShortcutGroups)
-            {
-                var shown = rows.Where(r => (MainWindow.HasMenuKey || r.Key != MenuKeysRow) && words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
-                                                           || MenuKit.Keys(r.Action).Contains(w, StringComparison.OrdinalIgnoreCase)
-                                                           || MenuKit.Keys(r.Key).Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
-                if (shown.Count == 0) continue;
-                var head = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 4),
-                    Children =
-                    {
-                        new TextBlock { Text = title, Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = shown.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
-                    },
-                };
-                groups.Children.Add(new StackPanel { Spacing = 6, Children = { head, Table(shown.Select(r => ShortcutRow(r.Key, r.Action)).ToList()) } });
-            }
-            if (groups.Children.Count == 0) groups.Children.Add(Caption(Loc.T("preferences.nothing_matches")));
-        }
-        filter.TextChanged += (_, _) => { _shortcutFilter = filter.Text ?? ""; Render(); };
-        Render();
-
-        return new StackPanel { Spacing = 18, Children = { VelocityWheelSection(), SearchField(filter, 320), groups } };
-    }
-
     private static readonly double[] VelocityWheelSteps = { 0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2 };
 
     // ⇧ + wheel over a piano-roll note (specs/063): its direction and step, beside the reference.
@@ -1862,7 +1559,8 @@ public sealed partial class PreferencesWindow : NotaWindow
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);
 
-    private static Control ShortcutRow(string key, string action)
+    // A fixed row (a mouse gesture, a list or typing key): key-caps, or the gesture as text.
+    private static Control FixedShortcutRow(string key, string action)
     {
         var tokens = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         Control keys;

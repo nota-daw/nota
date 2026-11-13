@@ -142,10 +142,10 @@ public sealed partial class DeviceChainView
             Bypassed: _engine.DeviceBypassed(_trackId, index), Bypassable: true, CanMove: true, CanDelete: false, PresetKind: kind,
             IsInstrument: false, Width: double.NaN, Kind: ChainKind.Effect, HeaderExtra: extras, Height: double.NaN, Xl: true);
         var card = BuildCardShell(spec, strategy.FullBleed ? body : new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
-        // Esc in the panel (a text box that takes it keeps it) closes it.
+        // Cancel (Esc) in the panel (a text box that takes it keeps it) closes it.
         card.KeyDown += (_, e) =>
         {
-            if (e.Handled || e.Key != Key.Escape) return;
+            if (e.Handled || !Nota.App.Input.Keys.Is(e, "edit.cancel")) return;
             e.Handled = true;
             CloseXl(index);
         };

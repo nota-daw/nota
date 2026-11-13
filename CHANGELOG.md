@@ -28,6 +28,64 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   st, 0 at centre. CRS stays the ratio and FINE the cents, so a ×1 operator at +7 sounds the
   1.5 fifth the 16-ratio table cannot reach, and a modulator can be placed at any interval
   without transposing the clip. Saved projects and factory presets read 0 st and are unchanged.
+
+## [0.60.1] — 2026-11-13
+
+### Added
+- **Nothing on the transport bar goes out of reach** (#520, specs/097). A **⋯** key now ends
+  the transport bar. When the window is too narrow — or the interface scale too large — for
+  the whole bar, the parts it hides (Tap, Key, Grid, Snap, Follow, Automation, Mixer, MIDI learn,
+  Remote, the time signature, loop and loop-record mode, the master level, the DSP meter)
+  are listed in the ⋯ menu, in bar order, and work from there as they do in the bar: toggles
+  as check items, Grid and the time signature as submenus, Tap stays open for tapping, the
+  master fader drags in place. An accent dot on ⋯ says something is in it; widen the window
+  and the parts go back to the bar. The menu also switches the **interface scale** (75–200 %)
+  at every width, the same setting as Settings → Appearance. When the Grid cell is hidden its
+  separator now goes with it, so the bar no longer shows two rules side by side.
+- **A Mixer button in the toolbar** (#516, specs/092). Next to Automation, the faders key shows
+  or hides the Mixer with one click, docked or in its own window, as View → Mixer and ⌘⇧M do.
+  It reads as on while the Mixer is shown and stays in step however you open or close it: the
+  menu, the shortcut, the panel's or the window's close button. Its tooltip names the shortcut.
+- **Your own keyboard shortcuts** (#61, specs/096). Every key in Nota can now be changed in
+  **Settings → Shortcuts**: click a key, press the new one, **Confirm** — menu commands and
+  the keys that used to be fixed alike: piano-roll and arrangement editing (nudge, transpose,
+  move to track), Session, devices, the Files browser, Modular, the transport, and the
+  computer-keyboard notes (each note, octave and velocity — handy on AZERTY or Cyrillic
+  layouts). An action can have a second key. Before anything is saved the row says which
+  action already answers that key where this one works ("⌘D is used by Duplicate") and offers
+  **Replace** or **Cancel**; a key used only in another view is allowed with a note on which
+  one wins, and keys the system keeps (⌘Q, ⌘H, Alt+F4…) are refused. Changed keys carry an
+  accent dot and their default, **Edited only** lists them, each has a reset, and **Reset all
+  to defaults…** puts everything back. Only changed keys are stored, so new defaults in later
+  versions still arrive. The menu, the context menus, tooltips and the command palette show
+  your keys at once; mouse gestures and the keys of lists and text fields stay as they are,
+  listed for reference. Typing a key in the filter ("⌘T", "cmd t") finds what it does.
+- **Choose the address Nota Remote shows** (#85, specs/095). On a computer with several
+  networks (Wi-Fi and Ethernet, a VPN, a virtual machine's network), Nota could put an address
+  in the QR code that the phone can't reach. Now you can choose it.
+  - **Settings → Remote → Address in the QR**: Automatic (as before: USB, then Wi-Fi, then
+    Ethernet) or one network interface. The choice is kept after a restart, by the
+    interface's name. While that interface is down, Automatic stands in, and the list says so.
+  - **Connect phone**: the other addresses under the main one take a click, which puts that
+    address in the link and QR code; **Automatic** under them goes back.
+  - Next to the address, **Open in the browser** opens the Remote page on this computer, and
+    **Copy the link** copies it.
+- **A Modular tab in the browser** (#592, specs/095). While Modular is the view the browser's
+  rail carries a **Modular** tab (a patch-cable icon, after MIDI effects) listing every node
+  Modular offers — LFO, Envelope Follower, MIDI → CV, ADSR, Macro, Math, Scope — with its
+  category and a description, searchable by name, category or alias ("wobble" finds LFO).
+  Drag a node onto the canvas and it lands there, unconnected; double-click (or Enter) puts
+  it in the middle of the view. The browser remembers its own last tab for Modular (the
+  Modular tab the first time) and goes back to the other one when you leave.
+- **The arrangement's track headers in Modular** (#592, specs/095). Modular's Track view shows
+  the same track column as the arrangement — group trays, every control, the context menu,
+  drag to reorder, meters, both looks — on the side **Track headers on the right** picks, and
+  it moves at once when that changes. Click a header to see that track's graph; drop a CV
+  cable on another track's header to modulate it from here.
+- **Group graphs in Modular** (#592, specs/095). A group's header opens the group's own effect
+  chain (Tracks in → effects → out); modulators patch its effects like any track's.
+- **Show in Modular** (#592, specs/095) in the track menus of the arrangement and the Session
+  view: Modular opens in Track view on that track.
 - **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
   lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
   Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
@@ -591,6 +649,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Curved automation eases instead of jumping** (#591): bending a segment towards an
+  ease-out made it reach almost all of its change at the very start — a near-vertical drop
+  on screen and an audible step in playback — while the opposite bend looked gentle. Every
+  curved segment (automation lanes, clip envelopes, MIDI controller lanes) now follows a
+  smooth exponential: no jump at either end, and ease-in and ease-out mirror each other.
+  Curves in saved projects keep their bend but play gentler at the extremes. Cutting a
+  curved segment (moving or duplicating a section, drawing over a controller lane,
+  recording controllers, splitting clips) now keeps its shape exactly on both sides, and
+  the curves are drawn smoothly at any zoom.
+- **Plug-in cards show the plug-in's window again**: since the new look, the info section's
+  own surface covered the picture of the plug-in's window on its card. The picture now
+  shows through the section, on S and on L, under the wash that keeps the text readable.
+- **Short clips keep their name on one line** (#590): a clip narrower than its name wrapped
+  the name onto a second line over the waveform. The name now stays on one line and ends in
+  an ellipsis; section names in the arrangement do the same.
 - **Track header meters stay inside the header** (#584): on a Compact or a low Standard row a
   track's level meter ran into the bottom edge of its header, and a folded group's meter ran
   under its name and buttons. Every header meter now fits its row, and a group's meter stands
@@ -691,6 +764,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   while hovered or dragged. Operator's OUT drop zone is the
   bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
   graph tooltips that named colours no longer drawn now describe what is on screen.
+
+### Removed
+- **Modular's + Add menu and its Tracks list** (#592, specs/095): nodes come from the browser's
+  Modular tab and the command palette; the track column is the arrangement's headers.
 
 ## [0.59.2] — 2026-11-08
 

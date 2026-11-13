@@ -502,7 +502,7 @@ headers and in the mixer, faders and meters.
 | Strength | Looks like | Used for |
 |---|---|---|
 | **Live: solid** | `Accent` fill, derived ink on it | Playing (Play while the transport runs), recording, the playhead, the loop range, a switch that is on inside a device, a device's power switch, the current device tab's underline, a live icon button |
-| **Picked: soft tint** | `AccentSoft` fill with orange text or icon (`AccentBright` in dark themes, `AccentPale` in light ones) | The option you chose: a segment, the current view, a tool that is on (Metronome, Follow, Snap, Automation), the left rail's current page (with a 2 × 14 orange tick), a filter chip that is on, Loop and Replace on. Never solid |
+| **Picked: soft tint** | `AccentSoft` fill with orange text or icon (`AccentBright` in dark themes, `AccentPale` in light ones) | The option you chose: a segment, the current view, a tool that is on (Metronome, Follow, Snap, Automation, Mixer), the left rail's current page (with a 2 × 14 orange tick), a filter chip that is on, Loop and Replace on. Never solid |
 | **Values in devices: orange lines** | `Accent` line on a quiet fill | Only inside a device card: the arc of a knob, the 3 px line on a value bar (its fill is the soft tint), the selected EQ point, an upright value bar |
 
 A shell slider under the pointer or being dragged borrows the value bar's colours (soft
@@ -740,7 +740,7 @@ The bar across the top: views, transport, tempo, grid and tools.
 - **Toggles:** Loop and the loop-record mode (Overdub: two layers · Replace: one layer and a
   turn arrow) are icon buttons beside the position; the loop range is on the ruler. Tap is
   a small pill and keeps its four beat dots.
-- **Tools:** Metronome, Follow, Snap and Automation are icon buttons; on is the soft tint.
+- **Tools:** Metronome, Follow, Snap, Automation and Mixer are icon buttons; on is the soft tint.
 - **Right:** MIDI and Remote with small status dots, then Master as a flat slider with its
   dB value inside (§ Sliders).
 - 44 high on `SurfaceDeep`, a seam below. The view switch (Arrangement · Session ·

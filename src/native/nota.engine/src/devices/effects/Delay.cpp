@@ -176,7 +176,7 @@ void Delay::process(float* buf, int32_t frames) {
     // so the wake-up echo has no timing jump. Sleep engages only after the
     // loop's full flight time (an echo can arrive long after the input and the
     // output both read silent), tracked below via loopPk_/quietSamples_.
-    hist_.begin(); // a gap since the last block (track muted or asleep) scrolls the graph on
+    const bool graph = hist_.begin(); // kept only while the card reads it; a gap scrolls it on
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     if (inSilent && !freeze && idle_) {
         wowPhase_ += wowInc * frames;
@@ -255,8 +255,9 @@ void Delay::process(float* buf, int32_t frames) {
             outWetL = mid + side;
             outWetR = mid - side;
         }
-        hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outWetL), std::fabs(outWetR)),
-            (outWetL + outWetR) * 0.5f);
+        if (graph)
+            hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outWetL), std::fabs(outWetR)),
+                (outWetL + outWetR) * 0.5f);
         const float oL = (dryG * l + wetG * outWetL) * outG;
         const float oR = (dryG * r + wetG * outWetR) * outG;
         buf[i * 2] = oL;

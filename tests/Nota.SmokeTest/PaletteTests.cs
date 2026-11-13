@@ -320,7 +320,7 @@ internal static class PaletteTests
     }
 
     // Source checks: the menu names only catalog commands, every command has a handler, and
-    // every shortcut the catalog declares is listed in Settings → Shortcuts.
+    // every key action is listed in Settings → Shortcuts.
     private static IEnumerable<(bool, string)> RegistryDrift()
     {
         var dir = AppContext.BaseDirectory;
@@ -355,14 +355,16 @@ internal static class PaletteTests
             ? $"every Settings page ({pageIds.Count}) has its palette command and every command its page"
             : $"Settings pages and commands disagree: {string.Join(", ", badPages)}");
 
-        var listed = System.Text.RegularExpressions.Regex.Matches(prefs, "\\(\"([^\"]+)\",\\s*(?:Loc\\.T\\()?\"").Select(m => m.Groups[1].Value)
-            .SelectMany(k => k.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Select(Canon).ToHashSet();
-        var missing = catalog.Where(c => c.Gesture.Length > 0 && !listed.Contains(Canon(c.Gesture))).Select(c => $"{c.Gesture} ({c.Title})").ToList();
-        yield return (missing.Count == 0, missing.Count == 0 ? "every catalog shortcut is listed in Settings → Shortcuts"
-            : $"shortcuts missing from Settings → Shortcuts: {string.Join(", ", missing)}");
-
-        // Modifier order doesn't matter: ⌥⌘S and ⌘⌥S are the same key.
-        static string Canon(string k) => new string(k.Where(c => "⌘⌃⌥⇧".Contains(c)).OrderBy(c => c).ToArray()) + new string(k.Where(c => !"⌘⌃⌥⇧".Contains(c)).ToArray());
+        // Settings → Shortcuts lists every key action exactly once (specs/096): its layout is
+        // built from the key-action catalog, which takes in every command of this catalog.
+        var actions = Nota.Application.Input.KeyActionCatalog.Create();
+        var laid = Nota.Application.Input.ShortcutLayout.Build(actions, menuKey: true)
+            .SelectMany(g => g.Rows).Where(r => r.ActionId is not null).Select(r => r.ActionId!).ToList();
+        var notLaid = actions.Select(x => x.Id).Where(id => !laid.Contains(id)).ToList();
+        var twice = laid.GroupBy(x => x).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        yield return (notLaid.Count == 0 && twice.Count == 0, notLaid.Count == 0 && twice.Count == 0
+            ? $"every key action ({actions.Count}) is listed once in Settings → Shortcuts"
+            : $"Settings → Shortcuts misses {string.Join(", ", notLaid)} · lists twice {string.Join(", ", twice)}");
     }
 
     private static IEnumerable<(bool, string)> Performance()

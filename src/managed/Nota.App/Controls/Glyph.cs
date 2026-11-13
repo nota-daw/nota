@@ -35,13 +35,14 @@ internal enum GlyphKind
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (24-unit grid, see Paths)
-    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
+    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, PatchCable, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Mixer, Apple, Windows, Linux, ChainLink, Update,
     Output, Globe,                 // Settings → Outputs and Language
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
     Expand, Shrink,                // a panel filling the window, and back to its split
     Home, Drive, AudioFile,        // the Files browse view: home folder, a drive, an audio file (spec 092)
     Menu,                          // the transport bar's Menu key: the whole app menu on Windows / Linux (#518)
+    More,                          // the transport bar's overflow key: what the bar had no room for (#520)
 }
 
 internal sealed class Glyph : Control
@@ -471,6 +472,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Options] = ("M4 7 H20 M7 12 H17 M10 17 H14", null),
         // Three equal rules: the application menu (#518).
         [GlyphKind.Menu] = ("M4 6.5 H20 M4 12 H20 M4 17.5 H20", null),
+        // Three dots in a row: more of the bar, in a menu (#520).
+        [GlyphKind.More] = (null, "M5 10.25 A1.75 1.75 0 1 0 5 13.75 A1.75 1.75 0 1 0 5 10.25 Z M12 10.25 A1.75 1.75 0 1 0 12 13.75 A1.75 1.75 0 1 0 12 10.25 Z M19 10.25 A1.75 1.75 0 1 0 19 13.75 A1.75 1.75 0 1 0 19 10.25 Z"),
         // A magnifier.
         [GlyphKind.Search] = ("M10.5 4 A6.5 6.5 0 1 0 10.5 17 A6.5 6.5 0 1 0 10.5 4 M15.5 15.5 L21 21", null),
         // A small solid triangle pointing right (a closed disclosure).
@@ -504,6 +507,8 @@ internal sealed class Glyph : Control
         // A bookmark (a preset).
         [GlyphKind.Preset] = ("M7 4 H17 V20 L12 16 L7 20 Z", null),
         // Two nodes joined by a cable (a modular patch).
+        // Two jacks and the cable sagging between them: the browser's Modular tab (spec 095).
+        [GlyphKind.PatchCable] = ("M2.5 7 A2.5 2.5 0 1 0 7.5 7 A2.5 2.5 0 1 0 2.5 7 Z M16.5 7 A2.5 2.5 0 1 0 21.5 7 A2.5 2.5 0 1 0 16.5 7 Z M5 9.5 C5 21 19 21 19 9.5", null),
         [GlyphKind.Patch] = ("M4 7 A2.501 2.501 0 1 0 9 7 A2.501 2.501 0 1 0 4 7 M15 17 A2.501 2.501 0 1 0 20 17 A2.501 2.501 0 1 0 15 17 M8.5 8.5 L15.5 15.5", null),
         // Two arrows chasing each other (loop).
         [GlyphKind.Loop] = ("M17 3 l3 3 l-3 3 M20 6 H8 a4 4 0 0 0 -4 4 v1.001 M7 21 l-3 -3 l3 -3 M4 18 h12 a4 4 0 0 0 4 -4 v-1.001", null),
@@ -531,6 +536,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Snap] = (null, "M4 17 V12.5 A8 8 0 0 1 20 12.5 V17 H15.5 V12.5 A3.5 3.5 0 0 0 8.5 12.5 V17 ZM4 19 H8.5 V21.5 H4 ZM15.5 19 H20 V21.5 H15.5 Z"),
         // A breakpoint envelope with two handles.
         [GlyphKind.Automation] = ("M3 17.5 H9 L14.5 7.5 H21", "M7.099 17.5 A1.9 1.9 0 1 0 10.901 17.5 A1.9 1.9 0 1 0 7.099 17.5 ZM12.6 7.5 A1.9 1.9 0 1 0 16.399 7.5 A1.9 1.9 0 1 0 12.6 7.5 Z"),
+        // Three channel faders, each a slot with a solid cap at its own level (the Mixer).
+        [GlyphKind.Mixer] = ("M6 4 V20 M12 4 V20 M18 4 V20", "M4 12.5 H8 V16 H4 ZM10 6.5 H14 V10 H10 ZM16 10 H20 V13.5 H16 Z"),
         // The Apple mark.
         [GlyphKind.Apple] = (null, "F1 M8 4.8 C6.4 3.733 3 3.867 3 7.867 C3 11.067 4.933 14 6.2 14 C7.067 14 7.333 13.533 8 13.533 C8.667 13.533 8.933 14 9.8 14 C10.8 14 12.267 12.133 12.867 10.267 C11.733 9.8 11.067 8.8 11.067 7.667 C11.067 6.6 11.667 5.733 12.533 5.267 C11.467 4 9.333 3.933 8 4.8 ZM8.133 4.2 C8.133 2.867 9.067 1.867 10.4 1.8 C10.4 3.133 9.467 4.133 8.133 4.2 Z"),
         // The Windows mark.

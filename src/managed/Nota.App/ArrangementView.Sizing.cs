@@ -467,7 +467,8 @@ public sealed partial class ArrangementView
     {
         double w = Math.Clamp(wanted, MinHeaderW, MaxHeaderW);
         double room = Bounds.Width - MinLanesW;   // a narrow window squeezes the lanes first, then the headers
-        if (Bounds.Width > 0 && w > room) w = Math.Max(MinHeaderW, room);
+        // Headers only (Modular, specs/095): the view is the column, the canvas beside it has the room.
+        if (!_headersOnly && Bounds.Width > 0 && w > room) w = Math.Max(MinHeaderW, room);
         return Math.Round(w);
     }
 
@@ -489,6 +490,7 @@ public sealed partial class ArrangementView
         foreach (var c in _footerHeaders.Children) c.Width = w;
         PlaceRowSeamGrips();
         PlaceColumnSeam();
+        FitHeadersOnlyWidth();
         if (final)
         {
             RebuildHeaders();
@@ -598,6 +600,7 @@ public sealed partial class ArrangementView
         foreach (var b in _columnDividers) b.BorderThickness = ColumnDivider;
         _columnBackdrop.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         PlaceColumnSeam();
+        FitHeadersOnlyWidth();
         // The cards carry their own divider: rebuild them with it on the new side.
         RebuildHeaders();
         RebuildFooterHeaders();
