@@ -1533,6 +1533,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   with **Alt** (alone) or **F10**. **View ▸ Show menu bar** or Settings → Appearance → **Menu
   bar** brings the row back, and the key steps aside. The Windows title bar reads
   "Nota — *project*". On macOS the menu stays in the system menu bar.
+- **The ⋯ key at the end of the transport bar**: on a narrow window or a large interface
+  scale the bar hides its least-needed parts (Tap, Key, Grid, Snap, Follow, Automation, Mixer,
+  MIDI learn, Remote, time signature, loop, loop-record mode, master, DSP meter), and the ⋯ menu
+  lists each one, in bar order, working as in the bar — check items, Grid and time-signature
+  submenus, Tap that stays open, the master fader in place. An accent dot on ⋯ says something
+  is in it. At any width the menu also switches the **Interface scale**.
 - **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
   release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
@@ -1648,7 +1654,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   colour too close to the record red, mute, solo or the meter green is refused with the
   reason. Applied live, Esc in the picker puts the previous one back. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
+  remembered (also from the transport bar's ⋯ menu); timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
   layout (device cards keep theirs), live and remembered. **Waveform** —
   **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Phrase

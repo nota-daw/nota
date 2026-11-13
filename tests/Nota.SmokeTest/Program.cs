@@ -883,6 +883,14 @@ if (args.Length >= 1 && args[0] == "--modular-browser")
     Console.WriteLine(failures == 0 ? "MODULAR BROWSER PASSED" : $"MODULAR BROWSER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Toolbar overflow alone (fast iteration): `--toolbar-overflow`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--toolbar-overflow")
+{
+    Console.WriteLine("-- toolbar overflow --");
+    foreach (var (ok, label) in ToolbarOverflowTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TOOLBAR OVERFLOW PASSED" : $"TOOLBAR OVERFLOW FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Arrangement group trays alone (fast iteration): `--group-trays`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--group-trays")
 {
@@ -15746,6 +15754,10 @@ foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
 // --- Arrangement group trays (specs/094): the header column's group slices ---
 Console.WriteLine("-- arrangement group trays --");
 foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
+
+// --- Toolbar overflow (specs/097): the shed parts the ⋯ menu lists ---
+Console.WriteLine("-- toolbar overflow --");
+foreach (var (ok, label) in ToolbarOverflowTests.Run()) Check(ok, label);
 
 // --- Modular browser tab (specs/095): catalogue rows, search, per-view tab memory ---
 Console.WriteLine("-- modular browser tab --");

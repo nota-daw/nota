@@ -42,6 +42,7 @@ internal enum GlyphKind
     Expand, Shrink,                // a panel filling the window, and back to its split
     Home, Drive, AudioFile,        // the Files browse view: home folder, a drive, an audio file (spec 092)
     Menu,                          // the transport bar's Menu key: the whole app menu on Windows / Linux (#518)
+    More,                          // the transport bar's overflow key: what the bar had no room for (#520)
 }
 
 internal sealed class Glyph : Control
@@ -471,6 +472,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Options] = ("M4 7 H20 M7 12 H17 M10 17 H14", null),
         // Three equal rules: the application menu (#518).
         [GlyphKind.Menu] = ("M4 6.5 H20 M4 12 H20 M4 17.5 H20", null),
+        // Three dots in a row: more of the bar, in a menu (#520).
+        [GlyphKind.More] = (null, "M5 10.25 A1.75 1.75 0 1 0 5 13.75 A1.75 1.75 0 1 0 5 10.25 Z M12 10.25 A1.75 1.75 0 1 0 12 13.75 A1.75 1.75 0 1 0 12 10.25 Z M19 10.25 A1.75 1.75 0 1 0 19 13.75 A1.75 1.75 0 1 0 19 10.25 Z"),
         // A magnifier.
         [GlyphKind.Search] = ("M10.5 4 A6.5 6.5 0 1 0 10.5 17 A6.5 6.5 0 1 0 10.5 4 M15.5 15.5 L21 21", null),
         // A small solid triangle pointing right (a closed disclosure).

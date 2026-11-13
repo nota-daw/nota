@@ -157,10 +157,10 @@
          panel tone with a seam under it. Stop / play / record, position and loop share one
          30px recessed group inside it, so playback reads as one object rather than a row of
          keys. Reads left to right as: which view · what plays · the numbers you set ·
-         the switches you flip · then, pinned right, what the machine is doing. Launch
-         quantize shows only in Session, where it applies. The view switch leads the row.
-         When the window is too narrow the row sheds its least-needed parts first —
-         see MainWindow.TransportFit.cs for the order. -->
+         the switches you flip · then, pinned right, what the machine is doing, and ⋯ last.
+         The view switch leads the row. When the window is too narrow the row sheds its
+         least-needed parts first — see MainWindow.TransportFit.cs for the order — and the ⋯
+         menu lists whatever it shed (MainWindow.TransportOverflow.cs, #520). -->
     <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}">
       <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
@@ -295,7 +295,7 @@
               <TextBlock Classes="CellLabel" Text="{app:T 'main.key'}" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <Border Classes="tb-sep"/>
+          <Border x:Name="GridSep" Classes="tb-sep"/>
           <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
                click for the grid menu. SnapChip sizes the value to its widest label. -->
           <Button x:Name="SnapChip" Classes="cell">
@@ -412,6 +412,19 @@
             <Panel x:Name="MasterMeterHost" Width="120" Height="8"/>
           </StackPanel>
         </StackPanel>
+
+        <!-- More (#520): what the bar had no room for, as a menu, then a few quick settings
+             (MainWindow.TransportOverflow.cs). Never shed. The dot says something is in it. -->
+        <Button x:Name="OverflowBtn" Grid.Column="10" Classes="tp-icon" Margin="8,0,0,0" VerticalAlignment="Center"
+                Click="OnOverflowClick"
+                ToolTip.Tip="{app:T 'main.more'}" AutomationProperties.Name="{app:T 'main.more'}">
+          <Panel>
+            <app:Glyph Kind="More" Size="16"/>
+            <Ellipse x:Name="OverflowDot" Width="5" Height="5" IsVisible="False"
+                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-3,-4,0"
+                     Fill="{DynamicResource Brush.Accent}"/>
+          </Panel>
+        </Button>
       </Grid>
     </Border>
 
