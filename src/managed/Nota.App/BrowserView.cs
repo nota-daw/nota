@@ -29,6 +29,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Nota.Application;
 using Nota.Application.Input;
 using Nota.Application.Samples;
@@ -52,6 +53,9 @@ public sealed partial class BrowserView : UserControl
 
     /// <summary>True while a browser row is being dragged (used by drop targets).</summary>
     public static bool IsBrowserDrag => CurrentDrag is not null;
+
+    /// <summary>True while the drag is a Modular node (spec 095): only the Modular canvas takes it.</summary>
+    public static bool IsModularNodeDrag => CurrentDrag is { Kind: BrowserItemKind.ModularNode };
 
     /// <summary>True while the drag is an arrangement audio clip pulled out as a sample (it
     /// rides the browser payload, so every sample drop target takes it as-is).</summary>
@@ -82,6 +86,7 @@ public sealed partial class BrowserView : UserControl
     /// where some backends don't expose the file list yet; the drop re-checks.</summary>
     public static bool IsAcceptableDrag(DragEventArgs e)
         => !DeviceDrag.IsActive   // a device card's drag carries text too, but isn't a file
+           && !IsModularNodeDrag  // a Modular node goes on the Modular canvas only (spec 095)
            && (IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File) || HasPathText(e.DataTransfer));
 
     // A drag that may name files without Avalonia's file list (#300): plain text or a
@@ -157,13 +162,17 @@ public sealed partial class BrowserView : UserControl
         return g;
     }
 
-    private const int TabCount = 9;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History / Track
+    private const int TabCount = 10;  // Instr / FX / MIDI / Files / Preset / Proj / Map / History / Track / Modular
     private const int EffectsTab = 1; // Audio effects
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
     private const int InspectorTab = 8; // the selected track's settings — hosts a TrackInspectorView
+    // Modular-only nodes (spec 095): a flat list on the rail after MIDI effects, shown only
+    // while Modular is the view. The index is last so the others keep theirs.
+    private const int ModularTab = 9;
+    private readonly BrowserTabMemory _tabMemory = new(0, ModularTab);
     private static bool IsCustomTab(int index) => index is MapTab or HistoryTab or InspectorTab;
     private const double RowH = 30;   // single-line index row (style guide: browser rows 30)
     private const double GroupRowH = 30;
@@ -271,7 +280,10 @@ public sealed partial class BrowserView : UserControl
             RailTab(6, Loc.T("browser.midi_map"), GlyphKind.Map),
             RailTab(7, Loc.T("browser.history"), GlyphKind.History),
             RailTab(InspectorTab, Loc.T("browser.track_inspector"), GlyphKind.Track),
+            RailTab(ModularTab, Loc.T("browser.modular"), GlyphKind.PatchCable),
         };
+        _tabs[ModularTab].IsVisible = false;   // Modular view only (SetModularContext)
+        _sources[ModularTab] = ModularBrowserItems.Build(Nota.Application.Palette.ModularCatalog.All);
         // A hairline above Files, Map and the inspector: devices · library · mappings · track.
         foreach (int i in new[] { 3, 6, InspectorTab })
         {
@@ -279,7 +291,7 @@ public sealed partial class BrowserView : UserControl
             _tabs[i].BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         }
         var tabStack = new StackPanel { Margin = new Thickness(0, 5, 0, 0) };
-        foreach (var t in _tabs) tabStack.Children.Add(t);
+        foreach (int i in new[] { 0, 1, 2, ModularTab, 3, 4, 5, 6, 7, InspectorTab }) tabStack.Children.Add(_tabs[i]);
         _collapseBtn = RailButton(GlyphKind.Sidebar, Loc.T("browser.collapse_browser"), () => SetCollapsed(!_collapsed, persist: true));
         _collapseBtn.Margin = new Thickness(0, 0, 0, 6);
         var rail = new DockPanel { Width = 40 };
@@ -507,6 +519,17 @@ public sealed partial class BrowserView : UserControl
         CollapsedChanged?.Invoke(collapsed);
     }
 
+    /// <summary>Modular became (or stopped being) the view (spec 095): the Modular tab joins or
+    /// leaves the rail, and the browser shows the tab last picked in that context — the
+    /// Modular tab the first time.</summary>
+    public void SetModularContext(bool inModular)
+    {
+        if (inModular == _tabMemory.InModular) return;
+        _tabs[ModularTab].IsVisible = inModular;
+        int tab = inModular ? _tabMemory.Enter() : _tabMemory.Leave();
+        SelectTab(tab);
+    }
+
     /// <summary>Persist the view options (the ⋮ menu) across sessions. Optional: without it
     /// the browser still works, it just forgets the toggles on quit.</summary>
     public void SetSettings(ISettingsService settings)
@@ -598,6 +621,7 @@ public sealed partial class BrowserView : UserControl
             string q = _search.Text?.Trim() ?? "";
             foreach (var it in src)
             {
+                if (index == ModularTab) { if (ModularBrowserItems.Matches(it, q)) dst.Add(it); continue; }
                 if (q.Length == 0
                     || it.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
                     || it.Sub.Contains(q, StringComparison.OrdinalIgnoreCase))
@@ -691,6 +715,7 @@ public sealed partial class BrowserView : UserControl
         {
             3 => Loc.Plural("browser.samples", n) + AnalysingSuffix(),
             4 => Loc.Plural("browser.presets_n", n),
+            ModularTab => Loc.Plural("browser.nodes_n", n),
             _ => Loc.Plural("browser.projects_n", n),
         };
     }
@@ -706,6 +731,7 @@ public sealed partial class BrowserView : UserControl
     {
         if (index == _active) return;
         _active = index;
+        _tabMemory.Picked(index);
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !_collapsed && i == index);
         // The MIDI-map, History and inspector tabs host bespoke views, not a filtered item list.
@@ -1258,8 +1284,23 @@ public sealed partial class BrowserView : UserControl
         ItemTemplate = itemTemplate,
     };
 
+    /// <summary>A Return pressed on the Modular tab's list with a node selected adds it
+    /// (spec 095): the window's transport keys leave that Return to the list.</summary>
+    public bool TakesReturn(object? source)
+        => source is Visual v && _active == ModularTab
+           && _pages[ModularTab].SelectedItem is BrowserItem { Kind: BrowserItemKind.ModularNode }
+           && (v == _pages[ModularTab] || v.GetVisualAncestors().Contains(_pages[ModularTab]));
+
     private void HookActivation(ListBox list)
     {
+        // Enter / Return on a Modular node adds it, as a double-click does (spec 095).
+        list.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Return) || e.KeyModifiers != KeyModifiers.None) return;
+            if (list.SelectedItem is not BrowserItem { Kind: BrowserItemKind.ModularNode } node) return;
+            ItemActivated?.Invoke(node, e.KeyModifiers);
+            e.Handled = true;
+        };
         list.DoubleTapped += (_, e) =>
         {
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
@@ -1690,6 +1731,7 @@ public sealed partial class BrowserView : UserControl
         BrowserItemKind.Preset => Loc.T("browser.preset"),
         BrowserItemKind.Folder => Loc.T("browser.folder"),
         BrowserItemKind.OtherFile => Loc.T("browser.file"),
+        BrowserItemKind.ModularNode => Loc.T("browser.modular_node"),
         _ => "",
     };
 

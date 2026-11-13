@@ -63,6 +63,11 @@ public partial class MainWindow
             _commands.Run((e.KeyModifiers & KeyModifiers.Shift) != 0 ? "transport.playPause" : "transport.playStop");
             e.Handled = true;
         }
+        else if (e.Key == Key.Return && Browser.TakesReturn(e.Source))
+        {
+            // A Modular node selected in the browser: Return adds it (specs/095), so leave the
+            // key to the list rather than stopping the transport.
+        }
         else if (e.Key == Key.Return)
         {
             // In the Session grid Return launches the selected slot or scene (design 1a);
@@ -309,7 +314,7 @@ public partial class MainWindow
         // ←/→ nudge the selected arrangement clips by the grid step (⌥: a 64th); ⌥↑/⌥↓ move them
         // to the next track that takes them (#302). Only with clips selected, and not while the
         // piano roll, the detail panel or the floating detail window has the keys.
-        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down && Timeline.IsVisible && !_detailWasLastFocused
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down && ArrangementShown && !_detailWasLastFocused
             && _detailWindow?.IsActive != true
             && _editorRoll is not { GridFocused: true }
             && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) == 0)

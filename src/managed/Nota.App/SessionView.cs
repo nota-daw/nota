@@ -91,6 +91,8 @@ public sealed partial class SessionView : UserControl
     internal LocateHooks? Locate { get; set; }
     /// <summary>Raised after slots are copied / moved into the arrangement (M5-6) or a track is renamed.</summary>
     public event Action? ArrangementChanged;
+    /// <summary>A column's menu asked for Show in Modular (specs/095).</summary>
+    public event Action<int>? ShowInModularRequested;
     /// <summary>A context menu asked for a new track (kind, the track to place it after, or -1 = at the end).</summary>
     public event Action<NewTrackKind, int>? AddTrackRequested;
     /// <summary>A one-line status message for the main window's status bar.</summary>
