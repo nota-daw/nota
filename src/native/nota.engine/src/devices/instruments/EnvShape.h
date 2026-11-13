@@ -345,6 +345,11 @@ inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, cons
         }
         return;
     }
+    // The plain generator (advanceRcStep, Twin's inline step) doesn't note when a voice reaches
+    // its sustain, and a Sustain raised above a held level isn't a decay at all: a voice in the
+    // decay / sustain stage whose level is not above the sustain follows it as the sustain does,
+    // instead of being taken for a decay that lands on the new level at once.
+    if (st == 2 && sh.last != 2 && env <= sus + 1e-3f) sh.last = 2;
     S s = st == 1 ? S::Attack : st == 2 ? (sh.last == 2 ? S::Sustain : S::Decay) : st == 3 ? S::Release : S::Off;
     advanceShapedEnv(env, s, sh, c.atkRate, c.decRate, sus, c.relRate, envBends(p));
     if (s == S::Sustain) {
