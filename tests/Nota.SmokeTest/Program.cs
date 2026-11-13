@@ -199,9 +199,16 @@ if (args.Length >= 1 && args[0] == "--menu-mirror")
     return failures == 0 ? 0 : 1;
 }
 // The Shortcuts page as JSON for the user manual (nota-docs `npm run shortcuts`, specs/096):
-// `--shortcuts-dump <file>` — groups, rows, the default keys in macOS glyphs, editable or fixed.
+// `--shortcuts-dump <file> [language.json]` — groups, rows, the default keys in macOS glyphs,
+// editable or fixed; with a language file, its texts (English where it lacks one).
 if (args.Length >= 2 && args[0] == "--shortcuts-dump")
 {
+    if (args.Length >= 3)
+    {
+        var table = Nota.Application.Localization.TranslationTable.Parse(File.ReadAllText(args[2]), out var langError);
+        if (table is null) { Console.Error.WriteLine($"{args[2]}: {langError}"); return 1; }
+        Nota.Application.Localization.Loc.Install(table, table.Code);
+    }
     File.WriteAllText(args[1], KeyBindingTests.Dump());
     Console.WriteLine($"wrote {args[1]}");
     return 0;
