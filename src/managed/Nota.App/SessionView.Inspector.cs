@@ -170,6 +170,9 @@ public sealed partial class SessionView
         f.ShowAt(anchor);
     }
 
+    // The key an action button names: the user's binding (specs/096), or none.
+    private static string K(string id) => Nota.App.Input.Keys.Bindings.Glyphs(id);
+
     private static Control Actions(params (string Label, string Key, Action Click)[] actions)
     {
         var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
@@ -322,11 +325,11 @@ public sealed partial class SessionView
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
-            (Loc.T("common.duplicate"), Shortcut.Cmd('D'), () => DuplicateSelection()),
-            (Loc.T("session.inspector.rename"), "F2", () => RenameSelection()),
-            (Loc.T("session.inspector.to_arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
+            (Loc.T("common.duplicate"), K("edit.duplicate"), () => DuplicateSelection()),
+            (Loc.T("session.inspector.rename"), K("session.rename"), () => RenameSelection()),
+            (Loc.T("session.inspector.to_arrangement"), K("edit.copyToOtherView"), () => CopySelectionToArrangement()),
             (Loc.T("common.edit"), "", () => SlotEditRequested?.Invoke(id, scene)),
-            (Loc.T("common.delete"), Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
+            (Loc.T("common.delete"), K("edit.delete"), () => DeleteSelection())));
     }
 
     // A drag on a number is one undo step, however many values it passes through.
@@ -402,11 +405,11 @@ public sealed partial class SessionView
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
             (Loc.T("session.launch"), "", () => LaunchSceneRow(scene)),
-            (Loc.T("session.inspector.insert_below"), Shortcut.Cmd('I'), () => InsertSceneAtSelection()),
-            (Loc.T("common.duplicate"), Shortcut.Cmd('D'), () => DuplicateSelection()),
-            (Loc.T("session.inspector.rename"), "F2", () => RenameSelection()),
-            (Loc.T("session.inspector.to_arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
-            (Loc.T("common.delete"), Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
+            (Loc.T("session.inspector.insert_below"), K("session.insertScene"), () => InsertSceneAtSelection()),
+            (Loc.T("common.duplicate"), K("edit.duplicate"), () => DuplicateSelection()),
+            (Loc.T("session.inspector.rename"), K("session.rename"), () => RenameSelection()),
+            (Loc.T("session.inspector.to_arrangement"), K("edit.copyToOtherView"), () => CopySelectionToArrangement()),
+            (Loc.T("common.delete"), K("edit.delete"), () => DeleteSelection())));
     }
 
     // ---- empty slot + group slot ------------------------------------------------------------
@@ -428,7 +431,7 @@ public sealed partial class SessionView
         if (c.IsInstrument) actions.Add((Loc.T("session.insert_midi_clip"), "", () => InsertMidiClip(c.TrackId, scene)));
         actions.Add(rec ? (Loc.T("session.inspector.stop_recording"), "", () => { _engine.StopSessionRecordSlot(c.TrackId); Refresh(); })
                         : (Loc.T("session.record_here"), "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
-        if (CanPaste) actions.Add((Loc.T("common.paste"), Shortcut.Cmd('V'), () => PasteSelection()));
+        if (CanPaste) actions.Add((Loc.T("common.paste"), K("edit.paste"), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
     }
 
@@ -453,8 +456,8 @@ public sealed partial class SessionView
             Text = Loc.T("session.inspector.launches_every_tracks_slot_in"),
             FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
-        s.Children.Add(Actions((Loc.T("session.inspector.launch_group_slot"), Shortcut.None(KeyGlyphs.Return), () => LaunchGroup(g, scene)), (Loc.T("session.inspector.stop_group"), "", () => StopColumn(g)),
-            (Loc.T("session.inspector.to_arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement())));
+        s.Children.Add(Actions((Loc.T("session.inspector.launch_group_slot"), K("session.launchSelection"), () => LaunchGroup(g, scene)), (Loc.T("session.inspector.stop_group"), "", () => StopColumn(g)),
+            (Loc.T("session.inspector.to_arrangement"), K("edit.copyToOtherView"), () => CopySelectionToArrangement())));
     }
 
     /// <summary>The selected clip's notes / waveform with a live playhead.</summary>

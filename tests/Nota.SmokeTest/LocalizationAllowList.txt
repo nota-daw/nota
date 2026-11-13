@@ -2734,3 +2734,25 @@ Nota.Application/Palette/CommandCatalog.cs	preferences input device channels mic
 Nota.Application/Palette/CommandCatalog.cs	preferences language langue francais english russian	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences output device speakers headphones test tone	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	preferences piano roll note names labels split fades detail panel	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Input/KeyActionCatalog.cs	Arrangement	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	Session	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	computer keyboard note piano	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	computer keyboard octave	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	computer keyboard velocity	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	devices pattern clip tab detail	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	escape deselect stop gesture	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	menu bar	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	notes grid	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	off disable	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	parent folder	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	path type paste folder	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	play launch slot scene	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	semitone pitch	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	zoom all nodes	# data: search keywords and view ids of the key actions, not shown (specs/096)
+Nota.Application/Input/KeyActionCatalog.cs	Return	# data: a key token (the key's own name), not a sentence
+Nota.Application/Input/ShortcutLayout.cs	Return	# data: a key token (the key's own name), not a sentence
+Nota.App/PreferencesWindow.Shortcuts.cs	Return	# data: a key token (the key's own name), not a sentence
+Nota.Application/Input/ReservedKeys.cs	Linux	# data: operating-system names (proper nouns)
+Nota.Application/Input/ReservedKeys.cs	Windows	# data: operating-system names (proper nouns)
+Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unknown action '{id}'"	# data: log text for the support log, not shown
+Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unreadable key '{t}' for '{id}'"	# data: log text for the support log, not shown

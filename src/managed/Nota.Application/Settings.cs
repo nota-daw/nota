@@ -154,6 +154,12 @@ public sealed class Settings
     /// <summary>The last items applied from the palette, most recent first (its Recent section).</summary>
     public List<string> PaletteRecent { get; set; } = new();
 
+    // --- keyboard shortcuts (specs/096, #61) ------------------------------------------------
+    /// <summary>The user's custom keys, by key-action id (<see cref="Input.KeyActionCatalog"/>).
+    /// Only actions that differ from their default have an entry, so a new default in a later
+    /// version still reaches everyone who never touched that key.</summary>
+    public Dictionary<string, KeyBindingOverride> KeyBindings { get; set; } = new();
+
     /// <summary>Adding a plug-in by hand (browser, drag & drop, palette) opens its editor window
     /// right away (#250). On by default; Preferences → Plug-ins.</summary>
     public bool OpenPluginWindowOnInsert { get; set; } = true;
@@ -323,4 +329,12 @@ public interface ISettingsService
     string ResolvedProjectsFolder();
     /// <summary>App-managed presets folder (created). M7-4.</summary>
     string PresetsFolder();
+}
+
+/// <summary>One action's custom keys (specs/096): per slot, null keeps the default, "" leaves
+/// it unassigned, anything else is the key in glyph notation ("⌘T", "⌥⇧↑", "Q").</summary>
+public sealed class KeyBindingOverride
+{
+    public string? Primary { get; set; }
+    public string? Alternative { get; set; }
 }

@@ -19,6 +19,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
@@ -645,33 +646,27 @@ public sealed partial class SessionView : UserControl
 
     private bool HandleKey(KeyEventArgs e)
     {
-        if (e.Source is TextBox) return false;
-        bool mod = ArrangementView.IsPrimaryDown(e.KeyModifiers);
-        bool other = (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) != 0;
-        var nav = NavCols;
-        switch (e.Key)
+        if (e.Source is TextBox || Keys.Capturing) return false;
+        bool plain = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
+        // The arrows walk the selection — fixed list navigation (specs/096 FR-011).
+        if (plain && e.Key is Key.Up or Key.Down or Key.Left or Key.Right)
         {
-            case Key.Up or Key.Down or Key.Left or Key.Right when !mod:
-                Move(e.Key, nav);
-                return true;
-            case Key.Back or Key.Delete when !mod:
-                DeleteSelection();
-                return true;
-            case Key.F2 when !mod:
-                RenameSelection();
-                return true;
-            case Key.C when mod && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt):
-                CopySelectionToArrangement();
-                return true;
+            Move(e.Key, NavCols);
+            return true;
         }
-        if (!mod || other) return false;
-        return e.Key switch
+        // The rest are bindings: the Session's own and the shared editing actions, which act on
+        // the selected clip or scene here. Launch (Return) is handled in the window's tunnel.
+        return Keys.Which(e, "edit.delete", "session.rename", "edit.copyToOtherView", "edit.copy", "edit.cut", "edit.paste",
+                   "edit.duplicate", "session.insertScene") switch
         {
-            Key.C => CopySelection(),
-            Key.X => CutSelection(),
-            Key.V => PasteSelection(),
-            Key.D => DuplicateSelection(),
-            Key.I => InsertSceneAtSelection(),
+            "edit.delete" => DeleteSelection() || true,
+            "session.rename" => RenameSelection() || true,
+            "edit.copyToOtherView" => CopySelectionToArrangement() || true,
+            "edit.copy" => CopySelection(),
+            "edit.cut" => CutSelection(),
+            "edit.paste" => PasteSelection(),
+            "edit.duplicate" => DuplicateSelection(),
+            "session.insertScene" => InsertSceneAtSelection(),
             _ => false,
         };
     }

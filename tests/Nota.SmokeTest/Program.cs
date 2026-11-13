@@ -198,11 +198,21 @@ if (args.Length >= 1 && args[0] == "--menu-mirror")
     Console.WriteLine(failures == 0 ? "MENU MIRROR PASSED" : $"MENU MIRROR FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Shortcuts page as JSON for the user manual (nota-docs `npm run shortcuts`, specs/096):
+// `--shortcuts-dump <file>` — groups, rows, the default keys in macOS glyphs, editable or fixed.
+if (args.Length >= 2 && args[0] == "--shortcuts-dump")
+{
+    File.WriteAllText(args[1], KeyBindingTests.Dump());
+    Console.WriteLine($"wrote {args[1]}");
+    return 0;
+}
 // Shortcut builder alone: `--shortcuts`.
 if (args.Length >= 1 && args[0] == "--shortcuts")
 {
     Console.WriteLine("-- shortcut builder --");
     foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+    Console.WriteLine("-- custom shortcuts --");
+    foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -15973,6 +15983,10 @@ foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
 // --- shortcut builder: canonical ordering, platform strings, key caps, gestures ---
 Console.WriteLine("-- shortcut builder --");
 foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+
+// --- custom keyboard shortcuts: catalog, conflicts, overrides, reset (specs/096) ---
+Console.WriteLine("-- custom shortcuts --");
+foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

@@ -1,66 +1,58 @@
 ---
 name: nota-shortcuts
-description: Keep the Preferences → Shortcuts screen in sync with the app's real keyboard/mouse bindings. Run this WHENEVER you add, remove, or change a keyboard shortcut or mouse gesture (transport keys, editing commands, piano-roll keys, the computer-keyboard note map, device drag, etc.) — the Shortcuts pane is a hand-maintained list and silently drifts from the handlers otherwise. Handles: finding every place bindings are defined, updating the on-screen list, and visually verifying it.
+description: Keep the Preferences → Shortcuts screen in sync with the app's real keyboard/mouse bindings. Run this WHENEVER you add, remove, or change a keyboard shortcut or mouse gesture (transport keys, editing commands, piano-roll keys, the computer-keyboard note map, device drag, etc.) — since specs/096 every key is a binding in the key-action catalog, so a new key must be declared there (not compared by hand in a handler) and a new gesture listed in ShortcutLayout. Handles: declaring the action, asking for it in the handler, the fixed rows, tests and visual verification.
 user-invocable: true
 ---
 
 # Keeping the Shortcuts screen honest
 
-Nota shows its keyboard/mouse shortcuts in **Preferences → Shortcuts**. That list is
-**hand-written**, not generated from the handlers — so every time the input handling
-changes, the screen must be updated by hand or it lies to the user. This skill is the
-checklist for doing that.
+Since specs/096 (#61) every keyboard shortcut is **rebindable** in Settings → Shortcuts.
+A key is no longer compared by hand in a handler and then described in a list: it is a
+**key action** with an id, a scope and a default, and the handler asks the user's bindings
+whether a press is that action. The Shortcuts page is built from the catalog, so an action
+can't be missing from it — but a key compared by hand, or a gesture nobody listed, still can.
 
 **Trigger:** you touched anything that changes what a key or mouse gesture does — a new
-hotkey, a re-mapped key, a removed command, a changed computer-keyboard note layout, a new
-drag gesture. If your change added/removed/moved a binding, you are not done until the
-Shortcuts pane matches.
+hotkey, a re-mapped default, a removed command, the computer-keyboard note layout, a new
+drag gesture.
 
-## 1. The on-screen list (what to edit)
+## 1. Where things live
 
-`src/managed/Nota.App/PreferencesWindow.cs` → the static **`ShortcutGroups`** array (feeds
-`ShortcutsPane`). It's grouped: `TRANSPORT`, `ARRANGEMENT & EDITING`, `PIANO ROLL`,
-`PLAY NOTES (COMPUTER KEYBOARD)`, `MOUSE`. Each row is `(Key, Action)`; the `Key` string is
-split on spaces and each token becomes its own mono key-cap (`/` and `·` stay plain
-separators) — as long as every token is a key: no lower-case letters, or one of `Space`
-`Return` `Delete` `Tab` `Esc` (`IsKeyToken`). Anything else (`Drag note edge`, `Face
-buttons`) is a gesture and shows as plain text. The `Action` is a short sentence. Use `⌘` for Meta/Ctrl, `⇧`
-for Shift, `⌥` for Alt, and the arrow glyphs `← → ↑ ↓`. Keep actions imperative and terse
-(design language: sentence case, `·`/` / ` as separators).
-
-## 2. The source of truth (where bindings actually live)
-
-Read these and reconcile the list against them — do **not** trust the existing pane text:
-
-| Bindings | File |
+| What | File |
 |---|---|
-| Transport (Space/Return), global editing (A, R, M, ⌘M, ⌘G/⌘⇧G, ⌘C/X/V, Delete, Tab, Esc) and the **computer-keyboard note map** (`KeyToPitch`) | `src/managed/Nota.App/MainWindow.Input.cs` |
-| Piano-roll note editing (arrows, ⇧ octave, ⌘A/⌘D, ⌘C/X/V, Delete, Esc) | `src/managed/Nota.App/PianoRollView.cs` (its `OnKeyDown`) |
-| Arrangement lane / clip gestures (double-click, drag) | `src/managed/Nota.App/ArrangementView*.cs` |
-| Device reorder drag | `src/managed/Nota.App/DeviceChainView.cs`, `DeviceCards/…` |
+| Palette / menu commands and their default keys | `src/managed/Nota.Application/Palette/CommandCatalog.cs` (the gesture is the *default*) |
+| Every other key action (note map, nudges, transposes, browser, Modular, Session…), scopes, shared editing actions | `src/managed/Nota.Application/Input/KeyActionCatalog.cs` |
+| The user's keys, conflict rule, reset, persistence | `src/managed/Nota.Application/Input/KeyBindings.cs` |
+| What the page lists, in which group; the **fixed rows** (mouse, trackpad, gamepad, list and typing keys) | `src/managed/Nota.Application/Input/ShortcutLayout.cs` |
+| Asking in a handler: `Keys.Is(e, "roll.transposeUp")`, `Keys.Which(e, …)` | `src/managed/Nota.App/Input/Keys.cs` |
+| The editor (capture, conflicts, reset) | `src/managed/Nota.App/PreferencesWindow.Shortcuts.cs` |
 
-`KeyToPitch` is the note layout: bare letters play notes, and `A` is **deliberately not** a
-note (it toggles automation mode) — so the "Play notes" rows must never list `A`. When that
-map changes, update the `PLAY NOTES` group (white vs. black keys, and the starting octave).
+Scopes (research R3 in `specs/096-custom-shortcuts`): Global, Arrangement and Notes are
+window-wide and conflict with each other; Session, PianoRoll, AudioEditor, Devices, Browser and
+Modular are focus scopes that win while they have the keyboard. A menu chord reaches every
+scope. Copy / Cut / Paste / Duplicate / Delete / Select all / Cancel (`edit.*`) are **shared**
+— one binding read by every view, never a per-view action.
 
-## 3. Procedure
+## 2. Procedure
 
-1. List, from your own diff, every binding you added/changed/removed.
-2. Open the source-of-truth file(s) above and confirm the *current* behaviour of each key in
-   the affected group — including ones you didn't touch, since the list may already be stale.
-3. Edit `ShortcutGroups` so every row matches. Add a row for a new binding, delete a row for a
-   removed one, fix the key-cap or wording for a changed one. Put it in the right group.
-4. Build: `dotnet build src/managed/Nota.App -c Debug`.
-5. Visually verify (see [nota-ui-verify] memory): the pane can't be reached by a click in a
-   headless run, so temporarily open it via an env-guarded hook in
-   `MainWindow.OnDataContextChanged` (`new PreferencesWindow(new SettingsViewModel(settings),
-   _vm).Show(this)`), and select the Shortcuts section (index 8 — count the sidebar entries, it moves as pages are added) — e.g. a temporary env read
-   in front of the constructor's `Select(0)`. Screenshot with `screencapture -x -o -l<winid>`
-   (get the id from the `winlist` swift helper), check the rows read correctly, then **revert
-   the temp hooks** and rebuild.
+1. **New key**: add a `KeyAction` (an existing command: give `CommandCatalog` its gesture; a
+   view key: `Add(...)` in `KeyActionCatalog` with a literal `Loc.T("keys.…")` title and the
+   right scope). Paired keys are one action per direction.
+2. In the handler, ask `Keys.Is(e, id)` / `Keys.Which(e, ids)` — never `e.Key == Key.X`. Keep
+   the handler's focus gates and order. List-navigation and typing keys (arrows in a list,
+   Return / Esc / Tab in a text box) stay fixed and are compared directly.
+3. **New gesture or fixed key**: add an `F(key, text)` row to its group in `ShortcutLayout`.
+4. Default keys must not collide (rule R3) — `KeyBindingTests` lists the pairs allowed on
+   purpose; a new one fails until it is added there with its reason.
+5. Build and run `dotnet run --project tests/Nota.SmokeTest -c Release -- --shortcuts` and
+   `-- --palette` (every action is laid out once), and `-- --localization` (new strings).
+6. Visually verify with the headless harness (memory: nota-ui-verify) —
+   `PreferencesWindow.ShowPage("Shortcuts")`, a filter, and `StartCapture` / `Propose` by
+   reflection for the editor states.
 
-## 4. Don't forget
+## 3. Don't forget
 
-- If the change is user-visible, it also wants a `CHANGELOG.md` entry under `## [Unreleased]`.
-- Keep the pane concise — it's a reference, not a manual. Group related keys onto one cap
-  (`⌘C  ⌘X  ⌘V`) rather than three rows when the action is one idea.
+- User-visible → `CHANGELOG.md` `[Unreleased]`, and the user docs: `npm run shortcuts` in
+  nota-docs regenerates `reference/shortcuts` from the layout.
+- Tooltips naming a key: `Keys.SetTip(control, text, id)` (the default glyph in the text is
+  swapped for the user's key). Context-menu hints: `MenuKit.Bound(id)`.

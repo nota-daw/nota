@@ -20,7 +20,7 @@ public sealed class ActionPaletteProvider(ICommandRegistry registry) : IPaletteP
         .Where(c => c.IsBound && !c.HideInPalette)
         .Select(c => new PaletteItem
         {
-            Kind = PaletteKind.Action, Id = "a:" + c.Id, Name = c.Title, Sub = c.Category, Gesture = c.Gesture,
+            Kind = PaletteKind.Action, Id = "a:" + c.Id, Name = c.Title, Sub = c.Category, Gesture = Nota.Application.Input.KeyBindings.Instance?.Glyphs(c.Id) ?? c.Gesture,   // the user's key (specs/096)
             View = c.View, Aliases = c.Aliases, Descriptor = c.Descriptor, Payload = c.Id,
         }).ToList();
 }

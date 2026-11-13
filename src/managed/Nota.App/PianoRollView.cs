@@ -23,6 +23,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -2835,60 +2836,69 @@ public sealed partial class PianoRollView : UserControl
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            bool meta = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
-            bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
-            if (!meta && (e.Key == Key.Delete || e.Key == Key.Back)) { if (_o.DeleteSelection()) e.Handled = true; return; }
-            // ⇧F: Fit to notes. Handled here, the window's computer-keyboard note map never
-            // sees it, so no F sounds.
-            if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Shift) { _o.FitToNotes(); e.Handled = true; return; }
-            if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Shift | KeyModifiers.Alt)) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
-            if (!meta && e.Key == Key.Escape && _o._selection.Count > 0)
+            if (Keys.Capturing) return;
+            // Every key is a binding (specs/096): the piano roll's own (roll.*) and the shared
+            // editing actions (edit.*), which mean "the notes" while this grid has focus.
+            if (Keys.Is(e, "edit.delete")) { if (_o.DeleteSelection()) e.Handled = true; return; }
+            // Fit to notes. Handled here, the window's computer-keyboard note map never sees it,
+            // so no note sounds.
+            if (Keys.Is(e, "roll.fitNotes")) { _o.FitToNotes(); e.Handled = true; return; }
+            if (Keys.Is(e, "roll.fold")) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
+            if (Keys.Is(e, "edit.cancel") && _o._selection.Count > 0)
             {
                 _o.SettlePlacement();
                 _o._selection.Clear(); _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
-            // Arrow keys nudge the selection: ←/→ by the grid in time, ↑/↓ by a semitone
-            // (Shift = an octave). The move auto-scrolls to keep pitch-shifted notes in view.
-            // ⇧←/⇧→ shorten/lengthen by the grid; ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
-            bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
-            if (!meta && _o._selection.Count > 0)
+            // Nudge the selection: in time by the grid, in pitch by a semitone or an octave (the
+            // move auto-scrolls to keep pitch-shifted notes in view); shorten / lengthen by the
+            // grid; velocity by 10 or by 1.
+            if (_o._selection.Count > 0 && Keys.Which(e, NoteMoves) is { } move)
             {
-                if (alt)
+                bool done = move switch
                 {
-                    switch (e.Key)
-                    {
-                        case Key.Up:   if (_o.NudgeVelocity(shift ? 1 : 10)) e.Handled = true; return;
-                        case Key.Down: if (_o.NudgeVelocity(shift ? -1 : -10)) e.Handled = true; return;
-                    }
-                }
-                else switch (e.Key)
-                {
-                    case Key.Left when shift:  if (_o.ResizeSelection(-1)) e.Handled = true; return;
-                    case Key.Right when shift: if (_o.ResizeSelection(+1)) e.Handled = true; return;
-                    case Key.Left:  if (_o.MoveSelection(0, -_o.SnapStep)) e.Handled = true; return;
-                    case Key.Right: if (_o.MoveSelection(0, +_o.SnapStep)) e.Handled = true; return;
-                    case Key.Up:    if (_o.MoveSelection(shift ? 12 : 1, 0)) e.Handled = true; return;
-                    case Key.Down:  if (_o.MoveSelection(shift ? -12 : -1, 0)) e.Handled = true; return;
-                }
+                    "roll.moveLeft" => _o.MoveSelection(0, -_o.SnapStep),
+                    "roll.moveRight" => _o.MoveSelection(0, +_o.SnapStep),
+                    "roll.transposeUp" => _o.MoveSelection(1, 0),
+                    "roll.transposeDown" => _o.MoveSelection(-1, 0),
+                    "roll.octaveUp" => _o.MoveSelection(12, 0),
+                    "roll.octaveDown" => _o.MoveSelection(-12, 0),
+                    "roll.shorten" => _o.ResizeSelection(-1),
+                    "roll.lengthen" => _o.ResizeSelection(+1),
+                    "roll.velocityUp" => _o.NudgeVelocity(10),
+                    "roll.velocityDown" => _o.NudgeVelocity(-10),
+                    "roll.velocityUpFine" => _o.NudgeVelocity(1),
+                    _ => _o.NudgeVelocity(-1),
+                };
+                if (done) e.Handled = true;
+                return;
             }
-            if (meta && e.Key == Key.A)
+            if (Keys.Is(e, "edit.selectAll"))
             {
                 _o.SettlePlacement();
                 _o._selection.Clear();
                 for (int i = 0; i < _o._notes.Count; i++) if (!_o.IsLocked(i)) _o._selection.Add(i);
                 _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
-            if (meta && e.Key == Key.D)   // cross-platform fallback (macOS uses the native menu)
+            if (Keys.Is(e, "edit.duplicate"))   // cross-platform fallback (macOS uses the native menu)
             {
                 if (_o.DuplicateSelection()) e.Handled = true;
                 return;
             }
             // Clipboard (the Edit-menu items carry no gesture, so these reach us here).
-            if (meta && e.Key == Key.C) { if (_o.CopySelection()) e.Handled = true; return; }
-            if (meta && e.Key == Key.X) { if (_o.CutSelection()) e.Handled = true; return; }
-            if (meta && e.Key == Key.V) { if (_o.PasteClipboard()) e.Handled = true; return; }
+            switch (Keys.Which(e, "edit.copy", "edit.cut", "edit.paste"))
+            {
+                case "edit.copy": if (_o.CopySelection()) e.Handled = true; return;
+                case "edit.cut": if (_o.CutSelection()) e.Handled = true; return;
+                case "edit.paste": if (_o.PasteClipboard()) e.Handled = true; return;
+            }
             base.OnKeyDown(e);
         }
+
+        private static readonly string[] NoteMoves =
+        {
+            "roll.moveLeft", "roll.moveRight", "roll.transposeUp", "roll.transposeDown", "roll.octaveUp", "roll.octaveDown",
+            "roll.shorten", "roll.lengthen", "roll.velocityUp", "roll.velocityDown", "roll.velocityUpFine", "roll.velocityDownFine",
+        };
     }
 
     // ---- velocity lane (interactive) -------------------------------------

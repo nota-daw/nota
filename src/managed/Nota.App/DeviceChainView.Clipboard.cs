@@ -13,6 +13,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Infrastructure;
@@ -465,29 +466,35 @@ public sealed partial class DeviceChainView
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        bool mod = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
-        if (mod && e.Key == Key.G && (e.KeyModifiers & KeyModifiers.Alt) == 0)
+        if (Keys.Capturing) return;
+        // Bindings (specs/096): group / ungroup into a rack, and the shared editing actions,
+        // which act on the selected devices while the chain has focus.
+        if (Keys.Which(e, "devices.group", "devices.ungroup") is { } group)
         {
-            if ((e.KeyModifiers & KeyModifiers.Shift) != 0) UngroupSelectedDevice(); else GroupSelectedDevice();
+            if (group == "devices.ungroup") UngroupSelectedDevice(); else GroupSelectedDevice();
             e.Handled = true; return;
         }
+        var edit = Keys.Which(e, "edit.copy", "edit.cut", "edit.paste", "edit.duplicate", "edit.delete");
         // A selected rack chain device takes the clipboard keys (specs/042).
-        if (_rackSel != null && _rackCmds is { } rc)
+        if (edit is not null && _rackSel != null && _rackCmds is { } rc)
         {
-            Action? run = mod ? e.Key switch { Key.C => rc.Copy, Key.X => rc.Cut, Key.V => rc.Paste, Key.D => rc.Duplicate, _ => null }
-                : e.Key is Key.Delete or Key.Back ? rc.Delete : null;
+            Action? run = edit switch
+            {
+                "edit.copy" => rc.Copy, "edit.cut" => rc.Cut, "edit.paste" => rc.Paste, "edit.duplicate" => rc.Duplicate, _ => rc.Delete,
+            };
             if (run != null) { run(); e.Handled = true; return; }
         }
-        if (mod && e.Key == Key.C && HasDeviceSelection) { CopySelectedDevice(); e.Handled = true; return; }
-        if (mod && e.Key == Key.X && HasDeviceSelection) { CutSelectedDevice(); e.Handled = true; return; }
-        if (mod && e.Key == Key.V && CanPaste) { PasteDevice(); e.Handled = true; return; }
-        if (mod && e.Key == Key.D && HasEffectSelection) { DuplicateSelectedDevice(); e.Handled = true; return; }
-        if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && HasDeviceSelection) { DeleteSelectedDevice(); e.Handled = true; return; }
-        // Esc with the XL device selected (a click on the panel's header or its placeholder
+        if (edit == "edit.copy" && HasDeviceSelection) { CopySelectedDevice(); e.Handled = true; return; }
+        if (edit == "edit.cut" && HasDeviceSelection) { CutSelectedDevice(); e.Handled = true; return; }
+        if (edit == "edit.paste" && CanPaste) { PasteDevice(); e.Handled = true; return; }
+        if (edit == "edit.duplicate" && HasEffectSelection) { DuplicateSelectedDevice(); e.Handled = true; return; }
+        if (edit == "edit.delete" && HasDeviceSelection) { DeleteSelectedDevice(); e.Handled = true; return; }
+        // Cancel with the XL device selected (a click on the panel's header or its placeholder
         // selects it and focuses the chain) closes the panel, as Esc inside the panel does.
-        if (!mod && e.Key == Key.Escape && _xlIndex >= 0 && SingleSelection is { Section: DeviceSection.Audio } xs && xs.Index == _xlIndex)
+        bool cancel = Keys.Is(e, "edit.cancel");
+        if (cancel && _xlIndex >= 0 && SingleSelection is { Section: DeviceSection.Audio } xs && xs.Index == _xlIndex)
         { CloseXl(_xlIndex); e.Handled = true; return; }
-        if (!mod && e.Key == Key.Escape && HasDeviceSelection) { ClearDeviceSelection(); Rebuild(); e.Handled = true; return; }
+        if (cancel && HasDeviceSelection) { ClearDeviceSelection(); Rebuild(); e.Handled = true; return; }
         base.OnKeyDown(e);
     }
 
