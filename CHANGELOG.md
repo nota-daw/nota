@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nothing on the transport bar goes out of reach** (#520, specs/097). A **⋯** key now ends
+  the transport bar. When the window is too narrow — or the interface scale too large — for
+  the whole bar, the parts it hides (Tap, Key, Grid, Snap, Follow, Automation, Mixer, MIDI learn,
+  Remote, the time signature, loop and loop-record mode, the master level, the DSP meter)
+  are listed in the ⋯ menu, in bar order, and work from there as they do in the bar: toggles
+  as check items, Grid and the time signature as submenus, Tap stays open for tapping, the
+  master fader drags in place. An accent dot on ⋯ says something is in it; widen the window
+  and the parts go back to the bar. The menu also switches the **interface scale** (75–200 %)
+  at every width, the same setting as Settings → Appearance. When the Grid cell is hidden its
+  separator now goes with it, so the bar no longer shows two rules side by side.
 - **A Mixer button in the toolbar** (#516, specs/092). Next to Automation, the faders key shows
   or hides the Mixer with one click, docked or in its own window, as View → Mixer and ⌘⇧M do.
   It reads as on while the Mixer is shown and stays in step however you open or close it: the

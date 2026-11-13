@@ -9,43 +9,56 @@
 // when the audio starts to crackle and isn't shown anywhere else, so it only folds to its
 // number early on and goes last of all (#303).
 // The Menu key (Windows / Linux, #518) is never in the order either: with the menu row hidden
-// it is the only way to the menu by mouse.
+// it is the only way to the menu by mouse. Nor is the ⋯ key at the end (#520): nothing shed is
+// lost — the ⋯ menu lists every part the bar had no room for. The order itself lives in
+// Nota.Presentation.ToolbarOverflow, so the menu and the smoke test read the same list.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Nota.Application.Localization;
+using Nota.Presentation;
 
 namespace Nota.App;
 
 public partial class MainWindow
 {
-    // Each step hides its controls together; steps go in this order and come back in reverse.
+    // Each step hides its controls together; steps go in ToolbarOverflow.ShedOrder and come
+    // back in reverse. What a step hid is listed in the ⋯ menu (MainWindow.TransportOverflow.cs).
     private Control[][]? _transportShedOrder;
     private bool _transportFitPosted;
 
-    private Control[][] TransportShedOrder => _transportShedOrder ??= new[]
+    /// <summary>How many steps of the shed order the last fit hid (0 = the whole bar shows).</summary>
+    private int _shedSteps;
+
+    private Control[][] TransportShedOrder => _transportShedOrder ??=
+        ToolbarOverflow.ShedOrder.Select(ShedControls).ToArray();
+
+    // The controls a part takes with it.
+    private Control[] ShedControls(ToolbarPart part) => part switch
     {
-        new Control[] { CpuBar },               // the DSP meter keeps its number
-        new Control[] { RemoteLabel },          // Remote keeps its glyph, count and dot
-        new Control[] { TapChip },              // palette ▸ Tap Tempo; the BPM field stays
-        new Control[] { KeyChip },              // set once per project
-        new Control[] { RemoteBtn },            // View ▸ Connect Phone…
-        new Control[] { FollowBtn },            // View ▸ Follow playhead
-        new Control[] { AutomationToggle },     // ⌘⇧A
-        new Control[] { MixerToggle },          // View ▸ Mixer, ⌘⇧M
-        new Control[] { TimeSigCell },          // set once per project
-        new Control[] { RemotePanel },          // MIDI learn (the panel goes with its last chip)
-        new Control[] { SnapChip },             // the grid; snapping itself stays switchable
-        new Control[] { SnapToggle },           // hold Alt to drag freely
-        new Control[] { LoopRecordCell },       // ⌘⇧R / Transport menu
-        new Control[] { LoopSep, LoopCell },    // ⌘L; the range stays visible on the ruler
-        new Control[] { MasterWell },           // the master strip is in the mixer
-        new Control[] { CpuMeter, CpuSep },     // only when nothing else is left to give
+        ToolbarPart.CpuBar => [CpuBar],                 // the DSP meter keeps its number
+        ToolbarPart.RemoteLabel => [RemoteLabel],       // Remote keeps its glyph, count and dot
+        ToolbarPart.Tap => [TapChip],                   // palette ▸ Tap Tempo; the BPM field stays
+        ToolbarPart.Key => [KeyChip],                   // set once per project
+        ToolbarPart.Remote => [RemoteBtn],              // View ▸ Connect Phone…
+        ToolbarPart.Follow => [FollowBtn],              // View ▸ Follow playhead
+        ToolbarPart.Automation => [AutomationToggle],   // ⌘⇧A
+        ToolbarPart.Mixer => [MixerToggle],             // View ▸ Mixer, ⌘⇧M
+        ToolbarPart.TimeSignature => [TimeSigCell],     // set once per project
+        ToolbarPart.MidiLearn => [RemotePanel],         // MIDI learn (the panel goes with its last chip)
+        ToolbarPart.Grid => [GridSep, SnapChip],        // the grid; snapping itself stays switchable
+        ToolbarPart.Snap => [SnapToggle],               // hold Alt to drag freely
+        ToolbarPart.LoopRecord => [LoopRecordCell],     // ⌘⇧R / Transport menu
+        ToolbarPart.Loop => [LoopSep, LoopCell],        // ⌘L; the range stays visible on the ruler
+        ToolbarPart.Master => [MasterWell],             // the master strip is in the mixer
+        ToolbarPart.DspMeter => [CpuMeter, CpuSep],     // only when nothing else is left to give
+        _ => [],
     };
 
     private void InitTransportFit()
@@ -94,6 +107,8 @@ public partial class MainWindow
             hidden++;
         }
 
+        _shedSteps = hidden;
+        OverflowDot.IsVisible = hidden > 0;
         TransportGrid.InvalidateMeasure();
     }
 

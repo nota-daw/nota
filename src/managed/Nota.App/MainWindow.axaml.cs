@@ -239,15 +239,7 @@ public partial class MainWindow : Window
         MasterMeterHost.Children.Add(_masterMeter);
 
         // The master slider: a flat bar over the master meter, its gain in dB written inside.
-        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0, Text = v => NotaNum.GainDb(v) };
-        var masterUndo = new MixGesture(vm.Engine, MixTarget.Master);   // one undo step per drag (specs/009)
-        masterVol.GestureBegin += masterUndo.Begin;
-        masterVol.GestureEnd += masterUndo.End;
-        Action<double> setMaster = v => vm.Transport.MasterVolume = v;
-        masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
-        // Double-click the dB written in the bar (or ⌥-click anywhere) to type the master gain;
-        // a double-click elsewhere on the bar resets to 0 dB.
-        ValueEntry.Attach(masterVol, masterVol.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)));
+        var masterVol = CreateMasterFader(vm);
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
@@ -800,10 +792,13 @@ public partial class MainWindow : Window
         _modular.ShowTrack(trackId);
     }
 
-    private void OnPickProjectKey(object? sender, RoutedEventArgs e)
+    private void OnPickProjectKey(object? sender, RoutedEventArgs e) => PickProjectKey(KeyChip);
+
+    /// <summary>The project-key picker, under the KEY cell — or under ⋯ when the cell is shed (#520).</summary>
+    private void PickProjectKey(Control anchor)
     {
         if (_vm is null) return;
-        KeyPicker.Show(KeyChip, _vm.Transport.Key, Loc.T("main.no_key"), k =>
+        KeyPicker.Show(anchor, _vm.Transport.Key, Loc.T("main.no_key"), k =>
         {
             _vm.Transport.KeyCode = k?.Code ?? -1;
             _vm.StatusText = k is { } key ? Loc.F("main.project_key", key.Long) : Loc.T("main.no_project_key");
@@ -868,6 +863,21 @@ public partial class MainWindow : Window
             if (tip != shown) ToolTip.SetTip(CpuMeter, shown = tip);   // re-set only when it changed (#66)
         };
         _cpuTipTick();
+    }
+
+    /// <summary>A master-gain fader: the transport bar's, and the one in the ⋯ menu while the
+    /// master strip is shed (#520). One undo step per drag (specs/009); double-click the dB
+    /// written in it (or ⌥-click anywhere) to type the gain, elsewhere to reset to 0 dB.</summary>
+    private static MiniFader CreateMasterFader(MainWindowViewModel vm)
+    {
+        var fader = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0, Text = v => NotaNum.GainDb(v) };
+        var undo = new MixGesture(vm.Engine, MixTarget.Master);
+        fader.GestureBegin += undo.Begin;
+        fader.GestureEnd += undo.End;
+        Action<double> set = v => vm.Transport.MasterVolume = v;
+        fader.ValueChanged += v => undo.Change(v, set);
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)));
+        return fader;
     }
 
     private readonly TapTempo _tap = new();
@@ -1031,9 +1041,11 @@ public partial class MainWindow : Window
 
     // Snap on/off: the latch you reach for to nudge something off-grid for a while. The
     // same switch as ⌘4 and the grid menu's "Snap to grid" (EditorGrids.Arrangement.SnapOn).
-    private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e)
+    private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e) => SetSnapEnabled(SnapToggle.IsChecked == true);
+
+    /// <summary>Snap on/off — the magnet, and its entry in the ⋯ menu while the magnet is shed.</summary>
+    private void SetSnapEnabled(bool on)
     {
-        bool on = SnapToggle.IsChecked == true;
         var grids = EditorGrids.Shared;
         grids.Set(EditorKind.Arrangement, grids.Get(EditorKind.Arrangement) with { SnapOn = on });
         if (_vm is not null) _vm.StatusText = on ? Loc.T("main.snap_on") : Loc.T("main.snap_off_clips_position_freely");
@@ -1043,7 +1055,7 @@ public partial class MainWindow : Window
     // (zoom, the menu, ⌘1–⌘5).
     private void InitSnapGrid()
     {
-        var chip = Nota.App.SnapChip.Attach(SnapChip, SnapLabel, SnapCaption, EditorKind.Arrangement, () => Timeline.SnapGridState);
+        var chip = _snapChip = Nota.App.SnapChip.Attach(SnapChip, SnapLabel, SnapCaption, EditorKind.Arrangement, () => Timeline.SnapGridState);
         Timeline.GridChanged += chip.Refresh;
         void SyncLatch() => SnapToggle.IsChecked = EditorGrids.Shared.Get(EditorKind.Arrangement).SnapOn;
         EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) SyncLatch(); };

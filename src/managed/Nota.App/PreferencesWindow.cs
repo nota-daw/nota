@@ -1454,6 +1454,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             buttons.Add((p, btn));
             strip.Children.Add(btn);
         }
+        // The scale can also change from the transport bar's ⋯ menu (#520) while Settings is open.
+        void Follow()
+        {
+            int now = InterfaceScale.Normalize(settings.Current.InterfaceScale);
+            foreach (var (bp, bb) in buttons) bb.IsChecked = bp == now;
+        }
+        strip.AttachedToVisualTree += (_, _) => NotaUiScale.Changed += Follow;
+        strip.DetachedFromVisualTree += (_, _) => NotaUiScale.Changed -= Follow;
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
