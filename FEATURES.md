@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.59.2** (plus changes in development on `main`). This document describes what is
+**0.60.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -655,6 +655,10 @@ own window — see
   aligned, one undo step; a mono input records a mono file.
 - **Inputs setup** (Settings → Inputs): switch inputs off and name inputs and stereo
   pairs per device; track input menus follow.
+- **Several Session slots in one take**: while a Session take records, launching an empty
+  slot on another armed track (audio or MIDI) records into it too, each from its own input;
+  clicking a recording slot stops it alone, the toolbar's stop ends them all. MCP
+  `stop_session_record_slot`.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
   **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
@@ -1736,7 +1740,7 @@ Coverage:
   mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
   release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
-  scene recording with a fixed length, back to arrangement, slot ↔ arrangement).
+  scene recording with a fixed length, stopping one recording slot, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
   8 macros and their mappings (range, curve), rack volume, glide and mono, a chain's MIDI

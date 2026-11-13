@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.60.1] — 2026-11-13
+
 ### Added
 - **Nothing on the transport bar goes out of reach** (#520, specs/097). A **⋯** key now ends
   the transport bar. When the window is too narrow — or the interface scale too large — for
