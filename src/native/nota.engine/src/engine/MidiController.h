@@ -77,6 +77,10 @@ inline std::vector<AutomationPoint> dedupeSwitch(const std::vector<AutomationPoi
 
 // Ramer–Douglas–Peucker over breakpoints (first and last always kept): the fewest points that
 // stay within `tol` of a block-rate recording — the shape the gesture had.
+// The curve of the piece [from, min(to, next point)] of the segment of `p` that holds `from`:
+// exact, as the segment shape is shift-invariant (#591). 0 before the first / past the last point.
+float ctlPieceCurve(const std::vector<AutomationPoint>& p, double from, double to);
+
 std::vector<AutomationPoint> thinCtlCurve(const std::vector<AutomationPoint>& p, float tol);
 
 // Recording tolerances: about one 7-bit step for a CC, ~1% of the wheel's travel — the capture

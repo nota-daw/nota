@@ -27,6 +27,6 @@ internal static class NotaDepth
         => ctx.DrawRectangle(NotaPalette.SurfaceHover, null, r, Shadow(owner, "Shadow.Lifted"));
 
     /// <summary>A pressed-in section of a device card.</summary>
-    public static void Section(DrawingContext ctx, StyledElement owner, RoundedRect r)
-        => ctx.DrawRectangle(NotaPalette.DeviceSection, null, r, Shadow(owner, "Shadow.Section"));
+    public static void Section(DrawingContext ctx, StyledElement owner, RoundedRect r, bool filled = true)
+        => ctx.DrawRectangle(filled ? NotaPalette.DeviceSection : Brushes.Transparent, null, r, Shadow(owner, "Shadow.Section"));
 }
