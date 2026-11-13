@@ -53,6 +53,7 @@ public partial class MainWindow
         }
         if (_vm.SuspendEnginePolling || PaletteOpen) return;   // the palette has the keyboard
         if (e.Source is TextBox || e.Source is NumericUpDown) return;
+        if (TakesOverflowKey(e)) { e.Handled = true; return; }   // ⋯ focused by Tab (#520)
 
         if (Keys.Is(e, "session.launchSelection") && SessionFocused)
         {
