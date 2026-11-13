@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Choose the address Nota Remote shows** (#85, specs/095). On a computer with several
+  networks (Wi-Fi and Ethernet, a VPN, a virtual machine's network), Nota could put an address
+  in the QR code that the phone can't reach. Now you can choose it.
+  - **Settings → Remote → Address in the QR**: Automatic (as before: USB, then Wi-Fi, then
+    Ethernet) or one network interface. The choice is kept after a restart, by the
+    interface's name. While that interface is down, Automatic stands in, and the list says so.
+  - **Connect phone**: the other addresses under the main one take a click, which puts that
+    address in the link and QR code; **Automatic** under them goes back.
+  - Next to the address, **Open in the browser** opens the Remote page on this computer, and
+    **Copy the link** copies it.
 - **A Modular tab in the browser** (#592, specs/095). While Modular is the view the browser's
   rail carries a **Modular** tab (a patch-cable icon, after MIDI effects) listing every node
   Modular offers — LFO, Envelope Follower, MIDI → CV, ADSR, Macro, Math, Scope — with its

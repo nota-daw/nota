@@ -120,6 +120,10 @@ public sealed class Settings
     public bool RemoteEnabled { get; set; }
     /// <summary>TCP port Nota Remote listens on (all interfaces).</summary>
     public int RemotePort { get; set; } = 7788;
+    /// <summary>The network interface whose address the Connect phone link and QR show (#85),
+    /// by its system name (en0, eth0, "Wi-Fi"); null = Automatic (a USB link first, then
+    /// Wi-Fi, then Ethernet). An interface that isn't up falls back to Automatic.</summary>
+    public string? RemoteInterface { get; set; }
     /// <summary>What a phone may do: 0 play notes only, 1 also control the project (mixer,
     /// transport, macros, XY, Session).</summary>
     public int RemoteAccess { get; set; } = 1;
