@@ -207,7 +207,7 @@ public partial class MainWindow
         {
             if (!_session.CopySelectionToArrangement()) _vm.StatusText = Loc.T("main.menu.select_a_clip_or_a");
         }
-        else if (Timeline.IsVisible && Timeline.CopySelectionToSession() < 0)
+        else if (ArrangementShown && Timeline.CopySelectionToSession() < 0)
             _vm.StatusText = Loc.T("main.menu.select_clips_to_copy_to");
     }
     private void OnMenuDeleteSel(object? sender, EventArgs e)

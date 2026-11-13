@@ -254,7 +254,7 @@ public sealed partial class PianoRollView
             return (float)(a.Value + (b.Value - a.Value) * Shape((beat - a.Beat) / span, a.Curve));
         }
 
-        private static double Shape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        private static double Shape(double t, float curve) => AutomationCurve.Shape(t, curve);
 
         // Sorted, the last point given for any one beat kept; a switch keeps only its changes.
         private List<AutomationPoint> Normalize(IEnumerable<AutomationPoint> pts)
@@ -456,10 +456,11 @@ public sealed partial class PianoRollView
                 for (int i = 1; i < c.Count; i++)
                 {
                     var a = c[i - 1]; var b = c[i];
+                    int steps = a.Curve != 0 ? AutomationCurve.DrawSteps(XOf(b.Beat) - XOf(a.Beat)) : 0;
                     if (a.Curve != 0)
-                        for (int s = 1; s < 12; s++)
+                        for (int s = 1; s < steps; s++)
                         {
-                            double t = s / 12.0;
+                            double t = s / (double)steps;
                             g.LineTo(new Point(XOf(a.Beat + (b.Beat - a.Beat) * t), ValueToY((float)(a.Value + (b.Value - a.Value) * Shape(t, a.Curve)))));
                         }
                     g.LineTo(new Point(XOf(b.Beat), ValueToY(b.Value)));

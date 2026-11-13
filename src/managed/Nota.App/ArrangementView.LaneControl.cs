@@ -1607,7 +1607,7 @@ public sealed partial class ArrangementView
                 string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
                 var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaType.ClipName, content)
-                { MaxTextWidth = Math.Max(8, rect.Width - 14), Trimming = TextTrimming.CharacterEllipsis };
+                { MaxTextWidth = Math.Max(8, rect.Width - 14), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
                 using var _ = ctx.PushClip(rect);
                 ctx.DrawText(ft, new Point(rect.X + 7, rect.Y + (LabelH - ft.Height) / 2 + 1));
             }
@@ -1656,7 +1656,7 @@ public sealed partial class ArrangementView
                 string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
                 var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaType.Eyebrow, NotaPalette.InkOn(band))
-                { MaxTextWidth = Math.Max(8, rect.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+                { MaxTextWidth = Math.Max(8, rect.Width - 10), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
                 using var _ = ctx.PushClip(rect);
                 ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + (TitleBandH - ft.Height) / 2));
             }

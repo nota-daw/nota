@@ -33,6 +33,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     address in the link and QR code; **Automatic** under them goes back.
   - Next to the address, **Open in the browser** opens the Remote page on this computer, and
     **Copy the link** copies it.
+- **A Modular tab in the browser** (#592, specs/095). While Modular is the view the browser's
+  rail carries a **Modular** tab (a patch-cable icon, after MIDI effects) listing every node
+  Modular offers — LFO, Envelope Follower, MIDI → CV, ADSR, Macro, Math, Scope — with its
+  category and a description, searchable by name, category or alias ("wobble" finds LFO).
+  Drag a node onto the canvas and it lands there, unconnected; double-click (or Enter) puts
+  it in the middle of the view. The browser remembers its own last tab for Modular (the
+  Modular tab the first time) and goes back to the other one when you leave.
+- **The arrangement's track headers in Modular** (#592, specs/095). Modular's Track view shows
+  the same track column as the arrangement — group trays, every control, the context menu,
+  drag to reorder, meters, both looks — on the side **Track headers on the right** picks, and
+  it moves at once when that changes. Click a header to see that track's graph; drop a CV
+  cable on another track's header to modulate it from here.
+- **Group graphs in Modular** (#592, specs/095). A group's header opens the group's own effect
+  chain (Tracks in → effects → out); modulators patch its effects like any track's.
+- **Show in Modular** (#592, specs/095) in the track menus of the arrangement and the Session
+  view: Modular opens in Track view on that track.
 - **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
   lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
   Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
@@ -596,6 +612,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Curved automation eases instead of jumping** (#591): bending a segment towards an
+  ease-out made it reach almost all of its change at the very start — a near-vertical drop
+  on screen and an audible step in playback — while the opposite bend looked gentle. Every
+  curved segment (automation lanes, clip envelopes, MIDI controller lanes) now follows a
+  smooth exponential: no jump at either end, and ease-in and ease-out mirror each other.
+  Curves in saved projects keep their bend but play gentler at the extremes. Cutting a
+  curved segment (moving or duplicating a section, drawing over a controller lane,
+  recording controllers, splitting clips) now keeps its shape exactly on both sides, and
+  the curves are drawn smoothly at any zoom.
+- **Plug-in cards show the plug-in's window again**: since the new look, the info section's
+  own surface covered the picture of the plug-in's window on its card. The picture now
+  shows through the section, on S and on L, under the wash that keeps the text readable.
+- **Short clips keep their name on one line** (#590): a clip narrower than its name wrapped
+  the name onto a second line over the waveform. The name now stays on one line and ends in
+  an ellipsis; section names in the arrangement do the same.
 - **Track header meters stay inside the header** (#584): on a Compact or a low Standard row a
   track's level meter ran into the bottom edge of its header, and a folded group's meter ran
   under its name and buttons. Every header meter now fits its row, and a group's meter stands
@@ -696,6 +727,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   while hovered or dragged. Operator's OUT drop zone is the
   bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
   graph tooltips that named colours no longer drawn now describe what is on screen.
+
+### Removed
+- **Modular's + Add menu and its Tracks list** (#592, specs/095): nodes come from the browser's
+  Modular tab and the command palette; the track column is the arrangement's headers.
 
 ## [0.59.2] — 2026-11-08
 

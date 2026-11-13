@@ -33,6 +33,10 @@ internal sealed class RuleSection : Decorator
     /// <summary>Kept for older call sites: a pressed-in section has no dividing rules.</summary>
     public SectionEdge Edges { get; init; } = SectionEdge.Auto;
 
+    /// <summary>False: only the pressed-in edge, no fill — for a section over a picture that
+    /// paints the section's own surface itself (a plug-in card's window preview).</summary>
+    public bool Filled { get; init; } = true;
+
     public RuleSection() => ClipToBounds = true;
 
     protected override Size MeasureOverride(Size availableSize)
@@ -65,6 +69,6 @@ internal sealed class RuleSection : Decorator
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        NotaDepth.Section(context, this, new RoundedRect(new Rect(Bounds.Size), NotaRadius.GroupValue));
+        NotaDepth.Section(context, this, new RoundedRect(new Rect(Bounds.Size), NotaRadius.GroupValue), Filled);
     }
 }

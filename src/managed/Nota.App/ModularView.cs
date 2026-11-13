@@ -69,9 +69,20 @@ public sealed partial class ModularView : UserControl
     private readonly TextBlock _status = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _statusRight = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
 
-    // track-list sidebar (Track view)
-    private readonly StackPanel _sidebar = new();
-    private readonly Border _sidebarPanel;
+    // The track column beside the canvas is the arrangement's own header column (specs/095);
+    // the host answers "which track's header is under this point" for cross-track CV drops.
+    /// <summary>Host hook: the track (and its header card) under a window point, or null.</summary>
+    public Func<Point, (int TrackId, Control Anchor)?>? TrackAtPoint { get; set; }
+    /// <summary>A CV cable drag started (true) or ended (false) — the host lights the column.</summary>
+    public event Action<bool>? ConnectHintChanged;
+    /// <summary>A line for the status bar (why a node couldn't be added, …).</summary>
+    public event Action<string>? StatusRequested;
+    /// <summary>Global view (islands) is shown.</summary>
+    public bool IsGlobal => _global;
+    /// <summary>Track ↔ Global switched — the host hides or shows the header column.</summary>
+    public event Action<bool>? GlobalChanged;
+    /// <summary>Nodes can be added: Track view with a track shown.</summary>
+    public bool CanAddNodes => !_global && _trackId > 0;
 
     /// <summary>Raised when a browser item is dropped on the canvas (adds it to the current track).</summary>
     public event Action<BrowserItem>? ItemDropped;
@@ -147,7 +158,8 @@ public sealed partial class ModularView : UserControl
         DragDrop.SetAllowDrop(_viewport, true);
         DragDrop.AddDragOverHandler(_viewport, (_, e) =>
         {
-            bool ok = BrowserView.IsAcceptableDrag(e) && _trackId > 0;
+            bool ok = BrowserView.IsModularNodeDrag ? CanAddNodes   // a Modular node (specs/095)
+                    : BrowserView.IsAcceptableDrag(e) && _trackId > 0;
             e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
             _dropGlow.IsVisible = ok;
         });
@@ -155,30 +167,24 @@ public sealed partial class ModularView : UserControl
         DragDrop.AddDropHandler(_viewport, (_, e) =>
         {
             _dropGlow.IsVisible = false;
-            foreach (var item in BrowserView.DroppedItems(e)) ItemDropped?.Invoke(item);
             e.Handled = true;
+            if (BrowserView.CurrentDrag is { Kind: BrowserItemKind.ModularNode } node)
+            {
+                // The node lands unconnected where it was dropped (specs/095).
+                if (!CanAddNodes) { StatusRequested?.Invoke(Loc.T("modular.open_a_track_to_add_nodes")); return; }
+                if (AddModulatorAt(node.BuiltinKind, e.GetPosition(_viewport)) >= 0)
+                    StatusRequested?.Invoke(Loc.F("modular.node_added", node.Name));
+                return;
+            }
+            foreach (var item in BrowserView.DroppedItems(e)) ItemDropped?.Invoke(item);
         });
 
-        // Middle row: track-list sidebar (Track view) + the canvas.
-        var header = new Border
-        {
-            Height = 26, Child = new TextBlock { Text = Loc.T("modular.tracks"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) },
-            BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
-        };
-        var listCol = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(header, Dock.Top);
-        listCol.Children.Add(header);
-        listCol.Children.Add(new ScrollViewer { Content = _sidebar, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
-        _sidebarPanel = new Border { Width = 176, Background = Rail, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 1, 0), Child = listCol };
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        body.Children.Add(_sidebarPanel);
-        Grid.SetColumn(_viewport, 1);
-        body.Children.Add(_viewport);
-
+        // Middle row: the canvas. The track column beside it is the arrangement's header
+        // column, laid out by the host (specs/095).
         var root = new Grid
         {
             RowDefinitions = new RowDefinitions("34,*,22"),
-            Children = { Toolbar(), Row(body, 1), StatusBar() },
+            Children = { Toolbar(), Row(_viewport, 1), StatusBar() },
         };
 
         // A docked panel like the browser and the arrangement: square, no frame of its own.
@@ -215,6 +221,7 @@ public sealed partial class ModularView : UserControl
     /// removed track's nodes on screen still wired to a dead track id.</summary>
     public void Show(int trackId)
     {
+        if (trackId > 0 && trackId == _engine.MasterTrackId) return;   // Modular doesn't patch the master
         if (trackId <= 0) { _trackId = -1; Rebuild(); RefreshSidebar(); return; }
         bool changed = trackId != _trackId;
         _trackId = trackId;
@@ -223,7 +230,13 @@ public sealed partial class ModularView : UserControl
         if (changed) FitToScreen();
     }
 
-    // The sidebar is the way in, so it refreshes even with no track picked yet (critique F3).
+    /// <summary>Show a track's graph from elsewhere (Show in Modular): Track view, that track.</summary>
+    public void ShowTrack(int trackId)
+    {
+        if (_global) { _trackId = trackId; SetGlobal(false); FitToScreen(); return; }
+        Show(trackId);
+    }
+
     public void Refresh() { if (_global || _trackId > 0) Rebuild(); RefreshSidebar(); }
 
     /// <summary>The track Modular opens on when nothing is selected: the first track that is
@@ -248,6 +261,7 @@ public sealed partial class ModularView : UserControl
         _globalBtn.IsChecked = global;
         if (_global == global) return;
         _global = global;
+        GlobalChanged?.Invoke(global);
         Rebuild();           // island / chain-node keys don't collide, so kept positions survive
         RefreshSidebar();
         FitToScreen();
@@ -260,35 +274,10 @@ public sealed partial class ModularView : UserControl
         else Show(trackId);   // already in Track view → just switch the graph
     }
 
-    // ---- track-list sidebar (Track view) --------------------------------
+    // ---- the empty-state hint (Track view with no track) -------------------
     private void RefreshSidebar()
     {
-        _sidebarPanel.IsVisible = !_global;   // collapses in Global view (islands are the tracks)
         _emptyHint.IsVisible = !_global && _trackId <= 0;   // the hint is Track view's; Global has islands
-        if (_global) return;
-        _sidebar.Children.Clear();
-        foreach (int i in ArrangementView.DisplayOrder(_engine))
-            if (_engine.TryGetTrackInfo(i, out var ti) && !ti.IsGroup)
-                _sidebar.Children.Add(TrackRow(ti.Id, ti));
-        if (_sidebar.Children.Count == 0)
-            _sidebar.Children.Add(new TextBlock { Text = Loc.T("modular.no_tracks_yet"), Classes = { "Caption" }, Margin = new Thickness(10, 8) });
-    }
-
-    private Control TrackRow(int trackId, NotaTrackInfo ti)
-    {
-        bool active = trackId == _trackId;
-        string name = _engine.GetTrackName(trackId);
-        if (string.IsNullOrEmpty(name)) name = ti.IsReturn ? Loc.F("common.return_n", trackId) : ti.IsInstrument ? Loc.F("modular.inst", trackId) : Loc.F("common.audio_n", trackId);
-        var color = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, trackId));
-        var row = new Border
-        {
-            Height = 34, Background = active ? NotaPalette.SurfaceHover : Brushes.Transparent,
-            BorderBrush = color, BorderThickness = new Thickness(3, 0, 0, 0),
-            Cursor = new Cursor(StandardCursorType.Hand), Tag = trackId,   // Tag → cross-track CV drop target
-            Child = new TextBlock { Text = name, FontSize = 11, FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal, Foreground = active ? Text1 : Text2, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) },
-        };
-        row.PointerPressed += (_, e) => { OpenTrack(trackId); e.Handled = true; };
-        return row;
     }
 
     // ---- layout persistence (UI-only data; sidecar in the .nota bundle) ----
@@ -382,9 +371,11 @@ public sealed partial class ModularView : UserControl
         if (_global) { RebuildGlobal(); return; }
         if (_trackId <= 0) { _grid.InvalidateVisual(); _edges.InvalidateVisual(); _mini.InvalidateVisual(); return; }
 
-        bool isInstrument = _engine.TryGetTrackInfo(TrackIndex(_trackId), out var ti) && ti.IsInstrument;
+        bool known = _engine.TryGetTrackInfo(TrackIndex(_trackId), out var ti);
+        bool isInstrument = known && ti.IsInstrument;
+        bool isGroup = known && ti.IsGroup;   // a group's own effect chain (specs/095)
         string trackName = _engine.GetTrackName(_trackId);
-        if (string.IsNullOrEmpty(trackName)) trackName = isInstrument ? Loc.F("modular.instrument", _trackId) : Loc.F("common.audio_n", _trackId);
+        if (string.IsNullOrEmpty(trackName)) trackName = isInstrument ? Loc.F("modular.instrument", _trackId) : isGroup ? Loc.T("common.group") : Loc.F("common.audio_n", _trackId);
 
         // Pre-scan incoming CV links (this track) so each modulated param gets its own input
         // port on its node — built before the nodes so their port blocks know the count.
@@ -430,9 +421,10 @@ public sealed partial class ModularView : UserControl
         }
         else
         {
-            var src = SimpleNode("input", Loc.T("modular.audio_in"), Sage, new Point(x, y),
+            // An audio track's clips / input, or the sum of a group's tracks.
+            var src = SimpleNode("input", isGroup ? Loc.T("modular.tracks_in") : Loc.T("modular.audio_in"), Sage, new Point(x, y),
                 audioIn: false, audioOut: true, midiIn: false, midiOut: false,
-                badge: "CLIPS", slot: Slot.Input);
+                badge: isGroup ? "GROUP" : "CLIPS", slot: Slot.Input);
             AddNode(src);
             prevAudio = src;
             x += NodeW + GapX;
@@ -948,28 +940,22 @@ public sealed partial class ModularView : UserControl
 
     // ---- modulators (Phase 3: LFO node + CV links) ---------------------
 
-    /// <summary>Adds a modulator node to the shown track without connections, at the pointer
-    /// when it is over the canvas, else in the middle of the view (the command palette). Returns
-    /// its id, or -1.</summary>
-    internal int AddModulatorAt(int kind)
+    /// <summary>Adds a modulator node to the shown track without connections: at
+    /// <paramref name="viewportPoint"/> (a browser drop), else at the pointer when it is over the
+    /// canvas, else in the middle of the view (the palette, a browser double-click). Returns its
+    /// id, or -1.</summary>
+    internal int AddModulatorAt(int kind, Point? viewportPoint = null)
     {
         if (_trackId <= 0) return -1;
         int id = _engine.ModulatorAdd(_trackId, kind);
         if (id < 0) return -1;
-        var scr = _pointerInViewport ?? Center();
+        var scr = viewportPoint ?? _pointerInViewport ?? Center();
         _savedPos[$"{_trackId}/mod{id}"] = new Point((scr.X - _pan.X) / _scale - 60, (scr.Y - _pan.Y) / _scale - 28);
         Rebuild(); Changed?.Invoke();
         return id;
     }
 
     private Point? _pointerInViewport;
-
-    private void AddModulator(int kind)
-    {
-        if (_trackId <= 0) return;
-        _engine.ModulatorAdd(_trackId, kind);   // 0 = LFO, 1 = envelope follower
-        Rebuild(); Changed?.Invoke();
-    }
 
     private void RemoveModulatorNode(GNode n)
     {
@@ -1816,7 +1802,7 @@ public sealed partial class ModularView : UserControl
         _connectCursor = e.GetPosition(_viewport);
         e.Pointer.Capture(_viewport);
         HighlightTargets(true);
-        _sidebarPanel.BorderBrush = Brass;   // hint: drop on a track here to modulate across tracks
+        ConnectHintChanged?.Invoke(true);   // hint: drop on a track's header to modulate across tracks
         _edges.InvalidateVisual();
     }
 
@@ -1825,14 +1811,13 @@ public sealed partial class ModularView : UserControl
         _connecting = false;
         e.Pointer.Capture(null);
         HighlightTargets(false);
-        _sidebarPanel.BorderBrush = BorderDef;   // clear the cross-track drop hint
+        ConnectHintChanged?.Invoke(false);   // clear the cross-track drop hint
 
-        // Dropped on the track list (left) → wire the modulator into a param on THAT track.
-        var sp = e.GetPosition(_sidebar);
-        if (sp.X >= 0 && sp.X <= _sidebar.Bounds.Width)
-            foreach (var child in _sidebar.Children)
-                if (child is Control c && c.Tag is int otherTrack && otherTrack != _trackId && c.Bounds.Contains(sp))
-                { ShowCrossTrackParamMenu(c, otherTrack, _connectMod); return; }
+        // Dropped on another track's header (the column beside the canvas) → wire the
+        // modulator into a param on THAT track.
+        if (TopLevel.GetTopLevel(this) is { } top && TrackAtPoint?.Invoke(e.GetPosition(top)) is var (otherTrack, anchor)
+            && otherTrack != _trackId)
+        { ShowCrossTrackParamMenu(anchor, otherTrack, _connectMod); return; }
 
         var scr = e.GetPosition(_viewport);
         var world = new Point((scr.X - _pan.X) / _scale, (scr.Y - _pan.Y) / _scale);
@@ -2203,20 +2188,8 @@ public sealed partial class ModularView : UserControl
             Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { _trackBtn, _globalBtn } },
         };
-        // All the modulator sources collapse into one "+ Add" dropdown (a normal chip
-        // button + a menu flyout) so the toolbar stays compact.
-        var addMenu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        void AddItem(string label, int kind)
-        {
-            var mi = new MenuItem { Header = label };
-            mi.Click += (_, _) => AddModulator(kind);
-            addMenu.Items.Add(mi);
-        }
-        foreach (var node in Nota.Application.Palette.ModularCatalog.All) AddItem(node.Name, node.Kind);   // the palette lists the same nodes
-        var addBtn = Chip(Loc.T("modular.add")); addBtn.Content = Glyph.Labeled(Loc.T("modular.add"), GlyphKind.ChevronDown);
-        addBtn.Flyout = addMenu;
+        // Nodes come from the browser's Modular tab and the palette (specs/095), not a toolbar menu.
         left.Children.Add(seg);
-        left.Children.Add(addBtn);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         var zoomOut = ZoomBtn("−"); zoomOut.Click += (_, _) => ZoomAround(Center(), 1 / 1.15);
