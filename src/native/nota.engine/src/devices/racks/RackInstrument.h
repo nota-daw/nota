@@ -57,6 +57,11 @@ class RackInstrument : public Instrument, public RackCore {
     void controller(int32_t ctl, float value) override;
     // An articulation's program change (specs/085) reaches every chain, on its channel.
     void programChange(int32_t program) override;
+    // An articulation's keyswitch (specs/085) goes straight to every chain whose instrument takes
+    // articulations, on its channel: past the zones and mono, and past a chain's MIDI effects —
+    // which only see the block's notes (blockMidi) and would drop or rework it.
+    void keyswitchOn(int32_t pitch, float velocity) override;
+    void keyswitchOff(int32_t pitch) override;
     // True when a chain holds an instrument that takes articulation MIDI (a hosted plug-in).
     bool takesArticulations() const override;
     bool supportsMpe() const override;

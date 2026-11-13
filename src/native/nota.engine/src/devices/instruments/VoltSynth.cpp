@@ -438,12 +438,12 @@ void VoltSynth::render(float* out, int32_t frames) {
         float outL = 0.0f, outR = 0.0f;
         for (auto& v : voices_) {
             if (!v.active) continue;
-            advanceShapedEnv(v.aEnv, v.aStage, v.aShape, aA, aD, aS, aR, aBend);
+            stepEnv(v.aEnv, v.aStage, v.aShape, aA, aD, aS, aR, aBend);
             if (v.aStage == Stage::Off) {
                 v.active = false;
                 continue;
             }
-            advanceShapedEnv(v.fEnv, v.fStage, v.fShape, fA, fD, fS, fR, fBend);
+            stepEnv(v.fEnv, v.fStage, v.fShape, fA, fD, fS, fR, fBend);
             if (v.fade1 < 1.0f) v.fade1 = std::min(1.0f, v.fade1 + fade1Inc);
             if (v.fade2 < 1.0f) v.fade2 = std::min(1.0f, v.fade2 + fade2Inc);
 
@@ -582,10 +582,10 @@ void VoltSynth::render(float* out, int32_t frames) {
     }
     activeVoices_.store(countActive(), std::memory_order_relaxed);
     {
-        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
         const bool on = lv && lv->active;
-        publishEnvTele(envTele_, on, on ? lv->aStage : Stage::Off, on ? lv->aShape : EnvShapeState{});
-        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->fStage : Stage::Off, on ? lv->fShape : EnvShapeState{});
+        publishEnvTele(envTele_, on, on ? lv->aStage : Stage::Off, on ? &lv->aShape : nullptr, on ? lv->aEnv : 0.0f, aS);
+        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->fStage : Stage::Off, on ? &lv->fShape : nullptr, on ? lv->fEnv : 0.0f, fS);
     }
     // Sleep: with no sounding voice the loop above accumulated exact zeros.
     idle_ = (countActive() == 0);

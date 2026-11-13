@@ -252,8 +252,8 @@ void Monolith::render(float* out, int32_t frames) {
     int active = 0;
 
     for (int32_t i = 0; i < frames; ++i) {
-        advanceShapedEnv(aEnv_, aStage_, aShape_, aA, aD, aS, aRel, aBend);
-        advanceShapedEnv(fEnv_, fStage_, fShape_, fA, fD, fS, fRel, fBend);
+        stepEnv(aEnv_, aStage_, aShape_, aA, aD, aS, aRel, aBend);
+        stepEnv(fEnv_, fStage_, fShape_, fA, fD, fS, fRel, fBend);
         // A held note follows the Sustain knobs live (automation included), as Monolith's
         // own envelope always did; the shared step leaves the sustain level alone.
         if (aStage_ == Stage::Sustain) aEnv_ = aS;
@@ -341,8 +341,8 @@ void Monolith::render(float* out, int32_t frames) {
     }
     if (aStage_ != Stage::Off) active = 1;
     active_.store(active, std::memory_order_relaxed);
-    publishEnvTele(envTele_, true, fStage_, fShape_);
-    publishEnvTele(envTele_ + kEnvTeleFloats, true, aStage_, aShape_);
+    publishEnvTele(envTele_, true, fStage_, &fShape_, fEnv_, fS);
+    publishEnvTele(envTele_ + kEnvTeleFloats, true, aStage_, &aShape_, aEnv_, aS);
     // Sleep: amp contour Off with nothing held means amp is exactly zero.
     idle_ = (aStage_ == Stage::Off && heldN_ == 0);
 }

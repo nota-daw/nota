@@ -225,6 +225,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
         const int sb = ShapeBase + o * 3;
         bend[o] = envBends({get((Param)sb), get((Param)(sb + 1)), get((Param)(sb + 2))});
     }
+    const bool allStraight = bend[0].straight && bend[1].straight && bend[2].straight && bend[3].straight;
     const int ftype = std::clamp((int)std::lround(get(FilterType) * 2.0f), 0, 2);
     const double fbase = expMap(get(FilterFreq), 60.0, 18000.0);
     const double fk = std::clamp(2.0 - 1.9 * get(FilterReso), 0.05, 2.0);
@@ -284,7 +285,12 @@ void OperatorSynth::render(float* out, int32_t frames) {
             int nc = 0;
             bool anyOn = false;
             for (int o = 0; o < 4; ++o) {
-                advanceShapedEnv(v.env[o], v.stage[o], v.shape[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o], bend[o]);
+                // Loop-invariant (a block's shapes), so the compiler keeps the straight loop as lean as it was.
+                if (allStraight) {
+                    advanceStraightEnv(v.env[o], v.stage[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o]);
+                    v.shape[o].p = -1.0f; // a bend that comes back starts from the level (EnvShape.h)
+                } else
+                    advanceShapedEnv(v.env[o], v.stage[o], v.shape[o], (float)atk[o], (float)dec[o], (float)sus[o], (float)rel[o], bend[o]);
                 if (v.stage[o] != Stage::Off) anyOn = true;
                 double pmod = modIn[o];
                 if (o == 0 && fb > 0.0) pmod += fb * v.fbLast;
@@ -335,11 +341,11 @@ void OperatorSynth::render(float* out, int32_t frames) {
     for (auto& v : voices_)
         if (v.active) ++live;
     {
-        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
         const bool on = lv && lv->active;
         for (int o = 0; o < 4; ++o)
             publishEnvTele(envTele_ + o * kEnvTeleFloats, on, on ? lv->stage[o] : Stage::Off,
-                on ? lv->shape[o] : EnvShapeState{});
+                on ? &lv->shape[o] : nullptr, on ? lv->env[o] : 0.0f, (float)sus[o]);
     }
     if (live == 0 && peak <= 1.0e-5f) {
         quietSamples_ += (uint64_t)frames;

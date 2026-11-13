@@ -433,7 +433,7 @@ void Mosaic::render(float* out, int32_t frames) {
             if (v.relTrig) { // a release sample plays through on its own level
                 if (v.env < 1.0f) v.env = std::min(1.0f, v.env + atkRateRel_);
             } else {
-                advanceShapedEnv(v.env, v.stage, v.shape, atkRate, decRate, sustain, relRate, bend);
+                stepEnv(v.env, v.stage, v.shape, atkRate, decRate, sustain, relRate, bend);
                 if (v.stage == Stage::Off) v.active = false;
             }
             if (!v.active) break;
@@ -772,7 +772,7 @@ void Mosaic::publishTelemetry(const float* out, int32_t frames, int nActive, dou
     float peak = 0.0f;
     for (int32_t i = 0; i < frames * 2; ++i) peak = std::max(peak, std::abs(out[i]));
     int held = 0, sus = 0, rel = 0;
-    const Voice* best = nullptr;
+    Voice* best = nullptr;
     int n = 0;
     uint32_t keys[8] = {};
     for (auto& v : voices_) {
@@ -814,7 +814,7 @@ void Mosaic::publishTelemetry(const float* out, int32_t frames, int nActive, dou
     tele_[11].store(best && fType > 0 ? static_cast<float>(best->cutoff) : -1.0f, std::memory_order_relaxed);
     tele_[12].store(best ? static_cast<float>(best->zone) : -1.0f, std::memory_order_relaxed);
     publishEnvTele(tele_ + kScEnv, best != nullptr && !best->relTrig, best ? best->stage : Stage::Off,
-        best ? best->shape : EnvShapeState{});
+        best ? &best->shape : nullptr, best ? best->env : 0.0f, get(Sustain));
     tele_[13].store(static_cast<float>(lastNote_), std::memory_order_relaxed);
     tele_[14].store(static_cast<float>(std::lround(lastVel_ * 127.0f)), std::memory_order_relaxed);
     tele_[15].store(static_cast<float>(n), std::memory_order_relaxed);

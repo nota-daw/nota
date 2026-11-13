@@ -1142,8 +1142,19 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
             V.g2s = g;
         }
         // -- envelopes (RC curves; the attack aims past 1 like the analog charge — or shaped, #531) --
-        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, fNative);
-        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, aNative);
+        // The plain generator inline while the shape is native (the default); the shaped step otherwise.
+        if (fNative) {
+            advanceRcStep(V.fenv, V.fst, c.fS, fRc);
+            V.fsh.p = -1.0f;
+        } else {
+            advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, false);
+        }
+        if (aNative) {
+            advanceRcStep(V.aenv, V.ast, c.aS, aRc);
+            V.ash.p = -1.0f;
+        } else {
+            advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, false);
+        }
         if (V.ast == 0 && !V.gate && V.fade == 0 && !V.retrig) { // asleep: stop computing this voice
             V.active = false;
             V.fst = 0;
@@ -1413,11 +1424,11 @@ void Consort::publishTelemetry() {
     tele_[ScBpm].store(
         tSpb_ > 1.0 ? static_cast<float>(60.0 * sampleRate_ / tSpb_) : 120.0f, std::memory_order_relaxed);
     tele_[ScLfo].store(lfoVal_, std::memory_order_relaxed);
-    const Voice& F = voices_[focus_];
+    Voice& F = voices_[focus_];
     tele_[ScEnv1].store(F.active ? F.fenv : 0.0f, std::memory_order_relaxed);
     tele_[ScEnv2].store(F.active ? F.aenv : 0.0f, std::memory_order_relaxed);
-    publishRcEnvTele(tele_ + ScEnvTele, F.active, F.fst, F.fsh, F.fenv, pn_[FSustain].load(std::memory_order_relaxed));
-    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, F.active, F.ast, F.ash, F.aenv,
+    publishRcEnvTele(tele_ + ScEnvTele, F.active, F.fst, &F.fsh, F.fenv, pn_[FSustain].load(std::memory_order_relaxed));
+    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, F.active, F.ast, &F.ash, F.aenv,
         pn_[ASustain].load(std::memory_order_relaxed));
     if (st == 3) { // the four most recent sounding voices
         int idx[kOsc] = {-1, -1, -1, -1};
