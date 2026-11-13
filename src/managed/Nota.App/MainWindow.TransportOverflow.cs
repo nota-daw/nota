@@ -36,12 +36,27 @@ public partial class MainWindow
 
     private void OnOverflowClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm is null) return;
         // The press that closed the open menu (light dismiss) is also this click: leave it closed.
         if ((DateTime.UtcNow - _overflowClosedAt).TotalMilliseconds < 300) return;
+        OpenOverflowMenu(fromKeyboard: false);
+    }
+
+    /// <summary>Space / Return on ⋯ while it has keyboard focus (Tab) opens the menu; the
+    /// window's transport keys would take them first (Space = Play everywhere), so they ask
+    /// here. A ⋯ merely clicked keeps Space as Play.</summary>
+    internal bool TakesOverflowKey(KeyEventArgs e)
+    {
+        if (e.KeyModifiers != KeyModifiers.None || e.Key is not (Key.Space or Key.Enter)) return false;
+        if (!ReferenceEquals(e.Source, OverflowBtn) || !OverflowBtn.Classes.Contains(":focus-visible")) return false;
+        OpenOverflowMenu(fromKeyboard: true);
+        return true;
+    }
+
+    private void OpenOverflowMenu(bool fromKeyboard)
+    {
+        if (_vm is null) return;
         if (_overflowMenu is { IsOpen: true } open) { open.Hide(); return; }
 
-        bool fromKeyboard = !OverflowBtn.IsPointerOver;   // Space / Return on the focused key
         var focusBefore = FocusManager?.GetFocusedElement();
         var menu = _overflowMenu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
         MenuKit.AddGroups(menu.Items, ShedEntries(_vm), QuickEntries());
@@ -79,7 +94,8 @@ public partial class MainWindow
             {
                 case ToolbarPart.Loop:
                 {
-                    var mi = Check(Loc.T("common.loop"), vm.Transport.LoopOn, "transport.loop", MenuKit.LoopKey);
+                    // The bar's Loop key: a plain on / off (⌘L also sets the loop to a selection).
+                    var mi = Toggle(Loc.T("common.loop"), vm.Transport.LoopOn, () => vm.Transport.LoopOn = !vm.Transport.LoopOn, MenuKit.LoopKey);
                     MenuKit.SetTrailing(mi, vm.Transport.LoopRangeText);
                     yield return mi;
                     break;
@@ -111,7 +127,9 @@ public partial class MainWindow
                     break;
                 }
                 case ToolbarPart.Follow:
-                    yield return Check(Loc.T("main.follow_playhead"), FollowBtn.IsChecked == true, "view.follow", MenuKit.Bound("view.follow"));
+                    // As the bar's key: a paused Follow is picked up again rather than turned off.
+                    yield return Toggle(Loc.T("main.follow_playhead"), FollowBtn.IsChecked == true,
+                                        () => SetFollowPlayhead(Timeline.FollowSuspended || !Timeline.FollowPlayhead), MenuKit.Bound("view.follow"));
                     break;
                 case ToolbarPart.Snap:
                 {
@@ -119,7 +137,7 @@ public partial class MainWindow
                     var mi = new MenuItem
                     {
                         Header = Loc.T("snap_chip.snap_to_grid"), ToggleType = MenuItemToggleType.CheckBox,
-                        IsChecked = on, InputGesture = MenuKit.Cmd(Avalonia.Input.Key.D4),
+                        IsChecked = on, InputGesture = MenuKit.Bound("grid.snap"),
                     };
                     mi.Click += (_, _) => SetSnapEnabled(!on);
                     yield return mi;
@@ -184,10 +202,13 @@ public partial class MainWindow
     }
 
     // A toggle that runs the part's command, so the bar, the app menu and its key stay one path.
-    private MenuItem Check(string header, bool on, string command, Avalonia.Input.KeyGesture? gesture)
+    private MenuItem Check(string header, bool on, string command, KeyGesture? gesture)
+        => Toggle(header, on, () => _commands.Run(command), gesture);
+
+    private static MenuItem Toggle(string header, bool on, Action flip, KeyGesture? gesture)
     {
         var mi = new MenuItem { Header = header, ToggleType = MenuItemToggleType.CheckBox, IsChecked = on, InputGesture = gesture };
-        mi.Click += (_, _) => _commands.Run(command);
+        mi.Click += (_, _) => flip();
         return mi;
     }
 
@@ -224,6 +245,13 @@ public partial class MainWindow
     private static MenuItem MasterEntry(MainWindowViewModel vm)
     {
         var fader = CreateMasterFader(vm);
+        // Follow the level while shown (a phone, a controller, undo), except mid-drag.
+        void Sync(object? s, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(vm.Transport.MasterVolume) && !fader.Dragging) fader.Value = vm.Transport.MasterVolume;
+        }
+        fader.AttachedToVisualTree += (_, _) => { fader.Value = vm.Transport.MasterVolume; vm.Transport.PropertyChanged += Sync; };
+        fader.DetachedFromVisualTree += (_, _) => vm.Transport.PropertyChanged -= Sync;
         fader.Width = 120;
         fader.Height = 16;
         fader.VerticalAlignment = VerticalAlignment.Center;
