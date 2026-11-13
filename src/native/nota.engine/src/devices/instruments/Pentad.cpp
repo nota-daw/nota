@@ -746,8 +746,19 @@ void Pentad::renderVoice(Voice& V, int n, const VoiceCtl& c) {
         // -- glide (exponential, in semitones) --
         V.pitch += (V.pitchTgt - V.pitch) * c.glideC;
         // -- envelopes (RC curves; attack aims past 1 like the analog charge — or shaped, #531) --
-        advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, fNative);
-        advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, aNative); // the amp's floor ≈ −90 dB
+        // The plain generator inline while the shape is native (the default); the shaped step otherwise.
+        if (fNative) {
+            advanceRcStep(V.fenv, V.fst, c.fS, fRc);
+            V.fsh.p = -1.0f;
+        } else {
+            advanceRcEnv(V.fenv, V.fst, V.fsh, c.fS, fRc, c.fShape, false);
+        }
+        if (aNative) {
+            advanceRcStep(V.aenv, V.ast, c.aS, aRc); // the amp's floor ≈ −90 dB
+            V.ash.p = -1.0f;
+        } else {
+            advanceRcEnv(V.aenv, V.ast, V.ash, c.aS, aRc, c.aShape, false);
+        }
         if (V.ast == 0 && V.fade == 0) { // asleep: stop computing this voice
             V.active = false;
             V.gate = false;
@@ -933,12 +944,12 @@ void Pentad::publishTelemetry(int32_t /*frames*/) {
     tele_[ScRate].store(static_cast<float>(sampleRate_), std::memory_order_relaxed);
     for (int v = 0; v < kMaxVoices; ++v)
         tele_[ScVoices + v].store(voices_[v].active ? voices_[v].level : 0.0f, std::memory_order_relaxed);
-    const Voice* nv = nullptr;
-    for (const Voice& V : voices_)
+    Voice* nv = nullptr;
+    for (Voice& V : voices_)
         if (V.active && (!nv || V.order > nv->order)) nv = &V;
-    publishRcEnvTele(tele_ + ScEnvTele, nv != nullptr, nv ? nv->fst : 0, nv ? nv->fsh : EnvShapeState{}, nv ? nv->fenv : 0.0f,
+    publishRcEnvTele(tele_ + ScEnvTele, nv != nullptr, nv ? nv->fst : 0, nv ? &nv->fsh : nullptr, nv ? nv->fenv : 0.0f,
         pn_[FSustain].load(std::memory_order_relaxed));
-    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, nv != nullptr, nv ? nv->ast : 0, nv ? nv->ash : EnvShapeState{},
+    publishRcEnvTele(tele_ + ScEnvTele + kEnvTeleFloats, nv != nullptr, nv ? nv->ast : 0, nv ? &nv->ash : nullptr,
         nv ? nv->aenv : 0.0f, pn_[ASustain].load(std::memory_order_relaxed));
 }
 

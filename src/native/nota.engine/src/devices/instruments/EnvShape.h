@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include "dsp/core/RtAttributes.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -80,7 +82,7 @@ template <class Stage> inline float shapedEnvProgress(Stage st, const EnvShapeSt
 // set the state's progress to −1 after it (as stepEnv does), so a bend that comes back later
 // in the stage starts from the level instead of an old progress.
 template <class Stage>
-inline void advanceStraightEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
+NOTA_ALWAYS_INLINE void advanceStraightEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
     switch (st) {
     case Stage::Attack:
         env += atk;
@@ -210,7 +212,7 @@ inline void advanceShapedEnv(float& env, Stage& st, EnvShapeState& sh, float atk
 // one. A stage bent while a note plays starts its bend from the level it has reached (the
 // straight step marks the progress unknown, so the shaped one never reuses an old one).
 template <class Stage>
-inline void stepEnv(float& env, Stage& st, EnvShapeState& sh, float atk, float dec, float sus, float rel, const EnvBends& k) {
+NOTA_ALWAYS_INLINE void stepEnv(float& env, Stage& st, EnvShapeState& sh, float atk, float dec, float sus, float rel, const EnvBends& k) {
     if (k.straight) {
         advanceStraightEnv(env, st, atk, dec, sus, rel);
         sh.p = -1.0f; // its progress is the level's now: a bend that comes back starts from here
@@ -278,6 +280,32 @@ inline float rcEnvProgress(float env, const EnvShapeState& sh, float sus) {
     }
 }
 
+// One sample of the RC generator alone (st: 0 idle · 1 attack · 2 decay / sustain · 3 release),
+// small enough to inline into a voice loop. Callers that take it while the shape is native
+// (rcEnvNative, decided once per block) set the state's progress to −1 after it: the graphs
+// note the stage once per block (publishRcEnvTele), and a shape that comes back starts from
+// the level.
+NOTA_ALWAYS_INLINE void advanceRcStep(float& env, int& st, float sus, const RcEnvCoefs& c) {
+    switch (st) {
+    case 1:
+        env += (c.aTgt - env) * c.aC;
+        if (env >= 1.0f) {
+            env = 1.0f;
+            st = 2;
+        }
+        break;
+    case 2: env += (sus - env) * c.dC; break;
+    case 3:
+        env -= env * c.rC;
+        if (env < c.offFloor) {
+            env = 0.0f;
+            st = 0;
+        }
+        break;
+    default: break;
+    }
+}
+
 // `native` is rcEnvNative(p), which callers can work out once per block.
 inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, const RcEnvCoefs& c, const EnvShapeParams& p,
     bool native) {
@@ -331,11 +359,21 @@ inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, cons
 }
 
 // The telemetry stage of an RC envelope (EnvShape.h's code: 0 A · 1 D · 2 S · 3 R · 4 none)
-// and its progress; `env` and `sus` are the envelope's level and sustain.
-inline void publishRcEnvTele(std::atomic<float>* out, bool sounding, int st, const EnvShapeState& sh, float env, float sus) {
-    const int code = !sounding || st == 0 ? 4 : st == 1 ? 0 : st == 2 ? (sh.last == 2 ? 2 : 1) : 3;
+// and its progress; `sh` is the shown envelope's shape state (null: none sounding), `env` and
+// `sus` its level and sustain. advanceRcStep doesn't track its stage, so a stage it entered is
+// noted here, once per block: the progress starts at most one block late.
+inline void publishRcEnvTele(std::atomic<float>* out, bool sounding, int st, EnvShapeState* sh, float env, float sus) {
+    int code = 4;
+    if (sounding && sh && st != 0) {
+        code = st == 1 ? 0 : st == 2 ? (sh->last == 2 || std::fabs(env - sus) < 1e-3f ? 2 : 1) : 3;
+        if (code != sh->last) {
+            if (!(code == 2 && sh->last == 1)) sh->from = env; // decay → sustain keeps the decay's start
+            sh->last = code;
+            sh->p = -1.0f;
+        }
+    }
     out[0].store(static_cast<float>(code), std::memory_order_relaxed);
-    out[1].store(code == 4 ? 0.0f : rcEnvProgress(env, sh, sus), std::memory_order_relaxed);
+    out[1].store(code == 4 ? 0.0f : rcEnvProgress(env, *sh, sus), std::memory_order_relaxed);
 }
 
 } // namespace nota
