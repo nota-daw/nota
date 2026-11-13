@@ -170,7 +170,7 @@ public partial class PreferencesWindow
                 {
                     bool on;
                     if (r.Row.ActionId is { } id)
-                        on = (!_editedOnly || Bindings.IsEdited(id) || id == _editId)
+                        on = (!_editedOnly || Bindings.IsEdited(id) || id == _editId || Bindings.NeedsDecision.Contains(id))
                              && (chord is { } c ? Bindings.Matches(id, c) : words.All(w => Matches(w, g.Title) || ActionMatches(w, id)));
                     else
                         on = !_editedOnly && (chord is { } c ? r.Row.Key.Split(' ').Contains(c.ToGlyphs())

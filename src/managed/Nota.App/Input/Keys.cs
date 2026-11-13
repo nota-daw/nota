@@ -28,22 +28,31 @@ public static class Keys
     /// <summary>The Shortcuts editor is recording a key: no window runs a shortcut meanwhile.</summary>
     public static bool Capturing { get; set; }
 
+    // The press a handler last recognised as one of its actions — whether or not it then had
+    // anything to act on. MainWindow's command fallback leaves such a press alone, so a key a
+    // view owns (⇧↑ with no notes selected) never falls through to a command that does more.
+    private static KeyEventArgs? _claimed;
+
+    /// <summary>True when a handler on this press's route recognised it as one of its actions.</summary>
+    public static bool Claimed(KeyEventArgs e) => ReferenceEquals(_claimed, e);
+
     /// <summary>True when the press is one of action <paramref name="id"/>'s keys.</summary>
-    public static bool Is(KeyEventArgs e, string id) => KeyTokens.Chord(e) is { } c && Bindings.Matches(id, c);
+    public static bool Is(KeyEventArgs e, string id)
+    {
+        if (KeyTokens.Chord(e) is not { } c || !Bindings.Matches(id, c)) return false;
+        _claimed = e;
+        return true;
+    }
 
     /// <summary>True when the press is any of the actions' keys.</summary>
-    public static bool IsAny(KeyEventArgs e, params string[] ids)
-    {
-        if (KeyTokens.Chord(e) is not { } c) return false;
-        foreach (var id in ids) if (Bindings.Matches(id, c)) return true;
-        return false;
-    }
+    public static bool IsAny(KeyEventArgs e, params string[] ids) => Which(e, ids) is not null;
 
     /// <summary>The first of <paramref name="ids"/> the press belongs to, or null.</summary>
     public static string? Which(KeyEventArgs e, params string[] ids)
     {
         if (KeyTokens.Chord(e) is not { } c) return null;
-        foreach (var id in ids) if (Bindings.Matches(id, c)) return id;
+        foreach (var id in ids)
+            if (Bindings.Matches(id, c)) { _claimed = e; return id; }
         return null;
     }
 

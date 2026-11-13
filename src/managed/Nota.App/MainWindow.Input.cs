@@ -383,7 +383,7 @@ public partial class MainWindow
     // window-wide commands anywhere, a view's commands while that view has the keyboard.
     private bool TryCommandKey(KeyEventArgs e)
     {
-        if (KeyTokens.Chord(e) is not { } chord) return false;
+        if (KeyTokens.Chord(e) is not { } chord || Keys.Claimed(e)) return false;
         var focus = ScopeOf(e.Source);
         foreach (var a in Keys.Bindings.Actions)
         {

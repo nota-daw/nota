@@ -2852,8 +2852,11 @@ public sealed partial class PianoRollView : UserControl
             // Nudge the selection: in time by the grid, in pitch by a semitone or an octave (the
             // move auto-scrolls to keep pitch-shifted notes in view); shorten / lengthen by the
             // grid; velocity by 10 or by 1.
-            if (_o._selection.Count > 0 && Keys.Which(e, NoteMoves) is { } move)
+            // Asked first, so a move key with nothing selected is still the piano roll's and
+            // never reaches the whole-clip command on the same key (roll.octaveUp).
+            if (Keys.Which(e, NoteMoves) is { } move)
             {
+                if (_o._selection.Count == 0) return;
                 bool done = move switch
                 {
                     "roll.moveLeft" => _o.MoveSelection(0, -_o.SnapStep),
