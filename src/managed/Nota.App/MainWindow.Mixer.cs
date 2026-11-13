@@ -33,6 +33,8 @@ public partial class MainWindow
     private static ISettingsService MixerSettings => App.Services.GetRequiredService<ISettingsService>();
     private static bool MixerFloating => MixerSettings.Current.MixerFloating;
     internal bool IsMixerShown => _mixerDocked || _mixerWindow is not null;
+    // On screen: a docked Mixer folds away while the clip editor fills the window (#516).
+    private bool IsMixerVisible => _mixerWindow is not null || (_mixerDocked && !_detailMaximized);
 
     private double MixerPanelMin => MixerPanelChrome + (_mixer?.MinContentHeight ?? 0);
     private double MixerPanelNatural => MixerPanelChrome + (_mixer?.NaturalContentHeight ?? 0);
@@ -59,10 +61,26 @@ public partial class MainWindow
 
     private void OnMenuMixer(object? sender, EventArgs e) => ToggleMixer();
 
-    /// <summary>Show the Mixer in its remembered placement, or hide it (⌘⇧M / View → Mixer).</summary>
+    // The toolbar's Mixer button (#516) runs view.mixer like View → Mixer and ⌘⇧M. A click
+    // flips the button by itself; put it back to what is true, since the Mixer may not open.
+    private void OnToggleMixerButton(object? sender, RoutedEventArgs e)
+    {
+        _commands.Run("view.mixer");
+        SyncMixerToggle();
+    }
+
+    /// <summary>The toolbar's Mixer button reads as on while the Mixer is on screen, docked or in
+    /// its own window — however it was opened or closed (button, menu, ⌘⇧M, the panel's or
+    /// the window's close button, a switch of placement, launch): docking, undocking, the
+    /// window opening and closing, and the clip editor filling the window all end here.</summary>
+    private void SyncMixerToggle() => MixerToggle.IsChecked = IsMixerVisible;
+
+    /// <summary>Show the Mixer in its remembered placement, or hide it (⌘⇧M / View → Mixer).
+    /// A docked Mixer hidden by the clip editor filling the window comes back instead.</summary>
     internal void ToggleMixer()
     {
-        if (IsMixerShown) HideMixer();
+        if (_mixerDocked && _detailMaximized) SetDetailMaximized(false);
+        else if (IsMixerShown) HideMixer();
         else ShowMixer();
     }
 
@@ -157,6 +175,7 @@ public partial class MainWindow
         _mixerWanted = DockedMixerHeight();
         LayoutBottomPanels();
         _mixer.Refresh();
+        SyncMixerToggle();
     }
 
     // The height the user dragged it to; until they have, full strips but no more than half
@@ -175,6 +194,7 @@ public partial class MainWindow
         SetHost(MixerHost, null);
         if (_mixer is not null && _mixerWindow is null) _mixer.IsVisible = false;
         LayoutBottomPanels();
+        SyncMixerToggle();
     }
 
     // A finished drag of either splitter next to the docked Mixer sets its height.
@@ -245,8 +265,10 @@ public partial class MainWindow
             _mixerWindow = null;
             // Closing it by hand hides the Mixer; a switch to docked or quitting the app doesn't.
             if (!_mixerSwitching && !_shuttingDown && !_quitRequested) RememberMixerShown(false);
+            SyncMixerToggle();
         };
         _mixerWindow = win;
+        SyncMixerToggle();
 
         _mixer.IsVisible = true;       // so the tick loop updates its meters
         SetHost(win.Host, _mixer);

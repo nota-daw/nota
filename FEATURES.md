@@ -119,8 +119,9 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ## Views
 
 Three top-level views, switched by three icon keys in the transport (**Arrangement ·
-Session · Modular**; each names its view in a tooltip). The Mixer (**View → Mixer**, ⌘⇧M)
-docks as a panel under any of the three, or floats in its own window — see
+Session · Modular**; each names its view in a tooltip). The Mixer (**View → Mixer**, ⌘⇧M,
+or the toolbar's **Mixer** button) docks as a panel under any of the three, or floats in its
+own window — see
 [Tracks and mixer](#tracks-and-mixer).
 
 - **Arrangement View** — a linear timeline:
@@ -287,8 +288,10 @@ docks as a panel under any of the three, or floats in its own window — see
   arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
   default) arms the instrument track you select.
   Double-click resets to the default.
-- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track in the Arrangement's
-  order — each group, then its tracks — then the returns, then the master (I/O, A/B sends,
+- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M, or the toolbar's **Mixer** button after
+  Automation, which reads as on while the Mixer is shown, docked or in its window): a strip
+  per track in the Arrangement's order — each group, then its tracks — then the returns,
+  then the master (I/O, A/B sends,
   pan, fader with a stereo meter and dB read-out, M / S / Arm), the
   **Strips | Stereo map** switch and the pan law footer. It docks as a resizable panel under
   Arrangement, Session or Modular, above the Devices / Clip panel (either, both or neither),

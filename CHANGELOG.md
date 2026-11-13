@@ -23,6 +23,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A Mixer button in the toolbar** (#516, specs/092). Next to Automation, the faders key shows
+  or hides the Mixer with one click, docked or in its own window, as View → Mixer and ⌘⇧M do.
+  It reads as on while the Mixer is shown and stays in step however you open or close it: the
+  menu, the shortcut, the panel's or the window's close button. Its tooltip names the shortcut.
 - **Your own keyboard shortcuts** (#61, specs/096). Every key in Nota can now be changed in
   **Settings → Shortcuts**: click a key, press the new one, **Confirm** — menu commands and
   the keys that used to be fixed alike: piano-roll and arrangement editing (nudge, transpose,

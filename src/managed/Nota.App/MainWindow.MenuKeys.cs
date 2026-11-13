@@ -31,6 +31,7 @@ public partial class MainWindow
         // Tooltips that name a key follow its binding (specs/096) and are spelled Ctrl+… on
         // Windows / Linux (#10).
         Keys.SetTip(AutomationToggle, Loc.T("main.menu_keys.show_parameter_automation_lanes_a"), "view.automation");
+        Keys.SetTip(MixerToggle, Loc.T("main.menu_keys.show_or_hide_the_mixer"), "view.mixer");
         foreach (var (c, id) in new (Control, string)[]
                  {
                      (RecordBtn, "transport.record"), (LoopRecordCell, "transport.loopRecordMode"), (MetronomeBtn, "transport.metronome"),

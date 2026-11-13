@@ -2690,6 +2690,7 @@
     "main.menu.select_clips_to_copy_to": "Select clips to copy to the session.",
     "main.menu.split_at_selection": "Split at selection",
     "main.menu.split_clip_s_at_playhead": "Split clip(s) at playhead",
+    "main.menu_keys.show_or_hide_the_mixer": "Show or hide the Mixer (⌘⇧M)",
     "main.menu_keys.show_parameter_automation_lanes_a": "Show parameter-automation lanes (⌘⇧A)",
     "main.midi_error": "MIDI error: {0}",
     "main.midi_import.couldnt_read": "Couldn't read {0}: {1}",
