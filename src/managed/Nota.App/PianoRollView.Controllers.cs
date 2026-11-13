@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Editing;
@@ -687,8 +688,8 @@ public sealed partial class PianoRollView
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (IsSwitch && _selBlock >= 0 && (e.Key == Key.Delete || e.Key == Key.Back)) { DeleteBlock(_selBlock); e.Handled = true; return; }
-            if (e.Key == Key.Escape && _selBlock >= 0) { _selBlock = -1; InvalidateVisual(); e.Handled = true; return; }
+            if (IsSwitch && _selBlock >= 0 && Keys.Owns(e, "edit.delete")) { DeleteBlock(_selBlock); e.Handled = true; return; }
+            if (Keys.Owns(e, "edit.cancel") && _selBlock >= 0) { _selBlock = -1; InvalidateVisual(); e.Handled = true; return; }
             base.OnKeyDown(e);
         }
 

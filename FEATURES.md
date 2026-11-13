@@ -1589,8 +1589,14 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
-- **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
-  Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
+- **Custom keyboard shortcuts** in Preferences → Shortcuts (specs/096): every key is
+  rebindable — menu commands, view keys (piano roll, arrangement, Session, devices, Files
+  browser, Modular) and the computer-keyboard note map — with a second key per action,
+  capture with Confirm / Cancel / Clear, conflict detection before saving (Replace or
+  Cancel; system-reserved keys refused), an edited mark with the default and a per-row reset,
+  **Edited only**, **Reset all to defaults**, and a filter that matches names and keys. Only
+  changed keys are stored; menus, context menus, tooltips and the palette follow them. Mouse
+  gestures and list / typing keys are listed read-only.
 
 ---
 
@@ -1670,7 +1676,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   code or a language file's path) sets the language for one run. On macOS the system's own
   text (application menu, open and save panels) follows the language from the next start. The
   Remote phone page, MCP tool descriptions and logs are not translated.
-- **Shortcuts**: the shortcut list.
+- **Shortcuts**: every keyboard shortcut, editable (custom keys, conflicts, reset); mouse gestures for reference.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
   `%APPDATA%\Nota` (Windows).
 

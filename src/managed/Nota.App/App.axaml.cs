@@ -108,6 +108,11 @@ public partial class App : Avalonia.Application
         // exists — and before the themes, whose load problems are interface text (spec 087):
         // the language is fixed for the run, so those texts are built once, in it.
         InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
+        // Keyboard shortcuts (specs/096): the defaults with the user's keys on top. After the
+        // language, as the actions' titles are interface text.
+        var keySettings = Services.GetRequiredService<ISettingsService>();
+        Nota.Application.Input.KeyBindings.Instance = new Nota.Application.Input.KeyBindings(
+            Nota.Application.Input.KeyActionCatalog.Create(), keySettings.Current, keySettings.Save, warn: m => log.Warn(m));
         // Colour theme (Preferences → Appearance), applied before the first window paints so
         // nothing flashes one theme on the way to another. Old Dark / Light / System
         // settings resolve onto the Studio themes (Appearance.Resolve).

@@ -23,6 +23,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Your own keyboard shortcuts** (#61, specs/096). Every key in Nota can now be changed in
+  **Settings → Shortcuts**: click a key, press the new one, **Confirm** — menu commands and
+  the keys that used to be fixed alike: piano-roll and arrangement editing (nudge, transpose,
+  move to track), Session, devices, the Files browser, Modular, the transport, and the
+  computer-keyboard notes (each note, octave and velocity — handy on AZERTY or Cyrillic
+  layouts). An action can have a second key. Before anything is saved the row says which
+  action already answers that key where this one works ("⌘D is used by Duplicate") and offers
+  **Replace** or **Cancel**; a key used only in another view is allowed with a note on which
+  one wins, and keys the system keeps (⌘Q, ⌘H, Alt+F4…) are refused. Changed keys carry an
+  accent dot and their default, **Edited only** lists them, each has a reset, and **Reset all
+  to defaults…** puts everything back. Only changed keys are stored, so new defaults in later
+  versions still arrive. The menu, the context menus, tooltips and the command palette show
+  your keys at once; mouse gestures and the keys of lists and text fields stay as they are,
+  listed for reference. Typing a key in the filter ("⌘T", "cmd t") finds what it does.
 - **Choose the address Nota Remote shows** (#85, specs/095). On a computer with several
   networks (Wi-Fi and Ethernet, a VPN, a virtual machine's network), Nota could put an address
   in the QR code that the phone can't reach. Now you can choose it.

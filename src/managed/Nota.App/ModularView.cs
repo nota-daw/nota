@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
@@ -2150,25 +2151,27 @@ public sealed partial class ModularView : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        bool mod = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
+        if (Keys.Capturing) return;
         var sel = Selected();
-        if (e.Key == Key.Space) { _spaceDown = true; _viewport.Cursor = new Cursor(StandardCursorType.SizeAll); }
-        else if (e.Key == Key.F && !mod) { FitNow(); e.Handled = true; }
-        else if (mod && e.Key == Key.D && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
-        else if (!mod && e.Key == Key.B && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && _selectedEdge is { IsCv: true, LinkOwner: >= 0 } ce)
+        bool delete = Keys.Owns(e, "edit.delete");
+        // Space held pans the canvas — a fixed key, like a mouse gesture (specs/096 FR-011).
+        if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None) { _spaceDown = true; _viewport.Cursor = new Cursor(StandardCursorType.SizeAll); }
+        else if (Keys.Owns(e, "modular.fit")) { FitNow(); e.Handled = true; }
+        else if (Keys.Owns(e, "edit.duplicate") && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
+        else if (Keys.Owns(e, "modular.bypass") && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
+        else if (delete && _selectedEdge is { IsCv: true, LinkOwner: >= 0 } ce)
         {
             _engine.CvLinkRemove(ce.LinkOwner, ce.LinkIndex); _selectedEdge = null;
             Rebuild(); Changed?.Invoke(); e.Handled = true;
         }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && _selectedEdge is { IsCv: true, ModInputField: >= 0 } me)
+        else if (delete && _selectedEdge is { IsCv: true, ModInputField: >= 0 } me)
         {
             RemoveModInputEdge(me); e.Handled = true;
         }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is { IsChainDevice: true }) { DeleteNode(sel); e.Handled = true; }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is { Slot: Slot.Modulator }) { RemoveModulatorNode(sel); e.Handled = true; }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is not null && FixedReason(sel) is { } why) { _status.Text = why; e.Handled = true; }
-        else if (e.Key == Key.Escape && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
+        else if (delete && sel is { IsChainDevice: true }) { DeleteNode(sel); e.Handled = true; }
+        else if (delete && sel is { Slot: Slot.Modulator }) { RemoveModulatorNode(sel); e.Handled = true; }
+        else if (delete && sel is not null && FixedReason(sel) is { } why) { _status.Text = why; e.Handled = true; }
+        else if (Keys.Owns(e, "edit.cancel") && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
     }
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
