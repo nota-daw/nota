@@ -27,7 +27,9 @@ namespace nota {
 
 // Per-voice, per-envelope state beside the level and the stage the instrument already keeps.
 struct EnvShapeState {
-    float p = 0.0f;    // progress through the current stage, 0..1 (telemetry reads it too)
+    // Progress through the current stage, 0..1. A straight stage leaves it at −1 and it is
+    // worked out from the level when asked (shapedEnvProgress), not on every sample.
+    float p = 0.0f;
     float from = 0.0f; // the level the stage started from
     int last = -1;     // the stage seen on the previous step (-1: re-arm on the next step)
 };
@@ -42,19 +44,65 @@ struct EnvShapeParams {
 // The bends k (−1..1) of attack, decay and release for a params set.
 struct EnvBends {
     float a = 0.0f, d = 0.0f, r = 0.0f;
+    bool straight = true; // every k = 0: stepEnv takes the plain step (decided once per block)
 };
 
 inline EnvBends envBends(const EnvShapeParams& s) {
     constexpr float kExpBend = 0.6f; // how far Exp bends each stage toward the RC curve
     const float e = s.exp >= 0.5f ? kExpBend : 0.0f;
     auto k = [e](float n) { return std::clamp((n - 0.5f) * 2.0f + e, -1.0f, 1.0f); };
-    return {e, k(s.decayCurve), k(s.releaseCurve)};
+    EnvBends b{e, k(s.decayCurve), k(s.releaseCurve)};
+    b.straight = b.a == 0.0f && b.d == 0.0f && b.r == 0.0f;
+    return b;
 }
 
 inline float envCurve(float p, float k) {
     if (k == 0.0f) return p;
     const float e = 1.0f + 4.0f * std::fabs(k);
     return k > 0.0f ? 1.0f - std::pow(1.0f - p, e) : std::pow(p, e);
+}
+
+// The progress through a stage the straight step left at −1, from the level `env`.
+template <class Stage> inline float shapedEnvProgress(Stage st, const EnvShapeState& sh, float env, float sus) {
+    if (sh.p >= 0.0f) return sh.p;
+    auto frac = [](float done, float span) { return span > 1e-6f ? std::clamp(done / span, 0.0f, 1.0f) : 1.0f; };
+    switch (st) {
+    case Stage::Attack: return frac(env - sh.from, 1.0f - sh.from);
+    case Stage::Decay: return frac(sh.from - env, sh.from - sus);
+    case Stage::Release: return frac(sh.from - env, sh.from);
+    default: return 0.0f;
+    }
+}
+
+// One sample of a straight ADSR: the old `env ±= rate` step, and nothing else. It leaves the
+// shape state alone — a few instructions per envelope per sample add up on a voice of four
+// operators — so the graphs note the stage once per block instead (publishEnvTele).
+template <class Stage>
+inline void advanceStraightEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
+    switch (st) {
+    case Stage::Attack:
+        env += atk;
+        if (env >= 1.0f) {
+            env = 1.0f;
+            st = Stage::Decay;
+        }
+        break;
+    case Stage::Decay:
+        env -= dec;
+        if (env <= sus) {
+            env = sus;
+            st = Stage::Sustain;
+        }
+        break;
+    case Stage::Release:
+        env -= rel;
+        if (env <= 0.0f) {
+            env = 0.0f;
+            st = Stage::Off;
+        }
+        break;
+    default: break;
+    }
 }
 
 // One sample of the ADSR. `Stage` is the instrument's own enum class with the members
@@ -68,20 +116,26 @@ inline void advanceShapedEnv(float& env, Stage& st, EnvShapeState& sh, float atk
         sh.p = 0.0f;
         sh.from = env;
     }
+    // A bent stage steps its progress; one that was straight until now carries on from its level.
+    auto resume = [&] {
+        if (sh.p < 0.0f) sh.p = shapedEnvProgress(st, sh, env, sus);
+    };
     switch (st) {
     case Stage::Attack: {
         const float span = 1.0f - sh.from;
         if (k.a == 0.0f) {
             env += atk;
+            sh.p = -1.0f;
             if (env >= 1.0f) {
                 env = 1.0f;
                 st = Stage::Decay;
+                sh.p = 1.0f;
             }
-            sh.p = span > 1e-6f ? std::clamp((env - sh.from) / span, 0.0f, 1.0f) : 1.0f;
         } else if (span <= 1e-6f) {
             env = 1.0f;
             st = Stage::Decay;
         } else {
+            resume();
             sh.p += atk / span;
             if (sh.p >= 1.0f) {
                 env = 1.0f;
@@ -96,15 +150,17 @@ inline void advanceShapedEnv(float& env, Stage& st, EnvShapeState& sh, float atk
         const float span = sh.from - sus;
         if (k.d == 0.0f) {
             env -= dec;
+            sh.p = -1.0f;
             if (env <= sus) {
                 env = sus;
                 st = Stage::Sustain;
+                sh.p = 1.0f;
             }
-            sh.p = span > 1e-6f ? std::clamp((sh.from - env) / span, 0.0f, 1.0f) : 1.0f;
         } else if (span <= 1e-6f) {
             env = sus;
             st = Stage::Sustain;
         } else {
+            resume();
             sh.p += dec / span;
             if (sh.p >= 1.0f) {
                 env = sus;
@@ -120,15 +176,17 @@ inline void advanceShapedEnv(float& env, Stage& st, EnvShapeState& sh, float atk
         const float span = sh.from;
         if (k.r == 0.0f) {
             env -= rel;
+            sh.p = -1.0f;
             if (env <= 0.0f) {
                 env = 0.0f;
                 st = Stage::Off;
+                sh.p = 1.0f;
             }
-            sh.p = span > 1e-6f ? std::clamp((sh.from - env) / span, 0.0f, 1.0f) : 1.0f;
         } else if (span <= 1e-6f) {
             env = 0.0f;
             st = Stage::Off;
         } else {
+            resume();
             sh.p += rel / span;
             if (sh.p >= 1.0f) {
                 env = 0.0f;
@@ -143,15 +201,37 @@ inline void advanceShapedEnv(float& env, Stage& st, EnvShapeState& sh, float atk
     }
 }
 
+// One sample: the plain step while every stage is straight (the default), else the shaped
+// one. A stage bent while a note plays starts its bend from the level it has reached.
+template <class Stage>
+inline void stepEnv(float& env, Stage& st, EnvShapeState& sh, float atk, float dec, float sus, float rel, const EnvBends& k) {
+    if (k.straight) advanceStraightEnv(env, st, atk, dec, sus, rel);
+    else
+        advanceShapedEnv(env, st, sh, atk, dec, sus, rel, k);
+}
+
 // Telemetry for the editor's envelope graphs: two floats per envelope — the stage
 // (0 A · 1 D · 2 S · 3 R · 4 none sounding) and the progress through it.
 constexpr int kEnvTeleFloats = 2;
 
+// `sh` is the shown envelope's shape state (null: none sounding), `env` its level and `sus`
+// its sustain. A straight envelope steps without its shape state, so a stage it entered is
+// noted here, once per block: the graph's progress starts at most one block late.
 template <class Stage>
-inline void publishEnvTele(std::atomic<float>* out, bool sounding, Stage st, const EnvShapeState& sh) {
-    const bool on = sounding && st != Stage::Off;
+inline void publishEnvTele(std::atomic<float>* out, bool sounding, Stage st, EnvShapeState* sh, float env, float sus) {
+    const bool on = sounding && sh && st != Stage::Off;
+    float p = 0.0f;
+    if (on) {
+        const int s = static_cast<int>(st);
+        if (s != sh->last) {
+            sh->last = s;
+            sh->p = -1.0f;
+            sh->from = env;
+        }
+        p = shapedEnvProgress(st, *sh, env, sus);
+    }
     out[0].store(on ? static_cast<float>(static_cast<int>(st)) : 4.0f, std::memory_order_relaxed);
-    out[1].store(on ? sh.p : 0.0f, std::memory_order_relaxed);
+    out[1].store(p, std::memory_order_relaxed);
 }
 
 inline int32_t readEnvTele(const std::atomic<float>* in, int n, float* out, int32_t maxN) {
@@ -228,7 +308,6 @@ inline void advanceRcEnv(float& env, int& st, EnvShapeState& sh, float sus, cons
         }
         return;
     }
-    if (sh.p < 0.0f) sh.p = rcEnvProgress(env, sh, sus); // carry on from where the generator was
     S s = st == 1 ? S::Attack : st == 2 ? (sh.last == 2 ? S::Sustain : S::Decay) : st == 3 ? S::Release : S::Off;
     advanceShapedEnv(env, s, sh, c.atkRate, c.decRate, sus, c.relRate, envBends(p));
     if (s == S::Sustain) {

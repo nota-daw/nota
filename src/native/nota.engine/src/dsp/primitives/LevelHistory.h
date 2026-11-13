@@ -11,6 +11,10 @@
 // publish, filling with silence, so an old hit scrolls away instead of standing still. Stale
 // means no publish for three blocks (at least 60 ms), so a large audio buffer — 4096 frames is
 // 85 ms at 48 kHz — still reads as live between its callbacks.
+// Only kept while something reads it: read() stamps the time, and once no read has come for
+// kWatchNs (the card closed, the device scrolled out of view) begin() says so and the device
+// skips the history — its per-sample work costs nothing on a track nobody is looking at. The
+// next read opens it again; the gap reads as silence, as any other gap does.
 // Fixed size, no allocation, no lock.
 
 #pragma once
@@ -33,6 +37,7 @@ class LevelHistory {
     static constexpr int kFloats = 2 * kPoints + kSpecN;
     static constexpr float kFloorDb = -120.0f;
     static constexpr int64_t kStaleNs = 60'000'000; // the least idle time that means no blocks run
+    static constexpr int64_t kWatchNs = 1'000'000'000; // no read for this long: nobody is looking
 
     void setSampleRate(double sr) {
         sr_ = sr > 0.0 ? sr : 48000.0;
@@ -51,6 +56,7 @@ class LevelHistory {
         sA_.store(0, std::memory_order_relaxed);
         pubNs_.store(0, std::memory_order_relaxed);
         staleNs_.store(kStaleNs, std::memory_order_relaxed);
+        watched_ = false;
     }
 
     // One sample: the input and wet magnitudes (any stereo fold the caller likes) and the mono wet.
@@ -63,21 +69,28 @@ class LevelHistory {
         if (++cnt_ >= bucket_) close();
     }
 
-    // At the top of every process(): if the engine stopped calling the device for a while (a
-    // muted or settled track), first scroll the stored rings on by that gap in silence, so the
+    // At the top of every process(). Returns whether the history is kept this block (a read
+    // came within kWatchNs); when it isn't, the device skips push() and the rest do nothing.
+    // If the engine stopped calling the device for a while (a muted or settled track, or a
+    // card that was closed), first scroll the stored rings on by that gap in silence, so the
     // history read() showed moving on stays moved on instead of the old audio coming back.
-    void begin() {
+    bool begin() {
+        const int64_t now = nowNs();
+        watched_ = now - readNs_.load(std::memory_order_relaxed) < kWatchNs;
+        if (!watched_) return false;
         const int64_t pub = pubNs_.load(std::memory_order_relaxed);
-        if (pub <= 0) return;
-        const int64_t gap = nowNs() - pub;
-        if (gap <= staleNs_.load(std::memory_order_relaxed)) return;
+        if (pub <= 0) return true;
+        const int64_t gap = now - pub;
+        if (gap <= staleNs_.load(std::memory_order_relaxed)) return true;
         const double frames = std::min(static_cast<double>(gap) * 1e-9 * sr_, static_cast<double>(kPoints + 1) * bucket_);
         fill(static_cast<int32_t>(frames));
         since_ = 0;
+        return true;
     }
 
     // A block the device skipped (asleep on silence): the graph keeps scrolling through it.
     void silence(int32_t frames) {
+        if (!watched_) return;
         fill(frames);
         since_ += frames;
         publish();
@@ -100,6 +113,7 @@ class LevelHistory {
 
   public:
     void publish() {
+        if (!watched_) return;
         // Three of the blocks the device sees, so the gap between two callbacks never reads as stale.
         const auto blockNs = static_cast<int64_t>(static_cast<double>(since_) / sr_ * 1e9);
         staleNs_.store(std::max(kStaleNs, 3 * blockNs), std::memory_order_relaxed);
@@ -114,6 +128,7 @@ class LevelHistory {
     // written (0 when out is too small).
     int32_t read(float* out, int32_t room) const {
         if (!out || room < kFloats) return 0;
+        readNs_.store(nowNs(), std::memory_order_relaxed); // someone is looking: keep the history
         const int64_t pub = pubNs_.load(std::memory_order_acquire);
         const int w = wA_.load(std::memory_order_relaxed), s = sA_.load(std::memory_order_relaxed);
         const int64_t idle = pub > 0 ? nowNs() - pub : 0;
@@ -153,6 +168,8 @@ class LevelHistory {
     float pkIn_ = 0.0f, pkWet_ = 0.0f;
     std::atomic<int> wA_{0}, sA_{0};
     std::atomic<int64_t> pubNs_{0}, staleNs_{kStaleNs};
+    mutable std::atomic<int64_t> readNs_{INT64_MIN / 2}; // the last read (UI thread); never read: not watched
+    bool watched_ = false;                                 // this block keeps the history (audio thread)
     static_assert(std::atomic<float>::is_always_lock_free, "the audio thread must not lock");
 };
 

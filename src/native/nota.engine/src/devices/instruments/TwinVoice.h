@@ -186,7 +186,7 @@ struct Env {
     // The progress through the stage. The RC generator works it out here, when the graphs
     // or a change of shape ask, rather than on every sample.
     float progress() const {
-        if (!native) return sh.p;
+        if (!native && sh.p >= 0.0f) return sh.p; // a bent stage keeps it; a straight one leaves −1
         switch (sh.last) {
         case 0: return sh.from < 1.0f ? std::clamp((lvl - sh.from) / (1.0f - sh.from), 0.0f, 1.0f) : 1.0f;
         case 1:

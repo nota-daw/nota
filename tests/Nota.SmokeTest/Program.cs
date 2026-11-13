@@ -4869,11 +4869,17 @@ Console.WriteLine("-- Nota Delay --");
     // Telemetry + the MCP status line.
     var sc = new float[11];
     de.DeviceSetParam(dt, dd, Sync, 1f); de.DeviceSetParam(dt, dd, DivL, 2f / 7f);
+    // The level history is kept only while a card reads it: everything rendered so far went
+    // unread, so there is none; this read opens it, as an open card's refresh does.
+    var dh = new float[11 + 2 * 1536 + 2048];
+    de.DeviceScope(dt, dd, dh, dh.Length);
+    float dUnread = -999;
+    for (int i = 0; i < 2 * 1536; i++) dUnread = Math.Max(dUnread, dh[11 + i]);
+    Check(dUnread <= -119, $"Delay keeps no level history while no card reads it ({dUnread:0} dB)");
     Render(20000);
     int scn = de.DeviceScope(dt, dd, sc, sc.Length);
     Check(scn == 11 && sc[4] > 1000 && sc[5] > 1, $"Delay scope reports sample rate + tempo ({sc[4]:0} Hz, {sc[5]:0.0} BPM)");
     // The live graph's level history follows the telemetry: input dB, echoes dB, echo samples.
-    var dh = new float[11 + 2 * 1536 + 2048];
     int dhn = de.DeviceScope(dt, dd, dh, dh.Length);
     float dIn = -999, dWet = -999;
     for (int i = 0; i < 1536; i++) { dIn = Math.Max(dIn, dh[11 + i]); dWet = Math.Max(dWet, dh[11 + 1536 + i]); }
@@ -5176,6 +5182,8 @@ Console.WriteLine("-- Nota Reverb --");
     re.DeviceSetParam(rt, rd, DryWet, 1f);
     re.DeviceSetParam(rt, rd, PreDelay, 0.25f);    // 50 ms, room to absorb the ~7 ms diffuser
     re.DeviceSetParam(rt, rd, LatencyComp, 1f);
+    var rh = new float[11 + 2 * 1536 + 2048];
+    re.DeviceScope(rt, rd, rh, rh.Length); // the card opens: the level history is kept from here on
     var comped = Render(20000);
     re.DeviceSetParam(rt, rd, LatencyComp, 0f);
     var raw = Render(20000);
@@ -5189,7 +5197,6 @@ Console.WriteLine("-- Nota Reverb --");
     Check(scn == 11 && sc[4] > 1000 && sc[8] > 100 && Math.Abs(sc[6] - 1.9) < 0.1,
           $"Reverb scope reports sample rate, diffuser delay and RT60 ({sc[4]:0} Hz, {sc[8]:0} smp, {sc[6]:0.00} s)");
     // The live graph's level history follows the telemetry: input dB, tail dB, tail samples.
-    var rh = new float[11 + 2 * 1536 + 2048];
     int rhn = re.DeviceScope(rt, rd, rh, rh.Length);
     float rIn = -999, rWet = -999;
     for (int i = 0; i < 1536; i++) { rIn = Math.Max(rIn, rh[11 + i]); rWet = Math.Max(rWet, rh[11 + 1536 + i]); }
