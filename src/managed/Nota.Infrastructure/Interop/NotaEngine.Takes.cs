@@ -44,4 +44,7 @@ public sealed partial class NotaEngine
     /// <paramref name="startBeat"/> under the current loop, through the real capture path, no device.</summary>
     public bool TakeRecordTest(int trackId, float[] interleavedStereo, int frames, double startBeat)
     { ThrowIfDisposed(); return NativeMethods.TakeRecordTest(_handle, trackId, interleavedStereo, frames, startBeat) != 0; }
+
+    public bool TakeRecordTestN(int trackId, float[] interleaved, int channels, int frames, double startBeat)
+    { ThrowIfDisposed(); return NativeMethods.TakeRecordTestN(_handle, trackId, interleaved, channels, frames, startBeat) != 0; }
 }

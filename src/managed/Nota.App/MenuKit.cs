@@ -38,24 +38,33 @@ internal static partial class MenuKit
     public static KeyGesture Cmd(Key key, bool shift = false)
         => new(key, Primary | (shift ? KeyModifiers.Shift : KeyModifiers.None));
 
-    public static readonly KeyGesture CopyKey = Cmd(Key.C);
-    public static readonly KeyGesture CutKey = Cmd(Key.X);
-    public static readonly KeyGesture PasteKey = Cmd(Key.V);
-    public static readonly KeyGesture DuplicateKey = Cmd(Key.D);
-    public static readonly KeyGesture PasteBouncedKey = Cmd(Key.V, shift: true);
+    // The keys context menus show, read from the user's bindings (specs/096) each time a menu
+    // is built, so a rebound key shows its new chord; null (no key shown) when unassigned.
+    public static KeyGesture? CopyKey => Bound("edit.copy");
+    public static KeyGesture? CutKey => Bound("edit.cut");
+    public static KeyGesture? PasteKey => Bound("edit.paste");
+    public static KeyGesture? DuplicateKey => Bound("edit.duplicate");
+    public static KeyGesture? PasteBouncedKey => Bound("edit.pasteBounced");
     // Arrangement: Copy to Session · Session: Copy to Arrangement.
-    public static readonly KeyGesture CopyToOtherViewKey = Cmd(Key.C, shift: true);
-    public static readonly KeyGesture SplitKey = Cmd(Key.E);
-    public static readonly KeyGesture ConsolidateKey = Cmd(Key.J);
+    public static KeyGesture? CopyToOtherViewKey => Bound("edit.copyToOtherView");
+    public static KeyGesture? SplitKey => Bound("edit.split");
+    public static KeyGesture? ConsolidateKey => Bound("edit.consolidate");
     // Arrangement time selection: Duplicate Time · Insert Silence.
-    public static readonly KeyGesture DuplicateTimeKey = Cmd(Key.D, shift: true);
-    public static readonly KeyGesture InsertSilenceKey = Cmd(Key.I, shift: true);
-    public static readonly KeyGesture LoopKey = Cmd(Key.L);
-    public static readonly KeyGesture GroupKey = Cmd(Key.G);
-    public static readonly KeyGesture UngroupKey = Cmd(Key.G, shift: true);
-    public static readonly KeyGesture ActivateKey = new(Key.D0);
-    // Delete and Backspace both delete; show the key the platform calls "delete".
-    public static readonly KeyGesture DeleteKey = new(OperatingSystem.IsMacOS() ? Key.Back : Key.Delete);
+    public static KeyGesture? DuplicateTimeKey => Bound("edit.duplicateTime");
+    public static KeyGesture? InsertSilenceKey => Bound("edit.insertSilence");
+    public static KeyGesture? LoopKey => Bound("transport.loop");
+    public static KeyGesture? GroupKey => Bound("track.group");
+    public static KeyGesture? UngroupKey => Bound("track.ungroup");
+    public static KeyGesture? ActivateKey => Bound("edit.toggleClipActive");
+    // Delete and Backspace both delete; show the key the platform calls "delete" (the
+    // alternative, ⌦, off macOS) when it is bound.
+    public static KeyGesture? DeleteKey =>
+        !OperatingSystem.IsMacOS() && Input.Keys.Bindings.Current("edit.delete", Nota.Application.Input.KeySlot.Alternative) is { } del
+            ? Input.ShortcutAvaloniaExtensions.ToGesture(del) : Bound("edit.delete");
+
+    /// <summary>The gesture of an action's current key, or null.</summary>
+    public static KeyGesture? Bound(string id) =>
+        Input.Keys.Bindings.Shown(id) is { } k ? Input.ShortcutAvaloniaExtensions.ToGesture(k) : null;
 
     /// <summary>Shortcut text written with the macOS glyphs ("⌘⇧Z", "⇧-click", "hold ⌘") as this
     /// platform spells it: unchanged on macOS, "Ctrl+Shift+Z" / "Shift-click" / "hold Ctrl"

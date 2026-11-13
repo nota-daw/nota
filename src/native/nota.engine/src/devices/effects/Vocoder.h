@@ -61,6 +61,7 @@ class Vocoder : public Device {
         Mix,
         Gain,
         Hold,
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     enum { CarrierSaw = 0, CarrierNoise = 1, CarrierTrack = 2 };

@@ -49,7 +49,6 @@ public sealed partial class PianoRollView
     private static readonly IBrush SpanWash = NotaPalette.Wash(NotaPalette.VizInk, 0x14);
     private static readonly IBrush PointFill = NotaPalette.VizInk;
     private static readonly IBrush PointHot = NotaPalette.Accent;
-    private static readonly IBrush TabActive = NotaPalette.AccentBright;
 
     internal LaneMode Lane => _laneMode;
 
@@ -168,35 +167,40 @@ public sealed partial class PianoRollView
     private sealed class LaneTabs : Control
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
-            { (LaneMode.Velocity, Loc.T("piano_roll.expression.vel")), (LaneMode.Bend, Loc.T("piano_roll.expression.bend")), (LaneMode.Pressure, Loc.T("piano_roll.expression.pres")), (LaneMode.Slide, Loc.T("piano_roll.expression.slide")), (LaneMode.Controller, "") };
-        // Five rows fit the velocity lane's 72 px.
-        private const double Top = 4, RowStep = 13;
-        private static readonly Typeface TabFace = new(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold);
+            { (LaneMode.Velocity, Loc.T("piano_roll.expression.vel")), (LaneMode.Bend, Loc.T("piano_roll.expression.bend")), (LaneMode.Pressure, Loc.T("piano_roll.expression.pres")), (LaneMode.Slide, Loc.T("piano_roll.expression.slide")), (LaneMode.Controller, "CC") };
+        private const double Top = 2, RowStep = 14, ChipH = 13;   // five rows end at 71, inside the 72 px velocity lane
         private readonly PianoRollView _o;
         private int _hover = -1;
         public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
-
-        private FormattedText Text(string s, IBrush ink) => new(s, NotaNum.Culture, FlowDirection.LeftToRight, TabFace, 9, ink);
 
         public override void Render(DrawingContext ctx)
         {
             ctx.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
             for (int i = 0; i < Tabs.Length; i++)
             {
+                // Style guide: the lane shown sits on the well in ink 1, the others ink 3 (ink 1 on hover).
                 bool on = Tabs[i].Mode == _o._laneMode;
-                var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
-                bool ctl = Tabs[i].Mode == LaneMode.Controller;
-                var ft = Text(ctl ? "CC" : Tabs[i].Label, ink);
+                var ink = on || i == _hover ? NotaPalette.TextPrimary : NotaPalette.TextTertiary;
+                // The gutter is narrow (the controller scale takes its right edge in CC mode) and the
+                // rows are 14 apart: a label steps down until it fits, so Text size Larger and Largest
+                // never run it into the scale or the next row.
+                double pad = Bounds.Width < 40 ? 2 : 6, size = NotaType.Caption;
+                NotaFormattedText ft;
+                do
+                {
+                    ft = new NotaFormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
+                        on ? NotaFonts.SansMedium : NotaFonts.Sans, size, ink);
+                    size -= 0.5;
+                } while ((ft.Width > Bounds.Width - 2 * pad - 2 || ft.Height > ChipH + 1) && size >= 6);
                 double y = Top + i * RowStep;
-                double x = (Bounds.Width - ft.Width) / 2;
-                ctx.DrawText(ft, new Point(x, y));
-                if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
+                if (on) ctx.DrawRectangle(NotaPalette.Well, null, new Rect(pad, y, Math.Max(0, Bounds.Width - 2 * pad), ChipH), NotaRadius.CellValue, NotaRadius.CellValue);
+                ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y + (ChipH - ft.Height) / 2));
             }
         }
 
         private int RowAt(Point p)
         {
-            int i = (int)Math.Floor((p.Y - Top + 2) / RowStep);
+            int i = (int)Math.Floor((p.Y - Top + 1) / RowStep);
             return i >= 0 && i < Tabs.Length ? i : -1;
         }
 
@@ -356,7 +360,7 @@ public sealed partial class PianoRollView
                         if (px > x1 + 0.5) continue;
                         bool hot = _hoverPt == (i, k) || (_drag == Drag.Point && _ptNote == i && _ptIdx == k);
                         double r = hot ? 3.5 : 2.5;
-                        ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), 1);
+                        ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), (float)NotaSkin.MapRadius(1));
                     }
                 }
 
@@ -364,7 +368,7 @@ public sealed partial class PianoRollView
             {
                 // The range label doubles as a button; the caret says it opens a menu.
                 var ink = _rangeHot ? KeyLabelHot : LabelText;
-                var ft = new FormattedText(RangeLabel(_range), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, ink);
+                var ft = new NotaFormattedText(RangeLabel(_range), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, ink);
                 ctx.DrawText(ft, new Point(4, 3));
                 Glyph.Draw(ctx, GlyphKind.CaretDown, new Rect(4 + ft.Width + 2, 3 + (ft.Height - 6) / 2, 6, 6), ink);
                 _rangeRect = new Rect(0, 0, 4 + ft.Width + 2 + 6 + 4, 3 + ft.Height + 2);

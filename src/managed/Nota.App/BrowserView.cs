@@ -29,6 +29,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Nota.Application;
 using Nota.Application.Input;
 using Nota.Application.Samples;
@@ -38,7 +39,7 @@ using Nota.Application.Localization;
 
 namespace Nota.App;
 
-public sealed class BrowserView : UserControl
+public sealed partial class BrowserView : UserControl
 {
     // The browser drag payload. macOS's native drag session requires exactly one
     // pasteboard item per drag image, and Avalonia makes one drag image per data
@@ -52,6 +53,9 @@ public sealed class BrowserView : UserControl
 
     /// <summary>True while a browser row is being dragged (used by drop targets).</summary>
     public static bool IsBrowserDrag => CurrentDrag is not null;
+
+    /// <summary>True while the drag is a Modular node (spec 095): only the Modular canvas takes it.</summary>
+    public static bool IsModularNodeDrag => CurrentDrag is { Kind: BrowserItemKind.ModularNode };
 
     /// <summary>True while the drag is an arrangement audio clip pulled out as a sample (it
     /// rides the browser payload, so every sample drop target takes it as-is).</summary>
@@ -82,6 +86,7 @@ public sealed class BrowserView : UserControl
     /// where some backends don't expose the file list yet; the drop re-checks.</summary>
     public static bool IsAcceptableDrag(DragEventArgs e)
         => !DeviceDrag.IsActive   // a device card's drag carries text too, but isn't a file
+           && !IsModularNodeDrag  // a Modular node goes on the Modular canvas only (spec 095)
            && (IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File) || HasPathText(e.DataTransfer));
 
     // A drag that may name files without Avalonia's file list (#300): plain text or a
@@ -157,16 +162,20 @@ public sealed class BrowserView : UserControl
         return g;
     }
 
-    private const int TabCount = 9;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History / Track
+    private const int TabCount = 10;  // Instr / FX / MIDI / Files / Preset / Proj / Map / History / Track / Modular
     private const int EffectsTab = 1; // Audio effects
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
     private const int InspectorTab = 8; // the selected track's settings — hosts a TrackInspectorView
+    // Modular-only nodes (spec 095): a flat list on the rail after MIDI effects, shown only
+    // while Modular is the view. The index is last so the others keep theirs.
+    private const int ModularTab = 9;
+    private readonly BrowserTabMemory _tabMemory = new(0, ModularTab);
     private static bool IsCustomTab(int index) => index is MapTab or HistoryTab or InspectorTab;
-    private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
-    private const double GroupRowH = 22;
+    private const double RowH = 30;   // single-line index row (style guide: browser rows 30)
+    private const double GroupRowH = 30;
 
     private readonly ListBox[] _pages;
     private readonly Border[] _tabs;
@@ -271,30 +280,39 @@ public sealed class BrowserView : UserControl
             RailTab(6, Loc.T("browser.midi_map"), GlyphKind.Map),
             RailTab(7, Loc.T("browser.history"), GlyphKind.History),
             RailTab(InspectorTab, Loc.T("browser.track_inspector"), GlyphKind.Track),
+            RailTab(ModularTab, Loc.T("browser.modular"), GlyphKind.PatchCable),
         };
+        _tabs[ModularTab].IsVisible = false;   // Modular view only (SetModularContext)
+        _sources[ModularTab] = ModularBrowserItems.Build(Nota.Application.Palette.ModularCatalog.All);
         // A hairline above Files, Map and the inspector: devices · library · mappings · track.
         foreach (int i in new[] { 3, 6, InspectorTab })
         {
             _tabs[i].BorderThickness = new Thickness(0, 1, 0, 0);
             _tabs[i].BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         }
-        var tabStack = new StackPanel();
-        foreach (var t in _tabs) tabStack.Children.Add(t);
+        var tabStack = new StackPanel { Margin = new Thickness(0, 5, 0, 0) };
+        foreach (int i in new[] { 0, 1, 2, ModularTab, 3, 4, 5, 6, 7, InspectorTab }) tabStack.Children.Add(_tabs[i]);
         _collapseBtn = RailButton(GlyphKind.Sidebar, Loc.T("browser.collapse_browser"), () => SetCollapsed(!_collapsed, persist: true));
-        _collapseBtn.BorderThickness = new Thickness(0, 1, 0, 0);
-        _collapseBtn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _collapseBtn.Margin = new Thickness(0, 0, 0, 6);
         var rail = new DockPanel { Width = 40 };
         DockPanel.SetDock(_collapseBtn, Dock.Bottom);
         rail.Children.Add(_collapseBtn);
-        rail.Children.Add(tabStack);
+        // A short window scrolls the tabs under the fold key instead of drawing them over it.
+        rail.Children.Add(new ScrollViewer
+        {
+            Content = tabStack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
 
-        // --- Search (26h): accent border on focus, match count on the right ---
+        // --- Search (style guide): 30 high, corner 7, the well; a 16px icon, the placeholder in
+        // ink 3, the match count on the right in ink 3; an orange edge while typing ---
         _search = new TextBox
         {
             Watermark = Loc.T("browser.search"),
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
-            FontSize = 11,
+            FontSize = NotaType.Body,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -302,7 +320,7 @@ public sealed class BrowserView : UserControl
         };
         _search.TextChanged += (_, _) => { ApplyFilter(_active); };
         _search.GotFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.Accent");
-        _search.LostFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _search.LostFocus += (_, _) => _searchWrap!.BorderBrush = Brushes.Transparent;
         // Esc leaves the search (the query stays) so the keyboard goes back to the app.
         _search.KeyDown += (_, e) =>
         {
@@ -312,27 +330,30 @@ public sealed class BrowserView : UserControl
         };
         _matchCount = new TextBlock
         {
-            FontSize = 9,
+            FontSize = NotaType.Caption,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        _matchCount.Classes.Add("Mono");
         _matchCount.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var searchGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var searchIcon = RailIcon(GlyphKind.Search, 16, "Brush.TextTertiary");
+        searchIcon.VerticalAlignment = VerticalAlignment.Center;
+        searchIcon.Margin = new Thickness(0, 0, 8, 0);
+        var searchGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        searchGrid.Children.Add(searchIcon);
+        Grid.SetColumn(_search, 1);
         searchGrid.Children.Add(_search);
-        Grid.SetColumn(_matchCount, 1);
+        Grid.SetColumn(_matchCount, 2);
         searchGrid.Children.Add(_matchCount);
         _searchWrap = new Border
         {
-            Height = 26,
-            CornerRadius = NotaRadius.Tile,
+            Height = NotaSize.Search,
+            CornerRadius = NotaRadius.Group,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 0),
+            BorderBrush = Brushes.Transparent,
+            Padding = new Thickness(9, 0, 10, 0),
             Child = searchGrid,
         };
-        _searchWrap.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        _searchWrap.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        _searchWrap.BindResource(Border.BoxShadowProperty, "Shadow.Sunken");
+        _searchWrap.BindResource(Border.BackgroundProperty, "Brush.Well");
 
         // Sort & view options — the row's shape, sectioning and tag management.
         _optionsBtn = BuildOptionsButton();
@@ -349,39 +370,36 @@ public sealed class BrowserView : UserControl
         // Filter chips (Favorites + tags). Populated from the VM in SetViewModel and
         // shown only on the device tabs (Instr / FX / MIDI). One line: the chips that
         // don't fit collapse into a "+N" that opens the rest.
-        _overflowText = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
-        _overflowText.Classes.Add("Mono");
+        _overflowText = new TextBlock { FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
         _overflowText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _overflowChip = new Border
         {
-            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
-            BorderThickness = new Thickness(1),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Group, Padding = new Thickness(10, 0),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = _overflowText,
         };
-        _overflowChip.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _overflowChip.BindResource(Border.BackgroundProperty, "Brush.Well");
         _overflowChip.PointerPressed += (_, e) => { ShowOverflowChips(); e.Handled = true; };
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
-        _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
+        _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 8), Child = _chipsPanel };
 
-        _sampleChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
-        _sampleChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _sampleChips, IsVisible = false };
+        _sampleChips = new WrapPanel { ItemSpacing = 6, LineSpacing = 6 };
+        _sampleChipsHost = new Border { Margin = new Thickness(8, 0, 8, 8), Child = _sampleChips, IsVisible = false };
         // Category chips wrap rather than overflow into "+N": they are the main way to narrow
         // a device tab, so every one stays in sight.
-        _categoryChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
-        _categoryChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _categoryChips, IsVisible = false };
+        _categoryChips = new WrapPanel { ItemSpacing = 6, LineSpacing = 6 };
+        _categoryChipsHost = new Border { Margin = new Thickness(8, 0, 8, 8), Child = _categoryChips, IsVisible = false };
 
         _previewFooter = new PreviewPlayer { IsVisible = false };
         _previewFooter.SetContext(files: _active == FilesTab);
 
         // Status line: what the active tab is showing, counted.
-        _statusText = new TextBlock { FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
-        _statusText.Classes.Add("Mono");
+        _statusText = new TextBlock { FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
         _statusText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _statusBar = new Border
         {
-            Height = 26,
-            Padding = new Thickness(10, 0),
+            Height = 30,
+            Padding = new Thickness(12, 0),
             BorderThickness = new Thickness(0, 1, 0, 0),
             Child = _statusText,
         };
@@ -389,7 +407,7 @@ public sealed class BrowserView : UserControl
         _statusBar.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
 
         // Empty-state message, centered over the list when a tab has nothing to show.
-        _emptyText.FontSize = 11;
+        _emptyText.FontSize = 10;
         _emptyText.TextWrapping = TextWrapping.Wrap;
         _emptyText.TextAlignment = TextAlignment.Center;
         _emptyText.LineHeight = 16;
@@ -409,7 +427,7 @@ public sealed class BrowserView : UserControl
         contentHost.Children.Add(_emptyWrap);
 
         var right = new DockPanel();
-        var topStack = new StackPanel { Children = { headerRow, _categoryChipsHost, _chipsHost, _sampleChipsHost } };
+        var topStack = new StackPanel { Children = { headerRow, BuildFilesBars(), BuildProjectsBar(), _categoryChipsHost, _chipsHost, _sampleChipsHost } };
         DockPanel.SetDock(topStack, Dock.Top);
         DockPanel.SetDock(_statusBar, Dock.Bottom);
         DockPanel.SetDock(_previewFooter, Dock.Bottom);
@@ -419,7 +437,7 @@ public sealed class BrowserView : UserControl
         right.Children.Add(contentHost);
 
         var railDivider = _railDivider = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
-        railDivider.BindResource(Border.BackgroundProperty, "Brush.Panel");
+        railDivider.BindResource(Border.BackgroundProperty, "Brush.SurfaceDeep");   // style guide: the left rail is deep
         railDivider.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         _body = right;
 
@@ -438,7 +456,7 @@ public sealed class BrowserView : UserControl
             Child = grid,
         };
         outer.BindResource(Border.CornerRadiusProperty, "Radius.Docked");
-        outer.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        outer.BindResource(Border.BackgroundProperty, "Brush.Panel");
         outer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = outer;
 
@@ -501,6 +519,17 @@ public sealed class BrowserView : UserControl
         CollapsedChanged?.Invoke(collapsed);
     }
 
+    /// <summary>Modular became (or stopped being) the view (spec 095): the Modular tab joins or
+    /// leaves the rail, and the browser shows the tab last picked in that context — the
+    /// Modular tab the first time.</summary>
+    public void SetModularContext(bool inModular)
+    {
+        if (inModular == _tabMemory.InModular) return;
+        _tabs[ModularTab].IsVisible = inModular;
+        int tab = inModular ? _tabMemory.Enter() : _tabMemory.Leave();
+        SelectTab(tab);
+    }
+
     /// <summary>Persist the view options (the ⋮ menu) across sessions. Optional: without it
     /// the browser still works, it just forgets the toggles on quit.</summary>
     public void SetSettings(ISettingsService settings)
@@ -559,6 +588,8 @@ public sealed class BrowserView : UserControl
             if (!ReferenceEquals(_chipsAnchor, vm.SimilarAnchor) || _chipsFilter != vm.SampleFilter) RebuildSampleChips();
         };
         RebuildSampleChips();
+        HookBrowse(vm);
+        HookProjects(vm);
         RefreshCounts();
     }
 
@@ -567,7 +598,7 @@ public sealed class BrowserView : UserControl
         0 => _vm?.Instruments,
         1 => _vm?.Effects,
         2 => _vm?.MidiEffects,
-        3 => _vm?.Samples,
+        3 => _vm is null ? null : _vm.BrowseMode ? _vm.BrowseItems : _vm.Samples,
         4 => _vm?.Presets,
         _ => null,
     };
@@ -590,6 +621,7 @@ public sealed class BrowserView : UserControl
             string q = _search.Text?.Trim() ?? "";
             foreach (var it in src)
             {
+                if (index == ModularTab) { if (ModularBrowserItems.Matches(it, q)) dst.Add(it); continue; }
                 if (q.Length == 0
                     || it.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
                     || it.Sub.Contains(q, StringComparison.OrdinalIgnoreCase))
@@ -636,6 +668,10 @@ public sealed class BrowserView : UserControl
         bool sampleFilter = tab == FilesTab && _vm is not null && (!_vm.SampleFilter.IsEmpty || _vm.SimilarAnchor is not null);
         if (sampleFilter && _vm!.IndexProgress.Total > 0)
             return (Loc.T("browser.no_matches_yet"), Loc.T("browser.nota_is_still_analysing_your"));
+        if (tab == FilesTab && BrowseOn && !searching)
+            return _vm!.BrowseState == BrowseListState.Unreadable
+                ? (Loc.T("browser.folder_unreadable"), "")
+                : (Loc.T("browser.folder_empty"), "");
         if (searching || filtering || sampleFilter) return (Loc.T("browser.no_matches"), Loc.T("browser.try_a_different_search_or"));
         return tab switch
         {
@@ -671,12 +707,15 @@ public sealed class BrowserView : UserControl
         }
         int n = VisibleCount(tab);
         // Filtered, the folders on screen are only there to hold the matches: count those.
+        if (tab == FilesTab && BrowseOn)
+            return Loc.Plural("browser.samples", System.Linq.Enumerable.Count(_vm.BrowseItems, s => s.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile));
         if (tab == FilesTab && _vm.SimilarAnchor is not null || tab == FilesTab && !_vm.SampleFilter.IsEmpty)
             n = System.Linq.Enumerable.Count(_vm.Samples, s => s.Kind != BrowserItemKind.Folder);
         return tab switch
         {
             3 => Loc.Plural("browser.samples", n) + AnalysingSuffix(),
             4 => Loc.Plural("browser.presets_n", n),
+            ModularTab => Loc.Plural("browser.nodes_n", n),
             _ => Loc.Plural("browser.projects_n", n),
         };
     }
@@ -692,6 +731,7 @@ public sealed class BrowserView : UserControl
     {
         if (index == _active) return;
         _active = index;
+        _tabMemory.Picked(index);
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !_collapsed && i == index);
         // The MIDI-map, History and inspector tabs host bespoke views, not a filtered item list.
@@ -715,7 +755,9 @@ public sealed class BrowserView : UserControl
         // Favorite/tag filter chips apply only to the device tabs.
         _chipsHost.IsVisible = index is 0 or 1 or 2;
         RebuildCategoryChips();
-        _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
+        UpdateFilesBars();
+        UpdateProjectsBar();
+        if (index == FilesTab) _vm?.RefreshSampleAvailability();   // a drive plugged in or pulled out meanwhile
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
         // The shared search box may have changed on another tab (#342).
@@ -726,14 +768,14 @@ public sealed class BrowserView : UserControl
 
     private Border RailTab(int index, string caption, GlyphKind iconKind)
     {
-        // Icon-only rail; the caption survives as a tooltip. 16px icon in a 36px tab, with
-        // a 2px brass edge on the left when active.
+        // Icon-only rail; the caption survives as a tooltip. A 16px icon in a 28px key, with
+        // the soft tint and a 2 × 14 orange tick at the rail's edge when it is the current page.
         var icon = RailIcon(iconKind, 16);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
-        var bar = new Border { Classes = { "RailBar" }, VerticalAlignment = VerticalAlignment.Stretch };
+        var bar = new Border { Classes = { "RailBar" } };
         var inner = new Grid();
-        inner.Children.Add(icon);
+        inner.Children.Add(new Border { Classes = { "RailKey" }, Child = icon });
         inner.Children.Add(bar);
         var tab = new Border { Classes = { "RailTab" }, Child = inner };
         ToolTip.SetTip(tab, caption);
@@ -745,13 +787,13 @@ public sealed class BrowserView : UserControl
         return tab;
     }
 
-    // A rail-styled action (not a tab): same 36px cell and hover, never marked active.
+    // A rail-styled action (not a tab): the same 28px key and hover, never marked active.
     private static Border RailButton(GlyphKind iconKind, string caption, Action onClick)
     {
         var icon = RailIcon(iconKind, 16);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
-        var btn = new Border { Classes = { "RailTab" }, Child = icon };
+        var btn = new Border { Classes = { "RailTab" }, Child = new Border { Classes = { "RailKey" }, Child = icon } };
         ToolTip.SetTip(btn, caption);
         btn.PointerPressed += (_, e) =>
         {
@@ -767,7 +809,7 @@ public sealed class BrowserView : UserControl
     private IDataTemplate BuildItemTemplate() => new FuncDataTemplate<BrowserItem>((item, _) =>
     {
         if (item is null) return new Control();
-        return item.IsGroup ? GroupRow(item) : IndexRow(item);
+        return item.IsGroup ? GroupRow(item) : item.Kind == BrowserItemKind.Project ? ProjectRow(item) : IndexRow(item);
     }, supportsRecycling: false);
 
     // A section header: caption, a hairline filling the gap, and the section's count.
@@ -790,17 +832,16 @@ public sealed class BrowserView : UserControl
             head.Children.Add(caret);
         }
         head.Children.Add(label);
-        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0) };
+        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
         rule.BindResource(Border.BackgroundProperty, "Brush.Rule");
         var count = new TextBlock
         {
             Text = item.GroupCount.ToString(),
-            FontSize = 9,
+            FontSize = NotaType.Caption,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
+            Margin = new Thickness(0, 0, 12, 0),
         };
-        count.Classes.Add("Mono");
-        count.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
+        count.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
 
         var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Background = Brushes.Transparent };
         grid.Children.Add(head);
@@ -854,24 +895,54 @@ public sealed class BrowserView : UserControl
         {
             icon = RailIcon(GlyphKind.Downloads, 13, "Brush.TextSecondary");
         }
+        // The Files browse view (spec 092): every row says what it is — folder, drive, audio,
+        // MIDI or another file — since folders open with a click rather than a caret.
+        else if (IsBrowseRow(item))
+        {
+            var kind = item.IsVolume ? GlyphKind.Drive
+                     : item.Kind switch
+                     {
+                         BrowserItemKind.Folder => GlyphKind.Folder,
+                         BrowserItemKind.Sample => GlyphKind.AudioFile,
+                         BrowserItemKind.MidiFile => GlyphKind.Midi,
+                         _ => GlyphKind.Doc,
+                     };
+            icon = RailIcon(kind, 14, item.Kind switch
+            {
+                BrowserItemKind.Folder => "Brush.TextSecondary",
+                BrowserItemKind.OtherFile => "Brush.TextDisabled",
+                _ => "Brush.TextTertiary",
+            });
+        }
 
         // A built-in row shows its distinctive word only ("Aurora", not "Nota Aurora"): the
         // family name would repeat down the whole list. Search still matches the full name.
         var name = new TextBlock
         {
-            Text = item.Prefix.Length > 0 ? item.ShortName : item.Name,
+            // Files and folders keep their real names ("Nota Samples" is a folder, not a device).
+            // (The factory kits' node is Nota's own and keeps its short name.)
+            Text = item.Prefix.Length > 0 && (item.Sub == "factory" || item.Kind is not (BrowserItemKind.Folder or BrowserItemKind.Sample or BrowserItemKind.MidiFile))
+                ? item.ShortName : item.Name,
             Classes = { "RowName" },
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        if (child) name.Classes.Add("child");
+        if (child || item.Size is not null) name.Classes.Add("child");
+        if (item.Unavailable) name.Classes.Add("unavailable");
+        // The selected clip's source file (spec 092, #581): an orange edge and name.
+        void MarkLocated() { edge.Classes.Set("located", item.Located); name.Classes.Set("located", item.Located); }
+        MarkLocated();
 
         // The type, as a quiet tag on the right edge (toggleable in the ⋮ menu). A sample's
         // tag is what the index heard — "124 · Am" — and fills in as the scan reaches it.
-        bool sample = item.Kind == BrowserItemKind.Sample;
-        string tag = sample ? SampleTag(item) : RowTag(item);
+        bool browseFile = item.Size is not null;
+        bool sample = item.Kind == BrowserItemKind.Sample && !browseFile;
+        string tag = browseFile ? Extension(item) : sample ? SampleTag(item) : item.Kind == BrowserItemKind.MidiFile ? RowTag(item) : Capital(RowTag(item));
         TextBlock? tagText = null;
-        if (sample || (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true)))
+        if (sample || browseFile || (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true)))
             tagText = new TextBlock { Text = tag, Classes = { "RowTag" }, TextTrimming = TextTrimming.CharacterEllipsis };
+        TextBlock? sizeText = item.Size is { } bytes
+            ? new TextBlock { Text = FileSize(bytes), Classes = { "RowTag" }, TextAlignment = TextAlignment.Right }
+            : null;
 
         var row = new IndexRowPanel
         {
@@ -883,22 +954,41 @@ public sealed class BrowserView : UserControl
             Name2 = name,
             Markers = BuildRowMarkers(item),   // brass ★ + tag colour dots
             Tag2 = tagText,
+            Size2 = sizeText,
         };
+        // A file Nota can't add stays in the list, in the disabled ink (spec 092).
+        if (item.Kind == BrowserItemKind.OtherFile)
+        {
+            name.Classes.Add("inert");
+            tagText?.Classes.Add("inert");
+            sizeText?.Classes.Add("inert");
+        }
 
         // The row's full identity lives in the tooltip, where the tag has no room for it
         // (a plug-in's format, a sample's folder, tempo and key).
         string tip = item.Tip.Length > 0 ? item.Tip : item.Sub;
         ToolTip.SetTip(row, tip.Length > 0 ? $"{item.Name} · {tip}" : item.Name);
+        // Every other file row still follows Locate's mark as the selected clip changes.
+        if (!sample && item.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile)
+        {
+            void Relocate(object? _, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(BrowserItem.Located)) MarkLocated();
+            }
+            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Relocate; item.PropertyChanged += Relocate; MarkLocated(); };
+            row.DetachedFromVisualTree += (_, _) => item.PropertyChanged -= Relocate;
+        }
         if (sample)
         {
-            void Retag(object? _, System.ComponentModel.PropertyChangedEventArgs __)
+            void Retag(object? _, System.ComponentModel.PropertyChangedEventArgs e)
             {
+                if (e.PropertyName == nameof(BrowserItem.Located)) { MarkLocated(); return; }
                 tagText!.Text = SampleTag(item);
                 row.InvalidateArrange();
             }
             // Subscribe only while shown: the item outlives its rows (they are rebuilt on every
             // scroll), so a lasting handler would pin every row ever drawn.
-            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Retag; item.PropertyChanged += Retag; tagText!.Text = SampleTag(item); };
+            row.AttachedToVisualTree += (_, _) => { item.PropertyChanged -= Retag; item.PropertyChanged += Retag; tagText!.Text = SampleTag(item); MarkLocated(); };
             row.DetachedFromVisualTree += (_, _) => item.PropertyChanged -= Retag;
             row.PointerEntered += (_, _) =>
             {
@@ -910,6 +1000,25 @@ public sealed class BrowserView : UserControl
             };
         }
         return row;
+    }
+
+    // A browse row (spec 092): a listed folder / drive / file of the browse view.
+    private static bool IsBrowseRow(BrowserItem item)
+        => item.Size is not null || item.IsVolume
+           || item.Kind == BrowserItemKind.Folder && !item.HasChildren && item.PlaceIndex < 0 && item.Path.Length > 0
+              && System.IO.Path.IsPathRooted(item.Path) && item.Sub != "factory";
+
+    private static string Extension(BrowserItem item)
+        => System.IO.Path.GetExtension(item.Path).TrimStart('.').ToLowerInvariant();
+
+    // "820 KB", "12.4 MB" — the browse view's size column.
+    private static string FileSize(long bytes)
+    {
+        const double K = 1024;
+        if (bytes < K) return Loc.F("browser.size_b", bytes);
+        if (bytes < K * K) return Loc.F("browser.size_kb", Math.Round(bytes / K).ToString("0", NotaNum.Culture));
+        if (bytes < K * K * K) return Loc.F("browser.size_mb", (bytes / (K * K)).ToString(bytes < 10 * K * K ? "0.0" : "0", NotaNum.Culture));
+        return Loc.F("browser.size_gb", (bytes / (K * K * K)).ToString("0.0", NotaNum.Culture));
     }
 
     // "124 · Am", a hit's note, or (until analysed, or with nothing to say) the file type.
@@ -936,6 +1045,9 @@ public sealed class BrowserView : UserControl
         public TextBlock Name2 { get; init; } = null!;
         public Control? Markers { get; init; }
         public TextBlock? Tag2 { get; init; }
+        /// <summary>The browse view's size column: fixed width, so sizes line up.</summary>
+        public TextBlock? Size2 { get; init; }
+        private const double SizeW = 54;
 
         protected override Size MeasureOverride(Size availableSize)
         {
@@ -955,6 +1067,7 @@ public sealed class BrowserView : UserControl
             Children.Add(Name2);
             if (Markers is not null) Children.Add(Markers);
             if (Tag2 is not null) Children.Add(Tag2);
+            if (Size2 is not null) Children.Add(Size2);
         }
 
         protected override Size ArrangeOverride(Size finalSize)
@@ -974,6 +1087,11 @@ public sealed class BrowserView : UserControl
             }
 
             double right = Math.Max(left, finalSize.Width - Gutter);
+            if (Size2 is not null)
+            {
+                Size2.Arrange(new Rect(right - SizeW, (h - Size2.DesiredSize.Height) / 2, SizeW, Size2.DesiredSize.Height));
+                right = Math.Max(left, right - SizeW - 8);
+            }
             double markersW = Markers?.DesiredSize.Width ?? 0;
             double avail = Math.Max(0, right - left - (markersW > 0 ? markersW + 6 : 0));
 
@@ -994,6 +1112,10 @@ public sealed class BrowserView : UserControl
 
     // The right-edge tag: what kind of thing the row is, in as few words as possible.
     // Nothing for rows whose indent already says it (presets under a device, folders).
+    // Tags read in sentence case ("Wavetable synth", "Built-in"); a file extension stays as it is.
+    private static string Capital(string s)
+        => s.Length > 0 && char.IsLower(s[0]) ? char.ToUpperInvariant(s[0]) + s[1..] : s;
+
     private static string RowTag(BrowserItem it) => it.Kind switch
     {
         BrowserItemKind.Folder => "",
@@ -1050,20 +1172,21 @@ public sealed class BrowserView : UserControl
 
     private Border BuildOptionsButton()
     {
-        var icon = RailIcon(GlyphKind.Options, 14, "Brush.TextSecondary");
+        // An icon button (style guide): 28, corner 7, no fill at rest, the well on hover.
+        var icon = RailIcon(GlyphKind.Options, 16, "Brush.TextSecondary");
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
         var btn = new Border
         {
-            Width = 26, Height = 26,
-            Margin = new Thickness(6, 0, 0, 0),
-            CornerRadius = NotaRadius.Tile,
-            BorderThickness = new Thickness(1),
+            Width = NotaSize.Icon, Height = NotaSize.Icon,
+            Margin = new Thickness(4, 0, 0, 0),
+            CornerRadius = NotaRadius.Group,
+            Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = icon,
         };
-        btn.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        btn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        btn.PointerEntered += (_, _) => btn.BindResource(Border.BackgroundProperty, "Brush.Well");
+        btn.PointerExited += (_, _) => btn.Background = Brushes.Transparent;
         ToolTip.SetTip(btn, Loc.T("browser.sort_and_view"));
         btn.PointerPressed += (_, e) => { ShowOptionsMenu(btn); e.Handled = true; };
         return btn;
@@ -1149,7 +1272,7 @@ public sealed class BrowserView : UserControl
         {
             int i = rows.IndexOf(item);
             for (int j = i + 1; i >= 0 && j < rows.Count; j++)
-                if (rows[j] is BrowserItem { IsGroup: false } r && r.Kind != BrowserItemKind.Folder) { next = r; break; }
+                if (rows[j] is BrowserItem { IsGroup: false } r && r.Kind is not (BrowserItemKind.Folder or BrowserItemKind.OtherFile)) { next = r; break; }
         }
         _previewFooter.SetItem(item, next);
     }
@@ -1161,19 +1284,38 @@ public sealed class BrowserView : UserControl
         ItemTemplate = itemTemplate,
     };
 
+    /// <summary>A Return pressed on the Modular tab's list with a node selected adds it
+    /// (spec 095): the window's transport keys leave that Return to the list.</summary>
+    public bool TakesReturn(object? source)
+        => source is Visual v && _active == ModularTab
+           && _pages[ModularTab].SelectedItem is BrowserItem { Kind: BrowserItemKind.ModularNode }
+           && (v == _pages[ModularTab] || v.GetVisualAncestors().Contains(_pages[ModularTab]));
+
     private void HookActivation(ListBox list)
     {
+        // Enter / Return on a Modular node adds it, as a double-click does (spec 095).
+        list.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Return) || e.KeyModifiers != KeyModifiers.None) return;
+            if (list.SelectedItem is not BrowserItem { Kind: BrowserItemKind.ModularNode } node) return;
+            ItemActivated?.Invoke(node, e.KeyModifiers);
+            e.Handled = true;
+        };
         list.DoubleTapped += (_, e) =>
         {
             if (list.SelectedItem is not BrowserItem { IsGroup: false } item) return;
+            if (item.Kind == BrowserItemKind.OtherFile) return;   // listed, but nothing Nota can open
             // Folders (sample dirs, preset categories) are navigation: double-click opens them.
-            if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
+            // In Browse a single click already opened it; a second open would go one deeper.
+            if (item.Kind == BrowserItemKind.Folder && list == _pages[FilesTab] && BrowseOn) return;
+            else if (item.Kind == BrowserItemKind.Folder) _vm?.ToggleExpand(item);
             else { DismissPreview(); ItemActivated?.Invoke(item, e.KeyModifiers); }
         };
         list.SelectionChanged += (_, _) =>
         {
             // Section headers are chrome: never let one become the selection.
             if (list.SelectedItem is BrowserItem { IsGroup: true }) { list.SelectedItem = null; return; }
+            if (_suppressPreview) return;   // Locate selects a row without auditioning it
             if (_active <= PresetsTab && list == _pages[_active])
             {
                 SyncPreview(list);
@@ -1192,8 +1334,13 @@ public sealed class BrowserView : UserControl
         list.AddHandler(InputElement.PointerPressedEvent, OnRowPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerMovedEvent, OnRowMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         list.AddHandler(InputElement.PointerReleasedEvent,
-            (object? _, PointerReleasedEventArgs _) =>
+            (object? _, PointerReleasedEventArgs e) =>
             {
+                // A Browse folder opens on a click (contracts/ui.md), released on the row it was pressed on.
+                if (_pressedFolder is { } folder && list == _pages[FilesTab] && BrowseOn
+                    && (e.Source as StyledElement)?.DataContext == folder && !folder.Unavailable)
+                    _vm?.BrowseTo(folder.Path);
+                _pressedFolder = null;
                 _pressedItem = null; _pressArgs = null;
                 if (_listPointerDown && _active <= PresetsTab && list == _pages[_active]) ShowPreview(true);
                 _listPointerDown = false;
@@ -1204,16 +1351,21 @@ public sealed class BrowserView : UserControl
         list.ContextRequested += (_, e) => ShowContextMenu(list, e);
     }
 
+    private BrowserItem? _pressedFolder;   // a Browse folder row pressed; opens on release
+
     private void OnRowPressed(object? sender, PointerPressedEventArgs e)
     {
         _pressedItem = null;
         _pressArgs = null;
+        _pressedFolder = null;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (InButton(e.Source as StyledElement)) return;          // preview button etc.
         var item = (e.Source as StyledElement)?.DataContext as BrowserItem;
+        if (item is { Kind: BrowserItemKind.Folder, IsGroup: false } && e.ClickCount == 1 && BrowseOn && IsBrowseRow(item))
+            _pressedFolder = item;
         // Projects, folders and section headers aren't draggable (folders are navigation,
         // not payload; headers are chrome).
-        if (item is null || item.IsGroup || item.Kind is BrowserItemKind.Project or BrowserItemKind.Folder) return;
+        if (item is null || item.IsGroup || item.Kind is BrowserItemKind.Project or BrowserItemKind.Folder or BrowserItemKind.OtherFile) return;
         _pressedItem = item;
         _pressPoint = e.GetPosition(this);
         _pressArgs = e;   // DoDragDropAsync needs the PointerPressed args
@@ -1351,7 +1503,7 @@ public sealed class BrowserView : UserControl
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
         TextBox Field(double v, string hint) => new()
         {
-            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 12,
+            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 11,
             Text = v > 0 ? SampleInfo.FormatBpm(v) : "",
         };
         var min = Field(f.BpmMin, "min");
@@ -1422,19 +1574,19 @@ public sealed class BrowserView : UserControl
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (colorHex is not null)
             content.Children.Add(new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Fill = BrushFromHex(colorHex) });
-        var tb = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.TextOnAccent" : "Brush.TextPrimary");
+        // Style guide: 24 high, 10 padding, corner 7, the well, 12 in ink 2; on, the soft tint
+        // with orange text (a filter is picked, not live).
+        var tb = new TextBlock { Text = text, FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
+        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.AccentBright" : "Brush.TextSecondary");
         content.Children.Add(tb);
 
         var chip = new ChipBorder
         {
             Label = text, ColorHex = colorHex, Active = active, OnClick = onClick,
-            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
-            BorderThickness = new Thickness(1),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Group, Padding = new Thickness(10, 0),
             Cursor = new Cursor(StandardCursorType.Hand), Child = content,
         };
-        chip.BindResource(Border.BackgroundProperty, active ? "Brush.Accent" : "Brush.SurfaceRaised");
-        chip.BindResource(Border.BorderBrushProperty, active ? "Brush.Accent" : "Brush.Seam");
+        chip.BindResource(Border.BackgroundProperty, active ? "Brush.AccentSoft" : "Brush.Well");
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
@@ -1578,6 +1730,8 @@ public sealed class BrowserView : UserControl
         BrowserItemKind.Project => Loc.T("browser.project"),
         BrowserItemKind.Preset => Loc.T("browser.preset"),
         BrowserItemKind.Folder => Loc.T("browser.folder"),
+        BrowserItemKind.OtherFile => Loc.T("browser.file"),
+        BrowserItemKind.ModularNode => Loc.T("browser.modular_node"),
         _ => "",
     };
 
@@ -1624,6 +1778,7 @@ public sealed class BrowserView : UserControl
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(similar);
                 flyout.Items.Add(reveal);
+                flyout.Items.Add(CopyPathItem(item));
                 return flyout;
             }
             // A saved preset file on disk (#234). Synthetic rows (factory presets, drum kits)
@@ -1648,21 +1803,29 @@ public sealed class BrowserView : UserControl
             }
             case BrowserItemKind.Sample:
             case BrowserItemKind.MidiFile:
+            case BrowserItemKind.OtherFile:
             {
                 var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(reveal);
+                flyout.Items.Add(CopyPathItem(item));
                 return flyout;
             }
             case BrowserItemKind.Folder when _active == FilesTab:   // real sample folders (preset folders are synthetic)
             {
-                var multi = new MenuItem { Header = Loc.T("browser.create_multisample") };
-                multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
-                ToolTip.SetTip(multi, Loc.T("browser.map_the_folders_samples_by"));
-                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
+                if (BrowseOn) AddBrowseFolderItems(flyout, item);
+                if (!item.Unavailable && !item.IsVolume)
+                {
+                    var multi = new MenuItem { Header = Loc.T("browser.create_multisample") };
+                    multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
+                    ToolTip.SetTip(multi, Loc.T("browser.map_the_folders_samples_by"));
+                    flyout.Items.Add(multi);
+                }
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel, IsEnabled = !item.Unavailable };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
-                flyout.Items.Add(multi);
                 flyout.Items.Add(reveal);
+                flyout.Items.Add(CopyPathItem(item));
+                if (!BrowseOn && item.PlaceIndex >= 0) { flyout.Items.Add(new Separator()); AddPlaceItems(flyout, item); }
                 return flyout;
             }
             case BrowserItemKind.Project:

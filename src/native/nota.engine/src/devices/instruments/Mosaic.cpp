@@ -42,6 +42,9 @@ Mosaic::Mosaic() {
     pn_[MpePressure].store(0.5f);
     pn_[MpeSlide].store(0.5f);
     pn_[View].store(0.0f); // L
+    pn_[DCurve].store(0.5f);
+    pn_[RCurve].store(0.5f);
+    pn_[EnvExp].store(0.0f); // straight, Lin: old projects keep their envelope
     for (auto& v : voices_) v.active = false;
     for (int k = 0; k < 128; ++k) {
         noteOnAt_[k] = 0;
@@ -203,7 +206,7 @@ std::string Mosaic::pluginParamId(int32_t i) const {
     static const char* ids[kNumParams] = {"volume", "pan", "transpose", "detune", "attack", "decay", "sustain",
         "release", "filtertype", "cutoff", "resonance", "voicemode", "keytrack", "velamount", "glide", "pitchtrack",
         "envcutoff", "envamount", "output", "polyphony", "perkey", "oldfade", "relon", "relvol", "rellen", "velcurve",
-        "pedal", "bendrange", "mpepressure", "mpeslide", "view"};
+        "pedal", "bendrange", "mpepressure", "mpeslide", "view", "dcurve", "rcurve", "envexp"};
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
 }
 
@@ -213,7 +216,8 @@ std::string Mosaic::pluginParamName(int32_t i) const {
         "Env Decay", "Env Sustain", "Env Release", "Filter Type", "Filter Cutoff", "Filter Resonance", "Voice Mode",
         "Filter Keytrack", "Voice Velocity", "Voice Glide", "Pitch Keytrack", "Filter Env On", "Filter Env Amount",
         "Out Level", "Voice Polyphony", "Voice Per Key", "Voice Old Fade", "Release Triggers", "Release Volume",
-        "Release Length", "Voice Vel Curve", "Voice Pedal", "MPE Bend Range", "MPE Pressure", "MPE Slide", "View"};
+        "Release Length", "Voice Vel Curve", "Voice Pedal", "MPE Bend Range", "MPE Pressure", "MPE Slide", "View",
+        "Env Decay Curve", "Env Release Curve", "Env Exp"};
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
 }
 
@@ -378,6 +382,7 @@ void Mosaic::render(float* out, int32_t frames) {
     const float decRate = static_cast<float>(1.0 / (expMap(get(Decay), 0.002, 6.0) * sr_));
     const float relRate = static_cast<float>(1.0 / (expMap(get(Release), 0.002, 6.0) * sr_));
     const float sustain = get(Sustain);
+    const EnvBends bend = envBends({get(DCurve), get(RCurve), get(EnvExp)});
     const double glideSec = glideSeconds(get(Glide));
     const double glideK = glideSec > 0.0 ? 1.0 - std::exp(-static_cast<double>(kCtl) / (glideSec * sr_)) : 1.0;
     const int fType = std::clamp(static_cast<int>(std::lround(get(FilterType) * 3.0f)), 0, 3);
@@ -427,31 +432,10 @@ void Mosaic::render(float* out, int32_t frames) {
             }
             if (v.relTrig) { // a release sample plays through on its own level
                 if (v.env < 1.0f) v.env = std::min(1.0f, v.env + atkRateRel_);
-            } else
-                switch (v.stage) {
-                case Stage::Attack:
-                    v.env += atkRate;
-                    if (v.env >= 1.0f) {
-                        v.env = 1.0f;
-                        v.stage = Stage::Decay;
-                    }
-                    break;
-                case Stage::Decay:
-                    v.env -= decRate;
-                    if (v.env <= sustain) {
-                        v.env = sustain;
-                        v.stage = Stage::Sustain;
-                    }
-                    break;
-                case Stage::Sustain: break;
-                case Stage::Release:
-                    v.env -= relRate;
-                    if (v.env <= 0.0f) {
-                        v.env = 0.0f;
-                        v.active = false;
-                    }
-                    break;
-                }
+            } else {
+                stepEnv(v.env, v.stage, v.shape, atkRate, decRate, sustain, relRate, bend);
+                if (v.stage == Stage::Off) v.active = false;
+            }
             if (!v.active) break;
             float kg = 1.0f;
             if (v.kill > 0) {
@@ -732,6 +716,7 @@ void Mosaic::spawn(const mosaic::Program& p, int32_t pitch, int vel7, float velo
         v.gr = static_cast<float>(std::sin((pn + 1.0) * kPi / 4.0));
         v.env = release ? 1.0f : 0.0f; // a release sample starts at its own level
         v.stage = Stage::Attack;
+        v.shape = {};
         v.ex.reset(add);
         v.peak = v.level;
     }
@@ -787,7 +772,7 @@ void Mosaic::publishTelemetry(const float* out, int32_t frames, int nActive, dou
     float peak = 0.0f;
     for (int32_t i = 0; i < frames * 2; ++i) peak = std::max(peak, std::abs(out[i]));
     int held = 0, sus = 0, rel = 0;
-    const Voice* best = nullptr;
+    Voice* best = nullptr;
     int n = 0;
     uint32_t keys[8] = {};
     for (auto& v : voices_) {
@@ -828,6 +813,8 @@ void Mosaic::publishTelemetry(const float* out, int32_t frames, int nActive, dou
     const int fType = std::clamp(static_cast<int>(std::lround(get(FilterType) * 3.0f)), 0, 3);
     tele_[11].store(best && fType > 0 ? static_cast<float>(best->cutoff) : -1.0f, std::memory_order_relaxed);
     tele_[12].store(best ? static_cast<float>(best->zone) : -1.0f, std::memory_order_relaxed);
+    publishEnvTele(tele_ + kScEnv, best != nullptr && !best->relTrig, best ? best->stage : Stage::Off,
+        best ? &best->shape : nullptr, best ? best->env : 0.0f, get(Sustain));
     tele_[13].store(static_cast<float>(lastNote_), std::memory_order_relaxed);
     tele_[14].store(static_cast<float>(std::lround(lastVel_ * 127.0f)), std::memory_order_relaxed);
     tele_[15].store(static_cast<float>(n), std::memory_order_relaxed);

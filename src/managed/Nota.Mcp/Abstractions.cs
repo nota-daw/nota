@@ -70,3 +70,46 @@ public interface IProjectKeyAccess
 {
     int KeyCode { get; set; }
 }
+
+/// <summary>Facade over the app's colour themes for the theme tools (spec 087): list, read,
+/// validate, preview, save, wear and try on themes — without referencing Nota.App. Implemented
+/// in Nota.App over NotaThemes / NotaThemeService; every member runs on the UI thread (call it
+/// inside <see cref="IEngineDispatch.InvokeAsync{T}"/>).</summary>
+public interface IThemeAccess
+{
+    ThemeListing List();
+    /// <summary>A listed theme's file text (format 1–3), or null for an unknown id. With
+    /// <paramref name="look"/> "classic", a built-in's classic palette (spec 091).</summary>
+    string? GetFile(string id, string? look = null);
+    ThemeCatalogue Catalogue();
+    IReadOnlyList<string> SystemFonts();
+    Nota.Application.Themes.ThemeValidation Validate(string json);
+    /// <summary>Images of <paramref name="json"/> worn on the named surfaces (all when null),
+    /// rendered offscreen; the live window does not change. Nothing is rendered for an invalid theme.</summary>
+    Task<ThemePreviews> PreviewAsync(string json, IReadOnlyList<string>? surfaces, bool themeAccent, string? look = null);
+    ThemeSaveResult Save(string json, bool overwrite);
+    /// <summary>Wear a listed theme and store it, as a pick in Preferences. Null, or why not.</summary>
+    string? Apply(string id);
+    /// <summary>Wear <paramref name="json"/> live without storing it. Whether it is worn.</summary>
+    bool TryOn(string json, out Nota.Application.Themes.ThemeValidation validation);
+    /// <summary>End a try-on; the id worn afterwards.</summary>
+    string RevertTryOn();
+    /// <summary>Wear and store a look ("new" | "classic", spec 091), as Preferences does; the id
+    /// worn afterwards. An unknown look throws ArgumentException naming the allowed ones.</summary>
+    string SetLook(string look);
+}
+
+public sealed record ThemeListing(ThemeListEntry[] Themes, string Worn, bool TryOn, ThemeChoiceInfo Choice, ThemeFileProblem[] Problems);
+public sealed record ThemeListEntry(string Id, string Name, string Kind, string Source, int Warnings, bool FontMissing,
+    string? FontFamily, double Roundness);
+public sealed record ThemeChoiceInfo(bool FollowSystem, string Single, string Dark, string Light, string Look);
+public sealed record ThemeFileProblem(string File, string Reason);
+public sealed record ThemeTokenInfo(string Name, string Group, string Role, bool Translucent);
+public sealed record ThemeRadiusStepInfo(string Name, double Design);
+/// <summary>The accepted limits, each as [min, max]: radius scale, a radius step in px, the font family name's length.</summary>
+public sealed record ThemeRanges(double[] Scale, double[] Step, int[] FontFamilyLength);
+public sealed record ThemeCatalogue(ThemeTokenInfo[] Tokens, ThemeRadiusStepInfo[] RadiusSteps, ThemeRanges Ranges, int[] FormatVersions);
+public sealed record ThemePreviewImage(string Name, string Description, byte[] Png);
+public sealed record ThemePreviews(Nota.Application.Themes.ThemeValidation Validation, ThemePreviewImage[] Images,
+    string[] Rendered, string[] Unknown);
+public sealed record ThemeSaveResult(Nota.Application.Themes.ThemeValidation Validation, bool Saved, string? File, string? Reason);

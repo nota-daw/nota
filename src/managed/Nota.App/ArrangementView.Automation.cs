@@ -484,6 +484,7 @@ public sealed partial class ArrangementView
                         // Nota Shutter: Pattern Out is the pattern's read-only output (a CV source) and
                         // Complexity only steers the dice — neither is a sound parameter to automate.
                         if (bkind == 19 && names[p] is "Pattern Out" or "Pattern Complexity") continue;
+                        if (DeviceView.IsViewParam(names[p])) continue;   // the card size isn't sound
                         int dd = d, pp = p;
                         string head = grouped ? Head(names[p]) : "";
                         bool sub = head.Length > 0 && names.Count(n => Head(n) == head) >= 2;
@@ -841,7 +842,7 @@ public sealed partial class ArrangementView
         filter.TextChanged += (_, _) => Rebuild(filter.Text ?? "");
 
         var panel = new StackPanel { Margin = new Thickness(8), MinWidth = 260 };
-        panel.Children.Add(new TextBlock { Text = name, FontSize = 11, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(new TextBlock { Text = name, FontSize = 10, Margin = new Thickness(0, 0, 0, 6) });
         panel.Children.Add(filter);
         panel.Children.Add(list);
         var popup = new Flyout { Content = panel };

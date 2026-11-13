@@ -31,7 +31,7 @@ internal sealed partial class RackCardView
         int c = Sel;
         var stack = new StackPanel { Spacing = 7 };
 
-        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
         string name = RcChainName(c);
         var nameTb = RcName(name, NotaPalette.TextPrimary, NotaType.RowLabel);
         nameTb.Cursor = new Cursor(StandardCursorType.Hand);
@@ -201,16 +201,8 @@ internal sealed partial class RackCardView
                 };
                 return Loc.F("device.rack.right_panel.dry_wet", mode, chains, NotaNum.Pct(a.RackDryWet()), macros);
             }
-            case RackKind.MidiEffect:
-                return Loc.F("device.rack.right_panel.merged_midi", a.RackMode() == RackKindProfile.Select ? "Select" : "Parallel", chains, macros);
             default:
-            {
-                var hits = RcProbeHits(_rs.ProbePitch);
-                string probe = _rs.ProbePitch >= 0 && _rs.Centre == RackCentreTab.Zones
-                    ? $"{NoteName(_rs.ProbePitch)} → {(hits.Count > 0 ? string.Join(" + ", hits.ConvertAll(RcChainName)) : "nothing")}"
-                    : a.RackMono() ? "mono" : "poly";
-                return $"{chains} · {probe} · {macros}";
-            }
+                return Loc.F("device.rack.right_panel.merged_midi", a.RackMode() == RackKindProfile.Select ? "Select" : "Parallel", chains, macros);
         }
     }
 }

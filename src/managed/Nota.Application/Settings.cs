@@ -11,6 +11,9 @@ namespace Nota.Application;
 
 public enum ToolbarSide { Left, Right }
 
+/// <summary>How the browser's Projects tab orders projects (spec 092, #582).</summary>
+public enum ProjectsSortOrder { Date, Name }
+
 /// <summary>The appearance before colour themes (spec 011). Still written, in step with
 /// the chosen theme's kind, so an older Nota opening this settings file gets a sensible
 /// variant; read only to migrate (see <see cref="Appearance"/>).</summary>
@@ -38,11 +41,32 @@ public sealed class Settings
     /// <summary>The last custom accent, #RRGGBB — kept while a preset is worn, so Custom
     /// offers it again.</summary>
     public string CustomAccent { get; set; } = "";
+    /// <summary>The look (spec 091, Settings → Appearance): empty or "new" for the current look,
+    /// "classic" for 0.59's colours, corners and Geist Mono values. Worn over every theme. An
+    /// unknown value reads as New and is never rewritten on read (<see cref="Nota.Application.Looks.Resolve"/>).</summary>
+    public string Look { get; set; } = "";
+    /// <summary>How Arrangement clips are drawn (spec 091, Settings → Appearance → Clips): empty to
+    /// follow the look (Classic → solid, New → tinted), or the user's pick, "solid" or "tinted",
+    /// which wins over the look (<see cref="Nota.Application.Looks.ClipStyleOf"/>).</summary>
+    public string ClipStyle { get; set; } = "";
     /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
     /// folding it gives the clip grid its width back on small windows.</summary>
     public bool SessionInspectorOpen { get; set; } = true;
-    /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.</summary>
+    /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.
+    /// Since spec 092 a mirror of the default <see cref="SampleFolders"/> entry, rewritten on
+    /// every save: older versions and Nota Mosaic's <c>samples:</c> refs read it.</summary>
     public string SamplesFolder { get; set; } = "";
+    /// <summary>The sample folders the browser's Files tab shows (spec 092, #346 / #268), in
+    /// order; exactly one is the default (packs install there). Null in settings written by
+    /// older versions — migrated from <see cref="SamplesFolder"/> on load.</summary>
+    public List<SampleFolderEntry>? SampleFolders { get; set; }
+    /// <summary>The Files tab shows the file-system browse view instead of the folder tree
+    /// (spec 092, #580).</summary>
+    public bool FilesBrowseMode { get; set; }
+    /// <summary>The folder the Files tab's browse view showed last ("" = the default folder).</summary>
+    public string FilesBrowseFolder { get; set; } = "";
+    /// <summary>The Projects tab's order: newest first (the default) or by name (#582).</summary>
+    public ProjectsSortOrder ProjectsSort { get; set; } = ProjectsSortOrder.Date;
     /// <summary>Browser projects folder ("" = default ~/Documents/Nota Projects). M7-4.</summary>
     public string ProjectsFolder { get; set; } = "";
     /// <summary>Last app version whose "What's New" the user has already seen ("" = never).
@@ -96,6 +120,10 @@ public sealed class Settings
     public bool RemoteEnabled { get; set; }
     /// <summary>TCP port Nota Remote listens on (all interfaces).</summary>
     public int RemotePort { get; set; } = 7788;
+    /// <summary>The network interface whose address the Connect phone link and QR show (#85),
+    /// by its system name (en0, eth0, "Wi-Fi"); null = Automatic (a USB link first, then
+    /// Wi-Fi, then Ethernet). An interface that isn't up falls back to Automatic.</summary>
+    public string? RemoteInterface { get; set; }
     /// <summary>What a phone may do: 0 play notes only, 1 also control the project (mixer,
     /// transport, macros, XY, Session).</summary>
     public int RemoteAccess { get; set; } = 1;
@@ -125,6 +153,12 @@ public sealed class Settings
     public Dictionary<string, Nota.Application.Palette.PaletteUse> PaletteUsage { get; set; } = new();
     /// <summary>The last items applied from the palette, most recent first (its Recent section).</summary>
     public List<string> PaletteRecent { get; set; } = new();
+
+    // --- keyboard shortcuts (specs/096, #61) ------------------------------------------------
+    /// <summary>The user's custom keys, by key-action id (<see cref="Input.KeyActionCatalog"/>).
+    /// Only actions that differ from their default have an entry, so a new default in a later
+    /// version still reaches everyone who never touched that key.</summary>
+    public Dictionary<string, KeyBindingOverride> KeyBindings { get; set; } = new();
 
     /// <summary>Adding a plug-in by hand (browser, drag & drop, palette) opens its editor window
     /// right away (#250). On by default; Preferences → Plug-ins.</summary>
@@ -174,11 +208,19 @@ public sealed class Settings
     /// <summary>The arrangement's track-header column sits on the right of the lanes (#72);
     /// off = on the left. View ▸ Track headers on the right, or Settings → Appearance.</summary>
     public bool ArrangementHeadersRight { get; set; }
+    /// <summary>Windows / Linux: the in-window menu row (File, Edit, View…) is shown (#518).
+    /// Off — the default — the Menu key at the start of the transport bar gives the whole menu,
+    /// and Alt / F10 open it. View ▸ Show menu bar, or Settings → Appearance. Ignored on macOS.</summary>
+    public bool ShowMenuBar { get; set; }
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
     /// 0 smooth — the peak outline around its RMS body (default; was bars before #267, so a
     /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced
     /// peak strokes.</summary>
     public int ArrangementWaveform { get; set; }
+    /// <summary>A heavier grid line every this many bars across the arrangement's lanes and
+    /// ruler, counted from bar 1 (Settings → Appearance, #517): 0 off (default), 4, 8, 16 or
+    /// 32. Anything else reads as off (<see cref="Editing.PhraseLines.Normalize"/>).</summary>
+    public int ArrangementPhraseBars { get; set; }
     /// <summary>Splitting an audio clip writes a short fade at the cut (issue #286). On by
     /// default; a missing key in an older settings file stays on. MIDI clips are left alone.
     /// The command palette and the clip menu can still fade a join when this is off.</summary>
@@ -186,6 +228,9 @@ public sealed class Settings
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
     public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;
+    /// <summary>Text size step in points (Settings → Appearance, spec 038): one of
+    /// <see cref="Application.TextSize.Steps"/>; anything else reads as 0.</summary>
+    public int TextSize { get; set; } = Application.TextSize.Default;
     /// <summary>Interface language code, lower-case (Settings → Appearance, spec 068): "en" or
     /// "fr". Read at start-up, so a change applies after a restart. An empty, unknown or
     /// hand-edited value reads as English (<see cref="Localization.UiLanguage.Normalize"/>).</summary>
@@ -193,8 +238,17 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Piano-roll notes in their articulation's colour instead of the track's (specs/085,
+    /// FR-015). The palette chip in the clip editor's header; off by default.</summary>
+    public bool PianoRollNoteColorByArticulation { get; set; }
     /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
     public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
+    /// <summary>Audio I/O setup per capture device (specs/086): switched-off inputs and their
+    /// names, keyed by <see cref="InputSetups.KeyOf"/>. A device never set up has no entry.</summary>
+    public Dictionary<string, InputSetup> InputSetups { get; set; } = new();
+    /// <summary>Output setup per playback device (specs/089): Main and Cue pairs and where the
+    /// click goes, keyed by <see cref="OutputSetups.KeyOf"/>. A device never set up has no entry.</summary>
+    public Dictionary<string, OutputSetup> OutputSetups { get; set; } = new();
     /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
     /// the velocity; true — wheel up lowers it.</summary>
     public bool PianoRollVelocityWheelReversed { get; set; }
@@ -212,11 +266,36 @@ public sealed class Settings
     /// Detail panel, as before #308. Off by default — a selection only follows an open panel and
     /// a double-click opens it. Settings → Appearance.</summary>
     public bool OpenDetailOnSelect { get; set; }
+    /// <summary>The XL panel's height above the device chain (specs/085, #540): the Devices
+    /// panel's splitter sizes it while a device is in XL. 0 = the default (460).</summary>
+    public double XlPanelHeight { get; set; }
 
     /// <summary>Label every note of the piano-roll keyboard: the keys column
     /// shows all note names (C, C#, D …) instead of only C. Off by default; a beginner aid
     /// set from Settings → Appearance.</summary>
     public bool PianoRollLabelAllNotes { get; set; } = false;
+}
+
+/// <summary>One sample folder in <see cref="Settings.SampleFolders"/>. <see cref="Path"/> is
+/// absolute and normalised; <see cref="Name"/> is only the label Nota shows (null = the
+/// folder's name) — renaming never touches the disk.</summary>
+public sealed class SampleFolderEntry
+{
+    public string Path { get; set; } = "";
+    public string? Name { get; set; }
+    public bool IsDefault { get; set; }
+}
+
+/// <summary>A sample folder as the UI sees it: list index, absolute path, label, default
+/// flag, and whether the folder could be found at the last look.</summary>
+public sealed record ResolvedSampleFolder(int Index, string Path, string Label, bool IsDefault, bool Available);
+
+public enum SampleFolderOutcome { Added, AlreadyPresent, Inside, Contains, NotADirectory }
+
+/// <summary>What adding a folder did; <see cref="Other"/> is the index of the entry it clashed with (−1 otherwise).</summary>
+public readonly record struct SampleFolderResult(SampleFolderOutcome Outcome, int Other = -1)
+{
+    public bool Ok => Outcome == SampleFolderOutcome.Added;
 }
 
 public interface ISettingsService
@@ -226,10 +305,36 @@ public interface ISettingsService
     /// <summary>Fired after Save() so views can re-apply settings live.</summary>
     event Action? Changed;
 
-    /// <summary>The sample library folder to browse (resolved default, created). M7-4.</summary>
+    /// <summary>The default sample folder (resolved, created) — where packs install and what
+    /// Nota Mosaic's <c>samples:</c> refs resolve against. M7-4; spec 092.</summary>
     string ResolvedSamplesFolder();
+
+    // --- sample folders (spec 092) -------------------------------------------------------
+    // Defaults keep simple implementations (test doubles) working with one folder.
+
+    /// <summary>Every sample folder, in list order. Never creates
+    /// folders other than the default.</summary>
+    IReadOnlyList<ResolvedSampleFolder> ResolvedSampleFolders()
+    {
+        var p = ResolvedSamplesFolder();
+        return new[] { new ResolvedSampleFolder(0, p, System.IO.Path.GetFileName(p.TrimEnd('/', '\\')), true, System.IO.Directory.Exists(p)) };
+    }
+    SampleFolderResult AddSampleFolder(string path) => new(SampleFolderOutcome.NotADirectory);
+    bool RemoveSampleFolder(int index) => false;
+    void RenameSampleFolder(int index, string? name) { }
+    void SetDefaultSampleFolder(int index) { }
+    /// <summary>Raised after the list of sample folders changed (added, removed, renamed, default moved).</summary>
+    event Action? SampleFoldersChanged { add { } remove { } }
     /// <summary>The projects folder to browse (resolved default, created). M7-4.</summary>
     string ResolvedProjectsFolder();
     /// <summary>App-managed presets folder (created). M7-4.</summary>
     string PresetsFolder();
+}
+
+/// <summary>One action's custom keys (specs/096): per slot, null keeps the default, "" leaves
+/// it unassigned, anything else is the key in glyph notation ("⌘T", "⌥⇧↑", "Q").</summary>
+public sealed class KeyBindingOverride
+{
+    public string? Primary { get; set; }
+    public string? Alternative { get; set; }
 }

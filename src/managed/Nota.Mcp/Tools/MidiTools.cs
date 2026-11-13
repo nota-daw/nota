@@ -18,10 +18,12 @@ public sealed class MidiTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
         [property: Description("MIDI note number, 60 = middle C")] int Pitch,
         [property: Description("Start in beats, relative to the clip")] double Start,
         [property: Description("Length in beats")] double Length,
-        [property: Description("Velocity 0..1")] float Velocity);
+        [property: Description("Velocity 0..1")] float Velocity,
+        [property: Description("Articulation id in the track's articulation map, 0 = none. Keep the value get_clip_notes returned when you write a note back.")] int Articulation = 0);
 
-    private static NotaNote ToEngine(Note n) => new(n.Pitch, n.Start, n.Length, Math.Clamp(n.Velocity, 0f, 1f));
-    private static Note FromEngine(NotaNote n) => new(n.Pitch, n.StartBeat, n.LengthBeats, n.Velocity);
+    // The articulation travels both ways, so a get → edit → set round trip keeps it (specs/085).
+    private static NotaNote ToEngine(Note n) => new(n.Pitch, n.Start, n.Length, Math.Clamp(n.Velocity, 0f, 1f)) { ArticulationId = Math.Max(0, n.Articulation) };
+    private static Note FromEngine(NotaNote n) => new(n.Pitch, n.StartBeat, n.LengthBeats, n.Velocity, n.ArticulationId);
 
     [McpServerTool(Name = "add_midi_clip"), Description("Add an empty MIDI clip to an instrument track at startBeat for lengthBeats. Returns the clip index.")]
     public Task<int> AddMidiClip(int trackId, double startBeat, double lengthBeats)

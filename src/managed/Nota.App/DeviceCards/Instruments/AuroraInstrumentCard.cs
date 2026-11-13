@@ -6,9 +6,12 @@
 //
 //   Wheels 56   pitch bend and mod wheel, on screen on every tab.
 //   Centre      six tabs:
-//               Osc    — the 16-frame wavetable stack beside the two oscillators, the sub
-//                        and the unison stack; the strip on top carries the bank and the
-//                        warp mode of whichever oscillator you are looking at.
+//               Osc    — both oscillators side by side (specs/053), each with its own
+//                        table window, table and warp-mode drop-downs, on switch and six
+//                        knobs; the sub and the unison stack share a row under them. Each
+//                        oscillator takes a dropped or picked audio file as its table
+//                        (WAV / FLAC / MP3), and its window follows the position the
+//                        newest sounding voice plays.
 //               Filter — the selected filter's response as a drag pad, with its type,
 //                        slope, cutoff, resonance, env / LFO / key amounts and where each
 //                        source (Osc 1 / Osc 2 / Sub) is sent.
@@ -18,9 +21,10 @@
 //                        that draws the selected LFO's own shape.
 //               Mod    — the 8 × 7 matrix: drag a cell up for +, down for −.
 //               FX     — drive · chorus · reverb, each on its own switch.
-//   Rail 186    Global (voice mode, bend range, position, cutoff, unison, gain, pan and
-//               the track's meter) or Macros (eight, three to a page, each a value, an
-//               amount and one of twelve targets). Picking Mod brings the macros up, as
+//   Rail 186    Global (voice mode, bend range, volume and pan; position, cutoff and
+//               unison detune have their one home on the Osc and Filter tabs) or Macros
+//               (eight, three to a page, each a value, an amount and one of twelve
+//               targets). Picking Mod brings the macros up, as
 //               the almanac draws that state.
 //
 // Neutral ink is the parameter itself; teal is modulation and what receives it; the accent
@@ -38,6 +42,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
 using Nota.Application.Localization;
@@ -50,6 +55,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
     public string Subtitle => "Wavetable";
     public double CardWidth => 700;
 
+    // The synth's scope (WavetableSynth::kScopeN): live follow and table serials first, the
+    // envelope telemetry after them.
+    private const int WavetableScopeN = 6;
     private const double WheelsW = 56, RailW = 186, TabH = 20, StatusH = 18, BodyH = 186;
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Mod", "FX" };
@@ -126,24 +134,43 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         (int, string) P(string id) => (I(id), id);
 
         var readouts = new List<Action>();
-        int tab = 0, railTab = 0, fsel = 0, osel = 0;   // Osc · Global · Filter 1 · Osc 1
+        int tab = 0, railTab = 0, fsel = 0;   // Osc · Global · Filter 1
 
-        var stack = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
-        var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
+        // One table window per oscillator: both are on screen together (specs/053).
+        var stacks = new AuroraTableView[2];
+        for (int o = 0; o < 2; o++) stacks[o] = new AuroraTableView { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 40 };
+        // Imported tables (specs/053): what each oscillator holds, re-read when its serial or
+        // its source changes, or a parameter moves (an undo, a preset), plus a passing note (loading, an error, a shortened file) for the caption.
+        var tinfo = new AuroraTableInfo[2];
+        bool canImport = engine.TryGetAuroraTableInfo(track, 0, out tinfo[0]);   // false inside a rack chain
+        if (canImport) engine.TryGetAuroraTableInfo(track, 1, out tinfo[1]);
+        var knownSerial = new[] { tinfo[0].Serial & 0xFFFFFF, tinfo[1].Serial & 0xFFFFFF };
+        var note = new string?[2];
+        var noteUntil = new DateTime[2];
+        var loading = new bool[2];
+        var dragging = new bool[2];
+        var capUpdates = new Action?[2];
+        var scope = new float[WavetableScopeN];
+        bool Imported(int o) => tinfo[o].HasTable && tinfo[o].UseCustom;
+        void ReloadInfo(int o)
+        {
+            if (!canImport) return;
+            engine.TryGetAuroraTableInfo(track, o, out tinfo[o]);
+            knownSerial[o] = tinfo[o].Serial & 0xFFFFFF;
+        }
+        var oscDimmed = new List<Control>[] { new(), new() };   // what an off oscillator greys
+        var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, Spectrum = new FilterSpectrum(engine, track) };
         var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
-        var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, Accent = Teal };
+        var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var lfoStrip = new AuroraLfoStrip { VerticalAlignment = VerticalAlignment.Stretch };
 
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.ValuesFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 6, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
         Action applyFilter = () => { };
-        Action applyOsc = () => { };
         Action showTab = () => { };
 
         // ---- the live tick's gate -------------------------------------------------
@@ -163,18 +190,59 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             primed = true;
             return moved;
         }
+        // Every tick, before the gate: where the newest sounding voice reads each table
+        // (the set Position when nothing sounds), and whether a table changed underneath
+        // (an undo, a preset). The windows repaint only when their lit step moves.
+        void Follow()
+        {
+            int n = engine.InstrumentScope(track, scope);
+            for (int o = 0; o < 2; o++)
+            {
+                bool stale = n >= 4 && (uint)scope[2 + o] != knownSerial[o]
+                          || n >= 6 && ((((int)scope[5] >> o) & 1) != 0) != tinfo[o].UseCustom;
+                if (canImport && stale) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
+                if (note[o] is not null && DateTime.UtcNow > noteUntil[o]) { note[o] = null; capUpdates[o]?.Invoke(); }
+                double pos = n >= 2 && scope[o] >= 0 ? scope[o] : G(o == 0 ? "position" : "osc2position");
+                if (Imported(o) && AuroraTableView.PreviewFor(tinfo[o].Serial, () => FetchPreview(o)) is { } pv)
+                    stacks[o].SetImported(tinfo[o].Serial, pv, pos);
+                else
+                    stacks[o].Set(Sel(o == 0 ? "table" : "osc2table", 4), pos);
+            }
+        }
+        AuroraTableView.Preview? FetchPreview(int o)
+        {
+            int frames = tinfo[o].Frames;
+            if (frames <= 0) return null;
+            int rep = Math.Min(frames, 16), grid = Math.Min(frames, 64);
+            const int points = 96;
+            var data = engine.AuroraTablePreview(track, o, rep, grid, points);
+            return data.Length == (rep + grid) * points ? new AuroraTableView.Preview(data, rep, grid, points, frames) : null;
+        }
         void Refresh(bool force)
         {
-            if (!ParamsMoved() && !force) return;
-            applyOsc(); applyFilter();
-            stack.Set(Sel(osel == 0 ? "table" : "osc2table", 4), G(osel == 0 ? "position" : "osc2position"));
-            stack.Dimmed = G(osel == 0 ? "osc1on" : "osc2on") < 0.5f;
+            long t0 = UiProbe.Start();
+            Follow();
+            if (!ParamsMoved() && !force) { UiProbe.EndTick(t0); return; }
+            // A parameter moved underneath (an undo, a preset, another card): the table info
+            // may have changed with it, so read it again before the readouts use it.
+            for (int o = 0; o < 2; o++) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
+            applyFilter();
+            for (int o = 0; o < 2; o++)
+                stacks[o].Dimmed = G(o == 0 ? "osc1on" : "osc2on") < 0.5f;
             env1.Refresh(); env2.Refresh();
             lfoStrip.Set(Sel("lfo1shape", 4), LfoCycles(0), G("lfo1depth"));
+            // Undim first so the readouts paint over the real colours, not ones saved while the
+            // oscillator was off (a cleared route would come back in its old modulation colour).
+            for (int o = 0; o < 2; o++)
+                foreach (var c in oscDimmed[o]) Inactive.Set(c, false, interactive: true);
             foreach (var r in readouts) r();
+            // After the readouts' own paint: an oscillator that is off takes the unavailable
+            // look, its controls staying where they are and still usable.
+            for (int o = 0; o < 2; o++)
+                if (G(o == 0 ? "osc1on" : "osc2on") < 0.5f)
+                    foreach (var c in oscDimmed[o]) Inactive.Set(c, true, interactive: true);
             hint.Text = Hint();
-            status.Text = Summary();
-            meta.Text = Meta();
+            UiProbe.EndTick(t0);
         }
         void Touch() => Refresh(true);
 
@@ -188,7 +256,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
         static TextBlock Section(string t, IBrush? c = null) => new()
         {
@@ -203,7 +271,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.ValuesFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };
@@ -302,19 +370,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         }
         Control StopChips(string id, string[] names, float[] stops, bool fill = false)
             => Chips(id, names, () => NearestExact(G(id), stops), iv => { SetP(id, stops[iv]); Touch(); }, fill);
-
-        Grid Slider(string label, string id, Func<string> text, double labelW = 0, double valueW = 40)
-        {
-            int pi = I(id);
-            var row = SliderRow(label, () => G(id), v => { SetP(id, (float)v); Touch(); }, text, out var sync,
-                begin: pi >= 0 ? () => Begin(id) : null,
-                end: pi >= 0 ? () => End(id) : null,
-                reset: pi >= 0 ? () => { SetP(id, engine.InstrumentParamDefault(track, pi)); Touch(); } : null,
-                labelWidth: labelW, valueWidth: valueW);
-            readouts.Add(sync);
-            if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), label);
-            return row;
-        }
 
         Control Toggle(string label, string id, Func<string>? live = null)
         {
@@ -417,76 +472,304 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         wheelsPanel.Width = WheelsW;
 
         // ---- Osc tab --------------------------------------------------------------
-        // Both oscillators own a bank and a warp mode. Two chip strips per oscillator
-        // would not fit, so ONE strip across the top carries them for whichever oscillator
-        // is selected — the 1 / 2 pick leads it, and clicking an oscillator's name picks it
-        // too. The pick and the bank names say what they are, so they go without captions. Under it: the table window on the left, the two oscillator rows on the
-        // right, and a line of drag values for the sub and the unison stack.
-        var oscTableHosts = new Panel[2];
-        var oscWarpHosts = new Panel[2];
-        for (int o = 0; o < 2; o++)
-        {
-            string pre = o == 0 ? "osc1" : "osc2";
-            oscTableHosts[o] = new Panel { Children = { Chips(o == 0 ? "table" : "osc2table", Banks) } };
-            oscWarpHosts[o] = new Panel { Children = { Chips(pre + "warpmode", WarpModes) } };
-        }
-        var oscPick = Segments(new[] { "1", "2" }, () => osel, iv => { osel = iv; Touch(); }, out var oscPickSync);
-        readouts.Add(oscPickSync);
-        ToolTip.SetTip(oscPick, Loc.T("device.aurora.the_oscillator_whose_table_and"));
-        var oscTableStack = new Panel();
-        foreach (var h in oscTableHosts) oscTableStack.Children.Add(h);
-        var oscWarpStack = new Panel();
-        foreach (var h in oscWarpHosts) oscWarpStack.Children.Add(h);
-        var oscStrip = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center,
-            Children = { oscPick, oscTableStack, Cap("WARP"), oscWarpStack },
-        };
+        // Both oscillators side by side, nothing behind a pick (specs/053): each column
+        // carries its name and on switch, its table and warp-mode drop-downs, its table
+        // window and its six knobs. Under both, a line of drag values for the sub and the
+        // unison stack. Four banks and five warp modes would not fit as segments in a
+        // 210 px column, so both are drop-downs (more than four choices is one anyway).
 
-        var oscGrid = new Grid
+        // A drop-down on a stepped parameter: the picked name in a groove with a chevron.
+        // A click opens the list, the wheel steps through it, right-click bubbles to the
+        // parameter menu; MIDI learn and automation follow as for the chips it replaces.
+        Control Drop(string id, string[] names, string learn, double width)
         {
-            ColumnDefinitions = new ColumnDefinitions("40,*,*,*,*,*,*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        var oscNames = new TextBlock[2];
-        for (int o = 0; o < 2; o++)
-        {
-            int ov = o;
-            string pre = o == 0 ? "osc1" : "osc2";
-            string nm = o == 0 ? "OSC 1" : "OSC 2";
-            int row = o * 2;
-            if (o > 0) { var rule = Rule(); rule.Margin = new Thickness(0, 1); Grid.SetRow(rule, 1); Grid.SetColumnSpan(rule, 7); oscGrid.Children.Add(rule); }
-            var name = Section(nm);
-            oscNames[o] = name;
-            var head = new StackPanel
+            int n = names.Length;
+            var name = Mono("", TextPrimary, NotaType.RowLabel);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            var chev = new Glyph(GlyphKind.ChevronDown, 7)
             {
-                Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
-                Children = { name, Toggle("", pre + "on", () => G(pre + "on") >= 0.5f ? "on" : "off") },
+                Foreground = TextTertiary, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             };
-            head.PointerPressed += (_, e) =>
+            DockPanel.SetDock(chev, Dock.Right);
+            var box = new Border
             {
-                if (!e.GetCurrentPoint(head).Properties.IsLeftButtonPressed) return;
-                osel = ov; Touch();
+                Height = 16, Width = width, Background = NotaPalette.Groove, CornerRadius = NotaRadius.Cell,
+                Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new DockPanel { Children = { chev, name } },
             };
-            void Cell(Control c, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); oscGrid.Children.Add(c); }
-            Cell(head, 0);
-            // Position is what the modulators reach for on this synth, so it wears teal.
-            Cell(PKnob(o == 0 ? "position" : "osc2position", "POSITION", nm + " Position", FrameText, 34, 42, Teal), 1);
-            Cell(PKnob(o == 0 ? "warp" : "osc2warp", "WARP", nm + " Warp", Pct, 34, 42), 2);
-            Cell(PKnob(pre + "level", "LEVEL", nm + " Level", Pct, 34, 42), 3);
-            Cell(PKnob(pre + "oct", "OCT", nm + " Octave", Oct, 34, 42), 4);
-            Cell(PKnob(pre + "semi", "SEMI", nm + " Semi", Semi, 34, 42), 5);
-            Cell(PKnob(pre + "detune", "FINE", nm + " Fine", Cents, 34, 42, Teal), 6);
+            box.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
+            void Pick(int iv) { SetP(id, iv / (float)(n - 1)); Touch(); }
+            box.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
+                var fly = new MenuFlyout();
+                int cur = Sel(id, n);
+                for (int i = 0; i < n; i++)
+                {
+                    int iv = i;
+                    var mi = new MenuItem { Header = names[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                    mi.Click += (_, _) => Pick(iv);
+                    fly.Items.Add(mi);
+                }
+                fly.ShowAt(box);
+                e.Handled = true;
+            };
+            box.PointerWheelChanged += (_, e) =>
+            {
+                if (WheelInput.Step(e, box) is not { } st) return;
+                e.Handled = true; if (st == 0) return;
+                Pick(Math.Clamp(Sel(id, n) - st, 0, n - 1));
+            };
+            readouts.Add(() => name.Text = names[Sel(id, n)]);
+            ToolTip.SetTip(box, learn + Loc.T("device.aurora.click_to_pick_scroll_to_step"));
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(box, MidiTarget.PluginParam(track, -1, pi), learn);
+            return box;
         }
-        applyOsc = () =>
+
+        // ---- imported tables (specs/053) ---------------------------------------------
+        // A position as the frame it lands on, out of the table the oscillator plays.
+        string PosText(int o, float pos)
         {
-            for (int o = 0; o < 2; o++)
+            if (!Imported(o)) return FrameText(pos);
+            int frames = Math.Max(1, tinfo[o].Frames);
+            return frames == 1 ? Loc.T("device.aurora.one_frame") : $"{1 + (int)Math.Round(pos * (frames - 1))}/{frames}";
+        }
+        void Note(int o, string text, double seconds = 4)
+        {
+            note[o] = text.Length == 0 ? null : text;
+            noteUntil[o] = DateTime.UtcNow.AddSeconds(seconds);
+            capUpdates[o]?.Invoke();
+        }
+        async void Import(int o, string path)
+        {
+            if (!canImport || loading[o]) return;
+            loading[o] = true; capUpdates[o]?.Invoke();
+            AuroraImportResult r;
+            try { r = await AuroraTableImporter.ImportAsync(engine, track, o, path); }
+            finally { loading[o] = false; }
+            ReloadInfo(o);
+            Note(o, r.Message);
+            if (r.Loaded) ctx.NotifyChanged();
+            Touch();
+        }
+        async void PickFile(Control anchor, int o)
+        {
+            if (TopLevel.GetTopLevel(anchor) is not { } top) return;
+            var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                oscTableHosts[o].IsVisible = oscWarpHosts[o].IsVisible = o == osel;
-                oscNames[o].Foreground = o == osel ? AccentBright : TextPrimary;
+                Title = Loc.F("device.aurora.import_a_wavetable_into_osc", o + 1), AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType(Loc.T("common.audio")) { Patterns = new[] { "*.wav", "*.flac", "*.mp3" } } },
+            });
+            if (files.Count > 0 && files[0].TryGetLocalPath() is { } p) Import(o, p);
+        }
+        void AcceptDrops(Control target, int o)
+        {
+            if (!canImport) return;
+            DragDrop.SetAllowDrop(target, true);
+            void Hover(bool on) { dragging[o] = on; stacks[o].DragOver = on; capUpdates[o]?.Invoke(); }
+            DragDrop.AddDragOverHandler(target, (_, e) =>
+            {
+                if (!BrowserView.IsAcceptableDrag(e)) return;
+                e.DragEffects = DragDropEffects.Copy; Hover(true); ctx.HideDropGlow(); e.Handled = true;
+            });
+            DragDrop.AddDragLeaveHandler(target, (_, _) => Hover(false));
+            DragDrop.AddDropHandler(target, (_, e) =>
+            {
+                Hover(false);
+                foreach (var it in BrowserView.DroppedItems(e))
+                    if (it.Kind is not (Nota.Presentation.BrowserItemKind.MidiFile or Nota.Presentation.BrowserItemKind.Preset
+                            or Nota.Presentation.BrowserItemKind.Project)
+                        && it.Path is { Length: > 0 } p && AuroraTableImporter.IsSupported(p))
+                    {
+                        Import(o, p);
+                        break;
+                    }
+                e.Handled = true;
+            });
+        }
+
+        // The table drop-down: the four banks, then (when the oscillator can hold one) the
+        // imported table by name, Import… and Remove. While the imported table plays, the
+        // bank row it would fall back to is shown greyed (FR-010).
+        Control TableDrop(int o, string id, string learn)
+        {
+            const int n = 4;
+            var name = Mono("", TextPrimary, NotaType.RowLabel);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            var chev = new Glyph(GlyphKind.ChevronDown, 7)
+            {
+                Foreground = TextTertiary, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            };
+            DockPanel.SetDock(chev, Dock.Right);
+            var box = new Border
+            {
+                Height = 16, Width = 74, Background = NotaPalette.Groove, CornerRadius = NotaRadius.Cell,
+                Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new DockPanel { Children = { chev, name } },
+            };
+            box.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
+            void Pick(int iv)
+            {
+                bool was = Imported(o);
+                if (I(id) >= 0) AuroraTableImporter.PickBank(engine, track, o, I(id), id, iv / (float)(n - 1));
+                if (was) { ReloadInfo(o); ctx.NotifyChanged(); }
+                Touch();
             }
-        };
+            box.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
+                var fly = new MenuFlyout();
+                int cur = Sel(id, n);
+                bool imp = Imported(o);
+                for (int i = 0; i < n; i++)
+                {
+                    int iv = i;
+                    var mi = new MenuItem { Header = Banks[i], ToggleType = MenuItemToggleType.Radio, IsChecked = !imp && i == cur };
+                    if (imp && i == cur) mi.Foreground = TextTertiary;   // what it falls back to
+                    mi.Click += (_, _) => Pick(iv);
+                    fly.Items.Add(mi);
+                }
+                if (canImport)
+                {
+                    fly.Items.Add(new Separator());
+                    if (tinfo[o].HasTable)
+                    {
+                        var own = new MenuItem { Header = tinfo[o].Name, ToggleType = MenuItemToggleType.Radio, IsChecked = imp };
+                        own.Click += (_, _) => { engine.AuroraSetSource(track, o, true, undoable: true); ReloadInfo(o); ctx.NotifyChanged(); Touch(); };
+                        fly.Items.Add(own);
+                    }
+                    var import = new MenuItem { Header = Loc.T("device.aurora.import") };
+                    import.Click += (_, _) => PickFile(box, o);
+                    fly.Items.Add(import);
+                    if (tinfo[o].HasTable)
+                    {
+                        fly.Items.Add(new Separator());
+                        fly.Items.Add(MenuKit.Danger(Loc.T("device.aurora.remove_imported_table"), null,
+                            () => { engine.AuroraClearTable(track, o); ReloadInfo(o); ctx.NotifyChanged(); Touch(); }));
+                    }
+                }
+                fly.ShowAt(box);
+                e.Handled = true;
+            };
+            box.PointerWheelChanged += (wt, e) =>
+            {
+                if (WheelInput.Step(e, wt ?? box) is not { } st) return;
+                e.Handled = true; if (st == 0) return;
+                Pick(Math.Clamp(Sel(id, n) - st, 0, n - 1));
+            };
+            readouts.Add(() =>
+            {
+                name.Text = Imported(o) ? tinfo[o].Name : Banks[Sel(id, n)];
+                ToolTip.SetTip(box, Imported(o)
+                    ? Loc.F("device.aurora.imported_click_for_the_banks", learn, tinfo[o].Name)
+                    : learn + Loc.T("device.aurora.click_to_pick_or_import"));
+            });
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(box, MidiTarget.PluginParam(track, -1, pi), learn);
+            return box;
+        }
+
+        // What steers the position: the strongest matrix route into Position (it moves
+        // both oscillators, so both windows name it).
+        string PosModText()
+        {
+            int best = -1; double mag = 0.02;
+            for (int s = 0; s < SrcNames.Length; s++)
+            {
+                double a = Math.Abs(G($"mtx{s}_2") - 0.5) * 2;
+                if (a > mag) { mag = a; best = s; }
+            }
+            return best < 0 ? "" : SrcNames[best].ToLowerInvariant() + " → pos";
+        }
+
+        Control OscColumn(int o)
+        {
+            string pre = o == 0 ? "osc1" : "osc2";
+            string nm = Loc.F("device.aurora.osc_n", o + 1);
+            string tableId = o == 0 ? "table" : "osc2table";
+            string posId = o == 0 ? "position" : "osc2position";
+
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Height = 18 };
+            var tableDrop = TableDrop(o, tableId, Loc.F("device.aurora.osc_table", nm));
+            var warpDrop = Drop(pre + "warpmode", WarpModes, Loc.F("device.aurora.osc_warp_mode", nm), 52);
+            var headCells = new Control[] { Section(nm), Toggle("", pre + "on", () => G(pre + "on") >= 0.5f ? "on" : "off"), new Panel(), tableDrop, warpDrop };
+            for (int i = 0; i < headCells.Length; i++) { Grid.SetColumn(headCells[i], i); head.Children.Add(headCells[i]); }
+
+            // The window's caption, one line in its title row: the bank, the frame and what
+            // modulates the position.
+            var bankCap = Mono("", TextSecondary, NotaType.Axis);
+            var frameCap = Mono("", TextPrimary, NotaType.Axis);
+            var modCap = Mono("", Teal, NotaType.Axis);
+            modCap.HorizontalAlignment = HorizontalAlignment.Right;
+            // The caption names the source and its frame, or what is happening to it: a drop
+            // about to land, a file loading, why one was refused, a table a project lost.
+            void UpdateCap()
+            {
+                string? state = dragging[o] ? Loc.F("device.aurora.drop_to_load_into", nm)
+                    : loading[o] ? Loc.T("device.aurora.loading")
+                    : note[o];
+                if (state is null && tinfo[o].Missing && !tinfo[o].HasTable) state = Loc.F("device.aurora.missing", tinfo[o].Name);
+                if (state is not null) { bankCap.Text = state; frameCap.Text = ""; return; }
+                if (Imported(o))
+                {
+                    bankCap.Text = tinfo[o].Name;
+                    frameCap.Text = PosText(o, G(posId));
+                }
+                else
+                {
+                    bankCap.Text = Banks[Sel(tableId, 4)];
+                    frameCap.Text = FrameText(G(posId));
+                }
+            }
+            capUpdates[o] = UpdateCap;
+            readouts.Add(() =>
+            {
+                UpdateCap();
+                // Nothing drives Position: say so, greyed, as the single window did.
+                string mod = PosModText();
+                modCap.Text = mod.Length > 0 ? mod : Loc.T("device.aurora.no_modulation");
+                modCap.Foreground = mod.Length > 0 ? Teal : TextDisabled;
+            });
+            bankCap.TextTrimming = TextTrimming.CharacterEllipsis;
+            var capRow = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5,
+                Margin = new Thickness(7, 3, 7, 0), VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false,
+            };
+            capRow.Children.Add(bankCap);
+            Grid.SetColumn(frameCap, 1); capRow.Children.Add(frameCap);
+            Grid.SetColumn(modCap, 2); capRow.Children.Add(modCap);
+            stacks[o].TopInset = 12;   // the caption line in the window's top edge
+            var window = new Panel { Children = { stacks[o], capRow } };
+
+            // Position is what the modulators reach for on this synth.
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*,*") };
+            var cells = new[]
+            {
+                PKnob(posId, "Position", nm + " Position", v => PosText(o, v), 34, 35, Teal),   // what the modulators reach for: the modulation mark
+                PKnob(o == 0 ? "warp" : "osc2warp", "Warp", nm + " Warp", Pct, 34, 35),
+                PKnob(pre + "level", "Level", nm + " Level", Pct, 34, 35),
+                PKnob(pre + "oct", Loc.T("device.aurora.oct"), nm + " Octave", Oct, 34, 35),
+                PKnob(pre + "semi", Loc.T("device.aurora.semi"), nm + " Semi", Semi, 34, 35),
+                PKnob(pre + "detune", Loc.T("device.aurora.fine"), nm + " Fine", Cents, 34, 35),
+            };
+            for (int i = 0; i < cells.Length; i++)
+            {
+                cells[i].HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]);
+            }
+
+            var col = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 3 };
+            Grid.SetRow(window, 1); Grid.SetRow(knobs, 2);
+            col.Children.Add(head); col.Children.Add(window); col.Children.Add(knobs);
+            // Off: everything but the name and the switch takes the unavailable look (the
+            // stack greys itself through Dimmed).
+            oscDimmed[o].AddRange(new Control[] { tableDrop, warpDrop, capRow, knobs });
+            col.Background = Brushes.Transparent;   // the whole column takes a dropped file
+            AcceptDrops(col, o);
+            return col;
+        }
 
         // The sub and the unison stack are drag values, as the almanac draws them: a caps
         // label over a mono readout, dragged up or down, double-clicked back to default.
@@ -508,38 +791,15 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             Padding = new Thickness(0, 3, 0, 0), Child = subUni,
         };
 
-        // The table window carries its own caption: which bank, which frame, and what is
-        // steering the position.
-        var tableCap = Mono("", TextTertiary, NotaType.Axis);
-        var frameCap = Mono("", TextPrimary, NotaType.Axis);
-        var posMod = Mono("", Teal, NotaType.Axis);
-        readouts.Add(() =>
-        {
-            tableCap.Text = $"Table {osel + 1} · {Banks[Sel(osel == 0 ? "table" : "osc2table", 4)]}";
-            frameCap.Text = "frame " + FrameText(G(osel == 0 ? "position" : "osc2position"));
-            int best = -1; double mag = 0.02;
-            for (int s = 0; s < SrcNames.Length; s++)
-            {
-                double a = Math.Abs(G($"mtx{s}_2") - 0.5) * 2;
-                if (a > mag) { mag = a; best = s; }
-            }
-            posMod.Text = best < 0 ? Loc.T("device.aurora.no_modulation") : SrcNames[best].ToLowerInvariant() + " → pos";
-            posMod.Foreground = best < 0 ? TextDisabled : Teal;
-        });
-        var tableOverlay = new StackPanel
-        {
-            Margin = new Thickness(7, 5), VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Left, Spacing = 0, IsHitTestVisible = false,
-            Children = { tableCap, frameCap, posMod },
-        };
-        stack.TopInset = 26;   // the three caption lines the overlay puts in that corner
-        var tableWindow = new Panel { Width = 128, Children = { stack, tableOverlay } };
-        var oscMid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
-        oscMid.Children.Add(tableWindow);
-        Grid.SetColumn(oscGrid, 1); oscMid.Children.Add(oscGrid);
-        var oscBodyGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 3 };
-        var oscRows = new Control[] { oscStrip, oscMid, subUniRow };
-        for (int i = 0; i < oscRows.Length; i++) { Grid.SetRow(oscRows[i], i); oscBodyGrid.Children.Add(oscRows[i]); }
+        var oscPair = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*"), ColumnSpacing = 5 };
+        var col1 = OscColumn(0);
+        var oscRule = new Border { Width = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
+        var col2 = OscColumn(1);
+        Grid.SetColumn(oscRule, 1); Grid.SetColumn(col2, 2);
+        oscPair.Children.Add(col1); oscPair.Children.Add(oscRule); oscPair.Children.Add(col2);
+        var oscBodyGrid = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 3 };
+        Grid.SetRow(subUniRow, 1);
+        oscBodyGrid.Children.Add(oscPair); oscBodyGrid.Children.Add(subUniRow);
         var oscBody = new Border { Padding = new Thickness(5, 3), Child = oscBodyGrid };
 
         // ---- Filter tab -----------------------------------------------------------
@@ -646,114 +906,23 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var filtBody = new Border { Padding = new Thickness(7, 5), Child = filtGrid };
 
         // ---- Env tab --------------------------------------------------------------
-        // Each stage box under a graph carries a small knob and a read-out. The knob turns
-        // and double-click resets like any knob; the rest of the box is a drag value too
-        // (vertical drag, Shift for fine), and a double-click anywhere on it types the value.
-        Knob EnvKnob(string id, int pi, string name, Func<float, string> fmt, IBrush? arc)
+        // Env 1 (amp) and Env 2 (free) side by side on one time scale (#531): drag the curve,
+        // bend decay and release by their diamonds, Lin / Exp in each header.
+        var envScale = new EnvTimeScale();
+        Control EnvKnobCell(string id, string label, string learn, Func<float, string> fmt) => PKnob(id, label, learn, fmt, 24, 40);
+        Control EnvRoute(Func<string> route)
         {
-            var knob = new Knob(G(id), 1.0)
-            {
-                Accent = true, Inline = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
-                VerticalAlignment = VerticalAlignment.Center, Format = v => fmt((float)v),
-            };
-            knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); Touch(); };
-            knob.GestureBegin += () => Begin(id);
-            knob.GestureEnd += () => End(id);
-            readouts.Add(() => { if (!knob.Dragging) knob.Value = G(id); ToolTip.SetTip(knob, name + " · " + fmt(G(id))); });
-            return knob;
-        }
-        void EnvBox(Border cell, string id, TextBlock readout, ValueField stageField)
-        {
-            // The box keeps its double-click for typing: no reset there (the knob and the
-            // right-click menu still reset).
-            var field = stageField with { ResetOnDoubleClick = false };
-            ValueEntry.Attach(cell, field, readout);
-            // The automation gesture opens on the first real change, not on the press: a
-            // press alone (the first click of a double-click) must not override automation.
-            bool drag = false, began = false; double lastY = 0, at = 0;
-            cell.PointerPressed += (_, e) =>
-            {
-                if (e.Handled || !e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
-                e.Handled = true;
-                if (e.ClickCount == 2) { ValueEntry.Open(cell, field); return; }
-                drag = true; began = false; lastY = e.GetPosition(cell).Y; at = G(id);
-                e.Pointer.Capture(cell);
-            };
-            cell.PointerMoved += (_, e) =>
-            {
-                if (!drag) return;
-                // Step by step, so Shift (fine) can come and go mid-drag without a jump.
-                double y = e.GetPosition(cell).Y;
-                at = Math.Clamp(at + (lastY - y) / ((e.KeyModifiers & KeyModifiers.Shift) != 0 ? 600.0 : 120.0), 0, 1);
-                lastY = y;
-                if ((float)at == G(id)) return;
-                if (!began) { began = true; Begin(id); }
-                SetP(id, (float)at); Touch();
-            };
-            void Stop() { drag = false; if (began) { began = false; End(id); } }
-            cell.PointerReleased += (_, e) => { if (!drag) return; Stop(); e.Pointer.Capture(null); };
-            cell.PointerCaptureLost += (_, _) => { if (drag) Stop(); };
-            ToolTip.SetTip(cell, Loc.F("device.aurora.drag_or_turn_to_change", field.Name));
-        }
-
-        Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids, Func<string> summary)
-        {
-            view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
-            string[] stage = { "A", "D", "S", "R" };
-            Func<float, string>[] fmt = { v => Secs(v, 0.001, 2.0), v => Secs(v, 0.002, 3.0), Pct, v => Secs(v, 0.002, 4.0) };
-            view.Format = (k, n) => fmt[k]((float)n);   // ⌥-click a breakpoint to type it
-            var cells = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
-            for (int k = 0; k < 4; k++)
-            {
-                string id = ids[k];
-                var fk = fmt[k];
-                string name = title + " · " + stage[k];
-                var v = Mono(fk(G(id)), TextPrimary, NotaType.RowLabel);
-                readouts.Add(() => v.Text = fk(G(id)));
-                // The knob on top, the stage letter and its value on one line under it: a box
-                // is too narrow to hold a knob beside a full value like "180 ms".
-                v.HorizontalAlignment = HorizontalAlignment.Right;
-                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Left;
-                var box = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 2 };
-                var cell = new Border
-                {
-                    Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Badge, Padding = new Thickness(3, 2, 3, 1),
-                    Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = box,
-                };
-                if (I(id) is var pi and >= 0)
-                {
-                    var knob = EnvKnob(id, pi, name, fk, ReferenceEquals(view, env2) ? Teal : null);
-                    knob.HorizontalAlignment = HorizontalAlignment.Center;
-                    Grid.SetColumnSpan(knob, 2); box.Children.Add(knob);
-                    MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), name);
-                }
-                Grid.SetRow(cap, 1); box.Children.Add(cap);
-                Grid.SetRow(v, 1); Grid.SetColumn(v, 1); box.Children.Add(v);
-                if (view.Field(k) is { } vf) EnvBox(cell, id, v, vf);
-                Grid.SetColumn(cell, k); cells.Children.Add(cell);
-            }
-            var sum = Mono("", TextSecondary, NotaType.Axis);
-            sum.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => sum.Text = summary());
             var dest = Mono("", Teal, NotaType.Axis);
             readouts.Add(() => dest.Text = route());
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5, Height = 11 };
-            head.Children.Add(Cap(title));
-            Grid.SetColumn(dest, 1); head.Children.Add(dest);
-            Grid.SetColumn(sum, 2); head.Children.Add(sum);
-            var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 4 };
-            g.Children.Add(head);
-            Grid.SetRow(view, 1); g.Children.Add(view);
-            Grid.SetRow(cells, 2); g.Children.Add(cells);
-            return g;
+            return dest;
         }
-        string AdsrSum(string a, string d, string s, string r)
-            => $"{Secs(G(a), 0.001, 2.0)} · {Secs(G(d), 0.002, 3.0)} · {Pct(G(s))} · {Secs(G(r), 0.002, 4.0)}";
-        var envPanel1 = EnvPanel("ENV 1", () => "→ Amp", env1, new[] { "attack", "decay", "sustain", "release" },
-            () => AdsrSum("attack", "decay", "sustain", "release"));
-        var envPanel2 = EnvPanel("ENV 2", () => EnvDest(1), env2, new[] { "env2attack", "env2decay", "env2sustain", "env2release" },
-            () => AdsrSum("env2attack", "env2decay", "env2sustain", "env2release"));
+        var envPanel1 = EnvPanel.Build(env1, new EnvPanel.Spec("ENV 1", new[] { "attack", "decay", "sustain", "release" },
+                new[] { "dcurve", "rcurve", "envexp" }, (0.001, 2.0), (0.002, 3.0), (0.002, 4.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), EnvRoute(() => "→ Amp"), envScale);
+        var envPanel2 = EnvPanel.Build(env2, new EnvPanel.Spec("ENV 2", new[] { "env2attack", "env2decay", "env2sustain", "env2release" },
+                new[] { "env2dcurve", "env2rcurve", "env2exp" }, (0.001, 2.0), (0.002, 3.0), (0.002, 4.0)),
+            P, EnvKnobCell, (id, names) => Chips(id, names), EnvRoute(() => EnvDest(1)), envScale);
+        EnvPanel.FollowVoice(ctx, WavetableScopeN, () => tab == 2, env1, env2);
         var env2Host = new Border
         {
             BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),
@@ -856,7 +1025,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var box = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 5), Child = g,
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 5), Child = g,
             };
             readouts.Add(() =>
             {
@@ -955,32 +1124,17 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         bendRow.Children.Add(Cap("BEND"));
         Grid.SetColumn(bendChips, 1); bendRow.Children.Add(bendChips);
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-        ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
-        var meterScale = new Grid
+        // Volume · Pan centred in the rail — the track meter already shows the level.
+        var globalBottom = new StackPanel
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))),
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                PKnob("gain", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 46),
+                PKnob("outpan", "PAN", "Out Pan", PanText, NotaSize.KnobRegular, 42),
+            },
         };
-        for (int i = 0; i < 3; i++)
-        {
-            var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-            Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-        }
-        var meterBlock = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 7),
-        };
-        meterBlock.Children.Add(meter);
-        Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
-
-        var globalBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        var gainCell = PKnob("gain", "GAIN", "Gain", Pct, 38, 46);
-        var panCell = PKnob("outpan", "PAN", "Out Pan", PanText, 30, 42);
-        globalBottom.Children.Add(gainCell);
-        Grid.SetColumn(panCell, 1); globalBottom.Children.Add(panCell);
-        Grid.SetColumn(meterBlock, 2); globalBottom.Children.Add(meterBlock);
 
         var globalTop = new StackPanel
         {
@@ -989,9 +1143,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             {
                 monoRow,
                 bendRow,
-                Slider("POS 1", "position", () => FrameText(G("position")), labelW: 42, valueW: 42),
-                Slider("CUTOFF", "cutoff", () => Hz(G("cutoff")), labelW: 42, valueW: 42),
-                Slider("UNISON", "unidetune", () => Detune(G("unidetune")), labelW: 42, valueW: 42),
             },
         };
         var globalGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
@@ -1055,7 +1206,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var box = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(3, 2), Child = row,
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(3, 2), Child = row,
             };
             readouts.Add(() =>
             {
@@ -1167,12 +1318,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- status strip ---------------------------------------------------------
-        string RouteWord(string id) => Routes[Sel(id, 4)];
-        string OscWord(int o) => BankWords[Sel(o == 0 ? "table" : "osc2table", 4)];
+        string OscWord(int o) => Imported(o) ? tinfo[o].Name : BankWords[Sel(o == 0 ? "table" : "osc2table", 4)];
         string FiltPre() => fsel == 0 ? "fil1" : "fil2";
-        string FiltFreqId() => fsel == 0 ? "cutoff" : "fil2freq";
-        string FiltResoId() => fsel == 0 ? "resonance" : "fil2reso";
 
         string Hint() => tab switch
         {
@@ -1185,37 +1332,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                + $"{(G("fxchoruson") >= 0.5f && G("fxchorus") > 1e-3f ? "chorus" : "—")} → "
                + $"{(G("fxreverbon") >= 0.5f && G("fxreverb") > 1e-3f ? "reverb" : "—")}",
         };
-        string Summary() => tab switch
-        {
-            0 => $"Osc 1 {OscWord(0)} {FrameText(G("position"))} {Pct(G("osc1level"))} → {RouteWord("routeosc1")} · "
-               + $"Osc 2 {OscWord(1)} {FrameText(G("osc2position"))} {Pct(G("osc2level"))} → {RouteWord("routeosc2")} · "
-               + $"sub {SubWaves[Sel("subwave", 3)]} {SubOct(G("suboct"))} oct {Pct(G("sublevel"))} · "
-               + $"unison ×{Voices(G("unison"))} {Detune(G("unidetune"))} spread {Pct(G("unispread"))}",
-            1 => $"Filter {fsel + 1} · {FiltTypes[Sel(FiltPre() + "type", 5)]} "
-               + $"{(G(FiltPre() + "slope") >= 0.5f ? "24" : "12")} dB/oct · {Hz(G(FiltFreqId()))} · "
-               + $"reso {Pct(G(FiltResoId()))} · env {Bip(G(FiltPre() + "env"))} · lfo {Bip(G(FiltPre() + "lfo"))} · "
-               + (G("filseries") >= 0.5f ? "series" : "parallel"),
-            2 => $"Env 1 → amp {AdsrSum("attack", "decay", "sustain", "release")} · Env 2 {EnvDest(1)}",
-            3 => $"LFO 1 {ShapeNames[Sel("lfo1shape", 4)]} {(SyncDiv(G("lfo1sync")) > 0 ? SyncText(G("lfo1sync")) : SlowHz(ExpMap(G("lfo1rate"), 0.05, 20)))} {LfoDest(2)} · "
-               + $"LFO 2 {ShapeNames[Sel("lfo2shape", 4)]} {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : SlowHz(ExpMap(G("lfo2rate"), 0.05, 20)))} {LfoDest(3)}",
-            4 => RouteCount() == 0 ? Loc.T("device.aurora.no_routes_drag_a_cell") : Loc.Plural("device.aurora.routes_in_the_matrix", RouteCount()),
-            _ => $"Drive {(G("fxdriveon") >= 0.5f ? DriveModes[Sel("fxdrivemode", 3)].ToLowerInvariant() + " " + Pct(G("fxdrive")) : "off")} · "
-               + $"chorus {(G("fxchoruson") >= 0.5f ? ChorusVoices[Sel("fxchorusvoices", 3)] + " " + Pct(G("fxchorus")) : "off")} · "
-               + $"reverb {(G("fxreverbon") >= 0.5f ? ReverbModes[Sel("fxreverbmode", 3)].ToLowerInvariant() + " " + Pct(G("fxreverb")) : "off")}",
-        };
-        string Meta()
-        {
-            string mode = G("mono") >= 0.5f ? "MONO" : "POLY 16";
-            return $"{mode} · ±{BendRange(G("bendrange"))} ST · GAIN {Pct(G("gain"))}";
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly -------------------------------------------------------------
         var body = new Grid
@@ -1227,12 +1343,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         Grid.SetColumn(tabPanel, 1); body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 2); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel
-        {
-            LastChildFill = true, Background = NotaPalette.SurfaceCard,
-            Children = { statusHost, body },
-        };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.SetInstLiveViz(() => Refresh(false));
         showRailTab();
@@ -1249,18 +1360,4 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    /// <summary>Row definitions that put a caption for each dB mark at its place on the
-    /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

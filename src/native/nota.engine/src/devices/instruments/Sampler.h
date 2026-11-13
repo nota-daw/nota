@@ -23,6 +23,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
 #include "media/SampleBuffer.h"
 
 #include <algorithm>
@@ -63,6 +64,10 @@ class Sampler final : public Instrument {
         EnvCutoff,
         EnvAmount,
         Output,
+        // ---- appended (#531): the envelope's shape — 0.5 = straight, Exp off ----
+        DCurve,
+        RCurve,
+        EnvExp,
         kNumParams
     };
 
@@ -81,7 +86,7 @@ class Sampler final : public Instrument {
     // [4] its note (fractional while gliding, −1 none) · [5] its cutoff in Hz after key
     // tracking and the envelope (−1 filter off / silent) · [6] output peak since the last
     // read, linear · [7] notes held (Mono stack depth).
-    static constexpr int kTele = 8;
+    static constexpr int kTele = 10;   // …[8] [9]: the envelope's stage and progress (EnvShape.h)
     int32_t scopeRead(float* out, int32_t maxN) const override;
 
     int32_t kind() const override { return 1; }
@@ -148,7 +153,7 @@ class Sampler final : public Instrument {
   private:
     static constexpr double kPi = 3.14159265358979323846;
     static constexpr uint64_t kIdleSamples = 16384; // hangover before sleep
-    enum class Stage { Attack, Decay, Sustain, Release };
+    enum class Stage { Attack, Decay, Sustain, Release, Off };   // Off: the release ended
     struct Voice {
         bool active = false;
         int32_t pitch = 0, dir = 1;
@@ -156,6 +161,7 @@ class Sampler final : public Instrument {
         float velocity = 0.0f, env = 0.0f;
         double ic1L = 0, ic2L = 0, ic1R = 0, ic2R = 0;
         Stage stage = Stage::Attack;
+        EnvShapeState shape; // the curve of the envelope's current stage
         bool keyUp = false; // its note-off came while it played as a one-shot
     };
     Voice* findFreeVoice();

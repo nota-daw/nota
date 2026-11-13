@@ -183,17 +183,18 @@ public sealed partial class ArrangementView
         if (on) StatusMessage?.Invoke(Loc.T("arrangement.link.the_groups_tracks_are_linked"));
     }
 
-    /// <summary>The group header's Link key: a chain-link chip, accent-filled while on.</summary>
+    /// <summary>The group header's Link key: a header key like M and S (a well, no rim),
+    /// accent-filled while on.</summary>
     private Control LinkToggle(TrackVM t)
     {
-        var glyph = new Glyph(GlyphKind.ChainLink, 10);
-        var chip = new Border
+        var glyph = new Glyph(GlyphKind.ChainLink, 10)
         {
-            Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
-            Child = glyph, Cursor = new Cursor(StandardCursorType.Hand),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
+        var chip = HeaderKey(glyph);
         ToolTip.SetTip(chip, LinkTip);
-        PaintLinkChip(chip, glyph, t.EditLink);
+        chip.Background = t.EditLink ? NotaPalette.Accent : NotaPalette.Well;
+        glyph.Foreground = t.EditLink ? NotaPalette.TextOnAccent : NotaPalette.TextSecondary;
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;

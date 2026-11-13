@@ -33,9 +33,13 @@ public interface ISampleIndex
     /// <summary>Records an analysis made elsewhere (the import path already decoded the file).</summary>
     SampleInfo Store(string path, SampleAnalysis analysis);
 
-    /// <summary>Indexes everything under <paramref name="root"/> in the background (replaces
-    /// any running scan). Files the index already knows are skipped.</summary>
-    void Watch(string root);
+    /// <summary>Indexes everything under the sample folders <paramref name="roots"/> in the
+    /// background (replaces any running scan). Files the index already knows are skipped; a
+    /// folder that is missing (an unplugged drive) keeps what was analysed under it.</summary>
+    void Watch(IReadOnlyList<string> roots);
+
+    /// <summary>One sample folder.</summary>
+    void Watch(string root) => Watch(new[] { root });
 
     /// <summary>Moves <paramref name="folder"/> to the front of the queue — a pack just installed.</summary>
     void Prioritize(string folder);

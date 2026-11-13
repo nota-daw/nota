@@ -127,9 +127,9 @@ internal sealed class TwinExpressionPad : Control
         ctx.DrawEllipse(live ? NotaPalette.Accent : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), p, 6, 6);
     }
 
-    private static void Label(DrawingContext ctx, string text, double x, double y, bool rightAlign)
+    private void Label(DrawingContext ctx, string text, double x, double y, bool rightAlign)
     {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, NotaPalette.TextTertiary);
+        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, NotaPalette.TextTertiary, NotaTextSize.InCard);
         ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
     }
 }
@@ -229,15 +229,56 @@ internal sealed class TwinWaveView : TwinParamGraph
 // The two filters' combined response, as the route and Osc 1's balance put them together: the
 // multimode (teal) and the ladder (rose) faint, their sum in viz ink. Drag sets the ladder's
 // cutoff (x) and resonance (y).
-internal sealed class TwinFilterView : TwinParamGraph
+internal sealed class TwinFilterView : FilterGraphBase
 {
-    private const double DbTop = 18, DbBottom = -36;
-    public TwinFilterView() { Cursor = new Cursor(StandardCursorType.Hand); }
-    protected override string[] Grab(Point p) => new[] { "ldcut", "ldres" };
-    protected override void Drag(Point p)
+    // The side-bound param access of TwinParamGraph (this graph sits on the shared filter
+    // graph base instead, #531): the card binds it to the side being edited.
+    public Func<string, float> Get = _ => 0f;
+    public Action<string, float>? Set;
+    public Action<string>? Begin, End;
+    private string _prefix = "";
+    private bool _drag;
+
+    public TwinFilterView() { Cursor = new Cursor(StandardCursorType.Hand); ClipToBounds = true; }
+    public void Bind(string prefix) { _prefix = prefix; InvalidateVisual(); }
+    public void Refresh() => InvalidateVisual();
+    private float P(string id) => Get(_prefix + id);
+    private void Write(string id, double v) { Set?.Invoke(_prefix + id, (float)Math.Clamp(v, 0, 1)); InvalidateVisual(); }
+
+    // The shared filter graph over 20 Hz … 20 kHz: the sum of both filters as the curve, the
+    // multimode and the ladder as thin lines; the axis lights the ladder's cutoff (the handle).
+    protected override (double Lo, double Hi) Span => (20.0, 20000.0);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -36.0);
+    protected override double CutoffHz => 20 * Math.Pow(1000, P("ldcut"));
+    private static double Xn(double hz) => Math.Log(hz / 20) / Math.Log(1000);
+    private static double Db(double m) => 20 * Math.Log10(Math.Max(m, 1e-6));
+    protected override double ResponseDb(double hz) => Db(At(Xn(hz)).Sum);
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        Write("ldcut", p.X / Math.Max(1, Bounds.Width));
-        Write("ldres", 1 - p.Y / Math.Max(1, Bounds.Height));
+        if (Set is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _drag = Dragging = true;
+        Begin?.Invoke(_prefix + "ldcut"); Begin?.Invoke(_prefix + "ldres");
+        e.Pointer.Capture(this);
+        Drag(e.GetPosition(this));
+        e.Handled = true;
+    }
+    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Drag(e.GetPosition(this)); }
+    protected override void OnPointerReleased(PointerReleasedEventArgs e) => Finish(e.Pointer);
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { Finish(null); base.OnPointerCaptureLost(e); }
+    private void Finish(IPointer? ptr)
+    {
+        if (!_drag) return;
+        End?.Invoke(_prefix + "ldcut"); End?.Invoke(_prefix + "ldres");
+        _drag = Dragging = false;
+        ptr?.Capture(null);
+        InvalidateVisual();
+    }
+    private void Drag(Point p)
+    {
+        var r = PlotRect;
+        Write("ldcut", (p.X - r.X) / Math.Max(1, r.Width));
+        Write("ldres", 1 - (p.Y - r.Y) / Math.Max(1, r.Height));
     }
 
     // Magnitudes at a frequency (normalized 0..1 on the 20 Hz … 20 kHz axis).
@@ -265,105 +306,14 @@ internal sealed class TwinFilterView : TwinParamGraph
 
     public override void Render(DrawingContext ctx)
     {
-        var r = new Rect(Bounds.Size);
-        if (r.Width < 16) return;
-        NotaGraph.Window(ctx, r);
-        double Y(double mag) => Math.Clamp((DbTop - 20 * Math.Log10(Math.Max(mag, 1e-6))) / (DbTop - DbBottom), 0, 1) * r.Height;
-        for (int dec = 1; dec < 3; dec++) // 200 Hz, 2 kHz
-        {
-            double gx = Math.Round(dec / 3.0 * r.Width) + 0.5;
-            ctx.DrawLine(NotaGraph.GridPen, new Point(gx, 1), new Point(gx, r.Height - 1));
-        }
-        double y0 = Math.Round(Y(1)) + 0.5;
-        ctx.DrawLine(NotaGraph.GridPen, new Point(1, y0), new Point(r.Width - 1, y0));
-        int n = (int)r.Width;
-        Point[] mm = new Point[n], ld = new Point[n], sum = new Point[n];
-        for (int i = 0; i < n; i++)
-        {
-            var (a, bl, c) = At(i / (double)(n - 1));
-            mm[i] = new Point(i, Y(a)); ld[i] = new Point(i, Y(bl)); sum[i] = new Point(i, Y(c));
-        }
-        ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.Teal, 1.0), Path(mm));
-        ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.Rose, 1.0), Path(ld));
-        ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Path(sum));
-        NotaGraph.Node(ctx, new Point(P("ldcut") * r.Width, (1 - P("ldres")) * r.Height), Dragging);
-        NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomLeft, "20");
-        NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomRight, "20k");
-    }
-}
-
-// An envelope: delay (mod env), attack, decay to the sustain level, a held stretch, release —
-// each time on its own stretch of the width, so a handle never jumps while another moves.
-// Handles: the attack peak (A), the decay corner (D and S), the release end (R).
-internal sealed class TwinEnvView : TwinParamGraph
-{
-    private readonly string _e;
-    private readonly bool _delay;
-    public TwinEnvView(string env, bool delay) { _e = env; _delay = delay; Cursor = new Cursor(StandardCursorType.Hand); }
-
-    private double Seg => Bounds.Width * (_delay ? 0.22 : 0.27);
-    private double Dly => _delay ? P(_e + "dly") * Bounds.Width * 0.12 : 0;
-    private Point[] Handles()
-    {
-        double h = Bounds.Height - 4, top = 3;
-        double xa = Dly + P(_e + "a") * Seg, xd = xa + P(_e + "d") * Seg, xs = xd + Bounds.Width * 0.16, xr = xs + P(_e + "r") * Seg;
-        double ys = top + (1 - P(_e + "s")) * h;
-        return new[] { new Point(xa, top), new Point(xd, ys), new Point(Math.Min(xr, Bounds.Width - 2), top + h) };
-    }
-    private int _which = -1;
-    protected override string[] Grab(Point p)
-    {
-        var hs = Handles();
-        _which = 0;
-        double best = double.MaxValue;
-        for (int i = 0; i < hs.Length; i++)
-        {
-            double d = Math.Abs(hs[i].X - p.X) + 0.5 * Math.Abs(hs[i].Y - p.Y);
-            if (d < best) { best = d; _which = i; }
-        }
-        return _which switch { 0 => new[] { _e + "a" }, 1 => new[] { _e + "d", _e + "s" }, _ => new[] { _e + "r" } };
-    }
-    protected override void Drag(Point p)
-    {
-        var hs = Handles();
-        double h = Bounds.Height - 4;
-        switch (_which)
-        {
-            case 0: Write(_e + "a", (p.X - Dly) / Seg); break;
-            case 1: Write(_e + "d", (p.X - hs[0].X) / Seg); Write(_e + "s", 1 - (p.Y - 3) / h); break;
-            default: Write(_e + "r", (p.X - (hs[1].X + Bounds.Width * 0.16)) / Seg); break;
-        }
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        var r = new Rect(Bounds.Size);
-        if (r.Width < 16) return;
-        NotaGraph.Window(ctx, r);
-        var hs = Handles();
-        double bottom = r.Height - 1;
-        double curve = _e == "menv" ? 0.5 : P(_e + "curve");
-        double k = 0.4 + 5 * curve; // the attack's bow, as the curve sets the analog overshoot
-        var pts = new System.Collections.Generic.List<Point> { new(1, bottom), new(Dly, bottom) };
-        for (int i = 1; i <= 16; i++)
-        {
-            double t = i / 16.0;
-            pts.Add(new Point(Dly + (hs[0].X - Dly) * t, bottom - (bottom - hs[0].Y) * (1 - Math.Exp(-k * t)) / (1 - Math.Exp(-k))));
-        }
-        for (int i = 1; i <= 16; i++)
-        {
-            double t = i / 16.0;
-            pts.Add(new Point(hs[0].X + (hs[1].X - hs[0].X) * t, hs[1].Y + (hs[0].Y - hs[1].Y) * Math.Exp(-4 * t)));
-        }
-        double xs = hs[1].X + r.Width * 0.16;
-        pts.Add(new Point(xs, hs[1].Y));
-        for (int i = 1; i <= 16; i++)
-        {
-            double t = i / 16.0;
-            pts.Add(new Point(xs + (hs[2].X - xs) * t, bottom - (bottom - hs[1].Y) * Math.Exp(-4 * t)));
-        }
-        ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Path(pts.ToArray()));
-        foreach (var hp in hs) NotaGraph.Node(ctx, hp, Dragging);
+        if (Bounds.Width < 16) return;
+        DrawBack(ctx);
+        DrawCurve(ctx, hz => Db(At(Xn(hz)).Mm), NotaPalette.TextTertiary, fill: false, width: 1.0);
+        DrawCurve(ctx, hz => Db(At(Xn(hz)).Ld), NotaPalette.TextSecondary, fill: false, width: 1.0);
+        DrawCurve(ctx, ResponseDb);
+        var at = new Point(XOf(CutoffHz), YOf(Db(At(Xn(CutoffHz)).Ld)));
+        DrawFront(ctx, at.Y);
+        DrawHandle(ctx, at);
     }
 }
 
@@ -518,7 +468,7 @@ internal sealed class TwinStepGrid : Control
         NotaGraph.Window(ctx, r);
         if (Pattern is null) return;
         double cw = CellW, top = 18, barH = r.Height - top - 16;
-        var mono = NotaFonts.Mono;
+        var mono = NotaFonts.Measure;
         for (int c = 0; c < 16; c++)
         {
             int st = Page * 16 + c;
@@ -532,7 +482,7 @@ internal sealed class TwinStepGrid : Control
             if (!s.IsRest)
             {
                 string label = Nota.Application.Twin.TwinPatterns.NoteName(s.Notes[0]) + (s.Notes.Count > 1 ? $"+{s.Notes.Count - 1}" : "");
-                var ft = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, 7.5, NotaPalette.TextSecondary);
+                var ft = new NotaFormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, 7.5, NotaPalette.TextSecondary, this);
                 ctx.DrawText(ft, new Point(x + Math.Max(1, (cw - ft.Width) / 2), 5));
                 double vh = barH * vel / 127.0;
                 ctx.FillRectangle(dragging ? NotaPalette.Accent : NotaPalette.VizInk, new Rect(x + cw * 0.3, top + barH - vh, cw * 0.4, vh));
@@ -570,7 +520,7 @@ internal sealed class TwinRouteView : TwinParamGraph
         void Box(double x, double y, string name)
         {
             var b = new Rect(Math.Round(x) + 0.5, Math.Round(y) + 0.5, bw, bh);
-            ctx.DrawRectangle(null, pen, b, 2, 2);
+            ctx.DrawRectangle(null, pen, b, NotaRadius.FineValue, NotaRadius.FineValue);
             var ft = NotaGraph.AxisText(name, NotaPalette.TextSecondary);
             ctx.DrawText(ft, new Point(b.X + (bw - ft.Width) / 2, b.Y + (bh - ft.Height) / 2));
         }
@@ -649,12 +599,12 @@ internal sealed class TwinFxView : TwinParamGraph
                 double sec = P("dlysync") >= 0.5f ? DivBeats[Math.Clamp((int)Math.Round(P("dlydiv") * 7), 0, 7)] * 0.5 : Math.Max(0.001, P("dlytime") * 2.0);
                 double step = Math.Max(4, sec / 2.0 * (r.Width - 8)), fb = P("dlyfb"), amp = 0.8, h = r.Height / 2 - 4;
                 bool ping = P("dlypingpong") >= 0.5f;
-                ctx.DrawRectangle(NotaPalette.TextFaint, null, new Rect(4, mid - h, 2, h), 1, 1);
+                ctx.DrawRectangle(NotaPalette.TextFaint, null, new Rect(4, mid - h, 2, h), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 for (int i = 1; 4 + i * step < r.Width - 4 && amp > 0.03; i++, amp *= Math.Max(0.05, fb))
                 {
                     double x = Math.Round(4 + i * step), hh = Math.Max(1, amp * h);
                     bool up = !ping || i % 2 == 1;
-                    ctx.DrawRectangle(ink, null, new Rect(x, up ? mid - hh : mid, 2, hh), 1, 1);
+                    ctx.DrawRectangle(ink, null, new Rect(x, up ? mid - hh : mid, 2, hh), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
                 NotaGraph.Axis(ctx, r, NotaGraph.Corner.TopRight, "L");
                 NotaGraph.Axis(ctx, r, NotaGraph.Corner.BottomRight, "R");
@@ -676,87 +626,6 @@ internal sealed class TwinFxView : TwinParamGraph
                 break;
             }
         }
-    }
-}
-
-// A number in a well that drags like a knob: vertical, up increases, the full range over 140 px,
-// Shift / Ctrl / ⌘ fine; a click never jumps it; double-click restores the default; left button
-// only, so right-click reaches the parameter menu. The number is in Ink 1 at rest and the
-// accent while hovered or dragged. Used where a row of four knobs will not fit — the ADSR times
-// under Twin's envelope graphs.
-internal sealed class TwinValueWell : Border
-{
-    private readonly TextBlock _text = new()
-    {
-        FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = NotaPalette.TextPrimary,
-        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-    };
-    private double _value, _lastY;
-    private bool _drag;
-    public Func<double, string> Format = v => NotaNum.Pct((float)v);
-    public double Default = double.NaN;
-    public event Action<double>? ValueChanged;
-    public event Action? GestureBegin, GestureEnd;
-    public bool Dragging => _drag;
-    public TextBlock Readout => _text;
-
-    public TwinValueWell()
-    {
-        Height = 15;
-        Background = NotaPalette.BgSunken;
-        BorderBrush = NotaPalette.Rule;
-        BorderThickness = new Thickness(1);
-        CornerRadius = NotaRadius.Clip;
-        Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
-        Child = _text;
-        PointerEntered += (_, _) => Paint();
-        PointerExited += (_, _) => Paint();
-    }
-
-    public double Value
-    {
-        get => _value;
-        set { _value = Math.Clamp(value, 0, 1); _text.Text = Format(_value); }
-    }
-
-    private void Paint() => _text.Foreground = _drag || IsPointerOver ? NotaPalette.Accent : NotaPalette.TextPrimary;
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        var pt = e.GetCurrentPoint(this);
-        if (!pt.Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 && !double.IsNaN(Default))
-        {
-            GestureBegin?.Invoke(); Value = Default; ValueChanged?.Invoke(_value); GestureEnd?.Invoke();
-            e.Handled = true;
-            return;
-        }
-        _drag = true; _lastY = pt.Position.Y;
-        e.Pointer.Capture(this);
-        GestureBegin?.Invoke();
-        Paint();
-        e.Handled = true;
-    }
-
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        if (!_drag) return;
-        double y = e.GetPosition(this).Y, dy = _lastY - y;
-        _lastY = y;
-        bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        Value = _value + dy / 140.0 * (fine ? 0.1 : 1);
-        ValueChanged?.Invoke(_value);
-    }
-
-    protected override void OnPointerReleased(PointerReleasedEventArgs e) => Finish(e.Pointer);
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) => Finish(null);
-    private void Finish(IPointer? p)
-    {
-        if (!_drag) return;
-        _drag = false;
-        p?.Capture(null);
-        GestureEnd?.Invoke();
-        Paint();
     }
 }
 
@@ -786,7 +655,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
 {
     internal readonly record struct Cell(int Slot, int Src, int Dst, float Depth, float Other);
 
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static Typeface Mono => NotaFonts.Measure;
     private static readonly Typeface Sans = NotaFonts.Sans;
     private static readonly Typeface SansMedium = NotaFonts.SansMedium;
     private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();
@@ -912,11 +781,11 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
         if (w < 40 || h < 30 || _rows.Length == 0 || _cols.Length == 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
         double rh = RowH, cw = ColW;
-        var corner = new FormattedText(Corner, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextFaint);
+        var corner = new NotaFormattedText(Corner, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextFaint, this);
         ctx.DrawText(corner, new Point(2, (HeadH - corner.Height) / 2));
         for (int c = 0; c < _cols.Length; c++)
         {
-            var t = new FormattedText(DestinationName(_cols[c]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextSecondary)
+            var t = new NotaFormattedText(DestinationName(_cols[c]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, NotaType.KnobLabel, NotaPalette.TextSecondary, this)
                 { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(RowHdrW + c * cw + (cw - t.Width) / 2, (HeadH - t.Height) / 2));
         }
@@ -930,7 +799,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
         {
             double y = HeadH + r * rh;
             ctx.DrawLine(rule, new Point(0, Math.Round(y) + 0.5), new Point(w, Math.Round(y) + 0.5));
-            var t = new FormattedText(SourceName(_rows[r]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary)
+            var t = new NotaFormattedText(SourceName(_rows[r]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaType.RowLabel, NotaPalette.TextPrimary, this)
                 { MaxTextWidth = RowHdrW - 6, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(2, y + (rh - t.Height) / 2));
             for (int c = 0; c < _cols.Length; c++)
@@ -938,7 +807,7 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
                 var cell = new Rect(RowHdrW + c * cw + 2, y + 2, cw - 4, rh - 4);
                 if (Find(_rows[r], _cols[c]) is { } cb)
                 {
-                    ctx.DrawRectangle(fill, edge, cell, 2, 2);
+                    ctx.DrawRectangle(fill, edge, cell, NotaRadius.FineValue, NotaRadius.FineValue);
                     double mid = cell.X + cell.Width / 2, half = cell.Width / 2 - 2;
                     double bw = half * Math.Abs(cb.Depth);
                     ctx.FillRectangle(bar, new Rect(cb.Depth >= 0 ? mid : mid - bw, cell.Bottom - 3, bw, 2));
@@ -947,13 +816,13 @@ internal sealed class TwinPatchMatrix : Control, IValueEntryHost
                         double ox = Math.Round(mid + half * cb.Other) + 0.5;
                         ctx.DrawLine(tick, new Point(ox, cell.Bottom - 5), new Point(ox, cell.Bottom - 1));
                     }
-                    var v = new FormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextPrimary);
+                    var v = new NotaFormattedText($"{cb.Depth * 100:+0;−0;0}", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextPrimary, this);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - 3 - v.Height) / 2));
                 }
                 else
                 {
-                    ctx.DrawRectangle(NotaPalette.BgSunken, null, cell, 2, 2);
-                    var v = new FormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextFaint);
+                    ctx.DrawRectangle(NotaPalette.BgSunken, null, cell, NotaRadius.FineValue, NotaRadius.FineValue);
+                    var v = new NotaFormattedText("·", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, NotaType.KnobValue, NotaPalette.TextFaint, this);
                     ctx.DrawText(v, new Point(cell.X + (cell.Width - v.Width) / 2, cell.Y + (cell.Height - v.Height) / 2));
                 }
             }

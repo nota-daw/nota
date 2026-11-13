@@ -200,7 +200,7 @@ internal static class SessionInputTests
                 int id = FirstAudio(dst);
                 yield return (dst.GetTrackInputChannels(id) == InputChannels.Mono2, $"input 2 survives save and load ({dst.GetTrackInputChannels(id)})");
             }
-            foreach (var t in doc.Tracks) t.InputChannels = null;   // as written before 0.58
+            foreach (var t in doc.Tracks) { t.InputChannels = null; t.InputFirst = null; t.InputWidth = null; }   // as written before 0.58
             using (var old = new NotaEngine())
             {
                 ProjectService.Apply(doc, old, dir);

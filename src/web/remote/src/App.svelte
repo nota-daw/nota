@@ -83,17 +83,19 @@
   /* The link is down: touches are not sent, so the surface steps back until it returns. */
   main.dim { opacity: .35; pointer-events: none; }
 
-  /* Rail (landscape, tablet): a docked panel on a seam; the chosen screen is a row with an accent tick. */
+  /* Rail (landscape, tablet): a docked panel on a seam; the chosen screen is picked — the soft
+     tint, orange text and a 2 × 14 orange tick, as the desktop's left rail. */
   .rail { width: 104px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; background: var(--panel); border-right: 1px solid var(--seam); }
   .tablet .rail { padding: 12px 8px; }
-  .rail button { height: 44px; border-radius: 2px; font-size: 12px; font-weight: 500; color: var(--text-muted); position: relative; transition: background-color var(--ease), color var(--ease); }
+  .rail button { height: 44px; border-radius: min(var(--r-field), 14px); font-size: 12px; font-weight: 500; color: var(--text-muted); position: relative; transition: background-color var(--ease), color var(--ease); }
   .tablet .rail button { height: 56px; font-size: 13px; }
-  .rail button.on { background: var(--surface-hover); color: var(--text-primary); }
-  .rail button.on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: var(--accent); }
+  .rail button.on { background: var(--accent-soft); color: var(--picked-ink); }
+  .rail button.on::before { content: ''; position: absolute; left: -6px; top: 50%; height: 14px; margin-top: -7px; width: 2px; border-radius: 0 var(--r-fine) var(--r-fine) 0; background: var(--accent); }
+  .tablet .rail button.on::before { left: -8px; }
 
-  /* Tabs (portrait): a docked bar; the chosen screen is primary ink with an accent line on the edge facing it. */
-  .tabs { flex: none; display: flex; padding: 0 6px max(8px, env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--seam); }
-  .tabs button { flex: 1; min-width: 0; height: 48px; font-size: 12px; font-weight: 500; color: var(--text-muted); position: relative; transition: color var(--ease); }
-  .tabs button.on { color: var(--text-primary); }
-  .tabs button.on::before { content: ''; position: absolute; left: 8px; right: 8px; top: -1px; height: 2px; background: var(--accent); }
+  /* Tabs (portrait): a docked bar; the chosen screen is picked — the soft tint and orange text,
+     with an orange line on the edge facing the screen. */
+  .tabs { flex: none; display: flex; padding: 4px 6px max(8px, env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--seam); }
+  .tabs button { flex: 1; min-width: 0; height: 48px; border-radius: min(var(--r-field), 14px); font-size: 12px; font-weight: 500; color: var(--text-muted); position: relative; transition: background-color var(--ease), color var(--ease); }
+  .tabs button.on { background: var(--accent-soft); color: var(--picked-ink); }
 </style>

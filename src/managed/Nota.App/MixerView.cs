@@ -21,9 +21,11 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Localization;
@@ -69,7 +71,7 @@ public sealed partial class MixerView : UserControl
     private sealed record StripMetrics(double Width, double Header, double Io, double Sends, double Pan,
         double FaderMin, double FaderComfort, double FaderMax, double FaderPad, double Buttons);
     private static readonly StripMetrics Regular = new(154, 24, 34, 42, 38, 72, 120, 190, 16, 28);
-    private static readonly StripMetrics CompactMetrics = new(72, 24, 18, 24, 22, 72, 120, 220, 8, 66);
+    private static readonly StripMetrics CompactMetrics = new(72, 24, 18, 42, 22, 72, 120, 220, 8, 66);
     private StripMetrics M => _compact ? CompactMetrics : Regular;
     private double FaderMax => M.FaderMax;
     private double FaderMin => M.FaderMin;
@@ -100,6 +102,7 @@ public sealed partial class MixerView : UserControl
         public PanKnob? Pan;
         public PanBar? PanBar;           // compact strips
         public Action<bool>? Mute, Solo, Arm, Link;   // Link: a group's Link key (specs/076)
+        public Action<bool>? Cue;                     // the Cue key (specs/089)
     }
     private readonly Dictionary<int, StripSync> _syncs = new();
     private StripSync SyncOf(int id) => _syncs.TryGetValue(id, out var s) ? s : _syncs[id] = new StripSync();
@@ -200,7 +203,7 @@ public sealed partial class MixerView : UserControl
     {
         bool on = _engine.GetTrackEditLink(id);
         var glyph = new Glyph(GlyphKind.ChainLink, 10);
-        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
         ToolTip.SetTip(b, ArrangementView.LinkTip);
         ArrangementView.PaintLinkChip(b, glyph, on);
         b.PointerPressed += (_, e) =>
@@ -249,7 +252,8 @@ public sealed partial class MixerView : UserControl
         {
             Content = new Panel { Children = { _bands, _row } },
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            // A short window scrolls the strips rather than cutting off M / S / arm.
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
         _stripsScroller.SizeChanged += (_, e) => { if (e.HeightChanged) FitHeight(); };
         _row.LayoutUpdated += (_, _) => _bands.InvalidateVisual();   // bands follow the strips' bounds
@@ -304,6 +308,8 @@ public sealed partial class MixerView : UserControl
         _strips.Clear();
         _stripById.Clear();
         _masterFader = null; _masterMeterFader = null;
+        _cueFader = null; _cueMeterFader = null; _cueDb = null; _cueOutput = _cueSources = null;
+        _builtCueShown = CueShown();   // Cue keys and the Cue strip (specs/089)
         int returns = _engine.ReturnTrackCount;
         int n = _engine.TrackCount;
         // As in the arrangement: the tracks in its hierarchical order (each group, then its
@@ -320,6 +326,7 @@ public sealed partial class MixerView : UserControl
         foreach (int i in ArrangementView.DisplayOrder(_engine))
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsReturn) AddStrip(ti, 0, -1, returns);
         _row.Children.Add(_compact ? CompactMasterStrip() : MasterStrip());
+        if (_builtCueShown) _row.Children.Add(_compact ? CompactCueStrip() : CueStrip());
         CollectDescendants(rows);
         _clipLatched.RemoveWhere(id => !_stripById.TryGetValue(id, out var g) || !g.IsGroup);   // a group that is gone
         _row.Margin = new Thickness(10, 10 + BandsH, 10, 10);
@@ -343,7 +350,7 @@ public sealed partial class MixerView : UserControl
         var e = new StripEntry { Id = ti.Id, Depth = depth, Parent = parent, IsGroup = ti.IsGroup, ColorIndex = colorIdx, Name = TrackNames.Of(_engine, ti) };
         var body = _compact ? CompactStrip(ti, c, returns, e) : Strip(ti, c, returns, e);
         // The selection outline sits over the strip's content, so selecting never resizes it.
-        e.Outline = new Border { BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, IsHitTestVisible = false, IsVisible = false };
+        e.Outline = new Border { BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, IsHitTestVisible = false, IsVisible = false };
         var inner = (Control)body.Child!;
         body.Child = null;   // detach before re-parenting
         body.Child = new Panel { Children = { inner, e.Outline } };
@@ -502,9 +509,11 @@ public sealed partial class MixerView : UserControl
         foreach (var (id, ctl, push) in _meters)
         {
             if (!ctl.IsEffectivelyVisible) continue;   // a folded strip reads nothing
-            if (id < 0) push(_engine.MasterMeter());
+            if (id == CueMeterId) push(_engine.CueMeter());
+            else if (id < 0) push(_engine.MasterMeter());
             else if (_engine.TryGetTrackMeter(id, out var m)) push(m);
         }
+        UpdateCue();
         // Follow master volume changes made elsewhere (MST, Master row, Remote, project load).
         if (GetMasterVolume is { } get && _masterDb is { } db)
         {
@@ -549,6 +558,7 @@ public sealed partial class MixerView : UserControl
             s.Mute?.Invoke(ti.Muted != 0);
             s.Solo?.Invoke(ti.Soloed != 0);
             s.Arm?.Invoke(ti.Armed != 0);
+            s.Cue?.Invoke(_engine.GetTrackCue(ti.Id));
             if (ti.IsGroup) s.Link?.Invoke(_engine.GetTrackEditLink(ti.Id));
         }
     }
@@ -573,13 +583,11 @@ public sealed partial class MixerView : UserControl
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
-        if (!isReturn)
-        {
-            var sends = SendsRow(id, returns);
-            sends.IsVisible = SendsShown;
-            _sendSections.Add(sends);
-            col.Children.Add(sends);
-        }
+        // A return has no sends; a blank of the same height keeps its fader level with the rest.
+        var sends = isReturn ? Blank(SendsH) : SendsRow(id, returns);
+        sends.IsVisible = SendsShown;
+        _sendSections.Add(sends);
+        col.Children.Add(sends);
 
         col.Children.Add(PanRow(id, ti.Pan, ti.IsGroup));
         col.Children.Add(FaderRow(id, ti.Volume, color, out var db, out var meter));
@@ -590,7 +598,7 @@ public sealed partial class MixerView : UserControl
         return new Border
         {
             Width = 154, Background = Card, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -598,10 +606,18 @@ public sealed partial class MixerView : UserControl
     {
         var col = new StackPanel();
         col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
-        var ioRow = IoRow(Loc.T("mixer.sum_bus"), Loc.T("mixer.output"));
+        _mainOutputShown = MainOutputText();   // specs/089: the pair Main plays on
+        var ioRow = IoRow(Loc.T("mixer.sum_bus"), _mainOutputShown);
         ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
+
+        // Master has no sends or pan: blanks of their height line its fader up with the strips.
+        var sends = Blank(SendsH);
+        sends.IsVisible = SendsShown;
+        _sendSections.Add(sends);
+        col.Children.Add(sends);
+        col.Children.Add(Blank(38));
 
         Control db;
         var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Master, out db, out var meter);
@@ -615,9 +631,12 @@ public sealed partial class MixerView : UserControl
         return new Border
         {
             Width = 154, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
+
+    private static Border Blank(double height) =>
+        new() { Height = height, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1) };
 
     // ---- footer: section toggles + pan law + crossfader placeholder -------
 
@@ -630,7 +649,7 @@ public sealed partial class MixerView : UserControl
         var left = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new TextBlock { Text = Loc.T("common.show"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle() },
+            Children = { new TextBlock { Text = Loc.T("common.show"), FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle() },
         };
 
         var divider = new Border { Width = 1, Height = 20, Background = BorderDef, VerticalAlignment = VerticalAlignment.Center };
@@ -654,17 +673,17 @@ public sealed partial class MixerView : UserControl
     private Border SectionToggle(string label, Func<bool> on, Func<bool> auto, Func<bool> pinned,
         Action<bool, bool> set, out Action paint)
     {
-        var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        // Shown: a solid accent key with derived ink; auto-hidden: a raised key with an accent
-        // rim; off: a raised key.
+        var t = new TextBlock { Text = label, FontSize = NotaType.Body, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Height = NotaSize.Chip, Padding = new Thickness(10, 0), CornerRadius = NotaRadius.Group, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        // A chip (style guide): shown is picked, so the soft tint and orange text; hidden sits on
+        // the well; auto-hidden for lack of height sits on the well with an orange outline.
         void Paint()
         {
             bool hiddenByHeight = on() && auto() && !pinned();
             bool lit = on() && !hiddenByHeight;
-            b.Background = lit ? Brass : NotaPalette.SurfaceRaised;
-            b.BorderBrush = lit || hiddenByHeight ? Brass : NotaPalette.Seam;
-            t.Foreground = lit ? OnAccent : hiddenByHeight ? TextTertiary : TextSecondary;
+            b.Background = lit ? NotaPalette.AccentSoft : NotaPalette.Well;
+            b.BorderBrush = hiddenByHeight ? Brass : Brushes.Transparent;
+            t.Foreground = lit ? NotaPalette.AccentBright : hiddenByHeight ? TextTertiary : TextSecondary;
             ToolTip.SetTip(b, hiddenByHeight ? Loc.T("mixer.hidden_not_enough_height_click") : null);
         }
         b.PointerPressed += (_, e) =>
@@ -683,14 +702,14 @@ public sealed partial class MixerView : UserControl
     // Compact strips (specs/070): a two-state key painted like the section toggles.
     private Border CompactToggle()
     {
-        var t = new TextBlock { Text = Loc.T("common.compact"), FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        var t = new TextBlock { Text = Loc.T("common.compact"), FontSize = NotaType.Body, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Height = NotaSize.Chip, Padding = new Thickness(10, 0), CornerRadius = NotaRadius.Group, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
         ToolTip.SetTip(b, Loc.T("mixer.show_compact_strips_more_tracks"));
         void Paint()
         {
-            b.Background = _compact ? Brass : NotaPalette.SurfaceRaised;
-            b.BorderBrush = _compact ? Brass : NotaPalette.Seam;
-            t.Foreground = _compact ? OnAccent : TextSecondary;
+            b.Background = _compact ? NotaPalette.AccentSoft : NotaPalette.Well;
+            b.BorderBrush = Brushes.Transparent;
+            t.Foreground = _compact ? NotaPalette.AccentBright : TextSecondary;
         }
         b.PointerPressed += (_, e) =>
         {
@@ -753,7 +772,7 @@ public sealed partial class MixerView : UserControl
     // badge for projects made before the law existed (they keep Balance until switched).
     private Control PanLawGroup()
     {
-        var label = new TextBlock { Text = Loc.T("mixer.pan_law"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = Loc.T("mixer.pan_law"), FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var seg = ClipEditorKit.Segments(new[] { Loc.T("mixer.stereo"), Loc.T("mixer.balance") }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
         {
             var law = i == 0 ? PanLaw.Stereo : PanLaw.Balance;
@@ -767,7 +786,7 @@ public sealed partial class MixerView : UserControl
             string[] tips = { Loc.T("mixer.panning_moves_the_whole_stereo"), Loc.T("mixer.panning_attenuates_the_opposite_channel") };
             for (int i = 0; i < buttons.Children.Count && i < tips.Length; i++) ToolTip.SetTip(buttons.Children[i], tips[i]);
         }
-        _lawHint = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _lawHint = new TextBlock { FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _olderBadge = Tag(Loc.T("mixer.older_project"), 9, 0, 18, Loc.T("mixer.projects_saved_before_stereo_pan"));
         return new StackPanel
         {
@@ -798,30 +817,28 @@ public sealed partial class MixerView : UserControl
     private static Border Tag(string text, double size, double tracking, double height, string tip)
     {
         var t = new TextBlock { Text = text, FontSize = size, LetterSpacing = tracking, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         var b = new Border
         {
             Height = height, Padding = new Thickness(size >= 9 ? 6 : 3, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = t,
+            CornerRadius = NotaRadius.Cell, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = t,
         };
         ToolTip.SetTip(b, tip);
         return b;
     }
 
-    // Crossfader is not in the engine yet — a disabled A/B track with an M7+ badge.
+    // Crossfader is not in the engine yet — a disabled A–B value bar with an M7+ badge.
     private Control Crossfader()
     {
-        var track = new Border { Width = 120, Height = 4, Background = Sunken, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
-        var knob = new Border { Width = 12, Height = 14, Background = NotaPalette.SurfaceHover, BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var host = new Panel { Width = 120, Children = { track, knob } };
+        var host = new MiniFader(0.5, 1.0) { Width = 120, VerticalAlignment = VerticalAlignment.Center, Text = _ => Loc.T("mixer.centre") };
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, IsEnabled = false,
             Children =
             {
-                new TextBlock { Text = "A", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "A", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
                 host,
-                new TextBlock { Text = "B", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "B", FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         return new StackPanel
@@ -837,7 +854,7 @@ public sealed partial class MixerView : UserControl
         // strip leads with its fold triangle and, folded, ends with its hidden members' state.
         var grid = new Grid { RowDefinitions = new RowDefinitions("3,*") };
         grid.Children.Add(new Border { Background = topColor, Height = 3, VerticalAlignment = VerticalAlignment.Top });
-        double fs = _compact ? 9 : 10, pad = _compact ? 4 : 7;
+        double fs = _compact ? 8.5 : 9, pad = _compact ? 4 : 7;
         var label = new TextBlock { Text = name, FontSize = fs, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         ToolTip.SetTip(label, name);
         var line = new DockPanel { Margin = new Thickness(pad, 0, pad, 0), LastChildFill = true };
@@ -916,28 +933,37 @@ public sealed partial class MixerView : UserControl
             FontSize = 8, Height = 16, MinHeight = 0, Padding = new Thickness(5, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
-        var sources = new List<int>();
-        void Add(string label, int src)
+        if (compact)
         {
-            cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
-            sources.Add(src);
+            // Plain strings drawn by a template, so the closed box builds a live TextBlock that
+            // trims with "…". A TextBlock handed over as the item's Content is shown there as a
+            // picture of itself, centred, and a name wider than the box lost both ends (#550).
+            // No recycling: the closed box would keep the first TextBlock, whose Text is set once, and
+            // go on showing the previous name after another source is picked.
+            cb.ItemTemplate = new FuncDataTemplate<string>((label, _) => new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, supportsRecycling: false);
+            var item = new Style(x => x.OfType<ComboBoxItem>());
+            item.Setters.Add(new Setter(TemplatedControl.PaddingProperty, new Thickness(5, 1)));
+            item.Setters.Add(new Setter(Layoutable.MinHeightProperty, 0.0));
+            cb.Styles.Add(item);
         }
-        Add(Loc.T("common.none"), -1);
-        int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
-            if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument && ti.Id != id)
-                Add(TrackNames.Of(_engine, ti), ti.Id);
-        int cur = _engine.GetTrackMidiSource(id);
-        int sel = sources.IndexOf(cur);
-        cb.SelectedIndex = sel >= 0 ? sel : 0;
+        // The live input (All inputs / a device) or the track it takes MIDI from (specs/086).
+        var instruments = new List<(int, string)>();
+        for (int i = 0; i < _engine.TrackCount; i++)
+            if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument) instruments.Add((ti.Id, TrackNames.Of(_engine, ti)));
+        var (entries, cur) = MidiInputPick.Compact(_engine, id, instruments);
+        foreach (var en in entries)
+            if (compact) cb.Items.Add(en.Label);
+            else cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = en.Label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
+        cb.SelectedIndex = cur;
         cb.SelectionChanged += (_, _) =>
         {
-            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < sources.Count)
-                _engine.SetTrackMidiSource(id, sources[cb.SelectedIndex]);
+            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < entries.Count)
+                MidiInputPick.Apply(_engine, id, entries[cb.SelectedIndex]);
         };
         if (compact)   // one line: the selector alone, its label in the tooltip (specs/070)
         {
             cb.Height = 14;
+            cb.Padding = new Thickness(1, 0);   // the arrow column keeps 32 px of the 62; leave the text what is left
             ToolTip.SetTip(cb, Loc.T("mixer.midi_in"));
             return new Border { Height = IoH, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(4, 2), Child = cb };
         }
@@ -963,10 +989,10 @@ public sealed partial class MixerView : UserControl
         {
             char letter = (char)('A' + bus);
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-            grid.Children.Add(new TextBlock { Text = letter.ToString(), FontSize = 8, Foreground = TextTertiary, Width = 8, VerticalAlignment = VerticalAlignment.Center });
+            grid.Children.Add(new TextBlock { Text = letter.ToString(), FontSize = NotaType.Eyebrow, Foreground = TextTertiary, Width = 10, VerticalAlignment = VerticalAlignment.Center });
             if (bus < returns)
             {
-                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
+                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center, Text = NotaNum.Pct };
                 int b = bus;
                 SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
                 ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", (char)('A' + b)), NotaNum.Pct));
@@ -975,7 +1001,7 @@ public sealed partial class MixerView : UserControl
             }
             else
             {
-                var flat = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
+                var flat = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(flat, 1); grid.Children.Add(flat);
             }
             body.Children.Add(grid);
@@ -1061,7 +1087,7 @@ public sealed partial class MixerView : UserControl
         for (int i = 0; i < 4; i++)
         {
             var t = new TextBlock { Text = marks[i], FontSize = 7, Foreground = TextDisabled, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = i == 0 ? VerticalAlignment.Top : i == 3 ? VerticalAlignment.Bottom : VerticalAlignment.Center };
-            t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             Grid.SetRow(t, i);
             scaleGrid.Children.Add(t);
         }
@@ -1073,7 +1099,9 @@ public sealed partial class MixerView : UserControl
         var letters = new Grid { ColumnDefinitions = new ColumnDefinitions($"{MeterScale.ChannelW},{MeterScale.Step},{MeterScale.ChannelW}"), Margin = new Thickness(0, 3, 0, 0) };
         foreach (var (txt, col) in new[] { ("L", 0), ("R", 2) })
         {
-            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary, HorizontalAlignment = HorizontalAlignment.Center };
+            // The letter is wider than its 3px column, so it borrows room either side
+            // (a cell clips what it can't fit, which cut R down to an F).
+            var t = new TextBlock { Text = txt, FontSize = NotaType.Axis, FontFamily = NotaFonts.ValuesFamily, Foreground = NotaPalette.TextTertiary, TextAlignment = TextAlignment.Center, Margin = new Thickness(-5, 0, -5, 0) };
             Grid.SetColumn(t, col); letters.Children.Add(t);
         }
         DockPanel.SetDock(letters, Dock.Bottom);
@@ -1093,6 +1121,7 @@ public sealed partial class MixerView : UserControl
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
+        if (_builtCueShown) row.Children.Add(CueToggle(id, out sync.Cue));
         if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
         if (ti.IsGroup) { row.Children.Add(LinkKey(id, out var linkSync)); sync.Link = linkSync; }   // group Link (specs/076)
         else sync.Link = null;
@@ -1104,7 +1133,7 @@ public sealed partial class MixerView : UserControl
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
-        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc };
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = disc };
         ToolTip.SetTip(b, TrackArming.Tip);
         void Paint()
         {
@@ -1121,8 +1150,8 @@ public sealed partial class MixerView : UserControl
     private Border Toggle(string label, bool danger, bool initial, Action<bool> set, out Action<bool> sync)
     {
         bool on = initial;
-        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = t };
+        var t = new TextBlock { Text = label, FontSize = 8.5, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = t };
         void Paint()
         {
             // On: mute amber, solo blue, with derived ink.
@@ -1140,7 +1169,7 @@ public sealed partial class MixerView : UserControl
     private TextBlock Mono(string text, IBrush fg)
     {
         var t = new TextBlock { Text = text, FontSize = 8, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 

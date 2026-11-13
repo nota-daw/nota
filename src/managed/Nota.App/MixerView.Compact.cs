@@ -57,7 +57,7 @@ public sealed partial class MixerView
         return new Border
         {
             Width = CompactMetrics.Width, Background = Card, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -65,7 +65,8 @@ public sealed partial class MixerView
     {
         var col = new StackPanel();
         col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
-        var io = CompactIoRow(Loc.T("mixer.sum_bus") + " " + Loc.T("mixer.output"));
+        _mainOutputShown = MainOutputText();   // specs/089
+        var io = CompactIoRow(Loc.T("mixer.sum_bus") + " " + _mainOutputShown);
         io.IsVisible = IoShown;
         _ioSections.Add(io);
         col.Children.Add(io);
@@ -80,7 +81,7 @@ public sealed partial class MixerView
         return new Border
         {
             Width = CompactMetrics.Width, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, ClipToBounds = true, Child = col,
+            CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
 
@@ -110,14 +111,14 @@ public sealed partial class MixerView
             Control bar;
             if (bus < returns)
             {
-                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
+                var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center, Text = NotaNum.Pct };
                 int b = bus;
                 SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
                 ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", (char)('A' + b)), NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 bar = f;
             }
-            else bar = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center };
+            else bar = new Border { Height = 3, Background = NotaPalette.TrackOff, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(bar, 1);
             grid.Children.Add(bar);
             body.Children.Add(grid);
@@ -200,6 +201,7 @@ public sealed partial class MixerView
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         stack.Children.Add(Wide(mute));
         stack.Children.Add(Wide(solo));
+        if (_builtCueShown) stack.Children.Add(Wide(CueToggle(id, out sync.Cue)));
         if (!isReturn) stack.Children.Add(Wide(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm)));
         if (ti.IsGroup) { stack.Children.Add(Wide(LinkKey(id, out var linkSync))); sync.Link = linkSync; }   // group Link (specs/076)
         else sync.Link = null;

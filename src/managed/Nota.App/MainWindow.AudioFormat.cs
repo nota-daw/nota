@@ -58,7 +58,13 @@ public partial class MainWindow
                 break;
         }
         items.Add(new Separator());
-        items.Add(MenuKit.Item(Loc.T("main.audio_format.audio_settings"), GlyphKind.Levels, () => ShowPreferencesPage("Audio")));
+        items.Add(MenuKit.Item(Loc.T("main.audio_format.audio_settings"), GlyphKind.Levels, ShowAudioPreferences));
         return items.ToArray();
     }
+
+    /// <summary>Settings on the Audio page (sample rate, buffer — the format menu's way in).</summary>
+    internal void ShowAudioPreferences() => ShowPreferencesPage("Audio");
+
+    /// <summary>Settings on the Inputs page (the input setup, specs/086 and 088).</summary>
+    internal void ShowInputPreferences() => ShowPreferencesPage("Inputs");
 }

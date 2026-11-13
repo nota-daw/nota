@@ -24,6 +24,11 @@ public partial class App : Avalonia.Application
     {
         // Numbers read the same on every OS locale: a point, and U+2212 for the minus.
         NotaNum.Install();
+        // One typeface with tabular figures, so digits keep their width everywhere.
+        NotaFonts.InstallTabular();
+        NotaTextSize.Install();
+        // A skin's typeface and corner radii (spec 087), by the same kind of coercion.
+        NotaSkin.Install();
         // Rounded, bordered, clipping Borders clip their child to the inner edge.
         BorderInnerClip.Install();
         AvaloniaXamlLoader.Load(this);
@@ -56,6 +61,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IProjectStore, ProjectStore>();
         services.AddSingleton<IProjectHistory>(_ => new ProjectHistory(AppInfo.Version));
         services.AddSingleton<IPresetStore, PresetStore>();
+        services.AddSingleton<Nota.Application.Articulations.IArticulationLibrary>(_ => new Nota.Infrastructure.Articulations.ArticulationLibraryStore());   // specs/085
         services.AddSingleton<IFactoryPresets, FactoryPresetCatalog>();
         services.AddSingleton<IPresetAudition, PresetAudition>();
         services.AddSingleton<IDrumKits, DrumKitService>();
@@ -82,6 +88,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<RemoteService>();
         // Presentation.
         services.AddSingleton<TransportViewModel>();
+        services.AddSingleton<Nota.Application.Browser.IProjectSummaries, ProjectSummaryReader>();   // spec 092
         services.AddSingleton<BrowserViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         Services = services.BuildServiceProvider();
@@ -97,21 +104,35 @@ public partial class App : Avalonia.Application
             e.SetObserved();
         };
 
+        // Interface language (spec 068), before any view model, window or static text table
+        // exists — and before the themes, whose load problems are interface text (spec 087):
+        // the language is fixed for the run, so those texts are built once, in it.
+        InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
+        // Keyboard shortcuts (specs/096): the defaults with the user's keys on top. After the
+        // language, as the actions' titles are interface text.
+        var keySettings = Services.GetRequiredService<ISettingsService>();
+        Nota.Application.Input.KeyBindings.Instance = new Nota.Application.Input.KeyBindings(
+            Nota.Application.Input.KeyActionCatalog.Create(), keySettings.Current, keySettings.Save, warn: m => log.Warn(m));
         // Colour theme (Preferences → Appearance), applied before the first window paints so
         // nothing flashes one theme on the way to another. Old Dark / Light / System
         // settings resolve onto the Studio themes (Appearance.Resolve).
         foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
+        // User themes (spec 087) load first, so a stored user theme id resolves to itself.
+        NotaThemes.ReloadUser();
+        foreach (var (file, reason) in NotaThemes.UserLoadProblems) log.Info($"User theme skipped — {file}: {reason}");
         // The accent (spec 084) is resolved with it, so the first frame already wears it too.
         var startSettings = Services.GetRequiredService<ISettingsService>().Current;
-        NotaThemeService.Set(Appearance.Resolve(startSettings, NotaThemeService.KnownThemes));
+        NotaThemeService.StoredChoice = () => Appearance.Resolve(
+            Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes);
+        // The look (spec 091) too: a classic first frame, not a new one that switches.
+        NotaThemeService.Start(Appearance.Resolve(startSettings, NotaThemeService.KnownThemes), Looks.Resolve(startSettings));
         NotaThemeService.SetAccent(Accent.Resolve(startSettings));
         // Interface scale (spec 027), likewise before the first window: windows and every
         // popup they open take it from here.
         NotaUiScale.InitPopups();
         NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
-        // Interface language (spec 068), before any view model, window or static text table
-        // exists: the language is fixed for the run, so those texts are built once, in it.
-        InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
+        // Text size (spec 038), likewise: every text the app draws takes its step.
+        NotaTextSize.Set(Services.GetRequiredService<ISettingsService>().Current.TextSize);
         TranslateAppMenu();
         TextBoxMenu.Install();   // the text boxes' Cut / Copy / Paste menu is Avalonia's, in English
 
@@ -124,6 +145,10 @@ public partial class App : Avalonia.Application
             try { await Services.GetRequiredService<IMosaicPacks>().ScanAsync(); }
             catch (Exception e) { log.Error("Couldn't make Mosaic presets for the sample packs", e); }
         });
+
+        // Inputs switched off on the Audio I/O page stay off for takes (specs/086).
+        try { InputSetupAccess.Push(Services.GetRequiredService<IAudioEngine>()); }
+        catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
 
         // Plugins installed from the registry (Preferences → Get Plug-ins) live in their own folder.
         try { PluginScan.EnsureStoreScanPath(Services.GetRequiredService<IPluginCatalog>(), Services.GetRequiredService<IPluginStore>()); }
@@ -183,6 +208,19 @@ public partial class App : Avalonia.Application
                 recovery.BeginSession();
 
                 var vm = Services.GetRequiredService<MainWindowViewModel>();   // constructs the engine
+                // Main and Cue's output pairs and the click (specs/089), once the device runs: the
+                // setup is keyed on the backend that actually started (ASIO, or its WASAPI fallback).
+                try { OutputSetupAccess.Push(vm.Engine); }
+                catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
+                // Every audio restart may open another device (the system default changed):
+                // its own input names and switched-off inputs (specs/086).
+                vm.AudioApplied += () =>
+                {
+                    try { InputSetupAccess.Push(vm.Engine); }
+                    catch (Exception e) { log.Error("Couldn't apply the Audio I/O setup", e); }
+                    try { OutputSetupAccess.Push(vm.Engine); }
+                    catch (Exception e) { log.Error("Couldn't apply the output setup", e); }
+                };
                 var main = new MainWindow { DataContext = vm, PendingRecovery = pending };
                 desktop.MainWindow = main;
 

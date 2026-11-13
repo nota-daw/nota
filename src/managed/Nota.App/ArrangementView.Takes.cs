@@ -245,8 +245,7 @@ public sealed partial class ArrangementView
         // the comp plays from it in the track colour, and the swipe in progress.
         private void DrawTakeLanes(DrawingContext ctx, TrackVM t, double top, double w)
         {
-            var (_, _, _, body) = ClipColors(t.ColorIndex);
-            var ink = ClipInk(t.ColorIndex);
+            var (body, _, _, ink) = ClipColors(t.ColorIndex);
             for (int k = 0; k < t.Takes.Count; k++)
             {
                 var take = t.Takes[k];
@@ -260,7 +259,7 @@ public sealed partial class ArrangementView
                 {
                     using (ctx.PushOpacity(0.35))
                     {
-                        ctx.DrawRectangle(body, null, r, NotaRadius.ClipValue, NotaRadius.ClipValue);
+                        ctx.DrawRectangle(body, null, r, NotaRadius.FieldValue, NotaRadius.FieldValue);
                         DrawTakePeaks(ctx, take, r, r, ink);
                     }
                     foreach (var c in t.Clips)
@@ -273,7 +272,7 @@ public sealed partial class ArrangementView
                         double cx0 = Math.Max(r.X, _o.BeatToX(c.StartBeat)), cx1 = Math.Min(r.Right, _o.BeatToX(c.StartBeat + c.LengthBeats));
                         if (cx1 <= cx0 || cx1 < 0 || cx0 > w) continue;
                         var used = new Rect(cx0, r.Y, cx1 - cx0, r.Height);
-                        ctx.DrawRectangle(body, null, used, NotaRadius.ClipValue, NotaRadius.ClipValue);
+                        ctx.DrawRectangle(body, null, used, NotaRadius.FieldValue, NotaRadius.FieldValue);
                         DrawTakePeaks(ctx, take, r, used, ink);
                     }
                 }
@@ -287,11 +286,11 @@ public sealed partial class ArrangementView
                 }
 
                 // The lane's name stays at the left edge while the take scrolls past.
-                var ft = new FormattedText(Loc.F("arrangement.takes.take", take.Number), CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(Loc.F("arrangement.takes.take", take.Number), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 9.5, RulerText);
                 double lx = Math.Max(4, Math.Min(x0 + 4, w - ft.Width - 8));
                 var plate = new Rect(lx - 3, y + 4, ft.Width + 6, ft.Height + 1);
-                ctx.DrawRectangle(LabelPlate, null, plate, 2, 2);
+                ctx.DrawRectangle(LabelPlate, null, plate, NotaRadius.FineValue, NotaRadius.FineValue);
                 ctx.DrawText(ft, new Point(lx, y + 4));
             }
         }

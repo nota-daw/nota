@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The custom-drawn view of the Nota Reverb card: the decay-tail window. The impulse flashes
-// at the pre-delay (teal), the early reflections light one after another, then the RT60
-// curve draws itself and fades — a loop while the reverb is sounding, a still picture when
-// it is not. Frozen, the tail is a held line under an accent frame. It is also a control:
-// drag the pre-delay marker to set the pre-delay, drag anywhere else to lengthen or shorten
-// the decay; double-click either to reset. It draws what the card hands it and owns no
-// engine state.
+// The custom-drawn view of the Nota Reverb card: the decay in dB. On a dB axis the tail is a
+// straight line, so how long the reverb rings reads at a glance: it starts at the pre-delay
+// (0 dB) and reaches −60 dB at the decay time (RT60). Two labelled handles set them — Pre
+// (drag sideways) and Decay (drag the −60 dB point sideways); a press elsewhere takes the
+// nearer one, double-click or ⌥-click resets it. The early reflections are ticks right after
+// the pre-delay, and a fainter line shows the highs (8 kHz) dying sooner under HF damp. Under
+// the set line runs your audio after its latest hit (#377): the input as a grey wash and the
+// measured tail as a grey line, each against its own peak, so a tail that rings longer or
+// shorter than the setting shows at once. Frozen, the tail is a held line at 0 dB under an
+// accent frame. It draws what the card hands it and owns no engine state.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -21,84 +25,140 @@ namespace Nota.App;
 
 internal sealed class ReverbTailView : Control, IValueHandles
 {
-    public const double AxisSec = 4.0;
-    // The pre-delay marker sits between 3 % and 33 % of the width (0 … 200 ms); the early
-    // reflections are drawn magnified — 100 ms spans 35 % — or they would pile onto the marker.
-    private const double PreLo = 0.03, PreSpan = 0.30, ErSpanPer100Ms = 0.35;
+    private const double DbFloor = -72, PreMaxMs = 200, RtLo = 0.2, RtHi = 12;
+    private static readonly double[] Windows = { 0.5, 1, 2, 3, 4, 6, 8, 12, 16 };
+    private const double Left = 30, AxisRow = 14, TopPad = 26;
 
-    private double _rt60 = 2, _preNorm = 0.1, _preMs = 20;
+    private double _rt60 = 2, _rtHigh = 1.5, _preMs = 20, _win = 4;
     private double[] _erMs = Array.Empty<double>();
     private float[] _erGain = Array.Empty<float>();
     private bool _freeze;
-    private double _phase = -1;       // 0..1 while sounding, −1 = still
-    private int _drag;                // 0 none, 1 decay, 2 pre-delay
-    private double _dragX, _dragY, _dragV;
+    // The latest hit of your audio: (seconds after the hit, dB against its own peak); empty = none.
+    private readonly List<(double Sec, double Db)> _inLive = new(), _tailLive = new();
+    // The hit the curve belongs to: its age when last seen in the history, when that was, and the
+    // tail's peak, so a tail longer than the history (6.1 s) keeps its curve after the hit scrolls out.
+    private double _hitAge = -1, _tailRef;
+    private long _hitSeen;
+    private int _drag, _hover;        // 0 none, 1 decay, 2 pre-delay
 
     public event Action<int, double>? Changed;   // target (0 decay / 1 pre-delay), new normalised value
     public event Action<int>? GestureBegin;
     public event Action<int>? GestureEnd;
     public event Action<int>? Reset;
-    public Func<double>? DecayValue { get; set; }  // the Decay param now, for the relative drag
 
     public bool Dragging => _drag != 0;
+
+    private static readonly IPen LivePen = new Pen(NotaPalette.TextSecondary, 1.2, lineJoin: PenLineJoin.Round);
 
     public ReverbTailView()
     {
         ClipToBounds = true;
-        MinHeight = 40;
+        MinHeight = 60;
         Cursor = new Cursor(StandardCursorType.SizeWestEast);
     }
 
-    /// <summary>Feed the window: RT60 in seconds (≤ 0 = frozen), the pre-delay (normalised,
-    /// and in ms for the label), and the early reflections (ms after the pre-delay, level 0..1;
-    /// empty = off).</summary>
-    public void Set(double rt60, bool freeze, double preNorm, double preMs, double[] erMs, float[] erGain)
+    /// <summary>Feed the window: RT60 and the highs' RT60 in seconds, freeze, the pre-delay in
+    /// ms, and the early reflections (ms after the pre-delay, level 0..1; empty = off).</summary>
+    public void Set(double rt60, double rtHigh, bool freeze, double preMs, double[] erMs, float[] erGain)
     {
-        _rt60 = rt60; _freeze = freeze; _preNorm = Math.Clamp(preNorm, 0, 1); _preMs = preMs;
+        _rt60 = Math.Max(0.05, rt60); _rtHigh = Math.Max(0.02, rtHigh); _freeze = freeze; _preMs = preMs;
         _erMs = erMs; _erGain = erGain;
+        // The time axis fits the tail with some room, and holds still while a handle is dragged.
+        if (_drag == 0)
+        {
+            double need = (_preMs / 1000 + (_freeze ? 2 : _rt60)) * 1.15;
+            _win = Windows[^1];
+            foreach (var wv in Windows) if (wv >= need) { _win = wv; break; }
+        }
         InvalidateVisual();
     }
 
-    /// <summary>Where the loop is (0..1), or −1 for the still picture.</summary>
-    public void SetPhase(double phase)
+    /// <summary>Feed the level history (at <paramref name="off"/> in the scope; <paramref name="has"/>
+    /// false = none): the input and the tail from the latest hit of the input on.</summary>
+    public void SetLive(float[] scope, int off, bool has)
     {
-        if (phase < 0 && _phase < 0) return;
-        _phase = phase;
-        InvalidateVisual();
+        bool had = _tailLive.Count > 0;
+        has = has && scope.Length >= off + SpaceDraw.Floats;
+        int hit = has ? SpaceDraw.LatestHit(scope, off) : -1;
+        int wetOff = off + SpaceDraw.Points;
+        if (hit >= 0)
+        {
+            _inLive.Clear(); _tailLive.Clear(); _hitAge = -1;
+            var input = SpaceDraw.Since(scope, off, hit);
+            var tail = SpaceDraw.Since(scope, wetOff, hit);
+            double inPk = -120, tailPk = -120;
+            foreach (var (_, db) in input) inPk = Math.Max(inPk, db);
+            foreach (var (_, db) in tail) tailPk = Math.Max(tailPk, db);
+            if (tailPk > -70)
+            {
+                foreach (var (t, db) in input) _inLive.Add((t, db - inPk));
+                foreach (var (t, db) in tail) _tailLive.Add((t, db - tailPk));
+                _hitAge = (SpaceDraw.Points - 1 - hit) * SpaceDraw.PointSec;
+                _hitSeen = System.Diagnostics.Stopwatch.GetTimestamp();
+                _tailRef = tailPk;
+            }
+        }
+        else if (has && _hitAge >= 0)
+        {
+            // The hit has left the history but its tail may still ring: keep what was drawn before
+            // the history's oldest point and redraw the rest from the history.
+            double age = _hitAge + System.Diagnostics.Stopwatch.GetElapsedTime(_hitSeen).TotalSeconds;
+            if (age > Windows[^1]) { _inLive.Clear(); _tailLive.Clear(); _hitAge = -1; }
+            else
+            {
+                double oldest = age - (SpaceDraw.Points - 1) * SpaceDraw.PointSec;
+                _tailLive.RemoveAll(e => e.Sec >= oldest);
+                foreach (var (t, db) in SpaceDraw.Since(scope, wetOff, 0))
+                    _tailLive.Add((oldest + t, db - _tailRef));
+            }
+        }
+        else { _inLive.Clear(); _tailLive.Clear(); _hitAge = -1; }
+        if (had || _tailLive.Count > 0) InvalidateVisual();
     }
 
-    private (double x0, double x1, double top, double bot) Geo() => (8, Bounds.Width - 8, 15, Bounds.Height - 12);
-    private double PreX() { var (x0, x1, _, _) = Geo(); return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0); }
+    // ---- geometry ------------------------------------------------------------------
+    private Rect Plot => new(Left, TopPad, Math.Max(1, Bounds.Width - Left - 10), Math.Max(1, Bounds.Height - TopPad - AxisRow));
+    private double XOfSec(double sec) { var r = Plot; return r.X + Math.Clamp(sec / _win, 0, 1) * r.Width; }
+    private double SecAt(double x) { var r = Plot; return Math.Clamp((x - r.X) / r.Width, 0, 1) * _win; }
+    private double YOf(double db) { var r = Plot; return r.Y + Math.Clamp(db / DbFloor, 0, 1) * r.Height; }
+    private Point PrePt => new(XOfSec(_preMs / 1000), YOf(0));
+    private Point DecayPt => new(XOfSec(_preMs / 1000 + _rt60), YOf(-60));
 
-    // Typed entry (specs/035): handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
-    public int HandleAt(Point p) => Math.Abs(p.X - PreX()) <= 8 ? 1 : 0;
-    public Rect HandleRect(int handle)
-    {
-        var (x0, x1, top, _) = Geo();
-        return ValueEntry.Near(new Point(handle == 1 ? PreX() : (x0 + x1) / 2, top), Bounds.Size);
-    }
+    private int Nearest(Point p)
+        => Math.Abs(p.X - PrePt.X) + Math.Abs(p.Y - PrePt.Y) * 0.5 <= Math.Abs(p.X - DecayPt.X) + Math.Abs(p.Y - DecayPt.Y) * 0.5 ? 2 : 1;
+
+    // Typed entry (specs/035): handle 0 = the decay, 1 = the pre-delay.
+    public int HandleAt(Point p) => Nearest(p) == 2 ? 1 : 0;
+    public Rect HandleRect(int handle) => ValueEntry.Near(handle == 1 ? PrePt : DecayPt, Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _freeze) return;
         var p = e.GetPosition(this);
-        int target = Math.Abs(p.X - PreX()) <= 8 ? 2 : 1;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(target - 1); e.Handled = true; return; }
-        _drag = target; _dragX = p.X; _dragY = p.Y; _dragV = DecayValue?.Invoke() ?? 0.5;
+        int target = Nearest(p);
+        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(target - 1); e.Handled = true; return; }
+        _drag = target;
         GestureBegin?.Invoke(target - 1);
         e.Pointer.Capture(this);
         Apply(p);
         e.Handled = true;
     }
-    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag != 0) Apply(e.GetPosition(this)); }
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        var p = e.GetPosition(this);
+        if (_drag != 0) { Apply(p); return; }
+        int h = Nearest(p);
+        if (h != _hover) { _hover = h; InvalidateVisual(); }
+    }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hover != 0) { _hover = 0; InvalidateVisual(); } }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
         if (_drag == 0) return;
-        GestureEnd?.Invoke(_drag - 1); _drag = 0; e.Pointer.Capture(null);
+        GestureEnd?.Invoke(_drag - 1); _drag = 0; e.Pointer.Capture(null); InvalidateVisual();
     }
-
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
@@ -108,22 +168,24 @@ internal sealed class ReverbTailView : Control, IValueHandles
 
     private void Apply(Point p)
     {
-        var (x0, x1, top, bot) = Geo();
-        if (x1 <= x0) return;
+        double sec = SecAt(p.X);
         if (_drag == 2)
-            Changed?.Invoke(1, Math.Clamp(((p.X - x0) / (x1 - x0) - PreLo) / PreSpan, 0, 1));
+            Changed?.Invoke(1, Math.Clamp(sec * 1000 / PreMaxMs, 0, 1));
         else
-            // Right or up = a longer tail; one window width spans the whole range.
-            Changed?.Invoke(0, Math.Clamp(_dragV + (p.X - _dragX) / (x1 - x0) - (p.Y - _dragY) / Math.Max(20, bot - top) * 0.5, 0, 1));
+        {
+            double rt = Math.Clamp(sec - _preMs / 1000, RtLo, RtHi);
+            Changed?.Invoke(0, Math.Log(rt / RtLo) / Math.Log(RtHi / RtLo));
+        }
     }
 
-    private static FormattedText Text(string t, IBrush ink, double size = 7.5)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+    private static FormattedText Text(string t, IBrush ink, double size = NotaGraph.AxisSize)
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Measure, size, ink, NotaTextSize.InCard);
+    private static string SecF(double s) => s >= 1 ? NotaNum.F($"{s:0.##} s") : NotaNum.F($"{s * 1000:0} ms");
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w < 16 || h < 16) return;
+        if (w < 60 || h < 50) return;
         var rect = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, rect);
         if (_freeze)
@@ -131,100 +193,121 @@ internal sealed class ReverbTailView : Control, IValueHandles
             ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Accent, 0x0D), rect);
             ctx.DrawRectangle(null, new Pen(NotaPalette.BorderBrass, 1), new RoundedRect(rect.Deflate(0.5), NotaGraph.Radius));
         }
-        var (x0, x1, top, bot) = Geo();
-        if (x1 <= x0 || bot <= top) return;
-        double span = bot - top;
+        var r = Plot;
 
-        // Quarter-second grid across the window, a mid line and the floor.
-        for (int i = 1; i < 4; i++)
+        // dB lines (0 · −20 · −40 · −60, the last dashed: where RT60 is measured) and the time grid.
+        foreach (var db in new[] { 0.0, -20, -40, -60 })
         {
-            double x = x0 + (x1 - x0) * i / 4.0;
-            ctx.DrawLine(NotaGraph.GridPen, new Point(x, 4), new Point(x, h - 4));
+            double y = YOf(db);
+            var pen = db == -60 ? new Pen(NotaPalette.TextTertiary, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) } : NotaGraph.GridPen;
+            ctx.DrawLine(pen, new Point(r.X, y), new Point(r.Right, y));
+            var ft = Text(db == 0 ? "0 dB" : NotaNum.F($"{db:0}"), NotaGraph.AxisInk);
+            ctx.DrawText(ft, new Point(Left - 4 - ft.Width, y - ft.Height / 2));
         }
-        ctx.DrawLine(NotaGraph.GridPen, new Point(x0, top + span * 0.5), new Point(x1, top + span * 0.5));
-        ctx.DrawLine(new Pen(NotaPalette.GridBeat, 1.2), new Point(x0, bot), new Point(x1, bot));
+        double step = _win <= 1 ? 0.25 : _win <= 3 ? 0.5 : _win <= 8 ? 1 : 2;
+        for (double t = step; t < _win - 1e-6; t += step)
+        {
+            double x = XOfSec(t);
+            ctx.DrawLine(NotaGraph.GridPen, new Point(x, r.Y), new Point(x, r.Bottom));
+            var ft = Text(SecF(t), NotaGraph.AxisInk);
+            ctx.DrawText(ft, new Point(x - ft.Width / 2, r.Bottom + 1));
+        }
+        ctx.DrawText(Text("0", NotaGraph.AxisInk), new Point(r.X - 2, r.Bottom + 1));
 
-        double preX = PreX();
-        bool live = _phase >= 0;
-        double ph = live ? _phase : 1;
+        double pre = _preMs / 1000;
+        double preX = XOfSec(pre);
 
-        // ---- the tail: exp(−6.9 t / RT60) on a linear amplitude scale over 4 s --------
-        double Env(double t) => _freeze ? 0.92 : Math.Exp(-6.9 * t / Math.Max(0.05, _rt60));
-        double YAt(double x) => bot - span * Env((x - preX) / Math.Max(1, x1 - preX) * AxisSec);
-        var full = new StreamGeometry();
+        if (_freeze)
+        {
+            ctx.DrawLine(new Pen(NotaPalette.AccentBright, 1.8), new Point(preX, YOf(0)), new Point(r.Right, YOf(0)));
+            ctx.DrawText(new NotaFormattedText(Loc.T("device.reverb.tail_held_no_decay"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 3));
+            return;
+        }
+
+        // Your audio after its latest hit, under the set line: the input as a wash, the tail as a line.
+        if (_tailLive.Count > 1)
+        {
+            var wash = new StreamGeometry();
+            using (var g = wash.Open())
+            {
+                g.BeginFigure(new Point(XOfSec(0), r.Bottom), true);
+                foreach (var (t, db) in _inLive) { if (t > _win) break; g.LineTo(new Point(XOfSec(t), YOf(db))); }
+                g.LineTo(new Point(XOfSec(Math.Min(_inLive[^1].Sec, _win)), r.Bottom));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.TextTertiary, 0x40), null, wash);
+            var line = new StreamGeometry();
+            using (var g = line.Open())
+            {
+                bool first = true;
+                foreach (var (t, db) in _tailLive)
+                {
+                    if (t > _win) break;
+                    var at = new Point(XOfSec(t), YOf(Math.Max(db, DbFloor)));
+                    if (first) { g.BeginFigure(at, false); first = false; } else g.LineTo(at);
+                }
+                g.EndFigure(false);
+            }
+            ctx.DrawGeometry(null, LivePen, line);
+        }
+
+        // The highs: a fainter line that falls sooner (HF damp).
+        var hiPen = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x66), 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
+        var hiEnd = new Point(XOfSec(pre + _rtHigh * -DbFloor / 60), YOf(DbFloor));
+        ctx.DrawLine(hiPen, new Point(preX, YOf(0)), hiEnd.X > r.Right ? new Point(r.Right, YOf(-60 * (_win - pre) / _rtHigh)) : hiEnd);
+
+        // The tail: 0 dB at the pre-delay, −60 dB at the decay, on to the floor.
+        double endSec = pre + _rt60 * -DbFloor / 60;
+        var end = endSec <= _win ? new Point(XOfSec(endSec), YOf(DbFloor)) : new Point(r.Right, YOf(-60 * (_win - pre) / _rt60));
         var fill = new StreamGeometry();
-        using (var g = full.Open())
-        using (var f = fill.Open())
+        using (var g = fill.Open())
         {
-            g.BeginFigure(new Point(x0, bot), false);
-            g.LineTo(new Point(preX, bot));
-            f.BeginFigure(new Point(preX, bot), true);
-            for (double x = preX; x <= x1 + 0.1; x += 2)
-            {
-                var pt = new Point(Math.Min(x, x1), YAt(Math.Min(x, x1)));
-                g.LineTo(pt); f.LineTo(pt);
-            }
-            f.LineTo(new Point(x1, bot));
-            f.EndFigure(true);
+            g.BeginFigure(new Point(preX, r.Bottom), true);
+            g.LineTo(new Point(preX, YOf(0))); g.LineTo(end); g.LineTo(new Point(end.X, r.Bottom));
+            g.EndFigure(true);
         }
-        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x12), null, fill);
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x55), 1.4, lineJoin: PenLineJoin.Round), full);
-
-        // The bright stroke draws itself over the first half of the loop, then fades a little.
-        double reach = _freeze || !live ? 1 : Math.Clamp(ph / 0.52, 0, 1);
-        double tailOp = !live ? 1 : _freeze ? 0.75 + 0.25 * Math.Sin(ph * Math.PI) : ph < 0.06 ? 0.2 + ph / 0.06 * 0.8 : ph < 0.86 ? 1 : 1 - (ph - 0.86) / 0.14 * 0.8;
-        if (reach > 0)
-        {
-            double xEnd = preX + (x1 - preX) * reach;
-            var bright = new StreamGeometry();
-            using (var g = bright.Open())
-            {
-                g.BeginFigure(new Point(x0, bot), false);
-                g.LineTo(new Point(preX, bot));
-                for (double x = preX; x <= xEnd + 0.1; x += 2) g.LineTo(new Point(Math.Min(x, xEnd), YAt(Math.Min(x, xEnd))));
-            }
-            using (ctx.PushOpacity(tailOp))
-                ctx.DrawGeometry(null, new Pen(live ? NotaPalette.Accent : NotaPalette.VizInk, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), bright);
-        }
-
-        // Where the tail has fallen 60 dB — the decay the knob names.
-        if (!_freeze)
-        {
-            double rx = preX + _rt60 / AxisSec * (x1 - preX);
-            if (rx <= x1) ctx.DrawEllipse(NotaPalette.VizInk, null, new Point(rx, bot), 2.2, 2.2);
-        }
-
-        // ---- the impulse at the pre-delay and the early reflections ----------------
-        double burstOp = !live ? 0.9 : ph < 0.1 ? 1 : ph < 0.4 ? 1 - (ph - 0.1) / 0.3 * 0.6 : 0.4 - (ph - 0.4) / 0.6 * 0.18;
-        using (ctx.PushOpacity(burstOp))
-            ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(preX, top - 2), new Point(preX, bot));
-
+        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x14), null, fill);
+        ctx.DrawLine(new Pen(NotaPalette.VizInk, 1.8, lineCap: PenLineCap.Round), new Point(preX, YOf(0)), end);
+        // The early reflections: short ticks hanging under the start of the tail, longer the
+        // louder they are (they come within ~60 ms, so on a seconds axis they sit close).
         int n = Math.Min(_erMs.Length, _erGain.Length);
+        var erPen = new Pen(NotaPalette.Wash(NotaPalette.TextSecondary, 0xB0), 1);
+        double tickMax = Math.Max(6, YOf(-20) - YOf(0));
         for (int k = 0; k < n; k++)
         {
-            double x = preX + _erMs[k] / 100.0 * ErSpanPer100Ms * (x1 - x0);
-            if (x > x1) break;
-            double fire = 0.08 + 0.1 * k / Math.Max(1, n - 1);        // each lights a beat after the last
-            double since = ph - fire;
-            double op, sc;
-            if (_freeze) { op = 0.6 + 0.4 * Math.Max(0, Math.Cos(since * Math.PI * 2)); sc = 0.9; }
-            else if (!live) { op = 0.75; sc = 1; }
-            else if (since < 0) { op = 0.15; sc = 0.5; }
-            else if (since < 0.36) { op = 1 - since / 0.36 * 0.7; sc = 1 - since / 0.36 * 0.2; }
-            else { op = 0.3 - Math.Min(1, (since - 0.36) / 0.6) * 0.15; sc = 0.8 - Math.Min(1, (since - 0.36) / 0.6) * 0.3; }
-            double len = Math.Max(3, span * 0.52 * _erGain[k] * sc);
-            using (ctx.PushOpacity(op))
-                ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(x, bot), new Point(x, bot - len));
+            double x = XOfSec(pre + _erMs[k] / 1000);
+            if (x > r.Right) break;
+            double y0 = YOf(0) + 5;
+            ctx.DrawLine(erPen, new Point(x, y0), new Point(x, y0 + tickMax * Math.Clamp(_erGain[k], 0, 1)));
         }
 
-        // ---- labels ------------------------------------------------------------------
-        var title = _freeze ? Text(Loc.T("device.reverb.tail_held_no_decay"), NotaPalette.AccentBright) : Text("Decay tail", NotaGraph.TitleInk);
-        ctx.DrawText(title, new Point(x0 - 3, 3));
-        var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), _freeze ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(rt, new Point(x1 + 3 - rt.Width, 3));
-        var pre = Text(NotaNum.F($"pre {_preMs:0} ms"), NotaPalette.TealBright);
-        ctx.DrawText(pre, new Point(Math.Min(preX + 3, x1 - pre.Width - 24), h - pre.Height - 2));
-        var ax = Text("4 s", NotaGraph.AxisInk);
-        ctx.DrawText(ax, new Point(x1 + 3 - ax.Width, h - ax.Height - 2));
+        // The handles and their labels.
+        void Handle(Point at, bool hot, string label, bool above)
+        {
+            if (hot) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, at, 8, 8);
+            ctx.DrawEllipse(hot ? NotaPalette.AccentBright : NotaGraph.Ground, new Pen(NotaPalette.AccentBright, 1.6), at, 3.8, 3.8);
+            var ft = Text(label, hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            double x = Math.Clamp(at.X + 7, r.X, r.Right - ft.Width);
+            if (at.X + 7 + ft.Width > r.Right) x = at.X - 7 - ft.Width;
+            ctx.DrawText(ft, new Point(x, above ? at.Y - ft.Height - 2 : at.Y + 2));
+        }
+        Handle(PrePt, _drag == 2 || (_drag == 0 && _hover == 2), NotaNum.F($"Pre {_preMs:0} ms"), true);
+        var dp = DecayPt;
+        if (dp.X <= r.Right + 0.5)
+            Handle(dp, _drag == 1 || (_drag == 0 && _hover == 1), "Decay " + SecF(_rt60), true);
+
+        NotaGraph.Title(ctx, rect, "Decay");
+        var hi = Text(Loc.T("device.reverb.highs_8_khz"), NotaGraph.AxisInk);
+        double lx = w - 10 - hi.Width;
+        ctx.DrawText(hi, new Point(lx, 4));
+        ctx.DrawLine(hiPen, new Point(lx - 18, 4 + hi.Height / 2), new Point(lx - 4, 4 + hi.Height / 2));
+        if (_tailLive.Count > 1)
+        {
+            var yt = Text(Loc.T("device.reverb.your_tail"), NotaGraph.AxisInk);
+            double yx = lx - 26 - yt.Width;
+            ctx.DrawText(yt, new Point(yx, 4));
+            ctx.DrawLine(LivePen, new Point(yx - 18, 4 + yt.Height / 2), new Point(yx - 4, 4 + yt.Height / 2));
+        }
     }
 }

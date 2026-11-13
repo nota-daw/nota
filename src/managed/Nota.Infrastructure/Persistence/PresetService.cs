@@ -61,6 +61,8 @@ public static class PresetService
                 }
                 // Nota Mosaic: the zone map travels with the sound (its samples stay referenced).
                 if (ik == MosaicModel.Kind && engine.MosaicProgram(trackId) is { Length: > 0 } prog) doc.MosaicProgram = prog;
+                // Nota Aurora: its imported tables travel with the sound (specs/053).
+                if (ik == 5) doc.AuroraTables = CaptureAuroraTables(engine, trackId);
                 // Nota Twin: its sequencer patterns travel with the sound (a params-free state blob).
                 if (ik == Nota.Application.Twin.TwinMatrix.Kind && Nota.Application.Twin.TwinPatterns.FromState(engine.GetPluginState(trackId, -1)) is { } pats)
                     doc.StateBase64 = Convert.ToBase64String(Nota.Application.Twin.TwinPatterns.StateWithPatterns(pats));
@@ -76,7 +78,8 @@ public static class PresetService
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             doc.NamedParams = new Dictionary<string, float>(pc);
             for (int i = 0; i < pc; i++)
-                doc.NamedParams[engine.DeviceParamName(trackId, deviceIndex, i)] = engine.DeviceGetParam(trackId, deviceIndex, i);
+                if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))   // the card size is editor state (#531)
+                    doc.NamedParams[pn] = engine.DeviceGetParam(trackId, deviceIndex, i);
             if (bk == EqKind) doc.BandText = CaptureBandText(engine, trackId, deviceIndex);
             return doc;
         }
@@ -197,6 +200,21 @@ public static class PresetService
         engine.MidiEffectSetParam(trackId, index, 7, engine.MidiEffectGetParam(trackId, index, 3) > 0f ? 1f : 0f);
     }
 
+    private const int LensKind = 22; // Nota Lens
+
+    // An effect preset's named params as today's device names them. Nota Lens called its graph
+    // "View" until the card got an S / L size (#531), which took that name: an older Lens
+    // preset's "View" is its graph, and it never sets the card size.
+    private static System.Collections.Generic.Dictionary<string, float>? EffectNamed(PresetDocument doc, int kind)
+    {
+        var named = doc.NamedParams;
+        if (kind != LensKind || named is null || named.ContainsKey("Graph") || !named.TryGetValue("View", out var graph)) return named;
+        var moved = new System.Collections.Generic.Dictionary<string, float>(named);
+        moved.Remove("View");
+        moved["Graph"] = graph;
+        return moved;
+    }
+
     private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
@@ -213,11 +231,11 @@ public static class PresetService
                 if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int di = engine.AddBuiltinDevice(targetTrackId, doc.BuiltinKind);
                 if (di < 0) return Loc.T("persistence.preset.failed_to_add_device");
-                if (doc.NamedParams is { Count: > 0 })
+                if (EffectNamed(doc, doc.BuiltinKind) is { Count: > 0 } named)
                 {
                     int pc = engine.DeviceParamCount(targetTrackId, di);
                     for (int i = 0; i < pc; i++)
-                        if (doc.NamedParams.TryGetValue(engine.DeviceParamName(targetTrackId, di, i), out var v))
+                        if (named.TryGetValue(engine.DeviceParamName(targetTrackId, di, i), out var v))
                             engine.DeviceSetParam(targetTrackId, di, i, v);
                 }
                 else
@@ -277,6 +295,7 @@ public static class PresetService
                             engine.PluginParamSet(t, -1, i, v);
                 }
                 LoadTwinPatterns(doc, engine, t);
+                if (doc.BuiltinKind == 5) return LoadAuroraTables(doc, engine, t, undoable: false);
                 string mw = LoadMosaicProgram(doc, engine, t);
                 return mw.Length > 0 ? mw : LoadGrainSource(doc, engine, t);
             }
@@ -312,6 +331,81 @@ public static class PresetService
         var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
         if (src is null || path is null) return Loc.F("persistence.preset.couldnt_prepare_the_sample", doc.GrainSource);
         return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : Loc.F("persistence.preset.couldnt_load_the_sample", src.Name);
+    }
+
+    // A built-in instrument's parameters in place: the named ones, every other one back to its
+    // default (the card size excepted). The Aurora path above shares it.
+    private static void ApplyInstrumentParams(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        int pc = engine.PluginParamCount(trackId, -1);
+        for (int i = 0; i < pc; i++)
+        {
+            string id = engine.PluginParamId(trackId, -1, i);
+            if (InstrumentView.IsViewParam(id)) continue;
+            bool named = doc.NamedParams is { Count: > 0 } && doc.NamedParams.ContainsKey(id);
+            engine.PluginParamSet(trackId, -1, i, named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i));
+        }
+    }
+
+    // Nota Aurora's imported tables into a preset: the frames, as base64 float32.
+    private static List<PresetAuroraTable>? CaptureAuroraTables(IAudioEngine engine, int trackId)
+    {
+        List<PresetAuroraTable>? list = null;
+        for (int o = 0; o < 2; o++)
+        {
+            if (!engine.TryGetAuroraTableInfo(trackId, o, out var info) || !info.HasTable) continue;
+            var frames = engine.AuroraTableRead(trackId, o);
+            if (frames.Length == 0) continue;
+            var bytes = new byte[frames.Length * sizeof(float)];
+            Buffer.BlockCopy(frames, 0, bytes, 0, bytes.Length);
+            (list ??= new()).Add(new PresetAuroraTable
+            {
+                Osc = o, Name = info.Name, Origin = info.Origin, Frames = info.Frames, UseCustom = info.UseCustom,
+                Data = Convert.ToBase64String(bytes),
+            });
+        }
+        return list;
+    }
+
+    // A Nota Aurora preset sets exactly its tables: the ones it carries, and the built-in bank
+    // on every oscillator it does not name (so a factory preset clears an imported table).
+    private static string LoadAuroraTables(PresetDocument doc, IAudioEngine engine, int trackId, bool undoable)
+    {
+        string warn = "";
+        for (int o = 0; o < 2; o++)
+        {
+            var entry = doc.AuroraTables?.Find(x => x.Osc == o);
+            if (entry is null)
+            {
+                if (engine.TryGetAuroraTableInfo(trackId, o, out var cur))
+                {
+                    if (cur.HasTable) engine.AuroraClearTable(trackId, o);
+                    else if (cur.Missing) engine.AuroraSetMissing(trackId, o, "");
+                    if (cur.UseCustom) engine.AuroraSetSource(trackId, o, false, undoable && !cur.HasTable);
+                }
+                continue;
+            }
+            float[]? frames = null;
+            try
+            {
+                var bytes = Convert.FromBase64String(entry.Data);
+                if (entry.Frames is > 0 and <= 256 && bytes.Length == entry.Frames * 2048 * sizeof(float))
+                {
+                    frames = new float[bytes.Length / sizeof(float)];
+                    Buffer.BlockCopy(bytes, 0, frames, 0, bytes.Length);
+                }
+            }
+            catch (FormatException) { }
+            if (frames is null || engine.AuroraTableFromFrames(frames, entry.Frames, entry.Name, entry.Origin, out var h) != AuroraTableResult.Ok)
+            {
+                warn = $"The preset's Osc {o + 1} table \"{entry.Name}\" couldn't be read.";
+                continue;
+            }
+            try { engine.AuroraSetTable(trackId, o, h, undoable); }
+            finally { engine.AuroraTableFree(h); }
+            engine.AuroraSetSource(trackId, o, entry.UseCustom);
+        }
+        return warn;
     }
 
     // A Nota Mosaic preset loads its program: a factory multisample (rendered on first use) or
@@ -356,7 +450,8 @@ public static class PresetService
         {
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             for (int i = 0; i < pc; i++)
-                engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
+                if (!DeviceView.IsViewParam(engine.DeviceParamName(trackId, deviceIndex, i)))   // the card size (S / L / XL) stays
+                    engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
             if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == EqKind) ApplyBandText(null, engine, trackId, deviceIndex);
         }
         return "";
@@ -407,6 +502,18 @@ public static class PresetService
         if (trackId <= 0) return Loc.T("common.select_a_track_first");
         switch (doc.Type)
         {
+            case "builtin-instrument" when engine.TrackInstrumentKind(trackId) == 5:
+            {
+                // Nota Aurora: the parameters and the imported tables are one undo step.
+                engine.BeginUndoGroup();
+                try
+                {
+                    var parms = new PresetDocument { Type = "builtin-instrument-params", NamedParams = doc.NamedParams };
+                    ApplyInstrumentParams(parms, engine, trackId);
+                    return LoadAuroraTables(doc, engine, trackId, undoable: true);
+                }
+                finally { engine.EndUndoGroup(); }
+            }
             case "builtin-instrument":
             {
                 int pc = engine.PluginParamCount(trackId, -1);
@@ -433,14 +540,15 @@ public static class PresetService
             {
                 if (deviceIndex < 0) return Loc.T("persistence.preset.not_an_effect");
                 int pc = engine.DeviceParamCount(trackId, deviceIndex);
-                if (doc.NamedParams is { Count: > 0 })
+                if (EffectNamed(doc, engine.TrackDeviceBuiltinKind(trackId, deviceIndex)) is { Count: > 0 } named)
                 {
                     // A param the preset doesn't name goes back to its default (like instruments),
                     // so switching presets never inherits leftovers from the previous one.
+                    // The card size (View, #531) is editor state: the card keeps its S / L size.
                     for (int i = 0; i < pc; i++)
-                        engine.DeviceSetParam(trackId, deviceIndex, i,
-                            doc.NamedParams.TryGetValue(engine.DeviceParamName(trackId, deviceIndex, i), out var v)
-                                ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
+                        if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))
+                            engine.DeviceSetParam(trackId, deviceIndex, i,
+                                named.TryGetValue(pn, out var v) ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
                 }
                 else
                 {

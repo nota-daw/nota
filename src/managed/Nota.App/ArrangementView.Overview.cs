@@ -42,33 +42,19 @@ public sealed partial class ArrangementView
         }
     }
 
-    // The strip row: the same header-column chrome as the ruler row (label + visible-range
-    // readout on one line), then the strip itself over the lane column.
+    // The strip row: the header column names the strip (the visible range is read out on
+    // the ruler row, style guide), then the strip itself over the lane column.
     private Border BuildOverviewRow()
     {
         var label = new TextBlock
         {
             Text = Loc.T("arrangement.overview.overview"), Classes = { "SectionLabel" },
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(NameGap, 0, 0, 0),
         };
-        _overviewRange = new TextBlock
-        {
-            Text = "", FontSize = 9,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
-        var labels = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(14, 0, 0, 0),
-            Children = { label, _overviewRange },
-        };
-
         var grid = new Grid { Height = OverviewH };
-        var header = HeaderPanel(labels);
-        header.BindResource(Border.BackgroundProperty, "Brush.BgSunken");   // the strip is a well, header included
+        var header = HeaderPanel(label);
         grid.Children.Add(header);
         grid.Children.Add(_overview);
         AddSideRow(grid, header, _overview);
@@ -108,11 +94,11 @@ public sealed partial class ArrangementView
         ApplyOverviewView(w / OverviewSpan, 0);
     }
 
-    // Bar range readout under the strip label — refreshed with every redraw, so it follows
-    // scroll, zoom and project growth.
+    // Bar range readout on the ruler row ("bars 1 to 8 of 36") — refreshed with every redraw,
+    // so it follows scroll, zoom and project growth.
     private void UpdateOverviewRange()
     {
-        if (_overviewRange is null || !_overviewRow.IsVisible) return;
+        if (_overviewRange is null) return;
         int bpb = Math.Max(1, _beatsPerBar);
         int first = (int)Math.Floor(_scrollBeats / bpb) + 1;
         int last = Math.Max(first, (int)Math.Ceiling((_scrollBeats + ViewportBeats) / bpb));
@@ -302,7 +288,7 @@ public sealed partial class ArrangementView
             int n = _o._tracks.Count;
             if (n == 0)
             {
-                var hint = new FormattedText(Loc.T("arrangement.overview.the_project_appears_here"), CultureInfo.InvariantCulture,
+                var hint = new NotaFormattedText(Loc.T("arrangement.overview.the_project_appears_here"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, OvEmptyText);
                 ctx.DrawText(hint, new Point(10, (h - hint.Height) / 2));
             }
@@ -343,7 +329,7 @@ public sealed partial class ArrangementView
             // at the very end is pushed left, not clamped to nothing).
             x0 = Math.Clamp(x0, 0, Math.Max(0, w - 2));
             x1 = Math.Clamp(x1, x0 + 2, Math.Max(x0 + 2, w));
-            ctx.DrawRectangle(OvWindow, OvFrame, new Rect(x0 + 0.5, 2.5, Math.Max(1, x1 - x0 - 1), h - 5), 2, 2);
+            ctx.DrawRectangle(OvWindow, OvFrame, new Rect(x0 + 0.5, 2.5, Math.Max(1, x1 - x0 - 1), h - 5), NotaRadius.FineValue, NotaRadius.FineValue);
 
             // Loop region: a thin brass band along the top edge (the ruler owns the full
             // brace). Drawn over the scrim — a loop outside the viewport still has to show.

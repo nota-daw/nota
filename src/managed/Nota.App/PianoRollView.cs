@@ -23,6 +23,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -410,7 +411,7 @@ public sealed partial class PianoRollView : UserControl
     private static readonly IPen BendPen = new Pen(NotaPalette.TextPrimary, 1.25, lineCap: PenLineCap.Round);
     private static readonly IPen BendPenOnSel = new Pen(NotaPalette.TextOnAccent, 1.25, lineCap: PenLineCap.Round);
     private static readonly IBrush PressureShade = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0x66);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
 
     private double RangeH => _rows.Count * RowH;
 
@@ -677,9 +678,12 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Length of the active clip (the inspector's LENGTH / LOOP).</summary>
     public double ActiveLengthBeats => _set.ActiveClip.LengthBeats;
 
-    /// <summary>Track colour of note i's clip; the active colour for a one-clip set.</summary>
+    /// <summary>Note i's colour: its articulation's when notes are coloured by articulation and it
+    /// has one to show (specs/085, FR-015), else the track colour of its clip (the active colour for
+    /// a one-clip set). Selected, ghost and locked notes are drawn by their own branches.</summary>
     private Color ColorOf(int i)
     {
+        if (NoteColorByArticulation && ArticulationColourOf(i) is Color art) return art;
         int s = i >= 0 && i < _owner.Count ? _owner[i] : 0;
         return s < _slotBrushes.Count && _set.IsMulti ? _slotBrushes[s].Color : _trackColor;
     }
@@ -1187,9 +1191,8 @@ public sealed partial class PianoRollView : UserControl
         if (a.Count != b.Length) return false;
         for (int i = 0; i < b.Length; i++)
         {
-            var x = a[i]; var y = b[i];
-            if (x.Pitch != y.Pitch || x.StartBeat != y.StartBeat || x.LengthBeats != y.LengthBeats
-                || x.Velocity != y.Velocity || x.ExprId != y.ExprId) return false;
+            // Every field, the articulation included (specs/085): an edit to any of them must reach the engine.
+            if (!NotaNote.Same(a[i], b[i])) return false;
         }
         return true;
     }
@@ -1852,8 +1855,12 @@ public sealed partial class PianoRollView : UserControl
         private void RenderTime(DrawingContext ctx, double h, double ppb, double viewEnd, double origin, double bpm)
         {
             double pxPerSec = ppb * bpm / 60.0;
-            double charW = _charW > 0 ? _charW
-                : _charW = new FormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText).Width / 10;
+            if (_charW <= 0 || _charWKey != (NotaTextSize.Step, NotaFonts.FaceStamp))   // re-measure when Text size or the face changes
+            {
+                _charWKey = (NotaTextSize.Step, NotaFonts.FaceStamp);
+                _charW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText).Width / 10;
+            }
+            double charW = _charW;
             double stepS = RulerLabels.TimeSteps[^1];
             foreach (var st in RulerLabels.TimeSteps)
             {
@@ -1869,11 +1876,12 @@ public sealed partial class PianoRollView : UserControl
                 double x = _o.BeatToX(b);
                 ctx.DrawLine(BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                 if (b >= _o._lengthBeats - 1e-9) continue;
-                var ft = new FormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                var ft = new NotaFormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText);
                 ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
             }
         }
         private double _charW;
+        private (int Step, int Face) _charWKey;   // the Text size step and face _charW was measured at
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -1924,7 +1932,7 @@ public sealed partial class PianoRollView : UserControl
                     ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                     if (b >= _o._lengthBeats - 1e-9) continue;
                     string label = RulerLabels.Bars(origin + b, step, bpb, NotaNum.Culture);
-                    var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
+                    var ft = new NotaFormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, bar ? RulerBarText : LabelText);
                     ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
                 }
             }
@@ -2089,15 +2097,18 @@ public sealed partial class PianoRollView : UserControl
         // and cut to the column.
         private void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
         {
+            // The axis size once a row has room for it (the default 12px row does); down to the
+            // type floor on squeezed rows.
+            double size = Math.Clamp(RowH - 2, NotaType.Floor, NotaType.Axis);
             string? pad = _o._rows.Label(_o._rows.NearestRow(pitch));
             if (pad is not null)
             {
-                var name = new FormattedText(pad, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, ink)
+                var name = new NotaFormattedText(pad, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink)
                     { MaxTextWidth = Math.Max(1, w - 8), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
                 ctx.DrawText(name, new Point(4, y + (RowH - name.Height) / 2));
                 return;
             }
-            var ft = new FormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, ink);
+            var ft = new NotaFormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink);
             ctx.DrawText(ft, new Point(w - ft.Width - 5, y + (RowH - ft.Height) / 2));
         }
     }
@@ -2228,10 +2239,10 @@ public sealed partial class PianoRollView : UserControl
                 var r = new Rect(x, y, Math.Max(2, nw - 1), RowH - 1);
                 if (_o.IsGhost(i))   // a tool's preview: brass outline over the clip's own notes
                 {
-                    ctx.DrawRectangle(GhostFill, GhostEdge, r.Deflate(0.5), 2, 2);
+                    ctx.DrawRectangle(GhostFill, GhostEdge, r.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
                     continue;
                 }
-                if (sel) ctx.DrawRectangle(NoteSel, NoteSelEdge, r.Deflate(0.5), 2, 2);
+                if (sel) ctx.DrawRectangle(NoteSel, NoteSelEdge, r.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
                 else
                 {
                     // Track colour, quieter the softer the note — and, with several clips open,
@@ -2245,20 +2256,23 @@ public sealed partial class PianoRollView : UserControl
                         ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender(), _o._owner) : default;
                     double appear = _o._recPreview?.Progress(n.Pitch, _o._recClipStart + n.StartBeat) ?? 1;
                     if (fate.Kind == NoteFateKind.Kept && appear < 1)
-                        ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, 2);
+                        ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, (float)NotaRadius.FineValue);
                     else if (fate.Kind == NoteFateKind.Kept)
-                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
+                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, (float)NotaRadius.FineValue);
                     else
                     {
                         double keepW = fate.Kind == NoteFateKind.Cut ? Math.Min(r.Width, fate.CutLength * ppb) : 0;
                         if (keepW > 0)
-                            ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r.WithWidth(keepW), 2);
+                            ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r.WithWidth(keepW), (float)NotaRadius.FineValue);
                         var doomed = new Rect(r.X + keepW, r.Y, Math.Max(1, r.Width - keepW), r.Height);
-                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a * 0.25), c.R, c.G, c.B)), doomed, 2);
+                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a * 0.25), c.R, c.G, c.B)), doomed, (float)NotaRadius.FineValue);
                         _doomed.Add((doomed, c));   // its dashed edge goes on top of the notes covering it
                     }
                 }
                 if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
+                // FR-014: an articulation the map no longer holds — a warning notch at the note's start.
+                if (n.ArticulationId > 0 && _o.HasMissingArticulation(i))
+                    ctx.FillRectangle(NotaPalette.Warning, new Rect(r.X, r.Y, Math.Min(3, r.Width), r.Height), (float)NotaSkin.MapRadius(1));
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
                 bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft || (_drag == Mode.Place && _placeKind == PlaceDragKind.Length)) && sel)
                               || (_drag == Mode.None && _hoverNote == i && !_o.IsLocked(i));
@@ -2273,7 +2287,7 @@ public sealed partial class PianoRollView : UserControl
             if (_doomed.Count > 0)
             {
                 foreach (var (d, dc) in _doomed)
-                    ctx.DrawRectangle(null, new Pen(new SolidColorBrush(dc), 1, DashStyle.Dash), d.Deflate(0.5), 2, 2);
+                    ctx.DrawRectangle(null, new Pen(new SolidColorBrush(dc), 1, DashStyle.Dash), d.Deflate(0.5), NotaRadius.FineValue, NotaRadius.FineValue);
                 _doomed.Clear();
             }
             // Keys held into the recording take (#56): from the key-down to the capture clock,
@@ -2289,7 +2303,7 @@ public sealed partial class PianoRollView : UserControl
                     double p = rp.Progress(hn.Pitch, hn.StartBeat);
                     var hr = new Rect(hx, PitchToY(hn.Pitch), Math.Max(2, hw - 1), RowH - 1);
                     ctx.FillRectangle(p < 1 ? RecordPreview.AppearBrush(c, p)
-                        : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, 2);
+                        : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, (float)NotaRadius.FineValue);
                 }
             _o.DrawOutsideClip(ctx, w, h);
             if (_drag == Mode.Marquee)
@@ -2385,6 +2399,20 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             Focus();
+            // Right-click a note: its articulation (specs/085). The selection stays when the note is
+            // in it (a chord, a phrase), else the note alone is selected first.
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed && _drag == Mode.None)
+            {
+                int rhit = HitTest(e.GetPosition(this), out _);
+                if (rhit < 0) return;
+                // A pending paste / drawn note lands first (settling can cut or remove notes): hit again.
+                if (!_o._selection.Contains(rhit) && _o.SettlePlacement()) rhit = HitTest(e.GetPosition(this), out _);
+                if (rhit < 0) return;
+                if (!_o._selection.Contains(rhit)) { _o._selection.Clear(); _o._selection.Add(rhit); _o.Invalidate(); _o.Changed?.Invoke(); }
+                _o.ShowArticulationMenu(this, rhit);
+                e.Handled = true;
+                return;
+            }
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             _o.EndVelocityWheel();   // a press starts a new edit: close the wheel's burst first
             var p = e.GetPosition(this);
@@ -2673,7 +2701,11 @@ public sealed partial class PianoRollView : UserControl
             int hn = kind == 1 ? hit : -1;   // the bright trim-edge affordance shows only on the edge
             bool left = edge < 0;
             if (hn != _hoverNote || left != _hoverLeft) { _hoverNote = hn; _hoverLeft = left; _o.Invalidate(); }
+            // FR-014: say why a note carries the warning notch.
+            object? tip = hit >= 0 && _o.HasMissingArticulation(hit) ? MissingArticulationTip : null;
+            if (!Equals(ToolTip.GetTip(this), tip)) ToolTip.SetTip(this, tip);
         }
+        private static readonly string MissingArticulationTip = Loc.T("articulations.menu.missing_tip");
 
         // Whatever ends the press (release, a window losing the pointer) ends its note.
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
@@ -2804,60 +2836,72 @@ public sealed partial class PianoRollView : UserControl
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            bool meta = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
-            bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
-            if (!meta && (e.Key == Key.Delete || e.Key == Key.Back)) { if (_o.DeleteSelection()) e.Handled = true; return; }
-            // ⇧F: Fit to notes. Handled here, the window's computer-keyboard note map never
-            // sees it, so no F sounds.
-            if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Shift) { _o.FitToNotes(); e.Handled = true; return; }
-            if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Shift | KeyModifiers.Alt)) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
-            if (!meta && e.Key == Key.Escape && _o._selection.Count > 0)
+            if (Keys.Capturing) return;
+            // Every key is a binding (specs/096): the piano roll's own (roll.*) and the shared
+            // editing actions (edit.*), which mean "the notes" while this grid has focus.
+            if (Keys.Owns(e, "edit.delete")) { if (_o.DeleteSelection()) e.Handled = true; return; }
+            // Fit to notes. Handled here, the window's computer-keyboard note map never sees it,
+            // so no note sounds.
+            if (Keys.Owns(e, "roll.fitNotes")) { _o.FitToNotes(); e.Handled = true; return; }
+            if (Keys.Owns(e, "roll.fold")) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
+            if (Keys.Owns(e, "edit.cancel") && _o._selection.Count > 0)
             {
                 _o.SettlePlacement();
                 _o._selection.Clear(); _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
-            // Arrow keys nudge the selection: ←/→ by the grid in time, ↑/↓ by a semitone
-            // (Shift = an octave). The move auto-scrolls to keep pitch-shifted notes in view.
-            // ⇧←/⇧→ shorten/lengthen by the grid; ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
-            bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
-            if (!meta && _o._selection.Count > 0)
+            // Nudge the selection: in time by the grid, in pitch by a semitone or an octave (the
+            // move auto-scrolls to keep pitch-shifted notes in view); shorten / lengthen by the
+            // grid; velocity by 10 or by 1.
+            // Asked first, so a move key with nothing selected is still the piano roll's and
+            // never reaches the whole-clip command on the same key (roll.octaveUp).
+            if (Keys.OwnedBy(e, NoteMoves) is { } move)
             {
-                if (alt)
+                if (_o._selection.Count == 0) return;
+                bool done = move switch
                 {
-                    switch (e.Key)
-                    {
-                        case Key.Up:   if (_o.NudgeVelocity(shift ? 1 : 10)) e.Handled = true; return;
-                        case Key.Down: if (_o.NudgeVelocity(shift ? -1 : -10)) e.Handled = true; return;
-                    }
-                }
-                else switch (e.Key)
-                {
-                    case Key.Left when shift:  if (_o.ResizeSelection(-1)) e.Handled = true; return;
-                    case Key.Right when shift: if (_o.ResizeSelection(+1)) e.Handled = true; return;
-                    case Key.Left:  if (_o.MoveSelection(0, -_o.SnapStep)) e.Handled = true; return;
-                    case Key.Right: if (_o.MoveSelection(0, +_o.SnapStep)) e.Handled = true; return;
-                    case Key.Up:    if (_o.MoveSelection(shift ? 12 : 1, 0)) e.Handled = true; return;
-                    case Key.Down:  if (_o.MoveSelection(shift ? -12 : -1, 0)) e.Handled = true; return;
-                }
+                    "roll.moveLeft" => _o.MoveSelection(0, -_o.SnapStep),
+                    "roll.moveRight" => _o.MoveSelection(0, +_o.SnapStep),
+                    "roll.transposeUp" => _o.MoveSelection(1, 0),
+                    "roll.transposeDown" => _o.MoveSelection(-1, 0),
+                    "roll.octaveUp" => _o.MoveSelection(12, 0),
+                    "roll.octaveDown" => _o.MoveSelection(-12, 0),
+                    "roll.shorten" => _o.ResizeSelection(-1),
+                    "roll.lengthen" => _o.ResizeSelection(+1),
+                    "roll.velocityUp" => _o.NudgeVelocity(10),
+                    "roll.velocityDown" => _o.NudgeVelocity(-10),
+                    "roll.velocityUpFine" => _o.NudgeVelocity(1),
+                    _ => _o.NudgeVelocity(-1),
+                };
+                if (done) e.Handled = true;
+                return;
             }
-            if (meta && e.Key == Key.A)
+            if (Keys.Owns(e, "edit.selectAll"))
             {
                 _o.SettlePlacement();
                 _o._selection.Clear();
                 for (int i = 0; i < _o._notes.Count; i++) if (!_o.IsLocked(i)) _o._selection.Add(i);
                 _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
-            if (meta && e.Key == Key.D)   // cross-platform fallback (macOS uses the native menu)
+            if (Keys.Owns(e, "edit.duplicate"))   // cross-platform fallback (macOS uses the native menu)
             {
                 if (_o.DuplicateSelection()) e.Handled = true;
                 return;
             }
             // Clipboard (the Edit-menu items carry no gesture, so these reach us here).
-            if (meta && e.Key == Key.C) { if (_o.CopySelection()) e.Handled = true; return; }
-            if (meta && e.Key == Key.X) { if (_o.CutSelection()) e.Handled = true; return; }
-            if (meta && e.Key == Key.V) { if (_o.PasteClipboard()) e.Handled = true; return; }
+            switch (Keys.OwnedBy(e, "edit.copy", "edit.cut", "edit.paste"))
+            {
+                case "edit.copy": if (_o.CopySelection()) e.Handled = true; return;
+                case "edit.cut": if (_o.CutSelection()) e.Handled = true; return;
+                case "edit.paste": if (_o.PasteClipboard()) e.Handled = true; return;
+            }
             base.OnKeyDown(e);
         }
+
+        private static readonly string[] NoteMoves =
+        {
+            "roll.moveLeft", "roll.moveRight", "roll.transposeUp", "roll.transposeDown", "roll.octaveUp", "roll.octaveDown",
+            "roll.shorten", "roll.lengthen", "roll.velocityUp", "roll.velocityDown", "roll.velocityUpFine", "roll.velocityDownFine",
+        };
     }
 
     // ---- velocity lane (interactive) -------------------------------------
@@ -2899,7 +2943,7 @@ public sealed partial class PianoRollView : UserControl
                     b = new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B));
                 }
                 ctx.FillRectangle(b, new Rect(x, h - bh, 2, bh));
-                ctx.FillRectangle(hov && !sel ? EdgeHighlight : b, new Rect(x - 2, h - bh - 2, 6, 3), 1);
+                ctx.FillRectangle(hov && !sel ? EdgeHighlight : b, new Rect(x - 2, h - bh - 2, 6, 3), (float)NotaSkin.MapRadius(1));
             }
             _o.DrawOutsideClip(ctx, w, h);
         }

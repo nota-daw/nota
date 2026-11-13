@@ -76,7 +76,7 @@ public sealed partial class ArrangementView
         private const double PillH = 16;
         private static double PillWidth(string label)
         {
-            var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 Typeface.Default, 9, NotaPalette.TextPrimary);
             return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
         }
@@ -218,10 +218,9 @@ public sealed partial class ArrangementView
             float v0 = _bendLeft.Value, v1 = _bendRight.Value;
             if (Math.Abs(v1 - v0) < 1e-4f) { _bendLeft.Curve = 0f; _owner.InvalidateVisual(); return; }
             double val = YToValue(_bendTrack, i, pos.Y);
-            double frac = Math.Clamp((val - v0) / (v1 - v0), 0.02, 0.98);
-            // Solve Shape(0.5, curve) == frac  ->  0.5^e = frac  ->  e = ln(frac)/ln(0.5).
-            double e = Math.Log(frac) / Math.Log(0.5);
-            _bendLeft.Curve = (float)Math.Clamp(-Math.Log2(e) / 4.0, -1.0, 1.0);
+            double frac = Math.Clamp((val - v0) / (v1 - v0), 0.01, 0.99);
+            // The curve whose midpoint reaches the pointer (#591).
+            _bendLeft.Curve = Nota.Application.Editing.AutomationCurve.FromMidpoint(frac);
             CommitAutoDuringDrag(_bendTrack);   // engine follows the curve bend live
             _owner.InvalidateVisual();
         }
@@ -370,7 +369,7 @@ public sealed partial class ArrangementView
                         double bx = _o.BeatToX(b.Beat), by2 = ValueToY(t, i, b.Value);
                         if (a.Curve == 0f) { ctx.DrawLine(segPen, new Point(ax, ay), new Point(bx, by2)); continue; }
                         // Curved segment: polyline of shaped sub-samples (M9-D).
-                        const int steps = 16;
+                        int steps = Nota.Application.Editing.AutomationCurve.DrawSteps(bx - ax);
                         var prev = new Point(ax, ay);
                         for (int s = 1; s <= steps; s++)
                         {
@@ -410,8 +409,8 @@ public sealed partial class ArrangementView
                 // Target-selector pill (top-left) — width fits the label, text centred.
                 double pillW = PillWidth(t.AutoLabel);
                 var pill = PillRect(i, pillW);
-                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.ControlValue, NotaRadius.ControlValue);
-                var ft = new FormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.FieldValue, NotaRadius.FieldValue);
+                var ft = new NotaFormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
                 using (ctx.PushClip(pill))
                     ctx.DrawText(ft, new Point(pill.X + 6, pill.Y + (PillH - ft.Height) / 2));

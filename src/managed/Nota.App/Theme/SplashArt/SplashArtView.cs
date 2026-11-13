@@ -32,7 +32,7 @@ internal sealed class SplashArtView : Control
     {
         var card = new Rect(0, 0, SplashScene.Width, SplashScene.Height);
         var ground = Resolve(new ColorRef(SplashRole.Ground));
-        using (ctx.PushClip(new RoundedRect(card, NotaRadius.BodyValue)))
+        using (ctx.PushClip(new RoundedRect(card, NotaRadius.CardValue)))
         {
             ctx.FillRectangle(new SolidColorBrush(ground), card);
             var a = _scene.ArtRect;

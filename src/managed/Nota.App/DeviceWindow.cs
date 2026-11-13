@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The device window — a rack chain's instrument or effect popped out of a Drum Rack,
-// Instrument Rack, Audio Effect Rack or Nota Rhythm voice. The card's header moves into
+// Instrument Rack, Audio Effect Rack or Nota Rhythm voice, or a track's device that opens in
+// XL popped out of its card (specs/085: resizable, the L body stretched to it). The card's header moves into
 // the window's own title bar: name · track on the left, then the preset picker
 // "‹ Name ⌄ ›", the S / L size and the bypass switch. The device body sits below at its
 // card size, and a status bar closes the window (a one-line summary + the processing-type
@@ -67,14 +68,24 @@ internal sealed class DeviceWindow : NotaWindow
     /// <param name="badge">The processing type for the status bar ("SUBTRACTIVE").</param>
     /// <param name="build">Builds the content; registers its live-follow ticks. Called again
     /// by <see cref="Refill"/> (a preset applied, the size switched, a sample dropped).</param>
+    /// <param name="resizable">A window the user sizes, the body stretched to it (a track's
+    /// device opened from its pop-out key, specs/085); otherwise it fits the body's card size.</param>
     public DeviceWindow(string name, string context, string badge, Func<Action<Action>, DeviceWindowPage> build,
-        DeviceWindowBypass? bypass = null, Func<string>? status = null) : base(BarH)
+        DeviceWindowBypass? bypass = null, Func<string>? status = null, bool resizable = false) : base(BarH)
     {
         _name = name; _context = context; _badge = NotaText.Label(badge);
         _build = build; _bypass = bypass; _status = status;
         Title = context.Length > 0 ? $"{name} · {context}" : name;
-        SizeToContent = SizeToContent.WidthAndHeight;
-        CanResize = false;
+        if (resizable)
+        {
+            Width = 1100; Height = 560; MinWidth = 640; MinHeight = 340;
+            CanResize = true;
+        }
+        else
+        {
+            SizeToContent = SizeToContent.WidthAndHeight;
+            CanResize = false;
+        }
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -124,7 +135,8 @@ internal sealed class DeviceWindow : NotaWindow
 
     private Control Layout(DeviceWindowPage page)
     {
-        double w = double.IsNaN(page.BodyWidth) ? 0 : page.BodyWidth;
+        // A resizable window is at least MinWidth wide: lay the bar out for that.
+        double w = double.IsNaN(page.BodyWidth) ? (CanResize ? MinWidth : 0) : page.BodyWidth;
         double presetW = page.Presets is null ? 0 : PickerW + Gap;
         double togglesW = (page.Size is null ? 0 : 34 + Gap) + (_bypass is null ? 0 : 26 + Gap);
         var inset = CaptionPadding(NotaUiScale.Factor);   // the OS window buttons' room
@@ -251,9 +263,12 @@ internal sealed class DeviceWindow : NotaWindow
     private Control BodyArea(DeviceWindowPage page)
     {
         _bodyHost = page.Body;
+        // A device body has a fixed size here too: its text keeps its size, as in the card
+        // (the window's own title row still follows Text size).
+        NotaTextSize.SetFixed(page.Body, true);
         var tag = new Border
         {
-            Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Rule,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8),
             IsHitTestVisible = false, IsVisible = false,
@@ -320,7 +335,7 @@ internal sealed class DeviceWindow : NotaWindow
     private static TextBlock MonoText(double size, IBrush ink)
     {
         var tb = new TextBlock { FontSize = size, Foreground = ink, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return tb;
     }
 

@@ -37,8 +37,12 @@ public sealed class ProjectService
     /// chain children's sidechain keys / CC targets.
     /// v26 (specs/048) adds Preset on instruments, devices and MIDI effects.
     /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
+    /// v28 (specs/050) lets a sidechain key name one pad, chain or voice of its source.
     /// v29 (specs/067) adds Takes on audio tracks and TakeId on audio clips.
-    public const int CurrentFormatVersion = 29;
+    /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
+    /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
+    /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
+    public const int CurrentFormatVersion = 32;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -82,6 +86,7 @@ public sealed class ProjectService
             {
                 PanLaw = engine.PanLaw == PanLaw.Stereo ? "stereo" : "balance",
                 PanLawLegacy = transport.PanLawLegacy,
+                CueVolume = Math.Abs(engine.CueVolume - 1f) > 1e-6f ? engine.CueVolume : null,
             },
             // Always written ([] when none), so a load can tell "no sections" from "older file".
             Sections = engine.Sections.Select(s => new SectionDto { Start = s.StartBeat, Length = s.LengthBeats, Name = s.Name }).ToList(),
@@ -105,6 +110,7 @@ public sealed class ProjectService
                 Mute = ti.Muted != 0,
                 Solo = ti.Soloed != 0,
                 Armed = ti.Armed != 0,
+                Cue = engine.GetTrackCue(ti.Id) ? true : null,
                 ReturnIndex = engine.TrackReturnIndex(ti.Id),
                 GroupId = ti.GroupId >= 0 && idToIndex.TryGetValue(ti.GroupId, out var gix) ? gix : -1,   // parent → doc index
                 ColorIndex = engine.GetTrackColorIndex(ti.Id),
@@ -114,10 +120,19 @@ public sealed class ProjectService
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
                 Monitor = engine.GetTrackMonitor(ti.Id),
-                InputChannels = (int)engine.GetTrackInputChannels(ti.Id),
+                InputChannels = engine.GetTrackInput(ti.Id).AsChannels is { } oldPick ? (int)oldPick : null,
+                InputFirst = engine.GetTrackInput(ti.Id).First + 1,
+                InputWidth = engine.GetTrackInput(ti.Id).Width,
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
+                MidiOffsetMs = engine.GetTrackMidiOffsetMs(ti.Id) is var moff && moff != 0.0 ? moff : null,   // v30; 0 = omitted
+                ArticulationMap = ti.IsInstrument ? CaptureArticulationMap(engine, ti.Id, warnings) : null,   // v30
             };
+            if (ti.IsInstrument && engine.GetTrackMidiInput(ti.Id) is var midiIn)   // MIDI input (specs/086)
+            {
+                t.MidiInputUid = midiIn.Uid;
+                t.MidiInputChannel = midiIn.Channel > 0 ? midiIn.Channel : null;
+            }
             for (int b = 0; b < t.Sends.Length; b++) t.Sends[b] = engine.GetTrackSend(ti.Id, b);
 
             if (ti.IsInstrument)
@@ -152,7 +167,12 @@ public sealed class ProjectService
                         instDto.State = RegisterBlob(doc, engine.GetPluginState(ti.Id, -1));
                     }
                 }
-                else   // every other built-in instrument (Synth/Physical/Aurora/Volt/Instrument
+                else if (kind == 5)   // Nota Aurora: the blob without its tables, which go to samples/
+                {
+                    instDto.State = RegisterBlob(doc, engine.AuroraState(ti.Id, includeTables: false));
+                    instDto.Wavetables = CaptureWavetables(doc, engine, ti.Id);
+                }
+                else   // every other built-in instrument (Synth/Physical/Volt/Instrument
                 {      // Rack/Drum Rack/Flux) persists its state blob — the load path rebuilds from it.
                     instDto.State = RegisterBlob(doc, engine.GetPluginState(ti.Id, -1));
                 }
@@ -240,6 +260,7 @@ public sealed class ProjectService
                     if (rel == null) continue;
                     var dto = AudioClipState.Capture(engine, ti.Id, c, ac);
                     dto.Sample = rel;
+                    dto.Source = SourceOf(engine, ac.SampleId);
                     int take = engine.ClipTakeId(ti.Id, c);
                     if (take != 0) dto.TakeId = take;
                     int joined = engine.ClipJoinedEdges(ti.Id, c);
@@ -253,7 +274,7 @@ public sealed class ProjectService
                     if (rel == null) continue;
                     (t.Takes ??= new List<AudioTakeDto>()).Add(new AudioTakeDto
                     {
-                        Id = tk.Id, Number = tk.Number, Group = tk.Group, Sample = rel,
+                        Id = tk.Id, Number = tk.Number, Group = tk.Group, Sample = rel, Source = SourceOf(engine, tk.SampleId),
                         OriginBeat = tk.OriginBeat, SourceOffsetFrames = tk.SourceOffsetFrames, LengthFrames = tk.LengthFrames,
                     });
                 }
@@ -287,6 +308,7 @@ public sealed class ProjectService
                         ? AudioClipState.Capture(engine, ti.Id, SessionClip.Index(s), sac)
                         : new AudioClipDto { SourceOffsetFrames = sa.SourceOffsetFrames, LengthFrames = sa.LengthFrames, Gain = sa.Gain };
                     audio.Sample = rel;
+                    audio.Source = SourceOf(engine, sa.SampleId);
                     audio.Name = null;   // the slot carries its own name
                     t.SessionSlots.Add(WithClipProps(engine, ti.Id, new SessionSlotDto
                     {
@@ -578,6 +600,8 @@ public sealed class ProjectService
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
         engine.SetPanLaw(ParsePanLaw(doc.Mixer?.PanLaw, warnings), checkpoint: false);
+        // The Cue level (specs/089): a listening level, not part of the mix — no undo step.
+        engine.CueVolume = doc.Mixer?.CueVolume is float cv && float.IsFinite(cv) ? Math.Clamp(cv, 0f, 2f) : 1f;
 
         // Arrangement sections (specs/016), also a baseline. A file from before they moved into
         // the project keeps them in the bundle's sidecar.
@@ -694,6 +718,9 @@ public sealed class ProjectService
                         var blob = ReadBlob(bundleDir, synthState);
                         if (blob.Length > 0) engine.SetPluginState(id, -1, blob);
                     }
+                    // Nota Aurora: its imported tables, from samples/ (specs/053).
+                    if (id > 0 && t.Instrument is { Kind: 5, Wavetables: { } wts })
+                        RestoreWavetables(engine, id, bundleDir, wts, warnings, newTrackIds.Count + 1);
                     // Nota Rhythm Phase 2: reload each voice's one-shot from the bundle.
                     if (id > 0 && t.Instrument is { Kind: 12, VoiceSamples: { } vsl })
                         foreach (var vs in vsl)
@@ -742,6 +769,7 @@ public sealed class ProjectService
             engine.SetTrackPan(id, t.Pan);
             engine.SetTrackMute(id, t.Mute);
             engine.SetTrackSolo(id, t.Solo);
+            engine.SetTrackCue(id, t.Cue == true);
             engine.SetTrackArmed(id, t.Armed);
             if (t.Name is { Length: > 0 } trackName) engine.SetTrackName(id, trackName);
             if (t.ColorIndex >= 0) engine.SetTrackColorIndex(id, t.ColorIndex);
@@ -749,8 +777,12 @@ public sealed class ProjectService
             if (t.EditLink == true) engine.SetTrackEditLink(id, true);   // group Link (specs/076)
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
-            engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair
+            engine.SetTrackInput(id, TrackInputOf(t));
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
+            if (t.MidiInputUid is { Length: > 0 } || t.MidiInputChannel is > 0)    // MIDI input (specs/086)
+                engine.SetTrackMidiInput(id, t.MidiInputUid, t.MidiInputChannel ?? 0);
+            if (t.MidiOffsetMs is { } offMs && double.IsFinite(offMs)) engine.SetTrackMidiOffsetMs(id, offMs);   // v30; absent = 0, engine clamps
+            if (t.Type == 1 && t.ArticulationMap is { } artMap) ApplyArticulationMap(engine, id, artMap, warnings);   // v30
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
             var ccPaths = new List<(int mi, int chain, int slot)>();   // CC targets inside racks: after the devices
@@ -815,6 +847,7 @@ public sealed class ProjectService
                         if (engine.TryGetTakeInfo(id, k, out var lti) && lti.Id == nid)
                         {
                             BundleContent.SeedSample(engine, lti.SampleId, tk.Sample);
+                            if (tk.Source is { Length: > 0 } tsrc) engine.SetSampleSource(lti.SampleId, tsrc);
                             break;
                         }
                 }
@@ -827,7 +860,11 @@ public sealed class ProjectService
                 if (ac.TakeId is int oldTake && takeIds.TryGetValue(oldTake, out int newTake))
                     engine.SetClipTakeId(id, ci, newTake);
                 if (ac.JoinedEdges is int je && je != 0) joinedEdges.Add((ci, je));
-                if (engine.TryGetAudioClipInfo(id, ci, out var lci)) BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
+                if (engine.TryGetAudioClipInfo(id, ci, out var lci))
+                {
+                    BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
+                    if (ac.Source is { Length: > 0 } src) engine.SetSampleSource(lci.SampleId, src);
+                }
             }
             // After every clip is in: a join is kept only where both of its clips are there.
             if (joinedEdges.Count > 0)
@@ -856,7 +893,10 @@ public sealed class ProjectService
                     else
                     {
                         if (engine.TryGetSessionAudioSlot(id, sl.Scene, out var lsa))
+                        {
                             BundleContent.SeedSample(engine, lsa.SampleId, sa.Sample);
+                            if (sa.Source is { Length: > 0 } ssrc) engine.SetSampleSource(lsa.SampleId, ssrc);
+                        }
                         AudioClipState.ApplyShape(engine, id, SessionClip.Index(sl.Scene), sa);
                         engine.SetSessionSlotLength(id, sl.Scene, sl.LengthBeats);   // clip edits resync it; the saved loop wins
                     }
@@ -1060,6 +1100,17 @@ public sealed class ProjectService
                 WriteSampleWav(engine, kv.Value, ResolveInBundle(bundleDir, kv.Key));
         }
 
+        if (doc.TableRefs.Count > 0)
+        {
+            Directory.CreateDirectory(Path.Combine(bundleDir, BundleContent.SamplesDir));
+            foreach (var kv in doc.TableRefs)
+            {
+                string path = ResolveInBundle(bundleDir, kv.Key);
+                if (File.Exists(path) && new FileInfo(path).Length >= kv.Value.Length * sizeof(float)) continue;
+                BundleContent.WriteAtomic(path, tmp => AuroraTableWav.Write(tmp, kv.Value));
+            }
+        }
+
         if (doc.StateBlobs.Count > 0)
         {
             Directory.CreateDirectory(Path.Combine(bundleDir, BundleContent.StatesDir));
@@ -1144,6 +1195,10 @@ public sealed class ProjectService
     // Records `sampleId` under a bundle-relative path named by its content hash
     // (identical audio shares one file) and returns that path, or null if the sample
     // is missing from the live graph.
+    // The file a clip's audio came from (spec 092, #581), or null when unknown.
+    private static string? SourceOf(IAudioEngine engine, long sampleId)
+        => sampleId > 0 && engine.SampleSource(sampleId) is { Length: > 0 } p ? p : null;
+
     private static string? RegisterSample(ProjectDocument doc, IAudioEngine engine, long sampleId, List<string> warnings)
     {
         if (sampleId <= 0) return null;
@@ -1162,6 +1217,77 @@ public sealed class ProjectService
         }
         doc.SampleRefs.TryAdd(rel, sampleId);
         return rel;
+    }
+
+    // Nota Aurora's imported tables (specs/053): each one a content-named float32 WAV, so two
+    // Auroras with the same table share one file. A table a project could not restore stays
+    // listed as missing, so the next save keeps its name.
+    private static List<WavetableDto>? CaptureWavetables(ProjectDocument doc, IAudioEngine engine, int trackId)
+    {
+        List<WavetableDto>? list = null;
+        for (int o = 0; o < 2; o++)
+        {
+            if (!engine.TryGetAuroraTableInfo(trackId, o, out var info)) return null;
+            if (info.HasTable)
+            {
+                string rel;
+                if (doc.SessionNames) rel = $"{BundleContent.SamplesDir}/table-{trackId}-{o}-{info.Serial}.wav";
+                else
+                {
+                    var frames = engine.AuroraTableRead(trackId, o);
+                    if (frames.Length == 0) continue;
+                    var bytes = new byte[frames.Length * sizeof(float)];
+                    Buffer.BlockCopy(frames, 0, bytes, 0, bytes.Length);
+                    rel = BundleContent.SampleRel(BundleContent.BlobHash(bytes));
+                    doc.TableRefs.TryAdd(rel, frames);
+                }
+                (list ??= new()).Add(new WavetableDto
+                {
+                    Osc = o, Sample = rel, Name = info.Name, Origin = info.Origin, Frames = info.Frames,
+                    UseCustom = info.UseCustom,
+                });
+            }
+            else if (info.Missing)
+                (list ??= new()).Add(new WavetableDto { Osc = o, Name = info.Name, Missing = true, UseCustom = false });
+        }
+        return list;
+    }
+
+    // Puts each saved table back (no undo step: this is a load). A table that cannot be read
+    // leaves its oscillator on the built-in bank, marked missing under the name it had.
+    private static void RestoreWavetables(IAudioEngine engine, int id, string bundleDir, List<WavetableDto> tables,
+        List<string> warnings, int trackNo)
+    {
+        foreach (var w in tables)
+        {
+            if (w.Osc is < 0 or > 1) continue;
+            bool ok = false;
+            if (!w.Missing && w.Sample.Length > 0 && w.Frames is > 0 and <= 256)
+            {
+                string path = ResolveInBundle(bundleDir, w.Sample);
+                float[]? mono = File.Exists(path) ? NotaEngine.DecodeMono(path, 60.0, out _) : null;
+                if (mono is not null && mono.Length == w.Frames * 2048
+                    && engine.AuroraTableFromFrames(mono, w.Frames, w.Name, w.Origin, out var h) == AuroraTableResult.Ok)
+                {
+                    try { ok = engine.AuroraSetTable(id, w.Osc, h, undoable: false); }
+                    finally { engine.AuroraTableFree(h); }
+                    if (ok) engine.AuroraSetSource(id, w.Osc, w.UseCustom);
+                }
+            }
+            if (ok) continue;
+            warnings.Add($"Track {trackNo}: Aurora Osc {w.Osc + 1} table \"{w.Name}\" is missing — it plays its built-in table.");
+            engine.AuroraSetMissing(id, w.Osc, w.Name.Length > 0 ? w.Name : "table");
+            engine.AuroraSetSource(id, w.Osc, false);
+        }
+    }
+
+    // A saved track's hardware input (specs/086): the device channel + width, or — in files
+    // saved before 0.60 — the old three-value pick (absent before 0.58: the stereo pair).
+    internal static InputPick TrackInputOf(TrackDto t)
+    {
+        if (t.InputFirst is int first && t.InputWidth is int width && new InputPick(first - 1, width) is { IsValid: true } p)
+            return p;
+        return InputPick.From((InputChannels)(t.InputChannels ?? 0));
     }
 
     // Writes a sample unless its content-named file is already complete on disk.
@@ -1228,6 +1354,25 @@ public sealed class ProjectService
 
     // A note's recorded MPE goes inline with it (notes sharing one curve, like a duplicate,
     // each carry a copy).
+    // --- articulation maps (specs/085) ------------------------------------------------------
+
+    private static JsonObject? CaptureArticulationMap(IAudioEngine engine, int trackId, List<string> warnings)
+    {
+        if (engine.GetTrackArticulationMapJson(trackId) is not { Length: > 0 } json) return null;
+        try { return JsonNode.Parse(json) as JsonObject; }
+        catch (JsonException) { warnings.Add("A track's articulation map couldn't be saved (it isn't valid JSON)."); return null; }
+    }
+
+    // A map that can't be read, or that the engine refuses, is a warning: the project still opens.
+    private static void ApplyArticulationMap(IAudioEngine engine, int trackId, JsonObject node, List<string> warnings)
+    {
+        var read = Nota.Application.Articulations.ArticulationMapFile.Read(node.ToJsonString(), "");
+        foreach (var m in read.Warnings) warnings.Add(m.Text);
+        if (read.Map is not { } map) return;
+        if (!Nota.Application.Articulations.ArticulationMapAssignment.Assign(engine, trackId, map))
+            warnings.Add($"Couldn't restore the articulation map \"{map.Name}\".");
+    }
+
     private static NoteDto[] ToDtos(IAudioEngine engine, NotaNote[] notes)
     {
         var arr = new NoteDto[notes.Length];

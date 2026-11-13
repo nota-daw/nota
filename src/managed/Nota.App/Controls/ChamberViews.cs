@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Custom-drawn views for the Nota Chamber card: the two BLEND-column faders (the two-tone
-// convolution / algorithm split and the wet level), the IR waveform with draggable Start /
-// Decay trims (also a file drop target), the three-band decay graph, the tail-EQ response
-// with its two handles and the modulation LFO trace. Values are pushed in by the card's
-// refresh tick; the interactive views raise Changed / DragStarted / DragEnded so the card
-// writes the params and records automation gestures.
+// Custom-drawn views for the Nota Chamber card, one graph of one thing per tab (#531):
+//   · ChamberIrView — the room's recording (the impulse response) as a clip: Start / End
+//     brackets trim it, and the fade-in (Attack) and the fade-out the engine applies shape the
+//     waveform where they act. Also the drop target for a user IR.
+//   · ChamberDecayGraph — how long each frequency rings: one curve over Lows · Mids · Highs,
+//     a handle on each plateau (drag up / down) and the Damping boundary (drag sideways).
+//   · ChamberEqCurve — the tail EQ on the shared filter graph (FilterGraphBase): low cut +
+//     low shelf on one handle, high cut + high shelf on the other.
+//   · ChamberFlowView — the signal flow: the input through Convolution and Algorithm (side by
+//     side or one into the other), the EQ where it sits, the stereo stage, ducking, the dry
+//     path and the output. A click on an engine turns it on or off; a click on the EQ moves it.
+// Values are pushed in by the card's refresh tick; the interactive views raise events so the
+// card writes the params and records automation gestures.
 
 using System;
 using System.Collections.Generic;
@@ -21,17 +28,15 @@ namespace Nota.App;
 
 internal static class ChamberInk
 {
-    public static Color SlateColor => NotaPalette.InkColor("#6D8FB5");   // convolution
-    public static Color MauveColor => NotaPalette.InkColor("#B57286");   // shimmer / pitch, low band
-    public static IBrush Slate => NotaPalette.Ink("#6D8FB5");
-    public static IBrush Mauve => NotaPalette.Ink("#B57286");   // a live slot, not a snapshot of its colour
     public static readonly IBrush Veil = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xB8);
     public static readonly IBrush GridLine = NotaPalette.SurfaceCard;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
-    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);
+    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b, NotaTextSize.InCard);
+    public static IBrush Slate => NotaPalette.TextSecondary;   // convolution (was slate blue)
+    public static IBrush Mauve => NotaPalette.TextTertiary;    // shimmer / pitch (was mauve)
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
 
     // A time axis that stays put while the content moves inside it (so turning a knob visibly
@@ -45,85 +50,42 @@ internal static class ChamberInk
         foreach (double r in Ranges) if (r >= need) return r;
         return Ranges[^1];
     }
-    public static string AxisLabel(double s) => s >= 1 ? NotaNum.F($"{s:0.##}\u2009s") : NotaNum.F($"{s * 1000:0}\u2009ms");
+    public static string AxisLabel(double s) => s >= 1 ? NotaNum.F($"{s:0.##} s") : NotaNum.F($"{s * 1000:0} ms");
     // Normalised amplitude → 0..1 height on a −60 dB floor.
     public static double DbHeight(double v, double floorDb = 60) => Math.Clamp((20 * Math.Log10(Math.Max(v, 1e-9)) + floorDb) / floorDb, 0, 1);
-}
 
-// A vertical fader. Split = the BLEND C/A fader: slate (convolution) above the handle, neutral
-// ink (algorithm) below, value = the algorithm share. Otherwise a neutral fill from the bottom;
-// the handle turns accent while dragged.
-internal sealed class ChamberFader : Control
-{
-    private double _v;
-    private bool _drag;
-    public bool Split { get; init; }
-    public double Default { get; set; } = double.NaN;
-    public bool Dragging => _drag;
-    public event Action<double>? Changed;
-    public event Action? DragStarted;
-    public event Action? DragEnded;
+    public static string Sec(double s) => s >= 10 ? NotaNum.F($"{s:0.0} s") : s >= 1 ? NotaNum.F($"{s:0.00} s") : NotaNum.F($"{s * 1000:0} ms");
 
-    public ChamberFader() { Width = 16; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
-
-    public void Set(double v) { if (_drag) return; _v = Math.Clamp(v, 0, 1); InvalidateVisual(); }
-
-    private void Apply(PointerEventArgs e)
+    /// <summary>A graph handle: hollow in the accent, filled with a halo while hot, its label
+    /// beside it (flipped left at the right edge) above or below.</summary>
+    public static void Handle(DrawingContext ctx, Rect plot, Point at, bool hot, string? label, bool above = true)
     {
-        double h = Bounds.Height; if (h <= 2) return;
-        _v = Math.Clamp(1 - e.GetPosition(this).Y / h, 0, 1);
-        Changed?.Invoke(_v); InvalidateVisual();
-    }
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && !double.IsNaN(Default))
-        {
-            DragStarted?.Invoke(); _v = Default; Changed?.Invoke(_v); DragEnded?.Invoke(); InvalidateVisual(); e.Handled = true; return;
-        }
-        _drag = true; DragStarted?.Invoke(); e.Pointer.Capture(this); Apply(e); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(); } }
-
-    // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 2 || h < 4) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, r, r);
-        double y = (1 - _v) * h;
-        using (ctx.PushClip(new RoundedRect(rect, r)))
-        {
-            if (Split) ctx.FillRectangle(ChamberInk.Alpha(ChamberInk.SlateColor, 0x59), new Rect(0, 0, w, y));
-            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x30), new Rect(0, y, w, h - y));
-        }
-        ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
-        double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(_drag ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
+        if (hot) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, at, 8, 8);
+        ctx.DrawEllipse(hot ? NotaPalette.AccentBright : NotaGraph.Ground, new Pen(NotaPalette.AccentBright, 1.6), at, 3.8, 3.8);
+        if (label is null) return;
+        var ft = NotaGraph.AxisText(label, hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        double x = at.X + 7;
+        if (x + ft.Width > plot.Right) x = at.X - 7 - ft.Width;
+        double y = above ? at.Y - ft.Height - 2 : at.Y + 3;
+        y = Math.Clamp(y, plot.Y, plot.Bottom - ft.Height);
+        NotaGraph.PlateText(ctx, ft, new Point(Math.Max(plot.X, x), y));
     }
 }
 
-// The IR: a peak envelope of the source (left / LL above the centre line in neutral ink, right / RR
-// below in teal), veiled outside the Start … Decay window. Drag a trim line to move it,
-// double-click to reset both. Drop an audio file (Finder or the browser) to load it.
+// THE IMPULSE RESPONSE as a clip: the room's recording (both channels' peak, mirrored about the
+// centre line) on its own time axis. Start / End brackets keep a stretch of it — the rest is
+// veiled — and inside it the waveform is drawn as the engine shapes it: the fade-in (Attack,
+// squared), the fade-out that ends a trimmed IR, and reversed when Reverse IR is on. A faint
+// copy behind shows what the fades take away. Drag a bracket (a press takes the nearer one),
+// double-click resets both. Drop an audio file (Finder or the browser) to load it.
 internal sealed class ChamberIrView : Control, IValueHandles
 {
+    private const double Pad = 8, AxisRow = 13;
     private float[] _l = Array.Empty<float>(), _r = Array.Empty<float>();
-    private double _sec, _start, _end = 1, _attackSec;
+    private double _sec, _start, _end = 1, _attackSec, _size = 1;
     private bool _reverse, _building, _hover;
     private string? _empty;
-    private int _drag;   // 0 none, 1 start, 2 end
-    private float[] _res = Array.Empty<float>();
-    private double _resSec, _preSec, _axis;
-    private const double SourceShare = 0.56;   // top lane = the source + trims, bottom = the result
+    private int _drag, _hot;   // 0 none, 1 start, 2 end
 
     public event Action<double, double>? TrimChanged;    // (start, end) fractions
     public event Action<int>? DragStarted;               // 1 start / 2 end
@@ -135,6 +97,7 @@ internal sealed class ChamberIrView : Control, IValueHandles
     public ChamberIrView()
     {
         ClipToBounds = true;
+        MinHeight = 60;
         Cursor = new Cursor(StandardCursorType.SizeWestEast);
         DragDrop.SetAllowDrop(this, true);
         DragDrop.AddDragOverHandler(this, (_, e) => { if (BrowserView.IsAcceptableDrag(e)) { e.DragEffects = DragDropEffects.Copy; _hover = true; DropHover?.Invoke(); InvalidateVisual(); e.Handled = true; } });
@@ -149,39 +112,35 @@ internal sealed class ChamberIrView : Control, IValueHandles
     }
 
     public void SetWave(float[] l, float[] r) { _l = l; _r = r; InvalidateVisual(); }
-    // The processed IR as convolved (normalised envelope over `seconds`), after `preSec`.
-    public void SetResult(float[] env, double seconds, double preSec)
+    /// <summary>The IR's length (s), the trims (0..1), the fade-in (s, as heard), the Size stretch,
+    /// reverse, a rebuild in progress, and the text for an empty user slot (null when loaded).</summary>
+    public void Set(double seconds, double start, double end, double attackSec, double size, bool reverse, bool building, string? emptyText)
     {
-        _res = env; _resSec = seconds; _preSec = preSec;
-        _axis = ChamberInk.Axis(_axis, preSec + seconds);
-        InvalidateVisual();
-    }
-    public void Set(double seconds, double start, double end, double attackSec, bool reverse, bool building, string? emptyText)
-    {
-        _sec = seconds; _attackSec = attackSec; _reverse = reverse; _building = building; _empty = emptyText;
+        _sec = seconds; _attackSec = attackSec; _size = Math.Max(0.25, size); _reverse = reverse; _building = building; _empty = emptyText;
         if (_drag == 0) { _start = start; _end = end; }
         InvalidateVisual();
     }
 
-    private double X(double f) => f * Bounds.Width;
+    private Rect Plot => new(Pad, NotaGraph.PlotTop, Math.Max(1, Bounds.Width - 2 * Pad), Math.Max(1, Bounds.Height - NotaGraph.PlotTop - AxisRow - 2));
+    private double X(double f) { var r = Plot; return r.X + Math.Clamp(f, 0, 1) * r.Width; }
+    private int Nearest(double x) => Math.Abs(x - X(_start)) <= Math.Abs(x - X(_end)) ? 1 : 2;
+
     private void Apply(PointerEventArgs e)
     {
-        double w = Bounds.Width; if (w <= 2) return;
-        double f = Math.Clamp(e.GetPosition(this).X / w, 0, 1);
+        var r = Plot;
+        double f = Math.Clamp((e.GetPosition(this).X - r.X) / r.Width, 0, 1);
         if (_drag == 1) _start = Math.Min(f, Math.Min(0.9, _end - 0.02));
         else _end = Math.Max(f, Math.Max(0.05, _start + 0.02));
         TrimChanged?.Invoke(_start, _end); InvalidateVisual();
     }
-    // Typed entry (specs/035): handle 0 = the start trim, 1 = the decay trim (source lane only).
-    public int HandleAt(Point p)
-        => _empty != null || p.Y > Bounds.Height * SourceShare ? -1 : Math.Abs(p.X - X(_start)) <= Math.Abs(p.X - X(_end)) ? 0 : 1;
-    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(handle == 0 ? _start : _end), 0), Bounds.Size);
+    // Typed entry (specs/035): handle 0 = the start bracket, 1 = the end bracket.
+    public int HandleAt(Point p) => _empty != null ? -1 : Nearest(p.X) - 1;
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(handle == 0 ? _start : _end), Plot.Y), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _empty != null) return;
-        if (e.GetPosition(this).Y > Bounds.Height * SourceShare) return;   // the RESULT lane is read-only
         if (e.ClickCount == 2)
         {
             DragStarted?.Invoke(1); DragStarted?.Invoke(2);
@@ -189,352 +148,452 @@ internal sealed class ChamberIrView : Control, IValueHandles
             DragEnded?.Invoke(1); DragEnded?.Invoke(2);
             InvalidateVisual(); e.Handled = true; return;
         }
-        double x = e.GetPosition(this).X;
-        _drag = Math.Abs(x - X(_start)) <= Math.Abs(x - X(_end)) ? 1 : 2;
+        _drag = Nearest(e.GetPosition(this).X);
         DragStarted?.Invoke(_drag); e.Pointer.Capture(this); Apply(e); e.Handled = true;
     }
-    protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag != 0) Apply(e); }
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_drag != 0) { Apply(e); return; }
+        int h = _empty != null ? 0 : Nearest(e.GetPosition(this).X);
+        if (h != _hot) { _hot = h; InvalidateVisual(); }
+    }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hot != 0) { _hot = 0; InvalidateVisual(); } }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag != 0) { int d = _drag; _drag = 0; e.Pointer.Capture(null); DragEnded?.Invoke(d); } }
-
+    { base.OnPointerReleased(e); if (_drag != 0) { int d = _drag; _drag = 0; e.Pointer.Capture(null); InvalidateVisual(); DragEnded?.Invoke(d); } }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     { if (_drag != 0) { int d = _drag; _drag = 0; InvalidateVisual(); DragEnded?.Invoke(d); } base.OnPointerCaptureLost(e); }
 
-    private static string Sec(double s) => s >= 1 ? NotaNum.F($"{s:0.00}\u2009s") : NotaNum.F($"{s * 1000:0}\u2009ms");
+    // The peak of both channels at a source position (0..1).
+    private double PeakAt(double f)
+    {
+        int n = Math.Max(_l.Length, _r.Length);
+        if (n < 2) return 0;
+        int i = Math.Clamp((int)Math.Round(f * (n - 1)), 0, n - 1);
+        float a = i < _l.Length ? _l[i] : 0, b = i < _r.Length ? _r[i] : a;
+        return Math.Sqrt(Math.Clamp(Math.Max(a, b), 0f, 1f));   // √ lifts the tail into view
+    }
+
+    // The engine's gain at a point u (0..1) of the kept stretch, in the order it is heard
+    // (ChamberIrSynth::shapeIr): a raised-cosine fade-out on the forward window's end (it moves
+    // to the head when reversed), then a squared fade-in on what is heard first.
+    private double GainAt(double u, double keptSec)
+    {
+        if (keptSec <= 0) return 1;
+        double heardSec = keptSec / _size;
+        double fo = _end < 0.999 ? Math.Min(0.3 * heardSec, 0.35) : Math.Min(heardSec / 4, 0.01);
+        double fi = Math.Max(_attackSec, _start > 0.0005 || _reverse ? 0.002 : 0);
+        double t = u * heardSec;                          // heard time into the kept stretch
+        double tf = _reverse ? t : heardSec - t;          // time from the forward window's end
+        double g = tf < fo ? 0.5 - 0.5 * Math.Cos(Math.PI * tf / fo) : 1;
+        if (t < fi) { double k = t / fi; g *= k * k; }
+        return g;
+    }
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w < 4 || h < 8) return;
-        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
+        if (w < 40 || h < 40) return;
+        var rect = new Rect(0, 0, w, h);
+        NotaGraph.Window(ctx, rect);
         if (_empty != null)
         {
-            var t = ChamberInk.Text(_empty, 8, NotaPalette.TextTertiary);
+            var t = NotaGraph.AxisText(_empty, NotaPalette.TextTertiary);
             ctx.DrawText(t, new Point((w - t.Width) / 2, (h - t.Height) / 2));
-            if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new Rect(1, 1, w - 2, h - 2), 3, 3);
+            if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new RoundedRect(rect.Deflate(1), NotaGraph.Radius));
             return;
         }
-        double full = h;
-        h = Math.Floor(full * SourceShare);                 // ---- SOURCE lane (top) ----
-        double mid = h / 2, amp = mid - 3;
-        ctx.DrawLine(new Pen(ChamberInk.GridLine, 1), new Point(0, mid), new Point(w, mid));
-        var clip = ctx.PushClip(new Rect(0, 0, w, h));
-        void Env(float[] a, bool up, Color c, double alphaLine)
-        {
-            int n = a.Length; if (n < 2) return;
-            var line = new StreamGeometry();
-            using (var l = line.Open())
-            {
-                for (int i = 0; i < n; i++)
-                {
-                    double x = i * w / (n - 1), v = Math.Sqrt(Math.Clamp(a[i], 0f, 1f));   // √ lifts the tail into view
-                    var p = new Point(x, up ? mid - v * amp : mid + v * amp);
-                    if (i == 0) l.BeginFigure(p, false); else l.LineTo(p);
-                }
-            }
-            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(c, (byte)(255 * alphaLine)), 1.1), line);
-        }
-        Env(_l, true, NotaPalette.VizInk.Color, 1.0);
-        // Left and right in the first two chromas; the second at 70% (almanac § oscillogram).
-        Env(_r.Length > 0 ? _r : _l, false, NotaPalette.TealColor, 0.7);
+        var r = Plot;
+        double mid = r.Y + r.Height / 2, amp = r.Height / 2 - 2;
+        ctx.DrawLine(NotaGraph.GridPen, new Point(r.X, mid), new Point(r.Right, mid));
 
-        double xs = X(_start), xe = X(_end);
-        // Attack: the fade-in shape across the head of the kept window.
-        if (_attackSec > 0.0005 && _sec > 0)
+        // The time grid and its labels (the source's own time).
+        if (_sec > 0)
         {
-            double xa = xs + (_attackSec / _sec) * w;
+            double step = _sec <= 0.6 ? 0.1 : _sec <= 1.5 ? 0.25 : _sec <= 3 ? 0.5 : _sec <= 8 ? 1 : 2;
+            for (double s = step; s < _sec - step * 0.3; s += step)
+            {
+                double x = X(s / _sec);
+                ctx.DrawLine(NotaGraph.GridPen, new Point(x, r.Y), new Point(x, r.Bottom));
+                var ft = NotaGraph.AxisText(ChamberInk.AxisLabel(s));
+                ctx.DrawText(ft, new Point(x - ft.Width / 2, r.Bottom + 2));
+            }
+            ctx.DrawText(NotaGraph.AxisText("0"), new Point(r.X - 2, r.Bottom + 2));
+        }
+
+        // The whole recording, faint: what the brackets leave out and the fades take away.
+        int cols = (int)Math.Clamp(r.Width / 1.5, 40, 480);
+        Geometry Wave(Func<double, double> heightAt)
+        {
             var g = new StreamGeometry();
             using (var c = g.Open())
             {
-                c.BeginFigure(new Point(xs, h - 2), false);
-                for (int i = 1; i <= 16; i++) { double t = i / 16.0; c.LineTo(new Point(xs + (xa - xs) * t, h - 2 - (h - 4) * t * t)); }
+                c.BeginFigure(new Point(r.X, mid), true);
+                for (int i = 0; i <= cols; i++) { double f = (double)i / cols; c.LineTo(new Point(X(f), mid - heightAt(f) * amp)); }
+                for (int i = cols; i >= 0; i--) { double f = (double)i / cols; c.LineTo(new Point(X(f), mid + heightAt(f) * amp)); }
+                c.EndFigure(true);
             }
-            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(NotaPalette.VizInk.Color, 0x90), 1, new DashStyle(new double[] { 2, 2 }, 0)), g);
+            return g;
         }
-        ctx.FillRectangle(ChamberInk.Veil, new Rect(0, 0, xs, h));
-        ctx.FillRectangle(ChamberInk.Veil, new Rect(xe, 0, w - xe, h));
-        // Trims rest in neutral ink; the one being dragged turns accent.
-        var trim = new Pen(NotaPalette.VizInk, 1);
-        ctx.DrawLine(_drag == 1 ? new Pen(NotaPalette.Accent, 1) : trim, new Point(xs + 0.5, 0), new Point(xs + 0.5, h));
-        ctx.DrawLine(_drag == 2 ? new Pen(NotaPalette.Accent, 1) : trim, new Point(xe - 0.5, 0), new Point(xe - 0.5, h));
-        ctx.DrawRectangle(_drag == 1 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xs - 1.5, mid - 7, 3, 14), 1.5, 1.5);
-        ctx.DrawRectangle(_drag == 2 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xe - 1.5, mid - 7, 3, 14), 1.5, 1.5);
+        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x22), null, Wave(PeakAt));
 
-        var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), 7, _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
-        var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), 7, _drag == 2 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(en, new Point(Math.Max(2, xe - en.Width - 4), h - en.Height - 2));
-        if (_reverse)
+        // The kept stretch as heard: reversed inside the brackets when Reverse IR is on, faded.
+        double s0 = _start, s1 = _end, keptSec = (s1 - s0) * _sec;
+        double Heard(double f)
         {
-            var rv = ChamberInk.Text("Reversed", 7, ChamberInk.Mauve);
-            double rx = (xs + xe - rv.Width - 9) / 2;
-            Glyph.Draw(ctx, GlyphKind.StepLeft, new Rect(rx, 2 + (rv.Height - 6) / 2, 6, 6), ChamberInk.Mauve);
-            ctx.DrawText(rv, new Point(rx + 9, 2));
+            if (f < s0 || f > s1 || s1 <= s0) return 0;
+            double u = (f - s0) / (s1 - s0);
+            return PeakAt(_reverse ? s1 - u * (s1 - s0) : f) * GainAt(u, keptSec);
         }
-        clip.Dispose();
-        RenderResult(ctx, w, h, full);
-        if (_building)
+        using (ctx.PushClip(new Rect(X(s0), r.Y, Math.Max(0, X(s1) - X(s0)), r.Height)))
         {
-            var b = ChamberInk.Text(Loc.T("device.chamber.building"), 7, NotaPalette.TextTertiary);
-            ctx.DrawText(b, new Point(w - b.Width - 4, h + 2));
+            var heard = Wave(Heard);
+            ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x26), new Pen(NotaPalette.VizInk, 1), heard);
         }
-        if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new Rect(1, 1, w - 2, full - 2), 3, 3);
-    }
 
-    // ---- RESULT lane (bottom): the IR as it is convolved — pre-delay gap, stretched by Size,
-    // faded by Attack / Decay, reversed — on a steady time axis, in dB (−60 dB floor).
-    private void RenderResult(DrawingContext ctx, double w, double top, double full)
-    {
-        double lh = full - top;
-        if (lh < 10) return;
-        ctx.FillRectangle(ChamberInk.Alpha(NotaPalette.SurfaceAbyss.Color, 0xFF), new Rect(0, top, w, lh));
-        ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, top + 0.5), new Point(w, top + 0.5));
-        double axis = _axis > 0 ? _axis : 1, bot = full - 2, peakY = top + 9;
-        double X(double t) => Math.Clamp(t / axis, 0, 1) * w;
-        var gp = new Pen(ChamberInk.GridLine, 1);
-        for (int i = 1; i < 4; i++) ctx.DrawLine(gp, new Point(w * i / 4, top + 1), new Point(w * i / 4, full));
-        int n = _res.Length;
-        if (n >= 2 && _resSec > 0)
+        // The gain line over the kept stretch: where the fades act.
+        var gl = new StreamGeometry();
+        using (var c = gl.Open())
         {
-            var fill = new StreamGeometry(); var line = new StreamGeometry();
-            double x0 = X(_preSec);
-            using (var f = fill.Open())
-            using (var l = line.Open())
+            for (int i = 0; i <= 120; i++)
             {
-                f.BeginFigure(new Point(x0, bot), true);
-                for (int i = 0; i < n; i++)
-                {
-                    double x = X(_preSec + (i + 0.5) / n * _resSec);
-                    var p = new Point(x, bot - (bot - peakY) * ChamberInk.DbHeight(_res[i]));
-                    f.LineTo(p);
-                    if (i == 0) l.BeginFigure(p, false); else l.LineTo(p);
-                    if (x >= w) break;
-                }
-                f.LineTo(new Point(Math.Min(w, X(_preSec + _resSec)), bot));
-            }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, 1), line);
-            if (_preSec > 0.0005)
-            {
-                ctx.DrawLine(new Pen(NotaPalette.Teal, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(x0, top + 2), new Point(x0, full));
-                var pt = ChamberInk.Text(NotaNum.F($"pre {_preSec * 1000:0}\u2009ms"), 7, NotaPalette.Teal);
-                ctx.DrawText(pt, new Point(Math.Min(x0 + 3, w - pt.Width - 2), bot - pt.Height));
-            }
-            if (_preSec + _resSec > axis * 1.001)
-            {
-                Glyph.Draw(ctx, GlyphKind.ChevronRight, new Rect(w - 9, peakY - 1, 7, 7), NotaPalette.TextSecondary);
+                double u = i / 120.0;
+                var p = new Point(X(s0 + u * (s1 - s0)), r.Y + 1 + (1 - GainAt(u, keptSec)) * (mid - r.Y - 1));
+                if (i == 0) c.BeginFigure(p, false); else c.LineTo(p);
             }
         }
-        var len = ChamberInk.Text(NotaNum.F($"as heard · {_resSec:0.00}\u2009s · axis {ChamberInk.AxisLabel(axis)}"), 7, NotaPalette.TextDisabled);
-        ctx.DrawText(len, new Point(w - len.Width - 4, top + 2));
+        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xA0), 1) { DashStyle = new DashStyle(new double[] { 3, 2 }, 0) }, gl);
+
+        // Veil outside the brackets, then the brackets: a line with a grab tab at the top.
+        double xs = X(s0), xe = X(s1);
+        ctx.FillRectangle(ChamberInk.Veil, new Rect(r.X, r.Y, xs - r.X, r.Height));
+        ctx.FillRectangle(ChamberInk.Veil, new Rect(xe, r.Y, r.Right - xe, r.Height));
+        void Bracket(double x, int id, bool left, string label)
+        {
+            bool hot = _drag == id || (_drag == 0 && _hot == id);
+            var ink = hot ? NotaPalette.AccentBright : NotaPalette.VizInk;
+            ctx.DrawLine(new Pen(ink, hot ? 1.6 : 1.2), new Point(x, r.Y), new Point(x, r.Bottom));
+            var tab = left ? new Rect(x, r.Y, 5, 12) : new Rect(x - 5, r.Y, 5, 12);
+            ctx.DrawRectangle(ink, null, tab, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
+            ctx.DrawLine(new Pen(ink, 2), new Point(left ? x : x - 5, r.Bottom - 0.5), new Point(left ? x + 5 : x, r.Bottom - 0.5));
+            var ft = NotaGraph.AxisText(label, hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            double tx = left ? x + 8 : x - 8 - ft.Width;
+            if (left && tx + ft.Width > xe - 10) tx = Math.Max(r.X, x - 8 - ft.Width);
+            NotaGraph.PlateText(ctx, ft, new Point(Math.Clamp(tx, r.X, r.Right - ft.Width), r.Y + 1));
+        }
+        Bracket(xs, 1, true, "Start " + ChamberInk.Sec(s0 * _sec));
+        Bracket(xe, 2, false, "End " + ChamberInk.Sec(s1 * _sec));
+
+        // Title, and the state on the right: reversed, rebuilding.
+        NotaGraph.Title(ctx, rect, Loc.T("device.chamber.impulse_response"));
+        var tags = new List<string>();
+        if (_reverse) tags.Add(Loc.T("device.chamber.reversed"));
+        if (_building) tags.Add(Loc.T("device.chamber.building"));
+        if (tags.Count > 0)
+        {
+            var ft = NotaGraph.AxisText(string.Join(" · ", tags), NotaPalette.TextSecondary);
+            ctx.DrawText(ft, new Point(w - 8 - ft.Width, 5));
+        }
+        if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new RoundedRect(rect.Deflate(1), NotaGraph.Radius));
     }
 }
 
-// DECAY PER BAND: the energy decay (dB, straight lines) of the low / mid / high bands after the
-// pre-delay, each ending at its RT60 on the time axis. Drag a band's end marker to set its RT60
-// (mid = Decay; low / high are stored relative to it).
+// DECAY TIME BY FREQUENCY: how long each part of the spectrum rings. The algorithm splits its
+// tail in three bands (Chamber::Algo — below 250 Hz, up to the Damping frequency, above it), so
+// the curve is three plateaus (named along the floor) with soft steps between them. A handle on each plateau sets that
+// band's decay (drag up / down: the mids are Decay, lows and highs are stored relative to it, so
+// they ride along); the Damping boundary is a dashed line with its own handle (drag sideways).
+// Double-click a handle to reset it. Frozen, the curve is a held line under an accent frame.
 internal sealed class ChamberDecayGraph : Control, IValueHandles
 {
-    private double _pre, _tmax = 4;
-    private readonly double[] _rt = { 3, 3, 1.5 };
+    private const double Left = 34, AxisRow = 13, FLo = 20, FHi = 20000, LowEdge = 250;
+    private double _rtL = 3, _rtM = 3, _rtH = 1.5, _damp = 4500, _ymax = 4;
     private bool _freeze;
-    private int _drag = -1;
-    private float[] _echo = Array.Empty<float>();
-    private double _echoSec;
-    private string _info = "";
-    private static readonly IBrush[] Ink = { ChamberInk.Mauve, NotaPalette.VizInk, NotaPalette.Teal };
-    private static readonly string[] Names = { "low", "mid", "high" };
+    private int _drag = -1, _hot = -1;   // 0 low · 1 mid · 2 high · 3 damping
 
-    public event Action<int, double>? Changed;   // band, RT60 seconds
-    public event Action<int>? DragStarted;
+    public event Action<int, double>? Changed;    // band (0 low / 1 mid / 2 high), RT60 seconds
+    public event Action<double>? DampChanged;     // Damping, normalised
+    public event Action<int>? DragStarted;        // handle 0..3
     public event Action<int>? DragEnded;
-    public int DraggingBand => _drag;
+    public event Action<int>? Reset;
+    public bool Dragging => _drag >= 0;
 
-    public ChamberDecayGraph() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.SizeWestEast); }
+    public ChamberDecayGraph() { ClipToBounds = true; MinHeight = 60; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
 
-    public void Set(double preSec, double rtLow, double rtMid, double rtHigh, bool freeze, string info)
+    public void Set(double rtLow, double rtMid, double rtHigh, double dampHz, bool freeze)
     {
-        _pre = preSec; _freeze = freeze; _info = info;
+        _freeze = freeze;
         if (_drag < 0)
         {
-            _rt[0] = rtLow; _rt[1] = rtMid; _rt[2] = rtHigh;
-            double content = _freeze ? Math.Max(_pre + 2, _tmax / 1.08) : _pre + Math.Max(_rt[0], Math.Max(_rt[1], _rt[2]));
-            _tmax = ChamberInk.Axis(_tmax, content);   // steady axis: the curves move, not the scale
+            _rtL = rtLow; _rtM = rtMid; _rtH = rtHigh; _damp = dampHz;
+            _ymax = ChamberInk.Axis(_ymax, Math.Max(_rtL, Math.Max(_rtM, _rtH)));   // steady axis
         }
         InvalidateVisual();
     }
-    // The algorithm's rendered impulse response (normalised envelope over `seconds`).
-    public void SetEchogram(float[] env, double seconds) { _echo = env; _echoSec = seconds; InvalidateVisual(); }
 
-    private const double Pad = 6, Top = 16;
-    private double X(double t) => Pad + t / _tmax * (Bounds.Width - 2 * Pad);
-    private double T(double x) => (x - Pad) / Math.Max(1, Bounds.Width - 2 * Pad) * _tmax;
+    // ---- geometry ------------------------------------------------------------------
+    private Rect Plot => new(Left, NotaGraph.PlotTop, Math.Max(1, Bounds.Width - Left - 8), Math.Max(1, Bounds.Height - NotaGraph.PlotTop - AxisRow - 2));
+    private double XOf(double hz) { var r = Plot; return r.X + Math.Log(Math.Clamp(hz, FLo, FHi) / FLo) / Math.Log(FHi / FLo) * r.Width; }
+    private double HzAt(double x) { var r = Plot; return FLo * Math.Pow(FHi / FLo, Math.Clamp((x - r.X) / r.Width, 0, 1)); }
+    private double YOf(double s) { var r = Plot; return r.Bottom - Math.Clamp(s / _ymax, 0, 1) * (r.Height - 4); }
+    private double SecAt(double y) { var r = Plot; return Math.Max(0, (r.Bottom - y) / (r.Height - 4) * _ymax); }
 
-    // Typed entry (specs/035): handle b = band b's marker (low · mid · high), the nearest one.
-    public int HandleAt(Point p)
+    // The decay at a frequency: the three bands crossed over smoothly (one-pole-like splits).
+    private double RtAt(double f)
     {
-        if (_freeze) return -1;
-        int hb = -1; double best = double.MaxValue;
-        for (int b = 0; b < 3; b++) { double d = Math.Abs(p.X - X(_pre + _rt[b])); if (d < best) { best = d; hb = b; } }
-        return hb;
+        double wl = 1 / (1 + Math.Pow(f / LowEdge, 4)), rh = Math.Pow(f / _damp, 4), wh = rh / (1 + rh);
+        double wm = Math.Max(0, 1 - wl - wh);
+        double sum = wl + wm + wh;
+        return Math.Exp((wl * Math.Log(_rtL) + wm * Math.Log(_rtM) + wh * Math.Log(_rtH)) / sum);
     }
-    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(_pre + _rt[handle]), Top), Bounds.Size);
+    private double BandHz(int b) => b switch { 0 => 70, 1 => Math.Sqrt(LowEdge * _damp), _ => Math.Min(14000, Math.Sqrt(_damp * FHi) * 1.2) };
+    private double BandRt(int b) => b switch { 0 => _rtL, 1 => _rtM, _ => _rtH };
+    private Point HandlePt(int h) => h == 3 ? new Point(XOf(_damp), Plot.Bottom - 6) : new Point(XOf(BandHz(h)), YOf(BandRt(h)));
+
+    private int Nearest(Point p)
+    {
+        int best = 0; double bd = double.MaxValue;
+        for (int h = 0; h < 4; h++)
+        {
+            var q = HandlePt(h);
+            double d = h == 3 ? Math.Abs(p.X - q.X) * 1.6 + 6 : Math.Abs(p.X - q.X) + Math.Abs(p.Y - q.Y) * 0.6;
+            if (d < bd) { bd = d; best = h; }
+        }
+        return best;
+    }
+
+    // Typed entry (specs/035): handles 0 low · 1 mid (Decay) · 2 high · 3 Damping.
+    public int HandleAt(Point p) => _freeze ? -1 : Nearest(p);
+    public Rect HandleRect(int handle) => ValueEntry.Near(HandlePt(handle), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _freeze) return;
-        double x = e.GetPosition(this).X, best = double.MaxValue;
-        for (int b = 0; b < 3; b++) { double d = Math.Abs(x - X(_pre + _rt[b])); if (d < best) { best = d; _drag = b; } }
-        DragStarted?.Invoke(_drag); e.Pointer.Capture(this); OnPointerMoved(e); e.Handled = true;
+        var p = e.GetPosition(this);
+        int h = Nearest(p);
+        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(h); e.Handled = true; return; }
+        _drag = h; DragStarted?.Invoke(h); e.Pointer.Capture(this); Apply(p); e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (_drag < 0) return;
-        _rt[_drag] = Math.Clamp(T(e.GetPosition(this).X) - _pre, 0.05, 70);
-        Changed?.Invoke(_drag, _rt[_drag]); InvalidateVisual();
+        var p = e.GetPosition(this);
+        if (_drag >= 0) { Apply(p); return; }
+        int h = _freeze ? -1 : Nearest(p);
+        if (h != _hot)
+        {
+            _hot = h;
+            Cursor = new Cursor(h == 3 ? StandardCursorType.SizeWestEast : StandardCursorType.SizeNorthSouth);
+            InvalidateVisual();
+        }
     }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hot >= 0) { _hot = -1; InvalidateVisual(); } }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag >= 0) { int b = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(b); } }
-
+    { base.OnPointerReleased(e); if (_drag >= 0) { int b = _drag; _drag = -1; e.Pointer.Capture(null); InvalidateVisual(); DragEnded?.Invoke(b); } }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     { if (_drag >= 0) { int b = _drag; _drag = -1; InvalidateVisual(); DragEnded?.Invoke(b); } base.OnPointerCaptureLost(e); }
 
-    private static string S(double s) => s >= 10 ? NotaNum.F($"{s:0}\u2009s") : NotaNum.F($"{s:0.0}\u2009s");
+    private void Apply(Point p)
+    {
+        if (_drag == 3)
+        {
+            _damp = Math.Clamp(HzAt(p.X), 500, 18000);
+            DampChanged?.Invoke(Math.Log(_damp / 500) / Math.Log(18000.0 / 500));
+        }
+        else
+        {
+            double rt = Math.Max(0.05, SecAt(p.Y));
+            if (_drag == 1)
+            {
+                // Lows and highs are ratios of the mids: they ride along.
+                double k = Math.Clamp(rt, 0.2, 20) / _rtM;
+                _rtM *= k; _rtL *= k; _rtH *= k;
+                Changed?.Invoke(1, _rtM);
+            }
+            else
+            {
+                rt = Math.Clamp(rt, _rtM * 0.25, _rtM * 4);
+                if (_drag == 0) _rtL = rt; else _rtH = rt;
+                Changed?.Invoke(_drag, rt);
+            }
+        }
+        InvalidateVisual();
+    }
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w < 20 || h < 24) return;
-        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var gp = new Pen(ChamberInk.GridLine, 1);
-        double bot = h - 4;
-        ctx.DrawLine(gp, new Point(0, (Top + bot) / 2), new Point(w, (Top + bot) / 2));
-        ctx.DrawLine(gp, new Point(w / 3, Top - 4), new Point(w / 3, h));
-        ctx.DrawLine(gp, new Point(2 * w / 3, Top - 4), new Point(2 * w / 3, h));
-        var cap = ChamberInk.Caps("DECAY PER BAND", 7, NotaPalette.TextTertiary);
-        ctx.DrawText(cap, new Point(5, 3));
-        if (_info.Length > 0) ctx.DrawText(ChamberInk.Text(_info, 7, NotaPalette.TextDisabled), new Point(5 + cap.Width + 6, 3));
-
-        // The real echogram (dB, −60 dB floor) behind the RT60 lines — Size, Diffusion, the
-        // mode, modulation and Freeze all show up here.
-        int en = _echo.Length;
-        if (en >= 2 && _echoSec > 0)
+        if (w < 60 || h < 50) return;
+        var rect = new Rect(0, 0, w, h);
+        NotaGraph.Window(ctx, rect);
+        if (_freeze)
         {
-            var fill = new StreamGeometry(); var line = new StreamGeometry();
-            using (var f = fill.Open())
-            using (var l = line.Open())
+            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Accent, 0x0D), rect);
+            ctx.DrawRectangle(null, new Pen(NotaPalette.BorderBrass, 1), new RoundedRect(rect.Deflate(0.5), NotaGraph.Radius));
+        }
+        var r = Plot;
+
+        // Seconds up the left, the decades along the bottom.
+        double step = _ymax <= 1 ? 0.25 : _ymax <= 3 ? 0.5 : _ymax <= 6 ? 1 : _ymax <= 12 ? 2 : 5;
+        for (double s = step; s <= _ymax + 1e-6; s += step)
+        {
+            double y = YOf(s);
+            ctx.DrawLine(NotaGraph.GridPen, new Point(r.X, y), new Point(r.Right, y));
+            var ft = NotaGraph.AxisText(ChamberInk.AxisLabel(s));
+            if (y - ft.Height / 2 > r.Y - 2) ctx.DrawText(ft, new Point(Left - 4 - ft.Width, y - ft.Height / 2));
+        }
+        foreach (var f in new[] { 100.0, 1000, 10000 })
+        {
+            double x = XOf(f);
+            ctx.DrawLine(NotaGraph.GridPen, new Point(x, r.Y), new Point(x, r.Bottom));
+        }
+        foreach (var f in new[] { 50.0, 100, 200, 500, 1000, 2000, 5000, 10000 })
+        {
+            var ft = NotaGraph.AxisText(NotaNum.Hz(f));
+            ctx.DrawText(ft, new Point(XOf(f) - ft.Width / 2, r.Bottom + 2));
+        }
+
+        // The three bands, named along the floor.
+        double xl = XOf(LowEdge), xd = XOf(_damp);
+        ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x80), 1) { DashStyle = new DashStyle(new double[] { 2, 3 }, 0) }, new Point(xl, r.Y), new Point(xl, r.Bottom));
+        bool dampHot = _drag == 3 || (_drag < 0 && _hot == 3);
+        ctx.DrawLine(new Pen(dampHot ? NotaPalette.AccentBright : NotaPalette.Wash(NotaPalette.Accent, 0x90), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) }, new Point(xd, r.Y), new Point(xd, r.Bottom));
+        void BandName(string t, double x0, double x1)
+        {
+            var ft = NotaGraph.AxisText(t, NotaPalette.TextTertiary);
+            if (x1 - x0 < ft.Width + 6) return;
+            ctx.DrawText(ft, new Point((x0 + x1 - ft.Width) / 2, r.Bottom - ft.Height - 2));
+        }
+        BandName(Loc.T("device.chamber.lows"), r.X, xl);
+        BandName(Loc.T("device.chamber.mids"), xl, xd);
+        BandName(Loc.T("device.chamber.highs"), xd, r.Right);
+
+        if (_freeze)
+        {
+            double y = r.Y + 8;
+            ctx.DrawLine(new Pen(NotaPalette.AccentBright, 1.8), new Point(r.X, y), new Point(r.Right, y));
+            NotaGraph.Title(ctx, rect, Loc.T("device.chamber.decay_time_by_frequency"));
+            var ft = NotaGraph.AxisText(Loc.T("device.chamber.frozen_the_tail_holds"), NotaPalette.AccentBright);
+            ctx.DrawText(ft, new Point(w - 8 - ft.Width, 5));
+            return;
+        }
+
+        // The curve, with a light fill down to the floor.
+        int n = (int)Math.Clamp(r.Width / 1.5, 40, 400);
+        var line = new StreamGeometry(); var area = new StreamGeometry();
+        using (var lc = line.Open())
+        using (var ac = area.Open())
+        {
+            ac.BeginFigure(new Point(r.X, r.Bottom), true);
+            for (int i = 0; i < n; i++)
             {
-                f.BeginFigure(new Point(X(_pre), bot), true);
-                for (int i = 0; i < en; i++)
-                {
-                    double x = X(_pre + (i + 0.5) / en * _echoSec);
-                    var p = new Point(x, bot - (bot - Top) * ChamberInk.DbHeight(_echo[i]));
-                    f.LineTo(p);
-                    if (i == 0) l.BeginFigure(p, false); else l.LineTo(p);
-                    if (x >= w) break;
-                }
-                f.LineTo(new Point(Math.Min(w, X(_pre + _echoSec)), bot));
+                double x = r.X + r.Width * i / (n - 1);
+                var p = new Point(x, YOf(RtAt(HzAt(x))));
+                if (i == 0) lc.BeginFigure(p, false); else lc.LineTo(p);
+                ac.LineTo(p);
             }
-            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(NotaPalette.VizInk.Color, 0x60), 0.8), line);
+            ac.LineTo(new Point(r.Right, r.Bottom)); ac.EndFigure(true);
         }
+        ctx.DrawGeometry(FilterAxis.ResponseFill, null, area);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), line);
 
-        // legend (right-aligned): swatch + "low 6.1 s"
-        double lx = w - 5;
-        for (int b = 2; b >= 0; b--)
-        {
-            var t = ChamberInk.Text(NotaNum.F($"{Names[b]} {(_freeze ? "∞" : S(_rt[b]))}"), 7, b == 1 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary);
-            lx -= t.Width; ctx.DrawText(t, new Point(lx, 3));
-            lx -= 11; ctx.FillRectangle(Ink[b], new Rect(lx, 7, 8, 2));
-            lx -= 8;
-        }
-
-        double x0 = X(0), xp = X(_pre);
+        // The handles: one per band (its decay beside it) and the Damping grip on its line.
         for (int b = 0; b < 3; b++)
         {
-            var g = new StreamGeometry();
-            using (var c = g.Open())
-            {
-                c.BeginFigure(new Point(x0, Top), false);
-                c.LineTo(new Point(xp, Top));
-                if (_freeze) c.LineTo(new Point(w, Top));
-                else
-                {
-                    // −60 dB at pre + RT on the same dB scale as the echogram (a straight decay).
-                    c.LineTo(new Point(X(_pre + _rt[b]), bot));
-                }
-            }
-            ctx.DrawGeometry(null, new Pen(Ink[b], b == 1 ? 1.8 : 1.5), g);
-            if (!_freeze)
-            {
-                double hx = Math.Clamp(X(_pre + _rt[b]), 4, w - 4);
-                ctx.DrawEllipse(_drag == b ? NotaPalette.Accent : Ink[b], new Pen(NotaPalette.BgSunken, 2), new Point(hx, bot - 1), _drag == b ? 4.5 : 3.5, _drag == b ? 4.5 : 3.5);
-            }
+            bool hot = _drag == b || (_drag < 0 && _hot == b);
+            ChamberInk.Handle(ctx, r, HandlePt(b), hot, ChamberInk.Sec(BandRt(b)), HandlePt(b).Y > r.Y + 16);
         }
-        var tm = ChamberInk.Text(ChamberInk.AxisLabel(_tmax), 7, NotaPalette.TextDisabled);
-        ctx.DrawText(tm, new Point(w - tm.Width - 4, bot - tm.Height - 3));
+        var dp = HandlePt(3);
+        if (dampHot) ctx.DrawEllipse(NotaPalette.Wash(NotaPalette.Accent, 0x40), null, dp, 8, 8);
+        var grip = new Rect(dp.X - 3.5, dp.Y - 3.5, 7, 7);
+        ctx.DrawRectangle(dampHot ? NotaPalette.AccentBright : NotaGraph.Ground, new Pen(NotaPalette.AccentBright, 1.4), grip, NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
+        var dl = NotaGraph.AxisText(Loc.T("device.chamber.damping") + " " + NotaNum.Hz(_damp), dampHot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        double dx = dp.X + 8 + dl.Width > r.Right ? dp.X - 8 - dl.Width : dp.X + 8;
+        NotaGraph.PlateText(ctx, dl, new Point(dx, dp.Y - dl.Height - 6));
+
+        NotaGraph.Title(ctx, rect, Loc.T("device.chamber.decay_time_by_frequency"));
     }
 }
 
-// TAIL EQ response (log 30 Hz … 18 kHz, ±20 dB): low cut + low shelf, high shelf + high cut
-// (the same RBJ biquads the engine runs). Handle 0 (neutral ink) = low cut (X) + low shelf gain (Y);
-// handle 1 = high cut (X) + high shelf gain (Y).
-internal sealed class ChamberEqCurve : Control, IValueHandles
+// TAIL EQ on the shared filter graph (FilterGraphBase, as Beat Repeat / Auto Filter draw theirs):
+// low cut + low shelf, high shelf + high cut (the same RBJ biquads the engine runs). Handle 0 =
+// low cut (X) + low shelf gain (Y); handle 1 = high cut (X) + high shelf gain (Y). A cut dragged
+// to its end of the axis is off. Double-click a handle to reset it.
+internal sealed class ChamberEqCurve : FilterGraphBase, IValueHandles
 {
     private double _lc, _lg = 0.5, _hs = 0.5, _hc = 1;
-    private int _drag = -1;
-    private const double FLo = 30, FHi = 18000, DbSpan = 20, Sr = 48000;
+    private int _drag = -1, _hot = -1;
+    private const double Sr = 48000;
 
     public event Action<int, double, double>? Changed;   // handle, cut (norm), gain (norm)
     public event Action<int>? DragStarted;
     public event Action<int>? DragEnded;
+    public event Action<int>? Reset;
     public int DraggingHandle => _drag;
 
-    public ChamberEqCurve() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); }
+    public ChamberEqCurve() { MinHeight = 60; ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); }
+
+    protected override (double Lo, double Hi) Span => (20.0, 20000.0);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -30.0);
+    protected override double ResponseDb(double hz) => Db(hz);
+    protected override double CutoffHz
+    {
+        get
+        {
+            int h = _drag >= 0 ? _drag : _hot;
+            if (h == 0) return _lc > 0.001 ? LowCutHz(_lc) : double.NaN;
+            if (h == 1) return _hc < 0.999 ? HighCutHz(_hc) : double.NaN;
+            return double.NaN;
+        }
+    }
 
     public void Set(double lowCut, double lowGain, double highShelf, double highCut)
     { if (_drag >= 0) return; _lc = lowCut; _lg = lowGain; _hs = highShelf; _hc = highCut; InvalidateVisual(); }
 
     public static double LowCutHz(double v) => 20 * Math.Pow(100, Math.Clamp(v, 0, 1));
     public static double HighCutHz(double v) => 1000 * Math.Pow(20, Math.Clamp(v, 0, 1));
-    private double X(double hz) => Math.Log(Math.Clamp(hz, FLo, FHi) / FLo) / Math.Log(FHi / FLo) * Bounds.Width;
-    private double Hz(double x) => FLo * Math.Pow(FHi / FLo, Math.Clamp(x / Math.Max(1, Bounds.Width), 0, 1));
-    private double Y(double db) => Bounds.Height / 2 - db / DbSpan * (Bounds.Height / 2 - 3);
+    private Point Pt(int h) => h == 0 ? new Point(XOf(LowCutHz(_lc)), YOf((_lg - 0.5) * 36)) : new Point(XOf(HighCutHz(_hc)), YOf((_hs - 0.5) * 36));
+    private int Nearest(Point p) => Dist(p, Pt(0)) <= Dist(p, Pt(1)) ? 0 : 1;
+    private static double Dist(Point a, Point b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+
+    // Typed entry (specs/035): handle 0 = low cut + low shelf, 1 = high cut + high shelf (the nearer).
+    public int HandleAt(Point p) => Nearest(p);
+    public Rect HandleRect(int handle) => ValueEntry.Near(Pt(handle), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(this);
-        double d0 = Dist(p, X(LowCutHz(_lc)), Y((_lg - 0.5) * 36)), d1 = Dist(p, X(HighCutHz(_hc)), Y((_hs - 0.5) * 36));
-
-        _drag = d0 <= d1 ? 0 : 1;
-        DragStarted?.Invoke(_drag); e.Pointer.Capture(this); OnPointerMoved(e); e.Handled = true;
+        int h = Nearest(p);
+        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(h); e.Handled = true; return; }
+        _drag = h; Dragging = true;
+        DragStarted?.Invoke(h); e.Pointer.Capture(this); Apply(p); e.Handled = true;
     }
-    // Typed entry (specs/035): handle 0 = low cut + low shelf, 1 = high cut + high shelf (the nearer).
-    public int HandleAt(Point p)
-        => Dist(p, X(LowCutHz(_lc)), Y((_lg - 0.5) * 36)) <= Dist(p, X(HighCutHz(_hc)), Y((_hs - 0.5) * 36)) ? 0 : 1;
-    public Rect HandleRect(int handle) => ValueEntry.Near(handle == 0 ? new Point(X(LowCutHz(_lc)), Y((_lg - 0.5) * 36))
-        : new Point(X(HighCutHz(_hc)), Y((_hs - 0.5) * 36)), Bounds.Size);
-
-    private static double Dist(Point p, double x, double y) => Math.Sqrt((p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y));
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (_drag < 0) return;
         var p = e.GetPosition(this);
-        double hz = Hz(p.X);
-        double db = Math.Clamp(-(p.Y - Bounds.Height / 2) / (Bounds.Height / 2 - 3) * DbSpan, -18, 18);
+        if (_drag >= 0) { Apply(p); return; }
+        int h = Nearest(p);
+        if (h != _hot) { _hot = h; InvalidateVisual(); }
+    }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hot = -1; InvalidateVisual(); }
+    private void Apply(Point p)
+    {
+        var r = PlotRect;
+        double hz = HzAt(p.X);
+        double db = Math.Clamp(-(p.Y - YOf(0)) / Math.Max(1, YOf(-18) - YOf(0)) * 18, -18, 18);
         double gn = Math.Clamp(0.5 + db / 36, 0, 1);
-        if (_drag == 0) { _lc = p.X <= 2 ? 0 : Math.Clamp(Math.Log(hz / 20) / Math.Log(100), 0, 1); _lg = gn; Changed?.Invoke(0, _lc, _lg); }
-        else { _hc = p.X >= Bounds.Width - 2 ? 1 : Math.Clamp(Math.Log(hz / 1000) / Math.Log(20), 0, 1); _hs = gn; Changed?.Invoke(1, _hc, _hs); }
+        if (_drag == 0) { _lc = p.X <= r.X + 3 ? 0 : Math.Clamp(Math.Log(hz / 20) / Math.Log(100), 0, 1); _lg = gn; Changed?.Invoke(0, _lc, _lg); }
+        else { _hc = p.X >= r.Right - 3 ? 1 : Math.Clamp(Math.Log(hz / 1000) / Math.Log(20), 0, 1); _hs = gn; Changed?.Invoke(1, _hc, _hs); }
         InvalidateVisual();
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(d); } }
-
+    { base.OnPointerReleased(e); if (_drag >= 0) { int d = _drag; _drag = -1; Dragging = false; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(d); } }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    { if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); DragEnded?.Invoke(d); } base.OnPointerCaptureLost(e); }
+    { if (_drag >= 0) { int d = _drag; _drag = -1; Dragging = false; InvalidateVisual(); DragEnded?.Invoke(d); } base.OnPointerCaptureLost(e); }
 
     // |H| (dB) of the four stages at f.
     private double Db(double f)
@@ -549,10 +608,10 @@ internal sealed class ChamberEqCurve : Control, IValueHandles
     }
     private static double Mag((double b0, double b1, double b2, double a0, double a1, double a2) c, double f)
     {
-        double w = 2 * Math.PI * f / Sr, cw = Math.Cos(w), sw = Math.Sin(w), c2 = Math.Cos(2 * w), s2 = Math.Sin(2 * w);
+        double w = 2 * Math.PI * Math.Min(f, Sr * 0.49) / Sr, cw = Math.Cos(w), sw = Math.Sin(w), c2 = Math.Cos(2 * w), s2 = Math.Sin(2 * w);
         double nr = c.b0 + c.b1 * cw + c.b2 * c2, ni = -(c.b1 * sw + c.b2 * s2);
         double dr = c.a0 + c.a1 * cw + c.a2 * c2, di = -(c.a1 * sw + c.a2 * s2);
-        return 10 * Math.Log10((nr * nr + ni * ni) / Math.Max(1e-30, dr * dr + di * di));
+        return 10 * Math.Log10(Math.Max(1e-30, nr * nr + ni * ni) / Math.Max(1e-30, dr * dr + di * di));
     }
     private static class Biquad
     {
@@ -572,77 +631,263 @@ internal sealed class ChamberEqCurve : Control, IValueHandles
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w < 20 || h < 16) return;
-        ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var gp = new Pen(ChamberInk.GridLine, 1);
-        ctx.DrawLine(gp, new Point(0, h / 2), new Point(w, h / 2));
-        foreach (double hz in new[] { 100.0, 1000.0, 10000.0 }) { double gx = X(hz); ctx.DrawLine(gp, new Point(gx, 0), new Point(gx, h)); }
-
-        var line = new StreamGeometry(); var fill = new StreamGeometry();
-        using (var lc = line.Open())
-        using (var fc = fill.Open())
+        var r = PlotRect;
+        if (r.Width <= 0 || r.Height <= 0) return;
+        DrawBack(ctx);
+        DrawCurve(ctx, Db);
+        double fc = CutoffHz;
+        DrawFront(ctx, double.IsFinite(fc) ? YOf(Db(fc)) : double.NaN);
+        bool saved = Dragging;
+        string[] names = { Loc.T("device.chamber.low"), Loc.T("device.chamber.high") };
+        for (int h = 0; h < 2; h++)
         {
-            double y0 = Math.Clamp(Y(Db(FLo)), 1, h - 1);
-            lc.BeginFigure(new Point(0, y0), false);
-            fc.BeginFigure(new Point(0, h / 2), true); fc.LineTo(new Point(0, y0));
-            for (double x = 1.5; x <= w; x += 1.5)
-            {
-                var p = new Point(x, Math.Clamp(Y(Db(Hz(x))), 1, h - 1));
-                lc.LineTo(p); fc.LineTo(p);
-            }
-            fc.LineTo(new Point(w, h / 2));
+            Dragging = _drag == h;
+            var at = Pt(h);
+            at = new Point(Math.Clamp(at.X, r.X + 5, r.Right - 5), at.Y);
+            DrawHandle(ctx, at);
+            bool hot = _drag == h || (_drag < 0 && _hot == h);
+            var ft = NotaGraph.AxisText(names[h], hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            double tx = h == 0 ? at.X + 7 : at.X - 7 - ft.Width;
+            ctx.DrawText(ft, new Point(Math.Clamp(tx, r.X + 2, r.Right - ft.Width - 2), at.Y - ft.Height - 3));
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth), line);
-
-        var t0 = ChamberInk.Text("30", 7, NotaPalette.TextDisabled);
-        ctx.DrawText(t0, new Point(4, h - t0.Height - 2));
-        var t1 = ChamberInk.Text("18k Hz", 7, NotaPalette.TextDisabled);
-        ctx.DrawText(t1, new Point(w - t1.Width - 4, h - t1.Height - 2));
-
-        var ring = new Pen(NotaPalette.BgSunken, 2);
-        double hx0 = Math.Clamp(X(LowCutHz(_lc)), 4, w - 4), hy0 = Math.Clamp(Y((_lg - 0.5) * 36), 4, h - 4);
-        double hx1 = Math.Clamp(X(HighCutHz(_hc)), 4, w - 4), hy1 = Math.Clamp(Y((_hs - 0.5) * 36), 4, h - 4);
-        ctx.DrawEllipse(_drag == 0 ? NotaPalette.Accent : NotaPalette.VizInk, ring, new Point(hx0, hy0), _drag == 0 ? 4.5 : 3.8, _drag == 0 ? 4.5 : 3.8);
-        ctx.DrawEllipse(_drag == 1 ? NotaPalette.Accent : NotaPalette.TextSecondary, ring, new Point(hx1, hy1), _drag == 1 ? 4.5 : 3.8, _drag == 1 ? 4.5 : 3.8);
+        Dragging = saved;
     }
 }
 
-// The modulation LFO: a teal sine scrolling at the Rate, its swing following the Depth.
-internal sealed class ChamberLfoView : Control
+// THE SIGNAL FLOW: what Chamber does to the sound, left to right. The input splits into the dry
+// path (along the bottom) and the two engines — side by side (Parallel) or the convolution
+// feeding the algorithm (Serial) — whose blend runs through the tail EQ (where EQ position puts
+// it), the stereo stage (Width, bass mono) and ducking, meets the dry at the mix and leaves at
+// the output. Each block names its live value; an engine that is off is dashed. A click on an
+// engine turns it on or off; a click on the EQ moves it to the next position.
+internal sealed class ChamberFlowView : Control
 {
-    private double _rate = 0.4, _depth = 0.3, _phase;
-    private DateTime _last = DateTime.UtcNow;
-    public ChamberLfoView() { ClipToBounds = true; }
+    public readonly record struct State(bool ConvOn, bool AlgoOn, bool Serial, double Blend, int EqPos, bool EqFlat,
+        bool WetOnly, string Dry, double Mix, string Width, string Mono, double DuckAmountDb, double DuckNowDb, string Out, bool Freeze);
 
-    public void Tick(double rateHz, double depth)
+    private State _s = new(true, true, false, 0.5, 1, true, false, "0.0", 0.35, "100 %", "off", 0, 0, "0.0 dB", false);
+    private Rect _conv, _algo, _eq;
+    private int _hot;   // 0 none · 1 conv · 2 algo · 3 EQ
+
+    public event Action? ConvClicked;
+    public event Action? AlgoClicked;
+    public event Action? EqClicked;
+
+    public ChamberFlowView() { ClipToBounds = true; MinHeight = 60; }
+
+    public void Set(State s) { if (s == _s) return; _s = s; InvalidateVisual(); }
+
+    private int HitAt(Point p) => _conv.Contains(p) ? 1 : _algo.Contains(p) ? 2 : _eq.Contains(p) ? 3 : 0;
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
-        var now = DateTime.UtcNow;
-        double dt = Math.Clamp((now - _last).TotalSeconds, 0, 0.1);
-        _last = now; _rate = rateHz; _depth = depth;
-        _phase = (_phase + dt * rateHz) % 1.0;
+        base.OnPointerMoved(e);
+        int h = HitAt(e.GetPosition(this));
+        if (h == _hot) return;
+        _hot = h;
+        Cursor = h != 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         InvalidateVisual();
     }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hot != 0) { _hot = 0; InvalidateVisual(); } }
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        switch (HitAt(e.GetPosition(this)))
+        {
+            case 1: ConvClicked?.Invoke(); e.Handled = true; break;
+            case 2: AlgoClicked?.Invoke(); e.Handled = true; break;
+            case 3: EqClicked?.Invoke(); e.Handled = true; break;
+        }
+    }
+
+    private static readonly IPen Wire = new Pen(NotaPalette.TextTertiary, 1.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+    private static readonly IPen WireOff = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x60), 1, lineCap: PenLineCap.Round) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
 
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
-        if (w < 8 || h < 8) return;
-        ctx.DrawLine(new Pen(ChamberInk.GridLine, 1), new Point(0, h / 2), new Point(w, h / 2));
-        double amp = (h / 2 - 3) * (0.12 + 0.88 * Math.Clamp(_depth, 0, 1));
-        const double cycles = 3;
+        if (w < 200 || h < 70) return;
+        var rect = new Rect(0, 0, w, h);
+        NotaGraph.Window(ctx, rect);
+        NotaGraph.Title(ctx, rect, Loc.T("device.chamber.signal_flow"));
+        var mode = NotaGraph.AxisText(_s.Serial ? Loc.T("device.chamber.serial_convolution_feeds_the_algorithm") : Loc.T("device.chamber.parallel_both_engines_hear_the_input"), NotaPalette.TextSecondary);
+        ctx.DrawText(mode, new Point(w - 8 - mode.Width, 5));
+
+        double top = NotaGraph.PlotTop + 4, bot = h - 8;
+        double yDry = bot - 6;
+        double yConv = top + (yDry - top) * 0.16, yAlgo = top + (yDry - top) * 0.66;
+        double yMain = (yConv + yAlgo) / 2;
+        const double bh = 28, engW = 96, blkW = 60, eqW = 40, sumR = 7;
+
+        // Lay the main line out: fixed widths, the spare width shared by the gaps.
+        bool eqIn = _s.EqPos == 0, eqTail = _s.EqPos == 1, eqOut = _s.EqPos == 2;
+        var inLbl = NotaGraph.AxisText(Loc.T("device.chamber.in"), NotaPalette.TextSecondary);
+        var outLbl = NotaGraph.AxisText(Loc.T("device.chamber.out"), NotaPalette.TextSecondary);
+        var parts = new List<double> { inLbl.Width + 4 };
+        if (eqIn) parts.Add(eqW);
+        parts.Add(engW); parts.Add(0);              // engines, the blend node
+        if (eqTail) parts.Add(eqW);
+        parts.Add(blkW); parts.Add(blkW);            // stereo, ducking
+        parts.Add(2 * sumR);                         // the mix node
+        if (eqOut) parts.Add(eqW);
+        parts.Add(outLbl.Width + 4);
+        double fixedW = 0; foreach (var p in parts) fixedW += p;
+        double gap = Math.Max(8, (w - 16 - fixedW) / (parts.Count - 1));
+        double x = 8;
+        int k = 0;
+        double Next() { double at = x; x += parts[k++] + gap; return at; }
+
+        // In, and the dry split right after it.
+        double xIn = Next();
+        ctx.DrawText(inLbl, new Point(xIn, yMain - inLbl.Height / 2));
+        double xSplitDry = xIn + inLbl.Width + 4 + Math.Min(6, gap / 2);
+        double cur = xIn + inLbl.Width + 4;
+
+        Rect Block(double bx, double cy, double bw, string name, string value, bool on, bool hot, bool click)
+        {
+            var b = new Rect(bx, cy - bh / 2, bw, bh);
+            if (on) ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderDefault, 1), b, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
+            else ctx.DrawRectangle(null, new Pen(hot ? NotaPalette.AccentBright : NotaPalette.TextDisabled, 1) { DashStyle = new DashStyle(new double[] { 3, 2 }, 0) }, b, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
+            var n = new NotaFormattedText(name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaGraph.TitleSize,
+                on ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, NotaTextSize.InCard) { MaxTextWidth = bw - 6, Trimming = TextTrimming.CharacterEllipsis };
+            var v = NotaGraph.AxisText(value, on ? (click && hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary) : NotaPalette.TextDisabled);
+            double th = n.Height + v.Height;
+            ctx.DrawText(n, new Point(bx + (bw - n.Width) / 2, cy - th / 2));
+            ctx.DrawText(v, new Point(bx + (bw - v.Width) / 2, cy - th / 2 + n.Height));
+            return b;
+        }
+        string eqVal = _s.EqFlat ? Loc.T("device.chamber.flat") : Loc.T("device.chamber.shaping");
+        _eq = default;
+
+        if (eqIn)
+        {
+            double ex = Next();
+            ctx.DrawLine(Wire, new Point(cur, yMain), new Point(ex, yMain));
+            _eq = Block(ex, yMain, eqW, "EQ", eqVal, true, _hot == 3, true);
+            cur = ex + eqW;
+        }
+
+        // The engines.
+        double xe = Next();
+        double xSplit = xe - Math.Min(12, gap * 0.6);
+        ctx.DrawLine(Wire, new Point(cur, yMain), new Point(xSplit, yMain));
+        string convShare = NotaNum.Pct(1 - _s.Blend), algoShare = NotaNum.Pct(_s.Blend);
+        // Input → Convolution; Input → Algorithm (Parallel) or Convolution → Algorithm (Serial).
+        ctx.DrawGeometry(null, _s.ConvOn ? Wire : WireOff, Elbow(new Point(xSplit, yMain), new Point(xe, yConv)));
+        if (!_s.Serial) ctx.DrawGeometry(null, _s.AlgoOn ? Wire : WireOff, Elbow(new Point(xSplit, yMain), new Point(xe, yAlgo)));
+        _conv = Block(xe, yConv, engW, Loc.T("device.chamber.convolution"), _s.ConvOn ? convShare : Loc.T("device.chamber.off"), _s.ConvOn, _hot == 1, true);
+        _algo = Block(xe, yAlgo, engW, Loc.T("device.chamber.algorithm"), !_s.AlgoOn ? Loc.T("device.chamber.off") : _s.Freeze ? algoShare + " · " + Loc.T("device.chamber.frozen") : algoShare, _s.AlgoOn, _hot == 2, true);
+        if (_s.Serial)
+        {
+            double cx = xe + engW / 2;
+            var pen = _s.ConvOn && _s.AlgoOn ? Wire : WireOff;
+            ctx.DrawLine(pen, new Point(cx, _conv.Bottom), new Point(cx, _algo.Top - 1));
+            Arrow(ctx, new Point(cx, _algo.Top - 1), pen.Brush ?? NotaPalette.TextTertiary, down: true);
+        }
+
+        // The blend node.
+        double xBlend = Next();
+        ctx.DrawGeometry(null, _s.ConvOn ? Wire : WireOff, Elbow(new Point(xe + engW, yConv), new Point(xBlend, yMain), toRight: false));
+        ctx.DrawGeometry(null, _s.AlgoOn ? Wire : WireOff, Elbow(new Point(xe + engW, yAlgo), new Point(xBlend, yMain), toRight: false));
+        ctx.DrawEllipse(NotaPalette.TextTertiary, null, new Point(xBlend, yMain), 2.2, 2.2);
+        cur = xBlend;
+
+        if (eqTail)
+        {
+            double ex = Next();
+            ctx.DrawLine(Wire, new Point(cur, yMain), new Point(ex, yMain));
+            _eq = Block(ex, yMain, eqW, "EQ", eqVal, true, _hot == 3, true);
+            cur = ex + eqW;
+        }
+        double xs = Next();
+        ctx.DrawLine(Wire, new Point(cur, yMain), new Point(xs, yMain));
+        Block(xs, yMain, blkW, Loc.T("device.chamber.width"), _s.Width, true, false, false);
+        if (_s.Mono != "off")
+        {
+            var mf = NotaGraph.AxisText(Loc.T("device.chamber.mono_below") + " " + _s.Mono, NotaPalette.TextTertiary);
+            ctx.DrawText(mf, new Point(xs + (blkW - mf.Width) / 2, yMain + bh / 2 + 2));
+        }
+        cur = xs + blkW;
+        double xd = Next();
+        ctx.DrawLine(Wire, new Point(cur, yMain), new Point(xd, yMain));
+        bool ducking = _s.DuckAmountDb > 0.05;
+        string duckVal = !ducking ? Loc.T("device.chamber.off") : _s.DuckNowDb > 0.05 ? NotaNum.Unit(-_s.DuckNowDb, "0.0", "dB") : NotaNum.Unit(-_s.DuckAmountDb, "0", "dB") + " " + Loc.T("device.chamber.max");
+        Block(xd, yMain, blkW, Loc.T("device.chamber.ducking"), duckVal, ducking, false, false);
+        if (ducking && _s.DuckNowDb > 0.05)
+            ctx.DrawRectangle(NotaPalette.AccentBright, null, new Rect(xd + 4, yMain + bh / 2 - 3, (blkW - 8) * Math.Clamp(_s.DuckNowDb / Math.Max(1, _s.DuckAmountDb), 0, 1), 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
+        cur = xd + blkW;
+
+        // The mix: the wet in from the left, the dry up from below.
+        double xm = Next() + sumR;
+        ctx.DrawLine(Wire, new Point(cur, yMain), new Point(xm - sumR, yMain));
+        ctx.DrawEllipse(NotaPalette.SurfaceCard, new Pen(NotaPalette.BorderDefault, 1), new Point(xm, yMain), sumR, sumR);
+        ctx.DrawLine(new Pen(NotaPalette.TextSecondary, 1.2), new Point(xm - 3.5, yMain), new Point(xm + 3.5, yMain));
+        ctx.DrawLine(new Pen(NotaPalette.TextSecondary, 1.2), new Point(xm, yMain - 3.5), new Point(xm, yMain + 3.5));
+        var mixT = NotaGraph.AxisText(Loc.T("device.chamber.wet") + " " + (_s.WetOnly ? "100 %" : NotaNum.Pct(_s.Mix)), NotaPalette.TextSecondary);
+        NotaGraph.PlateText(ctx, mixT, new Point(Math.Min(xm - mixT.Width / 2, w - 8 - mixT.Width), yMain - sumR - mixT.Height - 2));
+
+        // The dry path along the bottom.
+        var dryPen = _s.WetOnly ? WireOff : Wire;
+        var dry = new StreamGeometry();
+        using (var g = dry.Open())
+        {
+            g.BeginFigure(new Point(xSplitDry, yMain), false);
+            g.LineTo(new Point(xSplitDry, yDry)); g.LineTo(new Point(xm, yDry)); g.LineTo(new Point(xm, yMain + sumR));
+            g.EndFigure(false);
+        }
+        ctx.DrawGeometry(null, dryPen, dry);
+        ctx.DrawEllipse(NotaPalette.TextTertiary, null, new Point(xSplitDry, yMain), 2.2, 2.2);
+        var dryT = NotaGraph.AxisText(_s.WetOnly ? Loc.T("device.chamber.dry_off_wet_only") : Loc.T("device.chamber.dry") + " " + _s.Dry,
+            _s.WetOnly ? NotaPalette.TextDisabled : NotaPalette.TextSecondary);
+        NotaGraph.PlateText(ctx, dryT, new Point((xSplitDry + xm - dryT.Width) / 2, yDry - dryT.Height / 2));
+        cur = xm + sumR;
+
+        if (eqOut)
+        {
+            double ex = Next();
+            ctx.DrawLine(Wire, new Point(cur, yMain), new Point(ex, yMain));
+            _eq = Block(ex, yMain, eqW, "EQ", eqVal, true, _hot == 3, true);
+            cur = ex + eqW;
+        }
+        double xo = Next();
+        ctx.DrawLine(Wire, new Point(cur, yMain), new Point(xo - 3, yMain));
+        Arrow(ctx, new Point(xo - 2, yMain), NotaPalette.TextTertiary, down: false);
+        ctx.DrawText(outLbl, new Point(xo + 2, yMain - outLbl.Height / 2));
+        var outV = NotaGraph.AxisText(_s.Out, NotaPalette.TextTertiary);
+        ctx.DrawText(outV, new Point(Math.Min(xo + 2, w - 6 - outV.Width), yMain + outLbl.Height / 2 + 1));
+    }
+
+    // A wire from a to b that runs across, then up / down, then across (right-angled, rounded).
+    private static Geometry Elbow(Point a, Point b, bool toRight = true)
+    {
         var g = new StreamGeometry();
         using (var c = g.Open())
         {
-            for (double x = 0; x <= w; x += 1)
+            c.BeginFigure(a, false);
+            double xm = toRight ? a.X + Math.Min(6, (b.X - a.X) / 2) : b.X - Math.Min(6, (b.X - a.X) / 2);
+            if (Math.Abs(b.Y - a.Y) < 0.5) c.LineTo(b);
+            else
             {
-                double ph = (x / w * cycles - _phase) * 2 * Math.PI;
-                var p = new Point(x, h / 2 - Math.Sin(ph) * amp);
-                if (x == 0) c.BeginFigure(p, false); else c.LineTo(p);
+                double rr = Math.Min(Math.Min(4, Math.Abs(b.Y - a.Y) / 2), Math.Min(Math.Abs(xm - a.X), Math.Abs(b.X - xm))), sy = Math.Sign(b.Y - a.Y);
+                c.LineTo(new Point(xm - rr, a.Y));
+                c.QuadraticBezierTo(new Point(xm, a.Y), new Point(xm, a.Y + sy * rr));
+                c.LineTo(new Point(xm, b.Y - sy * rr));
+                c.QuadraticBezierTo(new Point(xm, b.Y), new Point(xm + rr, b.Y));
+                c.LineTo(b);
             }
+            c.EndFigure(false);
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Teal, 1.5), g);
-        var t = ChamberInk.Text(_rate >= 1 ? NotaNum.F($"{_rate:0.0}\u2009Hz") : NotaNum.F($"{_rate:0.00}\u2009Hz"), 7, NotaPalette.TextTertiary);
-        ctx.DrawText(t, new Point(w - t.Width - 3, 1));
+        return g;
+    }
+    private static void Arrow(DrawingContext ctx, Point tip, IBrush ink, bool down)
+    {
+        var g = new StreamGeometry();
+        using (var c = g.Open())
+        {
+            if (down) { c.BeginFigure(tip, true); c.LineTo(new Point(tip.X - 3, tip.Y - 4)); c.LineTo(new Point(tip.X + 3, tip.Y - 4)); }
+            else { c.BeginFigure(tip, true); c.LineTo(new Point(tip.X - 4, tip.Y - 3)); c.LineTo(new Point(tip.X - 4, tip.Y + 3)); }
+            c.EndFigure(true);
+        }
+        ctx.DrawGeometry(ink, null, g);
     }
 }

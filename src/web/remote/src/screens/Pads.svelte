@@ -100,13 +100,13 @@
   <div class="bar">
     <div class="seg banks" role="group" aria-label="Bank">
       {#each banks as b}
-        <button class="mono" class:on={app.prefs.bank === b.i} onclick={() => (app.prefs.bank = b.i)}>{b.name}</button>
+        <button class:on={app.prefs.bank === b.i} onclick={() => (app.prefs.bank = b.i)}>{b.name}</button>
       {/each}
     </div>
     <button class="btn" class:on={app.prefs.fullVel} aria-pressed={app.prefs.fullVel} onclick={() => (app.prefs.fullVel = !app.prefs.fullVel)}>Full velocity</button>
     <button class="btn rep" class:on={repeat} aria-pressed={repeat} onclick={() => (repeat = !repeat)}>
       Repeat
-      <span class="rate mono" role="button" tabindex="0" aria-label="Repeat rate"
+      <span class="rate" role="button" tabindex="0" aria-label="Repeat rate"
         onclick={(e) => { e.stopPropagation(); rate = (rate + 1) % RATES.length; }}
         onkeydown={() => {}}>{RATES[rate].n}</span>
     </button>
@@ -118,10 +118,10 @@
       <button class="pad" class:on class:playing style:--tc={color} style:--tc-ink={colorInk}
         onpointerdown={(e) => press(e, note)} onpointerup={release} onpointercancel={release} onpointerleave={release}
         aria-label={names.get(note) ?? noteName(note)}>
-        <span class="num mono">{note - 35}</span>
+        <span class="num">{note - 35}</span>
         <span class="txt">
           <span class="name">{names.get(note) ?? noteName(note)}</span>
-          <span class="note mono">{noteName(note)}</span>
+          <span class="note">{noteName(note)}</span>
         </span>
       </button>
     {/each}
@@ -133,11 +133,11 @@
   .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .banks button { min-width: 42px; flex: none; font-size: 12px; }
   .rep { padding: 0 6px 0 10px; gap: 8px; }
-  .rate { height: 30px; display: flex; align-items: center; padding: 0 7px; border-radius: 2px; background: var(--bg-sunken); font-size: 11px; color: var(--text-secondary); }
-  .rep.on .rate { color: var(--text-primary); }
+  .rate { height: 30px; display: flex; align-items: center; padding: 0 7px; border-radius: min(var(--r-value-bar), 10px); background: var(--bg-sunken); font-size: 11px; color: var(--text-secondary); }
+  .rep.on .rate { color: var(--picked-ink); }
   .grid { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 6px; }
-  /* Tiles: raised at rest; under the finger solid accent; played by the track solid in its colour — ink derived either way. */
-  .pad { border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; padding: 8px; min-height: 0; min-width: 0; overflow: hidden; text-align: left; touch-action: none; }
+  /* Pads: raised at rest; under the finger live (solid accent); played by the track solid in its colour — ink derived either way. */
+  .pad { border-radius: var(--r-field); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; padding: 8px; min-height: 0; min-width: 0; overflow: hidden; text-align: left; touch-action: none; }
   .num, .note { font-size: 10px; color: var(--text-tertiary); }
   .txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -8,9 +8,9 @@
 //     with its slider and what it does) | TRANSFER (input across, output up: the curve, the
 //     band Random can spread a note over, the Out range as dashed lines, the last 12 notes as
 //     dots) | OUT RANGE (a two-handle range, the Random switch + amount + Both / Up / Down, a
-//     LAST 12 NOTES histogram: outline in, fill out) — over a status line.
+//     LAST 12 NOTES histogram: outline in, fill out).
 //   • S 260 × 260 — the mode chip over the TRANSFER window and four knobs (Drive or Value ·
-//     Random · Low · High); the footer's "random both" steps Both → Up → Down → off.
+//     Random · Low · High); the random direction is an L-only control.
 // Dots and bars are the real notes the device shaped (telemetry), not a demo. The maths is
 // VelocityModel, a mirror of MidiVelocity.h, so picture == sound.
 
@@ -152,7 +152,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.ValuesFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------
@@ -368,16 +368,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             modeIsland.Margin = new Thickness(0, 0, 5, 0); outIsland.Margin = new Thickness(5, 0, 0, 0);
             var islands = new DockPanel { Children = { WithDock(modeIsland, Dock.Left), WithDock(outIsland, Dock.Right), transferIsland } };
 
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                var (lo, hi) = VelocityModel.Range(G);
-                string rnd = VelocityModel.RandomOn(G) ? $"{VelocityModel.RandomText(G)} {Dirs[VelocityModel.Dir(G)].ToLowerInvariant()}" : "off";
-                statusL.Text = $"{Modes[Mode()]} · {(IsFixed() ? "value " + VelocityModel.Fixed(G) : $"drive {VelocityModel.Drive(G):0.00}")} · random {rnd} · out {lo}–{hi}";
-                statusR.Text = Bypassed() ? "bypassed" : Last() is { } l ? Loc.F("device.velocity.last", l.In, l.Out) : "MIDI";
-            });
-            return Framed(islands, statusL, statusR);
+            return Framed(islands);
         }
 
         // =========================================================================================
@@ -386,7 +377,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             // Mode chip: click for the next mode, Shift-click for the previous.
             var modeTb = new TextBlock { FontSize = 9, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = Cap, VerticalAlignment = VerticalAlignment.Center };
-            var modeChip = new Border { Height = 14, Width = 70, CornerRadius = NotaRadius.Badge, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1),
+            var modeChip = new Border { Height = 14, Width = 70, CornerRadius = NotaRadius.Cell, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1),
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), Margin = new Thickness(0, 0, 6, 0),
                 Child = new DockPanel { Children = { WithDock(chev, Dock.Right), modeTb } } };
             modeChip.PointerPressed += (_, ev) =>
@@ -431,40 +422,11 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 lastIO.Text = Last() is { } l ? $"{l.In} → {l.Out}" : "";
             });
 
-            // Footer: "random both" steps Both → Up → Down → off → Both (Shift-click backwards).
-            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
-            statusL.PointerEntered += (_, _) => statusL.Foreground = Txt;
-            statusL.PointerExited += (_, _) => statusL.Foreground = Sub;
-            statusL.PointerPressed += (_, ev) =>
-            {
-                if (!ev.GetCurrentPoint(statusL).Properties.IsLeftButtonPressed) return;
-                int state = VelocityModel.RandomOn(G) ? VelocityModel.Dir(G) : 3;   // 0 both · 1 up · 2 down · 3 off
-                state = (state + (ev.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 3 : 1)) % 4;
-                Begin(PRandomOn); Begin(PRandomDir);
-                if (state == 3) S(PRandomOn, 0); else { S(PRandomOn, 1); S(PRandomDir, state); }
-                End(PRandomOn); End(PRandomDir);
-                Refresh(); ev.Handled = true;
-            };
-            ToolTip.SetTip(statusL, Loc.T("device.velocity.random_both_ways_up_down"));
-            Learn(statusL, PRandomDir, "Random Dir");
-            var statusR = Mono("", Sub);
-            readouts.Add(() =>
-            {
-                statusL.Text = VelocityModel.RandomOn(G) ? $"random {Dirs[VelocityModel.Dir(G)].ToLowerInvariant()}" : "random off";
-                var (lo, hi) = VelocityModel.Range(G);
-                statusR.Text = Bypassed() ? "bypassed" : $"out {lo}–{hi}";
-            });
-            return Framed(island, statusL, statusR);
+            return Framed(island);
         }
 
         // ---- shared pieces -----------------------------------------------------------------------
-        Control Framed(Control main, TextBlock left, TextBlock right)
-        {
-            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
-                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
-            right.Margin = new Thickness(8, 0, 0, 0);
-            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
-        }
+        Control Framed(Control main) => new Border { Background = Ground, Padding = new Thickness(5), Child = main };
 
         Control IslandHead(Control left, Control? right)
         {

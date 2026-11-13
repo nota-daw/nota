@@ -371,6 +371,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_device_builtin_kind")]
     internal static partial int TrackDeviceBuiltinKind(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_device_id")]
+    internal static partial long TrackDeviceId(IntPtr engine, int trackId, int deviceIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_plugin_id")]
     internal static partial IntPtr TrackInstrumentPluginId(IntPtr engine, int trackId);
 
@@ -382,6 +385,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_id")]
     internal static partial IntPtr PluginParamId(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_index_from_v1")]
+    internal static partial int PluginParamIndexFromV1(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_name")]
     internal static partial IntPtr PluginParamName(IntPtr engine, int trackId, int deviceIndex, int paramIndex);

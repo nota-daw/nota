@@ -29,6 +29,9 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     public Action? Clear { get; init; }
     /// <summary>Repaints the owner after a commit or a reset.</summary>
     public Action? After { get; init; }
+    /// <summary>Reads the name when the menu opens, for a control whose parameter follows a tab
+    /// (Compressor's second fader: Makeup, or SC gain on the Sidechain tab); <see cref="Name"/> without it.</summary>
+    public Func<string>? NameNow { get; init; }
     /// <summary><see cref="TextAt"/> reads back through <see cref="Set"/> (legacy rows, plug-in
     /// parameters whose text is only readable at the current value); the position is restored
     /// before the gesture opens.</summary>
@@ -37,7 +40,18 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     /// handle leaves it (the Stereo Map's volume — a double-click centres the pan).</summary>
     public bool ResetOnDoubleClick { get; init; } = true;
 
-    public bool CanReset => Reset is not null || Default is not null;
+    /// <summary>Reads the default when it is needed, for an owner whose default moves (a knob whose
+    /// reset value follows a mode); <see cref="Default"/> is used without it.</summary>
+    public Func<double?>? DefaultNow { get; init; }
+    /// <summary>The default in effect now.</summary>
+    public double? CurrentDefault => DefaultNow is { } now ? now() : Default;
+
+    public bool CanReset => Reset is not null || CurrentDefault is not null;
+
+    /// <summary>⌥-click on the control itself resets instead of typing (the faders whose ⌥-click
+    /// reset before typed entry came: Compressor Thresh / Makeup, EQ-3's band faders and Output).
+    /// Typing stays on a double-click of the read-out and the right-click menu.</summary>
+    public bool AltResets { get; init; }
 }
 
 /// <summary>A control with several typeable handles: double-click / ⌥-click / right-click ask it

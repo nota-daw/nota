@@ -11,8 +11,8 @@
 //   PrismEnvTrace  — the band's input peaks and its detector envelope against the threshold.
 //   PrismGrMeter   — a gain-reduction bar that grows down from the top (boost grows up), with
 //                    an optional peak-hold line.
-// Band colours follow the mockup: Low = mauve, Mid = neutral ink, High = teal (accent is kept
-// for live or chosen state — a dragged handle, solo).
+// The bands are greys told apart by shade (Low mid grey, Mid the curve ink, High darker); the
+// accent is kept for live or chosen state — a dragged handle, solo.
 
 using System;
 using System.Diagnostics;
@@ -28,19 +28,20 @@ namespace Nota.App;
 internal static class PrismInk
 {
     // Read per use: the colours follow the theme, so they must not be captured in a static array.
-    public static Color[] BandColor => new[] { NotaPalette.TrackColors[7], NotaPalette.VizInk.Color, NotaPalette.TrackColors[4] };
-    public static readonly IBrush[] Band = { NotaPalette.TrackBrushes[7], NotaPalette.VizInk, NotaPalette.Teal };
+    // The bands are greys told apart by shade (Low mid grey, Mid the curve ink, High darker).
+    public static Color[] BandColor => new[] { NotaPalette.TextSecondary.Color, NotaPalette.VizInk.Color, NotaPalette.TextTertiary.Color };
+    public static readonly IBrush[] Band = { NotaPalette.TextSecondary, NotaPalette.VizInk, NotaPalette.TextTertiary };
     // Text / handle tint for the selected band.
-    public static readonly IBrush[] BandLit = { Band[0], NotaPalette.TextPrimary, Band[2] };
+    public static readonly IBrush[] BandLit = { NotaPalette.TextPrimary, NotaPalette.TextPrimary, NotaPalette.TextPrimary };
     public static readonly string[] Names = { "Low", "Mid", "High" };
     public static readonly IBrush InnerBorder = NotaPalette.GraphBorder;
     public static readonly IPen InnerPen = new Pen(InnerBorder, 1);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static Typeface NumFace => NotaFonts.Measure;   // values role (spec 091): read live
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
-    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);
+    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b, NotaTextSize.InCard);
     public static double Db(double lin) => lin > 1e-6 ? 20 * Math.Log10(lin) : -120;
     public static string HzShort(double hz) => hz >= 1000 ? (hz >= 10000 ? NotaNum.F($"{hz / 1000:0}k") : NotaNum.F($"{hz / 1000:0.0}k")) : NotaNum.F($"{hz:0}");
 }
@@ -179,7 +180,7 @@ internal sealed class PrismSpectrum : Control, IValueHandles
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 8 || h < 8) return;
         var rect = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, 4, 4);
+        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
 
         // Band tints (the selected band a little stronger).
         double[] edges = _bands switch { 1 => new[] { 0.0, 1.0 }, 2 => new[] { 0.0, _xl, 1.0 }, _ => new[] { 0.0, _xl, _xh, 1.0 } };
@@ -228,20 +229,20 @@ internal sealed class PrismSpectrum : Control, IValueHandles
             var col = PrismInk.Band[upper];
             bool hot = _hover == idx || _drag == idx;
             ctx.DrawLine(new Pen(_drag == idx ? NotaPalette.Accent : col, hot ? 2 : 1), new Point(x, 0), new Point(x, h));
-            var t = PrismInk.Text(PrismInk.HzShort(20 * Math.Pow(1000, v)), 7, _drag == idx ? NotaPalette.AccentBright : upper == 1 ? NotaPalette.TextPrimary : col);
+            var t = PrismInk.Text(PrismInk.HzShort(20 * Math.Pow(1000, v)), NotaGraph.AxisSize, _drag == idx ? NotaPalette.AccentBright : upper == 1 ? NotaPalette.TextPrimary : col);
             double tw = t.Width + 8, tx = Math.Clamp(x - tw / 2, 0, w - tw);
             var tag = new Rect(tx, 0, tw, 12);
-            ctx.DrawRectangle(hot ? NotaPalette.SurfaceRaised : NotaPalette.SurfaceCard, new Pen(col, 1), tag, 3, 3);
+            ctx.DrawRectangle(hot ? NotaPalette.SurfaceRaised : NotaPalette.SurfaceCard, new Pen(col, 1), tag, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             ctx.DrawText(t, new Point(tx + 4, 6 - t.Height / 2));
         }
         if (_bands >= 2) Cross(_xl, 1, 0);
         if (_bands >= 3) Cross(_xh, 2, 1);
 
-        var l0 = PrismInk.Text("20", 7, NotaPalette.TextDisabled);
+        var l0 = PrismInk.Text("20", NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(l0, new Point(5, h - l0.Height - 1));
-        var l1 = PrismInk.Text("20k Hz", 7, NotaPalette.TextDisabled);
+        var l1 = PrismInk.Text("20k Hz", NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(l1, new Point(w - l1.Width - 5, h - l1.Height - 1));
-        ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
+        ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
     }
 
     // In-place iterative radix-2 Cooley–Tukey FFT.
@@ -364,7 +365,7 @@ internal sealed class PrismTransfer : Control, IValueHandles
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 8 || h < 8) return;
         var rect = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, 4, 4);
+        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         var grid = new Pen(NotaPalette.SurfaceCard, 1);
         ctx.DrawLine(grid, new Point(0, h / 2), new Point(w, h / 2));
         ctx.DrawLine(grid, new Point(w / 2, 0), new Point(w / 2, h));
@@ -387,11 +388,11 @@ internal sealed class PrismTransfer : Control, IValueHandles
         if (_below || _hover == 2) ctx.DrawEllipse(_drag == 2 ? NotaPalette.Accent : _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, _hover == 2 ? new Pen(NotaPalette.TextPrimary, 1) : null, below, 3, 3);
         ctx.DrawEllipse(_drag == 1 ? NotaPalette.Accent : PrismInk.BandLit[_band], _hover == 1 ? new Pen(NotaPalette.TextPrimary, 1) : null, Pt(_thrA, Out(_thrA)), 3.5, 3.5);
 
-        var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), 7, PrismInk.BandLit[_band]);
+        var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), NotaGraph.AxisSize, PrismInk.BandLit[_band]);
         ctx.DrawText(ta, new Point(4, 3));
-        var tb = PrismInk.Text(_below ? NotaNum.F($"below {_thrB:0}") : "below off", 7, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
-        ctx.DrawText(tb, new Point(4, h - tb.Height - 2));
-        ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
+        var tb = PrismInk.Text(_below ? NotaNum.F($"below {_thrB:0}") : "below off", NotaGraph.AxisSize, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
+        ctx.DrawText(tb, new Point(w - tb.Width - 4, h - tb.Height - 2));   // bottom right: the curve never comes down there
+        ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
     }
 }
 
@@ -418,7 +419,7 @@ internal sealed class PrismEnvTrace : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 8 || h < 8) return;
         var rect = new Rect(0, 0, w, h);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, 4, 4);
+        ctx.DrawRectangle(NotaPalette.BgSunken, null, rect, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         const double top = 14, range = 60;   // 0 dB at `top`, −60 dB at the bottom
         double Y(double db) => top + Math.Clamp(-db / range, 0, 1) * (h - top - 2);
         var grid = new Pen(NotaPalette.SurfaceCard, 1);
@@ -445,14 +446,14 @@ internal sealed class PrismEnvTrace : Control
         Trace(_in, new Pen(NotaPalette.BorderStrong, 1.2));
         Trace(_det, new Pen(col, 1.7));
 
-        var title = PrismInk.Caps("Detector envelope · " + PrismInk.Names[_band].ToLowerInvariant(), 7, NotaPalette.TextTertiary);
+        var title = PrismInk.Caps("Detector envelope · " + PrismInk.Names[_band].ToLowerInvariant(), NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(title, new Point(5, 3));
-        var l2 = PrismInk.Text("detector", 7, PrismInk.BandLit[_band]);
-        var l1 = PrismInk.Text("input", 7, NotaPalette.TextTertiary);
+        var l2 = PrismInk.Text("detector", NotaGraph.AxisSize, PrismInk.BandLit[_band]);
+        var l1 = PrismInk.Text("input", NotaGraph.AxisSize, NotaPalette.TextTertiary);
         double x2 = w - l2.Width - 5, x1 = x2 - 14 - l1.Width - 12;
-        ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(x1, 7, 8, 2)); ctx.DrawText(l1, new Point(x1 + 11, 3));
-        ctx.FillRectangle(col, new Rect(x2 - 11, 7, 8, 2)); ctx.DrawText(l2, new Point(x2, 3));
-        ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
+        ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(x1, 9, 8, 2)); ctx.DrawText(l1, new Point(x1 + 11, 3));
+        ctx.FillRectangle(col, new Rect(x2 - 11, 9, 8, 2)); ctx.DrawText(l2, new Point(x2, 3));
+        ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
     }
 }
 
@@ -468,7 +469,7 @@ internal sealed class PrismGrMeter : Control
     public int Band { get; init; }
     public bool Soloed { get; set; }
 
-    public PrismGrMeter() { Width = 18; }
+    public PrismGrMeter() { Width = 14; }
 
     public void Set(double grDb, double boostDb, bool peakHold)
     {
@@ -484,10 +485,10 @@ internal sealed class PrismGrMeter : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 4 || h < 4) return;
         var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(Soloed ? NotaPalette.Accent : PrismInk.InnerBorder, 1), rect, 2, 2);
+        ctx.DrawRectangle(NotaPalette.Groove, Soloed ? new Pen(NotaPalette.Accent, 1) : null, rect, NotaRadius.ValueBarValue, NotaRadius.ValueBarValue);
         double ih = h - 3;
         var col = PrismInk.BandColor[Band];
-        if (_gr > 0.01) ctx.DrawRectangle(PrismInk.Band[Band], null, new Rect(1.5, 1.5, w - 3, ih * Math.Min(1, _gr / Scale)), 2, 2);
+        if (_gr > 0.01) ctx.DrawRectangle(PrismInk.Band[Band], null, new Rect(1.5, 1.5, w - 3, ih * Math.Min(1, _gr / Scale)), NotaRadius.FineValue, NotaRadius.FineValue);
         if (_boost > 0.01) { double bh = ih * Math.Min(1, _boost / Scale); ctx.FillRectangle(PrismInk.Alpha(col, 0x70), new Rect(1.5, h - 1.5 - bh, w - 3, bh)); }
         if (_peakHold && _hold > 0.05)
         {

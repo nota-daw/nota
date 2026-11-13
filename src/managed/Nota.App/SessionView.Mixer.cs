@@ -54,7 +54,7 @@ public sealed partial class SessionView
         var stack = new StackPanel { Spacing = Gap };
         TextBlock Label(string text) => new()
         {
-            Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextDisabled,
+            Text = text, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextDisabled,
             Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Border Row(double h, string text) => new() { Height = h, Child = Label(text) };
@@ -120,19 +120,18 @@ public sealed partial class SessionView
                 if (c.Kind is ColKind.Track or ColKind.Group)
                 {
                     int bus = b, id = c.TrackId;
-                    var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { Default = 0 };
-                    var read = ReadoutText();
-                    void Show() => read.Text = f.Value <= 0.005 ? "–" : NotaNum.Str(f.Value * 100, "0");
-                    SendControl.Attach(f, _engine, id, bus, _ => Show());   // undoable, writes automation (specs/072)
-                    ValueEntry.Attach(f, f.EntryField(Loc.T("session.mixer.send"), v => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0")), read);
-                    Show();
+                    // The send amount is written inside the bar (style guide: shell sliders).
+                    static string SendText(double v) => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0");
+                    var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { Default = 0, Text = SendText };
+                    SendControl.Attach(f, _engine, id, bus);   // undoable, writes automation (specs/072)
+                    ValueEntry.Attach(f, f.EntryField(Loc.T("session.mixer.send"), SendText));
                     sendSyncs.Add(() =>
                     {
                         if (f.Dragging) return;
                         double v = _engine.GetTrackSend(id, bus);
-                        if (Math.Abs(v - f.Value) > 1e-3) { f.Value = v; Show(); }
+                        if (Math.Abs(v - f.Value) > 1e-3) f.Value = v;
                     });
-                    rows.Add(FaderRow(f, read));
+                    rows.Add(FaderRow(f, null));
                 }
                 else rows.Add(new Border { Height = FaderRowH });
             }
@@ -141,6 +140,7 @@ public sealed partial class SessionView
 
         Action meter = () => { };
         var follow = new List<Action<NotaTrackInfo>>();
+        bool cueShown = CueKey.Shown(_engine);   // Cue keys (specs/089)
         if (_showMixer)
         {
             Control panRow;
@@ -155,14 +155,13 @@ public sealed partial class SessionView
                 pan.PanChanged += p => panUndo.Change(p, setPan);
                 ValueEntry.Attach(pan, pan.EntryField(Loc.T("common.pan")));
                 follow.Add(t => { if (!pan.Dragging && Math.Abs(pan.Pan - t.Pan) > 1e-3) pan.Pan = t.Pan; });
-                panRow = FaderRow(pan, ReadoutText());
+                panRow = FaderRow(pan, null);
             }
             else panRow = new Border { Height = FaderRowH };
 
             double vol0 = hasTrack ? ti.Volume : GetMasterVolume?.Invoke() ?? 1f;
-            var vol = new MiniFader(vol0, 1.5) { Default = 1.0 };
-            var db = ReadoutText();
-            void ShowDb() => db.Text = vol.Value <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(vol.Value), signed: true);
+            static string DbText(double v) => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true);
+            var vol = new MiniFader(vol0, 1.5) { Default = 1.0, Text = DbText };
             var volUndo = new MixGesture(_engine, hasTrack ? MixTarget.Volume(c.TrackId) : MixTarget.Master);
             vol.GestureBegin += volUndo.Begin;
             vol.GestureEnd += volUndo.End;
@@ -171,10 +170,9 @@ public sealed partial class SessionView
                 if (hasTrack) _engine.SetTrackVolume(c.TrackId, (float)v);
                 else SetMasterVolume?.Invoke((float)v);
             };
-            vol.ValueChanged += v => { volUndo.Change(v, setVol); ShowDb(); };
-            ValueEntry.Attach(vol, vol.EntryField(Loc.T("common.volume"), v => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true)), db);
-            ShowDb();
-            if (hasTrack) follow.Add(t => { if (!vol.Dragging && Math.Abs(vol.Value - t.Volume) > 1e-3) { vol.Value = t.Volume; ShowDb(); } });
+            vol.ValueChanged += v => volUndo.Change(v, setVol);
+            ValueEntry.Attach(vol, vol.EntryField(Loc.T("common.volume"), DbText));
+            if (hasTrack) follow.Add(t => { if (!vol.Dragging && Math.Abs(vol.Value - t.Volume) > 1e-3) vol.Value = t.Volume; });
 
             var mL = new MeterLine(); var mR = new MeterLine();
             var meters = new StackPanel { Height = MeterRowH, Spacing = 1, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Children = { mL, mR } };
@@ -193,6 +191,13 @@ public sealed partial class SessionView
                 btns.Children.Add(MixToggle("M", ti.Muted != 0, false, (v, _) => _engine.SetTrackMute(id, v), out var syncMute));
                 btns.Children.Add(MixToggle("S", ti.Soloed != 0, false, (v, _) => _engine.SetTrackSolo(id, v), out var syncSolo));
                 follow.Add(t => { syncMute(t.Muted != 0); syncSolo(t.Soloed != 0); });
+                if (cueShown)   // Cue (specs/089)
+                {
+                    var cue = CueKey.Create(_engine, id, 0, 20, NotaRadius.Cell, out var syncCue);
+                    cue.Margin = new Thickness(1.5, 0);
+                    btns.Children.Add(cue);
+                    follow.Add(t => syncCue(_engine.GetTrackCue(t.Id)));
+                }
                 if (c.Kind == ColKind.Track)
                 {
                     btns.Children.Add(MixToggle(null, ti.Armed != 0, true, (v, additive) =>
@@ -207,7 +212,7 @@ public sealed partial class SessionView
                 {
                     bool linkOn = _engine.GetTrackEditLink(id);
                     var glyph = new Glyph(GlyphKind.ChainLink, 10);
-                    var key = new Border { Height = 17, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
+                    var key = new Border { Height = 17, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
                     ToolTip.SetTip(key, ArrangementView.LinkTip);
                     ArrangementView.PaintLinkChip(key, glyph, linkOn);
                     key.PointerPressed += (_, e) =>
@@ -222,7 +227,7 @@ public sealed partial class SessionView
                     follow.Add(_ => { bool v = _engine.GetTrackEditLink(id); if (v != linkOn) { linkOn = v; ArrangementView.PaintLinkChip(key, glyph, v); } });
                 }
             }
-            root.Children.Add(Section(panRow, FaderRow(vol, db), meters, btns));
+            root.Children.Add(Section(panRow, FaderRow(vol, null), meters, btns));
         }
         if (sendSyncs.Count > 0)
         {
@@ -244,18 +249,17 @@ public sealed partial class SessionView
 
     private static TextBlock ReadoutText()
     {
-        var t = new TextBlock { FontSize = 9, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        var t = new TextBlock { FontSize = 8.5, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 
-    private static Control FaderRow(Control fader, TextBlock readout)
+    private static Control FaderRow(Control fader, TextBlock? readout)
     {
         fader.VerticalAlignment = VerticalAlignment.Center;
         var g = new Grid { Height = FaderRowH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(4, 0), ColumnSpacing = 6 };
         g.Children.Add(fader);
-        Grid.SetColumn(readout, 1);
-        g.Children.Add(readout);
+        if (readout is not null) { Grid.SetColumn(readout, 1); g.Children.Add(readout); }
         return g;
     }
 
@@ -265,11 +269,11 @@ public sealed partial class SessionView
     private static Control MixToggle(string? label, bool initial, bool arm, Action<bool, KeyModifiers> set, out Action<bool> sync)
     {
         bool on = initial;
-        var text = new TextBlock { Text = label ?? "", FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = label ?? "", FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var disc = new Glyph(GlyphKind.Record, 7);
         var b = new Border
         {
-            Height = 20, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+            Height = 20, Margin = new Thickness(1.5, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
             BorderBrush = NotaPalette.Seam, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
             Child = arm ? disc : text,
         };
@@ -309,24 +313,33 @@ public sealed partial class SessionView
             if (_engine.TryGetTrackInfo(i, out var t) && t.Id != c.TrackId && !t.IsGroup)
                 names.Add((t.Id, TrackNames.Of(_engine, t), t.IsInstrument));
 
-        // An audio track's hardware input appears once per channel pick (#340): 1, 2, 1/2.
+        // An audio track's hardware input appears once per channel pick: every input, then the
+        // stereo pairs (#340, specs/086).
         var items = new List<(RecordInputPick Value, string Label)>();
         RecordInputPick cur;
-        if (c.IsInstrument)
+        if (c.IsInstrument) // the live input (All inputs / a device) or a track to take MIDI from (specs/086)
         {
-            items.Add((RecordInputPick.Track(-1), Loc.T("session.mixer.all_ins")));
-            foreach (var n in names.Where(n => n.Instrument)) items.Add((RecordInputPick.Track(n.Id), n.Name));
-            cur = RecordInputPick.Track(_engine.GetTrackMidiSource(c.TrackId));
+            var (entries, curEntry) = MidiInputPick.Compact(_engine, c.TrackId, names.Where(n => n.Instrument).Select(n => (n.Id, n.Name)));
+            var mcb = new ComboBox { Height = IoRowH, FontSize = 10, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
+            foreach (var en in entries) mcb.Items.Add(new ComboBoxItem { Content = en.Label, FontSize = 10 });
+            mcb.SelectedIndex = curEntry;
+            int tid = c.TrackId;
+            mcb.SelectionChanged += (_, _) =>
+            {
+                if (mcb.SelectedIndex >= 0 && mcb.SelectedIndex < entries.Count) MidiInputPick.Apply(_engine, tid, entries[mcb.SelectedIndex]);
+            };
+            ToolTip.SetTip(mcb, Loc.T("session.mixer.midi_input_every_input_or"));
+            return mcb;
         }
         else
         {
-            foreach (var (pick, _, shortName) in RecordInputPick.Hardware) items.Add((pick, shortName));
+            foreach (var (pick, _, shortName) in RecordInputPick.HardwareEntries(_engine, c.TrackId)) items.Add((pick, shortName));
             items.Add((RecordInputPick.Track(-1), Loc.T("common.master")));
             foreach (var n in names) items.Add((RecordInputPick.Track(n.Id), n.Name));
             cur = RecordInputPick.Of(_engine, c.TrackId);
         }
-        var cb = new ComboBox { Height = IoRowH, FontSize = 10, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
-        foreach (var it in items) cb.Items.Add(new ComboBoxItem { Content = it.Label, FontSize = 10 });
+        var cb = new ComboBox { Height = IoRowH, FontSize = 9, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
+        foreach (var it in items) cb.Items.Add(new ComboBoxItem { Content = it.Label, FontSize = 9 });
         int sel = items.FindIndex(it => it.Value.Matches(cur));
         cb.SelectedIndex = sel >= 0 ? sel : 0;
         int id = c.TrackId;
@@ -361,9 +374,9 @@ public sealed partial class SessionView
                 if (_engine.TryGetTrackInfo(i, out var t) && t.Id == c.GroupId) { text = TrackNames.Of(_engine, t); break; }
         var b = new Border
         {
-            Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge,
+            Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell,
             Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = text, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
+            Child = new TextBlock { Text = text, FontSize = 9, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
         };
         ToolTip.SetTip(b, Loc.T("session.mixer.output_group_a_track_to"));
         return b;
@@ -383,7 +396,7 @@ public sealed partial class SessionView
                 HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(compact ? 4 : 8, 0),
                 FontSize = compact ? 9 : 10, Height = compact ? 16 : 20, MinWidth = 0,
             };
-            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.Mono");
+            if (mono) tb.BindResource(ToggleButton.FontFamilyProperty, "Font.Measure");
             tb.Click += (_, _) =>
             {
                 foreach (var b in buttons) b.IsChecked = ReferenceEquals(b, tb);
@@ -407,8 +420,8 @@ public sealed partial class SessionView
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width;
-            ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, new Rect(0, 0, w, 2), 1, 1);
-            if (_level > 0) ctx.DrawRectangle(NotaPalette.Success, null, new Rect(0, 0, w * _level, 2), 1, 1);
+            ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, new Rect(0, 0, w, 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
+            if (_level > 0) ctx.DrawRectangle(NotaPalette.Success, null, new Rect(0, 0, w * _level, 2), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
         }
     }
 }

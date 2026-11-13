@@ -81,6 +81,8 @@ public enum MidiTargetKind
     // >= 0 = an Audio Effect Rack device at that index, <= MidiTarget.MidiRackBase (−1000) − mi =
     // the MIDI Effect Rack at MIDI effect index mi. ParamIndex = chain (or unused).
     RackVolume, RackChainGain, RackChainMute, RackChainSolo,
+    // Cue (specs/089): a track's Cue toggle and the Cue mix's level. Appended: saved as ints.
+    TrackCue, CueVolume,
 }
 
 /// <summary>Stable identity of a mappable control. TrackId is a runtime engine id;
@@ -94,6 +96,8 @@ public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int D
     public static MidiTarget TrackPan(int track) => new(MidiTargetKind.TrackPan, track, -1, -1);
     public static MidiTarget TrackMute(int track) => new(MidiTargetKind.TrackMute, track, -1, -1);
     public static MidiTarget TrackSolo(int track) => new(MidiTargetKind.TrackSolo, track, -1, -1);
+    public static MidiTarget TrackCue(int track) => new(MidiTargetKind.TrackCue, track, -1, -1);
+    public static readonly MidiTarget CueVolume = new(MidiTargetKind.CueVolume, -1, -1, -1);
     public static readonly MidiTarget MasterVolume = new(MidiTargetKind.MasterVolume, -1, -1, -1);
     public static readonly MidiTarget TransportPlay = new(MidiTargetKind.TransportPlay, -1, -1, -1);
     public static readonly MidiTarget TransportStop = new(MidiTargetKind.TransportStop, -1, -1, -1);
@@ -107,7 +111,7 @@ public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int D
     public static MidiTarget RackChainSolo(int track, int di, int chain) => new(MidiTargetKind.RackChainSolo, track, di, chain);
 
     /// <summary>True for on/off targets (buttons) — applied as a trigger, not a value.</summary>
-    public bool IsButton => Kind is MidiTargetKind.TrackMute or MidiTargetKind.TrackSolo
+    public bool IsButton => Kind is MidiTargetKind.TrackMute or MidiTargetKind.TrackSolo or MidiTargetKind.TrackCue
         or MidiTargetKind.TransportPlay or MidiTargetKind.TransportStop or MidiTargetKind.TransportRecord
         or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo;
 }

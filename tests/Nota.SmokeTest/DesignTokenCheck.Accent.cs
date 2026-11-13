@@ -42,6 +42,12 @@ internal static partial class DesignTokenCheck
                     fails.Count == 0 ? $"{id}: {p.Id} → {Accent.Hex(r.Tokens!["Accent"])}{(r.Adjusted ? " (lightness adjusted)" : "")} passes every accent rule"
                         : $"{id}: {p.Id} fails {string.Join(", ", fails)}");
             }
+            // The style guide's "picked" tint (AccentSoft) is a wash: it takes the accent's hue
+            // and keeps the theme's lightness, like the other blend tokens.
+            var aqua = AccentColours.Wear(t, new AccentChoice("aqua")).Tokens;
+            yield return (aqua is not null && aqua["AccentSoft"] != t["AccentSoft"]
+                          && Math.Abs(AccentColours.OkLch(aqua["AccentSoft"]).L - AccentColours.OkLch(t["AccentSoft"]).L) < 0.02,
+                $"{id}: the picked tint follows the accent (Aqua) at the theme's lightness");
         }
 
         // Custom colours (research R3; mockup § 2).
@@ -78,14 +84,14 @@ internal static partial class DesignTokenCheck
 
         // Wiring: everything a theme reaches wears the accent.
         var service = File.ReadAllText(Path.Combine(app, "Theme/NotaThemeService.cs"));
-        yield return (service.Contains("Worn(NotaThemes.Find(_choice.Active(osDark))"), "the theme service wears the accented theme");
+        yield return (service.Contains("var theme = Worn(InLook(picked, _look))"), "the theme service wears the accented theme");
         var startup = File.ReadAllText(Path.Combine(app, "App.axaml.cs"));
         yield return (startup.Contains("Accent.Resolve("), "the accent is resolved before the first window paints");
         var remote = File.ReadAllText(Path.Combine(app, "MainWindow.Remote.cs"));
         yield return (remote.Contains("NotaThemeService.Worn(") && remote.Contains("NotaThemeService.Accent"),
             "Nota Remote is sent the accented themes and re-sent on an accent change");
         var prefs = string.Concat(Directory.EnumerateFiles(app, "PreferencesWindow*.cs").Select(File.ReadAllText));
-        yield return (prefs.Contains("NotaThemeService.Worn("), "the theme cards preview each theme with the chosen accent");
+        yield return (prefs.Contains("NotaThemeService.WornForCard("), "the theme cards preview each theme with the chosen accent");
     }
 
     private static Dictionary<string, uint> ReadRgb(string json)

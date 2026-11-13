@@ -20,7 +20,7 @@ internal static class MidiCardHeader
     public static Control LearnButton(DeviceCardContext ctx)
     {
         var tb = new TextBlock { Text = "MIDI learn", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
-        var learn = new Border { Height = 16, CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+        var learn = new Border { Height = 16, CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
         ToolTip.SetTip(learn, Loc.T("device.midi.map_a_hardware_control_arm"));
         void Sync()
         {
@@ -51,6 +51,18 @@ internal static class MidiCardHeader
         var size = DeviceCardKit.Segments(new[] { "S", "L" }, () => isMini() ? 0 : 1,
             i => { setMini(i == 0); ctx.RequestRebuild(); }, out _, padX: 0, minSegWidth: 16, fontSize: 8);
         ToolTip.SetTip(size, Loc.T("device.midi.card_size_s_mini_l"));
+        return size;
+    }
+
+    /// <summary>The S / L / XL toggle of a device that opens in the XL panel (specs/085): the
+    /// same segments with a third, XL. Picking one rebuilds the chain.</summary>
+    public static Control SizeToggle(DeviceCardContext ctx, Func<Nota.Application.CardSize> get, Action<Nota.Application.CardSize> set)
+    {
+        static int Seg(Nota.Application.CardSize s) => s switch { Nota.Application.CardSize.S => 0, Nota.Application.CardSize.XL => 2, _ => 1 };
+        var size = DeviceCardKit.Segments(new[] { "S", "L", "XL" }, () => Seg(get()),
+            i => { set(i == 0 ? Nota.Application.CardSize.S : i == 2 ? Nota.Application.CardSize.XL : Nota.Application.CardSize.L); ctx.RequestRebuild(); },
+            out _, padX: 0, minSegWidth: 16, fontSize: 8);
+        ToolTip.SetTip(size, Loc.T("device.xl.card_size_s_l_xl"));
         return size;
     }
 }

@@ -30,6 +30,9 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     // A launch may have replaced the request between our two loads; only consume it if not.
     int32_t expect = p;
     if (!pending.compare_exchange_strong(expect, kNone, std::memory_order_relaxed)) return false;
+    // The caller flushes instrument voices when a launch/stop applies. Discard releases from
+    // the outgoing slot so they cannot cut a newly launched slot's switch on the same key.
+    articulationReleases.count = 0;
     if (p == kStop || p == kStopNow) {
         playing.store(-1, std::memory_order_relaxed);
     } else {

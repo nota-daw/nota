@@ -34,7 +34,7 @@ namespace Nota.App;
 internal static class SamplerInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = 7)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Measure, size, ink, NotaTextSize.InCard);
 
     public static void Corner(DrawingContext ctx, Rect r, NotaGraph.Corner c, string text, IBrush ink)
     {
@@ -254,7 +254,7 @@ internal sealed class SamplerKeysView : Control
             double kh = black ? keyH * 0.62 : keyH;
             var rect = new Rect(pad + i * kw + 1, bot - kh, Math.Max(1, kw - 2), kh);   // resting on the bottom edge
             IBrush fill = note == _root ? NotaPalette.Accent
-                : note == playing ? NotaPalette.Teal
+                : note == playing ? DeviceCardKit.ModInk
                 : black ? NotaPalette.SurfaceAbyss : NotaPalette.SurfaceRaised;
             ctx.DrawRectangle(fill, note == _root ? null : hair, new RoundedRect(rect, 0, 0, 2, 2));
             if (note == _natural && note != _root)
@@ -276,188 +276,8 @@ internal sealed class SamplerKeysView : Control
     }
 }
 
-// ---- the amp envelope -------------------------------------------------------------------
-internal sealed class SamplerEnvView : Control, IValueHandles
-{
-    private double _a, _d = 0.3, _s = 1, _r = 0.06;
-    private SamplerModel.Snapshot? _live;
-    private string _tl = "", _br = "";
-    private int _drag = -1;   // 0 attack, 1 decay+sustain, 2 release
-    private Point _last;
-
-    /// <summary>A node moved: (param id, new normalized value).</summary>
-    public event Action<string, double>? Changed;
-    public event Action<string>? DragBegin, DragEnd, Reset;
-
-    public SamplerEnvView() { ClipToBounds = true; }
-
-    public void Set(double a, double d, double s, double r, SamplerModel.Snapshot? live, string tl, string br)
-    {
-        _a = a; _d = d; _s = s; _r = r; _live = live; _tl = tl; _br = br;
-        InvalidateVisual();
-    }
-
-    // Each timed segment takes 4 … 30 % of the width by its (normalized) value; the rest is
-    // the held note.
-    private const double SegMin = 0.04, SegSpan = 0.26, Pad = 4;
-    private (Point A, Point D, Point S, Point R, Point O) Nodes()
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        double x0 = Pad, x1 = w - Pad, span = x1 - x0, top = 14, bot = h - 12;
-        double aw = (SegMin + SegSpan * _a) * span, dw = (SegMin + SegSpan * _d) * span, rw = (SegMin + SegSpan * _r) * span;
-        double sy = top + (1 - _s) * (bot - top);
-        var o = new Point(x0, bot);
-        var a = new Point(x0 + aw, top);
-        var d = new Point(a.X + dw, sy);
-        var rEnd = new Point(Math.Max(d.X + 8, x1 - span * 0.06), bot);
-        var s = new Point(Math.Max(d.X, rEnd.X - rw), sy);
-        return (a, d, s, rEnd, o);
-    }
-
-    private static readonly string[] Ids = { "attack", "decay", "release" };
-
-    // Typed entry: 0 = the attack node, 1 = decay / sustain, 2 = release (as a drag picks them).
-    private int NodeAt(Point p)
-    {
-        var n = Nodes();
-        var pts = new[] { n.A, n.D, n.R };
-        int best = -1; double bd = 10;
-        for (int i = 0; i < 3; i++) { double dd = Math.Abs(p.X - pts[i].X) + Math.Abs(p.Y - pts[i].Y) * 0.5; if (dd < bd) { bd = dd; best = i; } }
-        return best;
-    }
-    public int HandleAt(Point p) => NodeAt(p);
-    public Rect HandleRect(int handle)
-    {
-        var n = Nodes();
-        return ValueEntry.Near(handle switch { 0 => n.A, 1 => n.D, _ => n.R }, Bounds.Size);
-    }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        var p = e.GetPosition(this);
-        var n = Nodes();
-        var pts = new[] { n.A, n.D, n.R };
-        int best = -1; double bd = 10;
-        for (int i = 0; i < 3; i++) { double dd = Math.Abs(p.X - pts[i].X) + Math.Abs(p.Y - pts[i].Y) * 0.5; if (dd < bd) { bd = dd; best = i; } }
-        if (best < 0) return;
-        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(Ids[best]); if (best == 1) Reset?.Invoke("sustain"); e.Handled = true; return; }
-        _drag = best; _last = p;
-        DragBegin?.Invoke(Ids[best]);
-        if (best == 1) DragBegin?.Invoke("sustain");
-        e.Pointer.Capture(this);
-        e.Handled = true;
-    }
-
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        var p = e.GetPosition(this);
-        if (_drag < 0)
-        {
-            var n = Nodes();
-            bool near = new[] { n.A, n.D, n.R }.Any(q => Math.Abs(p.X - q.X) + Math.Abs(p.Y - q.Y) * 0.5 < 10);
-            Cursor = near ? new Cursor(StandardCursorType.SizeAll) : Cursor.Default;
-            return;
-        }
-        double span = Math.Max(1, Bounds.Width - Pad * 2) * SegSpan;
-        double dx = (p.X - _last.X) / span;
-        bool fine = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        if (fine) dx *= 0.2;
-        switch (_drag)
-        {
-            case 0: _a = Math.Clamp(_a + dx, 0, 1); Changed?.Invoke("attack", _a); break;
-            case 1:
-            {
-                _d = Math.Clamp(_d + dx, 0, 1); Changed?.Invoke("decay", _d);
-                double top = 14, bot = Bounds.Height - 12;
-                double dy = (p.Y - _last.Y) / Math.Max(1, bot - top) * (fine ? 0.2 : 1);
-                _s = Math.Clamp(_s - dy, 0, 1); Changed?.Invoke("sustain", _s);
-                break;
-            }
-            default: _r = Math.Clamp(_r - dx, 0, 1); Changed?.Invoke("release", _r); break;   // the release node moves left as it grows
-        }
-        _last = p;
-        InvalidateVisual();
-    }
-
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        if (_drag < 0) return;
-        DragEnd?.Invoke(Ids[_drag]);
-        if (_drag == 1) DragEnd?.Invoke("sustain");
-        _drag = -1; InvalidateVisual();
-        e.Pointer.Capture(null);
-    }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        if (_drag >= 0)
-        {
-            DragEnd?.Invoke(Ids[_drag]);
-            if (_drag == 1) DragEnd?.Invoke("sustain");
-            _drag = -1; InvalidateVisual();
-        }
-        base.OnPointerCaptureLost(e);
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var r = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, r);
-        var grid = NotaGraph.GridPen;
-        for (int i = 1; i < 4; i++) ctx.DrawLine(grid, new Point(w * i / 4, 0), new Point(w * i / 4, h));
-        var n = Nodes();
-        ctx.DrawLine(grid, new Point(0, n.A.Y), new Point(w, n.A.Y));
-        ctx.DrawLine(grid, new Point(0, n.D.Y), new Point(w, n.D.Y));
-
-        var geo = new StreamGeometry();
-        using (var g = geo.Open())
-        {
-            g.BeginFigure(n.O, true);
-            g.LineTo(n.A); g.LineTo(n.D); g.LineTo(n.S); g.LineTo(n.R);
-            g.EndFigure(true);
-        }
-        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x14), null, geo);
-        var line = new StreamGeometry();
-        using (var g = line.Open())
-        {
-            g.BeginFigure(n.O, false);
-            g.LineTo(n.A); g.LineTo(n.D); g.LineTo(n.S); g.LineTo(n.R);
-            g.EndFigure(false);
-        }
-        ctx.DrawGeometry(null, NotaGraph.PrimaryPen, line);
-        NotaGraph.Node(ctx, n.A, _drag == 0);
-        NotaGraph.Node(ctx, n.D, _drag == 1);
-        NotaGraph.Node(ctx, n.S, false);
-        NotaGraph.Node(ctx, n.R, _drag == 2);
-
-        // The loudest voice on the curve, in teal.
-        if (_live is { Live: true, Stage: >= 0 } lv)
-        {
-            double env = Math.Clamp(lv.Env, 0, 1), top = n.A.Y, bot = n.O.Y;
-            double y = bot - env * (bot - top);
-            double x = lv.Stage switch
-            {
-                0 => n.O.X + (n.A.X - n.O.X) * env,
-                1 => n.A.X + (n.D.X - n.A.X) * (1 - env) / Math.Max(1e-3, 1 - _s),
-                2 => (n.D.X + n.S.X) / 2,
-                _ => n.S.X + (n.R.X - n.S.X) * (1 - env / Math.Max(1e-3, _s)),
-            };
-            x = Math.Clamp(x, n.O.X, n.R.X);
-            NotaGraph.Node(ctx, new Point(x, y), true, NotaPalette.Teal);
-        }
-
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, Loc.T("device.sampler.note_held"), NotaPalette.TextAxis);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "0", NotaPalette.TextAxis);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, _br, NotaPalette.TextAxis);
-    }
-}
-
 // ---- the filter -------------------------------------------------------------------------
-internal sealed class SamplerFilterView : Control
+internal sealed class SamplerFilterView : FilterGraphBase
 {
     private int _type;
     private double _cut = 1, _reso, _liveHz = -1;
@@ -468,7 +288,7 @@ internal sealed class SamplerFilterView : Control
     public event Action<string, double>? Changed;
     public event Action? DragBegin, DragEnd, Reset;
 
-    private const double FLo = 30, FHi = 18000, DbTop = 18, DbBot = -42;
+    private const double FLo = 30, FHi = 18000;
 
     public SamplerFilterView() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.SizeAll); }
 
@@ -478,7 +298,11 @@ internal sealed class SamplerFilterView : Control
         InvalidateVisual();
     }
 
-    private static double XOf(double hz, double w) => Math.Log(Math.Clamp(hz, FLo, FHi) / FLo) / Math.Log(FHi / FLo) * w;
+    // The shared filter graph (#531) over 30 Hz … 18 kHz; an Off filter lights no cutoff.
+    protected override (double Lo, double Hi) Span => (FLo, FHi);
+    protected override (double Top, double Bottom) DbSpan => (18.0, -42.0);
+    protected override double CutoffHz => _type > 0 ? SamplerModel.CutoffHz((float)_cut) : double.NaN;
+    protected override double ResponseDb(double hz) => MagDb(_type, hz, SamplerModel.CutoffHz((float)_cut), _reso);
 
     // The engine's TPT SVF magnitude at f for cutoff fc (k = 2 − 1.9·reso).
     private static double MagDb(int type, double f, double fc, double reso)
@@ -493,20 +317,21 @@ internal sealed class SamplerFilterView : Control
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset?.Invoke(); e.Handled = true; return; }
-        _drag = true; _last = e.GetPosition(this);
+        _drag = Dragging = true; _last = e.GetPosition(this);
         DragBegin?.Invoke();
         e.Pointer.Capture(this);
         e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e)
     {
+        base.OnPointerMoved(e);
         if (!_drag) return;
         var p = e.GetPosition(this);
         double k = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 0.2 : 1;
         // x across the window spans 30 Hz … 18 kHz; the cutoff param spans 20 Hz … 20 kHz.
-        double octPerPx = Math.Log2(FHi / FLo) / Math.Max(1, Bounds.Width);
+        double octPerPx = Math.Log2(FHi / FLo) / Math.Max(1, PlotRect.Width);
         _cut = Math.Clamp(_cut + (p.X - _last.X) * octPerPx / Math.Log2(1000) * k, 0, 1);
-        _reso = Math.Clamp(_reso - (p.Y - _last.Y) / Math.Max(1, Bounds.Height) * k, 0, 1);
+        _reso = Math.Clamp(_reso - (p.Y - _last.Y) / Math.Max(1, PlotRect.Height) * k, 0, 1);
         Changed?.Invoke("cutoff", _cut);
         Changed?.Invoke("resonance", _reso);
         _last = p;
@@ -515,72 +340,38 @@ internal sealed class SamplerFilterView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false; InvalidateVisual();
+        _drag = Dragging = false; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke();
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag) { _drag = false; InvalidateVisual(); DragEnd?.Invoke(); }
+        if (_drag) { _drag = Dragging = false; InvalidateVisual(); DragEnd?.Invoke(); }
         base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
     {
-        double w = Bounds.Width, h = Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        var r = new Rect(0, 0, w, h);
-        NotaGraph.Window(ctx, r);
-        double top = 12, bot = h - 12;
-        double Y(double db) => top + (DbTop - Math.Clamp(db, DbBot, DbTop)) / (DbTop - DbBot) * (bot - top);
-        var grid = NotaGraph.GridPen;
-        foreach (var hz in new[] { 100.0, 1000, 10000 }) { double x = XOf(hz, w); ctx.DrawLine(grid, new Point(x, 0), new Point(x, h)); }
-        ctx.DrawLine(grid, new Point(0, Y(0)), new Point(w, Y(0)));
-        ctx.DrawLine(grid, new Point(0, Y(-24)), new Point(w, Y(-24)));
-
+        double w = Bounds.Width;
+        if (w <= 0 || Bounds.Height <= 0) return;
+        DrawBack(ctx);
+        if (_type > 0) DrawCurve(ctx, ResponseDb);
+        else DrawCurve(ctx, ResponseDb, NotaPalette.TextTertiary, fill: false, width: 1.2);
+        var r = PlotRect;
+        if (_type > 0 && _liveHz > 0 && Math.Abs(Math.Log2(_liveHz / CutoffHz)) > 0.05)
+        {
+            double lx = XOf(_liveHz);
+            // The cutoff the loudest voice hears now: a solid line in the lighter grey, named
+            // "live" at its top, against the set cutoff's dashed line.
+            ctx.DrawLine(new Pen(DeviceCardKit.ModInkBright, 1.2), new Point(lx, r.Y + 1), new Point(lx, r.Bottom - 1));
+            var lt = SamplerInk.Mono("live", DeviceCardKit.ModInkBright);
+            ctx.DrawText(lt, new Point(lx + 3 + lt.Width <= w - 2 ? lx + 3 : lx - 3 - lt.Width, 3 + lt.Height));
+        }
+        if (_tl.Length > 0) SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, _tl, NotaPalette.TextTertiary);
         double fc = SamplerModel.CutoffHz((float)_cut);
-        var pts = new List<Point>();
-        for (int i = 0; i <= 120; i++)
-        {
-            double x = i / 120.0 * w;
-            double f = FLo * Math.Pow(FHi / FLo, i / 120.0);
-            pts.Add(new Point(x, Y(MagDb(_type, f, fc, _reso))));
-        }
-        var fill = new StreamGeometry();
-        using (var g = fill.Open())
-        {
-            g.BeginFigure(new Point(0, bot), true);
-            foreach (var p in pts) g.LineTo(p);
-            g.LineTo(new Point(w, bot));
-            g.EndFigure(true);
-        }
-        var line = new StreamGeometry();
-        using (var g = line.Open())
-        {
-            g.BeginFigure(pts[0], false);
-            for (int i = 1; i < pts.Count; i++) g.LineTo(pts[i]);
-            g.EndFigure(false);
-        }
-        if (_type > 0) ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x14), null, fill);
-        ctx.DrawGeometry(null, _type > 0 ? NotaGraph.PrimaryPen : new Pen(NotaPalette.TextTertiary, 1.2), line);
-
-        if (_type > 0)
-        {
-            double cx = XOf(fc, w);
-            ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(cx, 0), new Point(cx, h));
-            NotaGraph.Node(ctx, new Point(cx, Y(MagDb(_type, fc, fc, _reso))), _drag);
-            if (_liveHz > 0 && Math.Abs(Math.Log2(_liveHz / fc)) > 0.05)
-            {
-                double lx = XOf(_liveHz, w);
-                ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(lx, 0), new Point(lx, h));
-            }
-        }
-
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "30\u2009Hz", NotaPalette.TextAxis);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, "18\u2009k", NotaPalette.TextAxis);
-        var k1 = SamplerInk.Mono("1\u2009k", NotaPalette.TextAxis);
-        ctx.DrawText(k1, new Point(XOf(1000, w) + 3, h - 3 - k1.Height + 1));
+        var at = new Point(XOf(fc), YOf(MagDb(_type, fc, fc, _reso)));
+        DrawFront(ctx, _type > 0 ? at.Y : double.NaN);
+        if (_type > 0) DrawHandle(ctx, at);
     }
 }

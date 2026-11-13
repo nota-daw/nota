@@ -13,6 +13,7 @@
 
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Nota.Infrastructure;
@@ -51,6 +52,11 @@ public sealed class ProjectDocument
     /// Capture, written to <c>plugin-states/</c> by Save; not serialized.</summary>
     [JsonIgnore] public Dictionary<string, byte[]> StateBlobs { get; } = new();
 
+    /// <summary>Nota Aurora custom wavetables (format v29, specs/053): relative bundle path
+    /// -&gt; the table's frames (2048 floats each). Populated by Capture, written to
+    /// <c>samples/</c> as float32 WAV by Save; not serialized.</summary>
+    [JsonIgnore] public Dictionary<string, float[]> TableRefs { get; } = new();
+
     /// <summary>Name binaries by live id / position (<c>sample-N.wav</c>, <c>state-N.bin</c>)
     /// instead of by content hash. Cheap — nothing is read or hashed — but only stable within
     /// a session, so it is for change detection (<see cref="ProjectService.Capture"/> with
@@ -76,6 +82,8 @@ public sealed class MixerDto
 {
     public string PanLaw { get; set; } = "balance";
     public bool PanLawLegacy { get; set; }
+    /// <summary>The Cue mix's level (specs/089), linear; null = 1 (unity, and older files).</summary>
+    public float? CueVolume { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -119,6 +127,7 @@ public sealed class TrackDto
     public bool Mute { get; set; }
     public bool Solo { get; set; }
     public bool Armed { get; set; }
+    public bool? Cue { get; set; }              // in Cue (specs/089); null = not (and older files)
     public int ReturnIndex { get; set; } = -1; // >=0 for return tracks
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position
@@ -131,8 +140,22 @@ public sealed class TrackDto
     // Hardware input channels (audio tracks): 0 stereo pair, 1 input 1, 2 input 2. Absent in
     // files saved before 0.58, which recorded the stereo pair.
     public int? InputChannels { get; set; }
+    // The hardware input as device channel + width (specs/086): InputFirst 1-based, InputWidth
+    // 1 (mono) or 2 (pair). Absent in files saved before 0.60 — then InputChannels says it.
+    // InputChannels is still written when it can name the pick, so 0.59 opens the file.
+    public int? InputFirst { get; set; }
+    public int? InputWidth { get; set; }
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
+    // An instrument track's MIDI input (specs/086): the device's uid (absent = All inputs) and
+    // channel (absent / 0 = all, 1–16).
+    public string? MidiInputUid { get; set; }
+    public int? MidiInputChannel { get; set; }
+    // MIDI playback offset in ms (negative = earlier; playback only, notes don't move). Omitted = 0. v30.
+    public double? MidiOffsetMs { get; set; }
+    // The track's articulation map (specs/085), embedded as Nota's map JSON
+    // (contracts/nota-articulation-map-file.md). Omitted = none. v30.
+    public JsonObject? ArticulationMap { get; set; }
     public float[] Sends { get; set; } = new float[4];
     public InstrumentDto? Instrument { get; set; }
     public List<MidiDeviceDto> MidiEffects { get; set; } = new();   // MIDI FX chain, before the instrument
@@ -347,6 +370,9 @@ public sealed class InstrumentDto
     public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
     public List<VoiceSampleDto>? VoiceSamples { get; set; }
+    /// <summary>Nota Aurora (Kind == 5) imported wavetables, one per oscillator that holds one
+    /// (format v29, specs/053); null = none.</summary>
+    public List<WavetableDto>? Wavetables { get; set; }
     /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
     public bool Bypassed { get; set; }
 
@@ -355,6 +381,22 @@ public sealed class InstrumentDto
 
 /// <summary>One drum voice's sample for Nota Rhythm: the voice index + a bundle-relative
 /// path into <c>samples/</c>.</summary>
+/// <summary>One Nota Aurora oscillator's imported wavetable (format v29, specs/053): its frames
+/// as a float32 WAV in <c>samples/</c> (a <c>clm </c> chunk names the 2048-sample frame), the
+/// name it was imported as, how the file was read (0 wavetable file, 1 single cycle,
+/// 2 recording) and whether the oscillator plays it. <see cref="Missing"/>: the table could not
+/// be restored when the project was last opened; <see cref="Sample"/> is empty then.</summary>
+public sealed class WavetableDto
+{
+    public int Osc { get; set; }
+    public string Sample { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int Origin { get; set; }
+    public int Frames { get; set; }
+    public bool UseCustom { get; set; } = true;
+    public bool Missing { get; set; }
+}
+
 public sealed class VoiceSampleDto
 {
     public int Voice { get; set; }
@@ -403,6 +445,9 @@ public sealed class AudioClipDto
     // Ends that play at full level where take sections meet: 1 head, 2 tail (v29, optional;
     // absent = both fade). A flatten keeps such a join after its takes are gone.
     public int? JoinedEdges { get; set; }
+    /// <summary>The file the clip's audio came from (spec 092, #581) — Locate opens it.
+    /// Optional; absent for recordings, renders and projects saved before it existed.</summary>
+    public string? Source { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -415,6 +460,8 @@ public sealed class AudioTakeDto
     public int Number { get; set; }            // "Take N" as shown on the lane
     public int Group { get; set; }             // takes of one recording share a group
     public string Sample { get; set; } = "";
+    /// <summary>The file the take's audio came from (spec 092); absent for a recording.</summary>
+    public string? Source { get; set; }
     public double OriginBeat { get; set; }     // beat of the sample's frame 0
     public double SourceOffsetFrames { get; set; }
     public long LengthFrames { get; set; }
@@ -575,9 +622,16 @@ public sealed class NoteDto
     /// <summary>Recorded MPE, when the note has any (omitted otherwise).</summary>
     public NoteMpeDto? Mpe { get; set; }
 
+    /// <summary>The note's articulation: an id in its track's articulation map (omitted = none). v30.</summary>
+    public int? Articulation { get; set; }
+
     public NoteDto() { }
-    public NoteDto(NotaNote n) { Pitch = n.Pitch; Start = n.StartBeat; Length = n.LengthBeats; Velocity = n.Velocity; }
-    public NotaNote ToNote() => new(Pitch, Start, Length, Velocity);
+    public NoteDto(NotaNote n)
+    {
+        Pitch = n.Pitch; Start = n.StartBeat; Length = n.LengthBeats; Velocity = n.Velocity;
+        Articulation = n.ArticulationId > 0 ? n.ArticulationId : null;
+    }
+    public NotaNote ToNote() => new(Pitch, Start, Length, Velocity) { ArticulationId = Articulation is > 0 ? Articulation.Value : 0 };
 }
 
 /// <summary>A note's recorded expression: per dimension a flat [beat, value, beat, value…] list,

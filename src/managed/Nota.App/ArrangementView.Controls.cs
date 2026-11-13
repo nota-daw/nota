@@ -13,6 +13,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 using Nota.Application.Localization;
 
@@ -186,10 +187,13 @@ public sealed partial class ArrangementView
                 double x = _o.BeatToX(beat);
                 if (x > w) break;
                 if (x < 0) continue;
-                ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
+                // A phrase bar (specs/092) runs its heavier line the ruler's full height, so the
+                // phrase reads from the bar numbers down through the lanes.
+                if (PhraseLines.StartsPhrase(bar, _o._phraseBars)) ctx.DrawLine(PhrasePen, new Point(x, 0), new Point(x, h));
+                else ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
                 if (bar % labelEvery != 0) continue;
-                var ft = new FormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
+                var ft = new NotaFormattedText((bar + 1).ToString(), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
         }
@@ -198,9 +202,13 @@ public sealed partial class ArrangementView
         private void RenderTime(DrawingContext ctx, double w, double h, double bpm)
         {
             double pxPerSec = _o._pixelsPerBeat * bpm / 60.0;
-            double charW = _charW > 0 ? _charW
-                : _charW = new FormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    NotaFonts.Mono, NotaType.Axis, RulerText).Width / 10;
+            if (_charW <= 0 || _charWKey != (NotaTextSize.Step, NotaFonts.FaceStamp))   // re-measure when Text size or the face changes
+            {
+                _charWKey = (NotaTextSize.Step, NotaFonts.FaceStamp);
+                _charW = new NotaFormattedText("0000000000", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.Measure, NotaType.Axis, RulerText).Width / 10;
+            }
+            double charW = _charW;
             double stepS = RulerLabels.TimeSteps[^1];
             foreach (var st in RulerLabels.TimeSteps)
             {
@@ -215,12 +223,13 @@ public sealed partial class ArrangementView
                 if (x > w) break;
                 if (x < 0) continue;
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
-                var ft = new FormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, RulerText);
+                var ft = new NotaFormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, RulerText);
                 ctx.DrawText(ft, new Point(x + 3, 3));
             }
         }
         private double _charW;
+        private (int Step, int Face) _charWKey;   // the Text size step and face _charW was measured at
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -271,8 +280,8 @@ public sealed partial class ArrangementView
             // While a loop region is drawn, moved or resized: its start, end and length.
             if (_o._loopDragging && _o._loopE > _o._loopS)
             {
-                var ft = new FormattedText(_o.LoopReadout(), CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.Mono, NotaType.Axis, ReadoutText);
+                var ft = new NotaFormattedText(_o.LoopReadout(), CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.Measure, NotaType.Axis, ReadoutText);
                 double tx = Math.Clamp(_o.BeatToX(_o._loopE) + 6, 2, Math.Max(2, w - ft.Width - 6));
                 var box = new Rect(tx - 3, 2, ft.Width + 6, h - 4);
                 ctx.FillRectangle(ChromeBg, box);
@@ -449,7 +458,7 @@ public sealed partial class ArrangementView
                 var pts = _o._masterAuto;
                 if (pts.Count == 0)
                 {
-                    var hint = new FormattedText(Loc.T("arrangement.controls.click_to_add_master_volume"), CultureInfo.InvariantCulture,
+                    var hint = new NotaFormattedText(Loc.T("arrangement.controls.click_to_add_master_volume"), CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                     ctx.DrawText(hint, new Point(12, my + (mh - hint.Height) / 2));
                 }
@@ -475,7 +484,7 @@ public sealed partial class ArrangementView
             }
             else
             {
-                var ft = new FormattedText(Loc.T("arrangement.controls.master_volume"), CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(Loc.T("arrangement.controls.master_volume"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                 ctx.DrawText(ft, new Point(12, my + (mh - ft.Height) / 2));
             }

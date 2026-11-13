@@ -2,14 +2,16 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Utility body (device kind 4), a build of the "Nota Utility"
-// mockup (700 × 260) on the Valve / Vintage / Auto Filter frame: an always-visible LEVEL
-// column (input and output meters with their level in the meter's unit), a centre panel with
-// Field / Mono / Levels tabs — the stereo field by frequency, the width over frequency with the
-// mono region, input and output over the last 8 s against the target — a right panel with
-// Routing / Output tabs, and a status strip. Every picture comes from the engine (Utility.h
-// scopeRead); every control is a device param, so automation / MIDI learn / presets / A-B /
-// persistence come for free. Params are in real units (Gain dB, Width %, Mono Freq Hz …);
-// the controls work on 0..1 and map.
+// mockup, laid out the #531 way (CardLayout; DESIGN.md § Devices › Card layout): a centre
+// panel with Field / Mono / Levels tabs — the stereo field by frequency (Width · Balance beside
+// it), the width over frequency with the mono region (Mono beside it), input and output over the
+// last 8 s against the target (Target beside it) — and a right panel with no tabs of its own
+// that follows them: Phase (Ø L, Ø R, Mute, the correlation box), Mono (on, slope), Match (level
+// match, gain match, the measurements box, the true-peak limiter) — over the Gain knob. S (260)
+// is the field over Gain, Width, Balance and Mono. Every picture comes from the engine (Utility.h scopeRead); every
+// control is a device param, so automation / MIDI learn / presets / A-B / persistence come for
+// free. Params are in real units (Gain dB, Width %, Mono Freq Hz …); the controls work on
+// 0..1 and map.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
@@ -47,6 +49,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
     private static readonly int[] Slopes = { 6, 12, 24 };
 
     public double Width => 700;
+    public double WidthFor(IAudioEngine engine, int trackId, int deviceIndex) => CardLayout.WidthFor(engine, trackId, deviceIndex, Width);
+    public Control? HeaderAccessory(DeviceCardContext ctx, int deviceIndex) => CardLayout.SizeToggle(ctx, deviceIndex);
     public bool FullBleed => true;
     public string? Subtitle => "Utility";
 
@@ -97,7 +101,6 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         double ScDb(int i) => scN > i ? scope[i] : -120;
 
         // ---- units ----------------------------------------------------------------
-        static string Db1(double v) => NotaNum.F($"{v:+0.0;−0.0;0.0}");
         static string GainF(double v) => NotaNum.F($"{v:+0.0;−0.0;0.0} dB");
         static string BalF(double v) => Math.Abs(v) < 0.005 ? "C" : NotaNum.F($"{(v < 0 ? "L" : "R")} {Math.Abs(v) * 100:0}");
         static string WidthF(double v) => NotaNum.F($"{v:0} %");
@@ -130,19 +133,15 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
-        static StackPanel Row(double sp, params Control[] cs)
-        { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
-        static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Measure"); return tb; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, Func<bool>? dim = null, double cellW = 44)
+        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, Func<bool>? dim = null, double cellW = 44, double size = 34, bool bipolar = false)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(N(p), 1.0) { Accent = true, ArcColor = arc, Default = DefN(p), Width = 34, Height = 34 };
+            var knob = new Knob(N(p), 1.0) { Accent = true, ArcColor = arc, Bipolar = bipolar, Default = DefN(p), Width = size, Height = size };
             knob.Format = v => fmt(FromN(p, v));   // read-out at any value: typing searches it
             knob.ValueChanged += v => { SetN(p, v); val.Text = fmt(P(p)); };
             knob.GestureBegin += () => Begin(p);
@@ -187,7 +186,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var tb = new TextBlock { Text = names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; pick(iv); RefreshAll(); e.Handled = true; };
                 cells[i] = b; texts[i] = tb; row.Children.Add(b);
             }
@@ -213,7 +212,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false, double h = 16, double padX = 7)
         {
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -239,7 +238,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
                 FontWeight = primary ? FontWeight.SemiBold : FontWeight.Normal, Foreground = TextPrimary };
             // A push button rests raised; `primary` only sets its text heavier (accent is for state, not actions).
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, Background = Raised,
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, Background = Raised,
                 BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); RefreshAll(); e.Handled = true; };
@@ -262,29 +261,6 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             return g;
         }
 
-        static Grid HeadRow(Control left, Control right)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
-            g.Children.Add(left); g.Children.Add(Col(right, 1));
-            return g;
-        }
-        Control KnobRow(Control[] knobs, Func<string> info1, Func<string> info2)
-        {
-            var i1 = Mono("", 7, TextTertiary); i1.HorizontalAlignment = HorizontalAlignment.Right;
-            var i2 = Mono("", 7, TextTertiary); i2.HorizontalAlignment = HorizontalAlignment.Right;
-            i1.TextTrimming = i2.TextTrimming = TextTrimming.CharacterEllipsis;
-            readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52, ColumnSpacing = 6 };
-            g.Children.Add(Row(4, knobs));
-            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
-            return g;
-        }
-        static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
-        {
-            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
-        };
-
         // ---- actions -----------------------------------------------------------------
         // Gain match: Gain is set so the output — metered before Gain and the auto-match ride —
         // meets the reference (the input's level or Target) over the last 3 s, in the meter's unit.
@@ -303,51 +279,23 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         string GainMatchTip = Loc.T("device.utility.gain_match_moves_gain_once");
         string ResetTip = Loc.T("device.utility.reset_gain_back_to_0");
 
-        // ======================================================================
-        // LEFT — Level column (input · output)
-        // ======================================================================
-        static AfFader MeterBar(IBrush ink) => new() { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
-        var levelTitle = Caps("LEVEL"); levelTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inMeter = MeterBar(NotaPalette.VizInk);
-        var outMeter = MeterBar(Teal);
-        var levelIn = Mono("", 7, TextPrimary); levelIn.HorizontalAlignment = HorizontalAlignment.Center;
-        var levelOut = Mono("", 7, TextPrimary); levelOut.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(levelIn, Loc.T("device.utility.the_inputs_level_in_the"));
-        ToolTip.SetTip(levelOut, Loc.T("device.utility.the_outputs_level_in_the"));
-        static double MeterN(double lin) => lin > 1e-6 ? Math.Clamp((20 * Math.Log10(lin) + 60) / 60, 0, 1) : 0;
-        readouts.Add(() =>
-        {
-            inMeter.Set(MeterN(Sc(S_InPk)), double.NaN);
-            outMeter.Set(MeterN(Sc(S_OutPk)), double.NaN);
-            levelIn.Text = LvlF(ScDb(S_InLevel));
-            levelOut.Text = NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}");
-            levelTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
-        });
-        Control MeterCell(AfFader m, string label, string tip)
-        {
-            var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            var d = new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = m } } };
-            ToolTip.SetTip(d, tip);
-            return d;
-        }
-        var meters = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        meters.Children.Add(MeterCell(inMeter, "IN", Loc.T("device.utility.input_peak_60_0_dbfs")));
-        meters.Children.Add(Col(MeterCell(outMeter, "OUT", Loc.T("device.utility.output_peak_60_0_dbfs")), 1));
-        var levelCol = new RuleSection
-        {
-            Width = 56, Padding = new Thickness(0, 5, 0, 4),
-            Child = new DockPanel { Children = { Docked(levelTitle, Dock.Top), Docked(levelOut, Dock.Bottom), Docked(levelIn, Dock.Bottom), meters } },
-        };
-        DockPanel.SetDock(levelCol, Dock.Left);
-
         Control WidthModeSeg() => Seg(WidthMode, new[] { "L/R", "M/S" },
             Loc.T("device.utility.width_law_l_r_the"));
+        Control Info(Func<string> text, Func<IBrush>? ink = null)
+        {
+            var t = Mono("", 8, TextSecondary);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            readouts.Add(() => { t.Text = text(); t.Foreground = ink?.Invoke() ?? TextSecondary; });
+            return t;
+        }
 
         // ======================================================================
-        // CENTRE — Field
+        // CENTRE — Field: the stereo field by frequency (drag sideways for the balance, up and
+        // down for the width); Width · Balance beside it, the channel and the width law under it.
         // ======================================================================
+        int centreTab = 0;
         UtFieldView? field = null;
-        Control FieldTab()
+        UtFieldView NewField()
         {
             field = new UtFieldView();
             field.StartH = () => N(Balance);
@@ -358,25 +306,15 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             field.GestureEnd += () => { End(Balance); End(Width_); };
             ToolTip.SetTip(field, Loc.T("device.utility.the_outputs_stereo_field_by"));
             Learn(field, Width_);
-
-            var corr = Mono("", 7, TextTertiary);
-            readouts.Add(() => corr.Text = "corr " + CorrF(Sc(S_Corr)));
-            var chips = IndexChips(ChannelMode, Modes, Loc.T("device.utility.channel_stereo_left_or_right"));
-            var head = HeadRow(Row(6, Caps("CHANNEL"), chips, WidthModeSeg()), corr);
-            var knobs = KnobRow(new[]
-            {
-                K(Gain, "GAIN", GainF),
-                K(Balance, "BALANCE", BalF),
-                K(Width_, "WIDTH", WidthF),
-                K(MonoFreq, "MONO", MonoF, dim: () => !On(MonoBelow)),
-            },
-            () => NotaNum.F($"correlation {CorrF(Sc(S_Corr))} · {BalanceText()}"),
-            () => NotaNum.F($"{PhaseText()} · {MonoText()}"));
-            return TabBody(head, field, knobs);
+            return field;
         }
+        Control FieldTab() => CardLayout.View(NewField(),
+            CardLayout.KnobColumn(K(Width_, "WIDTH", WidthF, cellW: 50), K(Balance, "BALANCE", BalF, cellW: 50)),
+            CardLayout.Line(6, IndexChips(ChannelMode, Modes, Loc.T("device.utility.channel_stereo_left_or_right")), WidthModeSeg()));
 
         // ======================================================================
-        // CENTRE — Mono
+        // CENTRE — Mono: the width over frequency with the mono region (drag the cutoff
+        // sideways); Mono beside it, the usual cutoffs under it.
         // ======================================================================
         UtWidthView? widthView = null;
         Control MonoTab()
@@ -390,32 +328,17 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             widthView.GestureEnd += () => { End(MonoFreq); End(Width_); };
             ToolTip.SetTip(widthView, Loc.T("device.utility.the_width_over_frequency_solid"));
             Learn(widthView, MonoFreq);
-
-            var wv = Mono("", 7, TextSecondary);
-            readouts.Add(() => wv.Text = NotaNum.F($"width {Sc(S_EffWidth):0}"));
-            var onOff = ToggleLatch(MonoBelow, () => On(MonoBelow) ? "On" : "Off", Loc.T("device.utility.mono_below_removes_the_side"));
             float[] quick = { 60, 120, 240 };
             var quickSeg = Segments(new[] { "60", "120", "240" }, () => NearestHz(P(MonoFreq), quick), iv => { SetP(MonoFreq, quick[iv]); if (!On(MonoBelow)) SetP(MonoBelow, 1f); RefreshAll(); }, out var qSync, padX: 6);
             readouts.Add(qSync);
             ToolTip.SetTip(quickSeg, Loc.T("device.utility.the_usual_cutoffs_60_120"));
             Learn(quickSeg, MonoFreq);
-            var slope = Latch(MonoSlope, () => Idx(MonoSlope) > 0, () => SetP(MonoSlope, (Idx(MonoSlope) + 1) % 3),
-                () => NotaNum.F($"Slope {Slopes[Idx(MonoSlope)]}"), Loc.T("device.utility.slope_of_the_mono_cutoff"));
-            var head = HeadRow(Row(6, Caps("MONO"), onOff, quickSeg, WidthModeSeg(), slope), wv);
-            var knobs = KnobRow(new[]
-            {
-                K(MonoFreq, "MONO", MonoF, dim: () => !On(MonoBelow)),
-                K(Width_, "WIDTH", WidthF),
-                K(Balance, "BALANCE", BalF, Teal),
-                K(Gain, "GAIN", GainF, Teal),
-            },
-            () => On(MonoBelow) ? NotaNum.F($"below {HzF(P(MonoFreq))} width 0 · slope {Slopes[Idx(MonoSlope)]} dB/oct") : NotaNum.F($"full range · width {Sc(S_EffWidth):0} %"),
-            () => NotaNum.F($"correlation {CorrF(Sc(S_Corr))} · {(Sc(S_Corr) >= 0.3 || Sc(S_OutPk) < 1e-4 ? "mono-safe" : Sc(S_Corr) >= 0 ? "check in mono" : "mono risk")}"));
-            return TabBody(head, widthView, knobs);
+            return CardLayout.View(widthView, CardLayout.KnobColumn(K(MonoFreq, "MONO", MonoF, dim: () => !On(MonoBelow), cellW: 50)), quickSeg);
         }
 
         // ======================================================================
-        // CENTRE — Levels
+        // CENTRE — Levels: input and output over the last seconds against the target (drag
+        // it); Target beside it, the meter under it.
         // ======================================================================
         UtLevelView? levelView = null;
         Control LevelsTab()
@@ -427,64 +350,25 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             levelView.GestureEnd += () => End(Target);
             ToolTip.SetTip(levelView, Loc.T("device.utility.input_teal_and_output_neutral"));
             Learn(levelView, Target);
-
-            var delta = Mono("", 7, TextSecondary);
-            readouts.Add(() => delta.Text = DeltaText());
-            var chips = IndexChips(Meter, Meters, Loc.T("device.utility.meter_lufs_s_short_term"));
-            var head = HeadRow(Row(6, Caps("METER"), chips, Button("Gain match", GainMatch, GainMatchTip, true), Button("Reset", ResetLevels, ResetTip, false)), delta);
-            var knobs = KnobRow(new[]
-            {
-                K(Gain, "GAIN", GainF),
-                K(Balance, "BALANCE", BalF, Teal),
-                K(Width_, "WIDTH", WidthF, Teal),
-                K(Target, "TARGET", v => NotaNum.F($"{v:0.0}"), Teal),
-            },
-            () => NotaNum.F($"in {LvlF(ScDb(S_InLevel))} → out {LvlF(ScDb(S_OutLevel))} {Meters[MeterI()]}"),
-            () => ScDb(S_TruePeak) > -119 ? NotaNum.F($"true peak {Sc(S_TruePeak):0.0} dBTP · headroom {Math.Max(0, -Sc(S_TruePeak)):0.0} dB") : "true peak —");
-            return TabBody(head, levelView, knobs);
+            return CardLayout.View(levelView,
+                CardLayout.KnobColumn(K(Target, "TARGET", v => NotaNum.F($"{v:0.0}"), Teal, cellW: 50)),
+                IndexChips(Meter, Meters, Loc.T("device.utility.meter_lufs_s_short_term")));
         }
 
         // ======================================================================
-        // RIGHT — Routing / Output
+        // RIGHT — follows the centre tab: Routing (Field) · Mono (Mono) · Match (Levels)
         // ======================================================================
-        static Control Spread(params Control[] rows)
+        (Control, Control) RoutingPanel()
         {
-            var defs = new List<string>();
-            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
-            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
-            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
-            return new Border { Padding = new Thickness(8, 6), Child = g };
-        }
-        static Control LabelRow(string label, Control c, double labW = 40)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")) };
-            g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
-            g.Children.Add(Col(c, 1));
-            return g;
-        }
-        Control Divided(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = c };
-
-        Control RoutingTab()
-        {
-            var phase = Row(3,
+            var phase = CardLayout.Line(3,
                 ToggleLatch(InvertL, () => "Ø L", Loc.T("device.utility.invert_the_left_channels_phase"), h: 15, padX: 6),
                 ToggleLatch(InvertR, () => "Ø R", Loc.T("device.utility.invert_the_right_channels_phase"), h: 15, padX: 6),
                 ToggleLatch(Mute, () => "Mute", Loc.T("device.utility.mute_the_output"), h: 15, padX: 6));
-            // Mono on: WIDTH · MONO f | BALANCE; off: WIDTH · BALANCE | GAIN — the mockup's two states.
-            var monoRow = SliderRow("Mono f", MonoFreq, HzF);
-            var balA = SliderRow("BALANCE", Balance, v => NotaNum.F($"{v:+0.00;−0.00;0.00}"), bipolar: true);
-            var balB = SliderRow("BALANCE", Balance, v => NotaNum.F($"{v:+0.00;−0.00;0.00}"), bipolar: true, modulation: true);
-            var gainRow = SliderRow("GAIN", Gain, Db1, bipolar: true);
-            var slot2 = new Panel { Children = { monoRow, balA } };
-            var slot3 = new Panel { Children = { balB, gainRow } };
-            readouts.Add(() => { bool m = On(MonoBelow); monoRow.IsVisible = m; balA.IsVisible = !m; balB.IsVisible = m; gainRow.IsVisible = !m; });
-
             var corrBar = new UtCorrBar();
             var corrTitle = Caps("CORRELATION");
             var corrText = Mono("", 9, TextPrimary);
             corrText.TextTrimming = TextTrimming.CharacterEllipsis;
-            var corrBox = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
-                Child = new StackPanel { Spacing = 3, Children = { corrTitle, corrBar, corrText } } };
+            var corrBox = CardLayout.ReadoutBox(new StackPanel { Spacing = 3, Children = { corrTitle, corrBar, corrText } });
             ToolTip.SetTip(corrBox, Loc.T("device.utility.output_correlation_1_mono_0"));
             readouts.Add(() =>
             {
@@ -496,138 +380,84 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                 corrTitle.Foreground = lit ? TextSecondary : TextTertiary;
                 corrText.Foreground = c < 0 && Sc(S_OutPk) > 1e-4 ? Danger : TextPrimary;
             });
-            return Spread(
-                LabelRow("PHASE", phase, 40),
-                SliderRow("WIDTH", Width_, v => NotaNum.F($"{v:0}")),
-                slot2,
-                Divided(slot3),
+            return (CardLayout.Head(CardLayout.Title(Loc.T("device.utility.phase")), phase), CardLayout.Rows(
                 corrBox,
-                new StackPanel { Spacing = 5, Children = {
-                    Toggle(MonoBelow, Loc.T("device.utility.mono_below_freq"), () => On(MonoBelow) ? NotaNum.F($"Mono below {HzF(P(MonoFreq))}") : Loc.T("device.utility.mono_below_freq")),
-                    Toggle(AutoMatch, "Level match", () => On(AutoMatch) ? NotaNum.F($"Level match {Sc(S_AutoDb):+0.0;−0.0;0.0} dB") : "Level match") } });
+                Info(BalanceText),
+                CardLayout.Rule(),
+                Info(PhaseText)));
         }
 
-        Control OutputTab()
+        (Control, Control) MonoPanel()
         {
-            Control Line(string k, Func<string> v, IBrush? ink = null)
+            var slope = Seg(MonoSlope, new[] { "6", "12", "24" }, Loc.T("device.utility.slope_of_the_mono_cutoff"));
+            var monoOn = Toggle(MonoBelow, Loc.T("device.utility.mono_below_freq"),
+                () => On(MonoBelow) ? NotaNum.F($"Mono below {HzF(P(MonoFreq))}") : Loc.T("device.utility.mono_below_freq"));
+            ToolTip.SetTip(monoOn, Loc.T("device.utility.mono_below_removes_the_side"));
+            return (CardLayout.Head(monoOn, slope),
+                CardLayout.Rows(
+                    Info(() => On(MonoBelow) ? NotaNum.F($"below {HzF(P(MonoFreq))} width 0 · slope {Slopes[Idx(MonoSlope)]} dB/oct") : NotaNum.F($"full range · width {Sc(S_EffWidth):0} %")),
+                    Info(() => NotaNum.F($"correlation {CorrF(Sc(S_Corr))} · {(Sc(S_Corr) >= 0.3 || Sc(S_OutPk) < 1e-4 ? "mono-safe" : Sc(S_Corr) >= 0 ? "check in mono" : "mono risk")}")),
+                    CardLayout.Rule(),
+                    Info(() => NotaNum.F($"width now {Sc(S_EffWidth):0} % · {(On(WidthMode) ? "M/S" : "L/R")}"))));
+        }
+
+        (Control, Control) MatchPanel()
+        {
+            Control Line(string k, Func<string> v)
             {
-                var val = Mono("", 8, ink ?? TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+                var val = Mono("", 8, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
                 readouts.Add(() => val.Text = v());
                 var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
                 g.Children.Add(new TextBlock { Text = k, FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
                 g.Children.Add(Col(val, 1));
                 return g;
             }
-            var box = new Border
-            {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 3),
-                Child = new StackPanel { Spacing = 1, Children = {
-                    Caps("MEASUREMENTS"),
-                    Line("in", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} {Unit()}")),
-                    Line("out", () => NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}")),
-                    Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP"), TextPrimary) } },
-            };
-            var matchTo = Seg(MatchTo, new[] { "Input", "Target" }, Loc.T("device.utility.what_gain_match_and_level"));
+            var box = CardLayout.ReadoutBox(new StackPanel { Spacing = 1, Children = {
+                Caps("MEASUREMENTS"),
+                Line("in", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} {Unit()}")),
+                Line("out", () => NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}")),
+                Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP")) } });
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-            var gm = Button("Gain match", GainMatch, GainMatchTip, false);
-            ((TextBlock)gm.Child!).FontWeight = FontWeight.SemiBold;
+            var gm = Button("Gain match", GainMatch, GainMatchTip, true);
+            gm.HorizontalAlignment = HorizontalAlignment.Stretch;
+            var rs = Button("Reset", ResetLevels, ResetTip, false);
+            rs.HorizontalAlignment = HorizontalAlignment.Stretch;
             btns.Children.Add(gm);
-            btns.Children.Add(Col(Button("Reset", ResetLevels, ResetTip, false), 1));
-            return Spread(
-                box,
-                SliderRow("GAIN", Gain, Db1, bipolar: true),
-                SliderRow("TARGET", Target, v => NotaNum.F($"{v:0.0}"), modulation: true),
-                SliderRow("CEILING", TpCeiling, v => NotaNum.F($"{v:0.0}"), dim: () => !On(TpLimit)),
-                LabelRow("MATCH", matchTo, 40),
-                Divided(btns),
-                new StackPanel { Spacing = 5, Children = {
-                    Toggle(AutoMatch, "Level match", () => On(AutoMatch) ? NotaNum.F($"Level match {Sc(S_AutoDb):+0.0;−0.0;0.0} dB") : "Level match"),
-                    Toggle(TpLimit, "True-peak limiter", () => On(TpLimit) ? NotaNum.F($"TP limit {CeilF(P(TpCeiling))}{(Sc(S_LimDb) > 0.05 ? NotaNum.F($" · −{Sc(S_LimDb):0.0}") : "")}") : "True-peak limiter") } });
+            btns.Children.Add(Col(rs, 1));
+            return (CardLayout.Head(Toggle(AutoMatch, "Level match", () => On(AutoMatch) ? NotaNum.F($"Level match {Sc(S_AutoDb):+0.0;−0.0;0.0} dB") : "Level match"),
+                    Seg(MatchTo, new[] { "Input", "Target" }, Loc.T("device.utility.what_gain_match_and_level"))),
+                CardLayout.Rows(
+                    box,
+                    btns,
+                    CardLayout.Rule(),
+                    Toggle(TpLimit, "True-peak limiter", () => On(TpLimit) ? NotaNum.F($"TP limit {CeilF(P(TpCeiling))}{(Sc(S_LimDb) > 0.05 ? NotaNum.F($" · −{Sc(S_LimDb):0.0}") : "")}") : "True-peak limiter"),
+                    SliderRow("CEILING", TpCeiling, v => NotaNum.F($"{v:0.0}"), dim: () => !On(TpLimit))));
         }
 
         // ======================================================================
-        // Tab frames
+        // Frames: L (tabs + the panel that follows them, Gain under it) · S (the field over
+        // Gain · Width · Balance · Mono)
         // ======================================================================
-        int centreTab = 0;
-        var centreHost = new ContentControl();
-        var rightHost = new ContentControl();
-        var centreBodies = new Control?[3];
-        var rightBodies = new Control?[2];
         var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
             extras.Text = centreTab switch
             {
                 1 => NotaNum.F($"width by frequency · {(On(WidthMode) ? "M/S" : "L/R")}"),
-                2 => NotaNum.F($"{Sc(S_HistSec):0} s window · {Meters[MeterI()]}"),
-                _ => Loc.T("device.utility.pan_by_frequency_1_s"),
+                2 => NotaNum.F($"in {LvlF(ScDb(S_InLevel))} → out {LvlF(ScDb(S_OutLevel))} {Meters[MeterI()]} · {DeltaText()} · {Sc(S_HistSec):0} s"),
+                _ => NotaNum.F($"correlation {CorrF(Sc(S_Corr))} · {MonoText()}"),
             };
         });
-        Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => MonoTab(), 2 => LevelsTab(), _ => FieldTab() };
-        Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : RoutingTab();
-
-        var centre = TabFrame(new[] { "Field", "Mono", "Levels" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
-        var rightFrame = TabFrame(new[] { "Routing", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new RuleSection { Width = 186, Child = rightFrame };
-        DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
-
-        // ======================================================================
-        // Status strip
-        // ======================================================================
-        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var statusRight = Mono("", 8, TextSecondary);
-        string StatusText()
-        {
-            var parts = new List<string>();
-            switch (centreTab)
-            {
-                case 1:
-                    parts.Add(On(WidthMode) ? "M/S" : "L/R");
-                    parts.Add(On(MonoBelow) ? NotaNum.F($"mono ↓ {HzF(P(MonoFreq))} · {Slopes[Idx(MonoSlope)]} dB/oct") : "mono off");
-                    parts.Add(NotaNum.F($"width {P(Width_):0}"));
-                    parts.Add(NotaNum.F($"balance {BalF(P(Balance))}"));
-                    if (On(InvertL)) parts.Add("Ø L");
-                    if (On(InvertR)) parts.Add("Ø R");
-                    parts.Add("gain " + GainF(P(Gain)));
-                    break;
-                case 2:
-                    parts.Add(Meters[MeterI()]);
-                    parts.Add("in " + LvlF(ScDb(S_InLevel)));
-                    parts.Add("out " + LvlF(ScDb(S_OutLevel)));
-                    parts.Add(On(MatchTo) ? NotaNum.F($"target {P(Target):0.0}") : Loc.T("device.utility.match_to_input"));
-                    parts.Add("gain " + GainF(P(Gain)));
-                    if (On(AutoMatch)) parts.Add(NotaNum.F($"auto {Sc(S_AutoDb):+0.0;−0.0;0.0} dB"));
-                    if (On(TpLimit)) parts.Add("TP " + CeilF(P(TpCeiling)));
-                    parts.Add(NotaNum.F($"width {P(Width_):0}"));
-                    break;
-                default:
-                    parts.Add(Modes[Idx(ChannelMode)]);
-                    parts.Add("gain " + Db1(P(Gain)));
-                    parts.Add(NotaNum.F($"balance {BalF(P(Balance))}"));
-                    parts.Add(NotaNum.F($"width {P(Width_):0}{(On(WidthMode) ? " M/S" : "")}"));
-                    parts.Add(On(MonoBelow) ? NotaNum.F($"mono ↓ {HzF(P(MonoFreq))}") : "mono off");
-                    parts.Add(PhaseText());
-                    if (On(Mute)) parts.Add("muted");
-                    break;
-            }
-            return string.Join(" · ", parts);
-        }
-        readouts.Add(() =>
-        {
-            statusLeft.Text = StatusText();
-            double sr = Sc(S_SampleRate);
-            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency 0 smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
-        });
-        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
-        statusGrid.Children.Add(statusLeft);
-        statusGrid.Children.Add(Col(statusRight, 1));
-        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
-        DockPanel.SetDock(status, Dock.Bottom);
-
-        // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { levelCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
+        Control root = CardLayout.IsMini(ctx, di)
+            ? CardLayout.Mini(NewField(), null,
+                K(Gain, "GAIN", GainF, cellW: 56), K(Width_, "WIDTH", WidthF, cellW: 56),
+                K(Balance, "BALANCE", BalF, cellW: 56), K(MonoFreq, "MONO", MonoF, dim: () => !On(MonoBelow), cellW: 56))
+            : CardLayout.Large(new[] { "Field", "Mono", "Levels" }, 0,
+                t => t switch { 1 => MonoTab(), 2 => LevelsTab(), _ => FieldTab() },
+                t => t switch { 1 => MonoPanel(), 2 => MatchPanel(), _ => RoutingPanel() },
+                extras,
+                CardLayout.Output(null, K(Gain, "GAIN", GainF, cellW: 58, size: 44, bipolar: true), null),
+                t => { centreTab = t; Refresh(); });
 
         void Refresh()
         {
@@ -664,45 +494,5 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             return -1;
         }
 
-        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
-        {
-            int sel = 0;
-            var btns = new Border[tabs.Length];
-            void Hi()
-            {
-                for (int i = 0; i < tabs.Length; i++)
-                {
-                    bool on = i == sel;
-                    btns[i].Background = on ? Card2 : Brushes.Transparent;
-                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
-                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                }
-            }
-            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                int iv = i;
-                var b = new Border
-                {
-                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
-                };
-                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
-                btns[i] = b;
-                bar.Children.Add(b);
-            }
-            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
-            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
-            if (!centered) DockPanel.SetDock(bar, Dock.Left);
-            barDock.Children.Add(bar);
-            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
-            DockPanel.SetDock(barBorder, Dock.Top);
-            Hi();
-            host.Content = body(sel);
-            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
-        }
     }
 }

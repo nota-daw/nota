@@ -13,6 +13,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Nota.Application;
 using Nota.Infrastructure;
 using Nota.Remote;
 
@@ -83,6 +84,21 @@ internal static class RemoteTests
         yield return (!RemoteLinks.InSubnet(IPAddress.Parse("::1"), IPAddress.Parse("10.0.0.1"), 24)
             && !RemoteLinks.InSubnet(IPAddress.Parse("10.0.0.5"), IPAddress.Parse("10.0.0.1"), 33),
             "nonsense prefixes and IPv6 match nothing");
+
+        // The address in the link and QR (#85): the chosen interface while it is up, else the best.
+        var links = new List<RemoteLink>
+        {
+            new("172.20.10.2", true, "USB", "en7"),
+            new("192.168.1.20", false, "Wi-Fi", "en0"),
+            new("192.168.1.21", false, "Wi-Fi", "en0"),
+            new("10.0.0.5", false, "Ethernet", "en1"),
+        };
+        yield return (RemoteLinks.Pick(links, null)?.Address == "172.20.10.2" && RemoteLinks.Pick(links, "")?.Address == "172.20.10.2",
+            "Automatic shows the best address (USB first)");
+        yield return (RemoteLinks.Pick(links, "en1")?.Address == "10.0.0.5", "a chosen interface's address goes in the QR");
+        yield return (RemoteLinks.Pick(links, "en0")?.Address == "192.168.1.20", "an interface with two addresses shows its first");
+        yield return (RemoteLinks.Pick(links, "utun3")?.Address == "172.20.10.2", "a chosen interface that isn't up falls back to Automatic");
+        yield return (RemoteLinks.Pick(new List<RemoteLink>(), "en0") is null, "no network, no address");
     }
 
     private static IEnumerable<(bool, string)> Engine()
@@ -189,10 +205,18 @@ internal static class RemoteTests
         public static readonly RemoteTheme Dark = Theme("test-dark", true, "#1E1F22"), Light = Theme("test-light", false, "#C9CBCF");
         public static readonly RemoteAppearance DarkOn = new(Dark, Dark, Light, "#17181A", "#FFFFFF");
         public static readonly RemoteAppearance LightOn = new(Light, Dark, Light, "#17181A", "#FFFFFF");
+        // A user skin (spec 087) with its own typeface and square corners (specs/090).
+        public static readonly RemoteTheme Skin = Theme("test-skin", true, "#101010") with
+        {
+            Font = "IBM Plex Sans",
+            Radii = new Dictionary<string, double> { ["card"] = 0, ["group"] = 0, ["field"] = 0, ["cell"] = 0, ["valueBar"] = 0, ["switch"] = 0, ["fine"] = 0 },
+        };
+        public static readonly RemoteAppearance SkinOn = new(Skin, Dark, Light, "#17181A", "#FFFFFF");
         public RemoteAppearance Appearance { get; set; } = DarkOn;
         private static RemoteTheme Theme(string id, bool dark, string ground) =>
             new(id, id, dark, new Dictionary<string, string> { ["BgApp"] = ground, ["Accent"] = "#FF9F1C", ["ShadowBevel"] = "#FFFFFF12" });
         public string TrackColor(int trackId) => "#58B368";
+        public string ClipColor(int trackId, int scene) => "#4FA3E0";
         public int SelectedTrackId { get; set; }
         public int ProjectKeyCode => -1;
         public IReadOnlyList<(string Name, double StartBeat)> Sections => new[] { ("Intro", 0.0), ("Drop", 16.0) };
@@ -363,8 +387,101 @@ internal static class RemoteTests
             "a theme change in Nota reaches the phone");
         yield return (Wait("theme", 200) is null, "and is sent once");
         yield return (Wait("proj", 1000, m => !m.GetProperty("dark").GetBoolean()) is not null, "the project's dark flag follows the theme");
+        // A skin's typeface and corners travel with its colours (specs/090 contracts/theme-message.md).
+        host.Appearance = FakeHost.SkinOn;
+        var skin = Wait("theme");
+        var skinTh = skin?.GetProperty("th");
+        yield return (skinTh is { } sk && sk.GetProperty("test-skin").GetProperty("font").GetString() == "IBM Plex Sans"
+                && sk.GetProperty("test-skin").GetProperty("r").EnumerateObject().Count() == 7
+                && sk.GetProperty("test-skin").GetProperty("r").GetProperty("card").GetDouble() == 0,
+            "a skin's typeface and all seven corner radii reach the phone");
+        yield return (skinTh is { } sb && !sb.GetProperty("test-light").TryGetProperty("font", out _) && !sb.GetProperty("test-light").TryGetProperty("r", out _),
+            "a theme on the design scale carries neither a typeface nor radii");
         host.Appearance = FakeHost.DarkOn;
+        yield return (Wait("theme") is not null, "leaving the skin re-sends the theme");
         yield return (hub.Devices.Count == 1 && hub.Devices[0].Name == "Anna's iPhone", "Nota lists the phone");
+
+        // Clip previews on Scenes (#557; specs/090 contracts/clips-message.md): sent to a phone
+        // on Scenes only, the whole grid once, then only what changed; notes capped.
+        e.AddSessionMidiClip(inst, 0, 8);
+        e.SetSessionNotes(inst, 0, new[] { new NotaNote(60, 0, 1, 0.8f), new NotaNote(64, 2, 2, 0.8f), new NotaNote(67, 4, 4, 0.8f) });
+        yield return (Wait("clips", 300) is null, "no clip previews while the phone is off Scenes");
+        Send(new { t = "sub", s = "Scenes" });
+        var clips = Wait("clips");
+        JsonElement? Slot(JsonElement? m, int scene) => m is { } cm
+            ? cm.GetProperty("s").EnumerateArray().Cast<JsonElement?>().FirstOrDefault(x => x!.Value.GetProperty("id").GetInt32() == inst && x.Value.GetProperty("i").GetInt32() == scene)
+            : null;
+        var s0 = Slot(clips, 0);
+        yield return (clips?.GetProperty("all").GetBoolean() == true && s0 is { } c0 && c0.GetProperty("k").GetString() == "n"
+                && c0.GetProperty("n").GetArrayLength() == 3 && c0.GetProperty("col").GetString() == "#4FA3E0"
+                && c0.GetProperty("nm").GetString()!.Length > 0 && c0.GetProperty("len").GetDouble() == 8
+                && c0.GetProperty("n")[1].EnumerateArray().Select(v => v.GetInt32()).SequenceEqual(new[] { 16, 16, 64 }),
+            "opening Scenes sends every filled slot: name, colour, length and its notes on the 1/64 grid");
+        yield return (Wait("clips", 1500) is null, "an unchanged clip is not sent again");
+        e.SetSessionNotes(inst, 0, Enumerable.Range(0, 300).Select(i => new NotaNote(36 + i % 60, i * 8.0 / 300, 0.01, 0.8f)).ToArray());
+        var edited = Wait("clips", 3000);
+        var s0b = Slot(edited, 0);
+        yield return (edited?.GetProperty("all").GetBoolean() == false && s0b is { } cb && cb.GetProperty("n").GetArrayLength() is > 0 and <= 128
+                && edited.Value.GetProperty("s").GetArrayLength() == 1,
+            "an edit re-sends just that slot, with at most 128 note bars");
+        Send(new { t = "sub", s = "Mixer" });
+        Thread.Sleep(60); hub.Tick();
+        e.SetSessionNotes(inst, 0, new[] { new NotaNote(48, 0, 1, 0.8f) });
+        yield return (Wait("clips", 800) is null, "a phone off Scenes gets no previews when clips change");
+        Send(new { t = "sub", s = "Scenes" });
+        var again = Wait("clips");
+        yield return (again?.GetProperty("all").GetBoolean() == true && Slot(again, 0)?.GetProperty("n").GetArrayLength() == 1,
+            "coming back to Scenes sends the current grid once");
+        // An audio clip's preview is its waveform: 48 magnitudes scaled to the loudest bucket.
+        string rampWav = Path.Combine(Path.GetTempPath(), $"nota-remote-ramp-{Guid.NewGuid():N}.wav");
+        var ramp = new float[48000 * 2];
+        for (int i = 0; i < ramp.Length; i++) ramp[i] = (float)(0.8 * i / ramp.Length * Math.Sin(2 * Math.PI * 220 * i / 48000.0));
+        using (var ww = new Nota.Infrastructure.WavWriter(rampWav, 48000, 1, WavBitDepth.Float32)) ww.WriteFrames(ramp, ramp.Length);
+        int aud = e.AddAudioTrack();
+        bool audioIn = e.AddSessionAudioFile(aud, 0, rampWav);
+        var withAudio = Wait("clips", 3000, m => m.GetProperty("s").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() == aud));
+        var pk = withAudio?.GetProperty("s").EnumerateArray().First(x => x.GetProperty("id").GetInt32() == aud);
+        var peaks = pk is { } pp && pp.TryGetProperty("p", out var pa) ? pa.EnumerateArray().Select(v => v.GetInt32()).ToArray() : Array.Empty<int>();
+        yield return (audioIn && pk?.GetProperty("k").GetString() == "p" && peaks.Length == 48 && peaks.Max() == 99 && peaks.All(v => v is >= 0 and <= 99)
+                && peaks[0] < peaks[^1],
+            $"an audio clip's preview is 48 peaks scaled to its loudest part (first {peaks.FirstOrDefault()}, last {peaks.LastOrDefault()})");
+        e.RemoveTrack(aud);
+        try { File.Delete(rampWav); } catch { }
+
+        // A big grid at the real UI clock (33 ms): an edit that keeps a slot's state and length
+        // (only its notes change) still reaches the phone within a second — the sweep is sized
+        // by time, not by a fixed number of slots per tick.
+        var big = Enumerable.Range(0, 15).Select(_ => e.AddInstrumentTrack()).ToArray();
+        int scenesBefore = e.SceneCount;
+        while (e.SceneCount < 32) e.AddScene();
+        foreach (var bt in big.Prepend(inst))
+            for (int sc = 1; sc < 32; sc++) { e.AddSessionMidiClip(bt, sc, 4); e.SetSessionNotes(bt, sc, new[] { new NotaNote(60, 0, 1, 0.8f) }); }
+        Send(new { t = "sub", s = "Mixer" });
+        Thread.Sleep(60); hub.Tick();
+        Send(new { t = "sub", s = "Scenes" });
+        Wait("clips", 3000);
+        for (int k = 0; k < 40; k++) { hub.Tick(); Thread.Sleep(33); }
+        lock (inbox) inbox.RemoveAll(m => m.GetProperty("t").GetString() == "clips");
+        int far = big[^1];
+        e.SetSessionNotes(far, 31, new[] { new NotaNote(72, 1, 2, 0.8f) });
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        JsonElement? farMsg = null;
+        while (sw.ElapsedMilliseconds < 2500 && farMsg is null)
+        {
+            hub.Tick();
+            lock (inbox)
+            {
+                var hit = inbox.FirstOrDefault(m => m.GetProperty("t").GetString() == "clips"
+                    && m.GetProperty("s").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() == far && x.GetProperty("i").GetInt32() == 31));
+                if (hit.ValueKind != JsonValueKind.Undefined) farMsg = hit;
+            }
+            Thread.Sleep(33);
+        }
+        long farMs = sw.ElapsedMilliseconds;
+        yield return (farMsg is not null && farMs < 1000, $"on a 16 × 32 grid at a 33 ms tick a note edit reaches the phone within a second ({farMs} ms)");
+        foreach (var bt in big) e.RemoveTrack(bt);
+        while (e.SceneCount > scenesBefore && e.RemoveScene(e.SceneCount - 1)) { }
+        Send(new { t = "sub", s = "Mixer" });
 
         Send(new { t = "ping", c = 1 });
         yield return (Wait("pong") is not null, "a ping is answered");

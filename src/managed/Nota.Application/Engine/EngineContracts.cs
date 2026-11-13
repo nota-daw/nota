@@ -36,6 +36,42 @@ public struct NotaNote(int pitch, double startBeat, double lengthBeats, float ve
     /// <summary>The note's recorded MPE in the engine's expression store (0 = none). Copy the
     /// note (don't rebuild it from its fields) and the expression travels with it.</summary>
     public int ExprId;
+    /// <summary>The note's articulation: a stable id in its track's articulation map (0 = none /
+    /// the map's default). Copy the note (don't rebuild it from its fields) and it travels with it.</summary>
+    public int ArticulationId;
+
+    /// <summary>Every field equal. Use this to tell whether an edit changed a note: a comparison
+    /// that lists fields by hand misses the next one added (an articulation-only edit was once
+    /// never sent to the engine for that reason). The smoke test checks it covers every field.</summary>
+    public static bool Same(in NotaNote a, in NotaNote b) =>
+        a.Pitch == b.Pitch && a.StartBeat == b.StartBeat && a.LengthBeats == b.LengthBeats
+        && a.Velocity == b.Velocity && a.ExprId == b.ExprId && a.ArticulationId == b.ArticulationId;
+}
+
+/// <summary>One articulation of a compiled articulation map (specs/085). Matches native
+/// NotaArticulationEntry: ids &gt; 0 and strictly ascending; actions are [ActionStart, ActionStart + ActionCount).</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaArticulationEntry
+{
+    public int Id;
+    /// <summary>0 latching, 1 momentary.</summary>
+    public int TriggerMode;
+    public double OffsetMs;
+    public double LeadMs;
+    public int ActionStart;
+    public int ActionCount;
+}
+
+/// <summary>One MIDI action of a compiled articulation map. Matches native NotaArticulationAction.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaArticulationAction
+{
+    /// <summary>0 keyswitch, 1 control change, 2 program change, 3 bank select MSB, 4 bank select LSB.</summary>
+    public int Kind;
+    /// <summary>0 = the note's own channel, 1..16 explicit.</summary>
+    public int Channel;
+    public int Data1;
+    public int Data2;
 }
 
 /// <summary>One breakpoint of a note's recorded expression (MPE). Matches native NotaExprPoint:
@@ -209,6 +245,24 @@ public struct NotaMosaicStatus
     public long RamBytes;
 }
 
+/// <summary>A Nota Aurora custom wavetable, as the engine reports it (specs/053): its frame
+/// count (0 = the slot is empty), how the file was read (0 wavetable file, 1 single cycle,
+/// 2 recording), whether it was cut to 60 s or 256 frames, and, for a track's slot, the source
+/// flag and whether a project could not restore it (then <see cref="Name"/> is the name it had).
+/// <see cref="Serial"/> changes whenever the slot's table does; <see cref="Hash"/> is the
+/// engine's 128-bit content hash of the frames, as hex.</summary>
+public readonly record struct AuroraTableInfo(int Frames, int Origin, bool TruncatedLength, bool TruncatedFrames,
+    bool UseCustom, bool Missing, uint Serial, string Hash, string Name)
+{
+    public bool HasTable => Frames > 0;
+}
+
+/// <summary>Results of the Aurora table builders (native NOTA_AURORA_*).</summary>
+public static class AuroraTableResult
+{
+    public const int Ok = 0, ErrDecode = -1, ErrFormat = -2, ErrSilent = -3, ErrEmpty = -4, ErrArgs = -5;
+}
+
 /// <summary>Captured session audio take. Matches native NotaSessionAudioSlot (M7-6b).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionAudioSlot
@@ -336,6 +390,38 @@ public enum PanLaw { Balance = 0, Stereo = 1 }
 /// <summary>Which hardware input channels an audio track records and monitors (#340): both as a
 /// stereo pair (1/2), or input 1 / input 2 alone — a mono source, placed in the middle.</summary>
 public enum InputChannels { Stereo = 0, Mono1 = 1, Mono2 = 2 }
+
+/// <summary>Why an armed track didn't record (specs/086); matches nota_engine_record_skipped.</summary>
+public enum RecordSkipReason { InputUnavailable = 1, TooMany = 2, SwitchedOff = 3, MixedSources = 4 }
+
+/// <summary>An instrument track's MIDI input (specs/086): the device's uid (null = All inputs)
+/// and channel (0 = all, 1–16); <see cref="Connected"/> is false while that device is away.</summary>
+public readonly record struct TrackMidiInput(string? Uid, int Channel, bool Connected)
+{
+    public static TrackMidiInput All => new(null, 0, true);
+}
+
+/// <summary>An audio track's hardware input (specs/086): device channel <see cref="First"/>
+/// (0-based) alone — a mono source, heard and recorded in the middle — or the stereo pair
+/// First/First+1 (First even).</summary>
+public readonly record struct InputPick(int First, int Width)
+{
+    public const int MaxChannels = 64;
+    public static readonly InputPick Stereo12 = new(0, 2);
+    public static InputPick Mono(int first) => new(first, 1);
+    public static InputPick Pair(int first) => new(first, 2);
+    public bool IsStereo => Width == 2;
+    public bool IsValid => First >= 0 && (Width == 1 || Width == 2) && First + Width <= MaxChannels && (Width == 1 || First % 2 == 0);
+    /// <summary>The old three-value pick, when this is one of them.</summary>
+    public InputChannels? AsChannels => this == Stereo12 ? InputChannels.Stereo
+        : this == Mono(0) ? InputChannels.Mono1 : this == Mono(1) ? InputChannels.Mono2 : null;
+    public static InputPick From(InputChannels c) => c switch
+    {
+        InputChannels.Mono1 => Mono(0),
+        InputChannels.Mono2 => Mono(1),
+        _ => Stereo12,
+    };
+}
 
 /// <summary>One Stereo Map row (specs/008), laid out like native NotaStereoMeasure: what a
 /// track / return / the master sends to the master, averaged over ~300 ms. Balance is on the

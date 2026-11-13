@@ -5,6 +5,7 @@
 #include "MiniaudioDevices.h"
 #include "nota_miniaudio.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace nota {
@@ -15,16 +16,20 @@ struct MiniaudioBackend::Impl {
     ma_context nullContext{};   // the silent fallback's context (null backend only)
     bool nullContextInited = false;
     RenderCallback render; // copied from the backend on start()
+    OutputStage stage;     // Main/Cue scratch + routing (specs/089)
+    int32_t channels = 2;  // the device's native output channels (≤ 64)
 };
 
-// miniaudio real-time thread: fill the interleaved stereo float output buffer.
+// miniaudio real-time thread: fill the interleaved float output buffer, one channel per
+// device output; Main and Cue are placed by the stage (specs/089).
 // MUST be real-time safe (no alloc/lock/IO) — same contract as CoreAudio (AR-6).
 static void dataCallback(ma_device* dev, void* pOutput, const void* /*pInput*/, ma_uint32 frameCount) {
     auto* impl = static_cast<MiniaudioBackend::Impl*>(dev->pUserData);
     float* out = static_cast<float*>(pOutput);
-    if (impl && impl->render) impl->render(out, static_cast<int32_t>(frameCount));
+    const int32_t ch = static_cast<int32_t>(dev->playback.channels);
+    if (impl && impl->render) impl->stage.process(impl->render, out, ch, static_cast<int32_t>(frameCount));
     else
-        std::memset(pOutput, 0, static_cast<size_t>(frameCount) * 2 * sizeof(float));
+        std::memset(pOutput, 0, static_cast<size_t>(frameCount) * static_cast<size_t>(ch) * sizeof(float));
 }
 
 MiniaudioBackend::MiniaudioBackend() : impl_(new Impl()) {}
@@ -51,7 +56,9 @@ bool MiniaudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
         ma_device_config c = ma_device_config_init(ma_device_type_playback);
         c.playback.pDeviceID = haveId && useId ? &id : nullptr; // NULL = system default
         c.playback.format = ma_format_f32;
-        c.playback.channels = 2; // interleaved stereo, like the engine
+        // 0 = the device's own channel count (specs/089), so Main and Cue can land on any
+        // output pair. WASAPI shared mode reports its mix format's channels.
+        c.playback.channels = 0;
         c.playback.shareMode = share;
         c.sampleRate = cfg.sampleRate > 0.0 ? static_cast<ma_uint32>(cfg.sampleRate) : 0;
         c.dataCallback = &dataCallback;
@@ -102,10 +109,19 @@ bool MiniaudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
     }
 
     // Negotiated values, read back after init.
+    impl_->channels = std::min<int32_t>(static_cast<int32_t>(impl_->device.playback.channels), kMaxOutputChannels);
     sampleRate_ = impl_->device.sampleRate;
     bufferFrames_ = static_cast<int32_t>(impl_->device.playback.internalPeriodSizeInFrames);
     running_ = true;
     return true;
+}
+
+int32_t MiniaudioBackend::outputChannelCount() const {
+    return running_ ? impl_->channels : 0;
+}
+
+void MiniaudioBackend::setOutputRouting(const OutputRouting& r) {
+    impl_->stage.setRouting(r);
 }
 
 void MiniaudioBackend::stop() {

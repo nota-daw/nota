@@ -67,6 +67,15 @@ public interface IAudioEngine : IDisposable
     void SetTrackPan(int trackId, float pan);
     void SetTrackMute(int trackId, bool mute);
     void SetTrackSolo(int trackId, bool solo);
+    /// <summary>Cue (specs/089): the track's signal after its devices, before its fader, pan,
+    /// mute and solo, also goes to the private Cue mix. Any number of tracks.</summary>
+    void SetTrackCue(int trackId, bool on);
+    bool GetTrackCue(int trackId);
+    /// <summary>The Cue mix's level, linear 0–2 (+6 dB). Never changes Main.</summary>
+    float CueVolume { get; set; }
+    /// <summary>Where the metronome and count-in clicks go, and their level (linear 0–2).</summary>
+    ClickDestination ClickDestination { get; set; }
+    void SetClickVolume(float gain);
     int TrackCount { get; }
     int DuplicateTrack(int trackId);   // deep copy after the source; new id or -1
     int AddTrackLike(int trackId);     // empty track with the source's instrument, devices and mix, before the returns; new id or -1
@@ -115,6 +124,9 @@ public interface IAudioEngine : IDisposable
     bool ArrangementActive { get; }
     void RecordSessionSlot(int trackId, int scene);
     void StopSessionRecord();
+    /// <summary>Stop recording one slot: while other slots of the Session audio take still record,
+    /// only this track's lands and loops back (specs/086); otherwise as <see cref="StopSessionRecord"/>.</summary>
+    void StopSessionRecordSlot(int trackId);
     int SessionSlotToArrangement(int trackId, int scene, double startBeat);
     void ArrangementClipToSession(int trackId, int clipIndex, int scene);
     /// <summary>Copies an arrangement audio clip into a session slot (loops the whole sample).</summary>
@@ -349,6 +361,43 @@ public interface IAudioEngine : IDisposable
     /// input 1 / input 2 alone as a mono source in the middle (#340). Hardware input only.</summary>
     void SetTrackInputChannels(int trackId, InputChannels channels);
     InputChannels GetTrackInputChannels(int trackId);
+    /// <summary>An audio track's hardware input: any device channel alone or an odd-aligned
+    /// stereo pair (specs/086). False for an invalid pick or a non-audio track.</summary>
+    bool SetTrackInput(int trackId, InputPick pick);
+    InputPick GetTrackInput(int trackId);
+    /// <summary>Whether the track's input exists on the open (or probed) capture device.</summary>
+    bool TrackInputAvailable(int trackId);
+    /// <summary>An instrument track's MIDI input (specs/086): which live MIDI reaches it when
+    /// armed, and so what it records — a device by uid (null = All inputs, the computer keyboard
+    /// too) and a channel (0 = all, 1–16). The track keeps the uid; while that device is not
+    /// connected it receives nothing from hardware. False for a non-instrument track.</summary>
+    bool SetTrackMidiInput(int trackId, string? uid, int channel);
+    TrackMidiInput GetTrackMidiInput(int trackId);
+    /// <summary>The capture device's input channels (0 when none is open) and their names
+    /// ("" where the device gives none).</summary>
+    int AudioInputChannelCount();
+    string AudioInputChannelName(int index);
+    /// <summary>Opens the selected capture device just to read its channels; returns the count.</summary>
+    int ProbeAudioInput();
+    /// <summary>Inputs switched off on the Audio I/O page (0-based): a take skips a track on one.</summary>
+    void SetDisabledInputs(int[] channels);
+    /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
+    void SetTestInputDevice(int channels);
+    /// <summary>The playback device's output channels (0 when none is open) and their names
+    /// ("" where the device gives none) — specs/089.</summary>
+    int AudioOutputChannelCount();
+    string AudioOutputChannelName(int index);
+    /// <summary>Where Main (the audience mix) and Cue (the private cue mix) go: 0-based first
+    /// channel and width (1 or 2); cueFirst &lt; 0 = no Cue output. Takes effect at once, no
+    /// device restart. False for a bad width, an odd stereo first or overlapping pairs.</summary>
+    bool SetOutputRouting(int mainFirst, int mainWidth, int cueFirst, int cueWidth);
+    /// <summary>The routing against the open device.</summary>
+    OutputRoutingState GetOutputRoutingState();
+    /// <summary>Tests: device frames into the capture ring, drained into the running take as poll() would.</summary>
+    void FeedInputForTest(float[] interleaved, int frames, int channels);
+    /// <summary>Tests: record <paramref name="frames"/> of <paramref name="channels"/>-wide
+    /// device frames into the track through the capture ring, the track taking its own input.</summary>
+    bool TakeRecordTestN(int trackId, float[] interleaved, int channels, int frames, double startBeat);
     /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
     /// source through the track in place of its clips. A master source stays silent.</summary>
     void SetTrackMonitor(int trackId, bool on);
@@ -357,6 +406,18 @@ public interface IAudioEngine : IDisposable
     /// MIDI output ("MIDI In"). sourceTrackId = -1 turns it off.</summary>
     void SetTrackMidiSource(int trackId, int sourceTrackId);
     int GetTrackMidiSource(int trackId);
+    /// <summary>Track-level MIDI playback offset in ms (negative = notes play earlier). Playback only:
+    /// the notes in the clips do not move. Clamped to ±2000 ms.</summary>
+    void SetTrackMidiOffsetMs(int trackId, double ms);
+    double GetTrackMidiOffsetMs(int trackId);
+    /// <summary>Gives an instrument track its articulation map (specs/085): the compiled table
+    /// (see ArticulationMapCompiler) plus the map as Nota's JSON, saved with the project. One undo
+    /// step. False, with nothing changed, when the engine rejects the table or the track.</summary>
+    bool SetTrackArticulationMap(int trackId, int defaultId, NotaArticulationEntry[] entries, NotaArticulationAction[] actions, string mapJson);
+    /// <summary>Removes the track's map; notes keep their articulation ids. One undo step.</summary>
+    bool ClearTrackArticulationMap(int trackId);
+    /// <summary>The map JSON the track holds, or null when it has none.</summary>
+    string? GetTrackArticulationMapJson(int trackId);
 
     // --- freeze (M7): bounce a track's pre-fader audio to a buffer and play it back
     //     in place of the live instrument+device chain. Drive offline with the backend
@@ -438,6 +499,39 @@ public interface IAudioEngine : IDisposable
     bool TryGetMosaicStatus(int trackId, out NotaMosaicStatus status);
     /// <summary>The sample id behind a zone (for TryGetSampleInfo / ReadSample), 0 = not loaded.</summary>
     long MosaicZoneSampleId(int trackId, int zone);
+    // ---- Nota Aurora custom wavetables (specs/053) ----
+    /// <summary>Decodes a WAV / FLAC / MP3 and builds a conditioned, band-limited table on the
+    /// calling thread (any thread: it touches no engine state). Returns an
+    /// <see cref="AuroraTableResult"/>; on Ok, <paramref name="table"/> is a handle the caller
+    /// frees with <see cref="AuroraTableFree"/>.</summary>
+    int AuroraTableBuild(string path, out nint table);
+    /// <summary>A table from frames a project or preset saved (2048 floats each): only the mips
+    /// are rebuilt, so it plays exactly what was saved.</summary>
+    int AuroraTableFromFrames(float[] frames, int frameCount, string name, int origin, out nint table);
+    AuroraTableInfo AuroraTableInfoOf(nint table);
+    /// <summary>The handle's base frames (2048 × frames floats).</summary>
+    float[] AuroraTableFrames(nint table);
+    void AuroraTableFree(nint table);
+    /// <summary>Puts the table into Aurora oscillator <paramref name="osc"/> (0/1) and plays it.
+    /// <paramref name="undoable"/>: one undo step (sounding notes stop); false: in place (a project
+    /// load). The engine keeps its own reference. False when the track isn't an Aurora.</summary>
+    bool AuroraSetTable(int trackId, int osc, nint table, bool undoable = true);
+    /// <summary>Removes the imported table (one undo step).</summary>
+    bool AuroraClearTable(int trackId, int osc);
+    /// <summary>Imported table (true) or the built-in bank (false). Undoable: one undo step
+    /// (the instrument is republished); otherwise in place with no undo (loads).</summary>
+    bool AuroraSetSource(int trackId, int osc, bool useCustom, bool undoable = false);
+    /// <summary>Marks a table a project named but could not restore ("" clears).</summary>
+    bool AuroraSetMissing(int trackId, int osc, string name);
+    bool TryGetAuroraTableInfo(int trackId, int osc, out AuroraTableInfo info);
+    /// <summary>The slot's base frames, or an empty array.</summary>
+    float[] AuroraTableRead(int trackId, int osc);
+    /// <summary>A drawing preview: <paramref name="repFrames"/> then <paramref name="gridFrames"/>
+    /// evenly chosen frames of <paramref name="points"/> samples each; empty when there is no table.</summary>
+    float[] AuroraTablePreview(int trackId, int osc, int repFrames, int gridFrames, int points);
+    /// <summary>The Aurora's state blob with or without the table frames (a project save keeps
+    /// the tables as sample files beside it).</summary>
+    byte[] AuroraState(int trackId, bool includeTables);
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a state blob into the track's instrument and records what it changed in the
@@ -505,6 +599,10 @@ public interface IAudioEngine : IDisposable
     int LiveHeldNotes(int[] outNotes);
     /// <summary>Live viz telemetry (Nota Operator harmonic spectrum) into outv; returns the count written.</summary>
     int InstrumentScope(int trackId, float[] outv);
+    /// <summary>The newest output samples of the track's instrument (mono, oldest first, up to
+    /// 4096) into outv; returns the count. Reading keeps the engine's tap on for about a
+    /// second (#531, the filter graph's spectrum).</summary>
+    int InstrumentOutput(int trackId, float[] outv);
     int AddSamplerTrack(string path, int rootNote = 60, bool loop = false);
     /// <summary>Adds an empty Sampler instrument track (a sample is loaded later).</summary>
     int AddSamplerInstrumentTrack();
@@ -520,6 +618,12 @@ public interface IAudioEngine : IDisposable
     string SampleName(long sampleId);
     /// <summary>Remember the source name of a sample (a project reload restores it).</summary>
     void SetSampleName(long sampleId, string name);
+    /// <summary>The full path the sample was loaded from, or "" when unknown (a recording, a
+    /// render, a project's own copy). Managed-side only, like <see cref="SampleName"/>; Locate
+    /// uses it and projects save it (spec 092, #581).</summary>
+    string SampleSource(long sampleId) => "";
+    /// <summary>Restore a sample's source path (project load).</summary>
+    void SetSampleSource(long sampleId, string path) { }
     int AddMidiClip(int trackId, double startBeat, double lengthBeats);
 
     // --- Hosted plugins (M3-3) ---------------------------------------------
@@ -1057,6 +1161,8 @@ public interface IAudioEngine : IDisposable
     // --- Level meters (M6-2) -----------------------------------------------
     bool TryGetTrackMeter(int trackId, out NotaMeter meter);
     NotaMeter MasterMeter();
+    /// <summary>The Cue bus after the Cue level (specs/089).</summary>
+    NotaMeter CueMeter();
 
     // --- MIDI clip notes ---------------------------------------------------
     void SetClipNotes(int trackId, int clipIndex, NotaNote[] notes);
@@ -1107,6 +1213,16 @@ public interface IAudioEngine : IDisposable
     int MasterTrackId { get; }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     int AudioRecordPeaks(float[] outMinMax, int maxPoints);
+    /// <summary>Every track the audio take is recording (specs/086: one take records every
+    /// armed audio track), and its live length / peaks per track.</summary>
+    int[] RecordingTracks();
+    double AudioRecordLengthBeatsOf(int trackId);
+    int AudioRecordPeaksOf(int trackId, float[] outMinMax, int maxPoints);
+    /// <summary>Armed tracks the last take start could not record, with why.</summary>
+    (int TrackId, RecordSkipReason Reason)[] RecordSkipped();
+    /// <summary>Tests: one take on every armed audio track from <paramref name="channels"/>-wide
+    /// device frames, through the real lane set-up; returns the lanes recorded.</summary>
+    int TakeRecordTestArmed(float[] interleaved, int channels, int frames, double startBeat);
     /// <summary>Notes held into the in-progress MIDI take, for drawing them growing. Fills
     /// <paramref name="buffer"/> and returns the count (0 when no MIDI take records); trackId is
     /// the take's track (0 = none), sessionScene the Session scene (-1 = arrangement take),
@@ -1176,6 +1292,9 @@ public interface IAudioEngine : IDisposable
     /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
     bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);
+    /// <summary>Which audio effect sits in the slot (#540): the same while it is edited, moved or
+    /// brought back by undo; another for a new, pasted or duplicated one. 0 = none. Compare only.</summary>
+    long TrackDeviceId(int trackId, int deviceIndex);
     string TrackInstrumentPluginId(int trackId);
     string TrackDevicePluginId(int trackId, int deviceIndex);
 
@@ -1246,6 +1365,12 @@ public interface IAudioEngine : IDisposable
     void SetAudioSystem(AudioSystem system);
     void SetAsioDriver(string id);
     string AsioDriver { get; }
+    /// <summary>The uid of the input device the staged config opens: the chosen device when it
+    /// is connected, else the system default ("" when there is none). Per-device input settings
+    /// key on it, so "System default" and a missing device never share another's (specs/086).</summary>
+    string EffectiveInputUid();
+    /// <summary>The same for the output device: per-device output setups key on it (specs/089).</summary>
+    string EffectiveOutputUid();
     /// <summary>Channel names of the open ASIO driver; empty when ASIO isn't running.</summary>
     IReadOnlyList<string> AsioChannels(bool input);
     int AsioPair(bool input);
@@ -1325,6 +1450,8 @@ public interface IAudioEngine : IDisposable
     // identified by a stable string paramID.
     int PluginParamCount(int trackId, int deviceIndex);
     string PluginParamId(int trackId, int deviceIndex, int paramIndex);
+    // A param index saved before Nota Twin's layout grew (#531), as it is today; others unchanged.
+    int PluginParamIndexFromV1(int trackId, int deviceIndex, int paramIndex);
     string PluginParamName(int trackId, int deviceIndex, int paramIndex);
     float PluginParamGet(int trackId, int deviceIndex, int paramIndex);
     /// <summary>The plugin's own text for a param's current value ("−12.0 dB"), or "" when it has none.</summary>

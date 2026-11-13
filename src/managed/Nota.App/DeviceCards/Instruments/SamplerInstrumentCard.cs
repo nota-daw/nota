@@ -15,8 +15,8 @@
 //               Env    — the amp envelope (drag its nodes), A / D / S / R and Vel → Vol.
 //               Filter — the SVF's real response (drag: cutoff × resonance); Type,
 //                        Cutoff, Reso, Keytrack and Env → Cutoff with its depth.
-//   Rail 186    always there: the voice mode (Poly 16 / Mono / Choke), Volume, Pan,
-//               Glide, the Output level, Vel → Vol and the output meter.
+//   Rail 186    always there: the voice mode (Poly 16 / Mono / Choke), Level, Pan,
+//               Glide, Volume (the output), Vel → Vol.
 //
 // Neutral ink is the parameter itself; teal is detune and modulation (keytrack, velocity, the
 // envelope's reach) and what the engine is doing now (the voice on the envelope, the
@@ -95,7 +95,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
 
         // ---- shared builders ----------------------------------------------------------
@@ -155,7 +155,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             var tb = new TextBlock { Text = text, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border
             {
-                Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
+                Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb, VerticalAlignment = VerticalAlignment.Center,
             };
             ToolTip.SetTip(b, tip);
@@ -208,7 +208,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         string PanText(float v) { double p = SamplerModel.PanSigned(v); return Math.Abs(p) < 0.015 ? "C" : (p < 0 ? "L" : "R") + NotaNum.Str(Math.Abs(p) * 100, "0"); }
         string GlideText(float v) { double s = SamplerModel.GlideSec(v); return s <= 0 ? NotaNum.Unit(0, "0", "ms") : NotaNum.Time(s); }
         string Oct(float v) => NotaNum.Unit(SamplerModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct");
-        string WindowText() => $"{NotaNum.Str(G("start") * durSec, "0.00")} → {NotaNum.Unit(G("end") * durSec, "0.00", "s")}";
         string LoopWord()
         {
             int l = LoopSel();
@@ -294,7 +293,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         {
             var b = new Border
             {
-                Width = 16, Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Width = 16, Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
@@ -308,7 +307,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         }
         var rootBox = new Border
         {
-            Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+            Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Child = rootText,
         };
         rootBox.PointerWheelChanged += (wt, e) =>
@@ -333,15 +332,20 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             (detectBtn, "Auto"));
 
         // ================= Env tab =================
-        var env = new SamplerEnvView();
+        // The shared envelope graph (#531): drag the breakpoints, bend decay and release by their
+        // diamonds, ⌥-click to type; the dot is the loudest voice.
+        var env = new VoltEnv(new SamplerEnvParams(acc)) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         ToolTip.SetTip(env, MenuKit.Keys(Loc.T("device.sampler.drag_the_nodes_attack_decay")));
-        env.DragBegin += Begin;
-        env.DragEnd += End;
-        env.Changed += (id, v) => { SetP(id, v); Refresh(); };
-        env.Reset += id => { Write(id, Def(id)); Refresh(); };
-        string EnvTl() => $"{NotaNum.Time(SamplerModel.AttackSec(G("attack")))} · {NotaNum.Time(SamplerModel.DecaySec(G("decay")))} · {DbLin(G("sustain"))} · {NotaNum.Time(SamplerModel.ReleaseSec(G("release")))}";
-        readouts.Add(() => env.Set(G("attack"), G("decay"), G("sustain"), G("release"), snap, EnvTl(),
-            hasSample ? NotaNum.Unit((G("end") - G("start")) * durSec, "0.00", "s") : ""));
+        (int, string) EP(string id) => (I(id), id);
+        env.Target("ENV", EP("attack"), EP("decay"), EP("sustain"), EP("release"));
+        env.Shape(EP("dcurve"), EP("rcurve"), EP("envexp"));
+        env.Format = (k, n) => k switch
+        {
+            0 => NotaNum.Time(SamplerModel.AttackSec((float)n)), 1 => NotaNum.Time(SamplerModel.DecaySec((float)n)),
+            2 => DbLin((float)n), _ => NotaNum.Time(SamplerModel.ReleaseSec((float)n)),
+        };
+        env.Seconds = (k, n) => k switch { 0 => SamplerModel.AttackSec((float)n), 1 => SamplerModel.DecaySec((float)n), _ => SamplerModel.ReleaseSec((float)n) };
+        readouts.Add(() => { env.SetPlay(snap.Live ? snap.EnvStage : 4, snap.EnvProgress); env.Refresh(); });
         float lastVel = G("velamount") > 0.005f ? G("velamount") : 1f;
         var velSwitch = Switch("", () => G("velamount") > 0.005f, () =>
         {
@@ -355,16 +359,18 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         readouts.Add(() => velWord.Text = G("velamount") > 0.005f ? NotaNum.Pct(G("velamount")) : "off");
         var velBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Cap("VEL → VOL"), velSwitch, velWord } };
         ToolTip.SetTip(velBlock, Loc.T("device.sampler.velocity_sets_the_level_the"));
+        var curveSeg = ParamChips("envexp", new[] { Loc.T("device.env.lin"), Loc.T("device.env.exp") });
         var envRow = Row(16,
             (PKnob("attack", "ATTACK", v => NotaNum.Time(SamplerModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "DECAY", v => NotaNum.Time(SamplerModel.DecaySec(v))), "Auto"),
             (PKnob("sustain", "SUSTAIN", DbLin, NotaSize.KnobMain, 58), "Auto"),
             (PKnob("release", "RELEASE", v => NotaNum.Time(SamplerModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
+            (Labeled("CURVE", curveSeg), "Auto"),
             (velBlock, "Auto"));
 
         // ================= Filter tab =================
-        var filt = new SamplerFilterView();
+        var filt = new SamplerFilterView { Spectrum = acc.Spectrum() };
         ToolTip.SetTip(filt, MenuKit.Keys(Loc.T("device.sampler.drag_left_right_for_the")));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
@@ -373,10 +379,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         // ⌥-click a node / the filter window to type it (specs/035).
         ValueField PF(string id, string name, Func<float, string> fmt) => new(name, () => G(id), v => fmt((float)v), v => SetP(id, v),
             () => Begin(id), () => End(id), I(id) >= 0 ? Def(id) : null) { After = Refresh };
-        ValueEntry.AttachHandles(env,
-            [PF("attack", "Attack", v => NotaNum.Time(SamplerModel.AttackSec(v)))],
-            [PF("decay", "Decay", v => NotaNum.Time(SamplerModel.DecaySec(v))), PF("sustain", "Sustain", DbLin)],
-            [PF("release", "Release", v => NotaNum.Time(SamplerModel.ReleaseSec(v)))]);
         ValueEntry.AttachAll(filt, PF("cutoff", "Cutoff", v => NotaNum.Hz(SamplerModel.CutoffHz(v))), PF("resonance", "Resonance", v => NotaNum.Pct(v)));
         string FiltTl()
         {
@@ -387,7 +389,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var typeSeg = ParamChips("filtertype", SamplerModel.FilterNames, padX: 7);
         ToolTip.SetTip(typeSeg, Loc.T("device.sampler.off_low_pass_high_pass"));
-        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobMain, 58, emphasised: true);
+        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobSecondary, 54, emphasised: true);
         var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v));
         var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.sampler.the_cutoff_follows_the_key"));
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1),
@@ -396,15 +398,45 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var filterBody = new[] { cutKnob, resoKnob, ktKnob };
         foreach (var c in filterBody) DimWhen(c, () => Sel("filtertype", 4) == 0);
         DimWhen(envAmt, () => Sel("filtertype", 4) == 0 || G("envcutoff") < 0.5f);
-        var filterRow = Row(14, (Labeled("TYPE", typeSeg), "Auto"), (cutKnob, "Auto"), (resoKnob, "Auto"), (ktKnob, "Auto"),
-            (new Panel(), "*"), (envBtn, "Auto"), (envAmt, "Auto"));
+        // The filter's controls in a column at the graph's right (#531), as on Nota Volt: the type
+        // over a grid of knobs, the envelope switch under them.
+        static Control SideGrid(params Control[] cells)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowSpacing = 4 };
+            for (int k = 0; k < cells.Length; k++)
+            {
+                if (k % 2 == 0) g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                cells[k].HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(cells[k], k % 2); Grid.SetRow(cells[k], k / 2); g.Children.Add(cells[k]);
+            }
+            return g;
+        }
+        static Control SidePage(Control view, Control side)
+        {
+            var host = new Border
+            {
+                Width = 150, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1, 0, 0, 0),
+                Padding = new Thickness(8, 0, 0, 0), Child = side,
+            };
+            var page = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(7, 5, 7, 5) };
+            page.Children.Add(view);
+            Grid.SetColumn(host, 1); page.Children.Add(host);
+            return page;
+        }
+        envBtn.HorizontalAlignment = HorizontalAlignment.Center;
+        var filterSide = new StackPanel
+        {
+            Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Labeled("TYPE", typeSeg), SideGrid(cutKnob, resoKnob, ktKnob, envAmt), envBtn },
+        };
 
         // ---- the tab panel ------------------------------------------------------------
         var views = new Control[] { wave, keys, env, filt };
-        var rows = new Control[] { sampleRow, pitchRow, envRow, filterRow };
+        var rows = new Control?[] { sampleRow, pitchRow, envRow, null };
         var pages = new Control[views.Length];
         for (int i = 0; i < views.Length; i++)
         {
+            if (rows[i] is null) { pages[i] = SidePage(views[i], filterSide); continue; }
             var rowHost = new Border
             {
                 Height = RowH, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),
@@ -457,35 +489,19 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Spacing = 6,
             Children =
             {
-                Slider("VOLUME", "volume", () => DbLin(G("volume")), tip: Loc.T("device.sampler.the_voices_level")),
+                Slider("LEVEL", "volume", () => DbLin(G("volume")), tip: Loc.T("device.sampler.the_voices_level")),
                 Slider("PAN", "pan", () => PanText(G("pan")), bipolar: true),
                 Slider("GLIDE", "glide", () => GlideText(G("glide")), tip: Loc.T("device.sampler.slide_from_the_last_note")),
             },
         };
-        var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.sampler.the_level_after_everything"));
-        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: Loc.T("device.sampler.how_much_velocity_sets_the"));
-
-        Control meterBlock;
-        if (acc.TryMeter(out _))
+        // Volume · Vel → Vol centred — the track meter already shows the level.
+        var outKnob = PKnob("output", "VOLUME", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.sampler.the_level_after_everything"));
+        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), NotaSize.KnobRegular, 50, arc: Teal, tip: Loc.T("device.sampler.how_much_velocity_sets_the"));
+        var outRow = new StackPanel
         {
-            var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
-            registerTick(() => { if (acc.TryMeter(out var m)) meter.Push(m); });
-            var meterScale = new Grid { VerticalAlignment = VerticalAlignment.Stretch, RowDefinitions = new RowDefinitions(string.Join(",", ScaleRows(0, -12, -48))) };
-            for (int i = 0; i < 3; i++)
-            {
-                var c = Mono(i == 0 ? "0" : i == 1 ? "−12" : "−48", NotaPalette.TextAxis, NotaType.Axis);
-                Grid.SetRow(c, i * 2 + 1); meterScale.Children.Add(c);
-            }
-            var mg = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 2) };
-            mg.Children.Add(meter);
-            Grid.SetColumn(meterScale, 1); mg.Children.Add(meterScale);
-            meterBlock = mg;
-        }
-        else meterBlock = new Panel();
-        var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
-        outRow.Children.Add(outKnob);
-        Grid.SetColumn(velKnob, 1); outRow.Children.Add(velKnob);
-        Grid.SetColumn(meterBlock, 2); outRow.Children.Add(meterBlock);
+            Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
+            Children = { outKnob, velKnob },
+        };
         var outHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = outRow };
 
         var railBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 6, Margin = new Thickness(8, 6, 8, 5) };
@@ -497,70 +513,11 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- the status line ----------------------------------------------------------
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
-        string EnvWord()
-        {
-            double a = SamplerModel.AttackSec(G("attack")), s = G("sustain"), rel = SamplerModel.ReleaseSec(G("release"));
-            if (s < 0.05) return Loc.T("device.sampler.a_pluck_it_decays_to");
-            if (a < 0.01 && s > 0.89 && rel < 0.05) return Loc.T("device.sampler.almost_a_gate_the_sample");
-            if (a > 0.3) return Loc.T("device.sampler.a_slow_swell");
-            if (rel > 1.0) return Loc.T("device.sampler.a_long_tail_after_release");
-            return Loc.T("device.sampler.held_at_the_sustain_level");
-        }
-        string Summary()
-        {
-            if (!hasSample) return Loc.T("device.sampler.no_sample_drop_one_from");
-            switch (tab)
-            {
-                case 0:
-                {
-                    string name = sampleName.Length > 0 ? sampleName + " · " : "";
-                    int l = LoopSel();
-                    string loop = l == 0 ? Loc.T("device.sampler.loop_off_crossfade_not_applied")
-                        : l == 1 ? $"{LoopWord()} · crossfade {NotaNum.Time(SamplerModel.CrossfadeSec(G("loopxfade")))}"
-                        : Loc.F("device.sampler.no_crossfade", LoopWord());
-                    string gain = Math.Abs(SamplerModel.GainDb(G("gain"))) > 0.05 ? $" · gain {NotaNum.Db(SamplerModel.GainDb(G("gain")), signed: true)}" : "";
-                    return $"{name}{WindowText()} · {loop}{gain}";
-                }
-                case 1:
-                {
-                    int nat = NaturalKey();
-                    string tail = nat == rootv ? Loc.T("device.sampler.the_sample_plays_at_its")
-                        : nat < 0 ? Loc.T("device.sampler.every_key_plays_the_same")
-                        : Loc.F("device.sampler.plays_the_sample_at_its", SamplerModel.NoteName(nat));
-                    return $"Root {SamplerModel.NoteName(rootv)} · transpose {St(G("transpose"))} · detune {Cents(G("detune"))} · keytrack {NotaNum.Pct(G("pitchtrack"))} — {tail}";
-                }
-                case 2:
-                    return Loc.F("device.sampler.env", EnvTl(), EnvWord())
-                        + (G("velamount") > 0.005f ? $" · velocity {NotaNum.Pct(G("velamount"))}" : " · velocity off");
-                default:
-                {
-                    int t = Sel("filtertype", 4);
-                    if (t == 0) return Loc.T("device.sampler.filter_off_the_sample_passes");
-                    string kt = G("keytrack") > 0.005f ? $"keytrack {NotaNum.Pct(G("keytrack"))}" : "keytrack off";
-                    string ev = G("envcutoff") >= 0.5f ? $" · env {Oct(G("envamount"))}" : "";
-                    string live = snap.Live && snap.CutoffHz > 0 ? $" · now {NotaNum.Hz(snap.CutoffHz)}" : "";
-                    return $"Filter {SamplerModel.FilterNames[t]} · cutoff {NotaNum.Hz(SamplerModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))} · {kt}{ev}{live}";
-                }
-            }
-        }
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
-
         // ---- assembly -----------------------------------------------------------------
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap, Margin = new Thickness(NotaSpace.DeviceGap) };
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         showTab = () =>
         {
@@ -579,7 +536,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         refresh = () =>
         {
             foreach (var r in readouts) r();
-            status.Text = Summary();
         };
         void Live()
         {
@@ -587,11 +543,6 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             SamplerModel.Parse(scope.AsSpan(0, Math.Max(0, n)), snap);
             if (acc.Info(out long sid, out int r) && sid == sampleId) rootv = r;   // the root may move from MCP / undo
             wave.SetPlayhead(snap.Live ? snap.PlayPos : acc.PlayPosition());
-            int voices = snap.Live ? snap.Voices : 0;
-            double esr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = hasSample
-                ? $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · {NotaNum.Unit(durSec, "0.00", "s")} sample · {voices}/{SamplerModel.Voices} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}"
-                : $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             Refresh();
         }
         registerTick(Live);
@@ -610,16 +561,4 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
     };
 
-    private static IEnumerable<string> ScaleRows(params double[] dbs)
-    {
-        double prev = 0;
-        foreach (var db in dbs)
-        {
-            double fromTop = 1.0 - MeterScale.NormDb(db);
-            yield return Math.Max(0, fromTop - prev).ToString("0.000", NotaNum.Culture) + "*";
-            yield return "Auto";
-            prev = fromTop;
-        }
-        yield return Math.Max(0, 1.0 - prev).ToString("0.000", NotaNum.Culture) + "*";
-    }
 }

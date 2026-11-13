@@ -87,6 +87,9 @@ void voiceControl(Voice& V, const PartCtl& c, double sr) {
     V.walk += (V.walkTgt - V.walk) * 0.02f;
 
     const float ef = 1.0f + c.drift * 0.2f * V.oEnv;
+    V.fenv.setShape(c.fShape);
+    V.aenv.setShape(c.aShape);
+    V.menv.setShape(c.mShape);
     V.fenv.setTimes(c.fA * ef, c.fD * ef, c.fS, c.fR * ef, c.fCurve, sr, false);
     V.aenv.setTimes(c.aA * ef, c.aD * ef, c.aS, c.aR * ef, c.aCurve, sr, false);
     V.menv.setTimes(c.mA, c.mD, c.mS, c.mR, 0.5f, sr, c.mLoop);

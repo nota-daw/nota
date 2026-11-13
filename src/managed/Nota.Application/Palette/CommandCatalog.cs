@@ -57,6 +57,7 @@ public static class CommandCatalog
         C("view.mixer", Loc.T("commands.show_mixer"), Loc.T("commands.view"), Shortcut.CmdShift('M'), "faders channels"),
         C("view.mixerFloat", Loc.T("commands.mixer_in_its_own_window"), Loc.T("commands.view"), "", "dock undock float pop out mixer window"),
         C("view.connectPhone", Loc.T("commands.connect_phone"), Loc.T("commands.view"), "", "remote mobile qr"),
+        C("view.articulationMaps", Loc.T("commands.articulation_maps"), Loc.T("commands.view"), "", "expression map keyswitch articulation manager library"),
         C("view.toggleBrowser", Loc.T("commands.toggle_browser"), Loc.T("commands.view"), "", "library sidebar"),
         C("view.toggleDetail", Loc.T("commands.toggle_detail_panel"), Loc.T("commands.view"), "", "devices clip"),
         C("view.maximizeDetail", Loc.T("commands.clip_editor_fills_the_window"), Loc.T("commands.view"), Shortcut.CmdShift('F'), "maximize maximise full detail panel piano roll restore split"),
@@ -77,6 +78,8 @@ public static class CommandCatalog
         C("view.history", Loc.T("commands.show_version_history"), Loc.T("commands.view"), "", "undo history versions snapshots"),
         C("view.midiLearn", Loc.T("commands.midi_learn"), Loc.T("commands.view"), "", "map controller"),
         C("view.fullscreen", Loc.T("commands.toggle_full_screen"), Loc.T("commands.view"), Shortcut.None("F11"), "maximize immersive hide chrome"),
+        C("view.menuBar", Loc.T("commands.show_menu_bar"), Loc.T("commands.view"), "", "menu bar menubar hamburger file edit row classic",
+            hide: OperatingSystem.IsMacOS()),   // macOS keeps its menu in the system bar (#518)
         C(Palette, Loc.T("commands.command_palette"), Loc.T("commands.view"), Shortcut.CmdShift('P'), "search", hide: true),
 
         // ---- Transport --------------------------------------------------------------------
@@ -123,14 +126,19 @@ public static class CommandCatalog
 
         // ---- Settings ---------------------------------------------------------------------
         C("prefs.open", Loc.T("common.settings"), Loc.T("common.settings"), Shortcut.Cmd(','), "preferences options"),
-        C("prefs.audio", Loc.T("commands.settings_audio"), Loc.T("common.settings"), "", "preferences device driver sample rate buffer"),
+        C("prefs.audio", Loc.T("commands.settings_audio"), Loc.T("common.settings"), "", "preferences driver asio sample rate buffer latency cpu"),
+        C("prefs.outputs", Loc.T("commands.settings_outputs"), Loc.T("common.settings"), "", "preferences output device speakers headphones test tone"),
+        C("prefs.inputs", Loc.T("commands.settings_inputs"), Loc.T("common.settings"), "", "preferences input device channels microphone names stereo pairs"),
         C("prefs.midi", Loc.T("commands.settings_midi"), Loc.T("common.settings"), "", "preferences controller keyboard"),
         C("prefs.gamepads", Loc.T("commands.settings_gamepads"), Loc.T("common.settings"), "", "preferences joystick controller"),
         C("prefs.remote", Loc.T("commands.settings_remote"), Loc.T("common.settings"), "", "preferences phone"),
+        C("prefs.mcp", Loc.T("commands.settings_mcp"), Loc.T("common.settings"), "", "preferences ai mcp claude assistant server port"),
         C("prefs.plugins", Loc.T("commands.settings_plug_ins"), Loc.T("common.settings"), "", "preferences vst3 au scan folders"),
         C("prefs.downloads", Loc.T("commands.settings_downloads"), Loc.T("common.settings"), "", "preferences store models sample packs"),
         C("prefs.library", Loc.T("commands.settings_library"), Loc.T("common.settings"), "", "preferences folders"),
-        C("prefs.appearance", Loc.T("commands.settings_appearance"), Loc.T("common.settings"), "", "preferences theme dark light language langue francais english"),
+        C("prefs.appearance", Loc.T("commands.settings_appearance"), Loc.T("common.settings"), "", "preferences theme dark light skin accent scale text size waveform"),
+        C("prefs.language", Loc.T("commands.settings_language"), Loc.T("common.settings"), "", "preferences language langue francais english russian"),
+        C("prefs.editing", Loc.T("commands.settings_editing"), Loc.T("common.settings"), "", "preferences piano roll note names labels split fades detail panel"),
         C("prefs.shortcuts", Loc.T("commands.settings_shortcuts"), Loc.T("common.settings"), "", "preferences hotkeys keys keyboard"),
         C("prefs.updates", Loc.T("commands.settings_updates"), Loc.T("common.settings"), "", "preferences update automatic check version"),
 

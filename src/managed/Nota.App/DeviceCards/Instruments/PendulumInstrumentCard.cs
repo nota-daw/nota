@@ -100,14 +100,12 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.ValuesFamily,
         };
 
         var hint = Mono("", TextTertiary);
         hint.HorizontalAlignment = HorizontalAlignment.Right; hint.Margin = new Thickness(0, 0, 8, 0);
         hint.TextTrimming = TextTrimming.CharacterEllipsis;
-        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Mono("", TextSecondary, 8);
         var lastNote = Mono("", TextTertiary);
         Action showTab = () => { };
 
@@ -156,7 +154,6 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             foreach (var r in readouts) r();
             hint.Text = Hint();
-            status.Text = Summary();
         }
 
         void Live()
@@ -171,9 +168,6 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             voiceBars.Set(snap.Levels);
             int voices = snap.Live ? snap.Voices : Math.Max(0, engine.InstrumentVoiceCount(track));
             lastNote.Text = Loc.F("device.pendulum.last_note", PendulumModel.NoteName(snap.LastPitch), Loc.Plural("device.pendulum.voices", voices));
-            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{voices}/{PendulumModel.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
-            status.Text = Summary();
         }
 
         // ---- shared builders ----------------------------------------------------------
@@ -232,7 +226,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             };
             var b = new Border
             {
-                Height = height, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Height = height, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             void Paint()
@@ -315,7 +309,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
                 PKnob("attack", "ATTACK", v => Secs(PendulumModel.AttackSeconds(v))),
                 PKnob("decay", "DECAY", v => Secs(PendulumModel.DecaySeconds(v))),
                 PKnob("release", "RELEASE", v => Secs(PendulumModel.ReleaseSeconds(v))),
-                PKnob("volume", "VOLUME", DbOf),
+                PKnob("volume", "VOLUME", DbOf, NotaSize.KnobMain),
             },
         };
         var toneHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = toneRow };
@@ -373,7 +367,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             var b = new Border
             {
-                Width = 16, Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Width = 16, Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
@@ -436,7 +430,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         readouts.Add(() => scaleText.Text = PendulumModel.ScaleText(G("root"), G("scalemode")));
         var scaleBox = new Border
         {
-            Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+            Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new DockPanel
             {
@@ -541,34 +535,13 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
 
-        // ---- words: the tab hint and the status line -----------------------------------
+        // ---- words: the tab hint ------------------------------------------------------
         string Cycle() => Synced() ? "sync " + PendulumModel.DivNames[Sel("division", 5)] : "free " + Secs(PendulumModel.FreeSeconds(G("freerate")));
         string RateText() => NotaNum.Unit(PendulumModel.RateSigned(G("rate")) * 100, "+0;−0;0", "%");
         string MotionWord() => PendulumModel.MotionNames[Sel("motion", 4)].ToLowerInvariant();
         string Hint() => tab == 0
             ? $"{Cycle()} · {MotionWord()} · {RateText()}"
             : $"{PendulumModel.WaveNames[Sel("wave", 5)].ToLowerInvariant()} · {PendulumModel.ToneWord(G("tone"))} · {Secs(PendulumModel.AttackSeconds(G("attack")))}";
-        string Summary()
-        {
-            if (tab == 0)
-            {
-                int n = Count();
-                var notes = new List<string>();
-                for (int b = 0; b < n; b++) notes.Add(PendulumModel.NoteName(snap.BallState[b].Pitch));
-                string chord = held.Length == 0 ? Loc.T("device.pendulum.hold_a_chord") : string.Join(" ", notes);
-                string s = $"{(Synced() ? "Sync " + PendulumModel.DivNames[Sel("division", 5)] : "Free " + Secs(PendulumModel.FreeSeconds(G("freerate"))))} · {MotionWord()} · rate {RateText()}"
-                    + $" · {n} balls → {chord} · sort {(G("chordsort") >= 0.5f ? "down" : "up")} · quantize {PendulumModel.QuantNames[Sel("quantize", 3)].ToLowerInvariant()}";
-                if (G("hold") >= 0.5f) s += " · hold";
-                return s;
-            }
-            string sc = PendulumModel.ScaleText(G("root"), G("scalemode"));
-            return $"{PendulumModel.WaveNames[Sel("wave", 5)]} · {PendulumModel.ToneWord(G("tone"))} · "
-                + $"{NotaNum.Str(PendulumModel.AttackSeconds(G("attack")) * 1000, "0")} / {NotaNum.Str(PendulumModel.DecaySeconds(G("decay")) * 1000, "0")} / "
-                + $"{NotaNum.Str(PendulumModel.ReleaseSeconds(G("release")) * 1000, "0")} ms · {DbOf(G("volume"))} · spread rate {NotaNum.Pct(G("spread"))} · "
-                + $"detune {Cents(G("detune"))} · pan {NotaNum.Pct(G("panspread"))}"
-                + (G("humanize") > 0.005f ? $" · humanize {NotaNum.Pct(G("humanize"))}" : "")
-                + (sc == "Off" ? "" : $" · {sc}");
-        }
 
         showTab = () =>
         {
@@ -586,15 +559,6 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             Refresh();
         };
 
-        // ---- status strip -------------------------------------------------------------
-        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
-        statusBar.Children.Add(status);
-        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
-        var statusHost = new Border
-        {
-            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
-            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
-        };
 
         // ---- assembly -----------------------------------------------------------------
         var body = new Grid
@@ -605,8 +569,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
-        DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = body };
 
         ctx.AddDeviceRefresher(Live);
         ctx.SetInstLiveViz(Refresh);

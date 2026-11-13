@@ -22,6 +22,746 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.60.1] — 2026-11-13
+
+### Added
+- **Nothing on the transport bar goes out of reach** (#520, specs/097). A **⋯** key now ends
+  the transport bar. When the window is too narrow — or the interface scale too large — for
+  the whole bar, the parts it hides (Tap, Key, Grid, Snap, Follow, Automation, Mixer, MIDI learn,
+  Remote, the time signature, loop and loop-record mode, the master level, the DSP meter)
+  are listed in the ⋯ menu, in bar order, and work from there as they do in the bar: toggles
+  as check items, Grid and the time signature as submenus, Tap stays open for tapping, the
+  master fader drags in place. An accent dot on ⋯ says something is in it; widen the window
+  and the parts go back to the bar. The menu also switches the **interface scale** (75–200 %)
+  at every width, the same setting as Settings → Appearance. When the Grid cell is hidden its
+  separator now goes with it, so the bar no longer shows two rules side by side.
+- **A Mixer button in the toolbar** (#516, specs/092). Next to Automation, the faders key shows
+  or hides the Mixer with one click, docked or in its own window, as View → Mixer and ⌘⇧M do.
+  It reads as on while the Mixer is shown and stays in step however you open or close it: the
+  menu, the shortcut, the panel's or the window's close button. Its tooltip names the shortcut.
+- **Your own keyboard shortcuts** (#61, specs/096). Every key in Nota can now be changed in
+  **Settings → Shortcuts**: click a key, press the new one, **Confirm** — menu commands and
+  the keys that used to be fixed alike: piano-roll and arrangement editing (nudge, transpose,
+  move to track), Session, devices, the Files browser, Modular, the transport, and the
+  computer-keyboard notes (each note, octave and velocity — handy on AZERTY or Cyrillic
+  layouts). An action can have a second key. Before anything is saved the row says which
+  action already answers that key where this one works ("⌘D is used by Duplicate") and offers
+  **Replace** or **Cancel**; a key used only in another view is allowed with a note on which
+  one wins, and keys the system keeps (⌘Q, ⌘H, Alt+F4…) are refused. Changed keys carry an
+  accent dot and their default, **Edited only** lists them, each has a reset, and **Reset all
+  to defaults…** puts everything back. Only changed keys are stored, so new defaults in later
+  versions still arrive. The menu, the context menus, tooltips and the command palette show
+  your keys at once; mouse gestures and the keys of lists and text fields stay as they are,
+  listed for reference. Typing a key in the filter ("⌘T", "cmd t") finds what it does.
+- **Choose the address Nota Remote shows** (#85, specs/095). On a computer with several
+  networks (Wi-Fi and Ethernet, a VPN, a virtual machine's network), Nota could put an address
+  in the QR code that the phone can't reach. Now you can choose it.
+  - **Settings → Remote → Address in the QR**: Automatic (as before: USB, then Wi-Fi, then
+    Ethernet) or one network interface. The choice is kept after a restart, by the
+    interface's name. While that interface is down, Automatic stands in, and the list says so.
+  - **Connect phone**: the other addresses under the main one take a click, which puts that
+    address in the link and QR code; **Automatic** under them goes back.
+  - Next to the address, **Open in the browser** opens the Remote page on this computer, and
+    **Copy the link** copies it.
+- **A Modular tab in the browser** (#592, specs/095). While Modular is the view the browser's
+  rail carries a **Modular** tab (a patch-cable icon, after MIDI effects) listing every node
+  Modular offers — LFO, Envelope Follower, MIDI → CV, ADSR, Macro, Math, Scope — with its
+  category and a description, searchable by name, category or alias ("wobble" finds LFO).
+  Drag a node onto the canvas and it lands there, unconnected; double-click (or Enter) puts
+  it in the middle of the view. The browser remembers its own last tab for Modular (the
+  Modular tab the first time) and goes back to the other one when you leave.
+- **The arrangement's track headers in Modular** (#592, specs/095). Modular's Track view shows
+  the same track column as the arrangement — group trays, every control, the context menu,
+  drag to reorder, meters, both looks — on the side **Track headers on the right** picks, and
+  it moves at once when that changes. Click a header to see that track's graph; drop a CV
+  cable on another track's header to modulate it from here.
+- **Group graphs in Modular** (#592, specs/095). A group's header opens the group's own effect
+  chain (Tracks in → effects → out); modulators patch its effects like any track's.
+- **Show in Modular** (#592, specs/095) in the track menus of the arrangement and the Session
+  view: Modular opens in Track view on that track.
+- **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
+  lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
+  Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
+  The Files tab adds folders the same ways. With more than one folder each is a top-level
+  node with its own menu; every folder is indexed (tempo, key, loop or one-shot, similar
+  sounds) and searched. One folder is the default: downloaded sample packs go there. A
+  folder on an unplugged drive stays listed as unavailable and comes back with the drive.
+  A folder already in the list, or inside or around one, is refused with a note.
+- **Browse the whole computer from the Files tab** (#580, specs/092). A **Tree | Browse**
+  switch: Browse shows one folder at a time, starting at the default sample folder, with
+  **Back / Forward / Up** (⌘[ ⌘] ⌘↑; Ctrl or Alt elsewhere) up to the list of drives, **Home**
+  (back to the default sample folder), a path bar whose segments jump there, **Copy path**,
+  and a path you type or paste (⌘L), a file path selecting that file. Every row has an icon
+  for what it is (folder, drive, audio, MIDI, other file); files show their extension and size
+  in their own columns, and files Nota can't add are listed in a faded ink and can't be
+  dragged or opened. Audio files preview and drag as in the tree; a folder can be added to
+  the browser from its menu. Every file and folder row in the Files tab has **Copy path**.
+- **Locate a clip's file** (#581, specs/092). An audio clip's menu in the arrangement and in
+  Session has **Locate ▸ In browser / In Finder** (In Explorer, In file manager). In browser
+  opens the Files tab at the file (the tree if it lies in a sample folder, else the browse
+  view); with a clip selected, its file is marked in the Files list whenever its folder is
+  open. Projects now remember the file each audio clip came from, so Locate still works after
+  reopening; a recording or a project from before shows the project's own copy instead.
+- **The Projects tab shows your newest work first** (#582, specs/092): projects sorted by the
+  last save (or by name, remembered), each with its date, tempo, key, length and number of
+  tracks, read in the background and cached. The open project is marked.
+- **Classic look** (#572, specs/091). **Settings → Appearance → Look** switches between the
+  new look and **Classic**. Classic brings back 0.59's colours, its tighter corners and
+  values in Geist Mono (tempo, position, dB, Hz, counters). It works with any colour theme
+  and takes effect at once, without a restart. The new look stays the default, and the
+  layouts are the same in both looks.
+  - **Clips: Solid | Tinted** (Settings → Appearance). Solid draws Arrangement clips as in
+    0.59: blocks of the track colour with a darker title band. With no pick, Classic draws
+    solid clips and New tinted ones. Your pick stays when you change the look.
+  - A user theme keeps its own colours under Classic, and its own typeface and corners when
+    it sets them. A theme file (format 3) can also set a typeface for values:
+    `"font": { "values": "…" }`.
+  - AI control (MCP): `set_look` switches the look. `list_themes` reports it, and
+    `get_theme` / `preview_theme` take an optional `look`.
+- **Nota Remote shows what is in each clip on the Scenes screen** (#557, specs/090). A filled
+  cell reads like the desktop's Session slot: the clip's name and length on top, and below
+  them its notes as a small piano roll, or its waveform, in the clip's colour. Editing,
+  replacing or recording a clip on the computer updates its cell on the phone within a
+  second; a take being recorded grows as it records. Previews are sent only to a phone on
+  Scenes and only for the clips that changed.
+- **Phrase lines in the arrangement** (#517, specs/092). **Settings → Appearance → Phrase
+  lines** draws a heavier grid line every 4, 8, 16 or 32 bars, counted from bar 1, across
+  the lanes, the return and master rows and the ruler, so you can see where an 8- or 16-bar
+  phrase starts and ends. The line is a neutral grey a step above the bar line, works in
+  every colour theme (your own too) and stays behind the clips. It counts bars, so it
+  follows the time signature. Off by default, and remembered for every project.
+- **A private Cue mix on its own outputs** (#483, specs/089). On an interface with more than
+  two outputs, **Settings → Outputs** sends Main (what the audience hears) to one
+  output pair and Cue (your own mix) to another, for example Main on 1/2 and Cue on 3/4.
+  Changing a pair takes effect at once, without restarting the device.
+  - **Cue key** (headphones) on every track, in the mixer, the Session mixer, the track
+    headers and the inspector. Several tracks can be in Cue at once. Each is heard after its
+    devices and before its fader, pan, mute and solo, so a track muted in Main is still
+    heard in Cue. Cue never changes Main, a recording or an export.
+  - **Cue strip** next to Master: the Cue output pair, the cued tracks, the Cue level and a
+    meter.
+  - **Click to Cue:** the metronome and count-in can go to Main, Cue or both, with their own
+    level. A click sent to Cue skips the master chain and never reaches the audience.
+  - **When the Cue outputs disappear** (another device, or the interface unplugged), Cue goes
+    silent and says so. Nothing is moved into Main. If Main's own pair is missing, Main plays
+    on 1/2 and the Master strip says so.
+  - **What is saved where:** output pairs and click settings are kept per device on this
+    computer. The cued tracks and the Cue level are saved with the project (format 32).
+  - **MIDI Learn** can map a track's Cue key and the Cue level.
+- **Skins: your own themes** (#336, specs/087). Put a theme file in the **Themes** folder
+  of Nota's data folder and it appears in **Preferences → Appearance**, next to the
+  built-in themes, under Dark or Light. You pick it like any built-in theme, and the choice
+  is kept after a restart.
+  - A theme file sets every colour token. Format 2 can also name a typeface installed on
+    the system and how round the corners are: one roundness from 0 (square) to 2, plus
+    exact values for single steps. The whole app follows it live, device cards and drawn
+    views included; sizes and layout stay the same.
+  - Right-click any theme card and pick **Duplicate** to get a copy to edit. **Open themes
+    folder** and **Reload** are under the cards.
+  - A file that can't be loaded is listed under the cards with the reason, and the token
+    it is about. A theme whose text may be hard to read loads anyway and shows how many
+    warnings it has. A typeface that isn't installed falls back to Geist.
+  - New MCP tools let an AI or a script design a skin:
+    - `list_themes`, `get_theme`, `get_theme_catalogue` and `list_system_fonts` read what
+      there is;
+    - `validate_theme` checks a theme without saving it;
+    - `preview_theme` returns one picture per part of the app in that theme, without
+      changing the window;
+    - `save_theme`, `apply_theme`, `try_on_theme` and `revert_try_on` save it, wear it or
+      try it on.
+- **Custom wavetables in Nota Aurora** (specs/053): drop a WAV, FLAC or MP3 file on either
+  oscillator, from the browser or the desktop, or pick **Import…** in its table drop-down.
+  Aurora turns it into a table as follows:
+  - a standard wavetable file, with a `clm ` frame size or a length that is a multiple of
+    2048, keeps its frames, up to 256;
+  - a file of up to 4096 samples is taken as one cycle;
+  - anything longer is cut into 16 frames, evenly spaced through it.
+  Only the first 60 s are read. Stereo is mixed to mono, DC is removed and the table is
+  normalised. A long file loads in the background. A silent or unreadable file is refused,
+  with the reason under the oscillator.
+  The table window draws the imported frames and follows the position each played note is
+  at, as LFOs and envelopes move it. The drop-down switches between the imported table and
+  the built-in ones and can remove the import. Import and remove are one undo step each,
+  and notes that are sounding stop when you import. Imported tables are band-limited, so a
+  bright table played high does not fold back. Each takes up to about 7 MB of memory.
+  Projects save each table inside the bundle, once even when several oscillators share it,
+  so a project opens with its tables even after the source file is gone. User presets carry
+  their tables too. The project format is now 31. Older projects open unchanged; a project
+  saved by this version needs this version or later to open.
+  An Aurora inside a rack keeps its tables, but cannot import one yet. Built-in tables and
+  factory presets sound exactly as before.
+- **XL for Nota EQ-8, Dynamic EQ-8, Lens and Auto Filter** (#540): the card's size toggle gains XL, which moves
+  the whole editor into a large panel above the device chain, as wide as the chain, with the
+  graph stretched to fill it. The card in the chain stays as a small 260 × 260 one that says
+  the editor is in XL. A track has one XL device. The panel follows the selected track and
+  comes back with the project. Shrink in the panel's header or Esc returns the device to L.
+  The panel's header has no Remove ×, so it can't be mistaken for closing the panel. While
+  XL is open the Devices panel's splitter resizes the XL panel, and the height is remembered.
+- **Open a device in its own window** (#540): the devices that have XL also have a pop-out key
+  in the header. It opens the editor in a resizable window with the device's presets and
+  bypass, and the card in the chain shows where the editor went. Nota Lens's own expand
+  button is replaced by this key.
+- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
+  text in the app a point smaller or up to two points larger, live, without changing the
+  layout (Interface scale still scales everything). Device cards keep their text size.
+- **Send levels in the Large track header**: a track at the Large height shows a value bar for
+  its send to each return, two per row, as far as the height allows.
+- **Record several audio tracks in one pass** (#353, #528, specs/086): Record now starts a take
+  on every armed audio track at once, each recording its own input — a drum kit on four inputs
+  goes to four tracks, all starting on the same beat and sample-aligned, with one latency
+  correction. A mono input is recorded to a mono file. The whole take is one Undo step; loop
+  recording keeps take lanes on every track. Tracks of a linked group now all record (#528).
+  A track set to an input the device lacks is skipped and the others record; disarming one
+  track mid-take lands its part and the rest keep going. Arm more tracks with ⌘-click
+  (Ctrl-click). For now an audio take records either the hardware inputs or one track's
+  output (internal resampling), not both at once.
+- **Name and switch off inputs** (#353, specs/086): Settings → **Inputs** lists every
+  input of the device with the name it gives it, a switch and a name of your own, then the
+  stereo pairs, which can be named too. Track input menus list only the inputs that are on,
+  under your names (an interface with more than 16 inputs groups them under **Mono inputs**
+  and **Stereo pairs**), and the track's Record input menu has **Audio I/O setup…**. Kept per
+  device; changes apply at once. A track set to an input you switched off keeps it and records
+  nothing from it. While recording several tracks the status line says how many, and which
+  armed tracks it skipped and why.
+- **Several Session slots record at once** (#353, specs/086): with a Session audio take
+  running, launching an empty slot on another armed audio track records into it too, in the
+  same take, from that moment. Clicking a recording slot stops that slot alone — its take lands
+  and loops — while the others keep recording; the toolbar's stop ends them all. Each slot
+  keeps its own take and input through save and load. MCP: `stop_session_record_slot`.
+- **Every armed instrument track records, each from its own MIDI input** (#528, specs/086):
+  a take now records a MIDI clip on every armed instrument track (up to 16), each overdubbing
+  its own clip under the playhead, in one undo step — so linked group instrument tracks all
+  record. An instrument track's **MIDI input** (track menu, inspector) is **All inputs** —
+  every device plus the computer keyboard, gamepad and Nota Remote — or one MIDI device, and
+  a channel (all or 1–16): two players on two controllers record onto two tracks at once. A
+  device that isn't connected stays picked, marked "(not connected)", and sends nothing; MPE
+  with a single channel shows a warning. Saved with the project. MCP: `set_track_midi_input`,
+  `get_track_midi_input`. In Session view, launching an empty MIDI slot on another track while
+  a MIDI slot records adds it to the take: each slot records its own input on its own loop,
+  stops on its own, and Discard and Retry restarts them all.
+- **Articulation maps** (specs/085): an instrument track can hold a map of the playing techniques
+  of a sample library (Long, Staccato, Legato…) and the MIDI that selects each one. Import a Cubase
+  `.expressionmap`, a Studio One `.keyswitch` list or Nota's own `.notamap` — from the Track
+  inspector's Articulations section or by dropping the file on it — and a preview shows every
+  articulation and everything the file couldn't carry over before the map is used. Right-click
+  notes in the piano roll ▸ Articulation to choose one per note; playback sends the keyswitches,
+  controllers and program changes to the hosted plug-in just ahead of the notes, once per phrase
+  for a latching articulation and held with the note for a momentary one, and re-sends what is in
+  force after a seek or a loop wrap. Built-in instruments are left alone. A note whose articulation
+  was removed from the map plays the default and is marked. Studio One `.soundvariation` files are
+  not supported yet.
+- **Articulation map manager** (View ▸ Articulation maps…, or Edit maps… in the inspector): create,
+  import, duplicate, delete and export maps; add, copy, remove and reorder articulations; edit
+  their names, colour, group, latching or momentary trigger, MIDI actions and channels, note
+  offset, trigger lead, enabled state and the default. Save updates every track using the map as
+  one undo step and says how many.
+- **Track MIDI offset** (specs/085): a track's notes can play earlier (negative) or later, to make
+  up for a slow attack, without moving them; each articulation can add an offset of its own, and a
+  trigger lead sends its switch ahead of the note. The inspector and the manager show when each
+  articulation's notes actually play. Saved with the project.
+- **Notes coloured by articulation** (specs/085): the palette chip in the clip editor header draws
+  notes in their articulation's colour instead of the track's.
+
+### Changed
+- **Groups in the Arrangement read as trays** (#584, specs/094). In the new look a group's
+  header row and its tracks now sit on one tray of the group's colour, with its edge down the
+  left, and the tray closes under the group's last track, so a track after the group is
+  clearly outside it. A track inside a group shows only its own colour bar, and nested groups
+  are trays inside trays, a few pixels further in each, instead of a stripe per level. A
+  folded group shows how many tracks it holds ("Instruments · 4"). The controls stay in the
+  same columns however deep a track sits. In the classic look the headers draw groups as
+  0.59 did: each row's own colour stripe, stepped in per level, and no group tints.
+- **The menu under a Menu key, and the menu bar hidden** (Windows / Linux, #518, specs/093).
+  The row of File, Edit, View, Transport and Help no longer sits between the title bar and
+  the transport bar, so the work area gains its height. The whole menu — the same items,
+  shortcuts and check marks, Open recent included — is under the new **☰ Menu** key at the
+  start of the transport bar; **Alt** (pressed and released on its own) or **F10** opens it
+  from the keyboard. **View ▸ Show menu bar**, or **Settings → Appearance → Menu bar**, brings
+  the row back (the key then steps aside). On Windows the title bar now reads
+  "Nota — *project*", as the taskbar does. macOS is unchanged.
+- **Nota Remote in the new look** (#556, specs/090). Every phone screen, sheet and banner now
+  follows the style guide the desktop wears: the same corner scale, one typeface with
+  fixed-width figures (Geist Mono is gone), sentence-case labels, a true minus and thin
+  spaces in numbers. Orange means what it means on the desktop: solid for what is live
+  (Play, a pad under your finger), a soft tint with orange text for what you picked (the
+  current screen, a segment, a toggle that is on). Macros and XY draw their values in the
+  track's colour; the mixer stays grey. The phone also wears your skin's typeface (when the
+  phone has it) and corner roundness, under Follow Nota and Follow phone alike.
+- **Track headers, a little wider** (#296): the header column now starts at 252 px instead
+  of 228, so names and controls breathe in the new look. A width you dragged yourself stays.
+  A group's **Link** key now matches M and S in the new look.
+- **Settings, reorganised** (#427, specs/088): every setting is on a page named for it.
+  - **Outputs** and **Inputs** are their own pages under Devices: the output device and the
+    test tone on one, the input device and the list of inputs with their switches and names
+    on the other. **Audio** keeps the audio system, sample rate, buffer, latency and the CPU
+    check. With ASIO the driver is still picked on Audio; its output and input pairs are on
+    Outputs and Inputs.
+  - A new **Remote control** group holds **Remote** and **AI control (MCP)**, now its own page.
+  - **Appearance** keeps only the look (theme, accent, waveform, track headers, scale, text
+    size). **Language** is its own page, and a new **Editing** page holds the piano-roll note
+    labels, fades on split audio clips and the detail-panel switch.
+  - The command palette has a **Settings:** command for each new page, and the track input
+    menu's **Audio I/O setup** opens Inputs. Every setting keeps its value.
+- **The manual opens in the interface language** (#539): Help ▸ Documentation and each device's
+  Documentation item open the French manual (`/fr/`) when Nota runs in French, the Russian one
+  for Russian, and the English one otherwise. The choice used to follow the OS language, so a
+  French interface got the English manual and a Russian OS with an English interface got the
+  Russian one.
+- **S cards keep their name readable** (#540): on an S card the preset picker is a small list
+  key in the header (Previous / Next, Init and the presets in its menu), so it no longer crowds
+  the device name.
+- **A new filter graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
+  Operator, Bass, Consort, Pentad, Monolith, Sampler, Mosaic and Twin draw their filter
+  response the same way, over the knobs they already had. The spectrum of what the instrument
+  plays, after its filter, moves behind the curve. Hovering shows a marker with the frequency,
+  the nearest note (with cents) and the gain there. The cutoff is lit on the frequency axis, with
+  a dashed rule up to the curve. The engine taps the instrument's output for this only while a
+  graph is on screen.
+- **Filter tabs give the graph the whole height** (nota-daw/nota#531): on Consort, Pentad,
+  Monolith, Sampler and Mosaic the filter's knobs and switches move into a column at the graph's
+  right, as on Volt. The spectrum behind the curve is drawn as a filled line, as on EQ-3. Operator
+  drops the harmonic spectrum under its filter.
+- **Envelope graphs name their grid** (nota-daw/nota#531): 25 / 50 / 75 % at the level lines, and
+  a line at each time tick named under the segment bar. Nota Twin's envelopes get the A D S R
+  knob row, and their two amounts each become one slider, side by side.
+- **A new envelope graph in the built-in instruments** (nota-daw/nota#531): Nota Volt, Aurora,
+  Operator, Bass, Physical, Sampler, Mosaic, Consort, Monolith, Pentad and Twin draw their
+  envelopes the same way. The curve is in the accent colour with a light fill. The sustain stretch is
+  marked as held, with its level as a dashed line and a badge. The breakpoints are hollow, and the one
+  you drag shows its value. A segment bar A · D · S · R lights the stage being edited. The envelopes
+  of a card share one time scale, and a dot follows the newest voice. Every envelope also gains a
+  **decay and a release curve** (drag the diamond in the middle of the stage) and a **Lin / Exp**
+  switch, as new parameters that automate and save with presets. They default to the old sound:
+  straight and Lin on the subtractive and sample instruments, and Exp (the analog RC curve) on
+  Consort, Pentad and Twin. Twin projects saved before this load into the new parameter layout.
+- **Envelopes get their own tab** (nota-daw/nota#531): Nota Operator's operator envelope moves
+  from the right rail to an Env tab among the centre tabs, with the operator picker A–D beside it.
+  Consort splits Filters · Env into Filters and Env. Pentad splits Filter · Amp into Filter and Env,
+  with the Release switch in the tab bar. Monolith's contours leave Modifiers for an Env tab.
+- **Built-in instrument cards without the status line** (nota-daw/nota#531): the 18 px text strip
+  along the bottom of every built-in instrument card is gone, and the controls use the height.
+  Nota Pentad's Voice setup (polyphony, allocation, glide, release, oversampling, bass comp,
+  noise floor, vintage seed, master tune, aftertouch) moves from the strip's flyout into a third
+  tab, **Voices**, next to Mixer and Output.
+- **Nota Volt comes in two sizes** (nota-daw/nota#531): an S / L toggle in the card header. L is
+  the full editor, now in the standard 700 × 260 card (it was 790), with the Wheels column
+  still on screen. S is a 260 × 260 mini card, as on Nota Synth: Filter 1's response to drag,
+  over Cutoff, Reso, Attack and Release. Both sizes edit the same sound, and the size saves
+  with the project but not with presets. Volt opens as L.
+- **One Volume knob, no rail meters, in the built-in instruments** (nota-daw/nota#531): the
+  output meters in the rails and output tabs of Nota Aurora, Bass, Grain, Keys, Mosaic, Operator,
+  Physical, Rhythm, Sampler, Synth, Consort and Pentad are gone (the track meter shows the level).
+  The output knob is called **Volume** everywhere (it was Gain on Volt and Aurora, Output on
+  Sampler and Mosaic, Master on Rhythm), sits a size above its neighbours and is centred with
+  them. Synth's Volume moves from a slider to that knob, and Flux's Gain row reads Volume. On
+  Sampler and Mosaic the voice-level slider becomes **Level**, so only one control says Volume.
+  The parameters themselves are unchanged, so projects, presets and automation are unaffected.
+- **More instrument-card tidying** (nota-daw/nota#531): the Instrument Rack drops its bottom
+  status line too (the Zones tab already says what a note plays; the effect racks keep theirs).
+  Nota Keys' pedal (lit by CC64 or the Pedal param) moves from the Damper column into the Play
+  rail, and the voice count sits right under the voice grid. Nota Monolith's contours have no
+  release of their own, so the release point on their graphs is drawn but no longer drags or
+  types. Nota Pentad's Output tab drops the voice strip that the Oscillators tab already shows.
+- **Built-in effect and MIDI effect cards without the status line or the side columns**
+  (nota-daw/nota#531): the 18 px text strip along the bottom of every built-in audio effect and
+  MIDI effect card is gone, in both sizes of the MIDI effects. The two- or three-bar column at
+  the left of Compressor, Reverb, Delay, Utility, Valve, Auto Filter, Vintage, Auto Shift,
+  Beat Repeat, Crush, Ceiling, Shutter, Chamber, Prism and Lens goes too, and the centre panel
+  takes its width. Parameters that lived only in those places move to the card itself:
+  Compressor's Threshold (Dynamics) and SC gain (Key) become sliders, Valve's Gain becomes the
+  first knob under the tone stack, Auto Filter's Freq and Res lead its Filter panel, Chamber's
+  Wet row becomes the Dry/wet slider, Prism's Amount sits beside Output (in place of its output
+  meters), and Dynamic EQ-8's Dynamic switch and Output slider sit under its graph. In the S
+  size, Length's Start from, Velocity's random direction and Random's seed and Lock are now
+  set in L. The parameters themselves are unchanged, so projects, presets and automation are
+  unaffected. The effect racks keep their status line.
+- **Nota Ceiling: one home per control, laid out like Auto Filter** (nota-daw/nota#531): the
+  Level, Reduction and Loudness graphs fill their tabs (drag the ceiling and the target on
+  them). The right panel loses its Meters / Detector tabs and follows the centre tab: on Level
+  the meters (True peak and Clean / Punch / Glue in its title bar, the meter box, the
+  character and time over the ceiling, Delta, Reset peaks), on Reduction the detector (Auto
+  release and the key source in its title bar, Look, Link, SC HP, the detector box), on
+  Loudness the target (its presets in the title bar, the integrated box, the loudness meters,
+  Reset). Under it on every tab: Gain, Ceiling (the larger knob) and Release. The read-outs
+  that sat beside the knobs move to the tab bar; the meter boxes stay. The parameters are
+  unchanged.
+- **Nota Beat Repeat: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
+  each graph fills its tab with the knobs it shows in a column on its right — Chance and
+  Variation by the Timeline, Offset and Gate by the Slices (which drag them), Freq and Width by
+  the Filter. The right panel loses its Character / Output tabs and follows the centre tab:
+  Repeat on Timeline (Mix / Insert / Gate in its title bar, Repeat and Reset, Latch, what the
+  repeater is doing), Capture on Slices (Interval, Grid with its triplets, the slice it takes),
+  Filter on Filter (its switch and LP / BP / HP in the title bar, Narrow with repeats, Pitch,
+  Pitch decay). Under it on every tab: Decay, Dry/wet (the larger knob) and Volume knobs. Chance,
+  Gate, Offset, Variation, Volume, Pitch and the switches lose their second copies; the state
+  box and the in / repeat / out measurements give way to read-out lines. The Filter tab moves to
+  the shared filter graph of Auto Filter and the instruments: the response in the accent with a
+  light fill and a hollow handle, the cutoff lit on a frequency axis, a hover marker with the
+  frequency, note and gain, and a later repeat's response dashed; drag sideways for the
+  frequency, up or down for the width. The parameters are unchanged.
+- **Nota Auto Shift: one home per control, laid out like Auto Filter** (nota-daw/nota#531):
+  each graph fills its tab with its own knobs in a column on the right — Amount, Speed and
+  Human by the Trace, Glide and Bend by the MIDI target — and the scale's notes under the
+  Scale histogram. The right panel loses its Shift / Detect tabs and follows the centre tab:
+  Detect on Trace (voice preset in its title bar, Low, High, Sens, Skip sibilants), Key on
+  Scale (Auto / Manual / MIDI in its title bar, key and scale, Fine, Range, Learn with what it
+  heard, Follow Scale device), MIDI on MIDI (the source track in its title bar, Note / Scale,
+  Latch, Oct lock, Pitch bend). Under it on every tab: Preserve formants and the Shift,
+  Dry/wet (the larger knob) and Formant knobs. Amount, Speed, Key, Learn and Follow lose their
+  second copies, the scale its row of segments next to the menu, and the Note and Learn
+  reading boxes give way to the tab bar's read-out. The parameters are unchanged.
+- **Nota Auto Filter: the filter's controls around its graph** (nota-daw/nota#531): on the
+  Filter tab, Freq, Res and Morph are knobs in a column right of the response, and
+  LP / BP / HP / Notch, 12 / 24 and Clean / Analog sit in one row under it. Each control has
+  one place now: the right panel has no tabs of its own and follows the centre tab — on
+  Filter it shows the modulation (Target, the envelope and LFO amounts, Smooth, the sidechain
+  key), on Envelope and LFO their controls, with the on switch and Up / Down or Free / Sync
+  in its title bar — over Drive, Dry/wet (the larger knob) and Gain, which stay. The Mod and
+  Output tabs and their copies of Retrig, Analog, Tempo sync and Stereo phase are gone; the
+  Envelope and LFO graph titles name the modulation target and pick it on a click. The
+  parameters are unchanged. The response is drawn
+  on the instruments' filter graph: the curve in the accent with a light fill and a hollow
+  handle, the incoming signal's spectrum as a filled line, the cutoff lit on a frequency axis
+  under the plot, and a hover marker with the frequency, note and gain. The Mod tab drops its
+  Cutoff box and the Output tab its in / out / cutoff box.
+- **The other built-in audio effects laid out like Auto Filter, in S / L sizes**
+  (nota-daw/nota#531): each graph fills its tab with the knobs it moves in a column on its
+  right and its choices in a row under it; the right panel has no tabs of its own and follows
+  the centre tab, with the section's switch and mode in its title bar and its read-out boxes
+  kept; the output knobs sit under it on every tab; an S / L toggle in the header folds the
+  card to a 260 × 260 S with the main graph over one row of knobs (each device appends a View
+  parameter, saved with the project and left alone by presets, A/B and the automation menu).
+  The parameters are unchanged. **Nota Utility:** Width and Balance by the field, Mono by the
+  width graph, Target by the levels; Phase (Ø L, Ø R, Mute, correlation), Mono (on, slope) and
+  Match (level and gain match, measurements, true-peak limiter) panels over Gain; S is the
+  field over Gain, Width, Balance and Mono. **Nota Level:** Loudness (the graph, Target beside
+  it, the scale and the target's standards under it) and Meters tabs; Correction (Auto / Manual,
+  the fader and the applied gain, Match / Reset) and Response (Fast / Slow, Window, Max gain,
+  True-peak safe) panels over Trim; S is the graph over Auto / Manual and Target, Trim, Window,
+  Max gain. **Nota Orbit:** the gain window with the pan line, Amount and Phase beside it, the
+  waveform and the phase snaps under it; the LFO panel (Hz / Sync, the rate, Rate, Shape, OUT
+  meters) over Dry/wet; S is the window over the waveform and Rate, Amount, Phase, Dry/wet.
+  **Nota Chorus:** the voices over their stereo field, Amount, Rate and Offset beside them, the
+  mode, Hz / Sync and τ / ct under them; the Voice panel (Feedback, Width, Warmth, HPF, the
+  detune and delay ranges) over Dry/wet; S is the voices over the mode and Rate, Amount, Width,
+  Dry/wet. **Nota Flanger:** the comb over the delay sweep, Delay, Feedback and Depth beside it,
+  the waveform and the feedback snaps under it; the LFO panel (Hz / Sync, the rate, Rate, Stereo,
+  the notch and null read-outs) over Dry/wet; S is the comb over the waveform and Rate, Delay,
+  Feedback, Dry/wet. **Nota Phaser:** the response over the corner sweep, Center, Feedback and
+  Depth beside it, the waveform and the stages under it; the LFO panel over Dry/wet; S is the
+  response over the stages and Rate, Center, Feedback, Dry/wet. **Nota Crush:** Bits and Rate by
+  the quantiser (Anti-alias under it), Drive by the transfer (the mode under it); Grit (Dither,
+  Jitter, Noise, the result box) and Output (Auto gain, the measurements box, DC filter, the
+  images and THD+N) panels over Filter, Dry/wet and Gain; S is the quantiser over the mode and
+  Bits, Rate, Drive, Dry/wet. **Nota Valve:** Middle and Mid freq by the tone stack (the model
+  and OS under it), Distance and Axis by the cabinet (cab, mic and position under it), the
+  harmonics alone (drag for Gain, Even only under it); Tone (Bass, Treble, Presence, Bright,
+  Deep, the model box), Cabinet (on, the cuts, the cabinet box) and Output (auto-comp, the
+  measurements box, the gate) panels over Gain, Dry/wet and Output; S is the tone stack over the
+  model and Gain, Bass, Treble, Dry/wet. **Nota Vintage:** Drive and Tone by the curve (the
+  character and OS under it), Wow, Flutter and Crackle by the pitch drift (what it shows under
+  it), the harmonics alone (Even only under it); Character (on, the tone model, the shelves, the
+  character box), Wear (sync, the rates, Wear, follow, stereo drift) and Output (auto-comp, the
+  measurements box, noise, hiss HP, Tube / Analog) panels over Dry/wet and Output; S is the curve
+  over the character and Drive, Tone, Wow, Dry/wet. **Nota Delay:** L and R time (ms or a note
+  division in the same place) and Feedback by the repeat window on Time (the mode and Link, Ping,
+  Fade under it), Diffuse and the wow on Loop · Wow (Tape mode and Clear loop under it); Stereo
+  (Tap tempo, Spread, Width, Mono f, Wet only, latency comp) and Loop (Freeze, the repeats'
+  filter, the wet meter) panels over Dry, Dry/wet and Out; S is the window over the mode and L,
+  R, Feedback, Dry/wet. **Nota Reverb:** Decay, Pre and Size by the tail on Space (the algorithm
+  under it), Low cut, High cut and Width on Tone · Mod (Vintage and Mod on tail under it); Space
+  (Freeze, Kill tail, Diffuse, HF damp, early reflections, wet only, the wet meter) and Mod
+  (Rate, Depth, Mono f, latency comp) panels over Dry, Dry/wet and Out; S is the tail over the
+  algorithm and Decay, Pre, Size, Dry/wet. **Nota Chamber:** four views — the IR (Predelay,
+  Size, Attack beside it, the IR picker under it), the decay per band (Decay, Size, Damping, the
+  mode), the tail EQ (the cuts, its position) and a new Output view with the meters (Width, Mono
+  f, the quality); Convolution, Algorithm, Mod and Mix (routing, the blend, ducking, wet only,
+  zero latency) panels over Dry, Dry/wet and Output; S is the IR over its picker and Predelay,
+  Size, Attack, Dry/wet. **Nota Compressor:** Threshold, Ratio and Knee by the curve (the
+  character under it), Attack, Release and Hold by the motion, HP, LP and Q by the key; the
+  Output tab is gone — Dynamics (detector, Range, the output box, Auto gain, Stereo link), Timing
+  (Auto-release, look-ahead, the live box) and Key (External, Listen, source, tap, SC Gain) panels
+  over Dry/wet and Makeup; S is the curve over the character and Threshold, Ratio, Release,
+  Dry/wet. **Nota Dynamic EQ-8** keeps its band editor on the right (it fills the panel, so the
+  output stays under the graph) and gains S: the band chips over the graph and the selected
+  band's Freq, Gain, Q and the output. **Nota EQ-3:** the response window moves to the left and
+  the three band faders to the right column; S is the response over the range and Low, Mid,
+  High and Output knobs. **Nota EQ-8** keeps its band editor and globals on the right and gains
+  S: the band chips over the graph and the selected band's Freq, Gain, Q and the output.
+  **Nota Strata** keeps its layer stack and loop rail and gains S: the bar counter and the cycle
+  ticks over the four transport buttons and Feedback, Input and Speed. **Nota Forge** keeps
+  its stages, curve and shape columns and gains S: the transfer curve and the harmonics over
+  Amount, Dry/wet and Out. **Nota Shutter:** Signal (Look, Peak hold and Live under it), Envelope
+  (Attack, Hold, Release beside it, the shape and Retrig under it), Sidechain (SC HP and SC LP
+  beside it, SC EQ and Listen under it) and Pattern tabs; Detector (the state and the
+  measurements, Reset), Opening (the times and openings per bar), the key (External sidechain,
+  the source, its level and band) and Rhythm (Sync / Free, Rate, Depth, Copy / Paste / Clear,
+  the MIDI and gate options) panels over the Gate / Duck switch and Floor, Threshold and Return
+  (Shutter has no dry/wet, so Threshold takes the middle); S is the Signal graph over Gate / Duck
+  and Threshold, Attack, Release and Floor. **Nota Prism** keeps its Bands, Band detail and
+  Time tabs (a multiband editor, like the EQ cards); the Meters / Output tabs give way to one
+  panel that follows the tab — Gain reduction (the band count, the meters, Solo, Peak hold), the
+  output stage (Auto makeup, the selected band's GR, boost and level, Soft clip) and Detector
+  (Peak / RMS, Lookahead, the sidechain, Listen) — over Amount, Dry/wet and Output; S is the
+  spectrum over the band count and Amount, Dry/wet and Output. **Nota Lens:** Spectrum (Smooth,
+  Decay, Tilt beside it, FFT and Mid / Side under it), Scope (Time/Div, Volt/Div, Trig level
+  beside it, Sync, the trigger or span and Afterglow under it) and Waterfall (Gain, Floor,
+  Contrast beside it, the speed under it), the source and Freeze in the tab bar; the Analyze /
+  Display tabs give way to one panel per view (the spectrum's peak hold, window, averaging,
+  floor and scale with the peak / crest / LUFS box and the cursor; the scope's Cursors and
+  layout, holdoff, key and afterglow with the capture box; the waterfall's window, FFT, overlap,
+  averaging and frame rate). An analyzer has no output stage, so there are no output knobs. S is
+  the spectrum over the source and Smooth, Decay, Tilt and Floor. Lens's view param, the shown
+  graph, is renamed from View to Graph (presets still skip it) so View can hold the card size.
+  **Nota Vocoder** drops its three columns: the envelope graph fills the Bands view with Q,
+  Attack and Release beside it and Bands, Formant and Hold under it (Low and High are its
+  draggable edges, no longer knobs too); the Carrier panel (Saw / Noise / Track, the carrier
+  track and tap, Tilt, Pitch, Mod gain and the Key and Out meters) sits over Unvoiced, Dry/wet
+  (Mix) and Gain; S is the graph over the carrier choice and Bands, Formant, Dry/wet and Gain. A preset no longer saves or
+  applies the View param of a built-in audio effect: loading one keeps the card's S / L size.
+- **Nota EQ-3, EQ-8 and Dynamic EQ-8 draw their response like Auto Filter** (nota-daw/nota#531):
+  the response is the orange curve over a light fill to 0 dB, with the spectrum as a filled area
+  behind it and a frequency strip under the window. The box with the selected band's values that
+  sat next to its node on EQ-8 and Dynamic EQ — and covered the curve and the other nodes — is
+  gone: the band's frequency, gain and Q (a cut's slope; for a dynamic band the gain it has now)
+  are lit on the frequency strip instead, and dB marks run up the left edge. The selected band's
+  own curve is a dashed grey line, Dynamic EQ's static response too. EQ-3's crossover values move
+  from the pills over the graph onto the strip; drag a crossover there or by its line.
+- **Nota Reverb and Nota Delay: your audio in the graphs** (nota-daw/nota#377): the graphs
+  now show what the device does to the audio playing through it, on top of the settings.
+  Reverb's Space graph draws the input after its latest hit as a grey wash and the measured
+  tail as a grey line under the set decay, so a tail that rings longer or shorter than Decay
+  shows at once. Its Tone · Mod tab draws how long the tail rings at each frequency (HF damp
+  shortens the highs), the low and high cut as handles you drag, and the tail's live spectrum;
+  Low cut, High cut and HF damp sit beside it, and Width moves to the Mod panel. Delay's repeat
+  lanes draw the level of your echoes behind the stems, and the lit repeat follows the latest
+  hit instead of a clock; its Filter tab draws the echoes' spectrum behind the filter curve.
+- **Nota Delay, Reverb and Chamber: graphs you can read, controls that sit together**
+  (nota-daw/nota#531): Delay's Time tab draws the repeats as two lanes in dB — L over R — on a
+  grid in beats or ms, the dry hit at 0 and each echo as tall as it is loud (ping-pong hops
+  between the lanes); drag a lane's first echo sideways for its time, up or down for Feedback.
+  Its feedback filter moves from a strip in the Loop panel to a Filter tab of its own, on the
+  full filter graph with Low cut and High cut beside it and a Repeats panel (the band, repeats
+  to −48 dB, ring time). Reverb draws its decay in dB, where the tail is a straight line from
+  the pre-delay to −60 dB at the decay time, with labelled Pre and Decay handles, the early
+  reflections and a dashed line for the highs dying sooner under HF damp. Chamber's Convolution
+  tab draws the IR as one clip — Start and End brackets, and the waveform as heard inside them
+  (the Attack fade-in, the fade-out at a trimmed end, reversed), where it used to stack the
+  source over the result; Algorithm draws the decay time by frequency — Lows, Mids and Highs
+  plateaus with a handle each and the Damping line you drag sideways — instead of three RT60
+  lines over the echogram; the tail EQ moves onto the shared filter graph; and the Output tab
+  with its meters gives way to Mix, a signal-flow diagram (input, the engines side by side or in
+  series, EQ where it sits, Width / bass mono, ducking, the dry path, out) with Blend, Width and
+  Mono f beside it and the routing under it; click an engine to turn it on or off, or the EQ to
+  move it. Quality moves to the Convolution panel. In every built-in
+  effect card the right panel's rows now stack from the top with an even gap, and the knobs
+  beside a graph sit together in its middle, instead of spreading over the whole height.
+- **Nota Auto Shift, Beat Repeat and Ceiling come in two sizes** (nota-daw/nota#531): the
+  S / L toggle in the card header, as on Auto Filter. S is a 260 × 260 card with the main
+  graph over a row of choices and four knobs at most: Auto Shift's trace over Key and Scale
+  and Amount, Speed, Human and Dry/wet; Beat Repeat's timeline over Interval and the Repeat
+  button and Chance, Gate, Decay and Dry/wet; Ceiling's level graph (drag the ceiling) over
+  the character and the reduction and loudness now, and Gain, Ceiling and Release. Each
+  device gets an appended View parameter, saved with the project and left alone by presets,
+  A/B and the automation menu; old projects open in L.
+- **Nota Auto Filter comes in two sizes** (nota-daw/nota#531): an S / L toggle in the card
+  header, the first audio effect with one. L is the full editor; S is a 260 × 260 card with
+  the response to drag over Freq, Res, Drive and Dry/wet knobs. The size is a new View
+  parameter appended to the device, so it saves with the project; presets, A/B and the
+  automation menu leave it alone, and old projects open in L.
+- **Nota Aurora: both oscillators on one Osc tab** (specs/053): the 1 / 2 switch is gone.
+  Osc 1 and Osc 2 sit side by side, each with its own table window (naming what modulates its
+  position, or "no modulation"), table and warp-mode drop-downs, on / off switch and its
+  Position, Warp, Level, Oct, Semi and Fine knobs, so both tables are on screen together. An
+  oscillator that is off greys out in place. The sub and unison stay in one row under both.
+  The Global rail keeps voices, bend, Volume and Pan: its Pos 1, Cutoff and Unison sliders
+  were second copies of the Osc and Filter tab controls and go (one home per control). The
+  table windows keep their drawing between paints, so two of them cost no more than the one
+  before. Sound, parameters, automation, MIDI learn and presets are unchanged.
+- **Nota Volt: envelope knobs and a cleaner Global rail** (nota-daw/nota#531): each envelope
+  stage box on the Env tab carries a gauge knob (as on Nota Aurora), with its value centred
+  under it and the A / D / S / R letter in the box's corner. The box still drags and types
+  its value. The Noise row drops its Color knob, which doubled the dark / pink / white
+  switch. The Global rail drops its output meter (the track meter shows the level), and
+  Gain, Drive and Pan sit centred.
+- **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
+  nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
+  tall as before. The knobs under the graphs move to the right panel as sliders: its first tab
+  follows the centre tab, and its Output tab (and Auto Filter's Mod tab) stay. Compressor: Curve shows
+  Dynamics (character, detector, ratio, knee, mix, range, auto gain), Motion shows Timing
+  (attack, release, hold, lookahead, auto-release) and Sidechain shows Key (source, tap,
+  external, listen, HP, LP, Q, stereo link). Auto Filter: Filter, Envelope and LFO each show
+  their own controls, with Mod → Freq / Reso / Both on the Filter panel. The live read-outs
+  (in / out and crest, measured transient and recovery, the cutoff and its note) moved to the
+  right of the tab bar.
+- **Smaller shell text and a new key picker** (review of
+  nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
+  The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
+  full.
+- **A new look** (spec 038, the Studio style guide): every control and setting stays where it
+  was; how it is drawn changes. The shell is flat and grey so the track colours carry the
+  content, and depth is kept for device cards. Orange now has three jobs: solid for what is
+  live, a soft tint for what you picked, orange lines for values inside a device.
+  - **Arrangement:** clips are a 20 % tint of the track colour with the name, notes and wave
+    in the full colour, and a selected clip gets an outline in the text colour instead of
+    orange. Track headers are 54 high on two rows (name, tag, M, S, arm; then volume with its
+    value inside the bar, the pan knob and the input picker). New tracks take colours in an
+    order that keeps neighbours apart. Group members show the group's bar beside their own.
+  - **Toolbar and device panel:** the toolbar, the device panel (its toolbar and the area
+    behind the cards) and the status line sit on the darker shell tone, a step below the
+    arrangement, as the style guide draws them. The **Sends** card at the end of a chain is
+    one column per return (its colour, letter, knob, amount and name), so it is narrow with
+    one return and widens as returns are added, instead of a fixed wide card.
+  - **Browser and rail:** 30 px rows, a larger search box, flat chips, and rail buttons that
+    show the page you are on with an orange tick and the soft tint.
+  - **Piano roll:** the clip settings move from the left column into one strip above the
+    notes, so the notes get the full width. Quantize strength is a flat bar with its value
+    inside.
+  - **Audio editor:** one column with Start and Length side by side and the Warp switch and
+    mode on the Warp title row, so nothing scrolls.
+  - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
+    fade back, and send and volume values sit inside their bars.
+  - **Devices** keep the layout and size they had: every card is still 700 × 260 with its
+    controls in the same places and its status line. What changes is how the parts are drawn:
+    capped knobs with an orange value arc, value bars instead of thin sliders, the new
+    switches and segment groups, pressed-in sections, one font, greys instead of the old
+    identity colours, and inactive controls in a quieter grey instead of faded.
+  - **Nota Strata** (review of nota-daw/nota#296): the transport, layer list and Loop rail are
+    pressed-in sections; the transport buttons are neutral, with the running one in orange
+    (Record in red) and a queued one outlined; layer waves are greys, newest brightest; each
+    layer's level is a value bar (double-click for 0 dB, or type a value); the tick strip has a
+    tick per beat of the loop; and the list fits all eight layers.
+- **An audio track can record any input of the interface** (#353, specs/086): the input
+  picker lists every input of the selected device — each one alone as a mono source,
+  recorded and heard in the middle, then the stereo pairs 1/2, 3/4, … — with the names the
+  device gives its inputs. The short label reads **In 3** or **In 3/4** instead of Ext 1 /
+  Ext 2. Projects keep the input; projects from 0.59 open with the input they had (Ext 1 →
+  In 1, Ext 2 → In 2, Ext 1/2 → In 1/2). A track set to an input the current device doesn't
+  have keeps it and records nothing from it until that device is back. On ASIO every input
+  of the driver is opened (a driver that refuses that many falls back to the saved pair).
+  MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
+
+### Fixed
+- **Curved automation eases instead of jumping** (#591): bending a segment towards an
+  ease-out made it reach almost all of its change at the very start — a near-vertical drop
+  on screen and an audible step in playback — while the opposite bend looked gentle. Every
+  curved segment (automation lanes, clip envelopes, MIDI controller lanes) now follows a
+  smooth exponential: no jump at either end, and ease-in and ease-out mirror each other.
+  Curves in saved projects keep their bend but play gentler at the extremes. Cutting a
+  curved segment (moving or duplicating a section, drawing over a controller lane,
+  recording controllers, splitting clips) now keeps its shape exactly on both sides, and
+  the curves are drawn smoothly at any zoom.
+- **Plug-in cards show the plug-in's window again**: since the new look, the info section's
+  own surface covered the picture of the plug-in's window on its card. The picture now
+  shows through the section, on S and on L, under the wash that keeps the text readable.
+- **Short clips keep their name on one line** (#590): a clip narrower than its name wrapped
+  the name onto a second line over the waveform. The name now stays on one line and ends in
+  an ellipsis; section names in the arrangement do the same.
+- **Track header meters stay inside the header** (#584): on a Compact or a low Standard row a
+  track's level meter ran into the bottom edge of its header, and a folded group's meter ran
+  under its name and buttons. Every header meter now fits its row, and a group's meter stands
+  at the right in the same column as the tracks'.
+- **The Files icon in the browser rail is the same size as its neighbours** (#579): the
+  folder is drawn on the same grid as the other rail icons.
+- **Monitoring a track through an audio track no longer crackles** (#563): an audio track whose
+  input is another track (an instrument, say) played it with clicks while monitoring, though a
+  recording of the same input was clean. It happened whenever the audio device asked for blocks
+  of varying length, as a Bluetooth output or one running at another sample rate does, and once
+  a pass at the loop seam. The monitored signal is now continuous, one block behind its source
+  as before.
+- **Discard and retry keeps the count-in out of an audio take** (#521): retrying an audio take
+  that counted in from stop counted in again, but the input was recorded from the moment of the
+  retry, so the new clip began with the count-in and ran late against the playhead by its
+  length. The input is now kept out until the count-in runs out, as on a fresh take.
+- **Compact Mixer: the MIDI-in selector shows its whole name** (#550): the drop-down on an
+  instrument strip left 20 px for the chosen name, so "Aucune" read "ucun" and a longer track
+  name lost both ends. It now leaves about 29 px, writes the name from the left and ends a longer
+  one with "…". The regular strip is unchanged.
+- Muting or solo-gating a Session track discards keyswitch releases for the flushed voices,
+  preventing them from cutting a new articulation after unmute. Clip edits reuse the track's
+  Session player directly instead of allocating and discarding temporary playback state.
+- Session articulation keyswitches retain their 20 ms release across tempo changes. Copied map
+  files with duplicate IDs no longer prevent the articulation map manager from opening.
+- Articulation playback keeps chased keyswitch releases across audio blocks, restores switches on
+  Session launches, and preserves notes, releases and expression when timing offsets span short
+  loops. Overlapping clips restore their own techniques, and overlapping momentary notes keep a
+  shared switch held until the last note ends. The map manager prefers the project's saved map
+  when the library has a different version, including after undo.
+- **Strata's layer list and beat strip are back as they were** after the restyle: the layer count
+  says "· one cycle shown" again, the beat tick strip is on screen before the first loop closes,
+  and every layer keeps its own shade of grey (with a matching outline), so all eight can be told
+  apart.
+- **Nota Strata looper** (review of nota-daw/nota#296):
+  - Record and Overdub on the first pass close the loop (Overdub goes straight on to layer 2);
+    before, only Play or Stop could end the first pass.
+  - With Quantize at 1/4, Play or Stop on the first pass waited forever; they now land on the
+    next beat. A stopped loop no longer runs on in the background, so Play starts it from the
+    top and Record or Overdub from Stop start at once.
+  - **Count-in 1 bar** and **Set tempo from loop** did nothing. Count-in now waits one bar
+    before the first pass (the counter shows the beats left, Stop cancels it, the dimmed buttons
+    leave it running), and Set tempo changes the song tempo when the first loop closes so the
+    loop is a whole number of bars, even with another track shown by then.
+  - **Export** did nothing; it now writes the loop as you hear it (every unmuted layer at its
+    level, at its speed, backwards when reversed) to a WAV file, and says so if the file can't
+    be written.
+  - The captions under the actions say what a press does now (for example "close, then play"
+    or "layer 3, next bar"), and actions that would do nothing are dimmed. The first pass
+    draws its waveform as it records, and a stopped loop's layers say Stopped. Right-clicking
+    a transport or mute button no longer triggers it.
+- **Twin MIDI mappings keep their controls** (#531): Nota Twin's envelope shapes grew its
+  parameter list, so a knob mapped in a 0.59 project would have moved a different control. Mappings
+  now save the parameter's id and find it again on load, and older projects' Twin mappings move
+  with the new layout.
+- **Disarming one of several recording tracks** (specs/086): disarming the first-armed audio track
+  no longer stops the other tracks' recording, and an instrument track disarmed while others record
+  keeps its controller moves (mod wheel, pedal) up to the moment it left.
+- **Tabs at the top of a card section keep its rounded corner** (nota-daw/nota#531): a selected
+  tab such as Global on a built-in instrument's rail painted over the section's corner. A
+  section now clips what it holds to its rounded edge.
+- **Performance wheels follow their value** (nota-daw/nota#531): on Nota Volt, Aurora, Operator
+  and Bass, the ribbed grip of the Pitch and Mod wheels now moves with the wheel instead of
+  staying put while only the value line moved.
+- **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
+  (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
+  other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and
+  release the detector really runs, the window length and the GR peak; the measured attack is
+  labelled "90 % rise", since it is timed to 90 % of the peak so a Hold plateau does not count.
+  Auto Filter: the LFO and Envelope tabs show the resonance swing ("reso X ±Y") when Mod is Reso
+  or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
+  The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
+  under the Auto gain switch.
+- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
+  range beside its icon again; the arrangement's header column names the **Sections** and
+  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
+  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
+  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
+  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
+  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
+  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
+  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
+- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
+  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
+  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
+  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
+  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
+  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
+  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
+  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
+  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
+  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
+  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
+  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
+  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
+  and labelled; Flux shows when the reaction pulls the vector. Value bars and EQ-3's faders
+  light up under the pointer, and the Auto Filter and Compressor handles only look grabbed
+  while hovered or dragged. Operator's OUT drop zone is the
+  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
+  graph tooltips that named colours no longer drawn now describe what is on screen.
+
+### Removed
+- **Modular's + Add menu and its Tracks list** (#592, specs/095): nodes come from the browser's
+  Modular tab and the command palette; the track column is the arrangement's headers.
+
 ## [0.59.2] — 2026-11-08
 
 ### Added

@@ -22,6 +22,7 @@ internal static class RetryTakeTests
         foreach (var r in Catalog()) yield return r;
         foreach (var r in NothingRecording()) yield return r;
         foreach (var r in MidiFromStopWithCountIn()) yield return r;
+        foreach (var r in AudioFromStopWithCountIn()) yield return r;
         foreach (var r in OverdubIntoClip()) yield return r;
         foreach (var r in PunchIn()) yield return r;
         foreach (var r in HeldAcrossRetry()) yield return r;
@@ -42,12 +43,90 @@ internal static class RetryTakeTests
         foreach (var r in SessionToggleSlot()) yield return r;
         foreach (var r in SessionAudioTempoChange()) yield return r;
         foreach (var r in DisarmOneOfTwo()) yield return r;
+        foreach (var r in DisarmOneOfTwoMidiKeepsControllers()) yield return r;
         foreach (var r in StoppedWhilePending()) yield return r;
         foreach (var r in NoEmptyUndoAfterPartialKeep()) yield return r;
+        foreach (var r in JoinedSlotKeepsHeldNote()) yield return r;
+        foreach (var r in JoinDuringCountInThenStop()) yield return r;
+        foreach (var r in JoinAfterCountIn()) yield return r;
     }
 
     // Audio and MIDI into empty tracks, audio disarmed (kept), MIDI retried and kept: two undo
     // steps, each one undoing a recording — no step left that changes nothing.
+    private static NotaEngine TwoArmed(out int a, out int b)
+    {
+        var e = Armed(out a);
+        b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(b, 0);
+        e.SetTrackArmed(b, true);
+        e.RenderOffline(new float[Chunk * 2], Chunk, Sr);
+        return e;
+    }
+
+    // A slot that joins a running Session MIDI take records a key already held when it starts.
+    private static IEnumerable<(bool, string)> JoinedSlotKeepsHeldNote()
+    {
+        using var e = TwoArmed(out int a, out int b);
+        e.SetCountIn(0);
+        e.SetLaunchQuant(4.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.Play();
+        Beats(e, 0.5);
+        e.RecordSessionSlot(a, 0);               // records from beat 4
+        Beats(e, 4.0);
+        e.NoteOn(62, 0.8f);
+        e.RecordSessionSlot(b, 0);               // joins; its slot starts at beat 8
+        Beats(e, 4.5);
+        e.NoteOff(62);
+        Beats(e, 0.2);
+        e.StopSessionRecord();
+        e.Poll();
+        var notes = e.GetSessionNotes(b, 0);
+        yield return (notes.Any(n => n.Pitch == 62),
+            $"a joined slot records a key held when it starts ({string.Join(",", notes.Select(n => $"{n.Pitch}@{n.StartBeat:F2}"))})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // Another track's slot pressed during a Session MIDI count-in leaves Stop able to end it.
+    private static IEnumerable<(bool, string)> JoinDuringCountInThenStop()
+    {
+        using var e = TwoArmed(out int a, out int b);
+        e.SetCountIn(1);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 1.0);
+        e.RecordSessionSlot(b, 0);               // can't join yet: ignored
+        Beats(e, 0.5);
+        e.StopSessionRecord();
+        Beats(e, 0.5);
+        yield return (e.CountInBeats <= 0.0 && !e.IsPlaying,
+            $"stopping a take a slot joined during its count-in stops the count-in ({e.CountInBeats:F2} beats left, playing {e.IsPlaying})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // Once the count-in has run out, another track's slot joins the take as usual.
+    private static IEnumerable<(bool, string)> JoinAfterCountIn()
+    {
+        using var e = TwoArmed(out int a, out int b);
+        e.SetCountIn(1);
+        e.SetLaunchQuant(0.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.RecordSessionSlot(a, 0);
+        Beats(e, 5.0);                           // the bar of count-in, then a beat of take
+        e.RecordSessionSlot(b, 0);
+        Beats(e, 0.2);
+        yield return (e.SessionSlotState(a, 0) == 4 && e.SessionSlotState(b, 0) == 4,
+            $"a slot pressed after the count-in joins the take (states {e.SessionSlotState(a, 0)}, {e.SessionSlotState(b, 0)})");
+        e.StopSessionRecord();
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
     private static IEnumerable<(bool, string)> NoEmptyUndoAfterPartialKeep()
     {
         using var e = Resampling(out int rec);
@@ -98,6 +177,36 @@ internal static class RetryTakeTests
         Beats(e, 0.01);
         yield return (audio == 1 && r == RetryTakeResult.Arrangement && AudioClips(e, rec) == 1 && Notes(e, t).Count == 0,
             $"retry after disarming one of two: the kept audio stays, the MIDI is retried ({r}, audio clips {AudioClips(e, rec)}, notes {Notes(e, t).Count})");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // Two instrument tracks record; one disarmed mid-move keeps its controller up to the last
+    // move, as disarming a lone track does (specs/020, specs/086).
+    private static IEnumerable<(bool, string)> DisarmOneOfTwoMidiKeepsControllers()
+    {
+        const int Mod = 1;
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetCountIn(0);
+        int a = e.AddInstrumentTrack(), b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a, 0);
+        e.SetTrackBuiltinInstrument(b, 0);
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(b, true);
+        e.StopTransport();
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.2);
+        Tap(e, 60, 0.2);
+        for (int k = 0; k <= 20; k++) { e.SendTrackController(a, Mod, k / 20f); Beats(e, 0.1); }
+        e.SetTrackArmed(a, false);              // b records on
+        e.Poll();
+        var mod = e.TryGetClipInfo(a, 0, out _) ? e.GetMidiClipController(a, 0, Mod) : Array.Empty<AutomationPoint>();
+        yield return (mod.Length >= 2 && Math.Abs(mod[^1].Value - 1f) < 0.03f,
+            $"disarming one of two recording instrument tracks keeps its controllers up to the last move ({string.Join(" ", mod.Select(p => $"{p.Beat:F2}:{p.Value:F2}"))})");
         e.SetRecording(false);
         e.StopTransport();
     }
@@ -510,6 +619,58 @@ internal static class RetryTakeTests
         var r = e.RetryTake();
         yield return (r == RetryTakeResult.None && !e.IsRecording && !e.IsPlaying && e.CanUndo == undo && e.CanRedo == redo && Clips(e, t).Count == 0,
             $"retry: nothing recording changes nothing ({r})");
+    }
+
+    // #521: an audio take on a hardware input counted in from stop, then retried. The retry
+    // counts in again, and the input stays out of the take until the count-in runs out — the new
+    // clip starts at the take start and holds only what came after it, not the count-in too.
+    private static IEnumerable<(bool, string)> AudioFromStopWithCountIn()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetTestInputDevice(2);
+        e.RenderOffline(new float[Chunk * 2], Chunk, Sr);
+        int rec = e.AddAudioTrack();
+        e.SetTrackInput(rec, InputPick.Pair(0));
+        e.SetTrackArmed(rec, true);
+        e.StopTransport();
+        e.Seek(8.0);
+        LiveBeats(e, 0.01);
+        e.SetCountIn(1);
+        e.SetRecording(true);
+        LiveBeats(e, 6.0);                   // the bar of count-in, then two beats of take
+
+        var r = e.RetryTake();
+        LiveBeats(e, 0.01);
+        yield return (r == RetryTakeResult.Arrangement && e.IsRecording && e.CountInBeats > 0 && !e.IsPlaying,
+            $"retry audio count-in: counting in again ({r}, count-in {e.CountInBeats:F2})");
+        LiveBeats(e, 6.0);                   // the bar of count-in again, then two beats
+        e.SetRecording(false);
+        LiveBeats(e, 0.01);
+
+        NotaAudioClipInfo clip = default;
+        double beats = -1.0;
+        bool got = AudioClips(e, rec) == 1 && e.TryGetAudioClipInfo(rec, 0, out clip) && clip.SampleId != 0;
+        if (got && e.TryGetSampleInfo(clip.SampleId, out var info)) beats = info.Frames / Spb;
+        yield return (got && Near(clip.StartBeat, 8.0) && Math.Abs(beats - 2.0) < 0.25,
+            $"retry audio count-in: the take holds what came after the count-in, from the take start (at {clip.StartBeat:F2}, {beats:F2} beats, want 2)");
+        e.StopTransport();
+    }
+
+    // Render and poll as the device would, the input thread handing over a block of input
+    // (both channels at 0.5) before each one — through the capture gate, as a real device does.
+    private static void LiveBeats(NotaEngine e, double beats)
+    {
+        var b = new float[Chunk * 2];
+        var input = Enumerable.Repeat(0.5f, Chunk * 2).ToArray();
+        int frames = (int)Math.Round(beats * Spb);
+        for (int done = 0; done < frames; done += Chunk)
+        {
+            e.InputBlockTest(input, Chunk, 2);
+            e.RenderOffline(b, Chunk, Sr);
+            e.Poll();
+        }
     }
 
     // The issue's case: a take from stop with a count-in. Retry drops it (and the clip it made),

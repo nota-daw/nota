@@ -28,7 +28,11 @@ namespace Nota.SmokeTest;
 internal static class TwinTests
 {
     private const int Sr = 48000;
-    private const int Params = 965; // globals 21 + 2 parts × (part 144 + 2 sides × 164)
+    private static readonly HashSet<string> ShapeLeaves = new()
+    {
+        "fenvdcurve", "fenvrcurve", "fenvexp", "aenvdcurve", "aenvrcurve", "aenvexp", "menvdcurve", "menvrcurve", "menvexp",
+    };
+    private const int Params = 1001; // globals 21 + 2 parts × (part 144 + 2 sides × 173)
 
     private static int Pi(IAudioEngine e, int t, string id)
     {
@@ -169,11 +173,54 @@ internal static class TwinTests
         }
         yield return (ids.Count == n && !ids.Contains("") && named, "twin param ids are unique + non-empty, every param has a name");
 
-        // Layout: globals, then per part its side-less block, side A, side B; Upper B's last route depth ends it.
-        bool layout = Pi(e, t, "mode") == 0 && Pi(e, t, "lo.morph") == 21 && Pi(e, t, "up.b.m64amt") == n - 1
-                      && Pi(e, t, "lo.b.ldcut") - Pi(e, t, "lo.a.ldcut") == 164
-                      && Pi(e, t, "up.a.ldcut") - Pi(e, t, "lo.a.ldcut") == 144 + 2 * 164;
+        // Layout: globals, then per part its side-less block, side A, side B; Upper B's mod-env Exp (#531) ends it.
+        bool layout = Pi(e, t, "mode") == 0 && Pi(e, t, "lo.morph") == 21 && Pi(e, t, "up.b.menvexp") == n - 1
+                      && Pi(e, t, "lo.b.ldcut") - Pi(e, t, "lo.a.ldcut") == 173
+                      && Pi(e, t, "up.a.ldcut") - Pi(e, t, "lo.a.ldcut") == 144 + 2 * 173;
         yield return (layout, "twin params follow the [globals][part][A][B] × 2 layout");
+
+        // A project saved before the envelope shapes (#531): its side blocks were 9 floats
+        // shorter. Build that blob from today's state and load it — every value lands on its
+        // own param again and the shapes keep their defaults (Exp on, straight).
+        using (var me = new NotaEngine())
+        {
+            int mt = me.AddTwinTrack();
+            P(me, mt, "lo.b.ldcut", 0.83f); P(me, mt, "up.a.m3amt", 0.21f); P(me, mt, "up.b.o1wave", 0.66f);
+            int laneParam = Pi(me, mt, "up.a.m3amt");
+            TwinPatterns.Do(me, mt, TwinPatterns.Act.MotionTarget, 0 << 16 | laneParam);
+            var full = me.GetPluginState(mt, -1);
+            int count = BitConverter.ToInt32(full, 4);
+            var keep = new List<int>();
+            for (int i = 0; i < count; i++)
+            {
+                string leaf = me.PluginParamId(mt, -1, i).Split('.')[^1];
+                if (!ShapeLeaves.Contains(leaf)) keep.Add(i);
+            }
+            bool shapeIds = count - keep.Count == 2 * 2 * 9;
+            var old = new List<byte>(full.AsSpan(0, 4).ToArray());
+            old.AddRange(BitConverter.GetBytes(keep.Count));
+            foreach (int i in keep) old.AddRange(full.AsSpan(8 + i * 4, 4).ToArray());
+            old.AddRange(full.AsSpan(8 + count * 4).ToArray());   // the pattern block
+            // Its motion lanes named the old index too. Pattern 0's lane 0 target follows the
+            // block's byte count (4), its magic (4), the length (1) and 64 steps of 9 bytes.
+            int laneAt = 8 + keep.Count * 4 + 4 + 4 + 1 + 64 * 9;
+            var oldBytes = old.ToArray();
+            bool laneThere = BitConverter.ToUInt16(oldBytes, laneAt) == laneParam;
+            BitConverter.GetBytes((ushort)keep.IndexOf(laneParam)).CopyTo(oldBytes, laneAt);
+            int nt = me.AddTwinTrack();
+            P(me, nt, "lo.a.fenvexp", 0f);
+            me.SetPluginState(nt, -1, oldBytes);
+            bool laneMoved = laneThere && keep.IndexOf(laneParam) != laneParam
+                             && TwinPatterns.FromState(me.GetPluginState(nt, -1))?[0].Lanes[0].Target == laneParam;
+            bool sameVals = keep.All(i => me.PluginParamGet(nt, -1, i) == me.PluginParamGet(mt, -1, i));
+            bool shapes = G(me, nt, "lo.a.fenvexp") == 1f && G(me, nt, "up.b.menvrcurve") == 0.5f;
+            yield return (shapeIds && sameVals && shapes && G(me, nt, "up.b.o1wave") == 0.66f && laneMoved,
+                $"a Twin state from before the envelope shapes loads value for value, motion lanes on their own params (kept {keep.Count} of {count}, lane {laneThere}/{laneMoved})");
+            // A MIDI mapping saved then (midimap.json, by index) finds the same control today.
+            int moved = Enumerable.Range(0, keep.Count).Count(o => me.PluginParamIndexFromV1(mt, -1, o) != keep[o]);
+            yield return (moved == 0 && me.PluginParamIndexFromV1(mt, -1, count) == count,
+                $"a MIDI mapping's Twin index from before the envelope shapes points at its own control again ({moved} of {keep.Count} off)");
+        }
         yield return (e.PluginParamName(t, -1, Pi(e, t, "up.b.ldcut")) == "Upper B · Ladder Cutoff",
             $"twin names carry part and side (got '{e.PluginParamName(t, -1, Pi(e, t, "up.b.ldcut"))}')");
         yield return (Math.Abs(G(e, t, "lo.a.ldcut") - G(e, t, "lo.b.ldcut")) < 1e-6 && Math.Abs(G(e, t, "lo.a.m7amt") - 0.5f) < 1e-6
@@ -270,6 +317,8 @@ internal static class TwinTests
         var bad = mine.SelectMany(p => cat.Document(p.Id)!.NamedParams!.Keys.Where(k => !ids.Contains(k)).Select(k => $"{p.DisplayName}:{k}")).ToList();
         yield return (bad.Count == 0, $"every Twin preset param id exists{(bad.Count > 0 ? " — bad: " + string.Join(", ", bad) : "")}");
         int tp = e.AddTwinTrack();
+        // Settle the heap first, so a collection left over from earlier tests doesn't land in the timing.
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         int fails = 0;
         double slowest = 0;
         foreach (var p in mine)
@@ -353,10 +402,10 @@ internal static class TwinTests
             se.ClearUndoHistory();
             float b0 = G(se, tt, "lo.b.ldcut"), a0 = G(se, tt, "lo.a.ldcut");
             int wrote = Nota.Application.Twin.TwinSides.Apply(se, tt, Nota.Application.Twin.TwinSides.Edit.CopyAToB);
-            bool copied = wrote == 164 && G(se, tt, "lo.b.ldcut") == a0 && G(se, tt, "lo.b.sync") == G(se, tt, "lo.a.sync");
+            bool copied = wrote == 173 && G(se, tt, "lo.b.ldcut") == a0 && G(se, tt, "lo.b.sync") == G(se, tt, "lo.a.sync");
             bool canUndo = se.CanUndo, u = se.Undo();
             bool undone = u && G(se, tt, "lo.b.ldcut") == b0 && G(se, tt, "lo.b.o1wave") == 1f && !se.CanUndo;
-            yield return (copied && canUndo && undone, $"A → B copies all 164 side params in one undo step (wrote {wrote})");
+            yield return (copied && canUndo && undone, $"A → B copies all 173 side params in one undo step (wrote {wrote})");
             Nota.Application.Twin.TwinSides.Apply(se, tt, Nota.Application.Twin.TwinSides.Edit.Swap);
             bool swapped = G(se, tt, "lo.a.ldcut") == b0 && G(se, tt, "lo.b.ldcut") == a0;
             yield return (swapped && se.Undo() && G(se, tt, "lo.a.ldcut") == a0 && !se.CanUndo, "Swap exchanges the sides in one undo step");
@@ -491,7 +540,7 @@ internal static class TwinTests
             string sm = mcp.SetTwinMorphSide(ct, "b", "o1wave=1; ldres=0.6, nope=1").Result;
             bool sideSet = sm.StartsWith("error: unknown or malformed: nope") && G(ce, ct, "lo.b.o1wave") == 1f && Math.Abs(G(ce, ct, "lo.b.ldres") - 0.6f) < 1e-6 && G(ce, ct, "lo.a.o1wave") != 1f;
             string cp = mcp.CopyTwinSide(ct, "b_to_a").Result;
-            bool copiedA = cp.StartsWith("b_to_a: 164") && G(ce, ct, "lo.a.o1wave") == 1f && ce.Undo() && G(ce, ct, "lo.a.o1wave") != 1f;
+            bool copiedA = cp.StartsWith("b_to_a: 173") && G(ce, ct, "lo.a.o1wave") == 1f && ce.Undo() && G(ce, ct, "lo.a.o1wave") != 1f;
             yield return (sideSet && copiedA, $"MCP set_twin_morph_side writes one side, copy_twin_side copies it in one undo step ({sm} | {cp})");
         }
 
@@ -1385,6 +1434,22 @@ internal static class TwinTests
             var pts = e.GetAutomationPoints(t, e.AddPluginAutomationLane(t, -1, "lo.a.ldcut"));
             bool knob = pts.Any(p => Math.Abs(p.Beat - 0.25) < 1e-9 && Math.Abs(p.Value - 0.6f) < 1e-4);
             yield return (knob, $"To clip holds the knob's value on an empty motion step ({pts.Length} points)");
+        }
+
+        // To clip: a swung full gate that rings into the next step playing the same note ends at
+        // that onset, as the live sequencer retriggers it there.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            TwinPatterns.WritePattern(e, t, 0, new[] { "C3", "C3:100:100%", "C3", "." });
+            P(e, t, "seq.swing", 1f);
+            int clip = TwinPatterns.ToClip(e, t, 0, 0);
+            var ns = clip >= 0 ? e.GetClipNotes(t, clip).OrderBy(n => n.StartBeat).ToArray() : Array.Empty<NotaNote>();
+            // Step 1 is swung to 0.375 with a 100 % gate (to 0.625); step 2 plays C3 again at 0.5.
+            bool trimmed = ns.Length == 3 && Math.Abs(ns[1].StartBeat - 0.375) < 1e-9
+                           && Math.Abs(ns[1].StartBeat + ns[1].LengthBeats - 0.5) < 1e-9
+                           && ns.Zip(ns.Skip(1)).All(z => z.First.StartBeat + z.First.LengthBeats <= z.Second.StartBeat + 1e-9);
+            yield return (trimmed, $"To clip ends a swung note at the next onset of the same pitch ({string.Join(" ", ns.Select(n => $"{n.StartBeat:0.###}+{n.LengthBeats:0.###}"))})");
         }
 
         // Transport stopped: a held key runs the sequencer on its own clock (Seq from step 1, Arp over

@@ -100,6 +100,13 @@ VoltSynth::VoltSynth() {
     set(UniSpread, 0.35f);
     set(Legato, 1.0f); // Mono slides, as Volt's mono always did
     set(WheelLfo, 0.0f);
+    set(View, 0.0f); // the card opens as L
+    set(DCurve, 0.5f);
+    set(RCurve, 0.5f);
+    set(EnvExp, 0.0f);
+    set(FDCurve, 0.5f);
+    set(FRCurve, 0.5f);
+    set(FEnvExp, 0.0f); // straight, Lin: old projects keep their envelopes
 }
 
 void VoltSynth::controller(int32_t ctl, float value) {
@@ -139,7 +146,8 @@ std::string VoltSynth::pluginParamId(int32_t i) const {
     }
     if (i >= ExtraBase) {
         static const char* ex[] = {"bend", "bendrange", "vibwheel", "osc1shape", "osc2shape", "osc1pw", "osc2pw",
-            "fildrive", "drive", "univoices", "unispread", "legato", "wheellfo"};
+            "fildrive", "drive", "univoices", "unispread", "legato", "wheellfo", "view", "dcurve", "rcurve", "envexp", "fdcurve", "frcurve",
+            "fenvexp"};
         return std::string(ex[i - ExtraBase]);
     }
     int j = i - MacroBase, m = j / 3, f = j % 3;
@@ -170,7 +178,8 @@ std::string VoltSynth::pluginParamName(int32_t i) const {
     if (i >= ExtraBase) {
         static const char* exNm[] = {"Pitch Bend", "Bend Range", "Vibrato → Wheel", "Osc1 Shape", "Osc2 Shape",
             "Osc1 Pulse Width", "Osc2 Pulse Width", "Filter Drive", "Drive", "Unison Voices", "Unison Spread", "Legato",
-            "Wheel → LFO"};
+            "Wheel → LFO", "View", "Decay Curve", "Release Curve", "Env Exp", "Filter Decay Curve",
+            "Filter Release Curve", "Filter Env Exp"};
         return std::string(exNm[i - ExtraBase]);
     }
     int j = i - MacroBase, m = j / 3, f = j % 3;
@@ -322,6 +331,8 @@ void VoltSynth::render(float* out, int32_t frames) {
     const float fA = rateOf(FAttack, 0.001, 2.0), fD = rateOf(FDecay, 0.002, 4.0), fR = rateOf(FRelease, 0.002, 5.0);
     const float fS = get(FSustain);
     const float aA = rateOf(Attack, 0.001, 2.0), aD = rateOf(Decay, 0.002, 4.0), aR = rateOf(Release, 0.002, 5.0);
+    const EnvBends aBend = envBends({get(DCurve), get(RCurve), get(EnvExp)});
+    const EnvBends fBend = envBends({get(FDCurve), get(FRCurve), get(FEnvExp)});
     const float aS = get(Sustain);
 
     const float p1 = bipF(Amp1Pan), p2 = bipF(Amp2Pan);
@@ -427,12 +438,12 @@ void VoltSynth::render(float* out, int32_t frames) {
         float outL = 0.0f, outR = 0.0f;
         for (auto& v : voices_) {
             if (!v.active) continue;
-            advanceEnv(v.aEnv, v.aStage, aA, aD, aS, aR);
+            stepEnv(v.aEnv, v.aStage, v.aShape, aA, aD, aS, aR, aBend);
             if (v.aStage == Stage::Off) {
                 v.active = false;
                 continue;
             }
-            advanceEnv(v.fEnv, v.fStage, fA, fD, fS, fR);
+            stepEnv(v.fEnv, v.fStage, v.fShape, fA, fD, fS, fR, fBend);
             if (v.fade1 < 1.0f) v.fade1 = std::min(1.0f, v.fade1 + fade1Inc);
             if (v.fade2 < 1.0f) v.fade2 = std::min(1.0f, v.fade2 + fade2Inc);
 
@@ -570,6 +581,12 @@ void VoltSynth::render(float* out, int32_t frames) {
         out[i * 2 + 1] += mR * opR * kSqrt2;
     }
     activeVoices_.store(countActive(), std::memory_order_relaxed);
+    {
+        Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        const bool on = lv && lv->active;
+        publishEnvTele(envTele_, on, on ? lv->aStage : Stage::Off, on ? &lv->aShape : nullptr, on ? lv->aEnv : 0.0f, aS);
+        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->fStage : Stage::Off, on ? &lv->fShape : nullptr, on ? lv->fEnv : 0.0f, fS);
+    }
     // Sleep: with no sounding voice the loop above accumulated exact zeros.
     idle_ = (countActive() == 0);
 }
@@ -597,6 +614,9 @@ void VoltSynth::startVoice(Voice& v, int32_t pitch, float velocity) {
     v.aStage = Stage::Attack;
     v.fEnv = 0.0f;
     v.fStage = Stage::Attack;
+    v.aShape = {};
+    v.fShape = {};
+    lastVoice_ = static_cast<int>(&v - voices_);
     v.fade1 = get(Lfo1Fade) > 0.001f ? 0.0f : 1.0f;
     v.fade2 = get(Lfo2Fade) > 0.001f ? 0.0f : 1.0f;
     v.f1a1 = v.f1a2 = 0.0;
@@ -616,32 +636,9 @@ void VoltSynth::startVoice(Voice& v, int32_t pitch, float velocity) {
     v.modCount = 0;
 }
 
-NOTA_ALWAYS_INLINE void VoltSynth::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
-    switch (st) {
-    case Stage::Attack:
-        env += atk;
-        if (env >= 1.0f) {
-            env = 1.0f;
-            st = Stage::Decay;
-        }
-        break;
-    case Stage::Decay:
-        env -= dec;
-        if (env <= sus) {
-            env = sus;
-            st = Stage::Sustain;
-        }
-        break;
-    case Stage::Sustain: break;
-    case Stage::Release:
-        env -= rel;
-        if (env <= 0.0f) {
-            env = 0.0f;
-            st = Stage::Off;
-        }
-        break;
-    case Stage::Off: break;
-    }
+int32_t VoltSynth::scopeRead(float* out, int32_t maxN) const {
+    if (!out || maxN <= 0) return 0;
+    return readEnvTele(envTele_, 2 * kEnvTeleFloats, out, maxN);
 }
 
 void VoltSynth::setSvf(double& a1, double& a2, double& a3, double fc, double k) const {

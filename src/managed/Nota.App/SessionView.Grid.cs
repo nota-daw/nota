@@ -67,7 +67,7 @@ public sealed partial class SessionView
         }
         _cellsRow.Children.Add(mid);
 
-        var addScene = new Button { Content = Loc.T("session.grid.scene"), Classes = { "ghost" }, Height = SpacerH, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
+        var addScene = new Button { Content = Loc.T("session.grid.scene"), Classes = { "ghost" }, Height = SpacerH, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
         ToolTip.SetTip(addScene, Loc.T("session.grid.add_a_scene_at_the"));
         addScene.Click += (_, _) => { int s = _engine.InsertScene(_engine.SceneCount); Refresh(); if (s >= 0) Select(new Selection(SelKind.Scene, 0, s)); };
 
@@ -77,7 +77,7 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("session.grid.stop_all_clips"), FontSize = 10, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("session.grid.stop_all_clips"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
             },
         };
         ToolTip.SetTip(stopAll, Loc.T("session.stop_every_session_clip"));
@@ -132,18 +132,18 @@ public sealed partial class SessionView
     private static TextBlock Mono(string text, double size, IBrush ink)
     {
         var t = new TextBlock { Text = text, FontSize = size, Foreground = ink, VerticalAlignment = VerticalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
         return t;
     }
 
     private static FormattedText Ft(string text, Typeface face, double size, IBrush ink, double maxWidth = double.PositiveInfinity)
     {
-        var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, face, size, ink);
+        var ft = new NotaFormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, face, size, ink);
         if (!double.IsInfinity(maxWidth)) { ft.MaxTextWidth = Math.Max(1, maxWidth); ft.MaxLineCount = 1; ft.Trimming = TextTrimming.CharacterEllipsis; }
         return ft;
     }
 
-    private static readonly IPen SelPen = new Pen(NotaPalette.Accent, 1);
+    private static readonly IPen SelPen = new Pen(NotaPalette.TextPrimary, 1.5);   // style guide: a selected slot is outlined in the text colour, not orange
     private static readonly IPen PlayheadPen = new Pen(NotaPalette.TextPrimary, 1);
 
     // The almanac's play triangle, drawn in a w×h box centred on c.
@@ -181,11 +181,11 @@ public sealed partial class SessionView
     }
 
     private static void DrawSelection(DrawingContext ctx, Rect r)
-        => ctx.DrawRectangle(null, SelPen, new Rect(r.X - 1.5, r.Y - 1.5, r.Width + 3, r.Height + 3).Normalize(), NotaRadius.TileValue - 1, NotaRadius.TileValue - 1);
+        => ctx.DrawRectangle(null, SelPen, new Rect(r.X - 1.5, r.Y - 1.5, r.Width + 3, r.Height + 3).Normalize(), NotaRadius.GroupValue - 1, NotaRadius.GroupValue - 1);
 
     private static void FillCell(DrawingContext ctx, Rect r, IBrush bg, IBrush? border)
     {
-        ctx.DrawRectangle(bg, border is null ? null : new Pen(border, 1), r.Deflate(0.5), NotaRadius.BadgeValue, NotaRadius.BadgeValue);
+        ctx.DrawRectangle(bg, border is null ? null : new Pen(border, 1), r.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
     }
 
     /// <summary>The track slot under a point in this view's coordinates (clip drag target).</summary>
@@ -199,7 +199,7 @@ public sealed partial class SessionView
 
     private void PromptText(Control anchor, string current, Action<string> commit)
     {
-        var box = new TextBox { Text = current, Width = 180, FontSize = 12, Classes = { "field" } };
+        var box = new TextBox { Text = current, Width = 180, FontSize = 11, Classes = { "field" } };
         var flyout = new Flyout { Content = box, Placement = Avalonia.Controls.PlacementMode.Pointer };
         box.KeyDown += (_, ke) =>
         {
@@ -222,14 +222,14 @@ public sealed partial class SessionView
         {
             _o = o; _c = c;
             Width = c.Width; Height = HeaderH;
-            CornerRadius = NotaRadius.Badge;
+            CornerRadius = NotaRadius.Cell;
             BorderThickness = new Thickness(1);
             ClipToBounds = true;
 
             var stripe = new Border { Height = 3, VerticalAlignment = VerticalAlignment.Top, Background = c.Kind == ColKind.Master ? NotaPalette.Master : c.Brush };
             var name = new TextBlock
             {
-                Text = c.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+                Text = c.Name, FontSize = 11, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = c.Kind == ColKind.Return ? NotaPalette.TextSecondary : NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center,
             };
             var top = new DockPanel { LastChildFill = true };
@@ -255,10 +255,10 @@ public sealed partial class SessionView
             if (c.Kind == ColKind.Track)
             {
                 var arrText = new TextBlock { Text = Loc.T("session.grid.arr"), FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.Accent };
-                arrText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+                arrText.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
                 _arr = new Border
                 {
-                    BorderBrush = NotaPalette.AccentDim, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Clip,
+                    BorderBrush = NotaPalette.AccentDim, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
                     Padding = new Thickness(3, 0), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                     Cursor = new Cursor(StandardCursorType.Hand), Child = arrText, IsVisible = false,
                 };
@@ -269,8 +269,8 @@ public sealed partial class SessionView
             }
             top.Children.Add(name);
 
-            var kind = new TextBlock { Text = c.KindLabel, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis };
-            kind.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            var kind = new TextBlock { Text = c.KindLabel, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis };
+            kind.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };
 
@@ -311,7 +311,7 @@ public sealed partial class SessionView
                 ? _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _c.TrackId
                 : _o._sel.Kind == SelKind.Bus && _o._sel.TrackId == _o.BusId(_c);
             Background = sel ? NotaPalette.SelHeaderBg : _c.Kind is ColKind.Return or ColKind.Master ? NotaPalette.Panel : NotaPalette.SurfaceCard;
-            BorderBrush = sel ? NotaPalette.AccentDim : Brushes.Transparent;
+            BorderBrush = Brushes.Transparent;
             if (_arr is not null) _arr.IsVisible = _o._engine.SessionPlayingSlot(_c.TrackId) >= 0;
         }
     }
@@ -389,7 +389,9 @@ public sealed partial class SessionView
 
         private static readonly Rect LaunchZone = new(3, 3, 18, 18);
         private Rect CentreZone => new(Bounds.Width / 2 - 8, Bounds.Height / 2 - 8, 16, 16);
-        private bool Recording => _o._recTrack == _c.TrackId && _o._recScene == _scene;
+        // The take's own slot, or another slot recording along with it (specs/086).
+        private bool Recording => (_o._recTrack == _c.TrackId && _o._recScene == _scene)
+                                  || (_o._recScene >= 0 && _o._engine.SessionSlotState(_c.TrackId, _scene) == 4);
         private int _lastState = -1;
         private bool _lastArmed, _lastDrag;
 
@@ -440,7 +442,7 @@ public sealed partial class SessionView
             if (!pt.Properties.IsLeftButtonPressed) return;
             e.Handled = true;
 
-            if (Recording && LaunchZone.Contains(p)) { _o._engine.StopSessionRecord(); _o.Refresh(); return; }
+            if (Recording && LaunchZone.Contains(p)) { _o._engine.StopSessionRecordSlot(_c.TrackId); _o.Refresh(); return; }
             if (_filled && LaunchZone.Contains(p))
             {
                 _o._engine.LaunchSlotVelocity(_c.TrackId, _scene, 1f);
@@ -499,12 +501,12 @@ public sealed partial class SessionView
 
             if (!_filled)
             {
-                FillCell(ctx, r, NotaPalette.SurfaceCard, dropTarget ? NotaPalette.Accent : null);
+                FillCell(ctx, r, NotaPalette.Well, dropTarget ? NotaPalette.Accent : null);
                 var c = r.Center;
                 if (_o._armed.Contains(_c.TrackId))
                     ctx.DrawEllipse(null, new Pen(_hoverCentre ? NotaPalette.Record : NotaPalette.TextMuted, 1.5), c, 3.25, 3.25);
                 else if (_stopButton)
-                    ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 3, c.Y - 3, 6, 6), 1, 1);
+                    ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 3, c.Y - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (selected) DrawSelection(ctx, r);
                 return;
             }
@@ -515,7 +517,7 @@ public sealed partial class SessionView
             double pos = playing ? eng.SessionSlotPosition(_c.TrackId) : 0;
             double frac = playing && _lenBeats > 0 ? pos / _lenBeats : 0;
 
-            IBrush bg = NotaPalette.Wash(_brush, playing ? (byte)0x40 : (byte)0x24);
+            IBrush bg = NotaPalette.Wash(_brush, playing ? (byte)0x45 : (byte)0x33);   // the clip's 20 % track tint
             IBrush border = dropTarget ? NotaPalette.Accent
                 : playing ? NotaPalette.Success
                 : queued ? (_o._blinkOn ? NotaPalette.Warning : NotaPalette.Wash(NotaPalette.Warning, 0x66))
@@ -526,7 +528,7 @@ public sealed partial class SessionView
             // progress pie while the clip plays.
             var lc = LaunchZone.Center;
             bool blinkDim = (queued || leaving) && !_o._blinkOn;
-            if (_hoverLaunch) ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.TextPrimary, 0x14), null, LaunchZone, NotaRadius.ClipValue, NotaRadius.ClipValue);
+            if (_hoverLaunch) ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.TextPrimary, 0x14), null, LaunchZone, NotaRadius.FieldValue, NotaRadius.FieldValue);
             if (playing && !leaving) DrawPie(ctx, lc, 5.5, frac);
             else
             {
@@ -536,10 +538,10 @@ public sealed partial class SessionView
                 DrawTriangle(ctx, lc, 8, 9, tri);
             }
 
-            var lenFt = Ft(_len, NotaFonts.Mono, 9, playing ? NotaPalette.TextStrong : NotaPalette.TextMuted);
+            var lenFt = Ft(_len, NotaFonts.Measure, 10, playing ? NotaPalette.TextStrong : NotaPalette.TextTertiary);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
-            var nameFt = Ft(_name, NotaFonts.SansMedium, 11, NotaPalette.TextPrimary, lenX - 27 - 4);
+            var nameFt = Ft(_name, NotaFonts.SansSemiBold, NotaType.ClipName, _brush, lenX - 27 - 4);
             ctx.DrawText(nameFt, new Point(27, (TopRowH - nameFt.Height) / 2));
 
             var area = new Rect(7, 25, r.Width - 14, r.Height - 31);
@@ -571,7 +573,7 @@ public sealed partial class SessionView
                     double x = area.X + n.Start / _lenBeats * area.Width;
                     double w = Math.Max(1.5, Math.Min(n.Len, _lenBeats - n.Start) / _lenBeats * area.Width);
                     double y = area.Y + (_maxPitch - n.Pitch) / (double)range * (area.Height - 3);
-                    ctx.DrawRectangle(_brush, null, new Rect(x, y, w, 3), 1, 1);
+                    ctx.DrawRectangle(_brush, null, new Rect(x, y, w, 3), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 }
                 return;
             }
@@ -586,7 +588,7 @@ public sealed partial class SessionView
             FillCell(ctx, r, NotaPalette.Wash(NotaPalette.Record, 0x33), NotaPalette.Record);
             var lc = LaunchZone.Center;
             ctx.DrawEllipse(waiting && !_o._blinkOn ? NotaPalette.Wash(NotaPalette.Record, 0x66) : NotaPalette.Record, null, lc, 4.5, 4.5);
-            var lenFt = Ft(FormatDuration(waiting ? 0 : _o._recElapsed), NotaFonts.Mono, 9, NotaPalette.DangerBright);
+            var lenFt = Ft(FormatDuration(waiting ? 0 : _o._recElapsed), NotaFonts.Measure, 9, NotaPalette.DangerBright);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
             var nameFt = Ft(waiting ? Loc.T("session.grid.rec_in") : Loc.T("session.recording"), NotaFonts.SansMedium, 11, NotaPalette.TextHeading, lenX - 31);
@@ -594,7 +596,7 @@ public sealed partial class SessionView
             if (!_c.IsInstrument)
             {
                 var buf = new float[44 * 2];
-                int n = _o._engine.AudioRecordPeaks(buf, 44);
+                int n = _o._engine.AudioRecordPeaksOf(_c.TrackId, buf, 44);   // this slot's lane (specs/086)
                 DrawPeaks(ctx, new Rect(7, 25, r.Width - 14, r.Height - 31), buf, n, NotaPalette.DangerBright);
             }
             else DrawRecordingNotes(ctx, new Rect(7, 25, r.Width - 14, r.Height - 31));
@@ -625,7 +627,7 @@ public sealed partial class SessionView
                 double wd = Math.Max(1.5, Math.Min(length, len - start) / len * area.Width);
                 double y = area.Y + (hi - pitch) / (double)range * (area.Height - 3);
                 var b = prog < 1 ? RecordPreview.AppearBrush(ink.Color, prog) : ink;
-                ctx.DrawRectangle(b, null, new Rect(x, y, wd, 3), 1, 1);
+                ctx.DrawRectangle(b, null, new Rect(x, y, wd, 3), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
             foreach (var n in stored)
                 if (n.StartBeat < len) Bar(n.Pitch, n.StartBeat, n.LengthBeats, rp?.Progress(n.Pitch, n.StartBeat) ?? 1);
@@ -650,7 +652,7 @@ public sealed partial class SessionView
         {
             double a = Math.Max(Math.Abs(peaks[i * 2]), Math.Abs(peaks[i * 2 + 1])) / max;
             double h = Math.Max(1, a * area.Height);
-            ctx.DrawRectangle(ink, null, new Rect(area.X + i * step, area.Y + (area.Height - h) / 2, bw, h), 0.5, 0.5);
+            ctx.DrawRectangle(ink, null, new Rect(area.X + i * step, area.Y + (area.Height - h) / 2, bw, h), NotaSkin.MapRadius(0.5), NotaSkin.MapRadius(0.5));
         }
     }
 
@@ -708,8 +710,8 @@ public sealed partial class SessionView
             bool selected = _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _g.TrackId && _o._sel.Scene == _scene;
             if (!Any)
             {
-                FillCell(ctx, r, NotaPalette.SurfaceCard, null);
-                ctx.DrawRectangle(NotaPalette.BorderStrong, null, new Rect(r.Center.X - 3, r.Center.Y - 3, 6, 6), 1, 1);
+                FillCell(ctx, r, NotaPalette.Well, null);
+                ctx.DrawRectangle(NotaPalette.BorderStrong, null, new Rect(r.Center.X - 3, r.Center.Y - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
                 if (selected) DrawSelection(ctx, r);
                 return;
             }
@@ -725,7 +727,7 @@ public sealed partial class SessionView
             {
                 var k = _kids[i];
                 IBrush ink = !k.Has ? NotaPalette.BorderDefault : eng.SessionSlotState(k.Id, _scene) == 3 ? NotaPalette.Success : k.Brush;
-                ctx.DrawRectangle(ink, null, new Rect(7, y, r.Width - 14, 3), 1, 1);
+                ctx.DrawRectangle(ink, null, new Rect(7, y, r.Width - 14, 3), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             }
             if (selected) DrawSelection(ctx, r);
         }
@@ -856,23 +858,23 @@ public sealed partial class SessionView
             IBrush? edge = _o._sceneDragTarget == _scene ? NotaPalette.Accent : any && playing && all ? NotaPalette.Wash(NotaPalette.Success, 0x66) : null;
             FillCell(ctx, r, rowSel ? NotaPalette.SurfaceRaised : NotaPalette.SurfaceCard, edge);
 
-            ctx.DrawRectangle(_hoverLaunch ? NotaPalette.SurfaceHover : NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), LaunchBox.Deflate(0.5), NotaRadius.BadgeValue, NotaRadius.BadgeValue);
+            ctx.DrawRectangle(_hoverLaunch ? NotaPalette.SurfaceHover : NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), LaunchBox.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
             IBrush tri = queued ? (_o._blinkOn ? NotaPalette.Warning : NotaPalette.Wash(NotaPalette.Warning, 0x66)) : playing ? NotaPalette.Success : NotaPalette.TextSecondary;
             DrawTriangle(ctx, LaunchBox.Center, 8, 9, tri);
 
             double x = LaunchBox.Right + 8;
-            ctx.DrawRectangle(_color, null, new Rect(x, r.Height / 2 - 3, 6, 6), 1, 1);
+            ctx.DrawRectangle(_color, null, new Rect(x, r.Height / 2 - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             x += 14;
             double right = r.Width - 8;
             if (_badge.Length > 0)
             {
-                var b = Ft(_badge, NotaFonts.Mono, 9, NotaPalette.TextSecondary);
+                var b = Ft(_badge, NotaFonts.Measure, 9, NotaPalette.TextSecondary);
                 var box = new Rect(right - b.Width - 8, r.Height / 2 - 8, b.Width + 8, 16);
-                ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), box.Deflate(0.5), NotaRadius.BadgeValue, NotaRadius.BadgeValue);
+                ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), box.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
                 ctx.DrawText(b, new Point(box.X + 4, box.Y + (16 - b.Height) / 2));
                 right = box.X - 6;
             }
-            var idx = Ft((_scene + 1).ToString("00", CultureInfo.CurrentCulture), NotaFonts.Mono, 9, NotaPalette.TextDisabled);
+            var idx = Ft((_scene + 1).ToString("00", CultureInfo.CurrentCulture), NotaFonts.Measure, 9, NotaPalette.TextDisabled);
             var name = Ft(_name, NotaFonts.SansSemiBold, 12, _named ? NotaPalette.TextPrimary : NotaPalette.TextTertiary, Math.Max(10, right - x - idx.Width - 6));
             ctx.DrawText(name, new Point(x, (r.Height - name.Height) / 2));
             ctx.DrawText(idx, new Point(x + name.Width + 6, (r.Height - name.Height) / 2 + (name.Baseline - idx.Baseline)));
@@ -881,6 +883,12 @@ public sealed partial class SessionView
     }
 
     // ---- context menus -------------------------------------------------------------------
+
+    // Locate ▸ for an audio take (spec 092, #581); nothing for a MIDI clip.
+    private Control[] LocateItems(int trackId, int scene)
+        => Locate is { } hooks && _engine.TryGetSessionAudioSlot(trackId, scene, out var sa)
+            ? new Control[] { LocateMenu.Build(hooks, sa.SampleId) }
+            : Array.Empty<Control>();
 
     private void ShowSlotMenu(Control anchor, Column c, int scene)
     {
@@ -897,6 +905,7 @@ public sealed partial class SessionView
                     MenuKit.Item(Loc.T("common.edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
                     MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
                 },
+                LocateItems(c.TrackId, scene),
                 new Control[] { MenuKit.Item(Loc.T("session.grid.copy_to_arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
                 new Control[] { AddTrackSubmenu(c.TrackId) },
                 MenuKit.ClipboardGroup(() => CopySelection(), () => CutSelection(), () => PasteSelection(), () => DuplicateSelection(), CanPaste),
@@ -976,7 +985,11 @@ public sealed partial class SessionView
         MenuKit.AddGroups(f.Items,
             new Control[] { MenuKit.Header(c.Name, c.Brush, pos >= 0 ? $"{c.KindLabel} · {pos + 1}" : c.KindLabel) },
             new Control[] { colour },
-            new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)) },
+            new Control[]
+            {
+                MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)),
+                MenuKit.Item(Loc.T("common.show_in_modular"), GlyphKind.Modular, () => ShowInModularRequested?.Invoke(c.TrackId)),   // specs/095
+            },
             new Control[] { AddTrackSubmenu(c.TrackId) },
             new Control[]
             {

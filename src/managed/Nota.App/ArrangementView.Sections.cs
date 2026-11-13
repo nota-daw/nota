@@ -55,7 +55,7 @@ public sealed partial class ArrangementView
     /// <summary>Raised whenever the section list changes, so the host can mark the project dirty.</summary>
     public event Action? SectionsChanged;
 
-    // The lane row: the same header-column chrome as the ruler, then the spans themselves.
+    // The lane row: the header column names the lane, then the spans themselves.
     private Border BuildSectionsRow()
     {
         var label = new TextBlock
@@ -63,7 +63,7 @@ public sealed partial class ArrangementView
             Text = Loc.T("arrangement.sections.sections"), Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(NameGap, 0, 0, 0),
         };
         var grid = new Grid { Height = SectionsH };
         var header = HeaderPanel(label);
@@ -167,7 +167,7 @@ public sealed partial class ArrangementView
     {
         bool automatic = SectionNames.IsAutomatic(s.Name);
         string automaticName = SectionNames.Automatic(SectionIndex(s));
-        var box = new TextBox { Text = automatic ? "" : s.Name, PlaceholderText = automaticName, Width = 180, FontSize = 12 };
+        var box = new TextBox { Text = automatic ? "" : s.Name, PlaceholderText = automaticName, Width = 180, FontSize = 11 };
         var caption = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
         void Caption() => caption.Text = SectionNames.IsAutomatic(box.Text) ? Loc.T("arrangement.sections.automatic_name") : Loc.T("arrangement.sections.custom_name");
         Caption();
@@ -621,12 +621,12 @@ public sealed partial class ArrangementView
 
         private void DrawSpan(DrawingContext ctx, ArrangementSection s, Rect r, bool warm)
         {
-            ctx.DrawRectangle(warm ? WarmFill : ColdFill, null, r, 3, 3);
+            ctx.DrawRectangle(warm ? WarmFill : ColdFill, null, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             ctx.FillRectangle(warm ? WarmEdge : ColdEdge, new Rect(r.X, r.Y, 2, r.Height));
             if (r.Width <= 22) return;
-            var ft = new FormattedText(_o.SectionDisplayName(s), CultureInfo.InvariantCulture,
+            var ft = new NotaFormattedText(_o.SectionDisplayName(s), CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, Typeface.Default, 9, warm ? WarmInk : ColdInk)
-            { MaxTextWidth = Math.Max(8, r.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+            { MaxTextWidth = Math.Max(8, r.Width - 10), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(ft, new Point(r.X + 7, r.Y + (r.Height - ft.Height) / 2));
         }
 
@@ -640,7 +640,7 @@ public sealed partial class ArrangementView
             IReadOnlyList<ArrangementSection> list = _mode == Mode.Reorder ? _o.SectionList : _o._sections;
             if (list.Count == 0 && _mode != Mode.Draft)
             {
-                var hint = new FormattedText(Loc.T("arrangement.sections.drag_here_to_mark_a"), CultureInfo.InvariantCulture,
+                var hint = new NotaFormattedText(Loc.T("arrangement.sections.drag_here_to_mark_a"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, HintInk);
                 ctx.DrawText(hint, new Point(8, (h - hint.Height) / 2));
             }
@@ -664,7 +664,7 @@ public sealed partial class ArrangementView
                     var r = new Rect(x0, 2, Math.Max(2, x1 - x0), h - 4);
                     if (reorder && i == _from)
                     {
-                        ctx.DrawRectangle(DraftFill, DraftPen, r, 3, 3);   // the landing slot
+                        ctx.DrawRectangle(DraftFill, DraftPen, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);   // the landing slot
                         ctx.FillRectangle(InsertBar, new Rect(r.X - 1, 0, 2, h));
                         continue;
                     }
@@ -678,7 +678,7 @@ public sealed partial class ArrangementView
                     using (ctx.PushOpacity(0.8))
                     {
                         DrawSpan(ctx, me, g, true);
-                        ctx.DrawRectangle(null, GhostPen, g, 3, 3);
+                        ctx.DrawRectangle(null, GhostPen, g, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
                     }
                 }
             }
@@ -689,7 +689,7 @@ public sealed partial class ArrangementView
                 double a = _o.BeatToX(_o.SnapBar(Math.Min(_pressBeat, _draftEnd)));
                 double b = _o.BeatToX(_o.SnapBar(Math.Max(_pressBeat, _draftEnd)));
                 var r = new Rect(a, 2, Math.Max(2, b - a), h - 4);
-                ctx.DrawRectangle(DraftFill, DraftPen, r, 3, 3);
+                ctx.DrawRectangle(DraftFill, DraftPen, r, NotaRadius.SwitchValue, NotaRadius.SwitchValue);
             }
 
             // Playhead tick, so the lane and the ruler read as one instrument.

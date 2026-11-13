@@ -69,8 +69,8 @@ public sealed partial class ArrangementView : UserControl
     private readonly Dictionary<int, MeterBar> _meters = new(); // per-track header meters (M6-2)
     // Per-track header vol/pan controls, refreshed each tick so automation moves them live.
     private readonly Dictionary<int, MiniFader> _volFaders = new();
+    private readonly List<(int Track, int Bus, MiniFader Fader)> _sendFaders = new();   // Large headers' sends
     private readonly Dictionary<int, PanBar> _panBars = new();
-    private readonly Dictionary<int, TextBlock> _volDb = new();
     // Return / Master footer rows: meter, volume fader and its dB read-out. Kept apart from the
     // track-header maps because the two columns are rebuilt independently.
     private readonly Dictionary<int, MeterBar> _footerMeters = new();
@@ -115,6 +115,9 @@ public sealed partial class ArrangementView : UserControl
     }
 
     /// <summary>Height of arrangement row <paramref name="i"/>: its clip area plus any open take lanes.</summary>
+    /// <summary>The height a row's header card is laid out for: the slim group bar or the track row.</summary>
+    private double HeaderRowHeight(TrackVM t) => IsSlimRow(t) ? GroupRowHeight : TrackRowHeight(t);
+
     internal double RowHeightAt(int i)
         => ClipAreaHeightAt(i) + (i >= 0 && i < _tracks.Count ? TakesHeight(_tracks[i]) : 0);
 
@@ -145,6 +148,9 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Scroll the track list so <paramref name="trackId"/>'s whole row is in view. Runs
     /// after the next layout pass, so it also works straight after a Refresh that added the
     /// row (the scroll extent isn't updated until then). A row already fully visible doesn't move.</summary>
+    /// <summary>Set by the main window: what an audio clip's Locate submenu does (spec 092).</summary>
+    internal LocateHooks? Locate { get; set; }
+
     public void RevealTrack(int trackId)
     {
         Dispatcher.UIThread.Post(() =>
@@ -374,22 +380,50 @@ public sealed partial class ArrangementView : UserControl
         var zoomIn = ZoomChip("+");
         zoomOut.Click += (_, _) => Zoom(1 / 1.25);
         zoomIn.Click += (_, _) => Zoom(1.25);
-        var zoomKeys = new StackPanel
+        // The visible range ("bars 1 to 8 of 36", 11 ink 3) with zoom out / in at the right.
+        _overviewRange = new TextBlock
         {
-            Orientation = Orientation.Horizontal, Spacing = 5,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = Loc.T("arrangement.zoom"), Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
-                zoomOut, zoomIn,
-            },
+            FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        zoomKeys.Width = HeaderW;
-        zoomKeys.Margin = new Thickness(8, 0, 0, 0);
-        var zoomBar = zoomKeys;
-        _headerColumnParts.Add(zoomBar);
-        var topLeft = HeaderPanel(zoomBar);
-        var topGrid = new Grid { Height = RulerH };
+        _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        _overviewRange.BindResource(TextBlock.FontFamilyProperty, "Font.Measure");
+        // "Zoom" names the two keys. On a header narrowed so far that the range read-out
+        // would be cut, the caption steps aside first (the keys keep their tooltips).
+        var zoomLabel = new TextBlock
+        {
+            Text = Loc.T("arrangement.zoom"), Classes = { "SectionLabel" },
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
+        };
+        var zoomBar = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), ColumnSpacing = 4,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(NameGap, 0, HeaderRightPad - 4, 0),
+        };
+        zoomBar.Children.Add(_overviewRange);
+        Grid.SetColumn(zoomLabel, 1);
+        Grid.SetColumn(zoomOut, 2);
+        Grid.SetColumn(zoomIn, 3);
+        zoomBar.Children.Add(zoomLabel);
+        zoomBar.Children.Add(zoomOut);
+        zoomBar.Children.Add(zoomIn);
+        void FitZoomLabel()
+        {
+            if (zoomBar.Bounds.Width <= 0) return;
+            // The TextBlock's FontSize already carries the text-size step, so measure it as is.
+            static double TextW(TextBlock t) => new NotaFormattedText(t.Text ?? "", CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight, new Typeface(t.FontFamily, t.FontStyle, t.FontWeight), t.FontSize, null,
+                NotaTextSize.InCard).Width;
+            double need = Math.Ceiling(TextW(_overviewRange)) + Math.Ceiling(TextW(zoomLabel)) + zoomLabel.Margin.Right
+                          + zoomOut.Width + zoomIn.Width + 3 * zoomBar.ColumnSpacing;
+            zoomLabel.IsVisible = need <= zoomBar.Bounds.Width;
+        }
+        zoomBar.SizeChanged += (_, _) => FitZoomLabel();
+        _overviewRange.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) FitZoomLabel(); };
+        _zoomBar = zoomBar;
+        _tracksCaption.Text = Loc.T("modular.tracks");
+        var topLeft = HeaderPanel(new Panel { Children = { zoomBar, _tracksCaption } });
+        var topGrid = _topGrid = new Grid { Height = RulerH };
         topGrid.Children.Add(topLeft);
         topGrid.Children.Add(_ruler);
         AddSideRow(topGrid, topLeft, _ruler);
@@ -455,7 +489,7 @@ public sealed partial class ArrangementView : UserControl
         };
         _headerColumnParts.Add(_columnBackdrop);
         _columnDividers.Add(_columnBackdrop);
-        _columnBackdrop.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        _columnBackdrop.BindResource(Border.BackgroundProperty, "Brush.Panel");
         _columnBackdrop.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         var centerArea = _centerArea = new Grid();
         centerArea.Children.Add(_columnBackdrop);
@@ -467,7 +501,7 @@ public sealed partial class ArrangementView : UserControl
         _headerColumnParts.Add(_footerHeaders);
         _headerColumnParts.Add(footerHeaderPanel);
         _columnDividers.Add(footerHeaderPanel);
-        footerHeaderPanel.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        footerHeaderPanel.BindResource(Border.BackgroundProperty, "Brush.SurfaceDeep");
         footerHeaderPanel.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         _footerLanes = new FooterLaneControl(this);
         _footer = new Grid();
@@ -490,7 +524,7 @@ public sealed partial class ArrangementView : UserControl
         };
 
         // Bottom: a thin horizontal scrollbar under the lanes, on the well, past a hairline.
-        var bottomGrid = new Grid();
+        var bottomGrid = _bottomGrid = new Grid();
         var bottomLeft = HeaderPanel(null);
         bottomLeft.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         bottomGrid.Children.Add(bottomLeft);
@@ -578,6 +612,29 @@ public sealed partial class ArrangementView : UserControl
         set { if (_clipLabels == value) return; _clipLabels = value; _lanes.InvalidateVisual(); }
     }
     private ClipLabelMode _clipLabels = ClipLabelMode.RunStart;
+    /// <summary>Tinted clips (the new look) or solid ones with a title band (0.59; Settings →
+    /// Appearance → Clips, spec 091).</summary>
+    public ClipStyle ClipStyle
+    {
+        get => _clipStyle;
+        set { if (_clipStyle == value) return; _clipStyle = value; _lanes.InvalidateVisual(); }
+    }
+    private ClipStyle _clipStyle = ClipStyle.Tinted;
+    /// <summary>How groups are drawn in the track headers (specs/094): trays in the new look,
+    /// 0.59.2's staircase of spines in the classic one. Follows the worn look.</summary>
+    public Look HeaderLook
+    {
+        get => _headerLook;
+        set
+        {
+            if (_headerLook == value) return;
+            _headerLook = value;
+            RebuildHeaders();
+            _lanes.InvalidateVisual();   // a group lane's wash follows the look
+        }
+    }
+    private Look _headerLook = Look.New;
+    private bool ClassicHeaders => _headerLook == Look.Classic;
     /// <summary>Audio-clip waveform style (Settings → Appearance).</summary>
     public WaveformStyle Waveform
     {
@@ -585,6 +642,20 @@ public sealed partial class ArrangementView : UserControl
         set { if (_waveform == value) return; _waveform = value; _lanes.InvalidateVisual(); }
     }
     private WaveformStyle _waveform = WaveformStyle.Smooth;
+    /// <summary>A heavier grid line every this many bars, counted from bar 1; 0 = off
+    /// (Settings → Appearance, specs/092). Drawn on the lanes, the footer rows and the ruler.</summary>
+    public int PhraseBars
+    {
+        get => _phraseBars;
+        set
+        {
+            value = PhraseLines.Normalize(value);
+            if (_phraseBars == value) return;
+            _phraseBars = value;
+            Redraw();
+        }
+    }
+    private int _phraseBars;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -947,8 +1018,6 @@ public sealed partial class ArrangementView : UserControl
             if (_volFaders.TryGetValue(ti.Id, out var f) && !f.Dragging && Math.Abs(f.Value - ti.Volume) > 1e-3)
             {
                 f.Value = ti.Volume;
-                if (_volDb.TryGetValue(ti.Id, out var db))
-                    db.Text = VolumeDbText(ti.Volume);
             }
             if (_panBars.TryGetValue(ti.Id, out var p) && !p.Dragging && Math.Abs(p.Pan - ti.Pan) > 1e-3)
                 p.Pan = ti.Pan;
@@ -957,16 +1026,29 @@ public sealed partial class ArrangementView : UserControl
             if (_footerPans.TryGetValue(ti.Id, out var rp) && !rp.Dragging && Math.Abs(rp.Pan - ti.Pan) > 1e-3)
                 rp.Pan = ti.Pan;
         }
+        // Large headers' sends follow the mixer, the Sends card and automation (#138).
+        foreach (var (tid, bus, sf) in _sendFaders)
+        {
+            if (sf.Dragging) continue;
+            double v = eng.GetTrackSend(tid, bus);
+            if (Math.Abs(sf.Value - v) > 1e-3) sf.Value = v;
+        }
         FollowSends(eng);
     }
 
-    // Moves a footer fader and its read-out to a volume changed elsewhere (Mixer, MST, MCP,
-    // automation, project load) — unless the user is dragging it.
+    // Moves a footer fader (its value is written inside it) to a volume changed elsewhere
+    // (Mixer, MST, MCP, automation, project load) — unless the user is dragging it.
     private static void FollowVolume(MiniFader? fader, TextBlock? db, double volume)
     {
         if (fader is null || fader.Dragging || Math.Abs(fader.Value - volume) <= 1e-3) return;
         fader.Value = volume;
         if (db is not null) db.Text = VolumeDbText(volume);
+    }
+
+    private static void FollowVolume(MiniFader? fader, double volume)
+    {
+        if (fader is null || fader.Dragging || Math.Abs(fader.Value - volume) <= 1e-3) return;
+        fader.Value = volume;
     }
 
     private void Zoom(double factor)
@@ -2197,23 +2279,23 @@ public sealed partial class ArrangementView : UserControl
         QueueSelectionNotify();   // every clip-selection change repaints the headers
         foreach (var (id, h) in _headerCards)
         {
-            // Selected row (almanac § States): brass wash, the left stripe turns brass, name in Ink 1.
-            bool selected = IsTrackMultiSelected(id);
-            h.card.Background = selected ? SelHeaderBg
-                : h.isGroup ? Brush("Brush.SurfaceRaised") : Brush("Brush.SurfaceCard");
-            h.name.Foreground = Brush("Brush.TextPrimary");
-            h.spine.Background = selected ? NotaPalette.Accent : h.spineIdle;
+            // Selected row (style guide): a slightly lighter background; the colour bar stays
+            // (classic: the spine goes accent, as in 0.59.2).
+            if (_tracks.Find(v => v.Id == id) is { } t)
+                PaintHeaderFill(h.card, t, IsTrackMultiSelected(id), h.spine, h.spineIdle);
         }
     }
 
     private void RebuildHeaders()
     {
+        ComputeTraySlices();
         _headers.Children.Clear();
         _meters.Clear();
         _volFaders.Clear();
+        _sendFaders.Clear();
         _panBars.Clear();
-        _volDb.Clear();
         _headerCards.Clear();
+        _trayLayers.Clear();
         _cardTiers.Clear();
         _cardSends.Clear();
         _sendKnobs.Clear();
@@ -2240,32 +2322,29 @@ public sealed partial class ArrangementView : UserControl
     // A group's row, collapsed to a title bar: disclosure, name, its own mute/solo, kind tag.
     // The fader, pan and meter live on the same card when the group is selected (BuildTrackCard),
     // so nothing is lost — it just stops costing a full row while you work on its children.
+    // New look (specs/094): the row heads the group's tray (its 16 % wash, the tray's edge), and
+    // its meter stands at the right in the tracks' column. Classic: 0.59.2's slim row — the
+    // "Group" tag and the level as a rail on its own line under the title.
     private Control BuildGroupBar(TrackVM t)
     {
         bool selected = IsTrackMultiSelected(t.Id);
-        var (_, _, _, spineBrush) = ClipColors(t.ColorIndex);
+        var spineBrush = TrackBrush(t.ColorIndex);
+        bool classic = ClassicHeaders;
+        var slice = SliceOf(t);
 
         var tri = new Border
         {
-            Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
+            Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, classic ? 0 : 6, 0),
+            Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, classic ? 8 : 9) { Foreground = Brush("Brush.TextSecondary") },
         };
         tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
 
-        var name = new TextBlock
-        {
-            Text = t.Name, FontSize = 11, FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("Brush.TextPrimary"),
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(4, 0, 0, 0),
-        };
-
+        var name = HeaderName(t.Name);
+        if (classic) { name.FontSize = NotaType.Name; name.Margin = new Thickness(4, 0, 0, 0); }
         var chips = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 3,
-            VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = classic ? ClassicChipGap : ChipGap, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
                 ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }),
@@ -2273,52 +2352,76 @@ public sealed partial class ArrangementView : UserControl
                 LinkToggle(t),
             },
         };
+        if (_engine is { } groupEngine && CueKey.Shown(groupEngine))   // Cue (specs/089)
+            chips.Children.Insert(2, CueKey.Create(groupEngine, t.Id, 18, 18, NotaRadius.Field, out _, offFill: NotaPalette.Well));
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
-        Grid.SetColumn(tri, 0);
-        Grid.SetColumn(name, 1);
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), VerticalAlignment = VerticalAlignment.Center };
+        var title = NameWithCount(name, slice);
+        Grid.SetColumn(title, 1);
         Grid.SetColumn(chips, 2);
-        var kind = TypeTag(Loc.T("common.group"));
-        Grid.SetColumn(kind, 3);
         row.Children.Add(tri);
-        row.Children.Add(name);
+        row.Children.Add(title);
         row.Children.Add(chips);
-        row.Children.Add(kind);
+        if (classic)
+        {
+            var kind = TypeTag(Loc.T("common.group"));
+            Grid.SetColumn(kind, 3);
+            row.Children.Add(kind);
+        }
 
-        // A group keeps its level readable at 26px as a 2px rail under the title.
-        var meter = new MeterBar(horizontal: true) { Height = 4, MinWidth = 0 };
-        _meters[t.Id] = meter;
-        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(8, 0, 8, 0) };
-        DockPanel.SetDock(meter, Dock.Bottom);
-        meter.Margin = new Thickness(0, 0, 0, 3);
-        body.Children.Add(meter);
-        body.Children.Add(row);
-
-        var spine = new Border { Width = 3, Background = spineBrush };
-        var grid = SpineGrid(t.Depth, spine, body);
-
+        var (bars, spine, x) = HeaderBars(t, own: false);
+        Control body;
+        if (classic)
+        {
+            // 0.59.2: the level as a rail on a line of its own under the title.
+            var meter = new MeterBar(horizontal: true) { Height = 4, MinWidth = 0, Margin = new Thickness(0, 0, 0, 3) };
+            _meters[t.Id] = meter;
+            DockPanel.SetDock(meter, Dock.Bottom);
+            body = new DockPanel { LastChildFill = true, Margin = new Thickness(x + 8, 0, 8, 0), Children = { meter, row } };
+        }
+        else
+        {
+            var meter = HeaderMeter(GroupRowHeight - GroupTrayLayout.ClosingBand(slice.Closings, GroupRowHeight));
+            _meters[t.Id] = meter;
+            DockPanel.SetDock(meter, Dock.Right);
+            body = new DockPanel
+            {
+                LastChildFill = true, Children = { meter, row },
+                Margin = new Thickness(x + 2, 0, GroupTrayLayout.TrayInsetR, GroupTrayLayout.ClosingBand(slice.Closings, GroupRowHeight)),
+            };
+        }
         var card = new Border
         {
             Width = HeaderW, Height = GroupRowHeight, ClipToBounds = true,
-            Background = selected ? SelHeaderBg : Brush("Brush.SurfaceRaised"),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = CardBorder,
-            Child = grid,
+            BorderThickness = CardBorderFor(t),
+            Child = new Panel { Children = { bars, body } },
         };
         _headerCards[t.Id] = (card, name, true, spine, spineBrush);
-        if (selected) spine.Background = NotaPalette.Accent;
+        PaintHeaderFill(card, t, selected, spine, spineBrush);
         AttachHeaderGestures(card, t);
         ValueEntry.SetScope(card, true);   // Tab in a value box: volume → pan on this header
         return card;
     }
 
-    // One builder, three layouts picked by the row's height (specs/015): compact puts the name
-    // and M/S/arm on one line; standard is the classic three rows; large gives the routing,
-    // the fader and the pan a row each. The controls and their wiring are shared.
+    // A group's name with " · N" after it while it is folded (specs/094): the tracks it hides,
+    // nested groups' tracks included. The name trims first; the count stays beside it.
+    private Control NameWithCount(TextBlock name, TraySlice slice)
+    {
+        if (slice.FoldedCount is not { } n) return name;
+        var count = TypeTag("· " + n.ToString(CultureInfo.CurrentCulture));
+        count.Margin = new Thickness(6, 1, 0, 0);
+        return new NameTagPanel { Children = { name, count } };
+    }
+
+    // One builder, three layouts picked by the row's height (specs/015, style guide): compact is
+    // the name row alone (name, kind, M S ● and the monitor); standard adds a second row with
+    // the volume bar (value inside), the pan knob and the input picker; large gives the input
+    // picker a row of its own. The controls and their wiring are shared.
     private Control BuildTrackCard(TrackVM t)
     {
         bool selected = IsTrackMultiSelected(t.Id);
-        var (_, _, _, spineBrush) = ClipColors(t.ColorIndex);
+        var spineBrush = TrackBrush(t.ColorIndex);
         double rowH = TrackRowHeight(t);
         var tier = TierFor(rowH);
         _cardTiers[t.Id] = tier;
@@ -2326,29 +2429,22 @@ public sealed partial class ArrangementView : UserControl
         _cardSends[t.Id] = sends;
         _sendKnobs.RemoveAll(k => k.trackId == t.Id);
 
-        // Row 1: [group ▸/▾] name (ellipsised) + type-tag chip.
-        var name = new TextBlock
-        {
-            Text = t.Name, FontSize = 11, FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("Brush.TextPrimary"),
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
+        // Row 1: [group ▸/▾ | freeze badge] name · kind ....... M S ● (monitor)
+        var name = HeaderName(t.Name);
         // A phone playing the track (Nota Remote) takes the type tag's place: during a jam
-        // "who plays what" matters more than MIDI / AUDIO.
-        Control typeTag = t.Player is { } player ? PlayerTag(player) : TypeTag(t.IsGroup ? "GROUP" : t.IsInstrument ? "MIDI" : "AUDIO");
-        var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        // "who plays what" matters more than MIDI / Audio.
+        Control typeTag = t.Player is { } player ? PlayerTag(player) : TypeTag(t.IsGroup ? Loc.T("common.group") : t.IsInstrument ? "MIDI" : Loc.T("common.audio"));
+        var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = MiniFader.BarH + 2 };
         if (t.IsGroup)
         {
             // Collapse triangle — hides/shows the group's child rows.
             var tri = new Border
             {
-                Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, 4, 0),
+                Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, 6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-                Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
+                Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 9) { Foreground = Brush("Brush.TextSecondary") },
             };
             tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
-            Grid.SetColumn(tri, 0);
             nameRow.Children.Add(tri);
         }
         else if (TakesToggle(t) is { } takes)
@@ -2361,13 +2457,15 @@ public sealed partial class ArrangementView : UserControl
             // Freeze badge: a drawn chain-link for a sleeping live-freeze source (1);
             // a drawn snowflake for an in-place frozen track or a linked frozen track (2).
             Control badge = t.LiveRole == 1
-                ? new Glyph(GlyphKind.ChainLink, 14) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 4, 0) }
-                : new Glyph(GlyphKind.Freeze, 10) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 4, 0) };
-            Grid.SetColumn(badge, 0);
+                ? new Glyph(GlyphKind.ChainLink, 14) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 5, 0) }
+                : new Glyph(GlyphKind.Freeze, 10) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 5, 0) };
             nameRow.Children.Add(badge);
         }
-        Control nameCell = name;
-        if (LinkMemberMark(t) is { } mark)   // linked with its group (specs/076)
+        // The name trims before it can push M / S / ● out of the card; the tag stays beside it.
+        // A member linked with its group carries the link mark before its name (specs/076).
+        Control nameCell = t.IsGroup ? NameWithCount(name, SliceOf(t)) : name;   // a folded group's count (specs/094)
+        if (t.IsGroup && !ClassicHeaders) typeTag.IsVisible = false;   // the tray says it's a group
+        if (LinkMemberMark(t) is { } mark)
         {
             var dock = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(mark, Dock.Left);
@@ -2375,97 +2473,58 @@ public sealed partial class ArrangementView : UserControl
             dock.Children.Add(name);
             nameCell = dock;
         }
-        Grid.SetColumn(nameCell, 1);
-        Grid.SetColumn(typeTag, 2);
-        nameRow.Children.Add(nameCell);
-        nameRow.Children.Add(typeTag);
+        var nameAndTag = new NameTagPanel { Children = { nameCell, typeTag } };
+        Grid.SetColumn(nameAndTag, 1);
+        nameRow.Children.Add(nameAndTag);
 
-        // M / S / ● (record-arm) and, on audio tracks, the monitor chip — 18×16 chips held
-        // against the meter at every height, so they stay put as the row is resized (#387).
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 5, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        // Each toggle also writes the TrackVM: resizing a row rebuilds its card from the VM
-        // without re-reading the engine, and a stale VM put the old state back (#255).
+        // M / S / ● (record-arm), 18 × 18 on the well. Each toggle also writes the TrackVM:
+        // resizing a row rebuilds its card from the VM without re-reading the engine, and a
+        // stale VM put the old state back (#255).
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = ChipGap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }));
         btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }));
+        if (_engine is { } cueEngine && CueKey.Shown(cueEngine))   // Cue (specs/089)
+            btnRow.Children.Add(CueKey.Create(cueEngine, t.Id, 18, 18, NotaRadius.Field, out _, offFill: NotaPalette.Well));
         if (t.IsGroup) btnRow.Children.Add(LinkToggle(t));   // group Link (specs/076)
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
-            btnRow.Children.Add(ArmToggle(t.Armed, (v, additive) =>
+            btnRow.Children.Add(ArmToggle(t.Armed, (v, mods) =>
             {
                 t.Armed = v;
-                if (_engine is not null) TrackArming.Set(_engine, t.Id, v, additive);
+                if (_engine is not null) TrackArming.Set(_engine, t.Id, v, mods);
             }));
 
+        // Audio tracks: a monitor key after the arm hears the selected input live.
         bool isAudioTrack = !t.IsInstrument && !t.IsReturn && !t.IsGroup;
-        // Audio tracks: the monitor chip hears the selected input live. A compact row has no
-        // input selector to tell it the source, so it reads it from the engine.
         var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
-        if (monitor is not null)
-        {
-            btnRow.Children.Add(monitor.Chip);
-            if (tier == HeaderTier.Compact && _engine is not null) monitor.SetSource(RecordInputPick.Of(_engine, t.Id).Source);
-        }
+        if (monitor is not null) btnRow.Children.Add(monitor.Chip);
+        Grid.SetColumn(btnRow, 2);
+        nameRow.Children.Add(btnRow);
 
-        // The routing selector — record-input on audio tracks, "MIDI In" on instrument tracks —
-        // sits left of the buttons (the standard row leaves no room for a 4th row). A large
-        // row gives it a row of its own; a compact one leaves it to the context menu.
-        Control row2 = btnRow;
-        Control? routingRow = null;
+        // The input picker ("In None ⌄"): record input on audio tracks, MIDI source on
+        // instrument tracks. A compact row leaves it to the context menu.
+        Control? picker = null;
         if (tier != HeaderTier.Compact && (isAudioTrack || t.IsInstrument))
-        {
-            var combo = isAudioTrack ? BuildInputCombo(t.Id, monitor) : BuildMidiSourceCombo(t.Id);
-            if (tier == HeaderTier.Large)
-            {
-                combo.Margin = new Thickness(0, 5, 0, 0);
-                routingRow = combo;
-            }
-            else
-            {
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3 };
-                btnRow.Margin = new Thickness(0);
-                Grid.SetColumn(combo, 0);
-                Grid.SetColumn(btnRow, 1);
-                g.Children.Add(combo);
-                g.Children.Add(btnRow);
-                row2 = g;
-            }
-        }
+            picker = isAudioTrack ? BuildInputCombo(t.Id, monitor) : BuildMidiSourceCombo(t.Id);
+        else monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
 
-        // Row 3: volume (mini fader + dB readout) and a bipolar pan bar in one row —
-        // grid 2× volume / 1× pan. Double-click either to reset (0 dB / centre).
+        // Volume: the value bar with its value written inside. Double-click resets to 0 dB.
         int volTrackId = t.Id;   // M9-C: record volume moves while playing
-        var fader = new MiniFader(t.Volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0 };
-        var db = new TextBlock
-        {
-            FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"),
-            VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
-            Margin = new Thickness(6, 0, 0, 0),
-        };
-        void ShowDb(double v) => db.Text = VolumeDbText(v);
-        ShowDb(t.Volume);
+        var fader = new MiniFader(t.Volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0, Text = VolumeDbText };
         // One undo step per drag / reset (specs/009): opened before the automation write so a
         // recorded lane and the value undo together, closed after it.
         var volUndo = _engine is { } ve ? new MixGesture(ve, MixTarget.Volume(volTrackId)) : null;
         fader.GestureBegin += () => volUndo?.Begin();
         Action<double> setHdrVol = v => _engine?.SetTrackVolume(volTrackId, (float)v);
-        fader.ValueChanged += v => { Change(volUndo, v, setHdrVol); ShowDb(v); };
+        fader.ValueChanged += v => Change(volUndo, v, setHdrVol);
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => volUndo?.End();
-        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), VolumeDbText), db);
-        _volFaders[t.Id] = fader; _volDb[t.Id] = db;
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), VolumeDbText));
+        _volFaders[t.Id] = fader;
 
-        var volCell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        Grid.SetColumn(fader, 0);
-        Grid.SetColumn(db, 1);
-        volCell.Children.Add(fader);
-        volCell.Children.Add(db);
-
+        // Pan: the small knob with its value beside it. Double-click centres.
         var pan = new PanBar(t.Pan) { VerticalAlignment = VerticalAlignment.Center };
         var panUndo = _engine is { } pe ? new MixGesture(pe, MixTarget.Pan(volTrackId)) : null;
         pan.GestureBegin += () => panUndo?.Begin();
@@ -2477,106 +2536,226 @@ public sealed partial class ArrangementView : UserControl
         ValueEntry.Attach(pan, pan.EntryField(Loc.T("common.pan")));
         _panBars[t.Id] = pan;
 
-        var volRow = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,*"), ColumnSpacing = 6, Margin = new Thickness(0, 6, 0, 0) };
-        Grid.SetColumn(volCell, 0);
+        // Row 2: volume · pan · input picker (the picker moves to a row of its own when large).
+        var volRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 6, Height = MiniFader.BarH + 2 };
+        volRow.Children.Add(fader);
         Grid.SetColumn(pan, 1);
-        volRow.Children.Add(volCell);
         volRow.Children.Add(pan);
 
-        // Indent nested rows so the group hierarchy reads at a glance.
-        var stack = new StackPanel { Margin = new Thickness(8, 6, 8, 6) };
+        var (bars, spine, x) = HeaderBars(t, own: true);
+        var stack = new StackPanel { Spacing = HeaderRowGap };
+        stack.Children.Add(nameRow);
         switch (tier)
         {
             case HeaderTier.Compact:
-                // One line: name · tag · M S ● (monitor). Volume, pan and routing stay in the mixer and
-                // the track's context menu. A narrow column drops the tag before the name.
-                nameRow.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto");
+                // One line: the volume, pan and routing stay in the mixer and the track's
+                // context menu. A narrow column drops the tag before the name.
                 if (HeaderW < 200) typeTag.IsVisible = false;
-                btnRow.Margin = new Thickness(6, 0, 0, 0);
-                btnRow.VerticalAlignment = VerticalAlignment.Center;
-                Grid.SetColumn(btnRow, 3);
-                nameRow.Children.Add(btnRow);
-                stack.Margin = new Thickness(8, 0, 8, 0);
                 stack.VerticalAlignment = VerticalAlignment.Center;
-                stack.Children.Add(nameRow);
                 break;
             case HeaderTier.Large:
-                // A row each: the fader takes the full width, the pan its own row below — unless
-                // the send row needs that room, then volume and pan share a row as on a standard card.
-                if (!sends)
-                {
-                    volRow.ColumnDefinitions = new ColumnDefinitions("*");
-                    volRow.RowDefinitions = new RowDefinitions("Auto,Auto");
-                    volRow.RowSpacing = 6;
-                    Grid.SetColumn(pan, 0);
-                    Grid.SetRow(pan, 1);
-                }
-                stack.Children.Add(nameRow);
-                stack.Children.Add(row2);
-                if (routingRow is not null) stack.Children.Add(routingRow);
+                stack.Margin = new Thickness(0, 8, 0, 0);
                 stack.Children.Add(volRow);
+                if (picker is not null)
+                {
+                    picker.HorizontalAlignment = HorizontalAlignment.Left;
+                    picker.MinWidth = PickerW;
+                    stack.Children.Add(picker);
+                }
+                // The sends to each return, two to a row, as far as the row's height allows
+                // (the card clips the rest; the mixer and the Sends card show them all) — only
+                // once the row reaches the Large height itself (specs/069, #472).
+                if (sends)
+                {
+                    double used = 8 + 2 * (MiniFader.BarH + 2) + HeaderRowGap + (picker is not null ? HeaderRowGap + PickerH : 0);
+                    int fits = (int)((rowH - used - 6) / (HeaderRowGap + MiniFader.BarH + 2));
+                    foreach (var row in SendRows(t.Id).Take(Math.Max(0, fits))) stack.Children.Add(row);
+                }
                 break;
             default:
-                stack.Children.Add(nameRow);
-                stack.Children.Add(row2);
+                stack.VerticalAlignment = VerticalAlignment.Center;
+                // The picker stays on a standard row. A narrow column shrinks it (the source
+                // name trims) and then lets the volume bar give way; only when even "In ⌄"
+                // and a sliver of volume can't sit beside the pan does it go to the context menu.
+                if (picker is not null)
+                {
+                    double room = HeaderW - x - NameGap - MeterW - PanBar.W - 2 * 6 - ContentRightInset;
+                    double pickerW = Math.Clamp(room - MiniFader.MinW, PickerMinW, PickerW);
+                    double faderMin = Math.Min(MiniFader.MinW, room - pickerW);
+                    if (faderMin < FaderSqueezeW)
+                    {
+                        picker = null;
+                        monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
+                    }
+                    else
+                    {
+                        fader.MinWidth = faderMin;
+                        picker.Width = pickerW;
+                        Grid.SetColumn(picker, 2);
+                        volRow.Children.Add(picker);
+                    }
+                }
+                else volRow.ColumnSpacing = 10;
                 stack.Children.Add(volRow);
                 break;
         }
-        // Room for the knobs: the card minus its group indent, spine, padding and meter.
-        if (sends && BuildSendRow(t, HeaderW - Math.Max(0, t.Depth) * GroupIndent - 3 - 16 - 11) is { } sendRow)
-            stack.Children.Add(sendRow);
 
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6) };
+        // The meter down the right edge: two 3px channels, inside the card on every row height
+        // (specs/094). New look: above any closing strips of the trays that end on this row.
+        double band = ClassicHeaders ? 0 : GroupTrayLayout.ClosingBand(SliceOf(t).Closings, rowH);
+        MeterBar meter = ClassicHeaders
+            ? new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, MinHeight = 0, Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6) }
+            : HeaderMeter(rowH - band);
         _meters[t.Id] = meter;
         DockPanel.SetDock(meter, Dock.Right);
-        var body = new DockPanel { LastChildFill = true, Children = { meter, stack } };
-
-        // 3px track-colour spine on the left edge, stepped in under its group.
-        var spine = new Border { Width = 3, Background = spineBrush };
-        var grid = SpineGrid(t.Depth, spine, body);
+        var body = new DockPanel { LastChildFill = true, Margin = new Thickness(x + NameGap, 0, ContentRightInset, band), Children = { meter, stack } };
 
         var card = new Border
         {
             Width = HeaderW,
             Height = rowH,
             ClipToBounds = true,
-            Background = selected ? SelHeaderBg : (t.Frozen || t.LiveRole != 0) ? FrozenHeaderBg : t.IsGroup ? Brush("Brush.SurfaceRaised") : Brush("Brush.SurfaceCard"),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = CardBorder,
-            Child = grid,
+            BorderThickness = CardBorderFor(t),
+            Child = new Panel { Children = { bars, body } },
         };
         // A background import is still filling the track: the disabled look (by colour, not
         // opacity), still clickable so the track can be deleted to cancel.
         if (IsProcessingTrack(t.Id)) card.AttachedToVisualTree += (_, _) => Inactive.Set(card, true, interactive: true);
         _headerCards[t.Id] = (card, name, t.IsGroup, spine, spineBrush);   // for in-place selection repaint
-        if (selected) spine.Background = NotaPalette.Accent;
+        PaintHeaderFill(card, t, selected, spine, spineBrush);
         AttachHeaderGestures(card, t);
         ValueEntry.SetScope(card, true);   // Tab in a value box: volume → pan on this header
         return card;
     }
 
-    // Nesting reads from the spine: a group's rows carry their colour spine one step
-    // (GroupIndent) further in than the group's own, so the hierarchy shows as a staircase
-    // of stripes while the names keep their place just past the stripe.
-    private const double GroupIndent = 10;
-
-    private static Grid SpineGrid(int depth, Border spine, Control body)
+    // Header geometry (style guide): 18px chips 4 apart, rows 6 apart, the name 12px past the
+    // colour bar, the input picker 62 wide.
+    // A Large header's sends: the return's colour and letter, then its bar with the amount inside
+    // (– at 0). Double-click resets to 0; double-click the amount or Alt-click types one.
+    private IEnumerable<Control> SendRows(int trackId)
     {
-        double indent = Math.Max(0, depth) * GroupIndent;
-        var grid = new Grid
+        if (_engine is not { } eng) yield break;
+        var sends = new List<Control>();
+        foreach (var r in _returns)
         {
-            ColumnDefinitions =
+            int bus = eng.TrackReturnIndex(r.Id);
+            if (bus < 0) continue;
+            static string SendText(double v) => v <= 0.005 ? "–" : NotaNum.Pct(v);
+            var f = new MiniFader(eng.GetTrackSend(trackId, bus), 1.0) { Default = 0, Text = SendText, VerticalAlignment = VerticalAlignment.Center };
+            int b = bus;
+            SendControl.Attach(f, eng, trackId, b);   // undoable, writes automation (specs/072)
+            ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", SendLetter(b)), SendText));
+            _sendFaders.Add((trackId, b, f));
+            var swatch = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Fine, Background = TrackBrush(r.ColorIndex), VerticalAlignment = VerticalAlignment.Center };
+            var letter = new TextBlock { Text = ((char)('A' + b)).ToString(), FontSize = NotaType.Eyebrow, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextSecondary"), VerticalAlignment = VerticalAlignment.Center };
+            ToolTip.SetTip(letter, Loc.F("arrangement.send", SendLetter(b), r.Name));
+            var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
+            cell.Children.Add(swatch);
+            Grid.SetColumn(letter, 1); cell.Children.Add(letter);
+            Grid.SetColumn(f, 2); cell.Children.Add(f);
+            sends.Add(cell);
+        }
+        for (int i = 0; i < sends.Count; i += 2)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 10, Height = MiniFader.BarH + 2 };
+            row.Children.Add(sends[i]);
+            if (i + 1 < sends.Count) { Grid.SetColumn(sends[i + 1], 1); row.Children.Add(sends[i + 1]); }
+            yield return row;
+        }
+    }
+
+    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerMinW = 36, FaderSqueezeW = 20, PickerH = 22, HeaderRightPad = 10, MeterW = 7 + 6 + 4;
+
+    private TextBlock HeaderName(string text) => new()
+    {
+        Text = text, FontSize = NotaType.TrackName, FontWeight = FontWeight.SemiBold,
+        Foreground = Brush("Brush.TextPrimary"), VerticalAlignment = VerticalAlignment.Center,
+        TextTrimming = TextTrimming.CharacterEllipsis,
+    };
+
+    // Nesting (specs/094). New look: the row's slice of every group tray it sits in
+    // (GroupTrayLayer) — a member keeps only its own 3 px bar, at the start of its card. Classic
+    // look: 0.59.2's staircase — the row's own 3 px spine, stepped in per nesting level, full
+    // height, nothing for the groups around it. Returns the layer, the row's own stripe (the
+    // selection repaint's handle) and where the row's content starts.
+    private const double OwnBarW = 3, ClassicChipGap = 3;
+    private readonly Dictionary<int, GroupTrayLayer> _trayLayers = new();
+
+    // Every row's controls end at the same x (FR-007): the trays' right inset in the new look.
+    private double ContentRightInset => ClassicHeaders ? 0 : GroupTrayLayout.TrayInsetR;
+
+    private (Control bars, Border own, double contentX) HeaderBars(TrackVM t, bool own)
+    {
+        var slice = SliceOf(t);
+        var canvas = new Panel();
+        Border bar;
+        if (ClassicHeaders)
+        {
+            bar = new Border
             {
-                new ColumnDefinition(indent, GridUnitType.Pixel),
-                new ColumnDefinition(3, GridUnitType.Pixel),
-                new ColumnDefinition(1, GridUnitType.Star),
-            },
-        };
-        Grid.SetColumn(spine, 1);
-        Grid.SetColumn(body, 2);
-        grid.Children.Add(spine);
-        grid.Children.Add(body);
-        return grid;
+                Width = GroupTrayLayout.ClassicSpineW, HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(slice.SpineX, 0, 0, 0), Background = TrackBrush(t.ColorIndex),
+            };
+            canvas.Children.Add(bar);
+            return (canvas, bar, slice.ContentLeft);
+        }
+
+        if (slice.Chain.Length > 0)
+        {
+            // The strips are sized for the row height the controls were laid out for, so a
+            // seam drag (which resizes the card without a rebuild) can't move them apart.
+            var layer = new GroupTrayLayer(slice, t.IsGroup ? null : Brush("Brush.Panel"), HeaderRowHeight(t));
+            _trayLayers[t.Id] = layer;
+            canvas.Children.Add(layer);
+        }
+        double x = slice.ContentLeft;
+        if (own && !t.IsGroup)
+        {
+            double band = GroupTrayLayout.ClosingBand(slice.Closings, HeaderRowHeight(t));
+            bar = new Border
+            {
+                Width = OwnBarW, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(OwnBarW / 2),
+                Margin = new Thickness(x, 6, 0, 6 + band), Background = TrackBrush(t.ColorIndex),
+            };
+            canvas.Children.Add(bar);
+            x += OwnBarW;
+        }
+        else
+            bar = new Border { Width = 0 };   // a group's stripe is its tray's edge
+        return (canvas, bar, x);
+    }
+
+    // The header meter (specs/094): a vertical stereo bar at the right, inside the card on every
+    // row height — MeterBar's 40 px floor is for the mixer, a Compact header has 18 px for it.
+    private static MeterBar HeaderMeter(double rowInner)
+    {
+        double v = Math.Clamp((rowInner - 12) / 2, 3, 6);
+        return new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 7, MinHeight = 0, Margin = new Thickness(6, v, 4, v) };   // MeterW in all
+    }
+
+    // A row inside a tray draws its own seam under its card body; the card keeps only the
+    // column divider so the tray runs unbroken from row to row.
+    private Thickness CardBorderFor(TrackVM t)
+    {
+        var b = CardBorder;
+        return !ClassicHeaders && SliceOf(t).Chain.Length > 0 ? new Thickness(b.Left, 0, b.Right, 0) : b;
+    }
+
+    // The header's fill for its state. New look: a member's card body is painted by its tray
+    // layer (the card itself stays the panel the trays wash over); classic: 0.59.2's raised
+    // group rows and card-surface tracks, the selected row's spine in the accent.
+    private void PaintHeaderFill(Border card, TrackVM t, bool selected, Border spine, IBrush spineIdle)
+    {
+        IBrush rest = ClassicHeaders ? Brush(t.IsGroup ? "Brush.SurfaceRaised" : "Brush.SurfaceCard") : Brush("Brush.Panel");
+        IBrush fill = selected ? SelHeaderBg : (t.Frozen || t.LiveRole != 0) ? FrozenHeaderBg : rest;
+        if (_trayLayers.TryGetValue(t.Id, out var layer) && layer.IsMember)
+        {
+            card.Background = Brush("Brush.Panel");
+            layer.Body = fill;
+        }
+        else card.Background = fill;
+        if (ClassicHeaders) spine.Background = selected ? NotaPalette.Accent : spineIdle;
     }
 
     // Select / reorder / context-menu gestures shared by a full track card and a slim group bar.
@@ -2704,6 +2883,7 @@ public sealed partial class ArrangementView : UserControl
         var vm = _tracks.FirstOrDefault(v => v.Id == trackId);
 
         var rename = MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
+        var showInModular = ShowInModularItem(trackId);
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked and shown on the item.
@@ -2723,18 +2903,37 @@ public sealed partial class ArrangementView : UserControl
                 choices.Add(mi);
                 if (on) curName = shortName;
             }
-            foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
-            int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
+            var hardware = RecordInputPick.HardwareEntries(_engine, trackId, probe: true);
+            foreach (var (pick, label, shortName) in hardware) Src(label, shortName, pick);
+            int hwCount = hardware.Count;
+            int fixedCount = hardware.Count + 1;   // the hardware entries + Master
             Src(Loc.T("common.master"), Loc.T("common.master"), RecordInputPick.Track(-1));
             foreach (var v in _tracks)
                 if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             foreach (var v in _returns)
             { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             recInput = MenuKit.ValueItem(Loc.T("common.record_input"), GlyphKind.Input, curName);
-            foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
+            if (RecordInputPick.NeedsSubmenus(hardware))
+            {
+                // A large interface (specs/086): its inputs and pairs under their own submenus.
+                var monoMenu = new MenuItem { Header = Loc.T("record_input_pick.mono_inputs") };
+                var pairMenu = new MenuItem { Header = Loc.T("record_input_pick.stereo_pairs") };
+                for (int k = 0; k < hwCount; k++) (hardware[k].Pick.Input.IsStereo ? pairMenu : monoMenu).Items.Add(choices[k]);
+                recInput.Items.Add(monoMenu);
+                if (pairMenu.Items.Count > 0) recInput.Items.Add(pairMenu);
+                recInput.Items.Add(choices[hwCount]);   // Master
+            }
+            else
+                foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
             if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
             foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
+            recInput.Items.Add(new Separator());
+            recInput.Items.Add(MenuKit.Item(Loc.T("record_input_pick.audio_io_setup"), GlyphKind.Levels,
+                () => (TopLevel.GetTopLevel(this) as MainWindow)?.ShowInputPreferences()));
         }
+
+        // MIDI input ▸ (instrument tracks): which device and channel reach the track (specs/086).
+        MenuItem? midiInput = vm is { IsInstrument: true } ? MidiInputPick.Menu(_engine, trackId) : null;
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
         // this track's instrument. The current source is ticked and shown on the item.
@@ -2782,7 +2981,7 @@ public sealed partial class ArrangementView : UserControl
         MenuKit.AddGroups(flyout.Items,
             new Control[] { MenuKit.Header(vm?.Name ?? "", TrackBrush(EffectiveColorIndex(_engine, trackId)), TrackBadge(trackId)) },
             new Control[] { TrackColourRow(one), TrackHeightRow(one) },
-            new Control?[] { rename, recInput, midiFrom }.OfType<Control>(),
+            new Control?[] { rename, showInModular, recInput, midiInput, midiFrom }.OfType<Control>(),
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,
@@ -2790,50 +2989,27 @@ public sealed partial class ArrangementView : UserControl
         return flyout;
     }
 
-    // Compact record-input selector for an audio track header: Ext (hardware), Master,
+    // Compact record-input selector for an audio track header: an input (In 1, In 3/4…), Master,
     // or another track / send. Reflects and writes the track's stored input source.
-    private ComboBox BuildInputCombo(int trackId, MonitorChip? monitor = null)
+    private Control BuildInputCombo(int trackId, MonitorChip? monitor = null)
     {
-        var cb = new ComboBox
-        {
-            FontSize = 9, Height = 16, MinHeight = 0, Padding = new Thickness(6, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,   // let the item span the box (In left / name right)
-        };
-        var sources = new List<RecordInputPick>();
-        // "In" pinned left (faded), the source name pinned right, so the name stands out.
-        void Add(string value, RecordInputPick src)
-        {
-            var inTb = new TextBlock { Text = Loc.T("arrangement.in"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
-            var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
-            // The closed box hoists this content out of its item, where it stops following the
-            // theme foreground and keeps whatever it was built with — so on the paper variant
-            // the name rendered near-white. A NotaPalette brush re-points on a variant change,
-            // so setting it locally holds in both.
-            valTb.Foreground = Brush("Brush.TextPrimary");
-            DockPanel.SetDock(inTb, Dock.Left);
-            // MinWidth so the closed selection box (which doesn't stretch its content in
-            // Avalonia) still spreads In to the left edge and the name to the right.
-            // Narrower with the monitor chip beside it, so the closed box still shows In + name.
-            var content = new DockPanel { LastChildFill = true, MinWidth = monitor is null ? 84 : 58, Children = { inTb, valTb } };
-            cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
-            sources.Add(src);
-        }
-        foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
+        var picks = new List<RecordInputPick>();
+        var sources = new List<(string, int)>();
+        void Add(string name, RecordInputPick pick) { sources.Add((name, picks.Count)); picks.Add(pick); }
+        // Every switched-on input of the device, then the pairs (specs/086).
+        foreach (var (pick, _, shortName) in RecordInputPick.HardwareEntries(_engine, trackId)) Add(shortName, pick);
         Add(Loc.T("common.master"), RecordInputPick.Track(-1));
         foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), RecordInputPick.Track(v.Id));
         foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id), RecordInputPick.Track(v.Id));
-        var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
-        int sel = sources.FindIndex(p => p.Matches(cur));
-        cb.SelectedIndex = sel >= 0 ? sel : 0;
+        var cur = _engine is null ? new RecordInputPick(0, InputPick.Mono(0)) : RecordInputPick.Of(_engine, trackId);
+        int sel = picks.FindIndex(p => p.Matches(cur));
         monitor?.SetSource(sel >= 0 ? cur.Source : 0);
-        cb.SelectionChanged += (_, _) =>
+        return InPicker(sources, Math.Max(0, sel), k =>
         {
-            if (cb.SelectedIndex < 0 || cb.SelectedIndex >= sources.Count || _engine is null) return;
-            sources[cb.SelectedIndex].ApplyTo(_engine, trackId);
-            monitor?.SetSource(sources[cb.SelectedIndex].Source);
-        };
-        return cb;
+            if (_engine is null) return;
+            picks[k].ApplyTo(_engine, trackId);
+            monitor?.SetSource(picks[k].Source);
+        });
     }
 
     // Input-monitor chip (Monitor "In"): while lit, the audio track plays whatever arrives on
@@ -2850,19 +3026,14 @@ public sealed partial class ArrangementView : UserControl
     {
         bool state = _engine?.GetTrackMonitor(trackId) ?? false;
         bool usable = true;
-        var glyph = new Glyph(GlyphKind.Headphones, 10);
-        var chip = new Border
-        {
-            Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
-            Child = glyph, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-        };
+        var glyph = new Glyph(GlyphKind.Headphones, 11);
+        var chip = HeaderKey(glyph);
         void Paint()
         {
-            // Engaged: a solid accent key with derived ink (toggled on); at rest a raised key.
-            chip.Background = Brush(state ? "Brush.Accent" : "Brush.SurfaceRaised");
-            chip.BorderBrush = Brush(state ? "Brush.Accent" : "Brush.Seam");
-            glyph.Foreground = Brush(state ? "Brush.TextOnAccent" : "Brush.TextSecondary");
-            chip.Opacity = usable ? 1.0 : 0.4;
+            // Engaged: solid orange (live) with derived ink; at rest the well. Master can't be
+            // monitored: then the key is drawn in ink 4, not faded.
+            chip.Background = Brush(state && usable ? "Brush.Accent" : "Brush.Well");
+            glyph.Foreground = Brush(!usable ? "Brush.TextDisabled" : state ? "Brush.TextOnAccent" : "Brush.TextSecondary");
             ToolTip.SetTip(chip, usable
                 ? (state ? Loc.T("arrangement.monitoring_input_click_to_stop") : Loc.T("arrangement.monitor_input_hear_it_live"))
                 : Loc.T("arrangement.master_cant_be_monitored_it"));
@@ -2878,43 +3049,77 @@ public sealed partial class ArrangementView : UserControl
         return new MonitorChip { Chip = chip, SetSource = src => { usable = src != -1; Paint(); } };
     }
 
-    // Compact MIDI-input selector for an instrument track header: None, or another instrument
-    // track whose MIDI this one receives ("MIDI In"). Mirrors the record-input combo.
-    private ComboBox BuildMidiSourceCombo(int trackId)
+    // Compact MIDI-input selector for an instrument track header: All inputs, a MIDI device, or
+    // another instrument track whose MIDI this one receives ("MIDI In"). Mirrors the
+    // record-input picker.
+    private Control BuildMidiSourceCombo(int trackId)
     {
-        var cb = new ComboBox
+        // The live input (All inputs / a device, with its channel) or the track it takes MIDI
+        // from (specs/086); the picker's values are the entries' indices.
+        if (_engine is not { } engine) return InPicker(new() { (Loc.T("midi_input.all_inputs"), 0) }, 0, _ => { });
+        var (entries, cur) = MidiInputPick.Compact(engine, trackId,
+            _tracks.Where(v => v.IsInstrument).Select(v => (v.Id, v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id))));
+        var sources = entries.Select((en, i) => (en.Label, i)).ToList();
+        return InPicker(sources, cur, i =>
         {
-            FontSize = 9, Height = 16, MinHeight = 0, Padding = new Thickness(6, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            if (i >= 0 && i < entries.Count) MidiInputPick.Apply(engine, trackId, entries[i]);
+        });
+    }
+
+    // The input picker on a track header (style guide): "In" in ink 3, the source in ink 1 and
+    // a chevron, on the well, 18 high, corner 5, no border; a click opens the sources with the
+    // current one ticked. It handles its own press, so a click never reselects the track.
+    private Control InPicker(List<(string name, int src)> sources, int current, Action<int> set)
+    {
+        var value = new TextBlock
+        {
+            FontSize = NotaType.Caption, Foreground = Brush("Brush.TextPrimary"),
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var sources = new List<int>();
-        // "In" pinned left (faded), the source name pinned right.
-        void Add(string value, int src)
+        void Show() => value.Text = sources.Find(x => x.src == current).name ?? sources[0].name;
+        Show();
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4 };
+        grid.Children.Add(new TextBlock { Text = Loc.T("arrangement.in"), FontSize = NotaType.Caption, Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center });
+        Grid.SetColumn(value, 1);
+        grid.Children.Add(value);
+        var chev = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(chev, 2);
+        grid.Children.Add(chev);
+        var box = new Border
         {
-            var inTb = new TextBlock { Text = Loc.T("arrangement.in"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
-            var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
-            // The closed box hoists this content out of its item, where it stops following the
-            // theme foreground and keeps whatever it was built with — so on the paper variant
-            // the name rendered near-white. A NotaPalette brush re-points on a variant change,
-            // so setting it locally holds in both.
-            valTb.Foreground = Brush("Brush.TextPrimary");
-            DockPanel.SetDock(inTb, Dock.Left);
-            var content = new DockPanel { LastChildFill = true, MinWidth = 84, Children = { inTb, valTb } };
-            cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
-            sources.Add(src);
-        }
-        Add(Loc.T("common.none"), -1);
-        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), v.Id);
-        int cur = _engine?.GetTrackMidiSource(trackId) ?? -1;
-        int sel = sources.IndexOf(cur);
-        cb.SelectedIndex = sel >= 0 ? sel : 0;
-        cb.SelectionChanged += (_, _) =>
-        {
-            if (cb.SelectedIndex >= 0 && cb.SelectedIndex < sources.Count)
-                _engine?.SetTrackMidiSource(trackId, sources[cb.SelectedIndex]);
+            Height = ChipD, CornerRadius = NotaRadius.Cell, Background = NotaPalette.Well, Padding = new Thickness(6, 0, 5, 0),
+            Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = grid,
         };
-        return cb;
+        box.PointerEntered += (_, _) => box.Background = NotaPalette.WellTrack;
+        box.PointerExited += (_, _) => box.Background = NotaPalette.Well;
+        box.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            var fly = new MenuFlyout();
+            foreach (var (name, src) in sources)
+            {
+                var mi = new MenuItem { Header = name, ToggleType = MenuItemToggleType.Radio, IsChecked = src == current };
+                mi.Click += (_, _) => { current = src; Show(); set(src); };
+                fly.Items.Add(mi);
+            }
+            fly.ShowAt(box);
+        };
+        // The wheel over the closed picker steps through the sources, as a dropdown does:
+        // down picks the next one, up the previous; it stops at either end.
+        box.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Delta.Y == 0 || sources.Count == 0) return;
+            e.Handled = true;
+            int at = Math.Max(0, sources.FindIndex(x => x.src == current));
+            int next = Math.Clamp(at + (e.Delta.Y < 0 ? 1 : -1), 0, sources.Count - 1);
+            if (next == at && sources[at].src == current) return;
+            current = sources[next].src;
+            Show();
+            set(current);
+        };
+        ToolTip.SetTip(box, Loc.T("common.input"));
+        return box;
     }
 
     // Colour ▸ one submenu per base hue, each with normal / light / dark shades shown as
@@ -2923,7 +3128,7 @@ public sealed partial class ArrangementView : UserControl
     private void PromptRenameTrack(Control anchor, int trackId)
     {
         if (_engine is null) return;
-        var box = new TextBox { Text = _engine.GetTrackName(trackId), Width = 180, FontSize = 12 };
+        var box = new TextBox { Text = _engine.GetTrackName(trackId), Width = 180, FontSize = 11 };
         var flyout = new Flyout { Content = box, Placement = PlacementMode.Bottom };
         box.KeyDown += (_, ke) =>
         {
@@ -2934,18 +3139,37 @@ public sealed partial class ArrangementView : UserControl
         Dispatcher.UIThread.Post(() => { box.SelectAll(); box.Focus(); }, DispatcherPriority.Input);
     }
 
-    // MIDI/AUDIO/GROUP kind tag: a quiet mono label, not a chip. It names the row's kind,
-    // which is reference information — a border would give it the weight of a control (1a).
-    private Control TypeTag(string text)
+    // The kind tag (MIDI / Audio / Group): quiet text beside the name, 11 ink 3, not a chip.
+    // It names the row's kind, which is reference information.
+    /// <summary>A track name and its type tag on one line. The tag keeps its width and sits right
+    /// after the name; the name gets what is left and trims, so a long name never shoves the
+    /// buttons beside it out of the header (a Grid's Auto column would let it grow).</summary>
+    private sealed class NameTagPanel : Panel
     {
-        var tb = new TextBlock
+        protected override Size MeasureOverride(Size available)
         {
-            Text = NotaText.Label(text), FontSize = 9, Classes = { "Mono" },
-            Foreground = Brush("Brush.TextMuted"), VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 0, 0),
-        };
-        return tb;
+            var (name, tag) = (Children[0], Children[1]);
+            tag.Measure(Size.Infinity);
+            name.Measure(new Size(Math.Max(0, available.Width - tag.DesiredSize.Width), available.Height));
+            return new Size(name.DesiredSize.Width + tag.DesiredSize.Width, Math.Max(name.DesiredSize.Height, tag.DesiredSize.Height));
+        }
+
+        protected override Size ArrangeOverride(Size final)
+        {
+            var (name, tag) = (Children[0], Children[1]);
+            double tagW = Math.Min(tag.DesiredSize.Width, final.Width);
+            double nameW = Math.Min(name.DesiredSize.Width, final.Width - tagW);
+            name.Arrange(new Rect(0, 0, nameW, final.Height));
+            tag.Arrange(new Rect(nameW, 0, tagW, final.Height));
+            return final;
+        }
     }
+
+    private Control TypeTag(string text) => new TextBlock
+    {
+        Text = text, FontSize = NotaType.Caption, Foreground = Brush("Brush.TextTertiary"),
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 1, 0, 0),
+    };
 
     // Nota Remote: the name of whoever plays this track from a phone, in a pill with a drawn
     // phone outline (design 5a) — "who plays what" during a jam.
@@ -2953,17 +3177,17 @@ public sealed partial class ArrangementView : UserControl
     {
         var phone = new Border
         {
-            Width = 6, Height = 9, CornerRadius = NotaRadius.Bar, BorderThickness = new Thickness(1),
+            Width = 6, Height = 9, CornerRadius = NotaRadius.Fine, BorderThickness = new Thickness(1),
             BorderBrush = Brush("Brush.TextStrong"), VerticalAlignment = VerticalAlignment.Center,
         };
         var name = new TextBlock
         {
-            Text = who, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextStrong"),
+            Text = who, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextStrong"),
             VerticalAlignment = VerticalAlignment.Center, MaxWidth = 70, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var pill = new Border
         {
-            Height = 16, CornerRadius = NotaRadius.Pill, Padding = new Thickness(6, 0), Margin = new Thickness(6, 0, 0, 0),
+            Height = 16, CornerRadius = NotaRadius.Group, Padding = new Thickness(6, 0), Margin = new Thickness(6, 0, 0, 0),
             Background = Brush("Brush.TrackOff"), BorderBrush = Brush("Brush.BorderStrong"), BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { phone, name } },
@@ -2972,21 +3196,27 @@ public sealed partial class ArrangementView : UserControl
         return pill;
     }
 
-    // A small 18×16 stateful key (M/S/●): a raised key at rest; on, a solid fill in the
-    // toggle's own colour — mute amber, solo blue, arm red — with
-    // derived ink. Record-arm: at rest a neutral key with a red disc; armed, solid red with a
-    // white disc.
+    // The header keys (M / S / ● / monitor), 18 × 18, corner 5, on the well with no border
+    // (style guide): on, a solid fill in the toggle's own colour (mute amber, solo blue, arm
+    // red) with derived ink. Record-arm at rest is a red disc on the well.
+    internal const double ChipD = 18;
+
+    private static Border HeaderKey(Control child) => new()
+    {
+        Width = ChipD, Height = ChipD, CornerRadius = NotaRadius.Cell, Child = child,
+        Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+    };
+
     // onChanged(armed, modifiers): ⌘/Ctrl arms without disarming the others (#332), ⌥ bypasses a group Link (specs/076).
     private Control ArmToggle(bool initial, Action<bool, KeyModifiers> onChanged)
     {
         bool state = initial;
-        var disc = new Glyph(GlyphKind.Record, 7);
-        var chip = new Border { Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc, Cursor = new Cursor(StandardCursorType.Hand) };
+        var disc = new Glyph(GlyphKind.Record, 8);
+        var chip = HeaderKey(disc);
         ToolTip.SetTip(chip, TrackArming.Tip);
         void Paint()
         {
-            chip.Background = state ? NotaPalette.Record : NotaPalette.SurfaceRaised;
-            chip.BorderBrush = state ? NotaPalette.Record : NotaPalette.Seam;
+            chip.Background = state ? NotaPalette.Record : NotaPalette.Well;
             disc.Foreground = state ? NotaPalette.RecordInk : NotaPalette.Record;
         }
         Paint();
@@ -3003,28 +3233,14 @@ public sealed partial class ArrangementView : UserControl
         bool state = initial;
         var tb = new TextBlock
         {
-            Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold,
+            Text = text, FontSize = NotaType.KeyLetter, FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
-        var chip = new Border
-        {
-            Width = 18, Height = 16, CornerRadius = NotaRadius.Control,
-            BorderThickness = new Thickness(1), Child = tb,
-        };
+        var chip = HeaderKey(tb);
         void Paint()
         {
-            if (state)
-            {
-                chip.Background = onFill;
-                chip.BorderBrush = onFill;
-                tb.Foreground = NotaPalette.InkOn(onFill);
-            }
-            else
-            {
-                chip.Background = NotaPalette.SurfaceRaised;
-                chip.BorderBrush = NotaPalette.Seam;
-                tb.Foreground = NotaPalette.TextSecondary;
-            }
+            chip.Background = state ? onFill : NotaPalette.Well;
+            tb.Foreground = state ? NotaPalette.InkOn(onFill) : NotaPalette.TextSecondary;
         }
         Paint();
         chip.PointerPressed += (_, e) => { e.Handled = true; state = !state; Paint(); onChanged(state); };
@@ -3172,7 +3388,7 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(6, 0, 0, 0),
         };
         db = dbText;
-        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0 };
+        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0, Text = VolumeDbText };
         // One undo step per drag / reset (specs/009): the master row targets the master volume.
         var undo = _engine is { } ue ? new MixGesture(ue, masterSpine ? MixTarget.Master : MixTarget.Volume(trackId)) : null;
         fader.GestureBegin += () => undo?.Begin();
@@ -3182,6 +3398,7 @@ public sealed partial class ArrangementView : UserControl
             fader.GestureEnd   += () => _engine?.EndAutomationWrite(trackId, AutomationTarget.Volume, -1, -1, "");
         }
         fader.GestureEnd   += () => undo?.End();
+        // The dB read-out follows the drag, and double-clicking it types a value (as the bar does).
         fader.ValueChanged += v => { Change(undo, v, setVolume); dbText.Text = VolumeDbText(v); };
         ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), VolumeDbText), dbText);
 
@@ -3308,7 +3525,9 @@ public sealed partial class ArrangementView : UserControl
                                            TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? Loc.T("common.return") : Loc.T("common.master")) },
             new Control[] { TrackColourRow(new[] { trackId }) },
             new Control[] { FooterHeightRow(isReturn ? _returns.FindIndex(r => r.Id == trackId) : _returns.Count) },
-            new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
+            isReturn
+                ? new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)), ShowInModularItem(trackId) }
+                : new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
             isReturn ? new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
@@ -3320,28 +3539,35 @@ public sealed partial class ArrangementView : UserControl
     private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? NotaPalette.TextPrimary;
 
     // Small bordered "−"/"+" zoom chip (HANDOFF 1b ruler: 11px, bordered, radius 4).
-    private static Button ZoomChip(string text) => new()
+    // Zoom out / in: bare 22px icon keys (shell controls stay flat; the hover grey shows them).
+    private static Button ZoomChip(string text)
     {
-        Content = text, Width = 24, Height = 18, MinWidth = 0, FontSize = 11,
-        Padding = new Thickness(0),
-        VerticalContentAlignment = VerticalAlignment.Center,
-        HorizontalContentAlignment = HorizontalAlignment.Center,
-    };
+        var b = new Button
+        {
+            Content = text, Width = 22, Height = 22, MinWidth = 0, FontSize = 13,
+            Padding = new Thickness(0), Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+        };
+        b.BindResource(Button.ForegroundProperty, "Brush.TextSecondary");
+        ToolTip.SetTip(b, text == "+" ? Loc.T("arrangement.zoom_in") : Loc.T("arrangement.zoom_out"));
+        return b;
+    }
 
-    // Header-column chrome (SurfaceCard + a divider facing the lanes), as wide as the header column.
+    // Header-column chrome (the panel grey + right divider), as wide as the header column.
     private Border HeaderPanel(Control? child)
     {
         var b = new Border { Width = HeaderW, BorderThickness = ColumnDivider, Child = child };
         _headerColumnParts.Add(b);   // follows the header-column width
         _columnDividers.Add(b);
-        b.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        b.BindResource(Border.BackgroundProperty, "Brush.Panel");
         b.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         return b;
     }
 
-    // Power-curve shaping, mirroring native AutomationLane::shape (M9-D).
+    // Segment shaping (M9-D, #591): the shared AutomationCurve, mirroring native AutomationLane::shape.
     internal static double Shape(double t, float curve)
-        => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        => AutomationCurve.Shape(t, curve);
 
     // ---- data colours (mirror the tokens in NotaTheme.axaml) --
     private static readonly IBrush LaneBgA = NotaPalette.BgApp;    // lanes on the ground
@@ -3349,6 +3575,11 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
+    // Phrase lines (specs/092): a step above the bar line, a neutral grey moved from the bar
+    // line toward the tertiary text — derived, so it follows every theme (user themes too) without
+    // a token of its own, and never the accent.
+    private static readonly IPen PhrasePen = new Pen(NotaPalette.Derived(
+        () => SliderTrack.Mix(NotaPalette.GridBar.Color, NotaPalette.TextTertiary.Color, 0.35)), 1);
     private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
     // Playhead: a 1px accent line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
@@ -3356,7 +3587,7 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush PlayheadBrush = NotaPalette.Accent;
     private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1);
     // Selection edges a clip with 1px brass — a state never thickens a border to 2px.
-    private static readonly IPen ClipSelBorder = new Pen(NotaPalette.Accent, 1);
+    private static readonly IPen ClipSelBorder = new Pen(NotaPalette.TextPrimary, 1.5);
     private static readonly IBrush EdgeHighlight = NotaPalette.MarkerHot; // resize-edge affordance
     private static readonly IBrush InactiveVeil = NotaPalette.Wash(NotaPalette.Veil, 0xB0); // deactivated-clip scrim
     private static readonly IBrush RulerText = NotaPalette.TextSecondary; // Brush.TextSecondary
@@ -3419,10 +3650,14 @@ public sealed partial class ArrangementView : UserControl
     // (normal / lighter / darker) so a colour index is base*Shades + shade. Return buses
     // sit at ReturnColorBase..; clips derive fill @30%, border @50%, strip @20%, content full.
     internal const int PaletteShades = 3;
-    internal static readonly int PaletteBases = NotaPalette.TrackColors.Length;   // 8
-    internal static readonly int ReturnColorBase = PaletteBases * PaletteShades;  // 24
+    internal static readonly int PaletteBases = NotaPalette.TrackColors.Length;   // 9
+    internal static readonly int ReturnColorBase = PaletteBases * PaletteShades;  // 27
+    // The order new tracks take the nine bases, so each contrasts with the one before (style
+    // guide): green, blue, amber, violet, rose, teal, slate, olive, sky. The tenth goes back to
+    // green, which contrasts with sky. Slots are Brush.Track1..9 as stored in projects.
+    private static readonly int[] AutoOrder = { 0, 3, 4, 5, 6, 1, 8, 7, 2 };
     /// <summary>Auto colour index (shade 0) for the Nth non-return track.</summary>
-    internal static int AutoTrackColorIndex(int nth) => (nth % PaletteBases) * PaletteShades;
+    internal static int AutoTrackColorIndex(int nth) => AutoOrder[nth % AutoOrder.Length] * PaletteShades;
     /// <summary>Colour index for a return bus (0/1).</summary>
     internal static int ReturnColorIndex(int returnIdx) => ReturnColorBase + (Math.Max(0, returnIdx) % NotaPalette.ReturnColors.Length);
 
@@ -3511,14 +3746,17 @@ public sealed partial class ArrangementView : UserControl
     private static (IBrush fill, IPen border, IBrush strip, IBrush content) ClipColors(int idx)
     {
         if (_clipColors.TryGetValue(idx, out var v)) return v;
+        // The content ink (notes, waveform, name) keeps 3:1 on the lane: a light shade on the
+        // light theme's grey ground would otherwise wash out.
         v = (ClipTint(idx, 0.30), new Pen(ClipTint(idx, 0.50), 1), ClipTint(idx, 0.20),
-             NotaPalette.Derived(() => TrackColorForIndex(idx)));
+             NotaPalette.Derived(() => NotaPalette.Legible(TrackColorForIndex(idx), NotaPalette.BgApp.Color)));
         _clipColors[idx] = v;
         return v;
     }
-    // A clip's title band: its track colour mixed 30% toward black; its notes and waveform a
-    // deeper shade, 58% toward black, so they read on the full-colour body.
-    private static readonly Dictionary<int, SolidColorBrush> _clipBands = new(), _clipInks = new();
+    private static readonly Dictionary<int, SolidColorBrush> _trackBrushes = new();
+
+    // A solid clip's title band: its track colour mixed 30 % toward black; its notes and waveform
+    // 58 % toward black (0.59, the Solid clip style). Theme-following and cached per index.
     internal static SolidColorBrush ClipBand(int idx) => Shade(_clipBands, idx, 0.30);
     internal static SolidColorBrush ClipInk(int idx) => Shade(_clipInks, idx, 0.58);
     private static SolidColorBrush Shade(Dictionary<int, SolidColorBrush> cache, int idx, double t)
@@ -3528,11 +3766,26 @@ public sealed partial class ArrangementView : UserControl
         cache[idx] = b;
         return b;
     }
+    private static readonly Dictionary<int, SolidColorBrush> _clipBands = new(), _clipInks = new();
 
     /// <summary>The theme-following brush for a palette index. A view that wants a track's
     /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it
     /// in the variant that was active when the view was built.</summary>
-    public static SolidColorBrush TrackBrush(int idx) => (SolidColorBrush)ClipColors(idx).content;
+    public static SolidColorBrush TrackBrush(int idx)
+    {
+        if (!_trackBrushes.TryGetValue(idx, out var b)) _trackBrushes[idx] = b = NotaPalette.Derived(() => TrackColorForIndex(idx));
+        return b;
+    }
+
+    /// <summary>A palette index at a fixed alpha (a group row's 16% tint, a member's 6% wash),
+    /// cached per index and alpha so it follows the theme without a derivation per build.</summary>
+    internal static SolidColorBrush TrackTint(int idx, double a)
+    {
+        var key = (idx, (int)Math.Round(a * 1000));
+        if (!_tints.TryGetValue(key, out var b)) _tints[key] = b = ClipTint(idx, a);
+        return b;
+    }
+    private static readonly Dictionary<(int, int), SolidColorBrush> _tints = new();
 
     /// <summary>A cached, theme-following tint of a palette index. Registers a derivation,
     /// so only call it behind a per-index cache — never per frame; <see cref="Alpha"/> is the
@@ -3548,8 +3801,9 @@ public sealed partial class ArrangementView : UserControl
     private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
 
     /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
-    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
-    /// sub-beat. Shared by the lanes and the footer rows.</summary>
+    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted phrase › bar ›
+    /// beat › sub-beat. A phrase line is always one of those lines (every bar step divides a
+    /// phrase), so it only changes the pen. Shared by the lanes and the footer rows.</summary>
     private void DrawGrid(DrawingContext ctx, double w, double h)
     {
         if (_pixelsPerBeat <= 0) return;
@@ -3558,7 +3812,8 @@ public sealed partial class ArrangementView : UserControl
         foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
         {
             double x = BeatToX(b);
-            var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
+            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, _beatsPerBar) ? PhrasePen
+                : IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
             ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
         }
 

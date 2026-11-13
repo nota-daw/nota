@@ -158,10 +158,36 @@ Follow the mockup language:
   CHARACTER / WEAR / SHAPE). If the content genuinely can't fit 260px tall at a sane
   width, **split into tabs** (below) rather than shrinking every control. Always
   do the visual check and trim leftover margins.
-- **If there's more than one logical section, use tabs** inside the card (e.g.
-  Signal Path / Modulation) with a segmented toggle styled like the Devices/Clip
-  segment, swapping a `ContentControl`. One section = one horizontal row that fits
-  260px tall.
+- **If there's more than one logical section, use tabs** inside the card — laid out
+  as below (graph · knobs · tabs · output), not as a segmented toggle per panel.
+- **Card layout with a graph (L) — DESIGN.md § Devices › Card layout: graph, tabs and
+  output is binding; Nota Auto Filter (`AutoFilterDeviceBody`) is the reference.**
+  - **One home per parameter.** Before building, list every param and give it exactly one
+    control. No copies across tabs, no "context" switches that change with the tab. Only a
+    graph handle / clickable graph title may edit a param that also has a control.
+  - **Graph:** the centre panel's main control, stretching (`DockPanel`, graph last) to
+    fill the panel minus its 20 tab bar, one knob column and the selector row (~430 × 150–190
+    on a 700 card). In S (260): graph on top, one row of ≤ 4 knobs (main params + Dry/wet).
+  - **Knobs by the graph:** only what the graph draws or drags — one column of ≤ 3 knobs
+    (34) on the graph's **right** (`KnobColumn(K(Freq…), K(Res…), K(Morph…))`); type /
+    slope / circuit chips and segments in one row under it.
+  - **Tabs:** centre tabs are views (one graph each, the first is the main job). The right
+    panel (186) has **no tab row**: it follows the centre tab (`ShowPanel(t)` swaps a
+    `(head, body)` pair). Its 20 title bar (`Head(left, right)`) holds the section's on
+    switch left, its mode right (Up / Down, Free / Sync); the body is `Rows(...)` of value
+    bars stacked from the top (an even gap, not spread over the height), a `Rule()`, then
+    routing (sidechain key). On the main tab the right panel is the
+    cross-cutting summary (modulation target, amounts, smoothing, key). A shared setting
+    shown in several views goes in the graph title with a chevron
+    (`AfWindowBase.TitleClicked` → a small `Flyout` picker).
+  - **Read-outs stay:** meter / detector / state boxes (sunken, `MeterGrid`, `InfoBox`) are
+    information, not params — keep them in the right panel of the view they explain; short
+    live lines go in the centre tab bar's extras.
+  - **Output:** `OutputStrip()` docked at the bottom of the right panel on every tab, a
+    1 px rule above: knobs, not value bars — **Dry/wet 44 in the middle**, Drive (pre)
+    34 left, Gain (post, `bipolar`) 34 right, cells bottom-aligned. Never a tab of its own.
+  - Verify in the headless harness (memory / `nota-design`): every tab, the panel fits
+    260 tall with no clipped row, and grep that no param index is bound twice.
 - **Card sizes (S / L) are views of ONE device, never two devices.** When a mockup gives a
   device a mini (S, 260) and a full (L) size (Nota Arp is the reference):
   - **Presets belong to the device, not to the size.** Both sizes show the same preset
@@ -189,9 +215,9 @@ Follow the mockup language:
   1px border, radius 7) with a bold section title.
 - **Controls, in order of preference for space:**
   - The shared **gauge `Knob`** via `InstrumentControls.InstKnob(ctx, idx, id, name, refresh, size, cellW, arc)`
-    — 270° groove + value arc + pointer. Pass a teal `arc` for **modulation-depth**
-    knobs (env/lfo/key amounts, velocity, vibrato); amber (default) for everything
-    else. Double-click resets to the param default.
+    — 270° groove + value arc + pointer; sizes 34 secondary / 36 regular / 44 main.
+    **Modulation-depth** knobs (env/lfo/key amounts, velocity, vibrato) draw orange with
+    a dashed arc (`ArcColor` marks them; DESIGN.md § Modulation). Double-click resets.
   - **`KnobGrid(cols, …)`** packs knobs into centered rows (2×2, or vertical for
     1 col) to shrink a panel; a partial last row stays centred.
   - **Interactive graphs are controls, not decoration**: a drag ADSR editor
@@ -202,7 +228,8 @@ Follow the mockup language:
   - **Selectors:** waveform = icon chips (`WaveIcon`), filter type = text chips,
     small A/B or Fil1/Fil2 = segmented `Seg` toggles. Not combo-boxes unless a list
     is long.
-  - Live values in `Font.Mono`; tiny UPPERCASE section/knob labels.
+  - One font (Geist, tabular figures) for values; sentence-case labels (`KnobCell` /
+    `NotaText.Label` convert the caps names in code).
 - **Live follow:** call `ctx.SetInstLiveViz(Refresh)` and register knobs via
   `ctx.AddInstFader(...)` (InstKnob does this for you); `RefreshSynthLive()` (driven by
   the playhead tick) re-reads params so automation playback moves the UI. Keep a

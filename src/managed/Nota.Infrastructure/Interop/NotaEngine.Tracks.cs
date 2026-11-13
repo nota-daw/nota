@@ -20,12 +20,16 @@ public sealed partial class NotaEngine
     public int AddAudioClip(int trackId, string path, double startBeat)
     {
         ThrowIfDisposed();
-        return NativeMethods.AddAudioClip(_handle, trackId, path, startBeat);
+        int c = NativeMethods.AddAudioClip(_handle, trackId, path, startBeat);
+        RememberClipSource(trackId, c, path);
+        return c;
     }
 
     public void SetTrackVolume(int trackId, float volume) { ThrowIfDisposed(); Check(NativeMethods.SetTrackVolume(_handle, trackId, volume)); }
     public void SetTrackPan(int trackId, float pan) { ThrowIfDisposed(); Check(NativeMethods.SetTrackPan(_handle, trackId, pan)); }
     public void SetTrackMute(int trackId, bool mute) { ThrowIfDisposed(); Check(NativeMethods.SetTrackMute(_handle, trackId, mute ? 1 : 0)); }
+    public void SetTrackCue(int trackId, bool on) { ThrowIfDisposed(); NativeMethods.SetTrackCue(_handle, trackId, on ? 1 : 0); }
+    public bool GetTrackCue(int trackId) { ThrowIfDisposed(); return NativeMethods.GetTrackCue(_handle, trackId) == 1; }
     public void SetTrackSolo(int trackId, bool solo) { ThrowIfDisposed(); Check(NativeMethods.SetTrackSolo(_handle, trackId, solo ? 1 : 0)); }
     public int TrackCount { get { ThrowIfDisposed(); return NativeMethods.TrackCount(_handle); } }
 
@@ -542,6 +546,112 @@ public sealed partial class NotaEngine
     public InputChannels GetTrackInputChannels(int trackId)
     { ThrowIfDisposed(); return (InputChannels)NativeMethods.TrackGetInputChannels(_handle, trackId); }
 
+    /// <summary>Sets an audio track's hardware input (any channel or odd-aligned pair, specs/086).</summary>
+    public bool SetTrackInput(int trackId, InputPick pick)
+    { ThrowIfDisposed(); return NativeMethods.TrackSetInput(_handle, trackId, pick.First, pick.Width) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Gets an audio track's hardware input.</summary>
+    public InputPick GetTrackInput(int trackId)
+    {
+        ThrowIfDisposed();
+        int v = NativeMethods.TrackGetInput(_handle, trackId);
+        return v < 0 ? InputPick.Stereo12 : new InputPick(v & 0xFF, (v >> 8) & 0xFF);
+    }
+
+    /// <summary>Whether the track's input exists on the open (or probed) capture device.</summary>
+    public bool TrackInputAvailable(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackInputAvailable(_handle, trackId) != 0; }
+
+    /// <summary>The capture device's input channel count (0 when none is open).</summary>
+    public int AudioInputChannelCount()
+    { ThrowIfDisposed(); return NativeMethods.AudioInputChannelCount(_handle); }
+
+    /// <summary>Sets an instrument track's MIDI input (specs/086): a device by uid (null = All
+    /// inputs) and a channel (0 = all, 1–16).</summary>
+    public bool SetTrackMidiInput(int trackId, string? uid, int channel)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.TrackSetMidiInputUid(_handle, trackId, string.IsNullOrEmpty(uid) ? null : uid, channel)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>An instrument track's MIDI input: the device uid (null = All inputs), the channel
+    /// (0 = all) and whether that device is connected now (always true for All inputs).</summary>
+    public TrackMidiInput GetTrackMidiInput(int trackId)
+    {
+        ThrowIfDisposed();
+        string uid = ReadNativeString((b, c) => NativeMethods.TrackGetMidiInputUid(_handle, trackId, b, c));
+        int v = NativeMethods.TrackGetMidiInput(_handle, trackId);
+        int source = (v & 0xFF) - 2, channel = (v >> 8) & 0xFF;
+        return new TrackMidiInput(uid.Length == 0 ? null : uid, channel, uid.Length == 0 || source >= 0);
+    }
+
+    /// <summary>Tests: filters a track to hardware source index <paramref name="source"/> (-2 =
+    /// All inputs) without a device to name it by uid.</summary>
+    public bool SetTrackMidiInputSourceForTest(int trackId, int source, int channel)
+    { ThrowIfDisposed(); return NativeMethods.TrackSetMidiInput(_handle, trackId, source, channel) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Tests: feeds a MIDI message as if hardware source <paramref name="source"/> sent it.</summary>
+    public void PushMidiForTest(int source, int status, int channel, int d1, int d2)
+    { ThrowIfDisposed(); NativeMethods.EnginePushMidiForTest(_handle, source, status, channel, d1, d2); }
+
+    /// <summary>The source index of a connected MIDI input (-1 when not connected).</summary>
+    public int MidiSourceOfUid(string uid)
+    { ThrowIfDisposed(); return NativeMethods.MidiSourceOfUid(_handle, uid); }
+
+    /// <summary>The name the capture device gives an input channel ("" when it gives none).</summary>
+    public string AudioInputChannelName(int index)
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioInputChannelName(_handle, index, b, c)); }
+
+    /// <summary>Opens the selected capture device just to read its channels; returns the count.</summary>
+    public int ProbeAudioInput()
+    { ThrowIfDisposed(); return NativeMethods.AudioInputProbe(_handle); }
+
+    /// <summary>Inputs switched off on the Audio I/O page (0-based): a take skips a track on one.</summary>
+    public void SetDisabledInputs(int[] channels)
+    { ThrowIfDisposed(); NativeMethods.AudioInputSetDisabled(_handle, channels, channels.Length); }
+
+    /// <summary>Tests: device frames into the capture ring, drained into the running take.</summary>
+    public void FeedInputForTest(float[] interleaved, int frames, int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineFeedInputTest(_handle, interleaved, frames, channels); }
+
+    /// <summary>Tests: pretend a capture device with this many inputs is open (0 clears it).</summary>
+    public void SetTestInputDevice(int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineSetTestInputDevice(_handle, channels); }
+
+    /// <summary>The playback device's output channel count (0 when none is open).</summary>
+    public int AudioOutputChannelCount()
+    { ThrowIfDisposed(); return NativeMethods.AudioOutputChannelCount(_handle); }
+
+    /// <summary>The name the playback device gives an output channel ("" when it gives none).</summary>
+    public string AudioOutputChannelName(int index)
+    { ThrowIfDisposed(); return ReadNativeString((b, c) => NativeMethods.AudioOutputChannelName(_handle, index, b, c)); }
+
+    /// <summary>Where Main and Cue go (specs/089), 0-based; cueFirst &lt; 0 = no Cue output.
+    /// False for an invalid routing (bad width, odd stereo first, overlapping pairs).</summary>
+    public bool SetOutputRouting(int mainFirst, int mainWidth, int cueFirst, int cueWidth)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.AudioSetOutputRouting(_handle, mainFirst, mainWidth, cueFirst, cueWidth)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>The routing against the open device: see <see cref="OutputRoutingState"/>.</summary>
+    public OutputRoutingState GetOutputRoutingState()
+    { ThrowIfDisposed(); return (OutputRoutingState)NativeMethods.AudioOutputRoutingState(_handle); }
+
+    /// <summary>Tests: pretend the output device has this many outputs (0 clears it).</summary>
+    public void SetTestOutputDevice(int channels)
+    { ThrowIfDisposed(); NativeMethods.EngineSetTestOutputDevice(_handle, channels); }
+
+    /// <summary>Tests: place Main and Cue on a device of <paramref name="deviceChannels"/> by the
+    /// current routing, as the backends do; returns the routing state.</summary>
+    public OutputRoutingState ScatterOutputsForTest(float[] main, float[]? cue, float[] deviceOut, int deviceChannels, int frames)
+    {
+        ThrowIfDisposed();
+        return (OutputRoutingState)NativeMethods.AudioScatterTest(_handle, main, cue, deviceOut, deviceChannels, frames);
+    }
+
     /// <summary>Turns live input monitoring on/off for an audio track (hear its record input through the track).</summary>
     public void SetTrackMonitor(int trackId, bool on)
     { ThrowIfDisposed(); NativeMethods.TrackSetMonitor(_handle, trackId, on ? 1 : 0); }
@@ -557,6 +667,40 @@ public sealed partial class NotaEngine
     /// <summary>Sets an instrument track's MIDI input source (receive that track's MIDI; -1 = off).</summary>
     public void SetTrackMidiSource(int trackId, int sourceTrackId)
     { ThrowIfDisposed(); NativeMethods.TrackSetMidiSource(_handle, trackId, sourceTrackId); }
+
+    /// <summary>Sets the track's MIDI playback offset in ms (negative = earlier; playback only).</summary>
+    public void SetTrackMidiOffsetMs(int trackId, double ms)
+    { ThrowIfDisposed(); NativeMethods.TrackSetMidiOffsetMs(_handle, trackId, ms); }
+
+    /// <summary>The track's MIDI playback offset in ms (negative = earlier).</summary>
+    public double GetTrackMidiOffsetMs(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackGetMidiOffsetMs(_handle, trackId); }
+
+    /// <inheritdoc/>
+    public bool SetTrackArticulationMap(int trackId, int defaultId, NotaArticulationEntry[] entries, NotaArticulationAction[] actions, string mapJson)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(actions);
+        var json = System.Text.Encoding.UTF8.GetBytes(mapJson ?? "");
+        return NativeMethods.TrackSetArticulationMap(_handle, trackId, defaultId, entries, entries.Length,
+            actions, actions.Length, json, json.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <inheritdoc/>
+    public bool ClearTrackArticulationMap(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackClearArticulationMap(_handle, trackId) == NativeMethods.NotaResult.Ok; }
+
+    /// <inheritdoc/>
+    public string? GetTrackArticulationMapJson(int trackId)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.TrackGetArticulationMapJson(_handle, trackId, null, 0);
+        if (n <= 0) return null;
+        var buf = new byte[n];
+        int got = NativeMethods.TrackGetArticulationMapJson(_handle, trackId, buf, n);
+        return got == n ? System.Text.Encoding.UTF8.GetString(buf) : null;   // changed in between: ask again
+    }
 
     /// <summary>Gets an instrument track's MIDI input source track id (-1 = off).</summary>
     public int GetTrackMidiSource(int trackId)
@@ -775,6 +919,51 @@ public sealed partial class NotaEngine
     {
         if (sampleId == 0) return;
         lock (_sampleNames) _sampleNames[sampleId] = System.IO.Path.GetFileNameWithoutExtension(path);
+        RememberSampleSource(sampleId, path);
+    }
+
+    // Where each loaded sample came from on disk (spec 092, #581): Locate finds the file a
+    // clip was made from, and the project keeps the path across a reload. A project's own
+    // copy (…/X.nota/samples/…) isn't a source: loading a project restores the real one.
+    private readonly Dictionary<long, string> _sampleSources = new();
+
+    private void RememberSampleSource(long sampleId, string path)
+    {
+        if (sampleId == 0 || string.IsNullOrEmpty(path) || IsBundleCopy(path)) return;
+        string full;
+        try { full = System.IO.Path.GetFullPath(path); } catch { return; }
+        // Freezes, stems and other renders are written to the temp folder and loaded from
+        // there: a scratch file, not a source anyone should be led back to.
+        if (Nota.Application.Browser.SampleFolderRules.IsSameOrInside(full, System.IO.Path.GetTempPath())) return;
+        lock (_sampleSources) _sampleSources[sampleId] = full;
+    }
+
+    private void RememberClipSource(int trackId, int clipIndex, string path)
+    {
+        if (clipIndex >= 0 && NativeMethods.GetAudioClipInfo(_handle, trackId, clipIndex, out var info) != 0)
+            RememberSampleSource(info.SampleId, path);
+    }
+
+    /// <summary>A path inside a project bundle's samples folder (a copy, not a source).</summary>
+    internal static bool IsBundleCopy(string path)
+    {
+        var dir = System.IO.Path.GetDirectoryName(path);
+        if (dir is null || !string.Equals(System.IO.Path.GetFileName(dir), "samples", StringComparison.OrdinalIgnoreCase)) return false;
+        var bundle = System.IO.Path.GetDirectoryName(dir);
+        return bundle is not null && bundle.EndsWith(".nota", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public string SampleSource(long sampleId)
+    { lock (_sampleSources) return _sampleSources.TryGetValue(sampleId, out var p) ? p : ""; }
+
+    public void SetSampleSource(long sampleId, string path)
+    {
+        if (sampleId == 0) return;
+        lock (_sampleSources)
+        {
+            if (string.IsNullOrEmpty(path)) _sampleSources.Remove(sampleId);
+            else _sampleSources[sampleId] = path;
+        }
     }
 
     public string SampleName(long sampleId)
@@ -852,7 +1041,12 @@ public sealed partial class NotaEngine
 
     /// <summary>Adds an audio clip restoring its source offset/length/gain. Returns clip index or -1.</summary>
     public int AddAudioClipEx(int trackId, string path, double startBeat, double sourceOffsetFrames, long lengthFrames, float gain)
-    { ThrowIfDisposed(); return NativeMethods.AddAudioClipEx(_handle, trackId, path, startBeat, sourceOffsetFrames, lengthFrames, gain); }
+    {
+        ThrowIfDisposed();
+        int c = NativeMethods.AddAudioClipEx(_handle, trackId, path, startBeat, sourceOffsetFrames, lengthFrames, gain);
+        RememberClipSource(trackId, c, path);
+        return c;
+    }
 
     /// <summary>Decoded-sample metadata by id. False if the id isn't found in the live graph.</summary>
     public bool TryGetSampleInfo(long sampleId, out NotaSampleInfo info)
@@ -989,6 +1183,114 @@ public sealed partial class NotaEngine
         return buf;
     }
 
+    // --- Nota Aurora custom wavetables (specs/053) ------------------------------
+
+    public int AuroraTableBuild(string path, out nint table)
+    {
+        table = 0;
+        if (string.IsNullOrEmpty(path)) return AuroraTableResult.ErrArgs;
+        int r = NativeMethods.AuroraTableBuild(path, out var t);
+        table = r == AuroraTableResult.Ok ? t : 0;
+        return r;
+    }
+
+    public unsafe int AuroraTableFromFrames(float[] frames, int frameCount, string name, int origin, out nint table)
+    {
+        table = 0;
+        if (frames is null || frameCount <= 0 || (long)frameCount * 2048 > frames.LongLength) return AuroraTableResult.ErrArgs;
+        int r;
+        IntPtr t;
+        fixed (float* p = frames) r = NativeMethods.AuroraTableFromFrames(p, frameCount, name ?? "", origin, out t);
+        table = r == AuroraTableResult.Ok ? t : 0;
+        return r;
+    }
+
+    public AuroraTableInfo AuroraTableInfoOf(nint table)
+    {
+        if (table == 0 || NativeMethods.AuroraTableInfo(table, out var raw) == 0) return default;
+        return ToInfo(raw);
+    }
+
+    public unsafe float[] AuroraTableFrames(nint table)
+    {
+        if (table == 0) return [];
+        long n = NativeMethods.AuroraTableFrames(table, null, 0);
+        if (n <= 0 || n > int.MaxValue) return [];
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.AuroraTableFrames(table, p, buf.LongLength);
+        return n == buf.LongLength ? buf : [];
+    }
+
+    public void AuroraTableFree(nint table)
+    {
+        if (table != 0) NativeMethods.AuroraTableFree(table);
+    }
+
+    public bool AuroraSetTable(int trackId, int osc, nint table, bool undoable = true)
+    { ThrowIfDisposed(); return table != 0 && NativeMethods.AuroraSetTable(_handle, trackId, osc, table, undoable ? 1 : 0) != 0; }
+
+    public bool AuroraClearTable(int trackId, int osc)
+    { ThrowIfDisposed(); return NativeMethods.AuroraClearTable(_handle, trackId, osc) != 0; }
+
+    public bool AuroraSetSource(int trackId, int osc, bool useCustom, bool undoable = false)
+    { ThrowIfDisposed(); return NativeMethods.AuroraSetSource(_handle, trackId, osc, useCustom ? 1 : 0, undoable ? 1 : 0) != 0; }
+
+    public bool AuroraSetMissing(int trackId, int osc, string name)
+    { ThrowIfDisposed(); return NativeMethods.AuroraSetMissing(_handle, trackId, osc, name ?? "") != 0; }
+
+    public bool TryGetAuroraTableInfo(int trackId, int osc, out AuroraTableInfo info)
+    {
+        ThrowIfDisposed();
+        info = default;
+        if (NativeMethods.AuroraTrackTableInfo(_handle, trackId, osc, out var raw) == 0) return false;
+        info = ToInfo(raw);
+        return true;
+    }
+
+    public unsafe float[] AuroraTableRead(int trackId, int osc)
+    {
+        ThrowIfDisposed();
+        long n = NativeMethods.AuroraTableRead(_handle, trackId, osc, null, 0);
+        if (n <= 0 || n > int.MaxValue) return [];
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.AuroraTableRead(_handle, trackId, osc, p, buf.LongLength);
+        return n == buf.LongLength ? buf : [];
+    }
+
+    public unsafe float[] AuroraTablePreview(int trackId, int osc, int repFrames, int gridFrames, int points)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.AuroraTablePreview(_handle, trackId, osc, repFrames, gridFrames, points, null, 0);
+        if (n <= 0) return [];
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.AuroraTablePreview(_handle, trackId, osc, repFrames, gridFrames, points, p, buf.Length);
+        return n == buf.Length ? buf : [];
+    }
+
+    public unsafe byte[] AuroraState(int trackId, bool includeTables)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.AuroraState(_handle, trackId, includeTables ? 1 : 0, null, 0);
+        if (n <= 0) return [];
+        var buf = new byte[n];
+        fixed (byte* p = buf) n = NativeMethods.AuroraState(_handle, trackId, includeTables ? 1 : 0, p, buf.Length);
+        return n == buf.Length ? buf : [];
+    }
+
+    private static unsafe AuroraTableInfo ToInfo(in NotaAuroraTableInfoRaw raw)
+    {
+        string hash, name;
+        fixed (byte* h = raw.Hash) hash = Convert.ToHexString(new ReadOnlySpan<byte>(h, 16)).ToLowerInvariant();
+        fixed (byte* n = raw.Name)
+        {
+            int len = 0;
+            while (len < 255 && n[len] != 0) len++;
+            name = System.Text.Encoding.UTF8.GetString(n, len);
+        }
+        return new AuroraTableInfo(raw.Frames, raw.Origin, raw.TruncatedLength != 0, raw.TruncatedFrames != 0,
+            raw.UseCustom != 0, raw.Missing != 0, raw.Serial, hash, name);
+    }
+
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }
@@ -1101,4 +1403,7 @@ public sealed partial class NotaEngine
 
     public int InstrumentScope(int trackId, float[] outv)
     { ThrowIfDisposed(); return NativeMethods.TrackInstrumentScope(_handle, trackId, outv, outv.Length); }
+
+    public int InstrumentOutput(int trackId, float[] outv)
+    { ThrowIfDisposed(); return NativeMethods.TrackInstrumentOutput(_handle, trackId, outv, outv.Length); }
 }

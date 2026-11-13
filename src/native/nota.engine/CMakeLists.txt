@@ -131,6 +131,8 @@ set(NOTA_ENGINE_SOURCES
     src/devices/midi_fx/MidiNoteLength.cpp
     src/devices/midi_fx/MidiVelocity.cpp
     src/devices/midi_fx/MidiRandom.cpp
+    src/engine/ArticulationSchedule.cpp
+    src/engine/ArticulationTable.cpp
     src/engine/Graph.cpp
     src/engine/Track.cpp
     src/engine/Transport.cpp
@@ -174,6 +176,7 @@ set(NOTA_ENGINE_SOURCES
     src/devices/instruments/Pentad.cpp
     src/devices/instruments/Consort.cpp
     src/devices/instruments/WavetableSynth.cpp
+    src/devices/instruments/AuroraTable.cpp
     src/devices/instruments/OperatorSynth.cpp
     src/devices/instruments/FluxSynth.cpp
     src/devices/instruments/PendulumSynth.cpp

@@ -9,7 +9,7 @@
 //     knob grid (search + pages), and, for a plug-in with a sidechain bus, its source.
 // The size is editor state kept by the chain view (a hosted plug-in has no "view" param).
 // Once the plug-in's window has been open, the info column stands on a picture of it
-// (PluginPreviewBackdrop, specs/046): the whole S body, the info column on L.
+// (PluginPreviewBackdrop, specs/046): the info section, on S and on L.
 
 using System;
 using System.Collections.Generic;
@@ -59,12 +59,14 @@ internal static class PluginCard
 
     public static Control Build(DeviceCardContext ctx, int di, PluginInfo info, ViewState state)
     {
-        if (state.Mini) return Section(InfoColumn(ctx, di, info, mini: true));
+        if (state.Mini) return new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: true), filled: false) } };
 
         var e = ctx.Engine; int t = ctx.TrackId;
         bool sidechain = di >= 0 && e.DeviceAcceptsSidechain(t, di);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(sidechain ? $"{InfoW},*,{ScW}" : $"{InfoW},*"), ColumnSpacing = 5 };
-        grid.Children.Add(new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: false)) } });
+        // The section draws only its edge here: the backdrop paints the section's surface,
+        // then the window picture and the wash, so the fill doesn't cover the picture.
+        grid.Children.Add(new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: false), filled: false) } });
         var pars = Section(Params(ctx, di, state)); Grid.SetColumn(pars, 1); grid.Children.Add(pars);
         if (sidechain)
         {
@@ -181,7 +183,7 @@ internal static class PluginCard
         };
         var v = new TextBlock
         {
-            Text = value, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.Value, Foreground = TextPrimary,
+            Text = value, FontFamily = NotaFonts.ValuesFamily, FontSize = NotaType.Value, Foreground = TextPrimary,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Grid.SetRow(l, row); Grid.SetRow(v, row); Grid.SetColumn(v, 1);
@@ -190,11 +192,11 @@ internal static class PluginCard
 
     private static Border Tag(string text) => new()
     {
-        BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+        BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
         Padding = new Thickness(4, 1), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
-            Text = NotaText.Label(text), FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobLabel,
+            Text = NotaText.Label(text), FontFamily = NotaFonts.ValuesFamily, FontSize = NotaType.KnobLabel,
             FontWeight = FontWeight.Medium, Foreground = TextSecondary,
         },
     };
@@ -234,18 +236,18 @@ internal static class PluginCard
             Text = "Parameters", FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
             Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center,
         };
-        var count = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        var count = new TextBlock { FontFamily = NotaFonts.ValuesFamily, FontSize = NotaType.KnobValue, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
 
         var search = new TextBox { Watermark = "Filter", Text = state.Filter, FontSize = 9, Classes = { "search" }, VerticalAlignment = VerticalAlignment.Center };
         var searchWrap = new Border
         {
             Width = 116, Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 0), Child = search,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 0), Child = search,
         };
         search.GotFocus += (_, _) => searchWrap.BorderBrush = NotaPalette.Accent;
         search.LostFocus += (_, _) => searchWrap.BorderBrush = BorderDef;
 
-        var pageText = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, MinWidth = 30, TextAlignment = TextAlignment.Center };
+        var pageText = new TextBlock { FontFamily = NotaFonts.ValuesFamily, FontSize = NotaType.KnobValue, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, MinWidth = 30, TextAlignment = TextAlignment.Center };
         var host = new ContentControl();
         int perPage = 1, gen = 0;
         var matches = new List<int>();
@@ -345,9 +347,9 @@ internal static class PluginCard
     }
 
     // A device section: card ground, hairline, radius 6.
-    private static Decorator Section(Control child, double pad = 8)
+    private static Decorator Section(Control child, double pad = 8, bool filled = true)
     {
-        var d = DeviceCardKit.Section(child);
+        var d = filled ? DeviceCardKit.Section(child) : new RuleSection { Filled = false, Child = child };
         d.Padding = new Thickness(pad, 6, pad, pad);
         return d;
     }

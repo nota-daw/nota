@@ -80,7 +80,7 @@ public sealed class WelcomeWindow : NotaWindow
         brand.Children.Add(new TextBlock
         {
             Text = Loc.F("welcome.version_engine_desktop_daw", AppInfo.Version, App.Services.GetRequiredService<EngineBuildInfo>().Version),
-            FontFamily = NotaFonts.MonoFamily,
+            FontFamily = NotaFonts.ValuesFamily,
             FontSize = NotaType.Value,
             Foreground = NotaPalette.TextMuted,
         });
@@ -110,7 +110,7 @@ public sealed class WelcomeWindow : NotaWindow
         recentHead.Children.Add(new TextBlock
         {
             Text = recent.Count.ToString(NotaNum.Culture),
-            FontFamily = NotaFonts.MonoFamily,
+            FontFamily = NotaFonts.ValuesFamily,
             FontSize = NotaType.Eyebrow,
             Foreground = NotaPalette.TextDisabled,
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -159,7 +159,7 @@ public sealed class WelcomeWindow : NotaWindow
             Background = NotaPalette.BgSunken,
             BorderBrush = NotaPalette.GraphBorder,
             BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel,
+            CornerRadius = NotaRadius.Group,
             Padding = new Thickness(4),
             ClipToBounds = true,
             Child = wellBody,
@@ -450,7 +450,7 @@ public sealed class WelcomeWindow : NotaWindow
         Background = NotaPalette.SurfaceRaised,
         BorderBrush = NotaPalette.Seam,
         BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Panel,
+        CornerRadius = NotaRadius.Group,
         Padding = new Thickness(14, 12),
         Margin = new Thickness(28, 16, 28, 0),
     };
@@ -465,14 +465,14 @@ public sealed class WelcomeWindow : NotaWindow
         text.Children.Add(new TextBlock
         {
             Text = title,
-            FontSize = 13,
+            FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
         });
         text.Children.Add(new TextBlock
         {
             Text = message,
-            FontSize = 12,
+            FontSize = 11,
             Foreground = NotaPalette.TextSecondary,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -508,7 +508,7 @@ public sealed class WelcomeWindow : NotaWindow
         public RecentRow(RecentProjectItem item)
         {
             Height = 28;
-            CornerRadius = NotaRadius.Badge;
+            CornerRadius = NotaRadius.Cell;
             Padding = new Thickness(12, 0, 10, 0);
             Transitions = new Transitions
             {
@@ -520,7 +520,7 @@ public sealed class WelcomeWindow : NotaWindow
             {
                 Width = 2,
                 Margin = new Thickness(-12, 7, 0, 7),
-                CornerRadius = NotaRadius.Bar,
+                CornerRadius = NotaRadius.Fine,
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
             _name = new TextBlock
@@ -534,7 +534,7 @@ public sealed class WelcomeWindow : NotaWindow
             _meta = new TextBlock
             {
                 Text = item.Modified,
-                FontFamily = NotaFonts.MonoFamily,
+                FontFamily = NotaFonts.ValuesFamily,
                 FontSize = NotaType.Value,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(12, 0, 0, 0),

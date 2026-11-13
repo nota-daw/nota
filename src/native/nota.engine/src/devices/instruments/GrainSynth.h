@@ -205,6 +205,7 @@ class GrainSynth final : public Instrument {
     static std::shared_ptr<SampleBuffer> makeDefaultSample(double sr);
 
     double sampleRate_ = 44100.0;
+    double fgSm_ = -1.0, fkSm_ = -1.0; // the filter's g and k, eased toward the block's (#531: no zipper clicks)
     std::atomic<int32_t> rootNote_{60};
     std::shared_ptr<SampleBuffer> sample_;
     uint32_t rng_ = 0x1234567u;

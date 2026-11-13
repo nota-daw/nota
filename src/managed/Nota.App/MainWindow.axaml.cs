@@ -91,6 +91,7 @@ public partial class MainWindow : Window
         InitBottomPanels();    // BodyGrid rows for the docked Mixer + Detail panels (specs/054)
         InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
         InitRecentMenu();      // File → Open recent (#443)
+        InitMenuButton();      // the Menu key in place of the menu row on Windows / Linux (#518)
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
         // decorations on macOS/Windows (traffic lights / caption buttons overlay it).
@@ -200,6 +201,7 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        StrataDeviceBody.StartTempoScan(vm.Engine);   // Set tempo from loop, on any track
         ValueEntry.UndoGroup = (vm.Engine.BeginUndoGroup, vm.Engine.EndUndoGroup);   // a handle's reset is one step
         Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
         Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
@@ -236,31 +238,23 @@ public partial class MainWindow : Window
         _masterMeter = new MeterBar(horizontal: true);
         MasterMeterHost.Children.Add(_masterMeter);
 
-        // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider. It
-        // sits over the master meter inside the MST module, with the gain printed in dB.
-        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0 };
-        var masterUndo = new MixGesture(vm.Engine, MixTarget.Master);   // one undo step per drag (specs/009)
-        masterVol.GestureBegin += masterUndo.Begin;
-        masterVol.GestureEnd += masterUndo.End;
-        Action<double> setMaster = v => vm.Transport.MasterVolume = v;
-        masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
-        // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
-        ValueEntry.Attach(masterVol, masterVol.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)), MasterDb);
+        // The master slider: a flat bar over the master meter, its gain in dB written inside.
+        var masterVol = CreateMasterFader(vm);
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
         // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
         // (half a BPM per pixel), the hundredths come from double-click-to-type.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: NotaType.Readout, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
-        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsNum.ValueChanged += v => vm.Transport.TimeSigNumerator = (int)Math.Round(v);
         TimeSigNumHost.Children.Add(tsNum);
-        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsDen.ValueChanged += v =>
         {
             int d = NearestPow2(v);
@@ -384,6 +378,11 @@ public partial class MainWindow : Window
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
         TrackArming.OthersChanged -= OnArmsChanged;
         TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
+        InputSetups.Changed -= OnArmsChanged;
+        InputSetups.Changed += OnArmsChanged;          // inputs renamed / switched off (specs/086): pickers relabel
+        OutputSetups.Changed -= OnOutputSetupChanged;
+        _cueKeysShown = CueKey.Shown(vm.Engine);       // the views below are built with this
+        OutputSetups.Changed += OnOutputSetupChanged;  // a Cue output set or cleared (specs/089): Cue keys come or go
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
@@ -397,6 +396,10 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        // …and whether notes take their articulation's colour (specs/085, FR-015).
+        PianoRollView.NoteColorByArticulation = vm.Settings.Current.PianoRollNoteColorByArticulation;
+        PianoRollView.NoteColorModeChanged -= OnNoteColorModeChanged;
+        PianoRollView.NoteColorModeChanged += OnNoteColorModeChanged;
         PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
         PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
         // The piano roll's key labels (every note, not just C) persist the same way.
@@ -414,15 +417,24 @@ public partial class MainWindow : Window
             vm.Settings.Save();
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+        Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);
+        // Groups in the track headers follow the worn look (specs/094); a theme or accent
+        // change leaves them be — the setter rebuilds only when the look itself moved.
+        Timeline.HeaderLook = NotaThemeService.Look;
+        NotaThemeService.Changed += () => Timeline.HeaderLook = NotaThemeService.Look;
+        Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
         vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
-        // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
+        // Settings → Appearance can switch the waveform style, the phrase lines and the header side while the arrangement is open.
         vm.Settings.Changed += () =>
         {
             Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+            Timeline.ClipStyle = Looks.ClipStyleOf(vm.Settings.Current);   // a pick, or the look's default
+            Timeline.PhraseBars = vm.Settings.Current.ArrangementPhraseBars;
             vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
+            ApplyMenuBar(vm.Settings.Current.ShowMenuBar);
         };
         Browser.SetViewModel(vm.Browser);
         InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
@@ -434,6 +446,7 @@ public partial class MainWindow : Window
         Browser.ItemActivated += OnBrowserItemActivated;
         Browser.Preview.Attach(vm.Engine, vm.Settings, App.Services.GetRequiredService<IPresetAudition>());
         Browser.Preview.StatusChanged += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        Browser.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // Files: path copied, folder not added (spec 092)
         Browser.RevealRequested += OnBrowserReveal;
         Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
@@ -450,6 +463,8 @@ public partial class MainWindow : Window
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.PreferredHeightChanged += FitDevicesPanel;   // the XL panel opened, closed or resized (specs/085)
+        if (_vm?.Settings.Current.XlPanelHeight is > 0 and var xlh) _deviceChain.XlPanelHeight = xlh;
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
@@ -468,6 +483,7 @@ public partial class MainWindow : Window
             RecordPreview = _recordPreview,
         };
         _session.SlotEditRequested += OpenSessionClipEditor;
+        _session.ShowInModularRequested += id => ShowInModular(id);   // specs/095
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
         HookSessionDeviceMoves(_session);                             // a device card dropped on a column (specs/043)
         _session.ArrangementChanged += () => Timeline.Refresh();      // M5-6
@@ -480,6 +496,7 @@ public partial class MainWindow : Window
         };
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         _session.SlotSelected += OnSessionSlotSelected;
+        InitLocate();   // clip menus' Locate ▸ and the Files highlight (spec 092)
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 
@@ -508,6 +525,14 @@ public partial class MainWindow : Window
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
+        // The track column beside the canvas is the arrangement's header column (specs/095).
+        _modular.TrackAtPoint = p => Timeline.TrackAtHeaderPoint(p);
+        _modular.ConnectHintChanged += on => Timeline.SetColumnHint(on);
+        _modular.StatusRequested += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        Timeline.ModularTrackId = () => _modular?.TrackId ?? -1;
+        Timeline.HeaderColumnWidthChanged += FitModularBesideHeaders;
+        _modular.GlobalChanged += _ => FitModularBesideHeaders();   // Global hides the column
+        Timeline.ShowInModularRequested += ShowInModular;
         MainContent.Children.Add(_modular);
         WireMixerGroups();   // fold state, selection and compact strips (specs/070)
 
@@ -722,7 +747,11 @@ public partial class MainWindow : Window
         if (_session is null || _modular is null) return;
         SetDetailMaximized(false);   // a view picked is a view to see
         bool session = view == MainView.Session, modular = view == MainView.Modular;
+        // Modular keeps the arrangement's header column beside its canvas (specs/095).
+        Timeline.HeadersOnly = modular;
         Timeline.IsVisible = view == MainView.Arrangement;
+        FitModularBesideHeaders();   // in Modular: the column, unless Global view is up
+        Browser.SetModularContext(modular);
         _session.IsVisible = session;
         _modular.IsVisible = modular;
         ArrangeBtn.IsChecked = view == MainView.Arrangement;
@@ -733,16 +762,43 @@ public partial class MainWindow : Window
         if (modular)
         {
             int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
-            if (t <= 0) t = _modular.FirstPatchableTrack();   // after opening a project nothing is selected (F3)
-            _modular.Show(t);                                   // Show(-1) still builds the sidebar and its empty state
+            if (t <= 0 || t == Engine.MasterTrackId) t = _modular.FirstPatchableTrack();   // after opening a project nothing is selected (F3)
+            _modular.Show(t);                                   // Show(-1) still shows the empty state
         }
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)
     }
 
-    private void OnPickProjectKey(object? sender, RoutedEventArgs e)
+    /// <summary>The arrangement is the shown view — not just its header column in Modular.</summary>
+    private bool ArrangementShown => Timeline.IsVisible && !Timeline.HeadersOnly;
+
+    // Modular's canvas sits beside the header column, on the side the column takes.
+    private void FitModularBesideHeaders()
+    {
+        if (_modular is null) return;
+        // Track view shows the header column beside the canvas; Global view hides it (the
+        // islands are the tracks) and gives the canvas the whole width.
+        bool column = Timeline.HeadersOnly && !_modular.IsGlobal;
+        if (Timeline.HeadersOnly) Timeline.IsVisible = column;
+        double w = column ? Timeline.HeaderColumnWidth : 0;
+        _modular.Margin = Timeline.HeadersOnRight ? new Thickness(0, 0, w, 0) : new Thickness(w, 0, 0, 0);
+    }
+
+    // Show in Modular (a track menu, specs/095): Modular, Track view, that track's graph.
+    private void ShowInModular(int trackId)
+    {
+        if (_modular is null || trackId <= 0) return;
+        SetView(MainView.Modular);
+        if (Timeline.SelectedTrackId != trackId) Timeline.SelectTrackFromOutside(trackId);
+        _modular.ShowTrack(trackId);
+    }
+
+    private void OnPickProjectKey(object? sender, RoutedEventArgs e) => PickProjectKey(KeyChip);
+
+    /// <summary>The project-key picker, under the KEY cell — or under ⋯ when the cell is shed (#520).</summary>
+    private void PickProjectKey(Control anchor)
     {
         if (_vm is null) return;
-        KeyPicker.Show(KeyChip, _vm.Transport.Key, Loc.T("main.no_key"), k =>
+        KeyPicker.Show(anchor, _vm.Transport.Key, Loc.T("main.no_key"), k =>
         {
             _vm.Transport.KeyCode = k?.Code ?? -1;
             _vm.StatusText = k is { } key ? Loc.F("main.project_key", key.Long) : Loc.T("main.no_project_key");
@@ -807,6 +863,21 @@ public partial class MainWindow : Window
             if (tip != shown) ToolTip.SetTip(CpuMeter, shown = tip);   // re-set only when it changed (#66)
         };
         _cpuTipTick();
+    }
+
+    /// <summary>A master-gain fader: the transport bar's, and the one in the ⋯ menu while the
+    /// master strip is shed (#520). One undo step per drag (specs/009); double-click the dB
+    /// written in it (or ⌥-click anywhere) to type the gain, elsewhere to reset to 0 dB.</summary>
+    private static MiniFader CreateMasterFader(MainWindowViewModel vm)
+    {
+        var fader = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0, Text = v => NotaNum.GainDb(v) };
+        var undo = new MixGesture(vm.Engine, MixTarget.Master);
+        fader.GestureBegin += undo.Begin;
+        fader.GestureEnd += undo.End;
+        Action<double> set = v => vm.Transport.MasterVolume = v;
+        fader.ValueChanged += v => undo.Change(v, set);
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)));
+        return fader;
     }
 
     private readonly TapTempo _tap = new();
@@ -896,6 +967,13 @@ public partial class MainWindow : Window
 
     private NativeMenuItem? _followMenuItem;
 
+    private void OnNoteColorModeChanged()
+    {
+        if (_vm is null) return;
+        _vm.Settings.Current.PianoRollNoteColorByArticulation = PianoRollView.NoteColorByArticulation;
+        _vm.Settings.Save();
+    }
+
     private void OnAuditionToggled()
     {
         if (_vm is null) return;
@@ -924,6 +1002,21 @@ public partial class MainWindow : Window
         _mixer?.Refresh();
     });
 
+    // Cue keys show only while a Cue output is set (or a track is in Cue). The setup is pushed
+    // on every audio restart, so rebuild the views only when that actually changes.
+    private bool _cueKeysShown;
+    private void OnOutputSetupChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        if (_vm is null) return;
+        bool shown = CueKey.Shown(_vm.Engine);
+        if (_cueKeysShown == shown) return;
+        _cueKeysShown = shown;
+        Timeline.Refresh();
+        _session?.Refresh();
+        _mixer?.Refresh();
+        _trackInspector?.Reload();
+    });
+
     private void OnFollowSuspendedChanged()
     {
         bool paused = Timeline.FollowSuspended;
@@ -948,9 +1041,11 @@ public partial class MainWindow : Window
 
     // Snap on/off: the latch you reach for to nudge something off-grid for a while. The
     // same switch as ⌘4 and the grid menu's "Snap to grid" (EditorGrids.Arrangement.SnapOn).
-    private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e)
+    private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e) => SetSnapEnabled(SnapToggle.IsChecked == true);
+
+    /// <summary>Snap on/off — the magnet, and its entry in the ⋯ menu while the magnet is shed.</summary>
+    private void SetSnapEnabled(bool on)
     {
-        bool on = SnapToggle.IsChecked == true;
         var grids = EditorGrids.Shared;
         grids.Set(EditorKind.Arrangement, grids.Get(EditorKind.Arrangement) with { SnapOn = on });
         if (_vm is not null) _vm.StatusText = on ? Loc.T("main.snap_on") : Loc.T("main.snap_off_clips_position_freely");
@@ -960,7 +1055,7 @@ public partial class MainWindow : Window
     // (zoom, the menu, ⌘1–⌘5).
     private void InitSnapGrid()
     {
-        var chip = Nota.App.SnapChip.Attach(SnapChip, SnapLabel, SnapCaption, EditorKind.Arrangement, () => Timeline.SnapGridState);
+        var chip = _snapChip = Nota.App.SnapChip.Attach(SnapChip, SnapLabel, SnapCaption, EditorKind.Arrangement, () => Timeline.SnapGridState);
         Timeline.GridChanged += chip.Refresh;
         void SyncLatch() => SnapToggle.IsChecked = EditorGrids.Shared.Get(EditorKind.Arrangement).SnapOn;
         EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) SyncLatch(); };

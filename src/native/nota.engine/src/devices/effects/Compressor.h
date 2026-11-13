@@ -48,6 +48,7 @@ class Compressor : public Device {
         ScQ,
         External,
         StereoLink,
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
 

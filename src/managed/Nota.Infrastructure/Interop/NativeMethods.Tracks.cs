@@ -24,6 +24,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_set_mute")]
     internal static partial NotaResult SetTrackMute(IntPtr engine, int trackId, int mute);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_cue")]
+    internal static partial NotaResult SetTrackCue(IntPtr engine, int trackId, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_cue")]
+    internal static partial int GetTrackCue(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_solo")]
     internal static partial NotaResult SetTrackSolo(IntPtr engine, int trackId, int solo);
 
@@ -330,6 +336,73 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_get_input_channels")]
     internal static partial int TrackGetInputChannels(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_input")]
+    internal static partial NotaResult TrackSetInput(IntPtr engine, int trackId, int first, int width);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_input")]
+    internal static partial int TrackGetInput(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_input_available")]
+    internal static partial int TrackInputAvailable(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_count")]
+    internal static partial int AudioInputChannelCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_channel_name")]
+    internal static partial int AudioInputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
+
+    // --- output routing (specs/089) ---
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_channel_count")]
+    internal static partial int AudioOutputChannelCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_channel_name")]
+    internal static partial int AudioOutputChannelName(IntPtr engine, int index, [Out] byte[] outBuf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_set_output_routing")]
+    internal static partial NotaResult AudioSetOutputRouting(IntPtr engine, int mainFirst, int mainWidth, int cueFirst, int cueWidth);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_routing_state")]
+    internal static partial int AudioOutputRoutingState(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_test_output_device")]
+    internal static partial void EngineSetTestOutputDevice(IntPtr engine, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_scatter_test")]
+    internal static partial int AudioScatterTest(IntPtr engine, float[] mainIn, float[]? cueIn, [Out] float[] deviceOut, int deviceChannels, int frames);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input_uid", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult TrackSetMidiInputUid(IntPtr engine, int trackId, string? uid, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_input_uid")]
+    internal static partial int TrackGetMidiInputUid(IntPtr engine, int trackId, [Out] byte[] outBuf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_input")]
+    internal static partial NotaResult TrackSetMidiInput(IntPtr engine, int trackId, int source, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_input")]
+    internal static partial int TrackGetMidiInput(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_source_of_uid", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int MidiSourceOfUid(IntPtr engine, string uid);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_push_midi_for_test")]
+    internal static partial void EnginePushMidiForTest(IntPtr engine, int source, int status, int channel, int d1, int d2);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_set_disabled")]
+    internal static partial void AudioInputSetDisabled(IntPtr engine, int[] channels, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_probe")]
+    internal static partial int AudioInputProbe(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_feed_input_test")]
+    internal static partial void EngineFeedInputTest(IntPtr engine, float[] interleaved, int frames, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_test_input_device")]
+    internal static partial void EngineSetTestInputDevice(IntPtr engine, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_take_record_test_n")]
+    internal static partial int TakeRecordTestN(IntPtr engine, int trackId, float[] interleaved, int channels, int frames, double startBeat);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_monitor")]
     internal static partial NotaResult TrackSetMonitor(IntPtr engine, int trackId, int on);
 
@@ -344,6 +417,24 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_source")]
     internal static partial int TrackGetMidiSource(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_offset_ms")]
+    internal static partial NotaResult TrackSetMidiOffsetMs(IntPtr engine, int trackId, double ms);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_midi_offset_ms")]
+    internal static partial double TrackGetMidiOffsetMs(IntPtr engine, int trackId);
+
+    // --- articulation maps (specs/085) ---
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_articulation_map")]
+    internal static partial NotaResult TrackSetArticulationMap(IntPtr engine, int trackId, int defaultId,
+        NotaArticulationEntry[] entries, int entryCount, NotaArticulationAction[] actions, int actionCount,
+        byte[] mapJson, int mapJsonLen);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_clear_articulation_map")]
+    internal static partial NotaResult TrackClearArticulationMap(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_articulation_map_json")]
+    internal static partial int TrackGetArticulationMapJson(IntPtr engine, int trackId, byte[]? output, int maxLen);
 
     // --- freeze (M7) ---
     [LibraryImport(Lib, EntryPoint = "nota_track_freeze_begin")]
@@ -460,6 +551,46 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_file_decode_mono", StringMarshalling = StringMarshalling.Utf8)]
     internal static unsafe partial long FileDecodeMono(string path, double maxSeconds, float* output, long cap, out double sampleRate);
+
+    // ---- Nota Aurora custom wavetables (specs/053) ----
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_build", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int AuroraTableBuild(string path, out IntPtr table);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_from_frames", StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial int AuroraTableFromFrames(float* frames, int count, string name, int origin, out IntPtr table);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_info")]
+    internal static partial int AuroraTableInfo(IntPtr table, out NotaAuroraTableInfoRaw info);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_frames")]
+    internal static unsafe partial long AuroraTableFrames(IntPtr table, float* output, long cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_free")]
+    internal static partial void AuroraTableFree(IntPtr table);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_table")]
+    internal static partial int AuroraSetTable(IntPtr engine, int trackId, int osc, IntPtr table, int checkpoint);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_clear_table")]
+    internal static partial int AuroraClearTable(IntPtr engine, int trackId, int osc);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_source")]
+    internal static partial int AuroraSetSource(IntPtr engine, int trackId, int osc, int useCustom, int checkpoint);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_missing", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int AuroraSetMissing(IntPtr engine, int trackId, int osc, string name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_table_info")]
+    internal static partial int AuroraTrackTableInfo(IntPtr engine, int trackId, int osc, out NotaAuroraTableInfoRaw info);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_table_read")]
+    internal static unsafe partial long AuroraTableRead(IntPtr engine, int trackId, int osc, float* output, long cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_table_preview")]
+    internal static unsafe partial int AuroraTablePreview(IntPtr engine, int trackId, int osc, int repFrames, int gridFrames, int points, float* output, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_state")]
+    internal static unsafe partial int AuroraState(IntPtr engine, int trackId, int includeTables, byte* output, int cap);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_action")]
     internal static partial void InstrumentAction(IntPtr engine, int trackId, int id, int iarg, float farg);
@@ -589,6 +720,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_scope")]
     internal static partial int TrackInstrumentScope(IntPtr engine, int trackId, [Out] float[] outv, int maxN);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_output")]
+    internal static partial int TrackInstrumentOutput(IntPtr engine, int trackId, [Out] float[] outv, int maxN);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_sampler_track", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int AddSamplerTrack(IntPtr engine, string path, int rootNote, int loop);
 
@@ -646,4 +780,20 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_sampler_info")]
     internal static partial int TrackSamplerInfo(IntPtr engine, int trackId, out NotaSamplerInfo info);
+}
+
+/// <summary>Native NotaAuroraTableInfo (specs/053), turned into
+/// <see cref="Nota.Application.AuroraTableInfo"/> by <see cref="NotaEngine"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NotaAuroraTableInfoRaw
+{
+    public int Frames;
+    public int Origin;
+    public int TruncatedLength;
+    public int TruncatedFrames;
+    public int UseCustom;
+    public int Missing;
+    public uint Serial;
+    public fixed byte Hash[16];
+    public fixed byte Name[256];
 }

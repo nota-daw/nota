@@ -3,8 +3,8 @@
 //
 // CoreAudio output backend (macOS). Uses a HALOutput AudioUnit so a specific
 // device, sample rate and buffer size can be requested (M7-1); with a zeroed
-// BackendConfig it falls back to the system default output device. Pulls
-// interleaved stereo float from the engine's render callback.
+// BackendConfig it falls back to the system default output device. Opens every output
+// channel of the device and places the engine's Main and Cue buses on them (specs/089).
 
 #pragma once
 
@@ -24,6 +24,10 @@ class CoreAudioBackend final : public AudioBackend {
     void setXrunCallback(std::function<void()> cb) override { onXrun_ = std::move(cb); }
     bool isRunning() const override { return running_; }
     void* ioWorkgroup() const override;
+    int32_t outputChannelCount() const override;
+    std::string outputChannelName(int32_t index) const override;
+    void setOutputRouting(const OutputRouting& r) override;
+    int32_t pollDeviceEvent() override;
 
     // Opaque to callers; public so the file-local CoreAudio callback can reach it.
     struct Impl;

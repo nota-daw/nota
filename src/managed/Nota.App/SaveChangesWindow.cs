@@ -115,7 +115,7 @@ public sealed class SaveChangesWindow : NotaWindow
         var meta = new TextBlock
         {
             Text = detail,
-            FontFamily = NotaFonts.MonoFamily,
+            FontFamily = NotaFonts.ValuesFamily,
             FontSize = NotaType.Value,
             Foreground = NotaPalette.TextMuted,
             VerticalAlignment = VerticalAlignment.Bottom,

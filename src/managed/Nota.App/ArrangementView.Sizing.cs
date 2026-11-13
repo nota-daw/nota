@@ -25,17 +25,17 @@ namespace Nota.App;
 public sealed partial class ArrangementView
 {
     // Row heights: a track row is 30–256 px; drags snap lightly to the three presets.
-    internal const double DefaultRowHeight = 64;
+    internal const double DefaultRowHeight = 54;
     internal const double MinRowHeight = 30;
     internal const double MaxRowHeight = 256;
     internal const double CompactRowHeight = 30;
-    internal const double StandardRowHeight = 64;
+    internal const double StandardRowHeight = 54;
     internal const double LargeRowHeight = 128;
     private const double SnapPx = 4;
     private static readonly double[] RowPresets = { CompactRowHeight, StandardRowHeight, LargeRowHeight };
 
     // Header column: 160–480 px, and never so wide that the lanes drop under 240 px.
-    internal const double DefaultHeaderW = 228;
+    internal const double DefaultHeaderW = 252;
     internal const double MinHeaderW = 160;
     internal const double MaxHeaderW = 480;
     private const double MinLanesW = 240;
@@ -67,10 +67,11 @@ public sealed partial class ArrangementView
         => _cardTiers.TryGetValue(t.Id, out var built)
            && (built != TierFor(h) || (_cardSends.TryGetValue(t.Id, out var sends) && sends != ShowSendsOn(t, TierFor(h), h)));
 
-    // The standard header needs ~61 px of visible content (three rows), the large one ~106,
-    // so each tier starts where its layout fits — below 62 a row is compact.
+    // The standard header needs ~50 px (two 18px rows 6 apart, with room above and below), the
+    // large one ~80 (a third row for the input picker), so each tier starts where its layout
+    // fits — below 50 a row is compact, the name row alone.
     internal static HeaderTier TierFor(double height)
-        => height < 62 ? HeaderTier.Compact : height < 112 ? HeaderTier.Standard : HeaderTier.Large;
+        => height < 50 ? HeaderTier.Compact : height < 100 ? HeaderTier.Standard : HeaderTier.Large;
 
     internal static double ClampRowHeight(double h) => Math.Clamp(h, MinRowHeight, MaxRowHeight);
 
@@ -198,7 +199,7 @@ public sealed partial class ArrangementView
         if (_rowResizeChanged) Dispatcher.UIThread.Post(RelayoutRows, DispatcherPriority.Render);
     }
 
-    /// <summary>Double-click on a row seam: the row (or the selection it is in) back to 64 px.</summary>
+    /// <summary>Double-click on a row seam: the row (or the selection it is in) back to the default height.</summary>
     internal void ResetRowHeight(int trackId)
     {
         _rowResizing = false;
@@ -466,7 +467,8 @@ public sealed partial class ArrangementView
     {
         double w = Math.Clamp(wanted, MinHeaderW, MaxHeaderW);
         double room = Bounds.Width - MinLanesW;   // a narrow window squeezes the lanes first, then the headers
-        if (Bounds.Width > 0 && w > room) w = Math.Max(MinHeaderW, room);
+        // Headers only (Modular, specs/095): the view is the column, the canvas beside it has the room.
+        if (!_headersOnly && Bounds.Width > 0 && w > room) w = Math.Max(MinHeaderW, room);
         return Math.Round(w);
     }
 
@@ -488,6 +490,7 @@ public sealed partial class ArrangementView
         foreach (var c in _footerHeaders.Children) c.Width = w;
         PlaceRowSeamGrips();
         PlaceColumnSeam();
+        FitHeadersOnlyWidth();
         if (final)
         {
             RebuildHeaders();
@@ -597,6 +600,7 @@ public sealed partial class ArrangementView
         foreach (var b in _columnDividers) b.BorderThickness = ColumnDivider;
         _columnBackdrop.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         PlaceColumnSeam();
+        FitHeadersOnlyWidth();
         // The cards carry their own divider: rebuild them with it on the new side.
         RebuildHeaders();
         RebuildFooterHeaders();

@@ -60,7 +60,7 @@ internal static partial class DesignTokenCheck
             .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/"))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"(?:DynamicResource |"")(?<key>Shadow\.\w+)[}""]").Select(m => m.Groups["key"].Value))
             .Distinct().Where(k => !built.Contains(k)).OrderBy(k => k).ToArray();
-        yield return (built.Count == 4 && shadowRefs.Length == 0,
+        yield return (built.Count == 9 && shadowRefs.Length == 0,
             shadowRefs.Length == 0 ? $"every Shadow.* key is built from the theme ({string.Join(", ", built.OrderBy(k => k))})"
                                    : $"Shadow.* keys nothing builds: {string.Join(", ", shadowRefs)}");
     }
@@ -84,15 +84,18 @@ internal static partial class DesignTokenCheck
         var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
         var geo = File.ReadAllText(Path.Combine(app, "Theme/NotaGeometry.cs"));
 
-        // XAML side: <CornerRadius x:Key="Radius.Clip">2</CornerRadius>, <sys:Double x:Key="Space.Tile">8</sys:Double>
+        // XAML side: <CornerRadius x:Key="Radius.Field">2</CornerRadius>, <sys:Double x:Key="Space.Tile">8</sys:Double>
         var xaml = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (Match m in Regex.Matches(theme, """x:Key="(?<key>(?:Radius|Control|Space)\.\w+)">(?<v>[0-9.]+)<"""))
             xaml[m.Groups["key"].Value] = double.Parse(m.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
 
-        // C# side: NotaRadius.<Name>Value, NotaSize.<Name>, NotaSpace.<Name>
+        // C# side: the radius scale (SkinGeometry.Design — spec 087 moved it there so skins can
+        // re-round it; NotaRadius.DockedValue stays a constant), NotaSize.<Name>, NotaSpace.<Name>
         var cs = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (Match m in Regex.Matches(geo, @"\b(?<name>\w+)Value\s*=\s*(?<v>[0-9.]+)"))
             cs["Radius." + m.Groups["name"].Value] = double.Parse(m.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var step in Enum.GetValues<Nota.Application.Themes.RadiusStep>())
+            cs["Radius." + step] = Nota.Application.Themes.SkinGeometry.Design(step);
         foreach (var (cls, prefix) in new[] { ("NotaSize", "Control."), ("NotaSpace", "Space.") })
         {
             var body = Regex.Match(geo, $@"class {cls}\s*\{{(?<b>.*?)\n\}}", RegexOptions.Singleline).Groups["b"].Value;
@@ -146,8 +149,8 @@ internal static partial class DesignTokenCheck
             ? "gradients in Theme/ only in NotaPalette.cs and Theme/SplashArt/"
             : $"gradients elsewhere in Theme/: {string.Join(", ", themeGradients)}");
 
-        // A Rectangle's RadiusX/RadiusY is a corner radius too, so it keeps the 0/1/2/3/4
-        // scale (spec 012 R9: the add-device targets drew at 7 and 6). Ratchet in
+        // A Rectangle's RadiusX/RadiusY is a corner radius too, so it keeps the style guide's
+        // 0/2/3/4/5/6/7/9 scale (spec 038; spec 012 R9 started this check). Ratchet in
         // RadiusAllowList.txt (path + "RadiusX = n") with today's offenders.
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         var offScale = new List<Hit>();
@@ -159,19 +162,21 @@ internal static partial class DesignTokenCheck
                 n++;
                 var code = f.EndsWith(".cs") ? CodeOf(line) : Regex.Replace(line, "<!--.*?-->", "");
                 foreach (Match m in Regex.Matches(code, @"\bRadius(?<axis>[XY])\s*=\s*""?(?<v>[0-9]+(?:\.[0-9]+)?)\b"))
-                    if (!new[] { 0d, 1, 2, 3, 4 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
+                    if (!new[] { 0d, 2, 3, 4, 5, 6, 7, 9 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
                         offScale.Add(new Hit(RelManaged(root, f), n, $"Radius{m.Groups["axis"].Value} = {m.Groups["v"].Value}"));
             }
         }
         var list = ReadRatchet(Path.Combine(root, RatchetDir, "RadiusAllowList.txt"));
         var radiusUsed = new HashSet<(string, string)>();
-        yield return RatchetVerdict("Rectangle radius off the 0/1/2/3/4 scale", offScale, list.ToHashSet(), radiusUsed);
+        yield return RatchetVerdict("Rectangle radius off the 0/2/3/4/5/6/7/9 scale", offScale, list.ToHashSet(), radiusUsed);
         yield return RatchetStale("radius allow-list", list, radiusUsed);
         yield return (true, $"radius allow-list: {list.Distinct().Count()} entries (ratchet: may only shrink)");
     }
 
-    /// <summary>Type: the theme and NotaFonts point at the same bundled Geist files, and no
-    /// view names a font of its own or sets text below the 7px floor. See DESIGN.md § Type.</summary>
+    /// <summary>Type: the theme and NotaFonts point at the same bundled Geist files; two roles —
+    /// words and values — where values are Geist under the new look and Geist Mono only by the
+    /// classic look's choice (spec 091); no view names a font of its own or sets text below the
+    /// 7px floor. See DESIGN.md § Type.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunType()
     {
         var root = RepoRoot();
@@ -182,15 +187,31 @@ internal static partial class DesignTokenCheck
 
         string XamlFont(string key) => Regex.Match(theme, $"""<FontFamily x:Key="{key}">(?<v>[^<]+)</FontFamily>""").Groups["v"].Value;
         string CsFont(string name) => Regex.Match(fonts, $@"const string {name}\s*=\s*""(?<v>[^""]+)""").Groups["v"].Value;
-        var ui = XamlFont("Font.UI"); var mono = XamlFont("Font.Mono");
-        yield return (ui.Length > 0 && ui == CsFont("UiUri") && mono.Length > 0 && mono == CsFont("MonoUri"),
-            $"Font.UI / Font.Mono match NotaFonts ({ui} · {mono})");
+        var ui = XamlFont("Font.UI");
+        yield return (ui.Length > 0 && ui == CsFont("UiUri"), $"Font.UI matches NotaFonts ({ui})");
 
-        var files = new[] { "Regular", "Medium", "SemiBold", "Bold" }
-            .SelectMany(w => new[] { $"Geist-{w}.ttf", $"GeistMono-{w}.ttf" })
-            .Where(f => !File.Exists(Path.Combine(root, "assets/fonts", f))).ToArray();
+        // Two roles (specs 038, 091): words (Font.UI) and values (Font.Measure). The theme's
+        // Font.Measure is Geist itself, so the new look is still one typeface; Geist Mono is
+        // named once, in NotaFonts, for the classic look to choose.
+        var families = Regex.Matches(theme, """<FontFamily x:Key="(?<k>[^"]+)">""").Select(m => m.Groups["k"].Value).ToArray();
+        yield return (families.SequenceEqual(new[] { "Font.UI", "Font.Measure" }),
+            $"two roles: Font.UI and Font.Measure are the only families ({string.Join(", ", families)})");
+        yield return (XamlFont("Font.Measure") == ui, $"the new look is one typeface: Font.Measure defaults to Geist ({XamlFont("Font.Measure")})");
+        var monoUris = Regex.Matches(fonts, @"const string (?<n>\w+Uri)\s*=\s*""(?<v>[^""]*Mono[^""]*)""")
+            .Select(m => m.Groups["n"].Value + "=" + m.Groups["v"].Value).ToArray();
+        yield return (monoUris.SequenceEqual(new[] { "MeasureMonoUri=avares://Nota.App/Assets/Fonts#Geist Mono" }),
+            $"Geist Mono is named once, as NotaFonts.MeasureMonoUri ({string.Join(", ", monoUris)})");
+        yield return (fonts.Contains("\"+tnum\""), "tabular figures are on (NotaFonts.Tabular)");
+
+        var weights = new[] { "Regular", "Medium", "SemiBold", "Bold" };
+        var expected = weights.SelectMany(w => new[] { $"Geist-{w}.ttf", $"GeistMono-{w}.ttf" }).ToHashSet();
+        var files = expected.Where(f => !File.Exists(Path.Combine(root, "assets/fonts", f))).ToArray();
         yield return (files.Length == 0,
-            files.Length == 0 ? "all eight Geist weights are bundled" : $"missing font files: {string.Join(", ", files)}");
+            files.Length == 0 ? "all four Geist and Geist Mono weights are bundled" : $"missing font files: {string.Join(", ", files)}");
+        var stray = Directory.GetFiles(Path.Combine(root, "assets/fonts"), "*.ttf")
+            .Select(Path.GetFileName).Where(f => !expected.Contains(f!)).ToArray();
+        yield return (stray.Length == 0,
+            stray.Length == 0 ? "no other typeface is bundled" : $"other font files bundled: {string.Join(", ", stray)}");
         yield return (File.Exists(Path.Combine(root, "LICENSES/OFL-1.1-Geist.txt")), "the Geist OFL licence ships with the fonts");
 
         var views = Files(app, "*.*", SearchOption.AllDirectories)
@@ -205,6 +226,15 @@ internal static partial class DesignTokenCheck
         yield return (named.Length == 0,
             named.Length == 0 ? "no view names a font family (NotaFonts / Font.* only)"
                               : $"font families named in views: {string.Join(", ", named)}");
+
+        // Drawn text goes through NotaFormattedText, which turns on tabular figures; a plain
+        // FormattedText (also a target-typed `FormattedText X(...) => new(...)`) loses them, so
+        // live readouts jitter in width as their digits change.
+        var plain = views.Where(v => Regex.IsMatch(v.Text, @"new\s+FormattedText\s*\(|FormattedText\s+\w+\s*\([^)]*\)\s*=>\s*new\s*\(|FormattedText\s+\w+\s*=\s*new\s*\("))
+            .Select(v => v.Path).OrderBy(p => p).ToArray();
+        yield return (plain.Length == 0,
+            plain.Length == 0 ? "drawn text uses NotaFormattedText (tabular figures)"
+                              : $"plain FormattedText in: {string.Join(", ", plain)}");
 
         // 7px is the floor. Catches FontSize literals and a FormattedText size literal.
         var small = new List<string>();
@@ -247,12 +277,13 @@ internal static partial class DesignTokenCheck
                                  : $"icon glyphs typed as text: {string.Join(", ", offenders.Take(10))}");
 
         var knob = File.ReadAllText(Path.Combine(app, "Controls/Knob.cs"));
-        yield return (knob.Contains("NotaSize.KnobSecondary") && knob.Contains("WidthProperty.OverrideMetadata<Knob>"),
-            "Knob snaps to the three almanac sizes");
+        yield return (knob.Contains("SizeSecondary = NotaSize.KnobSecondary") && knob.Contains("SizeInline = NotaSize.KnobInline")
+                      && knob.Contains("WidthProperty.OverrideMetadata<Knob>"),
+            "Knob is coerced onto its sizes (34 / 36 / 44 device, 24 inline, 28 flat)");
         var sw = File.ReadAllText(Path.Combine(app, "Controls/SwitchTrack.cs"));
-        yield return (Regex.IsMatch(sw, @"W = 18, H = 10, KnobD = 7, Inset = 1\.5"), "SwitchTrack is 18×10 with a 7px knob inset 1.5");
+        yield return (Regex.IsMatch(sw, @"W = 18, H = 10, KnobD = 7, Inset = 1\.5\b"), "SwitchTrack is 18×10 with a 7px knob inset 1.5");
         var sl = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
-        yield return (Regex.IsMatch(sl, @"TrackH = 3, HandleW = 6, HandleH = 7"), "SliderTrack is a 3px track with a 6×7 handle");
+        yield return (Regex.IsMatch(sl, @"LineW = 3, Height0 = 16, DeviceH = 9\b") && sl.Contains("NotaDepth.Groove"), "SliderTrack is a 9px value bar in a groove with a 3px line (16 in the shell)");
     }
 
     /// <summary>Numbers and labels: a display culture with a point and U+2212, units after a
@@ -349,7 +380,8 @@ internal static partial class DesignTokenCheck
             ballistics.Length == 0 ? "meters and spectra have no release ballistics" : $"meter/spectrum ballistics in: {string.Join(", ", ballistics)}");
 
         var meter = File.ReadAllText(Path.Combine(app, "Controls/MeterBar.cs"));
-        yield return (Regex.IsMatch(meter, @"ChannelW = 11, Step = 5"), "level meter channels are 11px with a 5px step");
+        yield return (Regex.IsMatch(meter, @"ChannelW = 3, Step = 1\.5") && Regex.IsMatch(meter, @"CautionDb = -6, AlertDb = 0;"),
+            "level meter channels are 3px, 1.5 apart, amber from −6 dBFS, red from 0 dBFS");
 
         var arr = string.Concat(Files(app, "ArrangementView*.cs").Select(File.ReadAllText));
         yield return (!arr.Contains("PlayheadGlow") && Regex.IsMatch(arr, @"PlayheadPen = new Pen\(PlayheadBrush, 1\)"),
@@ -370,8 +402,10 @@ internal static partial class DesignTokenCheck
         // Hex strings that are data rather than tokens: tag swatches the library stores, and
         // two device hue tables. Each is only ever painted through NotaPalette.Ink().
         var hexData = new[] { "TagEditorWindow.cs", "DeviceCards/Bodies/StrataDeviceBody.cs", "DeviceCards/Instruments/RhythmInstrumentCard.cs" };
-        // Opacity is allowed for exactly one thing: the ghost of a card being dragged.
-        var dragGhost = new Regex(@"\b(card|_devDragCard|_rcDragCard)\.Opacity = (0\.55|1\.0);");
+        // Opacity is allowed for exactly one thing: the ghost of a card being dragged — and,
+        // not being a look at all, the skin previews' host windows (spec 087), shown off screen
+        // and fully transparent so their views lay out; only their content is drawn.
+        var dragGhost = new Regex(@"\b(card|_devDragCard|_rcDragCard)\.Opacity = (0\.55|1\.0);|^\s*host\.Opacity = 0;");
 
         var rules = new (string Name, Regex Re, Func<string, string, bool>? Allow)[]
         {
@@ -403,7 +437,7 @@ internal static partial class DesignTokenCheck
             yield return (hits[name].Count == 0, hits[name].Count == 0 ? $"no {name}" : $"{name}: {string.Join(", ", hits[name].Take(8))}");
     }
 
-    /// <summary>Layout: device cards 700 wide with a 22px header (documented exceptions only),
+    /// <summary>Layout: device cards 260 high with a 24px header and a width that fits the device,
     /// transport at the top, list rows 26. See DESIGN.md § Device cards and § Shell.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunLayout()
     {
@@ -414,32 +448,30 @@ internal static partial class DesignTokenCheck
         var kit = File.ReadAllText(Path.Combine(app, "DeviceCardKit.cs"));
         yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
 
-        // Accepted exceptions (decided 2026-09-16): parameter stubs are narrow; the Bass and
-        // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.) The
-        // generic instrument card is an "Open GUI" stub, 170 wide since before it joined the
-        // shared shell (spec 012).
-        // Volt grew to 790 when it absorbed Nota Synth and Nota Bass (specs/026).
-        var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
-            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs", "GenericInstrumentCard.cs", "VoltInstrumentCard.cs" };
+        // Every card is 260 high in its 0.57 layout (spec 038 FR-041). A width outside 260–940
+        // is a layout that has lost its frame. The generic instrument card is an
+        // "Open GUI" stub (170) and parameter stubs are narrow.
+        yield return (Regex.IsMatch(kit, @"CardH = 260;"), "device cards are 260 high");
+        var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs", "GenericInstrumentCard.cs" };
         var off = Files(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")
-                .Where(m => m.Groups["w"].Value != "700").Select(m => $"{Path.GetFileName(f)} ({m.Groups["w"].Value})"))
+                .Where(m => int.Parse(m.Groups["w"].Value) is < 260 or > 940).Select(m => $"{Path.GetFileName(f)} ({m.Groups["w"].Value})"))
             .ToArray();
-        yield return (off.Length == 0, off.Length == 0 ? "device cards are 700 wide (documented exceptions aside)" : $"cards off the 700 format: {string.Join(", ", off)}");
+        yield return (off.Length == 0, off.Length == 0 ? "device card widths fit their devices (260–940)" : $"cards outside 260–940 wide: {string.Join(", ", off)}");
 
         var main = File.ReadAllText(Path.Combine(app, "MainWindow.axaml"));
         yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.TransportBar\\}\""),
             "transport is a docked row at the top of the window");
-        yield return (Regex.IsMatch(main, "<Border Grid.Column=\"1\" Classes=\"console\">"),
-            "transport console is the recessed group inside it");
+        yield return (Regex.IsMatch(main, "<StackPanel Grid.Column=\"1\"[^>]*>\\s*<Border Classes=\"console\">"),
+            "transport keys sit in the console well, first in the transport-and-timing group, with no rule after the views");
 
         var browser = File.ReadAllText(Path.Combine(app, "BrowserView.cs"));
-        yield return (Regex.IsMatch(browser, @"const double RowH = 2[6-8];"), "browser list rows are 26–28px");
+        yield return (Regex.IsMatch(browser, @"const double RowH = 30;"), "browser list rows are 30px (style guide)");
     }
 
     /// <summary>The Studio rules (DESIGN.md) that the older checks do not hold:
-    /// the 0/1/2/3/4 radius scale, blurred shadows only on floating layers, sentence-case
+    /// the style guide's radius scale, blurred shadows only on floating layers, sentence-case
     /// labels without tracking, values neutral at rest in the shared controls, the docked
     /// shell's sizes, and no value left from the earlier Ember palette.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunStudio()
@@ -450,22 +482,25 @@ internal static partial class DesignTokenCheck
         var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
-        // Radius: 0 docked · 1 plot bars · 2 inner keys, rows, clips · 3 controls, cards · 4 modals.
+        // Radius (spec 038): 0 docked · 2 fine parts · 3 switch · 4 value bar · 5 cell · 6 field ·
+        // 7 group, section · 9 card.
         var radii = Regex.Matches(theme, """<CornerRadius x:Key="(?<k>Radius\.\w+)">(?<v>[0-9.]+)</CornerRadius>""")
-            .Where(m => !new[] { 0d, 1, 2, 3, 4 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
+            .Where(m => !new[] { 0d, 2, 3, 4, 5, 6, 7, 9 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
             .Select(m => $"{m.Groups["k"].Value} {m.Groups["v"].Value}").ToArray();
         yield return (radii.Length == 0,
-            radii.Length == 0 ? "every Radius.* is on the 0/1/2/3/4 scale" : $"radii off the scale: {string.Join(", ", radii)}");
+            radii.Length == 0 ? "every Radius.* is on the 0/2/3/4/5/6/7/9 scale" : $"radii off the scale: {string.Join(", ", radii)}");
 
-        // A blurred shadow means the element floats. Only Shadow.Popover / Shadow.Modal may
-        // carry a blur; every other shadow is a bevel or an edge. They are built from the
-        // theme in NotaThemeService, one res["Shadow.*"] = … statement each.
+        // A wide blur means the element floats. Only Shadow.Popover / Shadow.Modal may blur more
+        // than 2px; the device-card depth (groove, section, switch, lifted part) is a 1–2px
+        // shadow and every other shadow is a bevel or an edge. They are built from the theme
+        // in NotaThemeService, one res["Shadow.*"] = … statement each.
         var service = File.ReadAllText(Path.Combine(app, "Theme/NotaThemeService.cs"));
         var blurred = Regex.Matches(service, @"res\[""(?<k>Shadow\.\w+)""\]\s*=(?<v>[^;]+);")
-            .Where(m => m.Groups["v"].Value.Contains("Blur") && m.Groups["k"].Value is not ("Shadow.Popover" or "Shadow.Modal"))
+            .Where(m => Regex.Matches(m.Groups["v"].Value, @"Blur = (?<b>[0-9]+)").Any(b => int.Parse(b.Groups["b"].Value) > 2)
+                        && m.Groups["k"].Value is not ("Shadow.Popover" or "Shadow.Modal"))
             .Select(m => m.Groups["k"].Value).ToList();
         yield return (blurred.Count == 0,
-            blurred.Count == 0 ? "only Shadow.Popover / Shadow.Modal carry a blur (floating layers)" : $"blurred shadows on docked surfaces: {string.Join(", ", blurred.Distinct())}");
+            blurred.Count == 0 ? "only Shadow.Popover / Shadow.Modal blur more than 2px (floating layers)" : $"blurred shadows on docked surfaces: {string.Join(", ", blurred.Distinct())}");
         var axamlShadows = Files(app, "*.axaml", SearchOption.AllDirectories)
             .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.EndsWith("Theme/NotaTheme.axaml"))
             .Where(f => Regex.IsMatch(File.ReadAllText(f), """BoxShadow="(?!\{)"""))
@@ -498,18 +533,20 @@ internal static partial class DesignTokenCheck
         yield return (shouters.Length == 0,
             shouters.Length == 0 ? "the shared label builders do not upper-case (NotaText.Label)" : $"upper-casing label builders: {string.Join(", ", shouters)}");
 
-        // Live or chosen: the shared value controls draw a resting value in neutral ink.
+        // Orange's third job: values inside a device are orange lines (knob arcs, value-bar
+        // lines); a graph curve stays Viz ink, and a flat knob outside a device is grey at rest.
         var knob = File.ReadAllText(Path.Combine(app, "Controls/Knob.cs"));
         var graph = File.ReadAllText(Path.Combine(app, "Controls/NotaGraph.cs"));
         var slider = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
-        yield return (knob.Contains("RestArc = NotaPalette.VizInk") && graph.Contains("PrimaryPen = new Pen(NotaPalette.VizInk")
-                      && slider.Contains("Fill = NotaPalette.VizInk"),
-            "knob arcs, slider fills and graph curves are neutral at rest (accent only while live)");
+        yield return (knob.Contains("DeviceArc = NotaPalette.Accent") && knob.Contains("GreyArc = NotaPalette.TextTertiary")
+                      && graph.Contains("PrimaryPen = new Pen(NotaPalette.VizInk") && slider.Contains("Line = NotaPalette.Accent"),
+            "device knob arcs and value-bar lines are orange; graph curves are Viz ink; flat knobs are grey at rest");
 
-        // The docked shell: a 44px transport row with a 30px console, panels on a 1px seam.
+        // The docked shell: a 44px toolbar whose transport keys sit in a 32px well (28px icon
+        // buttons in 2px of well), panels on a 1px seam.
         var geo = File.ReadAllText(Path.Combine(app, "Theme/NotaGeometry.cs"));
-        yield return (Regex.IsMatch(geo, @"TransportBar = 44;") && Regex.IsMatch(geo, @"Console = 30;") && Regex.IsMatch(geo, @"Gutter = 1;"),
-            "transport row 44 · console 30 · panels meet on a 1px seam");
+        yield return (Regex.IsMatch(geo, @"TransportBar = 44;") && Regex.IsMatch(geo, @"Console = 32;") && Regex.IsMatch(geo, @"Gutter = 1;"),
+            "toolbar 44 · transport well 32 · panels meet on a 1px seam");
 
         // No value of the earlier Ember palette is in a Studio theme (the Ember themes are
         // Ember by definition — spec 011 FR-016).

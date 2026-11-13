@@ -63,6 +63,12 @@ Monolith::Monolith() {
     set(AAttack, 0.02f);
     set(ADecay, 0.5f);
     set(ASustain, 0.85f);
+    set(FDCurve, 0.5f);
+    set(FRCurve, 0.5f);
+    set(FEnvExp, 0.0f);
+    set(ADCurve, 0.5f);
+    set(ARCurve, 0.5f);
+    set(AEnvExp, 0.0f); // straight, Lin: old projects keep their contours
 }
 
 void Monolith::controller(int32_t ctl, float value) {
@@ -83,7 +89,7 @@ std::string Monolith::pluginParamId(int32_t i) const {
         "velvcf", "bend", "modwheel", "o1range", "o1wave", "o2range", "o2tune", "o2wave", "o3range", "o3tune", "o3wave",
         "mix1lvl", "mix1on", "mix2lvl", "mix2on", "mix3lvl", "mix3on", "noiselvl", "noiseon", "noisetype", "extlvl",
         "exton", "feedback", "cutoff", "emph", "contour", "kbd1", "kbd2", "fattack", "fdecay", "fsustain", "aattack",
-        "adecay", "asustain"};
+        "adecay", "asustain", "fdcurve", "frcurve", "fenvexp", "adcurve", "arcurve", "aenvexp"};
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string();
 }
 
@@ -96,7 +102,8 @@ std::string Monolith::pluginParamName(int32_t i) const {
         "Mixer Osc3 Level", "Mixer Osc3 On", "Mixer Noise Level", "Mixer Noise On", "Mixer Noise Type",
         "Mixer External Level", "Mixer External On", "Mixer Feedback", "Filter Cutoff", "Filter Emphasis",
         "Filter Contour", "Filter Keyboard 1/3", "Filter Keyboard 2/3", "Filter-Env Attack", "Filter-Env Decay",
-        "Filter-Env Sustain", "Amp-Env Attack", "Amp-Env Decay", "Amp-Env Sustain"};
+        "Filter-Env Sustain", "Amp-Env Attack", "Amp-Env Decay", "Amp-Env Sustain", "Filter-Env Decay Curve",
+        "Filter-Env Release Curve", "Filter-Env Exp", "Amp-Env Decay Curve", "Amp-Env Release Curve", "Amp-Env Exp"};
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string();
 }
 
@@ -213,6 +220,8 @@ void Monolith::render(float* out, int32_t frames) {
     const float aS = get(ASustain);
     const float fRel = decayOn ? fD : rateOf2(0.004); // Decay switch off → near-instant release
     const float aRel = decayOn ? aD : rateOf2(0.004);
+    const EnvBends fBend = envBends({get(FDCurve), get(FRCurve), get(FEnvExp)});
+    const EnvBends aBend = envBends({get(ADCurve), get(ARCurve), get(AEnvExp)});
 
     const double glide = get(Glide);
     const double glideCoef = (get(GlideOn) > 0.5f && glide > 0.001)
@@ -243,10 +252,12 @@ void Monolith::render(float* out, int32_t frames) {
     int active = 0;
 
     for (int32_t i = 0; i < frames; ++i) {
-        advanceEnv(aEnv_, aStage_, aA, aD, aS, aRel);
-        if (aStage_ == Stage::Off && heldN_ == 0) { /* silent */
-        }
-        advanceEnv(fEnv_, fStage_, fA, fD, fS, fRel);
+        stepEnv(aEnv_, aStage_, aShape_, aA, aD, aS, aRel, aBend);
+        stepEnv(fEnv_, fStage_, fShape_, fA, fD, fS, fRel, fBend);
+        // A held note follows the Sustain knobs live (automation included), as Monolith's
+        // own envelope always did; the shared step leaves the sustain level alone.
+        if (aStage_ == Stage::Sustain) aEnv_ = aS;
+        if (fStage_ == Stage::Sustain) fEnv_ = fS;
 
         // Slow drift update.
         driftPhase_ += driftInc;
@@ -330,6 +341,8 @@ void Monolith::render(float* out, int32_t frames) {
     }
     if (aStage_ != Stage::Off) active = 1;
     active_.store(active, std::memory_order_relaxed);
+    publishEnvTele(envTele_, true, fStage_, &fShape_, fEnv_, fS);
+    publishEnvTele(envTele_ + kEnvTeleFloats, true, aStage_, &aShape_, aEnv_, aS);
     // Sleep: amp contour Off with nothing held means amp is exactly zero.
     idle_ = (aStage_ == Stage::Off && heldN_ == 0);
 }
@@ -368,33 +381,6 @@ int Monolith::selectPitch() const {
     return best;
 }
 
-void Monolith::advanceEnv(float& env, Stage& st, float atk, float dec, float sus, float rel) {
-    switch (st) {
-    case Stage::Attack:
-        env += atk;
-        if (env >= 1.0f) {
-            env = 1.0f;
-            st = Stage::Decay;
-        }
-        break;
-    case Stage::Decay:
-        env -= dec;
-        if (env <= sus) {
-            env = sus;
-            st = Stage::Sustain;
-        }
-        break;
-    case Stage::Sustain: env = sus; break;
-    case Stage::Release:
-        env -= rel;
-        if (env <= 0.0f) {
-            env = 0.0f;
-            st = Stage::Off;
-        }
-        break;
-    case Stage::Off: break;
-    }
-}
 
 double Monolith::osc12(int w, double ph, double dt) {
     switch (w) {

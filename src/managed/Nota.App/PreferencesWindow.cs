@@ -29,7 +29,9 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Localization;
+using Nota.Application.Themes;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -65,10 +67,17 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         (Loc.T("preferences.devices_settings"), new[]
         {
-            new Page("Audio", Loc.T("common.audio"), Loc.T("preferences.device_sample_rate_and_buffer"), GlyphKind.Levels),
+            new Page("Audio", Loc.T("common.audio"), Loc.T("preferences.audio_subtitle"), GlyphKind.Levels),
+            new Page("Outputs", Loc.T("preferences.outputs"), Loc.T("preferences.outputs_subtitle"), GlyphKind.Output),
+            new Page("Inputs", Loc.T("preferences.inputs"), Loc.T("preferences.inputs_subtitle"), GlyphKind.Input),
             new Page("MIDI", "MIDI", Loc.T("preferences.controllers_nota_listens_to"), GlyphKind.MidiPort),
             new Page("Gamepads", Loc.T("preferences.gamepads"), Loc.T("preferences.play_notes_or_drive_mapped"), GlyphKind.Gamepad),
+        }),
+        // Things outside Nota that drive it: a phone on the network, an AI assistant over MCP.
+        (Loc.T("preferences.remote_control"), new[]
+        {
             new Page("Remote", Loc.T("preferences.remote"), Loc.T("preferences.phones_and_tablets_on_this"), GlyphKind.Phone),
+            new Page("MCP", Loc.T("preferences.ai_control_mcp"), Loc.T("preferences.mcp_subtitle"), GlyphKind.Action),
         }),
         (Loc.T("preferences.plug_ins"), new[]
         {
@@ -77,9 +86,11 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         (Loc.T("preferences.general"), new[]
         {
+            new Page("Appearance", Loc.T("preferences.appearance"), Loc.T("preferences.appearance_subtitle"), GlyphKind.Appearance),
+            new Page("Language", Loc.T("preferences.language"), Loc.T("preferences.language_subtitle"), GlyphKind.Globe),
+            new Page("Editing", Loc.T("preferences.editing"), Loc.T("preferences.editing_subtitle"), GlyphKind.Edit),
             new Page("Library", Loc.T("preferences.library"), Loc.T("preferences.content_folders_and_version_history"), GlyphKind.Library),
-            new Page("Appearance", Loc.T("preferences.appearance"), Loc.T("preferences.theme_scale_waveforms_and_ai"), GlyphKind.Appearance),
-            new Page("Shortcuts", Loc.T("preferences.shortcuts"), Loc.T("preferences.keyboard_reference"), GlyphKind.Shortcuts),
+            new Page("Shortcuts", Loc.T("preferences.shortcuts"), Loc.T("preferences.shortcuts_subtitle"), GlyphKind.Shortcuts),
             new Page("Updates", Loc.T("preferences.updates"), Loc.T("preferences.new_versions_of_nota"), GlyphKind.Update),
         }),
     };
@@ -141,14 +152,21 @@ public sealed partial class PreferencesWindow : NotaWindow
         {
             nav.Children.Add(new TextBlock
             {
-                Text = group, FontSize = 9, FontWeight = FontWeight.Medium,
+                Text = group, FontSize = 8.5, FontWeight = FontWeight.Medium,
                 Foreground = TextDisabled, Margin = new Thickness(10, 12, 10, 5),
             });
             foreach (var page in pages) nav.Children.Add(BuildNavItem(page, index++));
         }
         var sidebar = new Border
         {
-            Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0), Child = nav,
+            Width = 188, Background = Sidebar, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 0),
+            // Fifteen pages outgrow the 480 px minimum height: the list scrolls so Shortcuts and
+            // Updates stay reachable in a short window.
+            Child = new ScrollViewer
+            {
+                Content = nav,
+                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            },
         };
 
         // The download dock is its own row under the scrolled pane: it shortens the pane
@@ -185,31 +203,41 @@ public sealed partial class PreferencesWindow : NotaWindow
     public void ShowDownloads(int source)
     {
         _downloadSource = Math.Clamp(source, 0, DownloadSources.Length - 1);
-        Select(DownloadsIndex);
+        Select("Downloads");
     }
 
     private static IEnumerable<Page> Pages => Nav.SelectMany(g => g.Pages);
 
-    /// <summary>Switches to the page with this title ("Audio", "Shortcuts" …) — the palette's
-    /// Settings: … commands.</summary>
-    public void ShowPage(string title)
+    // Pages are found by their stable id, never by position: inserting a page must not send
+    // a caller (palette, Remote pairing, Downloads, Updates) to its neighbour. An unknown id
+    // (an old caller) lands on the first page.
+    private static int IndexOf(string id)
     {
         int i = 0;
-        foreach (var p in Pages) { if (p.Id == title) { Select(i); return; } i++; }
+        foreach (var p in Pages) { if (p.Id == id) return i; i++; }
+        return 0;
     }
+
+    private string SelectedId => _selected >= 0 ? Pages.ElementAt(_selected).Id : "";
+
+    private void Select(string id) => Select(IndexOf(id));
+
+    /// <summary>Switches to the page with this id ("Audio", "Inputs", "MCP" …) — the palette's
+    /// Settings: … commands and every other way into a page.</summary>
+    public void ShowPage(string id) => Select(id);
 
     private Control BuildNavItem(Page page, int idx)
     {
         var edge = new Border
         {
-            Width = 2, CornerRadius = NotaRadius.Bar, Margin = new Thickness(0, 7),
+            Width = 2, CornerRadius = NotaRadius.Fine, Margin = new Thickness(0, 7),
             HorizontalAlignment = HorizontalAlignment.Left, Background = Brushes.Transparent,
         };
         var icon = new Glyph(page.Icon, 14);
-        var label = new TextBlock { Text = page.Title, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = page.Title, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
         var badge = new TextBlock
         {
-            FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary,
+            FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary,
             VerticalAlignment = VerticalAlignment.Center, IsVisible = false,
         };
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8, Margin = new Thickness(10, 0) };
@@ -219,7 +247,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         var root = new Border
         {
-            Height = 28, CornerRadius = NotaRadius.Tile, Background = Brushes.Transparent,
+            Height = 28, CornerRadius = NotaRadius.Group, Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new Panel { Children = { row, edge } },
         };
@@ -232,7 +260,11 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private void Select(int index)
     {
-        StopTests();   // the Audio pane is rebuilt on every visit — don't leave a tone / check orphaned
+        EndShortcutEdit();   // a row recording a key must not keep taking keys on another page
+        StopTests();   // the audio panes are rebuilt on every visit — don't leave a tone / check orphaned
+        // Apply() refreshes latency and the input list only while their page is the one shown.
+        _latencyValue = _latencyDetail = null;
+        _inputsHost = null;
         _selected = index;
         for (int i = 0; i < _navItems.Count; i++)
         {
@@ -244,17 +276,24 @@ public sealed partial class PreferencesWindow : NotaWindow
             n.Label.Foreground = on ? TextPrimary : TextSecondary;
             n.Label.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
         }
+        // A page opened from elsewhere (ShowPage("Updates")) shows its row even when the sidebar is scrolled.
+        // Posted past layout: called before the window is measured, the row has no place to scroll to yet.
+        if (index >= 0 && index < _navItems.Count)
+        {
+            var row = _navItems[index].Root;
+            Dispatcher.UIThread.Post(() => row.BringIntoView(), DispatcherPriority.Loaded);
+        }
 
         var page = Pages.ElementAt(index);
         // The subtitle takes the width left beside the title and wraps: a longer translation must
         // not run under a control placed at the right (the Downloads switch).
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10, Margin = new Thickness(0, 0, 0, 20) };
-        header.Children.Add(new TextBlock { Text = page.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Bottom });
-        var subtitle = new TextBlock { Text = page.Subtitle, FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 2) };
+        header.Children.Add(new TextBlock { Text = page.Title, FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Bottom });
+        var subtitle = new TextBlock { Text = page.Subtitle, FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 2) };
         Grid.SetColumn(subtitle, 1);
         header.Children.Add(subtitle);
 
-        if (index == DownloadsIndex) { _content.Content = DownloadsPane(header); return; }
+        if (page.Id == "Downloads") { _content.Content = DownloadsPane(header); return; }
 
         // Padding lives inside the scrolled content: a ScrollViewer's own Padding isn't part of
         // its extent, so the last rows of a long pane (Shortcuts) couldn't be scrolled into view.
@@ -263,7 +302,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             Content = new Border
             {
                 Padding = new Thickness(32, 26, 32, 40),
-                Child = new StackPanel { Children = { header, BuildPane(index) } },
+                Child = new StackPanel { Children = { header, BuildPane(page.Id) } },
             },
         };
     }
@@ -271,26 +310,34 @@ public sealed partial class PreferencesWindow : NotaWindow
     // The Downloads item carries the number of registry plugins not installed yet.
     private void UpdateDownloadsBadge(int count)
     {
-        var badge = _navItems[DownloadsIndex].Badge;
+        var badge = _navItems[IndexOf("Downloads")].Badge;
         badge.Text = count.ToString();
         badge.IsVisible = count > 0;
     }
 
-    private Control BuildPane(int index) => index switch
+    private Control BuildPane(string id) => id switch
     {
-        0 => AudioPane(),
-        1 => MidiPane(),
-        2 => GamepadsPane(),
-        RemoteIndex => RemotePane(),
-        4 => PluginsPane(),
-        6 => LibraryPane(),
-        7 => AppearancePane(),
-        UpdatesIndex => UpdatesPane(),
+        "Audio" => AudioPane(),
+        "Outputs" => OutputsPane(),
+        "Inputs" => InputsPane(),
+        "MIDI" => MidiPane(),
+        "Gamepads" => GamepadsPane(),
+        "Remote" => RemotePane(),
+        "MCP" => McpPane(),
+        "Plug-ins" => PluginsPane(),
+        "Appearance" => AppearancePane(),
+        "Language" => LanguagePane(),
+        "Editing" => EditingPane(),
+        "Library" => LibraryPane(),
+        "Updates" => UpdatesPane(),
         _ => ShortcutsPane(),
     };
 
     // ---- Audio ------------------------------------------------------------
 
+    // Audio: how the device runs — audio system and driver (Windows), sample rate, buffer,
+    // exclusive mode, latency and the CPU check. Which output and which inputs are on their
+    // own pages (Outputs, Inputs — specs/088).
     private Control AudioPane()
     {
         if (_main is null) return Caption(Loc.T("preferences.audio_settings_are_unavailable_in"));
@@ -298,14 +345,6 @@ public sealed partial class PreferencesWindow : NotaWindow
         _loading = true;
         var engine = _main.Engine;
         var cfg = engine.GetAudioConfig();
-
-        var outputCombo = Combo(280);
-        FillDeviceCombo(outputCombo, _outputUids, _audioDevices.OutputDevices(), cfg.OutputUid);
-        outputCombo.SelectionChanged += (_, _) => { int i = outputCombo.SelectedIndex; if (i >= 0 && i < _outputUids.Count) { engine.SetAudioOutputDevice(_outputUids[i]); Apply(); } };
-
-        var inputCombo = Combo(280);
-        FillDeviceCombo(inputCombo, _inputUids, _audioDevices.InputDevices(), cfg.InputUid);
-        inputCombo.SelectionChanged += (_, _) => { int i = inputCombo.SelectedIndex; if (i >= 0 && i < _inputUids.Count) { engine.SetAudioInputDevice(_inputUids[i]); Apply(); } };
 
         var srCombo = Combo(150);
         foreach (var sr in SampleRates) srCombo.Items.Add(sr == 0 ? Loc.T("preferences.device_default") : NotaNum.Unit(sr, "0", "Hz"));
@@ -317,8 +356,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         bufCombo.SelectedIndex = IndexOf(BufferSizes, cfg.BufferFrames);
         bufCombo.SelectionChanged += (_, _) => { int i = bufCombo.SelectedIndex; if (i >= 0) { engine.SetAudioBufferFrames(BufferSizes[i]); Apply(); } };
 
-        _latencyValue = new TextBlock { FontSize = 12, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary };
-        _latencyDetail = new TextBlock { FontSize = 12, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
+        _latencyValue = new TextBlock { FontSize = 11, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary };
+        _latencyDetail = new TextBlock { FontSize = 11, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap };
         UpdateLatency();
         var latency = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { _latencyValue, _latencyDetail } };
 
@@ -328,39 +367,31 @@ public sealed partial class PreferencesWindow : NotaWindow
         bool asio = asioUi && engine.AudioSystem == AudioSystem.Asio;
         if (asioUi) AudioSystemRows(device, engine, asio);
         if (asio)
-        {
             AsioRows(device, engine, srCombo);
-            device.Add(Row(Loc.T("preferences.latency"), latency));
-            var asioBody = Sections(
-                Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
-                Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
-            _loading = false;
-            return asioBody;
-        }
-        device.AddRange(new[]
+        else
         {
-            Row(Loc.T("common.output"), outputCombo), Row(Loc.T("common.input"), inputCombo),
-            Row(Loc.T("preferences.sample_rate"), srCombo), Row(Loc.T("preferences.buffer_size"), bufCombo),
-        });
-        // WASAPI exclusive (Windows only): lets Nota own the output device for the lowest
-        // latency, at the cost of muting other apps. The device then dictates the sample rate /
-        // buffer, so those are ignored while it's on. If the device refuses exclusive (busy /
-        // not allowed), the backend falls back to shared mode and the latency line says so.
-        if (OperatingSystem.IsWindows())
-        {
-            device.Add(Row(Loc.T("preferences.exclusive_mode"), SwitchRow(Loc.T("preferences.wasapi_exclusive_lowest_latency_mutes"), cfg.WasapiExclusive, on =>
+            device.Add(Row(Loc.T("preferences.sample_rate"), srCombo));
+            device.Add(Row(Loc.T("preferences.buffer_size"), bufCombo));
+            // WASAPI exclusive (Windows only): lets Nota own the output device for the lowest
+            // latency, at the cost of muting other apps. The device then dictates the sample rate /
+            // buffer, so those are ignored while it's on. If the device refuses exclusive (busy /
+            // not allowed), the backend falls back to shared mode and the latency line says so.
+            if (OperatingSystem.IsWindows())
             {
-                if (_loading) return;
-                engine.SetAudioWasapiExclusive(on);
-                Apply();
-            })));
-            device.Add(Row("", Caption(Loc.T("preferences.the_devices_native_sample_rate"))));
+                device.Add(Row(Loc.T("preferences.exclusive_mode"), SwitchRow(Loc.T("preferences.wasapi_exclusive_lowest_latency_mutes"), cfg.WasapiExclusive, on =>
+                {
+                    if (_loading) return;
+                    engine.SetAudioWasapiExclusive(on);
+                    Apply();
+                })));
+                device.Add(Row("", Caption(Loc.T("preferences.the_devices_native_sample_rate"))));
+            }
         }
         device.Add(Row(Loc.T("preferences.latency"), latency));
 
         var body = Sections(
             Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
-            Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
+            Section(Loc.T("preferences.test"), 8, CpuCheckRow(engine)));
         _loading = false;
         return body;
     }
@@ -390,7 +421,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 : Loc.T("preferences.no_asio_driver_found_install"))));
     }
 
-    // Driver · Output pair · Input pair · Sample rate · Buffer size (read-only) under ASIO.
+    // Driver · Sample rate · Buffer size (read-only) under ASIO. The output and input pairs are
+    // on the Outputs and Inputs pages (specs/088).
     // Pairs come from the open driver, so they show once it runs; the buffer size is the
     // driver's own setting (FR-008), changed in its panel ("Driver settings…").
     private void AsioRows(List<Control> device, IAudioEngine engine, ComboBox srCombo)
@@ -432,13 +464,6 @@ public sealed partial class PreferencesWindow : NotaWindow
             RebuildAudioPane();
         };
         device.Add(Row(Loc.T("preferences.driver"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { driverCombo, panel } }));
-
-        if (running)
-        {
-            device.Add(Row(Loc.T("common.output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
-            var ins = engine.AsioChannels(true);
-            device.Add(Row(Loc.T("common.input"), ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption(Loc.T("preferences.no_inputs_on_this_driver"))));
-        }
 
         // Sample rate is a request: a rate the driver refuses is reverted and explained (FR-007).
         // The view model remembers the refusal, so it also shows after an apply that waited for
@@ -510,7 +535,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private void OnAudioDeviceRestarted()
     {
-        if (_selected == 0) RebuildAudioPane();   // 0 = the Audio page
+        if (SelectedId is "Audio" or "Outputs" or "Inputs") RebuildAudioPane();
     }
 
     private Control TestToneRow()
@@ -599,7 +624,9 @@ public sealed partial class PreferencesWindow : NotaWindow
     private void Apply()
     {
         if (_loading || _main is null) return;
-        _main.ApplyAudioSettings();
+        _main.ApplyAudioSettings();             // re-reads the device's input setup (AudioApplied)
+        RebuildInputs(_main.Engine);           // ...its own inputs and names on the page (specs/086)
+        RebuildOutputs(_main.Engine);          // ...and its own output pairs (specs/089)
         UpdateLatency();
     }
 
@@ -664,10 +691,10 @@ public sealed partial class PreferencesWindow : NotaWindow
                 var dot = Dot(on ? NotaPalette.Success : BorderStrong);   // enabled: positive status
                 var name = new TextBlock
                 {
-                    Text = dev.Name, FontSize = 12, Foreground = on ? TextPrimary : TextTertiary,
+                    Text = dev.Name, FontSize = 11, Foreground = on ? TextPrimary : TextTertiary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 };
-                var sw = new ToggleSwitch(on, large: true) { VerticalAlignment = VerticalAlignment.Center };
+                var sw = new ToggleSwitch(on, large: true, shell: true) { VerticalAlignment = VerticalAlignment.Center };
                 sw.Changed += v =>
                 {
                     dot.Fill = v ? NotaPalette.Success : BorderStrong;
@@ -756,16 +783,16 @@ public sealed partial class PreferencesWindow : NotaWindow
             {
                 var last = new TextBlock
                 {
-                    Text = "—", FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary,
+                    Text = "—", FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextTertiary,
                     VerticalAlignment = VerticalAlignment.Center, MinWidth = 64, TextAlignment = TextAlignment.Right,
                 };
                 lastLabels[i] = last;
                 var name = new TextBlock
                 {
-                    Text = pads[i].Name, FontSize = 12, Foreground = TextPrimary,
+                    Text = pads[i].Name, FontSize = 11, Foreground = TextPrimary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 };
-                var cap = new TextBlock { Text = Loc.T("preferences.last"), FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var cap = new TextBlock { Text = Loc.T("preferences.last"), FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 rows.Add(ListRow(40, "Auto,*,Auto,Auto", Dot(Success), name, cap, last));
             }
             padHost.Content = Table(rows);
@@ -812,8 +839,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                  })
         {
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*") };
-            grid.Children.Add(new TextBlock { Text = input, FontSize = 12, Foreground = TextSecondary, Margin = new Thickness(12, 9) });
-            var a = new TextBlock { Text = action, FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary, Margin = new Thickness(12, 9), VerticalAlignment = VerticalAlignment.Center };
+            grid.Children.Add(new TextBlock { Text = input, FontSize = 11, Foreground = TextSecondary, Margin = new Thickness(12, 9) });
+            var a = new TextBlock { Text = action, FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary, Margin = new Thickness(12, 9), VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(a, 1);
             grid.Children.Add(a);
             map.Add(grid);
@@ -835,7 +862,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         var well = new Border
         {
             Background = Sunken, BorderBrush = Divider, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Panel, Padding = new Thickness(4), MinHeight = 132, Child = list,
+            CornerRadius = NotaRadius.Group, Padding = new Thickness(4), MinHeight = 132, Child = list,
         };
         var addBtn = Btn(Loc.T("preferences.add_folder"));
         var removeBtn = Btn(Loc.T("preferences.remove"));
@@ -857,15 +884,15 @@ public sealed partial class PreferencesWindow : NotaWindow
                 var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
                 grid.Children.Add(new TextBlock
                 {
-                    Text = path, FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = sel ? TextPrimary : TextSecondary,
+                    Text = path, FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = sel ? TextPrimary : TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 });
-                var tag = new TextBlock { Text = IsDefault(path) ? Loc.T("preferences.default") : "", FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var tag = new TextBlock { Text = IsDefault(path) ? Loc.T("preferences.default") : "", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(tag, 1);
                 grid.Children.Add(tag);
                 var row = new Border
                 {
-                    Height = 28, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control,
+                    Height = 28, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field,
                     Background = sel ? AccentSubtle : Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = grid,
                 };
                 row.PointerPressed += (_, _) => { _selFolder = idx; RenderFolders(); };
@@ -894,7 +921,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             RenderFolders();
         };
 
-        var rescanStatus = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        var rescanStatus = new TextBlock { FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         var rescan = Btn(Loc.T("preferences.rescan_plugins"));
         rescan.Click += async (_, _) =>
         {
@@ -940,11 +967,8 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         if (_main is null) return Caption(Loc.T("preferences.content_folders_are_unavailable_in"));
         var settings = _main.Settings;
-        return Sections(Section(Loc.T("preferences.content_folders"), 10, Table(new List<Control>
+        return Sections(SampleFoldersSection(settings), Section(Loc.T("preferences.content_folders"), 10, Table(new List<Control>
         {
-            FolderRow(Loc.T("preferences.samples"),
-                () => settings.Current.SamplesFolder, () => settings.ResolvedSamplesFolder(),
-                path => { settings.Current.SamplesFolder = path; settings.Save(); _main.Browser.RebuildSamples(); }),
             FolderRow(Loc.T("preferences.projects"),
                 () => settings.Current.ProjectsFolder, () => settings.ResolvedProjectsFolder(),
                 path => { settings.Current.ProjectsFolder = path; settings.Save(); _main.Browser.RebuildProjects(); }),
@@ -974,10 +998,10 @@ public sealed partial class PreferencesWindow : NotaWindow
         bool custom = !string.IsNullOrWhiteSpace(get());
         var path = new TextBlock
         {
-            Text = custom ? get() : resolved(), FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary,
+            Text = custom ? get() : resolved(), FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var tag = new TextBlock { Text = custom ? Loc.T("preferences.custom") : Loc.T("preferences.default"), FontSize = 10, Foreground = TextTertiary };
+        var tag = new TextBlock { Text = custom ? Loc.T("preferences.custom") : Loc.T("preferences.default"), FontSize = 9, Foreground = TextTertiary };
         var choose = Btn(Loc.T("preferences.choose"));
         choose.Click += async (_, _) =>
         {
@@ -991,7 +1015,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             tag.Text = Loc.T("preferences.custom");
         };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("110,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(14, 12) };
-        grid.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
         var text = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { path, tag } };
         Grid.SetColumn(text, 1); grid.Children.Add(text);
         Grid.SetColumn(choose, 2); grid.Children.Add(choose);
@@ -1007,7 +1031,25 @@ public sealed partial class PreferencesWindow : NotaWindow
     // theme, one per row while following the system. Picking a card of the other kind
     // switches mode. Every pick applies at once (NotaThemeService re-tints the palette and
     // repaints every open window) and is saved.
+    //
+    // User themes (spec 087) join the rows after the built-ins. The page re-reads the themes
+    // folder each time it opens and on Reload, and rebuilds itself when the folder or the worn
+    // theme changes from elsewhere (an MCP client), so it always shows what is true.
     private static Control ThemePicker()
+    {
+        if (!NotaThemeService.InScope) NotaThemes.ReloadUser();
+        var host = new ContentControl();
+        Action? show = null;
+        void Build() { var (content, s) = BuildThemePicker(); host.Content = content; show = s; }
+        Build();
+        void OnThemes() => Dispatcher.UIThread.Post(Build);
+        void OnWorn() => Dispatcher.UIThread.Post(() => show?.Invoke());
+        host.AttachedToVisualTree += (_, _) => { NotaThemes.ThemesChanged += OnThemes; NotaThemeService.Changed += OnWorn; };
+        host.DetachedFromVisualTree += (_, _) => { NotaThemes.ThemesChanged -= OnThemes; NotaThemeService.Changed -= OnWorn; };
+        return host;
+    }
+
+    private static (Control Content, Action Show) BuildThemePicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var darkCards = ThemeCards(NotaThemeKind.Dark);
@@ -1019,17 +1061,23 @@ public sealed partial class PreferencesWindow : NotaWindow
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         foreach (var label in new[] { Loc.T("preferences.dark"), Loc.T("preferences.light"), Loc.T("preferences.follow_system") })
         {
-            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label };
             modes.Add(btn);
             strip.Children.Add(btn);
         }
         var segmented = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+
+        var fallbackNote = new TextBlock { Classes = { "Caption" }, Foreground = NotaPalette.Warning, TextWrapping = TextWrapping.Wrap, MaxWidth = 560 };
 
         bool loading = true;
         void Show()
         {
             loading = true;
             var c = NotaThemeService.Choice;
+            var missing = StoredThemeIds(settings.Current).FirstOrDefault(id => NotaThemes.Find(id) is null);
+            fallbackNote.Text = missing is null ? "" : Loc.F("preferences.skins.fallback_note", missing,
+                (NotaThemeService.WornTheme is { } worn ? (NotaThemes.Find(worn.Id) ?? worn).Name : NotaThemes.Default.Name));
+            fallbackNote.IsVisible = missing is not null;
             var mode = Appearance.ModeOf(c, (NotaThemes.Find(c.Single) ?? NotaThemes.Default).IsDark);
             for (int i = 0; i < modes.Count; i++) modes[i].IsChecked = i == (int)mode;
             bool follow = mode == AppearanceMode.FollowSystem;
@@ -1067,11 +1115,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         };
 
         Show();
-        return new StackPanel
+        var panel = new StackPanel
         {
             Spacing = 10,
-            Children = { segmented, darkLabel, darkCards, lightLabel, lightCards },
+            Children = { segmented, fallbackNote, darkLabel, darkCards, lightLabel, lightCards, ThemesFolderRow() },
         };
+        if (ThemeProblems() is { } problems) panel.Children.Add(problems);
+        return (panel, Show);
     }
 
     // The themes of one kind as cards in a row: the preview in a frame that takes the
@@ -1082,22 +1132,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         {
             Classes = { "themes" }, SelectionMode = SelectionMode.Single,
             HorizontalAlignment = HorizontalAlignment.Left,
-            ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 }),
+            // Wraps: user themes (spec 087) can make a row longer than the page is wide.
+            ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 12, LineSpacing = 12 }),
             ItemsSource = NotaThemes.OfKind(kind).ToList(),
         };
-        list.ItemTemplate = new FuncDataTemplate<NotaColourTheme>((t, _) => t is null ? new TextBlock() : new StackPanel
-        {
-            Spacing = 6,
-            Children =
-            {
-                new Border { Classes = { "ThemeFrame" }, Child = new ThemePreview(t) },
-                new TextBlock { Text = t.Name, Classes = { "RowName" } },
-            },
-        });
+        // No sideways scrolling, so the wrap panel gets the page's width to wrap at.
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
+        list.ItemTemplate = new FuncDataTemplate<NotaColourTheme>((t, _) => t is null ? new TextBlock() : ThemeCard(t));
         return list;
     }
 
-    private static TextBlock ModeLabel() => new() { FontSize = 11, Margin = new Thickness(0, 4, 0, -4) };
+    private static TextBlock ModeLabel() => new() { FontSize = 10, Margin = new Thickness(0, 4, 0, -4) };
 
     // A miniature Nota window in one theme's own colours (with the chosen accent), whichever
     // theme is live, so each card previews itself: title bar, transport with the view keys, browser, arrangement
@@ -1109,14 +1154,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         public ThemePreview(NotaColourTheme theme) { _theme = theme; Width = W; Height = H; }
 
         // The theme as it is worn with the chosen accent (spec 084), so the card previews the pair.
-        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, NotaThemeService.Worn(_theme)));
+        // Under the classic look a built-in card shows its classic palette (spec 091).
+        private IBrush B(SolidColorBrush slot) => new ImmutableSolidColorBrush(NotaPalette.ColorIn(slot, NotaThemeService.WornForCard(_theme)));
 
         public override void Render(DrawingContext ctx)
         {
+            // The theme's own corners (spec 087): a square skin previews square.
+            double fieldR = Looks.Compose(_theme.Geometry, NotaThemeService.Look).RadiusOf(RadiusStep.Field);
             var seam = new Pen(B(NotaPalette.Seam), 1);
             void Fill(SolidColorBrush slot, double x, double y, double w, double h) => ctx.FillRectangle(B(slot), new Rect(x, y, w, h));
             void Key(SolidColorBrush slot, double x, double y, double w, double h) =>
-                ctx.DrawRectangle(B(slot), seam, new RoundedRect(new Rect(x + 0.5, y + 0.5, w - 1, h - 1), NotaRadius.ClipValue));
+                ctx.DrawRectangle(B(slot), seam, new RoundedRect(new Rect(x + 0.5, y + 0.5, w - 1, h - 1), fieldR));
             void HLine(double y, double x0, double x1) => ctx.DrawLine(seam, new Point(x0, y + 0.5), new Point(x1, y + 0.5));
             void VLine(double x, double y0, double y1) => ctx.DrawLine(seam, new Point(x + 0.5, y0), new Point(x + 0.5, y1));
 
@@ -1147,7 +1195,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 double y = top + i * laneH, span = W - x0;
                 var track = NotaPalette.TrackBrushes[i % NotaPalette.TrackBrushes.Length];
                 var r = new Rect(x0 + span * clips[i].At, y + 2, span * clips[i].Len, laneH - 4);
-                ctx.FillRectangle(B(track), r, (float)NotaRadius.ClipValue);
+                ctx.FillRectangle(B(track), r, (float)fieldR);
                 if (i < 3) HLine(y + laneH - 1, x0, W);
             }
             ctx.FillRectangle(B(NotaPalette.Accent), new Rect(x0 + (W - x0) * 0.46, top, 1, detailTop - top));
@@ -1174,7 +1222,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         foreach (var (style, label) in new[] { (0, Loc.T("preferences.smooth")), (1, Loc.T("preferences.solid")), (2, Loc.T("preferences.bars")) })
         {
             var st = style;
-            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
             btn.Click += (_, _) =>
             {
                 foreach (var (bs, bb) in buttons) bb.IsChecked = bs == st;
@@ -1183,6 +1231,93 @@ public sealed partial class PreferencesWindow : NotaWindow
                 settings.Save();
             };
             buttons.Add((st, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
+    // New · Classic (spec 091): the look every theme is worn in. Applies at once, like a theme
+    // pick, and is saved; an MCP set_look elsewhere moves the buttons (NotaThemeService.Changed).
+    private static Control LookPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(Look Look, ToggleButton Btn)>();
+        void Show() { foreach (var (l, b) in buttons) b.IsChecked = l == NotaThemeService.Look; }
+        foreach (var (look, label) in new[] { (Look.New, Loc.T("preferences.look_new")), (Look.Classic, Loc.T("preferences.look_classic")) })
+        {
+            var lk = look;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label };
+            btn.Click += (_, _) =>
+            {
+                Looks.Store(settings.Current, lk);
+                settings.Save();
+                NotaThemeService.SetLook(lk);
+                Show();
+            };
+            buttons.Add((lk, btn));
+            strip.Children.Add(btn);
+        }
+        Show();
+        var host = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        void OnChanged() => Dispatcher.UIThread.Post(Show);
+        host.AttachedToVisualTree += (_, _) => NotaThemeService.Changed += OnChanged;
+        host.DetachedFromVisualTree += (_, _) => NotaThemeService.Changed -= OnChanged;
+        return host;
+    }
+
+    // Solid · Tinted Arrangement clips (spec 091). Shows the style in effect — the look's default
+    // until the user picks; a pick is stored and wins over the look. Saving fires
+    // Settings.Changed, which redraws the open Arrangement.
+    private static Control ClipStylePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(ClipStyle Style, ToggleButton Btn)>();
+        void Show() { var now = Looks.ClipStyleOf(settings.Current); foreach (var (st, b) in buttons) b.IsChecked = st == now; }
+        foreach (var (style, label) in new[] { (ClipStyle.Solid, Loc.T("preferences.clips_solid")), (ClipStyle.Tinted, Loc.T("preferences.clips_tinted")) })
+        {
+            var st = style;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label };
+            btn.Click += (_, _) =>
+            {
+                Looks.StoreClipStyle(settings.Current, st);
+                settings.Save();
+                Show();
+            };
+            buttons.Add((st, btn));
+            strip.Children.Add(btn);
+        }
+        Show();
+        var host = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        void OnChanged() => Dispatcher.UIThread.Post(Show);   // a look switch moves the default
+        host.AttachedToVisualTree += (_, _) => NotaThemeService.Changed += OnChanged;
+        host.DetachedFromVisualTree += (_, _) => NotaThemeService.Changed -= OnChanged;
+        return host;
+    }
+
+    // Off / 4 / 8 / 16 / 32 for the arrangement's phrase lines (specs/092, #517): a heavier
+    // grid line every N bars from bar 1. Saving fires Settings.Changed, which repaints the
+    // arrangement at once.
+    private static Control PhraseLinesPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Bars, ToggleButton Btn)>();
+        int current = PhraseLines.Normalize(settings.Current.ArrangementPhraseBars);
+        foreach (int bars in PhraseLines.Choices)
+        {
+            var n = bars;
+            var label = n == 0 ? Loc.T("common.off") : n.ToString(NotaNum.Culture);
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = label, IsChecked = current == n };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bn, bb) in buttons) bb.IsChecked = bn == n;
+                if (settings.Current.ArrangementPhraseBars == n) return;
+                settings.Current.ArrangementPhraseBars = n;
+                settings.Save();
+            };
+            buttons.Add((n, btn));
             strip.Children.Add(btn);
         }
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
@@ -1235,6 +1370,67 @@ public sealed partial class PreferencesWindow : NotaWindow
         return box;
     }
 
+    // Windows / Linux: Hidden / Shown for the in-window menu row (#518). Hidden, the Menu key at
+    // the start of the transport bar gives the menu. Saving fires Settings.Changed, which shows or
+    // hides the row and ticks View ▸ Show menu bar; the same event repaints these buttons, so a
+    // change from the View menu updates an open Appearance pane. Not on macOS (system menu bar).
+    private static Control MenuBarRows()
+    {
+        if (!MainWindow.HasMenuKey) return new Panel { IsVisible = false };
+        return new StackPanel
+        {
+            Spacing = 10,
+            Children =
+            {
+                Row(Loc.T("preferences.menu_bar"), MenuBarPicker()),
+                Row("", Caption(Loc.T("preferences.menu_bar_caption"))),
+            },
+        };
+    }
+
+    private static Control MenuBarPicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(bool Shown, ToggleButton Btn)>();
+        void ShowSaved()
+        {
+            bool shown = settings.Current.ShowMenuBar;
+            foreach (var (bs, bb) in buttons) bb.IsChecked = bs == shown;
+        }
+        foreach (var (shown, label) in new[] { (false, Loc.T("preferences.menu_bar_hidden")), (true, Loc.T("preferences.menu_bar_shown")) })
+        {
+            var v = shown;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
+            btn.Click += (_, _) =>
+            {
+                if (settings.Current.ShowMenuBar == v) { ShowSaved(); return; }
+                settings.Current.ShowMenuBar = v;
+                settings.Save();
+            };
+            buttons.Add((v, btn));
+            strip.Children.Add(btn);
+        }
+        ShowSaved();
+        var box = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        var listening = false;
+        void OnChanged() => ShowSaved();
+        box.AttachedToVisualTree += (_, _) =>
+        {
+            ShowSaved();
+            if (listening) return;
+            listening = true;
+            settings.Changed += OnChanged;
+        };
+        box.DetachedFromVisualTree += (_, _) =>
+        {
+            if (!listening) return;
+            listening = false;
+            settings.Changed -= OnChanged;
+        };
+        return box;
+    }
+
     // 75–200 % for the whole interface (spec 027, #38). Applies live — this window rescales
     // under the pointer too — and is saved for the next launch.
     private static Control ScalePicker()
@@ -1246,7 +1442,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         foreach (var percent in InterfaceScale.Presets)
         {
             var p = percent;
-            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = $"{p}\u2009%", IsChecked = current == p };
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 11, Content = $"{p}\u2009%", IsChecked = current == p };
             btn.Click += (_, _) =>
             {
                 foreach (var (bp, bb) in buttons) bb.IsChecked = bp == p;
@@ -1258,437 +1454,73 @@ public sealed partial class PreferencesWindow : NotaWindow
             buttons.Add((p, btn));
             strip.Children.Add(btn);
         }
+        // The scale can also change from the transport bar's ⋯ menu (#520) while Settings is open.
+        void Follow()
+        {
+            int now = InterfaceScale.Normalize(settings.Current.InterfaceScale);
+            foreach (var (bp, bb) in buttons) bb.IsChecked = bp == now;
+        }
+        strip.AttachedToVisualTree += (_, _) => NotaUiScale.Changed += Follow;
+        strip.DetachedFromVisualTree += (_, _) => NotaUiScale.Changed -= Follow;
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
-    private Control AppearancePane()
+    // Smaller … Largest: a step in points on every text (spec 038). Applies live and is saved.
+    private static string TextSizeName(int step) => step switch
     {
-        var settings = App.Services.GetService<ISettingsService>();
-        var mcp = App.Services.GetService<McpService>();
-
-        // ---- AI control (MCP server) ----
-        var portBox = new TextBox
-        {
-            Text = (settings?.Current.McpPort ?? 3900).ToString(), Width = 96, Classes = { "field" },
-            FontSize = 12, FontFamily = NotaFonts.MonoFamily, HorizontalAlignment = HorizontalAlignment.Left,
-        };
-        var statusDot = Dot(BorderStrong);
-        var status = new TextBlock
-        {
-            FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var copyBtn = Btn(Loc.T("preferences.copy_config"));
-        copyBtn.HorizontalAlignment = HorizontalAlignment.Left;
-        var details = new StackPanel
-        {
-            Spacing = 10,
-            Children =
-            {
-                Row(Loc.T("preferences.port"), portBox),
-                Row(Loc.T("preferences.status"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { statusDot, status } }),
-                Row("", new StackPanel
-                {
-                    Spacing = 10,
-                    Children =
-                    {
-                        copyBtn,
-                        Caption(Loc.T("preferences.add_this_config_or_the")),
-                    },
-                }),
-            },
-        };
-
-        bool Enabled() => settings?.Current.McpEnabled ?? false;
-        void Refresh()
-        {
-            bool on = Enabled();
-            status.Text = on ? Loc.F("preferences.listening_on_http_127_0", settings!.Current.McpPort) : Loc.T("common.off");
-            statusDot.Fill = on ? NotaPalette.SuccessDim : BorderStrong;
-            portBox.IsEnabled = on;
-            portBox.Foreground = on ? TextPrimary : TextDisabled;
-            copyBtn.IsEnabled = on;
-            Inactive.Set(details, !on);
-        }
-        void ApplyMcp(bool on)
-        {
-            if (settings is null) return;
-            settings.Current.McpEnabled = on;
-            if (int.TryParse(portBox.Text, out var p) && p is > 0 and < 65536) settings.Current.McpPort = p;
-            settings.Save();
-            _ = mcp?.ApplyAsync();
-            Refresh();
-        }
-        var enable = SwitchRow(Loc.T("preferences.enable_mcp_server_let_an"), Enabled(), ApplyMcp);
-        portBox.LostFocus += (_, _) => ApplyMcp(Enabled());
-
-        // Copy a ready client-config JSON (Claude Desktop / Claude Code) with the current port.
-        string McpConfigJson()
-        {
-            int port = settings?.Current.McpPort ?? 3900;
-            return "{\n  \"mcpServers\": {\n    \"nota\": {\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:" + port + "/\"\n    }\n  }\n}";
-        }
-        DispatcherTimer? copied = null;
-        copyBtn.Click += async (_, _) =>
-        {
-            var cb = TopLevel.GetTopLevel(this)?.Clipboard;
-            if (cb is null) return;
-            await cb.SetTextAsync(McpConfigJson());
-            copyBtn.Content = Loc.T("preferences.copied");
-            copied?.Stop();
-            copied = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
-            copied.Tick += (_, _) => { copied!.Stop(); copyBtn.Content = Loc.T("preferences.copy_config"); };
-            copied.Start();
-        };
-        // Inactive.Set walks the visual tree, so the dimming waits until the pane is shown.
-        details.AttachedToVisualTree += (_, _) => Refresh();
-
-        // Piano-roll key labels: every note for beginners, C-only by default.
-        var labelAll = SwitchRow(Loc.T("preferences.label_every_note_in_the"), settings?.Current.PianoRollLabelAllNotes ?? false, on =>
-        {
-            if (settings is null) return;
-            settings.Current.PianoRollLabelAllNotes = on;
-            settings.Save();
-        });
-
-        // Detail panel (#308): a selection opens a closed panel only when this is on.
-        var openOnSelect = SwitchRow(Loc.T("preferences.open_the_detail_panel_when"), settings?.Current.OpenDetailOnSelect ?? false, on =>
-        {
-            if (settings is null) return;
-            settings.Current.OpenDetailOnSelect = on;
-            settings.Save();
-        });
-
-        var splitFades = SwitchRow(Loc.T("preferences.fade_audio_clips_when_splitting"), settings?.Current.SplitFades ?? true, on =>
-        {
-            if (settings is null) return;
-            settings.Current.SplitFades = on;
-            settings.Save();
-            _main.Engine.SplitFades = on;
-        });
-
-        return Sections(
-            Section("UI", 10,
-                TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
-                Row("", Caption(Loc.T("preferences.themes_change_colours_only_follow"))),
-                TopRow(Loc.T("preferences.accent"), AccentPicker()),
-                Row("", Caption(Loc.T("preferences.accent_caption"))),
-                Row(Loc.T("preferences.waveform"), WaveformPicker()),
-                Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
-                Row("", splitFades),
-                Row("", Caption(Loc.T("preferences.splitting_an_audio_clip_adds"))),
-                Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
-                Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
-                Row(Loc.T("preferences.interface_scale"), ScalePicker()),
-                Row("", Caption(Loc.T("preferences.makes_the_whole_interface_larger"))),
-                Row(Loc.T("preferences.language"), LanguagePicker()),
-                Row("", Caption(Loc.T("preferences.the_language_of_menus_panels")))),
-            Section(Loc.T("common.piano_roll"), 10, labelAll,
-                Caption(Loc.T("preferences.shows_every_note_name_c"))),
-            Section(Loc.T("preferences.detail_panel"), 10, openOnSelect,
-                Caption(Loc.T("preferences.off_a_click_only_selects"))),
-            Section(Loc.T("preferences.ai_control_mcp"), 12, enable, details));
-    }
-
-    // ---- Shortcuts --------------------------------------------------------
-
-    // NB: this list mirrors the real key handlers — keep the two in sync (see the
-    // `nota-shortcuts` skill). Bindings live in MainWindow.Input.cs (transport, global
-    // editing, computer-keyboard notes), PianoRollView.cs (note editing) and PreviewPlayer.cs
-    // (the Files tab's sample player). Written with the macOS glyphs; MenuKit.Keys spells them
-    // Ctrl / Alt / Shift on Windows and Linux. A Key made only of
-    // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
-    private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
-    {
-        (Loc.T("common.file"), new[]
-        {
-            ("⌘N   ⌘O", Loc.T("preferences.new_project_open_a_project")),
-            ("⌘S   ⌘⇧S", Loc.T("preferences.save_records_a_version_save")),
-            ("⌥⌘S", Loc.T("preferences.save_a_version_with_a")),
-            ("⌘⇧E", Loc.T("preferences.export_audio")),
-            ("⌘,", Loc.T("common.settings")),
-            ("⌘Q", Loc.T("preferences.quit_nota_asks_about_unsaved")),
-        }),
-        (Loc.T("preferences.window"), new[]
-        {
-            ("F11", Loc.T("preferences.enter_leave_full_screen_the")),
-            ("⌘⇧F", Loc.T("preferences.the_clip_editor_fills_the")),
-            (Loc.T("preferences.double_click_a_panel_edge"), Loc.T("preferences.reset_the_detail_panel_the")),
-        }),
-        (Loc.T("preferences.command_palette"), new[]
-        {
-            ("⌘⇧P", Loc.T("preferences.open_close_the_command_palette")),
-            ("↑ ↓   PgUp PgDn", Loc.T("preferences.move_through_the_results")),
-            ("Return", Loc.T("preferences.apply_where_the_palette_was")),
-            ("⌘Return", Loc.T("preferences.an_instrument_or_instrument_preset")),
-            ("⌥Return", Loc.T("preferences.replace_the_selected_device_instead")),
-            ("⇧Return", Loc.T("preferences.apply_and_keep_the_palette")),
-            ("Tab   ⇧Tab", Loc.T("preferences.filter_all_actions_tracks_devices")),
-            ("> @ + # ~", Loc.T("preferences.type_first_to_filter_actions")),
-            ("Esc", Loc.T("preferences.close_and_go_back_where")),
-        }),
-        (Loc.T("common.transport"), new[]
-        {
-            ("Space", Loc.T("preferences.play_stop_stop_goes_back")),
-            ("⇧Space", Loc.T("preferences.play_pause_the_playhead_stays")),
-            ("Return", Loc.T("preferences.stop_again_back_to_the")),
-            ("⌘R", Loc.T("common.record")),
-            ("⌘.", Loc.T("preferences.discard_the_take_and_record")),
-            ("⌘M", Loc.T("common.metronome")),
-            ("⌘L", Loc.T("preferences.loop_on_off_loop_the")),
-            (Loc.T("preferences.double_click_loop_brace"), Loc.T("preferences.loop_on_off_in_the")),
-            (Loc.T("preferences.drag_loop_edge_drag_loop"), Loc.T("preferences.resize_that_end_of_the")),
-            (Loc.T("preferences.right_click_ruler"), Loc.T("preferences.loop_on_off_loop_the_2")),
-            ("P", Loc.T("preferences.show_playhead_scroll_the_arrangement")),
-            ("⌘⇧R", Loc.T("preferences.loop_recording_overdub_every_pass")),
-            (Loc.T("preferences.click_the_position_read_out"), Loc.T("preferences.switch_it_between_bars_and")),
-        }),
-        (Loc.T("preferences.arrangement_editing"), new[]
-        {
-            ("⌘Z   ⌘⇧Z", Loc.T("preferences.undo_redo")),
-            ("⌘A", Loc.T("preferences.select_all_clips")),
-            ("⌘⇧A", Loc.T("preferences.toggle_automation_mode")),
-            ("⌘⇧M", Loc.T("preferences.toggle_the_mixer_view")),
-            ("Tab", Loc.T("preferences.cycle_devices_pattern_clip_in")),
-            ("Esc", Loc.T("preferences.cancel_the_current_gesture_clear")),
-            ("⌘G   ⌘⇧G", Loc.T("preferences.group_ungroup_selected_tracks_on")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_clips_a")),
-            ("⌘⇧C", Loc.T("preferences.copy_the_selected_clips_to")),
-            ("⌘⇧V", Loc.T("preferences.paste_the_last_range_as")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_clip_s")),
-            ("⌘⇧D", Loc.T("preferences.duplicate_time_insert_a_copy")),
-            ("⌘⇧I", Loc.T("preferences.insert_silence_push_everything_from")),
-            ("⌘E", Loc.T("preferences.split_at_the_playhead_at")),
-            ("⌘J", Loc.T("preferences.consolidate_the_selection_into_one")),
-            ("0", Loc.T("preferences.deactivate_activate_the_selected_clip")),
-            ("←   →", Loc.T("preferences.nudge_the_selected_clips_by_2")),
-            ("⌥←   ⌥→", Loc.T("preferences.nudge_the_selected_clips_by")),
-            ("⌥↑   ⌥↓", Loc.T("preferences.move_the_selected_clips_to")),
-            (Loc.T("preferences.drag_below_the_last_track"), Loc.T("preferences.move_the_clips_to_a")),
-            ("Delete", Loc.T("preferences.delete_the_selected_clip_range")),
-        }),
-        (Loc.T("preferences.grid_arrangement_or_clip_editor"), new[]
-        {
-            ("⌘1   ⌘2", Loc.T("preferences.narrow_widen_the_grid_in")),
-            ("⌘3", Loc.T("preferences.triplet_grid_on_off")),
-            ("⌘4", Loc.T("preferences.snap_to_grid_on_off")),
-            ("⌘5", Loc.T("preferences.switch_between_the_adaptive_auto")),
-            (Loc.T("preferences.alt_while_dragging"), Loc.T("preferences.move_freely_ignoring_the_grid")),
-            (Loc.T("preferences.audio_clip_editor_on_adsr"), Loc.T("preferences.cmd_1_5_act_on_the_arrangement")),
-        }),
-        (Loc.T("preferences.tracks_after_a_click_in"), new[]
-        {
-            ("⌘A", Loc.T("preferences.select_all_tracks")),
-            ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_tracks")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected_2")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_tracks")),
-            ("Delete", Loc.T("preferences.delete_the_selected_tracks_a")),
-        }),
-        (Loc.T("preferences.devices_after_a_click_on"), new[]
-        {
-            ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_devices")),
-            ("Esc", Loc.T("preferences.clear_the_device_selection_so")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_devices_each")),
-            ("⌘G", Loc.T("preferences.group_the_selected_devices_into")),
-            ("⌘⇧G", Loc.T("preferences.take_the_devices_out_of")),
-            ("Delete", Loc.T("preferences.delete_the_selected_devices_with")),
-            (Loc.T("preferences.drag_a_selected_devices_header"), Loc.T("preferences.move_the_selected_devices_of")),
-            (Loc.T("preferences.drag_a_device_onto_a"), Loc.T("preferences.move_it_there_out_of")),
-            (Loc.T("preferences.drag_a_device_onto_a_2"), Loc.T("preferences.copy_it_there")),
-        }),
-        (Loc.T("preferences.racks"), new[]
-        {
-            ("Esc", Loc.T("preferences.end_macro_mapping_map_on")),
-            (Loc.T("preferences.drag_a_zone_edge"), Loc.T("preferences.set_a_chains_key_velocity")),
-            (Loc.T("preferences.hover_the_zones"), Loc.T("preferences.see_which_chains_a_note")),
-            (Loc.T("preferences.double_click_a_chain_or"), Loc.T("preferences.rename_it")),
-            (Loc.T("preferences.right_click_a_macro"), Loc.T("preferences.map_it_to_a_parameter")),
-            (Loc.T("preferences.drag_a_devices_header"), Loc.T("preferences.move_it_within_its_chain")),
-            (Loc.T("preferences.click_a_device"), Loc.T("preferences.select_it_for_c_x")),
-        }),
-        (Loc.T("preferences.modular_after_a_click_on"), new[]
-        {
-            ("F", Loc.T("preferences.fit_every_node_on_screen")),
-            ("B", Loc.T("preferences.bypass_the_selected_device")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selected_device_with")),
-            ("Delete", Loc.T("preferences.delete_the_selected_device_modulator")),
-            ("Esc", Loc.T("preferences.show_fewer_parameters_on_every")),
-        }),
-        (Loc.T("preferences.session_after_a_click_in"), new[]
-        {
-            ("← → ↑ ↓", Loc.T("preferences.move_the_selection_between_slots")),
-            ("Return", Loc.T("preferences.launch_the_selected_clip_or")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_a_clip")),
-            ("⌘⇧C", Loc.T("preferences.copy_the_selected_clip_group")),
-            ("⌘D", Loc.T("preferences.duplicate_a_clip_into_the")),
-            ("⌘I", Loc.T("preferences.insert_a_scene_below_the")),
-            ("F2", Loc.T("preferences.rename_the_selected_clip_or")),
-            ("Delete", Loc.T("preferences.delete_the_selected_clip_or")),
-            (Loc.T("preferences.drag_clip"), Loc.T("preferences.move_it_to_another_slot")),
-            (Loc.T("preferences.drag_scene"), Loc.T("preferences.reorder_scenes")),
-            (Loc.T("preferences.double_click_slot"), Loc.T("preferences.edit_the_clip_an_empty")),
-            (Loc.T("preferences.double_click_header"), Loc.T("preferences.rename_the_track")),
-            (Loc.T("preferences.right_click_header_or_grid"), Loc.T("preferences.add_an_instrument_audio_or")),
-        }),
-        (Loc.T("common.piano_roll"), new[]
-        {
-            ("← →", Loc.T("preferences.move_notes_by_the_grid")),
-            ("↑ ↓", Loc.T("preferences.transpose_by_a_semitone")),
-            ("⇧↑  ⇧↓", Loc.T("preferences.transpose_by_an_octave")),
-            ("⇧←  ⇧→", Loc.T("preferences.shorten_lengthen_the_notes_by")),
-            ("⌥↑  ⌥↓", Loc.T("preferences.velocity_10_10_by_1")),
-            (Loc.T("preferences.wheel_over_a_note"), Loc.T("preferences.change_its_velocity_the_whole")),
-            ("⌘A", Loc.T("preferences.select_all_notes")),
-            ("⌘D", Loc.T("preferences.duplicate_the_selection_replaces_the")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_notes_paste")),
-            ("Esc", Loc.T("preferences.deselect_moved_or_pasted_notes")),
-            ("Delete", Loc.T("preferences.delete_the_selected_notes")),
-            (Loc.T("preferences.double_click_empty_grid"), Loc.T("preferences.add_a_note_with_the")),
-            (Loc.T("preferences.double_click_and_hold_drag"), Loc.T("preferences.shape_the_new_note_move")),
-            (Loc.T("preferences.drag_note_edge"), Loc.T("preferences.change_the_notes_start_or")),
-            (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag_2")),
-            (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead_on_the")),
-            (Loc.T("preferences.drag_velocity_stem"), Loc.T("preferences.set_velocity_selected_notes_move")),
-            (Loc.T("preferences.double_click_velocity_stem"), Loc.T("preferences.put_the_note_back_to")),
-            (Loc.T("preferences.right_click_velocity_stem"), Loc.T("preferences.reset_velocity_from_a_menu")),
-            (Loc.T("preferences.drag_in_the_bend_pres"), Loc.T("preferences.draw_the_selected_notes_mpe")),
-            (Loc.T("preferences.double_click_in_an_mpe"), Loc.T("preferences.add_a_point_on_a")),
-            (Loc.T("preferences.click_the_bend_lanes_range"), Loc.T("preferences.pick_how_far_the_bend")),
-            (Loc.T("preferences.click_the_controller_tab"), Loc.T("preferences.show_primary_controller_lane")),
-            (Loc.T("preferences.click_lane_controller_dropdown"), Loc.T("preferences.choose_lane_controller")),
-            (Loc.T("preferences.controller_lane_buttons"), Loc.T("preferences.manage_controller_lanes")),
-            (Loc.T("preferences.drag_in_the_sustain_lane"), Loc.T("preferences.draw_a_pedal_block_on")),
-            (Loc.T("preferences.drag_in_a_controller_lane"), Loc.T("preferences.draw_the_controllers_curve_draws")),
-            (Loc.T("preferences.drag_lane_divider"), Loc.T("preferences.resize_lane_remember_height")),
-            (Loc.T("preferences.click_a_clip_in_the"), Loc.T("preferences.make_it_the_active_clip")),
-            (Loc.T("preferences.cmd_alt_wheel"), Loc.T("preferences.zoom_rows_vertical_zoom")),
-            (Loc.T("preferences.click_a_key"), Loc.T("preferences.play_it_on_the_tracks")),
-            (Loc.T("preferences.drag_on_the_keys"), Loc.T("preferences.zoom_rows_down_taller_up")),
-            ("⌥ + pinch", Loc.T("preferences.zoom_rows_trackpad")),
-            ("⇧F", Loc.T("preferences.fit_to_notes")),
-            ("⌥⇧F", Loc.T("preferences.fold_only_the_scales_notes")),
-        }),
-        (Loc.T("preferences.audio_clip_editor"), new[]
-        {
-            (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag")),
-            (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead")),
-            (Loc.T("preferences.double_click_the_wave"), Loc.T("preferences.add_a_warp_marker_on")),
-            (Loc.T("preferences.drag_a_warp_marker"), Loc.T("preferences.align_the_audio_to_the")),
-            ("Esc", Loc.T("preferences.while_dragging_a_warp_marker")),
-            (Loc.T("preferences.drag_double_click_tempo"), Loc.T("preferences.set_the_tempo_the_clip")),
-        }),
-        (Loc.T("preferences.play_notes_computer_keyboard"), new[]
-        {
-            ("A S D F G H J K", Loc.T("preferences.white_keys_from_c4")),
-            ("W E · T Y U", Loc.T("preferences.black_keys_sharps")),
-            ("Z / X", Loc.T("preferences.shift_octave_down_up")),
-            ("C / V", Loc.T("preferences.lower_raise_velocity")),
-        }),
-        (Loc.T("preferences.browser_preview"), new[]
-        {
-            ("↑ ↓", Loc.T("preferences.move_through_samples_presets_and")),
-            (Loc.T("preferences.click_play_button"), Loc.T("preferences.play_stop_the_selected_sample")),
-            (Loc.T("preferences.click_waveform"), Loc.T("preferences.play_from_that_point")),
-            (Loc.T("preferences.click_wave_spec"), Loc.T("preferences.switch_the_well_between_the")),
-            (Loc.T("preferences.scroll_on_the_track_button"), Loc.T("preferences.step_through_the_demo_tracks")),
-            (Loc.T("preferences.alt_click_volume"), Loc.T("preferences.type_the_preview_volume_double")),
-        }),
-        (Loc.T("preferences.gamepad_macos"), new[]
-        {
-            (Loc.T("preferences.face_buttons"), Loc.T("preferences.play_c4_d4_e4_f4")),
-            (Loc.T("preferences.shoulder_buttons"), Loc.T("preferences.play_g4_a4_b4_c5")),
-            ("D-pad ↑ / ↓", Loc.T("preferences.shift_the_gamepad_octave")),
-            ("D-pad ← / →", Loc.T("preferences.lower_raise_velocity")),
-            (Loc.T("preferences.any_button"), Loc.T("preferences.mappable_through_midi_learn_a")),
-            (Loc.T("preferences.sticks_triggers"), Loc.T("preferences.mappable_as_continuous_controls_a")),
-        }),
-        (Loc.T("preferences.mouse"), new[]
-        {
-            (Loc.T("preferences.double_click_clip"), Loc.T("preferences.open_in_the_clip_editor")),
-            (Loc.T("preferences.double_click_a_track_header"), Loc.T("preferences.open_its_devices_in_the")),
-            (Loc.T("preferences.double_click_a_browser_instrument"), Loc.T("preferences.swap_it_onto_the_selected")),
-            (Loc.T("preferences.alt_double_click_a_browser"), Loc.T("preferences.always_start_a_new_track")),
-            (Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_play_record")),
-            (Loc.T("preferences.drag_an_audio_clips_adsr"), Loc.T("preferences.shape_attack_decay_sustain_release")),
-            (Loc.T("preferences.click_track_header"), Loc.T("preferences.add_the_track_to_the")),
-            (Loc.T("preferences.click_a_groups_link_key"), Loc.T("preferences.link_the_groups_tracks_arming")),
-            (Loc.T("preferences.click_a_clip_or_arm"), Loc.T("preferences.in_a_linked_group_select")),
-            (Loc.T("preferences.right_click_track_headers"), Loc.T("preferences.a_multi_selection_gets_its")),
-            (Loc.T("preferences.drag_a_tracks_bottom_edge"), Loc.T("preferences.resize_the_track_header_or")),
-            (Loc.T("preferences.drag_a_tracks_bottom_edge_2"), Loc.T("preferences.resize_every_track_at_once")),
-            (Loc.T("preferences.double_click_a_tracks_bottom"), Loc.T("preferences.back_to_the_standard_height")),
-            (Loc.T("preferences.drag_a_returns_or_the"), Loc.T("preferences.resize_that_row_header_or")),
-            ("⌘-click / ⇧-click return headers", Loc.T("preferences.select_several_returns_they_resize")),
-            (Loc.T("preferences.click_a_height_key_in"), Loc.T("preferences.set_every_track_to_compact")),
-            (Loc.T("preferences.drag_the_track_list_edge"), Loc.T("preferences.widen_or_narrow_the_track")),
-            (Loc.T("preferences.drag_sections_lane"), Loc.T("preferences.mark_a_new_section_over")),
-            (Loc.T("preferences.click_section"), Loc.T("preferences.jump_the_playhead_to_its")),
-            (Loc.T("preferences.double_click_section"), Loc.T("preferences.rename_it_right_click_reset")),
-            (Loc.T("preferences.return_esc_renaming_a_section"), Loc.T("preferences.keep_the_name_empty_automatic")),
-            (Loc.T("preferences.drag_section"), Loc.T("preferences.rearrange_the_song_it_and")),
-            (Loc.T("preferences.drag_section_2"), Loc.T("preferences.move_only_the_section_marker")),
-            (Loc.T("preferences.drag_section_edge"), Loc.T("preferences.resize_it_snapped_to_bars")),
-            (Loc.T("preferences.right_click_section"), Loc.T("preferences.move_earlier_later_duplicate_or")),
-            (Loc.T("preferences.drag_overview_strip"), Loc.T("preferences.drag_sideways_to_scroll_up")),
-            (Loc.T("preferences.drag_overview_edge"), Loc.T("preferences.zoom_by_resizing_the_viewport")),
-            (Loc.T("preferences.double_click_overview"), Loc.T("preferences.fit_the_whole_project_on")),
-            (Loc.T("preferences.drag_a_device_header"), Loc.T("preferences.reorder_devices_or_right_click")),
-            (Loc.T("preferences.right_click_a_device_header"), Loc.T("preferences.a_b_compare_move_copy")),
-            (Loc.T("preferences.delete_device_selected"), Loc.T("preferences.remove_the_selected_device_the")),
-            (Loc.T("preferences.drag_an_audio_clip_onto"), Loc.T("preferences.load_its_audio_into_the")),
-            (Loc.T("preferences.drag_an_audio_clip_out"), Loc.T("preferences.take_it_as_a_sample")),
-            (Loc.T("preferences.drag_clip_2"), Loc.T("preferences.position_freely_ignoring_the_grid")),
-            (Loc.T("preferences.wheel_over_the_device_chain"), Loc.T("preferences.scroll_it_sideways_over_an")),
-            (Loc.T("preferences.drag_knob"), Loc.T("preferences.change_a_device_value_hold")),
-            (Loc.T("preferences.drag_slider"), Loc.T("preferences.left_right_or_up_down")),
-            (Loc.T("preferences.click_a_knob_fader_or"), Loc.T("preferences.type_a_value_units_like")),
-            (Loc.T("preferences.return_esc_tab_tab_typing"), Loc.T("preferences.set_it_cancel_set_it")),
-            (Loc.T("preferences.click_a_graph_handle_envelope"), Loc.T("preferences.type_its_values_a_node")),
-            (Loc.T("preferences.double_click_a_knob_fader"), Loc.T("preferences.reset_the_value_to_its")),
-            (Loc.T("preferences.double_click_a_mod_matrix"), Loc.T("preferences.clear_the_route_volt_aurora")),
-            (Loc.T("preferences.right_click_a_knob_fader"), Loc.T("preferences.type_value_reset_to_default")),
-            (Loc.T("preferences.drag_jack_jack"), Loc.T("preferences.patch_a_cable_in_nota")),
-            (Loc.T("preferences.click_a_rhythm_step"), Loc.T("preferences.step_on_off_accent_quiet")),
-            (Loc.T("preferences.click_a_rhythm_voice"), Loc.T("preferences.select_and_play_it_drop")),
-        }),
+        -1 => Loc.T("preferences.text_size_smaller"),
+        1 => Loc.T("preferences.text_size_larger"),
+        2 => Loc.T("preferences.text_size_largest"),
+        _ => Loc.T("preferences.text_size_default"),
     };
 
-    private Control ShortcutsPane()
+    private static Control TextSizePicker()
     {
-        var groups = new StackPanel { Spacing = 18 };
-        var filter = new TextBox { PlaceholderText = Loc.T("preferences.filter_shortcuts"), Text = _shortcutFilter, Classes = { "search" }, FontSize = 12 };
-
-        void Render()
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Step, ToggleButton Btn)>();
+        int current = TextSize.Normalize(settings.Current.TextSize);
+        foreach (var step in TextSize.Steps)
         {
-            groups.Children.Clear();
-            // Each word must appear in the row's action, its keys or its group's title, so
-            // "keyboard" finds the whole "Play notes (computer keyboard)" group (#40).
-            var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            foreach (var (title, rows) in ShortcutGroups)
+            var st = step;
+            var btn = new ToggleButton { Classes = { "seg" }, Content = TextSizeName(st), IsChecked = current == st };
+            btn.Click += (_, _) =>
             {
-                var shown = rows.Where(r => words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
-                                                           || MenuKit.Keys(r.Action).Contains(w, StringComparison.OrdinalIgnoreCase)
-                                                           || MenuKit.Keys(r.Key).Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
-                if (shown.Count == 0) continue;
-                var head = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 4),
-                    Children =
-                    {
-                        new TextBlock { Text = title, Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = shown.Count.ToString(), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
-                    },
-                };
-                groups.Children.Add(new StackPanel { Spacing = 6, Children = { head, Table(shown.Select(r => ShortcutRow(r.Key, r.Action)).ToList()) } });
-            }
-            if (groups.Children.Count == 0) groups.Children.Add(Caption(Loc.T("preferences.nothing_matches")));
+                foreach (var (bs, bb) in buttons) bb.IsChecked = bs == st;
+                if (settings.Current.TextSize == st) return;
+                settings.Current.TextSize = st;
+                settings.Save();
+                NotaTextSize.Set(st);
+            };
+            buttons.Add((st, btn));
+            strip.Children.Add(btn);
         }
-        filter.TextChanged += (_, _) => { _shortcutFilter = filter.Text ?? ""; Render(); };
-        Render();
-
-        return new StackPanel { Spacing = 18, Children = { VelocityWheelSection(), SearchField(filter, 320), groups } };
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
+
+    private Control AppearancePane() => Sections(
+        Section("UI", 10,
+            Row(Loc.T("preferences.look"), LookPicker()),
+            Row("", Caption(Loc.T("preferences.look_caption"))),
+            Row(Loc.T("preferences.clips"), ClipStylePicker()),
+            Row("", Caption(Loc.T("preferences.clips_caption"))),
+            TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
+            Row("", Caption(Loc.T("preferences.skins.follow_system_hint"))),
+            TopRow(Loc.T("preferences.accent"), AccentPicker()),
+            Row("", Caption(Loc.T("preferences.accent_caption"))),
+            Row(Loc.T("preferences.waveform"), WaveformPicker()),
+            Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+            Row(Loc.T("preferences.phrase_lines"), PhraseLinesPicker()),
+            Row("", Caption(Loc.T("preferences.phrase_lines_caption"))),
+            Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
+            Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
+            MenuBarRows(),
+            Row(Loc.T("preferences.interface_scale"), ScalePicker()),
+            Row("", Caption(Loc.T("preferences.makes_the_whole_interface_larger"))),
+            Row(Loc.T("preferences.text_size"), TextSizePicker()),
+            Row("", Caption(Loc.T("preferences.text_size_caption")))));
+
+    // ---- Shortcuts --------------------------------------------------------
 
     private static readonly double[] VelocityWheelSteps = { 0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2 };
 
@@ -1727,7 +1559,8 @@ public sealed partial class PreferencesWindow : NotaWindow
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);
 
-    private static Control ShortcutRow(string key, string action)
+    // A fixed row (a mouse gesture, a list or typing key): key-caps, or the gesture as text.
+    private static Control FixedShortcutRow(string key, string action)
     {
         var tokens = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         Control keys;
@@ -1736,18 +1569,18 @@ public sealed partial class PreferencesWindow : NotaWindow
             var wrap = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             foreach (var t in tokens)
                 wrap.Children.Add(t is "/" or "·"
-                    ? new TextBlock { Text = t, FontSize = 11, Foreground = TextTertiary, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }
+                    ? new TextBlock { Text = t, FontSize = 10, Foreground = TextTertiary, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }
                     : KeyCap(MenuKit.Keys(t)));
             keys = wrap;
         }
         else
         {
-            keys = new TextBlock { Text = MenuKit.Keys(key), FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            keys = new TextBlock { Text = MenuKit.Keys(key), FontSize = 11, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         }
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*"), ColumnSpacing = 12, MinHeight = 20, Margin = new Thickness(12, 7) };   // 34 with the margin
         grid.Children.Add(keys);
-        var a = new TextBlock { Text = MenuKit.Keys(action), FontSize = 12, LineHeight = 17, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        var a = new TextBlock { Text = MenuKit.Keys(action), FontSize = 11, LineHeight = 17, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         Grid.SetColumn(a, 1);
         grid.Children.Add(a);
         return grid;
@@ -1758,17 +1591,17 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         var text = new TextBlock
         {
-            Text = label, FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary,
+            Text = label, FontSize = 10, FontFamily = NotaFonts.ValuesFamily, Foreground = TextPrimary,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         return new Border
         {
             Height = 20, MinWidth = 20, Margin = new Thickness(0, 1, 4, 1),
-            CornerRadius = NotaRadius.Control, Background = BorderStrong,
+            CornerRadius = NotaRadius.Field, Background = BorderStrong,
             BorderBrush = Divider, BorderThickness = new Thickness(1, 1, 1, 0),
             Child = new Border
             {
-                Background = Raised, CornerRadius = NotaRadius.Badge, Margin = new Thickness(0, 0, 0, 1),
+                Background = Raised, CornerRadius = NotaRadius.Cell, Margin = new Thickness(0, 0, 0, 1),
                 Padding = new Thickness(6, 0), Child = text,
             },
         };
@@ -1808,7 +1641,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             });
         return new Border
         {
-            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
             ClipToBounds = true, Child = stack,
         };
     }
@@ -1831,12 +1664,12 @@ public sealed partial class PreferencesWindow : NotaWindow
         var outline = new Rectangle
         {
             Stroke = Divider, StrokeThickness = 1, StrokeDashArray = new AvaloniaList<double> { 3, 3 },
-            RadiusX = NotaRadius.PanelValue, RadiusY = NotaRadius.PanelValue,
+            RadiusX = NotaRadius.GroupValue, RadiusY = NotaRadius.GroupValue,
         };
         var line = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(14, 0), VerticalAlignment = VerticalAlignment.Center,
-            Children = { Dot(BorderStrong), new TextBlock { Text = text, FontSize = 11, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center } },
+            Children = { Dot(BorderStrong), new TextBlock { Text = text, FontSize = 10, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center } },
         };
         return new Panel { Height = 44, Children = { outline, line } };
     }
@@ -1846,9 +1679,9 @@ public sealed partial class PreferencesWindow : NotaWindow
     // A settings switch (28×16) with its sentence; the sentence toggles it too.
     private static Control SwitchRow(string text, bool on, Action<bool> changed)
     {
-        var sw = new ToggleSwitch(on, large: true) { VerticalAlignment = VerticalAlignment.Center };
+        var sw = new ToggleSwitch(on, large: true, shell: true) { VerticalAlignment = VerticalAlignment.Center };
         sw.Changed += changed;
-        var label = new TextBlock { Text = text, FontSize = 12, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        var label = new TextBlock { Text = text, FontSize = 11, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         label.Cursor = new Cursor(StandardCursorType.Hand);
         label.PointerPressed += (_, e) => { if (e.GetCurrentPoint(label).Properties.IsLeftButtonPressed) { sw.Toggle(); e.Handled = true; } };
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { sw, label } };
@@ -1865,7 +1698,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border
         {
             Height = 30, MaxWidth = maxWidth, Padding = new Thickness(10, 0), Background = Sunken,
-            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Child = grid,
+            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, Child = grid,
             HorizontalAlignment = double.IsInfinity(maxWidth) ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
             Width = double.IsInfinity(maxWidth) ? double.NaN : maxWidth,
         };
@@ -1874,12 +1707,12 @@ public sealed partial class PreferencesWindow : NotaWindow
     // Settings buttons sit at the form scale: 28 tall, 12px label.
     private static Button Btn(string text) => new()
     {
-        Content = text, Height = 28, FontSize = 12, CornerRadius = NotaRadius.Tile, Padding = new Thickness(14, 0),
+        Content = text, Height = 28, FontSize = 11, CornerRadius = NotaRadius.Group, Padding = new Thickness(14, 0),
     };
 
     private static ComboBox Combo(double width) => new()
     {
-        MinWidth = width, MaxWidth = width * 1.7, FontSize = 12, CornerRadius = NotaRadius.Tile, HorizontalAlignment = HorizontalAlignment.Left,
+        MinWidth = width, MaxWidth = width * 1.7, FontSize = 11, CornerRadius = NotaRadius.Group, HorizontalAlignment = HorizontalAlignment.Left,
     };
 
     // Label · button · caption; the caption gets the remaining width so a long result wraps.
@@ -1901,14 +1734,14 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private static TextBlock RowLabel(string text) => new()
     {
-        Text = text, FontSize = 12, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center,
+        Text = text, FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center,
         TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 10, 0),
     };
 
     // Ink 5 for a note; Ink 4 (muted) for the explanation a pane leads with.
     private static TextBlock Caption(string text, bool muted = false) => new()
     {
-        Text = text, FontSize = 11, LineHeight = 17, Foreground = muted ? TextMuted : TextTertiary,
+        Text = text, FontSize = 10, LineHeight = 17, Foreground = muted ? TextMuted : TextTertiary,
         TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center,
     };
 

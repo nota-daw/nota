@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Editing;
@@ -254,7 +255,7 @@ public sealed partial class PianoRollView
             return (float)(a.Value + (b.Value - a.Value) * Shape((beat - a.Beat) / span, a.Curve));
         }
 
-        private static double Shape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        private static double Shape(double t, float curve) => AutomationCurve.Shape(t, curve);
 
         // Sorted, the last point given for any one beat kept; a switch keeps only its changes.
         private List<AutomationPoint> Normalize(IEnumerable<AutomationPoint> pts)
@@ -407,7 +408,7 @@ public sealed partial class PianoRollView
 
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
-                var hint = new FormattedText(IsSwitch ? Loc.T("piano_roll.controllers.drag_to_draw_a_block") : Loc.T("piano_roll.controllers.drag_to_draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
+                var hint = new NotaFormattedText(IsSwitch ? Loc.T("piano_roll.controllers.drag_to_draw_a_block") : Loc.T("piano_roll.controllers.drag_to_draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
                 ctx.DrawText(hint, new Point((w - hint.Width) / 2, (h - hint.Height) / 2));
             }
             if (!double.IsNaN(_hoverBeat) || _drag != Drag.None)
@@ -415,7 +416,7 @@ public sealed partial class PianoRollView
                 double beat = _drag == Drag.Point && _pt >= 0 && _pt < c.Count ? c[_pt].Beat : _hoverBeat;
                 if (!double.IsNaN(beat) && (c.Count > 0 || _drag != Drag.None))
                 {
-                    var ft = new FormattedText(Readout(ValueAt(c, beat, IsSwitch)), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, KeyLabelHot);
+                    var ft = new NotaFormattedText(Readout(ValueAt(c, beat, IsSwitch)), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, KeyLabelHot);
                     ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
                 }
             }
@@ -456,10 +457,11 @@ public sealed partial class PianoRollView
                 for (int i = 1; i < c.Count; i++)
                 {
                     var a = c[i - 1]; var b = c[i];
+                    int steps = a.Curve != 0 ? AutomationCurve.DrawSteps(XOf(b.Beat) - XOf(a.Beat)) : 0;
                     if (a.Curve != 0)
-                        for (int s = 1; s < 12; s++)
+                        for (int s = 1; s < steps; s++)
                         {
-                            double t = s / 12.0;
+                            double t = s / (double)steps;
                             g.LineTo(new Point(XOf(a.Beat + (b.Beat - a.Beat) * t), ValueToY((float)(a.Value + (b.Value - a.Value) * Shape(t, a.Curve)))));
                         }
                     g.LineTo(new Point(XOf(b.Beat), ValueToY(b.Value)));
@@ -474,7 +476,7 @@ public sealed partial class PianoRollView
                 if (px < -4 || px > w + 4) continue;
                 bool hot = k == _hoverPt || (_drag == Drag.Point && k == _pt);
                 const double r = 2.5;   // hover changes colour, not size
-                ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), 1);
+                ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), (float)NotaSkin.MapRadius(1));
             }
         }
 
@@ -686,8 +688,8 @@ public sealed partial class PianoRollView
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (IsSwitch && _selBlock >= 0 && (e.Key == Key.Delete || e.Key == Key.Back)) { DeleteBlock(_selBlock); e.Handled = true; return; }
-            if (e.Key == Key.Escape && _selBlock >= 0) { _selBlock = -1; InvalidateVisual(); e.Handled = true; return; }
+            if (IsSwitch && _selBlock >= 0 && Keys.Owns(e, "edit.delete")) { DeleteBlock(_selBlock); e.Handled = true; return; }
+            if (Keys.Owns(e, "edit.cancel") && _selBlock >= 0) { _selBlock = -1; InvalidateVisual(); e.Handled = true; return; }
             base.OnKeyDown(e);
         }
 

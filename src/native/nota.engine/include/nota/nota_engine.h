@@ -48,6 +48,8 @@ typedef struct NotaNoteData {
     float   velocity;      /* 0..1 */
     int32_t expr_id;       /* recorded MPE (nota_note_expr_*), 0 = none. Keep it when you move,
                             * copy or resize the note — the expression travels with it. */
+    int32_t articulation_id; /* stable articulation id in the track's articulation map, 0 = none.
+                              * Keep it when you move, copy or resize the note. */
 } NotaNoteData;
 
 /* One breakpoint of a note's recorded expression (MPE). dim: 0 bend (semitones), 1 pressure
@@ -376,6 +378,10 @@ NOTA_API int32_t nota_engine_drum_rack_selftest(NotaEngine* engine);
  * events renders once per block with every event at its sample offset, while a built-in
  * still renders in segments between events. */
 NOTA_API int32_t nota_engine_timed_events_selftest(NotaEngine* engine);
+/* Device-free self-test (specs/085): articulation scheduling block by block (map order, latching
+ * dedupe, offsets and leads, momentary holds, chase on seek and loop wrap, seam releases, overflow)
+ * and delivery ahead of the note on its channel. 0 = pass, else the number of the failed check. */
+NOTA_API int32_t nota_engine_articulation_selftest(NotaEngine* engine);
 /* Plugin-parameter automation (M9-B, target 3). Device-free structural self-test;
  * the plugin-param introspection + lane-add C ABI arrives in B2. */
 NOTA_API int32_t nota_engine_plugin_automation_selftest(NotaEngine* engine);
@@ -472,6 +478,9 @@ NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine,
  * string getters return a pointer valid until the next call (engine-owned). */
 NOTA_API int32_t     nota_plugin_param_count(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API const char* nota_plugin_param_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+/* Where a param index saved by an older version (a MIDI mapping) sits today: Nota Twin's
+ * layout grew after 0.59 (#531); any other device's index is returned unchanged. */
+NOTA_API int32_t     nota_plugin_param_index_from_v1(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API const char* nota_plugin_param_name(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 /* The plugin's display text for a param's current value ("-12.0 dB", unit appended), and its
  * normalized default. Engine-owned string, valid until the next call. */
@@ -787,6 +796,73 @@ NOTA_API void    nota_path_root_set(const char* name_utf8, const char* path_utf8
  * frames; out may be null to ask). Returns the frames decoded (≤ cap when out is given),
  * 0 on failure; *sample_rate gets the file's rate. */
 NOTA_API int64_t nota_file_decode_mono(const char* path_utf8, double max_seconds, float* out, int64_t cap, double* sample_rate);
+/* Nota Aurora custom wavetables (specs/053). A table is built from a file, or from frames a
+ * project or preset saved, on any thread (the builders touch no engine state), then handed to
+ * an oscillator of an Aurora track on the message thread. The engine keeps its own reference;
+ * the caller frees its handle. */
+typedef struct NotaAuroraTable NotaAuroraTable; /* opaque, immutable once built */
+typedef struct NotaAuroraTableInfo {
+    int32_t  frames;           /* 1..256; 0 = no table in that slot */
+    int32_t  origin;           /* 0 wavetable file, 1 single cycle, 2 recording */
+    int32_t  truncated_length; /* 1 = only the first 60 s were read */
+    int32_t  truncated_frames; /* 1 = frames beyond 256 were dropped */
+    int32_t  use_custom;       /* track queries only: the source flag */
+    int32_t  missing;          /* track queries only: 1 = a restore failed; name holds it */
+    uint32_t serial;           /* changes whenever the slot's table changes; 0 = none */
+    uint8_t  hash[16];         /* content hash of the base frames */
+    char     name[256];        /* UTF-8, NUL-terminated */
+} NotaAuroraTableInfo;
+enum {
+    NOTA_AURORA_OK = 0,
+    NOTA_AURORA_ERR_DECODE = -1, /* unreadable or broken file */
+    NOTA_AURORA_ERR_FORMAT = -2, /* not WAV / FLAC / MP3 */
+    NOTA_AURORA_ERR_SILENT = -3, /* peak below -60 dBFS */
+    NOTA_AURORA_ERR_EMPTY = -4,
+    NOTA_AURORA_ERR_ARGS = -5
+};
+/* Decode a file and build a conditioned, band-limited table. *out gets a new handle. */
+NOTA_API int32_t nota_aurora_table_build(const char* path_utf8, NotaAuroraTable** out);
+/* From already-conditioned frames (2048 floats each): only the mips are rebuilt, so a reload
+ * plays exactly what was saved. */
+NOTA_API int32_t nota_aurora_table_from_frames(const float* frames, int32_t frame_count, const char* name_utf8,
+                                               int32_t origin, NotaAuroraTable** out);
+NOTA_API int32_t nota_aurora_table_info(const NotaAuroraTable* table, NotaAuroraTableInfo* out);
+/* The base frames (2048 × frames floats) into out; returns floats written, or the count when out is null. */
+NOTA_API int64_t nota_aurora_table_frames(const NotaAuroraTable* table, float* out, int64_t cap);
+NOTA_API void    nota_aurora_table_free(NotaAuroraTable* table);
+/* Put the table into oscillator osc (0/1) and make it the active source. checkpoint 1 = one
+ * undo step (the instrument is republished; sounding notes stop), 0 = in place, no undo (a
+ * project load). Returns 1, or 0 when the track is not an Aurora or osc is out of range. */
+NOTA_API int32_t nota_track_aurora_set_table(NotaEngine* engine, int32_t track_id, int32_t osc,
+                                             const NotaAuroraTable* table, int32_t checkpoint);
+/* Remove the imported table from osc (one undo step); it plays its built-in bank again. */
+NOTA_API int32_t nota_track_aurora_clear_table(NotaEngine* engine, int32_t track_id, int32_t osc);
+/* 1 = play the imported table, 0 = the built-in bank. checkpoint 1 = one undo step (the
+ * instrument is republished, as for set_table; no step when nothing changes), 0 = in place,
+ * lock-free, no undo (a project or preset load). Inside an unlatched parameter gesture the
+ * parameter's value step merges into it, so a bank pick that leaves the imported table
+ * undoes as one step. */
+NOTA_API int32_t nota_track_aurora_set_source(NotaEngine* engine, int32_t track_id, int32_t osc, int32_t use_custom,
+                                              int32_t checkpoint);
+/* Mark osc as missing a table a project named ("" clears). No undo. */
+NOTA_API int32_t nota_track_aurora_set_missing(NotaEngine* engine, int32_t track_id, int32_t osc, const char* name_utf8);
+/* 1 and *out filled (frames 0 when the slot is empty), 0 when the track is not an Aurora. */
+NOTA_API int32_t nota_track_aurora_table_info(const NotaEngine* engine, int32_t track_id, int32_t osc,
+                                              NotaAuroraTableInfo* out);
+/* The slot's base frames (2048 × frames floats); returns floats written (the count when out is null), 0 if none. */
+NOTA_API int64_t nota_track_aurora_table_read(const NotaEngine* engine, int32_t track_id, int32_t osc, float* out,
+                                              int64_t cap);
+/* Drawing preview: rep_frames (≤ 16) evenly chosen frames, then grid_frames (≤ 64) evenly chosen
+ * frames, each `points` (≤ 256) values back to back: for each of points / 2 slices of the
+ * frame, its lowest and highest sample in the order they occur (a min / max outline).
+ * Returns floats written (the count needed when out is null). */
+NOTA_API int32_t nota_track_aurora_table_preview(const NotaEngine* engine, int32_t track_id, int32_t osc,
+                                                 int32_t rep_frames, int32_t grid_frames, int32_t points, float* out,
+                                                 int32_t cap);
+/* The state blob with (1) or without (0) the table frames; 0 is what a project save stores
+ * beside the tables' own sample files. Size / copy semantics of nota_track_get_plugin_state. */
+NOTA_API int32_t nota_track_aurora_state(const NotaEngine* engine, int32_t track_id, int32_t include_tables,
+                                         uint8_t* out, int32_t cap);
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);
@@ -966,6 +1042,16 @@ NOTA_API int32_t    nota_engine_master_track_id(const NotaEngine* engine);
 /* Live min/max peaks (interleaved, out_min_max[2*max_points]) over the in-progress
  * capture buffer so the take draws a growing waveform. Returns buckets written. */
 NOTA_API int32_t    nota_engine_audio_record_peaks(const NotaEngine* engine, float* out_min_max, int32_t max_points);
+/* A take records every armed audio track (specs/086): the tracks it is recording right now
+ * (up to `cap` ids into `out`, returns how many), and the same live geometry per track. */
+NOTA_API int32_t    nota_engine_recording_tracks(const NotaEngine* engine, int32_t* out, int32_t cap);
+NOTA_API double     nota_engine_audio_record_length_beats_of(const NotaEngine* engine, int32_t track_id);
+NOTA_API int32_t    nota_engine_audio_record_peaks_of(const NotaEngine* engine, int32_t track_id, float* out_min_max,
+                                                      int32_t max_points);
+/* Armed tracks the last take start could not record, with a reason each: 1 input not on the
+ * device, 2 too many lanes, 3 input switched off, 4 records another track while the take records
+ * the hardware input (or the other way round). Returns the count. */
+NOTA_API int32_t    nota_engine_record_skipped(const NotaEngine* engine, int32_t* track_ids, int32_t* reasons, int32_t cap);
 /* One note held into the in-progress MIDI take (live-recording preview). */
 typedef struct NotaRecordHeldNote {
     int32_t pitch;        /* 0..127 */
@@ -1158,6 +1244,10 @@ NOTA_API int32_t nota_track_instrument_supports_mpe(const NotaEngine* engine, in
  * hosted plugin. */
 NOTA_API int32_t nota_track_device_builtin_kind(const NotaEngine* engine, int32_t track_id,
                                                 int32_t device_index);
+/* Which audio effect sits in the track's slot `device_index`: the same value while it is edited,
+ * moved along the chain or brought back by undo; a new, pasted or duplicated effect has another
+ * (#540). 0 = no device there. Compare it, don't decode it. */
+NOTA_API int64_t nota_track_device_id(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* ---- Audio persistence (M7-6b) ------------------------------------------- */
 /* Full geometry of an audio clip; returns 1 if the clip is audio, else 0. */
@@ -1210,6 +1300,26 @@ NOTA_API NotaResult nota_track_restore_joined_edges(NotaEngine* engine, int32_t 
  * loop — without a device. 1 = a take was recorded. */
 NOTA_API int32_t    nota_take_record_test(NotaEngine* engine, int32_t track_id, const float* interleaved_stereo,
                                           int32_t frames, double start_beat);
+/* Smoke-test hook (specs/086): the same take through the multi-channel capture ring — `frames`
+ * of `channels`-wide device frames, the track recording its own input pick. 1 = recorded. */
+NOTA_API int32_t    nota_take_record_test_n(NotaEngine* engine, int32_t track_id, const float* interleaved,
+                                            int32_t channels, int32_t frames, double start_beat);
+/* Smoke-test hook (specs/086): one take on every armed audio track (each its own pick) from
+ * `frames` of `channels`-wide device frames, through the lane set-up, the ring, the drain and
+ * stop. Returns the lanes recorded (see nota_engine_record_skipped for the rest). */
+NOTA_API int32_t    nota_take_record_test_armed(NotaEngine* engine, const float* interleaved, int32_t channels,
+                                                int32_t frames, double start_beat);
+/* The same, with `disarm_track_id` disarmed once `disarm_at_frame` frames are in (a lane that
+ * leaves mid-take); the rest record on to the end. */
+NOTA_API int32_t    nota_take_record_test_armed_disarm(NotaEngine* engine, const float* interleaved, int32_t channels,
+                                                       int32_t frames, double start_beat, int32_t disarm_track_id,
+                                                       int32_t disarm_at_frame);
+
+/* Smoke-test hook (#521): one block of `channels`-wide device frames handed over as the input
+ * thread does — through the capture gate (shut while a count-in clicks), into the take ring.
+ * Pair with nota_engine_set_test_input_device; the next poll drains it into the take. */
+NOTA_API void       nota_engine_input_block_test(NotaEngine* engine, const float* interleaved, int32_t frames,
+                                                 int32_t channels);
 
 /* Decoded-sample metadata by id; returns 1 if found, else 0. */
 NOTA_API int32_t nota_sample_get_info(const NotaEngine* engine, int64_t sample_id, NotaSampleInfo* out);
@@ -1230,6 +1340,10 @@ NOTA_API int32_t nota_track_held_notes(const NotaEngine* engine, int32_t track_i
 /* Live viz telemetry (e.g. the Nota Operator harmonic spectrum) into `out`; returns the
    count of floats written (0 if the instrument exposes no scope). */
 NOTA_API int32_t nota_track_instrument_scope(const NotaEngine* engine, int32_t track_id, float* out, int32_t max_n);
+/* The newest output samples of a track's instrument (mono, oldest first, up to 4096) into
+   `out`; returns the count written. Reading keeps the tap on for about a second — the
+   instrument writes nothing while no one reads (#531, the filter graph's spectrum). */
+NOTA_API int32_t nota_track_instrument_output(const NotaEngine* engine, int32_t track_id, float* out, int32_t max_n);
 /* Captured session audio take; returns 1 if the slot holds audio, else 0. */
 NOTA_API int32_t nota_session_get_audio_slot(const NotaEngine* engine, int32_t track_id,
                                              int32_t scene, NotaSessionAudioSlot* out);
@@ -1283,6 +1397,9 @@ NOTA_API NotaResult nota_session_remove_scene(NotaEngine* engine, int32_t scene)
  * is cut to whole launch quanta (bars when unquantized), or to the fixed record length. */
 NOTA_API NotaResult nota_session_record_slot(NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_stop_record(NotaEngine* engine);
+/* Stop recording one slot (specs/086): while other slots of the Session audio take still record,
+ * only this track's lands in its slot and loops back; otherwise as nota_session_stop_record. */
+NOTA_API NotaResult nota_session_stop_record_slot(NotaEngine* engine, int32_t track_id);
 /* Move MIDI between Session and Arrangement (M5-6). slot->arrangement returns the
  * new arrangement clip index (or -1); arrangement->slot returns 1/0. */
 NOTA_API int32_t nota_session_slot_to_arrangement(NotaEngine* engine, int32_t track_id, int32_t scene, double start_beat);
@@ -1558,7 +1675,76 @@ NOTA_API int32_t    nota_track_get_record_input(NotaEngine* engine, int32_t trac
 /* Hardware input channels an audio track takes: 0 = both as a stereo pair (1/2), 1 = input 1
  * alone, 2 = input 2 alone. A mono pick is heard and recorded in the middle of both sides. */
 NOTA_API NotaResult nota_track_set_input_channels(NotaEngine* engine, int32_t track_id, int32_t channels);
+/* -1 when the track's pick is one the three values can't name (see nota_track_get_input). */
 NOTA_API int32_t    nota_track_get_input_channels(NotaEngine* engine, int32_t track_id);
+/* An audio track's hardware input (specs/086): `first` 0-based device channel, `width` 1 (a
+ * mono source, heard and recorded in the middle) or 2 (the stereo pair first/first+1, `first`
+ * even). Kept even when the device lacks it — the track then records and monitors nothing.
+ * NOTA_ERR_INVALID_ARG for a bad width, an odd stereo first, a channel past 64 or a
+ * non-audio track. */
+NOTA_API NotaResult nota_track_set_input(NotaEngine* engine, int32_t track_id, int32_t first, int32_t width);
+/* first | (width << 8); -1 for a non-audio track. */
+NOTA_API int32_t    nota_track_get_input(const NotaEngine* engine, int32_t track_id);
+/* 1 when the track's pick exists on the open (or probed) capture device. */
+NOTA_API int32_t    nota_track_input_available(const NotaEngine* engine, int32_t track_id);
+/* An instrument track's MIDI input (specs/086): which live MIDI reaches it when armed, and so
+ * what it records. source -2 = All inputs (the computer keyboard, gamepad and Remote too),
+ * else a hardware source index (nota_midi_source_of_uid; -1 = a device not connected: nothing
+ * from hardware); channel 0 = all, 1-16 one channel. NOTA_ERR_INVALID_ARG for a track that
+ * isn't an instrument track. */
+NOTA_API NotaResult nota_track_set_midi_input(NotaEngine* engine, int32_t track_id, int32_t source, int32_t channel);
+/* Packs (source + 2) | (channel << 8). */
+NOTA_API int32_t    nota_track_get_midi_input(const NotaEngine* engine, int32_t track_id);
+/* The same by device uid ("" or NULL = All inputs): the track keeps the uid and finds its
+ * device again whenever the MIDI inputs re-open (nota_midi_apply); while that device is not
+ * connected the track receives nothing from hardware. get copies the uid ("" = All) into
+ * `out` and returns its length. */
+NOTA_API NotaResult nota_track_set_midi_input_uid(NotaEngine* engine, int32_t track_id, const char* uid, int32_t channel);
+NOTA_API int32_t    nota_track_get_midi_input_uid(const NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
+/* The source index of a connected MIDI input by its uid (nota_midi_input_device_uid);
+ * -1 when it is not connected or switched off. Indices change when the inputs re-open. */
+NOTA_API int32_t    nota_midi_source_of_uid(const NotaEngine* engine, const char* uid);
+/* Tests: feed a channel-voice message as if hardware source `source` sent it (status high
+ * nibble 0x80/0x90/0xA0/0xB0/0xD0/0xE0, channel 0-15). */
+NOTA_API void       nota_engine_push_midi_for_test(NotaEngine* engine, int32_t source, int32_t status, int32_t channel,
+                                                   int32_t d1, int32_t d2);
+/* The capture device's input channels: how many (0 = none open), at most 64, and the UTF-8
+ * name the device gives one ("" when it gives none; copied into `out`, returns its length).
+ * probe opens the selected device just to read them (closing it again unless a track needs
+ * it) and returns the count. Message thread. */
+NOTA_API int32_t    nota_audio_input_channel_count(const NotaEngine* engine);
+NOTA_API int32_t    nota_audio_input_channel_name(const NotaEngine* engine, int32_t index, char* out, int32_t cap);
+NOTA_API int32_t    nota_audio_input_probe(NotaEngine* engine);
+/* Inputs switched off on the Audio I/O page (0-based channels; replaces the previous set). A
+ * take skips a track whose input is one of them (nota_engine_record_skipped reason 3). */
+NOTA_API void       nota_audio_input_set_disabled(NotaEngine* engine, const int32_t* channels, int32_t count);
+/* Tests: pretend a capture device with `channels` inputs ("Test N") is open; 0 clears it. */
+NOTA_API void       nota_engine_set_test_input_device(NotaEngine* engine, int32_t channels);
+/* Tests: `frames` of `channels`-wide device frames into the capture ring, then drained into
+ * the running take as poll() would. */
+NOTA_API void       nota_engine_feed_input_test(NotaEngine* engine, const float* interleaved, int32_t frames, int32_t channels);
+/* Output channels of the open playback device (specs/089): how many (0 = none), at most 64,
+ * and the UTF-8 name the device gives one ("" when it gives none; copied into `out`, returns
+ * its length). Message thread. */
+NOTA_API int32_t    nota_audio_output_channel_count(const NotaEngine* engine);
+NOTA_API int32_t    nota_audio_output_channel_name(const NotaEngine* engine, int32_t index, char* out, int32_t cap);
+/* Where Main (the audience mix) and Cue (the private cue mix) go: 0-based first channel and
+ * width (1 or 2; width 2 needs an even first). cue_first < 0 = no Cue output. Takes effect on
+ * the next audio block, no device restart; kept across nota_audio_apply. NOTA_ERR_INVALID_ARG
+ * for a bad width, an odd stereo first or overlapping pairs. Until it is called, ASIO keeps
+ * its saved output pair. */
+NOTA_API NotaResult nota_audio_set_output_routing(NotaEngine* engine, int32_t main_first, int32_t main_width,
+                                                  int32_t cue_first, int32_t cue_width);
+/* The routing against the open device: bit 1 = Main's pair is missing, Main plays on outputs
+ * 1/2; bit 2 = a Cue pair is set but missing (or would overlap Main): Cue is silent and
+ * nothing moves to Main. */
+NOTA_API int32_t    nota_audio_output_routing_state(const NotaEngine* engine);
+/* Tests: pretend the output device has `channels` outputs ("Test N"); 0 clears it. */
+NOTA_API void       nota_engine_set_test_output_device(NotaEngine* engine, int32_t channels);
+/* Tests: place `frames` of Main and Cue (interleaved stereo; cue may be null) on a device of
+ * `device_channels` by the current routing, as every backend does. Returns the state bits. */
+NOTA_API int32_t    nota_audio_scatter_test(const NotaEngine* engine, const float* main_in, const float* cue_in,
+                                            float* device_out, int32_t device_channels, int32_t frames);
 /* Input monitoring (audio tracks, Monitor "In"): while on, the track plays its record-input
  * source live through its devices + fader instead of its clips. A master source stays
  * silent (it would feed back). push_monitor_frames feeds the hardware-monitor ring without
@@ -1571,6 +1757,43 @@ NOTA_API void       nota_engine_push_monitor_frames(NotaEngine* engine, const fl
  * (source_track_id = -1 turns it off). */
 NOTA_API NotaResult nota_track_set_midi_source(NotaEngine* engine, int32_t track_id, int32_t source_track_id);
 NOTA_API int32_t    nota_track_get_midi_source(NotaEngine* engine, int32_t track_id);
+/* Track-level MIDI playback offset in ms (negative = earlier). Non-destructive; clamped to +-2000. */
+NOTA_API NotaResult nota_track_set_midi_offset_ms(NotaEngine* engine, int32_t track_id, double ms);
+NOTA_API double     nota_track_get_midi_offset_ms(NotaEngine* engine, int32_t track_id);
+
+/* Articulation maps (specs/085). The UI compiles a map into a flat table: articulations sorted
+ * by id, each pointing at a range of an ordered action array. Disabled articulations are left
+ * out (a note asking for one plays the default). */
+typedef struct NotaArticulationEntry {
+    int32_t id;            /* > 0, unique, strictly ascending in the array */
+    int32_t trigger_mode;  /* 0 latching (sent on change, stays in force), 1 momentary (held with each note) */
+    double  offset_ms;     /* added to the track's MIDI offset; within +-2000 */
+    double  lead_ms;       /* the actions go out this long before the (offset) note; 0..2000 */
+    int32_t action_start;  /* first action in the action array */
+    int32_t action_count;
+} NotaArticulationEntry;
+
+typedef struct NotaArticulationAction {
+    int32_t kind;          /* 0 keyswitch, 1 control change, 2 program change, 3 bank select MSB, 4 bank select LSB */
+    int32_t channel;       /* 0 = the note's own, 1..16 explicit */
+    int32_t data1;         /* keyswitch pitch / CC number / program, 0..127 */
+    int32_t data2;         /* keyswitch velocity / CC or bank value, 0..127 */
+} NotaArticulationAction;
+
+/* Gives an instrument track its articulation map: the compiled table plus the map file as opaque
+ * JSON (UTF-8, saved with the project and restored by undo). One undo step. default_id 0 = none.
+ * NOTA_ERR_INVALID_ARG, with nothing changed, for: no such instrument track, ids not > 0 and
+ * strictly ascending, an action range outside the array, a kind/channel/data value out of range,
+ * an offset or lead out of range or not finite, a default_id that is not 0 or an entry's id. */
+NOTA_API NotaResult nota_track_set_articulation_map(NotaEngine* engine, int32_t track_id, int32_t default_id,
+    const NotaArticulationEntry* entries, int32_t entry_count,
+    const NotaArticulationAction* actions, int32_t action_count,
+    const char* map_json, int32_t map_json_len);
+/* Removes the track's map; notes keep their articulation ids. One undo step (none when there was no map). */
+NOTA_API NotaResult nota_track_clear_articulation_map(NotaEngine* engine, int32_t track_id);
+/* Copies the stored map JSON into out (no terminator) and returns its length in bytes; out = NULL or
+ * max_len too small returns the length without copying. 0 = no map. */
+NOTA_API int32_t    nota_track_get_articulation_map_json(const NotaEngine* engine, int32_t track_id, char* out, int32_t max_len);
 
 /* ---- Freeze (M7) ---------------------------------------------------------- */
 /* Bounce a track's post-device, pre-fader audio to a buffer and play it back in
@@ -2359,6 +2582,25 @@ NOTA_API int32_t    nota_pdc_selftest(void);
 NOTA_API int32_t    nota_engine_track_meter(const NotaEngine* engine, int32_t track_id, NotaMeter* out);
 NOTA_API NotaResult nota_engine_master_meter(const NotaEngine* engine, NotaMeter* out);
 
+/* Cue (specs/089): a private mix for the performer on its own output pair (see
+ * nota_audio_set_output_routing). Any number of tracks — audio, instrument, group or return —
+ * can be in Cue; each adds its signal after its devices and before its fader, pan, mute and
+ * solo. A muted cued track is heard in Cue only. Cue never changes Main, a recording or a
+ * bounce. get_cue: 1 / 0, -1 for no such track. */
+NOTA_API NotaResult nota_track_set_cue(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t    nota_track_get_cue(const NotaEngine* engine, int32_t track_id);
+/* Cue level: linear gain 0 … 2 (+6 dB), default 1. */
+NOTA_API NotaResult nota_engine_set_cue_volume(NotaEngine* engine, float gain);
+NOTA_API float      nota_engine_cue_volume(const NotaEngine* engine);
+/* Cue meter, after the Cue level. */
+NOTA_API NotaResult nota_engine_cue_meter(const NotaEngine* engine, NotaMeter* out);
+/* Where the metronome and count-in clicks go: 0 Main (default, through the master chain as
+ * before), 1 Cue (past the master chain and fader, at the Cue level), 2 both. */
+NOTA_API NotaResult nota_transport_set_click_destination(NotaEngine* engine, int32_t dest);
+NOTA_API int32_t    nota_transport_click_destination(const NotaEngine* engine);
+/* Click level: linear gain 0 … 2, default 1 (the click as it always sounded). */
+NOTA_API NotaResult nota_transport_set_click_volume(NotaEngine* engine, float gain);
+
 /* ---- Offline render (tests / export) ------------------------------------- */
 /* Renders `frames` of interleaved stereo into out (length >= 2*frames) without
  * an audio device. Uses the engine's current sample rate. */
@@ -2376,6 +2618,9 @@ NOTA_API NotaResult nota_engine_render_offline_at(NotaEngine* engine, float* out
  * nota_engine_render_offline_at once first to prepare the nodes at a rate. The device
  * must be stopped (NOTA_ERR_ALREADY_RUNNING otherwise). */
 NOTA_API NotaResult nota_engine_render_device_block(NotaEngine* engine, float* out, int32_t frames);
+/* The same, rendering the Cue bus (specs/089) into `cue_out` too (stereo; may be null). */
+NOTA_API NotaResult nota_engine_render_device_block_cue(NotaEngine* engine, float* main_out, float* cue_out,
+                                                        int32_t frames);
 
 /* ---- Audio file encoders (export) -----------------------------------------
  * Streaming FLAC / MP3 writers behind the same ABI as the offline render above:
@@ -2517,6 +2762,12 @@ NOTA_API const char* nota_audio_output_device_uid(int32_t index);
 NOTA_API const char* nota_audio_output_device_name(int32_t index);
 NOTA_API const char* nota_audio_input_device_uid(int32_t index);
 NOTA_API const char* nota_audio_input_device_name(int32_t index);
+/* The uid of the input device the staged config opens (specs/086): the chosen device when it
+ * is connected, else the system default ("" when there is none). Copied into `out`; returns
+ * its length. Settings kept per input device key on it. */
+NOTA_API int32_t     nota_audio_effective_input_uid(const NotaEngine* engine, char* out, int32_t cap);
+/* The same for the output device (specs/089): per-device output setups key on it. */
+NOTA_API int32_t     nota_audio_effective_output_uid(const NotaEngine* engine, char* out, int32_t cap);
 
 /* Stage the desired config. Pass "" for a device to mean "system default",
  * 0 for sample_rate / buffer_frames to mean "device default". */

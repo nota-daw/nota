@@ -202,6 +202,7 @@ class Chamber final : public Device {
         Quality,
         WetOnly,
         ZeroLatency,
+        View, // card size, not sound: 0 = L, 1 = S (#531); presets skip it
         kNumParams
     };
     // Packed scope telemetry (lock-free, UI-polled).

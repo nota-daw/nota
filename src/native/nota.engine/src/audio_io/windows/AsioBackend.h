@@ -43,6 +43,9 @@ class AsioBackend final : public AudioBackend {
     const char* fallbackReason() const override { return reason_.c_str(); }
     bool sampleRateRefused() const override;
     double deviceChangedRate() const override;
+    int32_t outputChannelCount() const override;
+    std::string outputChannelName(int32_t index) const override;
+    void setOutputRouting(const OutputRouting& r) override;
 
   private:
     std::function<void()> xrun_;

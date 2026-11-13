@@ -23,7 +23,7 @@ namespace Nota.App;
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height;
-            ctx.DrawRectangle(Sunken, null, new Rect(0, 0, w, h), NotaRadius.ControlValue, NotaRadius.ControlValue);
+            ctx.DrawRectangle(Sunken, null, new Rect(0, 0, w, h), NotaRadius.FieldValue, NotaRadius.FieldValue);
             float a = V(0), b = V(1), c = V(2), sum = a + b + c;
             if (sum <= 1e-4f) return;
             var cols = new[] { S0, S1, S2 }; var v = new[] { a, b, c };

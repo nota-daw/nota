@@ -31,7 +31,10 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "EnvShape.h"
+#include "devices/instruments/AuroraTable.h"
 #include "engine/NoteExpression.h"
+#include "engine/SnapshotHistory.h"
 
 #include <algorithm>
 #include <atomic>
@@ -140,7 +143,14 @@ class WavetableSynth final : public Instrument {
         FxReverbOn,
         FxReverbMode,
         FxReverbSize, // 153..155
-        kNumParams    // 156
+        // ---- appended (v4, #531): the envelope shapes — 0.5 = straight, Exp off ----
+        DCurve,
+        RCurve,
+        EnvExp, // 156..158 Env 1
+        E2DCurve,
+        E2RCurve,
+        E2EnvExp,   // 159..161 Env 2
+        kNumParams  // 162
     };
     static int matrixIdx(int s, int d) { return MatrixBase + s * kDests + d; }
     static int macroIdx(int m, int f) { return MacroBase + m * 3 + f; }
@@ -180,9 +190,39 @@ class WavetableSynth final : public Instrument {
     // each id's string on the way past it.
     int32_t pluginParamIndexOfId(const std::string& id) const override;
 
-    std::vector<uint8_t> getState() const override;
+    std::vector<uint8_t> getState() const override { return stateWith(true); }
     void setState(const uint8_t* data, int32_t size) override;
     std::shared_ptr<Instrument> clone() const override;
+
+    // ---- custom wavetables (specs/053) -------------------------------------
+    // Message thread. Each oscillator can hold one imported table (AuroraTable.h) and a
+    // source flag that picks it over the built-in bank. A new table set is published
+    // through a SnapshotHistory, so the audio thread reads it through a raw pointer
+    // and never frees it; the flags are plain atomics. With no table or flag set, the
+    // synth, its state blob and its sound are exactly what they were before.
+    void setTable(int osc, std::shared_ptr<const AuroraTable> t); // also selects it and clears "missing"
+    void clearTable(int osc);                                     // back to the built-in
+    void setSource(int osc, bool custom) {
+        if (osc >= 0 && osc < 2) useCustom_[osc].store(custom ? 1 : 0, std::memory_order_relaxed);
+    }
+    void setMissing(int osc, const std::string& name);
+    std::shared_ptr<const AuroraTable> table(int osc) const;
+    bool useCustom(int osc) const {
+        return osc >= 0 && osc < 2 && useCustom_[osc].load(std::memory_order_relaxed) != 0;
+    }
+    std::string missingName(int osc) const;
+    // The state blob, with the table frames (getState) or without them (a project save,
+    // which keeps each table as its own sample file). contracts/state-blob.md.
+    std::vector<uint8_t> stateWith(bool includeTables) const;
+
+    // Live follow (specs/053 data model § Scope telemetry): [0]/[1] the position Osc 1 /
+    // Osc 2 of the most recently started sounding voice played at the end of the last
+    // block (−1 = none), [2]/[3] the serials of the two tables (0 = none), [4] voices,
+    // [5] which oscillators play their imported table. Then, from [kScopeN], the envelope
+    // telemetry for the editor's graphs (#531): the newest sounding voice's Env 1 stage and
+    // progress, then Env 2's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
+    static constexpr int32_t kScopeN = 6;
+    int32_t scopeRead(float* out, int32_t maxN) const override;
 
     void noteOn(int32_t pitch, float velocity) override;
     void noteOff(int32_t pitch) override;
@@ -206,6 +246,7 @@ class WavetableSynth final : public Instrument {
         double ph1[kUnison] = {}, ph2[kUnison] = {}, subPh = 0;
         float velocity = 0, env = 0, env2 = 0;
         Stage stage = Stage::Attack, stage2 = Stage::Attack;
+        EnvShapeState shape, shape2; // the curve of each envelope's current stage
         SvfCoef f[2];
         double ic1L[2] = {}, ic2L[2] = {}, ic1R[2] = {},
                ic2R[2] = {}; // L = 1st stage, R = 2nd slope stage; [i] = filter i
@@ -214,6 +255,7 @@ class WavetableSynth final : public Instrument {
             for (int i = 0; i < 2; ++i) sc1L[i] = sc2L[i] = sc1R[i] = sc2R[i] = 0.0;
         }
         int32_t modCount = 0;
+        uint64_t seq = 0;            // note-on order, for the scope's newest voice
         VoiceExpr ex; // MPE bend / pressure / slide
         float exBendAt = 0.0f;
         double exBendMul = 1.0;
@@ -248,7 +290,6 @@ class WavetableSynth final : public Instrument {
         default: dry += s;
         }
     }
-    static void advEnv(float& e, Stage& st, float a, float d, float s, float r);
 
     void setSvf(SvfCoef& c, double fc, double k) const;
     static double svf(const SvfCoef& c, double& ic1, double& ic2, double in, int type);
@@ -288,6 +329,21 @@ class WavetableSynth final : public Instrument {
         const float b = t1[i0] + (t1[i1] - t1[i0]) * xf;
         return a + (b - a) * ff;
     }
+    // The same interpolation for an imported table's mip level of `len` samples.
+    static float readMorphSized(const float* t0, const float* t1, float ff, double phase, int len) {
+        const double x = phase * len;
+        int i0 = (int)x & (len - 1);
+        int i1 = (i0 + 1) & (len - 1);
+        const float xf = (float)(x - std::floor(x));
+        const float a = t0[i0] + (t0[i1] - t0[i0]) * xf;
+        const float b = t1[i0] + (t1[i1] - t1[i0]) * xf;
+        return a + (b - a) * ff;
+    }
+    // oscStack over an imported table: the mip level is picked per read from the
+    // fastest unison voice's increment and the warp mode's harmonic bias (research R4),
+    // so a bright table played high stays below Nyquist.
+    float oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode, double warpAmt, int uniN,
+        const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut);
     static float harmAmp(int bank, float t, int n);
     // The four banks × sixteen frames are the same read-only 512 KB for every instance and
     // every clone, so they are built once, on first use, and handed out as a pointer.
@@ -356,7 +412,23 @@ class WavetableSynth final : public Instrument {
     Comb revC_[kRevCombs];
     Allp revA_[kRevAll];
     std::atomic<int32_t> activeVoices_{0};
+    // The filters' base cutoffs (log2 Hz) and resonances, eased toward the knobs per sample
+    // (#531): the control-rate update then steps a little at a time, not a whole turn at once.
+    double f1Sm_ = -1e9, f2Sm_ = -1e9, r1Sm_ = 0.0, r2Sm_ = 0.0;
+    int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
+    std::atomic<float> envTele_[4]; // Env 1 stage, progress, Env 2 stage, progress
     std::atomic<float> pn_[kNumParams];
+
+    // Custom tables (message thread publishes, audio thread reads live()).
+    SnapshotHistory<const AuroraTableSet> tableSet_;
+    std::atomic<uint8_t> useCustom_[2] = {0, 0};
+    void publishSet(std::shared_ptr<AuroraTableSet> s) { tableSet_.publish(std::move(s)); }
+    std::shared_ptr<AuroraTableSet> copySet() const {
+        auto cur = tableSet_.current();
+        return cur ? std::make_shared<AuroraTableSet>(*cur) : std::make_shared<AuroraTableSet>();
+    }
+    uint64_t noteSeq_ = 0;
+    std::atomic<float> scope_[kScopeN] = {-1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;

@@ -85,6 +85,7 @@ public partial class MainWindow
     private void OnBrowserItemActivated(BrowserItem item, KeyModifiers mods)
     {
         if (_vm is null) return;
+        if (item.Kind == BrowserItemKind.ModularNode) { AddModularNode(item); return; }
         try
         {
             RecordUse(PaletteIdOf(item), fromPalette: false);
@@ -127,12 +128,57 @@ public partial class MainWindow
         }
     }
 
+    // --- Locate (spec 092, #581) ------------------------------------------------------------
+
+    // The arrangement and Session clip menus' Locate submenu, and the Files-tab highlight of
+    // the selected clip's source file.
+    private void InitLocate()
+    {
+        var hooks = new LocateHooks
+        {
+            Source = id => ClipFiles.Source(Engine, id),
+            BundleCopy = id => ClipFiles.BundleCopy(Engine, id, _projectPath),
+            InBrowser = path => Browser.RevealFile(path),
+            InFileManager = path =>
+            {
+                try { RevealInFileManager(path); }
+                catch (Exception ex) { if (_vm is not null) _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
+            },
+        };
+        Timeline.Locate = hooks;
+        if (_session is not null)
+        {
+            _session.Locate = hooks;
+            _session.SlotSelected += (t, s) => MarkLocated(SessionSource(t, s));
+        }
+        Timeline.ClipSelectionChanged += () => MarkLocated(ArrangementSource());
+    }
+
+    private void MarkLocated(string? path) => _vm?.Browser.SetLocatedPath(path);
+
+    // The selected arrangement clip's source file, when it is one audio clip with a known source.
+    private string? ArrangementSource()
+        => SelectedClip(out int t, out int c, out bool midi) && !midi && Engine.TryGetAudioClipInfo(t, c, out var ai)
+            ? ClipFiles.Source(Engine, ai.SampleId) : null;
+
+    private string? SessionSource(int trackId, int scene)
+        => trackId > 0 && scene >= 0 && Engine.TryGetSessionAudioSlot(trackId, scene, out var sa)
+            ? ClipFiles.Source(Engine, sa.SampleId) : null;
+
     // Reveal a sample / folder / project in the OS file manager (Finder / Explorer / files).
     private void OnBrowserReveal(BrowserItem item)
     {
         if (_vm is null || string.IsNullOrEmpty(item.Path)) return;
         try { RevealInFileManager(item.Path); }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
+    }
+
+    /// <summary>Open a folder itself in the OS file manager (not its parent with it selected).</summary>
+    internal static void OpenFolderInFileManager(string dir)
+    {
+        if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { dir });
+        else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"\"{dir}\"");
+        else Process.Start("xdg-open", new[] { dir });
     }
 
     internal static void RevealInFileManager(string path)
@@ -177,9 +223,7 @@ public partial class MainWindow
         {
             string dir = _vm.Settings.PresetsFolder();
             Directory.CreateDirectory(dir);   // nothing saved yet: open it empty rather than fail
-            if (OperatingSystem.IsMacOS()) Process.Start("open", new[] { dir });
-            else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"\"{dir}\"");
-            else Process.Start("xdg-open", new[] { dir });
+            OpenFolderInFileManager(dir);
         }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
     }
@@ -270,5 +314,16 @@ public partial class MainWindow
         {
             _vm.StatusText = Loc.F("main.browser.save_preset_failed", ex.Message);
         }
+    }
+
+    // A Modular node double-clicked (or Enter) in the browser's Modular tab (specs/095): onto
+    // the shown track's canvas, unconnected, in the middle of the view — as the palette does.
+    private void AddModularNode(BrowserItem item)
+    {
+        if (_vm is null || _modular is null) return;
+        if (!_modular.IsVisible || !_modular.CanAddNodes) { _vm.StatusText = Loc.T("modular.open_a_track_to_add_nodes"); return; }
+        if (_modular.AddModulatorAt(item.BuiltinKind) < 0) { _vm.StatusText = Loc.F("main.palette.couldnt_add", item.Name); return; }
+        Timeline.Refresh();
+        _vm.StatusText = Loc.F("modular.node_added", item.Name);
     }
 }

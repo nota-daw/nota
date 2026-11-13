@@ -25,6 +25,8 @@ class MiniaudioBackend final : public AudioBackend {
     bool isRunning() const override { return running_; }
     bool exclusiveFallback() const override { return exclusiveFallback_; }
     bool silentFallback() const override { return silentFallback_; }
+    int32_t outputChannelCount() const override;
+    void setOutputRouting(const OutputRouting& r) override;
 
     // Opaque to callers; public so the file-local data callback can reach it.
     struct Impl;

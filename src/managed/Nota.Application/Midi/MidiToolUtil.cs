@@ -24,11 +24,13 @@ public static class MidiToolUtil
         return list;
     }
 
-    public static NotaNote Note(int pitch, double start, double length, double velocity) => new(
+    /// <summary>A new note. A note made from another one (an arpeggio step, an ornament, a run)
+    /// passes that note's <paramref name="articulation"/> so it plays with the same technique.</summary>
+    public static NotaNote Note(int pitch, double start, double length, double velocity, int articulation = 0) => new(
         Math.Clamp(pitch, 0, 127),
         start,
         Math.Max(MinLength, length),
-        (float)Math.Clamp(velocity, 0.01, 1.0));
+        (float)Math.Clamp(velocity, 0.01, 1.0)) { ArticulationId = Math.Max(0, articulation) };
 
     /// <summary>Drops notes that start past the clip, trims those that overrun it, and
     /// clamps pitch and velocity. Every tool ends with this so nothing has to be careful.</summary>
@@ -41,7 +43,8 @@ public static class MidiToolUtil
             if (start >= lengthBeats - 1e-9) continue;
             double len = Math.Min(Math.Max(MinLength, n.LengthBeats), lengthBeats - start);
             var m = Note(n.Pitch, start, len, n.Velocity);
-            m.ExprId = n.ExprId;   // a moved / trimmed note keeps its recorded MPE
+            m.ExprId = n.ExprId;                   // a moved / trimmed note keeps its recorded MPE
+            m.ArticulationId = n.ArticulationId;   // … and its articulation (specs/085)
             outp.Add(m);
         }
         return Sorted(outp);
