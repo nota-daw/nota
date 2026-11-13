@@ -326,7 +326,7 @@ public sealed partial class BrowserView
     private void OnFilesKey(object? sender, KeyEventArgs e)
     {
         if (_vm is null || Keys.Capturing || _active != FilesTab || _collapsed || _search.IsFocused || _pathBox.IsFocused) return;
-        if (Keys.Is(e, "browser.editPath"))
+        if (Keys.Owns(e, "browser.editPath"))
         {
             if (!BrowseOn) { SetBrowseMode(true); }
             BeginPathEdit();
@@ -342,7 +342,7 @@ public sealed partial class BrowserView
             e.Handled = true;
             return;
         }
-        switch (Keys.Which(e, "browser.back", "browser.forward", "browser.up"))
+        switch (Keys.OwnedBy(e, "browser.back", "browser.forward", "browser.up"))
         {
             case "browser.back": _vm.Browse.GoBack(); break;
             case "browser.forward": _vm.Browse.GoForward(); break;

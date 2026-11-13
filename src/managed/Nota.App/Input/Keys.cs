@@ -28,21 +28,17 @@ public static class Keys
     /// <summary>The Shortcuts editor is recording a key: no window runs a shortcut meanwhile.</summary>
     public static bool Capturing { get; set; }
 
-    // The press a handler last recognised as one of its actions — whether or not it then had
-    // anything to act on. MainWindow's command fallback leaves such a press alone, so a key a
-    // view owns (⇧↑ with no notes selected) never falls through to a command that does more.
+    // The press a focused view last recognised as one of its own actions — whether or not it
+    // then had anything to act on (⇧↑ with no notes selected). MainWindow's command fallback
+    // leaves such a press alone. Window-level checks (transport, track headers) don't claim: a
+    // key they pass on stays available to the command it is bound to.
     private static KeyEventArgs? _claimed;
 
-    /// <summary>True when a handler on this press's route recognised it as one of its actions.</summary>
+    /// <summary>True when a focused view on this press's route owned it.</summary>
     public static bool Claimed(KeyEventArgs e) => ReferenceEquals(_claimed, e);
 
     /// <summary>True when the press is one of action <paramref name="id"/>'s keys.</summary>
-    public static bool Is(KeyEventArgs e, string id)
-    {
-        if (KeyTokens.Chord(e) is not { } c || !Bindings.Matches(id, c)) return false;
-        _claimed = e;
-        return true;
-    }
+    public static bool Is(KeyEventArgs e, string id) => KeyTokens.Chord(e) is { } c && Bindings.Matches(id, c);
 
     /// <summary>True when the press is any of the actions' keys.</summary>
     public static bool IsAny(KeyEventArgs e, params string[] ids) => Which(e, ids) is not null;
@@ -51,9 +47,24 @@ public static class Keys
     public static string? Which(KeyEventArgs e, params string[] ids)
     {
         if (KeyTokens.Chord(e) is not { } c) return null;
-        foreach (var id in ids)
-            if (Bindings.Matches(id, c)) { _claimed = e; return id; }
+        foreach (var id in ids) if (Bindings.Matches(id, c)) return id;
         return null;
+    }
+
+    /// <summary>As <see cref="Is"/>, for a focused view that owns the key: a match claims the press.</summary>
+    public static bool Owns(KeyEventArgs e, string id)
+    {
+        if (!Is(e, id)) return false;
+        _claimed = e;
+        return true;
+    }
+
+    /// <summary>As <see cref="Which"/>, for a focused view that owns the keys: a match claims the press.</summary>
+    public static string? OwnedBy(KeyEventArgs e, params string[] ids)
+    {
+        if (Which(e, ids) is not { } id) return null;
+        _claimed = e;
+        return id;
     }
 
     /// <summary>The note-map action the press plays, or null.</summary>

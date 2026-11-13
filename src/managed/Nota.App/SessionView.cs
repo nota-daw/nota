@@ -659,7 +659,7 @@ public sealed partial class SessionView : UserControl
         }
         // The rest are bindings: the Session's own and the shared editing actions, which act on
         // the selected clip or scene here. Launch (Return) is handled in the window's tunnel.
-        return Keys.Which(e, "edit.delete", "session.rename", "edit.copyToOtherView", "edit.copy", "edit.cut", "edit.paste",
+        return Keys.OwnedBy(e, "edit.delete", "session.rename", "edit.copyToOtherView", "edit.copy", "edit.cut", "edit.paste",
                    "edit.duplicate", "session.insertScene") switch
         {
             "edit.delete" => DeleteSelection() || true,

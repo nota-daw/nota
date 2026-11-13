@@ -688,8 +688,8 @@ public sealed partial class PianoRollView
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (IsSwitch && _selBlock >= 0 && Keys.Is(e, "edit.delete")) { DeleteBlock(_selBlock); e.Handled = true; return; }
-            if (Keys.Is(e, "edit.cancel") && _selBlock >= 0) { _selBlock = -1; InvalidateVisual(); e.Handled = true; return; }
+            if (IsSwitch && _selBlock >= 0 && Keys.Owns(e, "edit.delete")) { DeleteBlock(_selBlock); e.Handled = true; return; }
+            if (Keys.Owns(e, "edit.cancel") && _selBlock >= 0) { _selBlock = -1; InvalidateVisual(); e.Handled = true; return; }
             base.OnKeyDown(e);
         }
 

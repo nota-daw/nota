@@ -2839,12 +2839,12 @@ public sealed partial class PianoRollView : UserControl
             if (Keys.Capturing) return;
             // Every key is a binding (specs/096): the piano roll's own (roll.*) and the shared
             // editing actions (edit.*), which mean "the notes" while this grid has focus.
-            if (Keys.Is(e, "edit.delete")) { if (_o.DeleteSelection()) e.Handled = true; return; }
+            if (Keys.Owns(e, "edit.delete")) { if (_o.DeleteSelection()) e.Handled = true; return; }
             // Fit to notes. Handled here, the window's computer-keyboard note map never sees it,
             // so no note sounds.
-            if (Keys.Is(e, "roll.fitNotes")) { _o.FitToNotes(); e.Handled = true; return; }
-            if (Keys.Is(e, "roll.fold")) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
-            if (Keys.Is(e, "edit.cancel") && _o._selection.Count > 0)
+            if (Keys.Owns(e, "roll.fitNotes")) { _o.FitToNotes(); e.Handled = true; return; }
+            if (Keys.Owns(e, "roll.fold")) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
+            if (Keys.Owns(e, "edit.cancel") && _o._selection.Count > 0)
             {
                 _o.SettlePlacement();
                 _o._selection.Clear(); _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
@@ -2854,7 +2854,7 @@ public sealed partial class PianoRollView : UserControl
             // grid; velocity by 10 or by 1.
             // Asked first, so a move key with nothing selected is still the piano roll's and
             // never reaches the whole-clip command on the same key (roll.octaveUp).
-            if (Keys.Which(e, NoteMoves) is { } move)
+            if (Keys.OwnedBy(e, NoteMoves) is { } move)
             {
                 if (_o._selection.Count == 0) return;
                 bool done = move switch
@@ -2875,20 +2875,20 @@ public sealed partial class PianoRollView : UserControl
                 if (done) e.Handled = true;
                 return;
             }
-            if (Keys.Is(e, "edit.selectAll"))
+            if (Keys.Owns(e, "edit.selectAll"))
             {
                 _o.SettlePlacement();
                 _o._selection.Clear();
                 for (int i = 0; i < _o._notes.Count; i++) if (!_o.IsLocked(i)) _o._selection.Add(i);
                 _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
-            if (Keys.Is(e, "edit.duplicate"))   // cross-platform fallback (macOS uses the native menu)
+            if (Keys.Owns(e, "edit.duplicate"))   // cross-platform fallback (macOS uses the native menu)
             {
                 if (_o.DuplicateSelection()) e.Handled = true;
                 return;
             }
             // Clipboard (the Edit-menu items carry no gesture, so these reach us here).
-            switch (Keys.Which(e, "edit.copy", "edit.cut", "edit.paste"))
+            switch (Keys.OwnedBy(e, "edit.copy", "edit.cut", "edit.paste"))
             {
                 case "edit.copy": if (_o.CopySelection()) e.Handled = true; return;
                 case "edit.cut": if (_o.CutSelection()) e.Handled = true; return;

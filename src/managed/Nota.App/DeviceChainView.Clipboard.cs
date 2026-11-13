@@ -469,12 +469,12 @@ public sealed partial class DeviceChainView
         if (Keys.Capturing) return;
         // Bindings (specs/096): group / ungroup into a rack, and the shared editing actions,
         // which act on the selected devices while the chain has focus.
-        if (Keys.Which(e, "devices.group", "devices.ungroup") is { } group)
+        if (Keys.OwnedBy(e, "devices.group", "devices.ungroup") is { } group)
         {
             if (group == "devices.ungroup") UngroupSelectedDevice(); else GroupSelectedDevice();
             e.Handled = true; return;
         }
-        var edit = Keys.Which(e, "edit.copy", "edit.cut", "edit.paste", "edit.duplicate", "edit.delete");
+        var edit = Keys.OwnedBy(e, "edit.copy", "edit.cut", "edit.paste", "edit.duplicate", "edit.delete");
         // A selected rack chain device takes the clipboard keys (specs/042).
         if (edit is not null && _rackSel != null && _rackCmds is { } rc)
         {
@@ -491,7 +491,7 @@ public sealed partial class DeviceChainView
         if (edit == "edit.delete" && HasDeviceSelection) { DeleteSelectedDevice(); e.Handled = true; return; }
         // Cancel with the XL device selected (a click on the panel's header or its placeholder
         // selects it and focuses the chain) closes the panel, as Esc inside the panel does.
-        bool cancel = Keys.Is(e, "edit.cancel");
+        bool cancel = Keys.Owns(e, "edit.cancel");
         if (cancel && _xlIndex >= 0 && SingleSelection is { Section: DeviceSection.Audio } xs && xs.Index == _xlIndex)
         { CloseXl(_xlIndex); e.Handled = true; return; }
         if (cancel && HasDeviceSelection) { ClearDeviceSelection(); Rebuild(); e.Handled = true; return; }

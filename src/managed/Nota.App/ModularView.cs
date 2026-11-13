@@ -2153,12 +2153,12 @@ public sealed partial class ModularView : UserControl
     {
         if (Keys.Capturing) return;
         var sel = Selected();
-        bool delete = Keys.Is(e, "edit.delete");
+        bool delete = Keys.Owns(e, "edit.delete");
         // Space held pans the canvas — a fixed key, like a mouse gesture (specs/096 FR-011).
         if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None) { _spaceDown = true; _viewport.Cursor = new Cursor(StandardCursorType.SizeAll); }
-        else if (Keys.Is(e, "modular.fit")) { FitNow(); e.Handled = true; }
-        else if (Keys.Is(e, "edit.duplicate") && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
-        else if (Keys.Is(e, "modular.bypass") && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
+        else if (Keys.Owns(e, "modular.fit")) { FitNow(); e.Handled = true; }
+        else if (Keys.Owns(e, "edit.duplicate") && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
+        else if (Keys.Owns(e, "modular.bypass") && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
         else if (delete && _selectedEdge is { IsCv: true, LinkOwner: >= 0 } ce)
         {
             _engine.CvLinkRemove(ce.LinkOwner, ce.LinkIndex); _selectedEdge = null;
@@ -2171,7 +2171,7 @@ public sealed partial class ModularView : UserControl
         else if (delete && sel is { IsChainDevice: true }) { DeleteNode(sel); e.Handled = true; }
         else if (delete && sel is { Slot: Slot.Modulator }) { RemoveModulatorNode(sel); e.Handled = true; }
         else if (delete && sel is not null && FixedReason(sel) is { } why) { _status.Text = why; e.Handled = true; }
-        else if (Keys.Is(e, "edit.cancel") && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
+        else if (Keys.Owns(e, "edit.cancel") && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
     }
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
