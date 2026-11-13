@@ -353,6 +353,28 @@ void RackInstrument::programChange(int32_t program) {
         }
 }
 
+void RackInstrument::keyswitchOn(int32_t pitch, float velocity) {
+    RackState* st = live();
+    if (!st) return;
+    for (auto& c : st->chains)
+        if (c.instrument && c.instrument->takesArticulations()) {
+            c.instrument->eventChannel = eventChannel;
+            c.instrument->keyswitchOn(pitch, velocity);
+            c.instrument->eventChannel = 0;
+        }
+}
+
+void RackInstrument::keyswitchOff(int32_t pitch) {
+    RackState* st = live();
+    if (!st) return;
+    for (auto& c : st->chains)
+        if (c.instrument && c.instrument->takesArticulations()) {
+            c.instrument->eventChannel = eventChannel;
+            c.instrument->keyswitchOff(pitch);
+            c.instrument->eventChannel = 0;
+        }
+}
+
 bool RackInstrument::takesArticulations() const {
     RackState* st = live();
     if (!st) return false;
