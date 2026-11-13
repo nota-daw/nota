@@ -2756,3 +2756,4 @@ Nota.Application/Input/ReservedKeys.cs	Linux	# data: operating-system names (pro
 Nota.Application/Input/ReservedKeys.cs	Windows	# data: operating-system names (proper nouns)
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unknown action '{id}'"	# data: log text for the support log, not shown
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unreadable key '{t}' for '{id}'"	# data: log text for the support log, not shown
+Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring an empty entry for '{id}'"	# data: log text for the support log, not shown

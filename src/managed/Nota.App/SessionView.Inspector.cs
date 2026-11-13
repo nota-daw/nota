@@ -44,6 +44,8 @@ public sealed partial class SessionView
 
     private InspectorPreview? _inspPreview;
 
+    private void RebuildInspectorKeys() => RebuildInspector();
+
     private void RebuildInspector()
     {
         _inspPreview = null;

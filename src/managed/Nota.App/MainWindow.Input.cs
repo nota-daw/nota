@@ -43,7 +43,9 @@ public partial class MainWindow
         if (_vm is null || Keys.Capturing) return;   // the Shortcuts editor is recording a key
         // ⌘⇧P / Ctrl+Shift+P: the command palette, from any window and any focus — a text
         // field included, as the chord types nothing (CP-1). Again closes it.
-        if (Keys.Is(e, CommandCatalog.Palette))
+        // A palette key that types something (a bare or ⇧ key) leaves text fields alone.
+        if (Keys.Is(e, CommandCatalog.Palette)
+            && (KeyTokens.Chord(e) is { IsChord: true } || e.Source is not (TextBox or NumericUpDown)))
         {
             TogglePalette(e.Source is Avalonia.Visual v ? TopLevel.GetTopLevel(v) as Window : null);
             e.Handled = true;
@@ -359,8 +361,9 @@ public partial class MainWindow
         }
 
         // Nothing above took it: the menu's shortcuts (Ctrl+S, Ctrl+Z…) on Windows / Linux —
-        // chords and bare function keys (F11 = full screen), the menu gestures.
-        if (TryMenuShortcut(e))
+        // chords and bare function keys (F11 = full screen), the menu gestures — then any other
+        // command key: an alternative key, a bare key the menu can't carry, a palette-only command.
+        if (TryMenuShortcut(e) || TryCommandKey(e))
         {
             e.Handled = true;
             return;
@@ -374,6 +377,24 @@ public partial class MainWindow
             e.Handled = true;
         }
         else base.OnKeyDown(e);
+    }
+
+    // A palette command bound to this key (specs/096) that no handler above and no menu item took:
+    // window-wide commands anywhere, a view's commands while that view has the keyboard.
+    private bool TryCommandKey(KeyEventArgs e)
+    {
+        if (KeyTokens.Chord(e) is not { } chord) return false;
+        var focus = ScopeOf(e.Source);
+        foreach (var a in Keys.Bindings.Actions)
+        {
+            if (!a.IsCommand || !(a.Scope.IsWindowLayer() || a.Scope == focus)) continue;
+            if (!Keys.Bindings.Matches(a.Id, chord) || _commands.Get(a.Id) is not { IsBound: true }) continue;
+            if (_heldKeys.Contains(e.Key)) return true;   // one run per press, not per auto-repeat
+            _heldKeys.Add(e.Key);
+            _commands.Run(a.Id);
+            return true;
+        }
+        return false;
     }
 
     private static readonly string[] ClipMoveKeys =

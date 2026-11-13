@@ -31,7 +31,7 @@ public sealed class KeyBindings
     // Effective keys per action: [0] primary, [1] alternative; null = none.
     private readonly Dictionary<string, Shortcut?[]> _current = new(StringComparer.Ordinal);
     private bool _warned;
-    private readonly HashSet<string> _needsDecision = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, KeySlot> _needsDecision = new(StringComparer.Ordinal);
 
     public KeyBindings(IEnumerable<KeyAction> actions, Settings settings, Action? save = null, KeyPlatform? platform = null,
         Action<string>? warn = null)
@@ -40,6 +40,7 @@ public sealed class KeyBindings
         _actions = actions.ToList();
         foreach (var a in _actions) _byId[a.Id] = a;
         _settings = settings;
+        _settings.KeyBindings ??= new();   // "KeyBindings": null in a hand-edited file
         _save = save;
         _platform = platform ?? ReservedKeys.Current;
         Rebuild();
@@ -56,7 +57,10 @@ public sealed class KeyBindings
     public event Action? Changed;
 
     /// <summary>Defaults that a user key took over after an update — listed under "Needs a decision".</summary>
-    public IReadOnlyCollection<string> NeedsDecision => _needsDecision;
+    public IReadOnlyCollection<string> NeedsDecision => _needsDecision.Keys;
+
+    /// <summary>Which slot of a "Needs a decision" action lost its default.</summary>
+    public KeySlot NeedsDecisionSlot(string id) => _needsDecision.GetValueOrDefault(id);
 
     /// <summary>Marks the actions a menu item carries (MainWindow reads them from its menu).</summary>
     public void SetMenuCommands(IEnumerable<string> ids)
@@ -106,6 +110,9 @@ public sealed class KeyBindings
         if (_byId.TryGetValue(id, out var a) && a.Fixed) return KeyCheck.Fixed;
         if (ReservedKeys.Reason(chord, _platform) is not null) return KeyCheck.Reserved;
         if (a is not null && NavigationKeys.TryGetValue(a.Scope, out var nav) && nav.Contains(chord)) return KeyCheck.Navigation;
+        // The Session grid walks its selection on an arrow with any modifier but ⌘ / ⌃.
+        if (a?.Scope == KeyScope.Session && chord.Key is "←" or "→" or "↑" or "↓"
+            && (chord.Modifiers & (ShortcutModifiers.Primary | ShortcutModifiers.Ctrl)) == 0) return KeyCheck.Navigation;
         return KeyCheck.Ok;
     }
 
@@ -215,7 +222,7 @@ public sealed class KeyBindings
     // The slot as the settings say: an override, else the default.
     private Shortcut? Override(string id, KeySlot slot, KeyAction a)
     {
-        if (!_settings.KeyBindings.TryGetValue(id, out var o)) return a.Default(slot);
+        if (!_settings.KeyBindings.TryGetValue(id, out var o) || o is null) return a.Default(slot);
         string? text = slot == KeySlot.Primary ? o.Primary : o.Alternative;
         if (text is null) return a.Default(slot);
         if (text.Length == 0) return null;
@@ -235,6 +242,7 @@ public sealed class KeyBindings
         // Drop what can't be used: unknown ids and keys that don't parse (FR-021).
         if (!_warned) foreach (var (id, o) in _settings.KeyBindings.ToList())
         {
+            if (o is null) { _warn?.Invoke($"Nota shortcuts: ignoring an empty entry for '{id}'"); continue; }
             if (!_byId.ContainsKey(id)) { _warn?.Invoke($"Nota shortcuts: ignoring unknown action '{id}'"); continue; }
             foreach (var t in new[] { o.Primary, o.Alternative })
                 if (!string.IsNullOrEmpty(t) && !TryParse(t, out _))
@@ -248,7 +256,7 @@ public sealed class KeyBindings
         // hand-edited file): the user's key wins, the default rests until the user decides.
         var userKeys = new List<(KeyAction A, KeySlot S, Shortcut K)>();
         foreach (var a in _actions)
-            if (_settings.KeyBindings.ContainsKey(a.Id))
+            if (_settings.KeyBindings.GetValueOrDefault(a.Id) is not null)
                 for (int s = 0; s < 2; s++)
                     if (_current[a.Id][s] is { } k && k != a.Default((KeySlot)s)) userKeys.Add((a, (KeySlot)s, k));
         if (userKeys.Count == 0) return;
@@ -264,7 +272,7 @@ public sealed class KeyBindings
                     // Two user keys on one chord: the first one listed keeps it.
                     if (user && userKeys.FindIndex(x => x.A == a && x.S == (KeySlot)s) < userKeys.IndexOf(u)) continue;
                     _current[a.Id][s] = null;
-                    _needsDecision.Add(a.Id);
+                    _needsDecision.TryAdd(a.Id, (KeySlot)s);
                     break;
                 }
             }

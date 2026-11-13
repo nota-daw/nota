@@ -84,12 +84,27 @@ internal static class KeyBindingTests
         yield return (jb is not null && jb.Matches("edit.split", new Shortcut(P, "E")) && warnings.Count == 2,
             $"an unknown action and an unreadable key are skipped with a warning each ({warnings.Count}); Split keeps ⌘E");
 
+        // ---- damaged entries don't stop the app (review on nota#597) -----------------------
+        var nulls = new Settings();
+        nulls.KeyBindings["edit.split"] = null!;
+        KeyBindings? nb = null;
+        try { nb = new KeyBindings(KeyActionCatalog.Create(true), nulls, platform: KeyPlatform.Mac); } catch { }
+        var noDict = new Settings { KeyBindings = null! };
+        KeyBindings? db = null;
+        try { db = new KeyBindings(KeyActionCatalog.Create(true), noDict, platform: KeyPlatform.Mac); } catch { }
+        yield return (nb is not null && nb.Matches("edit.split", new Shortcut(P, "E")) && db is not null && noDict.KeyBindings is not null,
+            "a null entry and a null KeyBindings in settings load as defaults, no exception");
+
         // ---- reserved and navigation keys -------------------------------------------------
         yield return (b.Check("edit.split", new Shortcut(P, "Q")) == KeyCheck.Reserved, "⌘Q is refused on macOS");
         var win = New(false, new Settings());
         yield return (win.Check("edit.split", new Shortcut(A, "F4")) == KeyCheck.Reserved, "Alt+F4 is refused on Windows");
         yield return (b.Check("session.rename", Shortcut.None("↑")) == KeyCheck.Navigation, "↑ is fixed for Session navigation");
         yield return (b.Check("edit.split", new Shortcut(P, "K")) == KeyCheck.Ok, "⌘K is free to use");
+        yield return (b.Check("session.rename", new Shortcut(A, "↑")) == KeyCheck.Navigation
+                      && b.Check("session.rename", new Shortcut(S, "←")) == KeyCheck.Navigation
+                      && b.Check("session.rename", new Shortcut(P, "↑")) == KeyCheck.Ok,
+            "⌥↑ and ⇧← are the Session grid's navigation too; ⌘↑ is free there");
 
         // ---- conflicts --------------------------------------------------------------------
         var cmdD = new Shortcut(P, "D");
@@ -124,6 +139,13 @@ internal static class KeyBindingTests
         var ub = New(true, upd);
         yield return (ub.Matches("edit.split", new Shortcut(P, "S")) && ub.Current("file.save") is null && ub.NeedsDecision.Contains("file.save"),
             "a user key on a chord a default also uses: the user's key wins, the default rests under \"Needs a decision\"");
+
+        var alt = new Settings();
+        alt.KeyBindings["edit.split"] = new KeyBindingOverride { Primary = "⌦" };
+        var ab = New(true, alt);
+        yield return (ab.NeedsDecision.Contains("edit.delete") && ab.NeedsDecisionSlot("edit.delete") == KeySlot.Alternative
+                      && ab.Matches("edit.delete", Shortcut.None("⌫")),
+            "a user key on Delete's alternative ⌦: the decision is about the alternative, ⌫ keeps working");
 
         // ---- notes ------------------------------------------------------------------------
         yield return (b.Matches("notes.c", Shortcut.None("A")) && b.Matches("notes.c2", Shortcut.None("K")) && b.Matches("notes.octaveUp", Shortcut.None("X")),

@@ -48,7 +48,8 @@ public partial class MainWindow
         if (!HasMenuKey) RemoveWithSeparatorAbove(menu, "view.menuBar");   // macOS: the menu is in the system bar (#518)
         Collect(menu);
         // A key a menu item carries reaches every scope on macOS: the conflict check reads which.
-        Keys.Bindings.SetMenuCommands(_menuItems.Keys);
+        // macOS: Settings… lives in the app menu (App.axaml), which carries its key too.
+        Keys.Bindings.SetMenuCommands(OperatingSystem.IsMacOS() ? _menuItems.Keys.Append("prefs.open") : _menuItems.Keys);
         ApplyMenuGestures();
         Keys.Bindings.Changed += ApplyMenuGestures;
 

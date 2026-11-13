@@ -20,6 +20,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Nota.App.Input;
 using Nota.Application.Input;
 using Nota.Application.Localization;
@@ -41,12 +43,33 @@ public partial class PreferencesWindow
     private bool _captureHooked;
     private readonly Dictionary<string, Decorator> _rowHosts = new(StringComparer.Ordinal);
     private Action? _renderShortcuts;
+    private Action? _applyShortcutFilter;
+    private int _shortcutsGeneration;
+    private readonly Dictionary<string, string> _rowSignatures = new(StringComparer.Ordinal);
+
+    private sealed class GroupView(string title)
+    {
+        public string Title { get; } = title;
+        public StackPanel? Root { get; set; }
+        public TextBlock Count { get; } = new()
+        {
+            FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center,
+        };
+        public List<RowView> Rows { get; } = new();
+    }
+
+    private sealed record RowView(ShortcutRow Row, Border Wrap, string Text);
+
+    // What a row shows: its keys, its edited mark and whether it is being edited.
+    private string RowSignature(string id) =>
+        $"{Bindings.Current(id)?.ToGlyphs()}|{Bindings.Current(id, KeySlot.Alternative)?.ToGlyphs()}|{Bindings.IsEdited(id)}|{(_editId == id ? _edit : EditKind.None)}";
 
     private static KeyBindings Bindings => Keys.Bindings;
 
     private Control ShortcutsPane()
     {
         var groups = new StackPanel { Spacing = 18 };
+        var empty = Caption("");
         var filter = new TextBox { PlaceholderText = Loc.T("preferences.filter_shortcuts"), Text = _shortcutFilter, Classes = { "search" }, FontSize = 11 };
         var resetAll = Btn(Loc.T("keys.ui.reset_all"));
         resetAll.Click += async (_, _) =>
@@ -56,52 +79,130 @@ public partial class PreferencesWindow
                 Loc.T("keys.ui.reset_all_confirm"), Loc.T("common.cancel")).ShowDialog<bool>(this);
             if (ok) Bindings.ResetAll();
         };
-        var editedOnly = SwitchRow(Loc.T("keys.ui.edited_only"), _editedOnly, on => { _editedOnly = on; _renderShortcuts?.Invoke(); });
+        var editedOnly = SwitchRow(Loc.T("keys.ui.edited_only"), _editedOnly, on => { _editedOnly = on; _applyShortcutFilter?.Invoke(); });
 
-        void Render()
+        // The list is built once per visit and then only shown or hidden: the filter and Edited
+        // only toggle rows, and a changed key rebuilds just its row. Building ~270 rows at once
+        // took a noticeable moment, so the first groups are built at once and the rest follow in
+        // the background, a few at a time.
+        var views = new List<GroupView>();
+        int generation = ++_shortcutsGeneration;
+        string[] decisionShown = [];
+
+        void Build()
         {
+            generation = ++_shortcutsGeneration;
             groups.Children.Clear();
             _rowHosts.Clear();
+            _rowSignatures.Clear();
+            views.Clear();
             resetAll.IsEnabled = Bindings.AnyEdited;
+            decisionShown = Bindings.NeedsDecision.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            var layout = new List<ShortcutGroup>();
+            if (decisionShown.Length > 0)
+                layout.Add(new ShortcutGroup(Loc.T("keys.ui.needs_decision"), decisionShown.Select(id => new ShortcutRow(id)).ToList()));
+            layout.AddRange(ShortcutLayout.Build(Bindings.Actions.ToList(), MainWindow.HasMenuKey));
+            int next = 0, built = 0;
+            while (next < layout.Count && built < 40) built += Add(layout[next++], decision: next == 1 && decisionShown.Length > 0);
+            groups.Children.Add(empty);
+            ApplyFilter();
+            int gen = generation;
+            void More()
+            {
+                if (gen != _shortcutsGeneration) return;   // rebuilt meanwhile
+                for (int n = 0; n < 2 && next < layout.Count; n++) Add(layout[next++], decision: false);
+                ApplyFilter();
+                if (next < layout.Count) Dispatcher.UIThread.Post(More, DispatcherPriority.Background);
+            }
+            if (next < layout.Count) Dispatcher.UIThread.Post(More, DispatcherPriority.Background);
+        }
+
+        int Add(ShortcutGroup g, bool decision)
+        {
+            var view = new GroupView(g.Title);
+            var stack = new StackPanel();
+            foreach (var r in g.Rows)
+            {
+                Control content = r.ActionId is { } id ? ActionRowHost(id, needsDecision: decision) : FixedShortcutRow(r.Key, r.Text);
+                var wrap = new Border { Background = RowBg, BorderBrush = Hairline, BorderThickness = new Thickness(0, 1, 0, 0), Child = content };
+                stack.Children.Add(wrap);
+                view.Rows.Add(new RowView(r, wrap, r.ActionId is null
+                    ? (MenuKit.Keys(r.Text) + "\n" + MenuKit.Keys(r.Key)) : ""));
+            }
+            view.Root = new StackPanel
+            {
+                Spacing = 6,
+                Children =
+                {
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 4),
+                        Children =
+                        {
+                            new TextBlock { Text = g.Title, Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center },
+                            view.Count,
+                        },
+                    },
+                    new Border
+                    {
+                        BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
+                        ClipToBounds = true, Child = stack,
+                    },
+                },
+            };
+            views.Add(view);
+            groups.Children.Insert(Math.Max(0, groups.Children.Count - (groups.Children.Contains(empty) ? 1 : 0)), view.Root);
+            return g.Rows.Count;
+        }
+
+        void ApplyFilter()
+        {
             // Each word must appear in the row's action, its keys or its group's title, so
             // "keyboard" finds the whole "Play notes (computer keyboard)" group (#40) and "cmd t"
-            // the action on ⌘T (FR-017).
+            // the action on ⌘T (FR-017). A filter that reads as one key finds that key.
             var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            // A filter that reads as one key ("⌘T", "cmd t", "ctrl+shift+t") finds that key.
             var chord = KeyQuery(_shortcutFilter);
-
-            if (Bindings.NeedsDecision.Count > 0 && words.Length == 0)
+            bool any = false;
+            foreach (var g in views)
             {
-                var rows = Bindings.NeedsDecision.Select(id => (Control)ActionRowHost(id, needsDecision: true)).ToList();
-                groups.Children.Add(Group(Loc.T("keys.ui.needs_decision"), rows));
-            }
-            foreach (var g in ShortcutLayout.Build(Bindings.Actions.ToList(), MainWindow.HasMenuKey))
-            {
-                var shown = new List<Control>();
+                int shown = 0;
                 foreach (var r in g.Rows)
                 {
-                    if (r.ActionId is { } id)
-                    {
-                        if (_editedOnly && !Bindings.IsEdited(id) && id != _editId) continue;
-                        if (chord is { } c ? !Bindings.Matches(id, c) : !words.All(w => Matches(w, g.Title) || ActionMatches(w, id))) continue;
-                        shown.Add(ActionRowHost(id, needsDecision: false));
-                    }
+                    bool on;
+                    if (r.Row.ActionId is { } id)
+                        on = (!_editedOnly || Bindings.IsEdited(id) || id == _editId)
+                             && (chord is { } c ? Bindings.Matches(id, c) : words.All(w => Matches(w, g.Title) || ActionMatches(w, id)));
                     else
-                    {
-                        if (_editedOnly) continue;
-                        if (chord is { } c ? !r.Key.Split(' ').Contains(c.ToGlyphs())
-                            : !words.All(w => Matches(w, g.Title) || Matches(w, MenuKit.Keys(r.Text)) || Matches(w, MenuKit.Keys(r.Key)))) continue;
-                        shown.Add(FixedShortcutRow(r.Key, r.Text));
-                    }
+                        on = !_editedOnly && (chord is { } c ? r.Row.Key.Split(' ').Contains(c.ToGlyphs())
+                            : words.All(w => Matches(w, g.Title) || Matches(w, r.Text)));
+                    r.Wrap.IsVisible = on;
+                    if (on) r.Wrap.BorderThickness = new Thickness(0, shown == 0 ? 0 : 1, 0, 0);   // no rule above the first
+                    if (on) shown++;
                 }
-                if (shown.Count > 0) groups.Children.Add(Group(g.Title, shown));
+                g.Root!.IsVisible = shown > 0;
+                g.Count.Text = shown.ToString();
+                any |= shown > 0;
             }
-            if (groups.Children.Count == 0) groups.Children.Add(Caption(_editedOnly ? Loc.T("keys.ui.nothing_edited") : Loc.T("preferences.nothing_matches")));
+            empty.Text = _editedOnly ? Loc.T("keys.ui.nothing_edited") : Loc.T("preferences.nothing_matches");
+            empty.IsVisible = !any;
         }
-        _renderShortcuts = Render;
-        filter.TextChanged += (_, _) => { _shortcutFilter = filter.Text ?? ""; Render(); };
+
+        // A key changed (here or anywhere): rebuild the rows whose keys or mark changed, or the
+        // whole list when "Needs a decision" changed.
+        void Changed()
+        {
+            resetAll.IsEnabled = Bindings.AnyEdited;
+            if (!Bindings.NeedsDecision.OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(decisionShown)) { Build(); return; }
+            foreach (var id in _rowHosts.Keys.ToList())
+                if (_rowSignatures.GetValueOrDefault(id) != RowSignature(id)) RefreshRow(id);
+            ApplyFilter();
+        }
+
+        _renderShortcuts = Changed;
+        _applyShortcutFilter = ApplyFilter;
+        filter.TextChanged += (_, _) => { _shortcutFilter = filter.Text ?? ""; ApplyFilter(); };
         HookCapture();
-        Render();
+        Build();
 
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 16 };
         var search = SearchField(filter, 320);
@@ -121,19 +222,8 @@ public partial class PreferencesWindow
 
     private void OnBindingsChanged() => _renderShortcuts?.Invoke();
 
-    private static Control Group(string title, List<Control> rows)
-    {
-        var head = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 4),
-            Children =
-            {
-                new TextBlock { Text = title, Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = rows.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.ValuesFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
-            },
-        };
-        return new StackPanel { Spacing = 6, Children = { head, Table(rows) } };
-    }
+    /// <summary>Ends a recording or a reset prompt (the page is left or the window closes).</summary>
+    private void EndShortcutEdit() { if (_edit != EditKind.None) EndEdit(); }
 
     // ---- filter --------------------------------------------------------------------------
 
@@ -204,14 +294,15 @@ public partial class PreferencesWindow
     private Control ActionRowHost(string id, bool needsDecision)
     {
         var host = new Decorator { Child = ActionRow(id, needsDecision) };
-        if (!needsDecision) _rowHosts[id] = host;
+        if (!needsDecision) { _rowHosts[id] = host; _rowSignatures[id] = RowSignature(id); }
         return host;
     }
 
     private void RefreshRow(string id)
     {
-        if (_rowHosts.TryGetValue(id, out var host)) host.Child = ActionRow(id, needsDecision: false);
-        else _renderShortcuts?.Invoke();
+        if (!_rowHosts.TryGetValue(id, out var host)) return;
+        host.Child = ActionRow(id, needsDecision: false);
+        _rowSignatures[id] = RowSignature(id);
     }
 
     private Control ActionRow(string id, bool needsDecision)
@@ -325,7 +416,8 @@ public partial class PreferencesWindow
 
     private Control NeedsDecisionLine(KeyAction a)
     {
-        var d = a.DefaultPrimary;
+        var slot = Bindings.NeedsDecisionSlot(a.Id);   // the slot whose default a user key took
+        var d = a.Default(slot);
         var taker = d is { } k ? Bindings.Actions.FirstOrDefault(x => x.Id != a.Id && Bindings.Matches(x.Id, k)) : null;
         var text = new TextBlock
         {
@@ -333,7 +425,7 @@ public partial class PreferencesWindow
             FontSize = 10.5, Foreground = NotaPalette.Warning, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center,
         };
         var leave = Btn(Loc.T("keys.ui.leave_unassigned"));
-        leave.Click += (_, _) => Bindings.Set(a.Id, KeySlot.Primary, null);
+        leave.Click += (_, _) => Bindings.Set(a.Id, slot, null);
         return new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(12 + LabelCol + 52, 0, 12, 8),
@@ -493,8 +585,16 @@ public partial class PreferencesWindow
         Keys.Bindings.Changed += OnBindingsChanged;
         Closed += (_, _) => { Keys.Bindings.Changed -= OnBindingsChanged; EndEdit(); };
         AddHandler(KeyDownEvent, OnCaptureKey, RoutingStrategies.Tunnel, handledEventsToo: true);
-        // Leaving the window cancels the recording (the next key would go elsewhere).
+        // Leaving the window cancels the recording (the next key would go elsewhere), and so
+        // does a click anywhere but the row being edited (the filter, another page, the list).
         Deactivated += (_, _) => { if (_edit == EditKind.Capture) EndEdit(); };
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (_edit != EditKind.Capture || _editId is null) return;
+            if (_rowHosts.TryGetValue(_editId, out var host) && e.Source is Visual v
+                && v.GetSelfAndVisualAncestors().Contains(host)) return;
+            EndEdit();
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     private void OnCaptureKey(object? sender, KeyEventArgs e)

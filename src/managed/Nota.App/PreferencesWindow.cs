@@ -260,6 +260,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private void Select(int index)
     {
+        EndShortcutEdit();   // a row recording a key must not keep taking keys on another page
         StopTests();   // the audio panes are rebuilt on every visit — don't leave a tone / check orphaned
         // Apply() refreshes latency and the input list only while their page is the one shown.
         _latencyValue = _latencyDetail = null;

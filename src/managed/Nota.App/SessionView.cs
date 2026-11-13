@@ -139,6 +139,9 @@ public sealed partial class SessionView : UserControl
     {
         ValueEntry.SetScope(this, true);   // Tab in a value box walks the values shown here
         _engine = engine;
+        // The inspector's buttons name their keys (specs/096): redraw them when a key changes.
+        AttachedToVisualTree += (_, _) => Nota.App.Input.Keys.Bindings.Changed += RebuildInspectorKeys;
+        DetachedFromVisualTree += (_, _) => Nota.App.Input.Keys.Bindings.Changed -= RebuildInspectorKeys;
         Focusable = true;
         FocusAdorner = null;
 
