@@ -2188,15 +2188,26 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
             for (auto& s : slices) nt->midiClips.push_back(std::move(s));
         } else {
             std::vector<AudioClip> slices;
+            bool changedSpan = false;
             for (auto& c : nt->clips) {
                 double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR, tempoMap());
                 if (ce > start + eps && cs < end - eps) {
                     auto s = audioSlice(c, start, end, spb, devSR, tempoMap());
+                    const double sourceLen = audioDisplayLenBeats(s, spb, devSR, tempoMap());
                     s.startBeat += len;
+                    changedSpan |= std::abs(audioDisplayLenBeats(s, spb, devSR, tempoMap()) - sourceLen) > eps;
                     slices.push_back(std::move(s));
                 }
             }
-            audioOverwriteRange(nt->clips, end, end + len, spb, devSR, tempoMap());
+            // Natural-rate copies can grow or shrink in beats after placement. Carve
+            // their actual landing spans before inserting any copy. When lengths stay
+            // the same, retain the selected range's existing silence/gap semantics.
+            if (changedSpan) {
+                for (const auto& s : slices)
+                    audioOverwriteRange(nt->clips, s.startBeat,
+                        s.startBeat + audioDisplayLenBeats(s, spb, devSR, tempoMap()), spb, devSR, tempoMap());
+            } else
+                audioOverwriteRange(nt->clips, end, end + len, spb, devSR, tempoMap());
             for (auto& s : slices) nt->clips.push_back(std::move(s));
         }
         g->tracks.push_back(nt);
@@ -2375,6 +2386,17 @@ namespace {
 
 constexpr double kSecEps = 1e-6;
 
+// A partial take's first played frame moves by beats; its frame-zero origin must
+// be solved in seconds so later comp swipes still address the same source audio.
+void shiftTake(AudioTake& take, double offset) {
+    if (take.tempoMap && take.sample && take.sample->sourceSampleRate > 0.0) {
+        const double start = take.beatAtFrame(take.sourceOffsetFrames) + offset;
+        take.originBeat = take.tempoMap->beatAt(take.tempoMap->secondsAt(start) -
+            take.sourceOffsetFrames / take.sample->sourceSampleRate);
+    } else
+        take.originBeat += offset;
+}
+
 const TimeRegion* regionAt(const std::vector<TimeRegion>& rs, double t) {
     for (const auto& r : rs)
         if (t >= r.start - kSecEps && t < r.end - kSecEps) return &r;
@@ -2529,7 +2551,7 @@ void Engine::remapTimeline(double lo, double hi, const std::vector<TimeRegion>& 
         for (auto& k : nt->takes)
             if (const TimeRegion* r = regionAt(rs, k.beatAtFrame(k.sourceOffsetFrames));
                 r && !r->drop && r->offset != 0.0) {
-                k.originBeat += r->offset;
+                shiftTake(k, r->offset);
                 changed = true;
             }
         return changed ? nt : nullptr;
@@ -2687,12 +2709,12 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
         std::vector<AudioTake> copies;
         for (auto& k : nt->takes) {
             const double ks = takeStart(k);
-            if (ks >= b - kSecEps) k.originBeat += len;
+            if (ks >= b - kSecEps) shiftTake(k, len);
             else if (ks >= a - kSecEps) {
                 AudioTake c = k;
                 c.id = ++nextTakeId_;
                 c.number = ++number;
-                c.originBeat += len;
+                shiftTake(c, len);
                 auto [git, fresh] = groups.try_emplace(k.group, 0);
                 if (fresh) git->second = ++nextTakeGroup_;
                 c.group = git->second;
@@ -3500,7 +3522,7 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
             nt.clips.push_back(a);
             newIdx = static_cast<int32_t>(nt.clips.size()) - 1;
         }
-        applyClipAutomation(nt, b.trackId, b.autom, start, b.len, b.sameTrack);
+        applyClipAutomation(nt, b.trackId, b.autom, start, lengthAt(b, start), b.sameTrack);
         lastPlaced_.emplace_back(b.trackId, newIdx);
     }
 

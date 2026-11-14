@@ -31,6 +31,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   save with the project, and playback follows their integrated timing.
 
 ### Fixed
+- **Tempo-map copies and comp edits** (#535): range duplication clears the copied
+  audio's actual landing span, and block paste clears automation only under its
+  destination span. Section moves, duplication and deletion keep partial takes
+  aligned with their comp clips, so subsequent comp edits select the same source audio.
 - **Tempo-map moves and scrolling** (#535): moving natural-rate audio carries the
   automation from its whole original span and clears only its landing span. The
   horizontal scrollbar reaches the last clip across large tempo changes.

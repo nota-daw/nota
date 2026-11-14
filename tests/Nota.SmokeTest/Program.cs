@@ -36,6 +36,7 @@ if (args.Contains("--tempo"))
     foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapCopyTakeTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
@@ -15849,6 +15850,7 @@ foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapCopyTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
