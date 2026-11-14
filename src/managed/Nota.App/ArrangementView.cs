@@ -2936,12 +2936,13 @@ public sealed partial class ArrangementView : UserControl
         MenuItem? midiInput = vm is { IsInstrument: true } ? MidiInputPick.Menu(_engine, trackId) : null;
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
-        // this track's instrument. The current source is ticked and shown on the item.
+        // this track's instrument. The current source is ticked and shown on the item; one that
+        // was removed shows as such (#504) rather than as None.
         MenuItem? midiFrom = null;
         if (vm is { IsInstrument: true })
         {
             int curSrc = _engine.GetTrackMidiSource(trackId);
-            string curName = Loc.T("common.none");
+            string curName = curSrc > 0 ? Loc.T("common.removed_track") : Loc.T("common.none");
             var others = _tracks.Where(v => v.Id != trackId && v.IsInstrument).ToList();
             foreach (var v in others) if (v.Id == curSrc) curName = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id);
             midiFrom = MenuKit.ValueItem(Loc.T("arrangement.midi_from"), GlyphKind.Note, curName);

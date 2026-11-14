@@ -2534,6 +2534,9 @@ class Engine {
     // the ones addressed to it, then the release of what it was sounding if it was disarmed
     // and no longer takes live input. Returns the new count.
     int liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n);
+    // The note-offs of the notes a track's MIDI In started and can no longer end (#504),
+    // appended to evs (as many as fit); clears those it appended. Returns the new count.
+    static int releaseRouted(Track::LiveHeld& held, MidiEv* evs, int n);
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
     bool passesMidiInput(const Track& t, const MidiEvent& e) const;

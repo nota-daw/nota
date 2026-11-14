@@ -343,7 +343,9 @@ own window — see
     arpeggiator or other MIDI FX drives the receiver. Selectors live in the track header,
     the mixer channel I/O, and the context menu. A muted source keeps sending MIDI.
     Recording on the receiver prints the incoming MIDI into a clip. Saved with the
-    project.
+    project. Switching MIDI In (to None, to another track, or by removing the source) while
+    a note is held ends the notes the old route started, and only those; a removed source
+    shows as **Removed track** until undo brings it back.
   - **Send/Return** buses (sends to returns) with a return list.
   - **Sidechain keys** — a device's key (and Nota Flux's React) listens to another track, or
     to one pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm on
