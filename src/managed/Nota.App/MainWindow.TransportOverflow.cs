@@ -153,6 +153,9 @@ public partial class MainWindow
                 case ToolbarPart.Mixer:
                     yield return Check(Loc.T("common.mixer"), MixerToggle.IsChecked == true, "view.mixer", MenuKit.Bound("view.mixer"));
                     break;
+                case ToolbarPart.Assistant:
+                    yield return Check(Loc.T("assistant.title"), AssistantToggle.IsChecked == true, "view.assistant", MenuKit.Bound("view.assistant"));
+                    break;
                 case ToolbarPart.MidiLearn:
                     yield return Check(Loc.T("main.transport_overflow.midi_learn"), MidiLearnBtn.IsChecked == true,
                                        "view.midiLearn", MenuKit.Bound("view.midiLearn"));

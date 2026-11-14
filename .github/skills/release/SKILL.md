@@ -211,6 +211,12 @@ Steps:
   set its header to `X.Y.Z`. That change goes into the release commit.
 - Run `nota-docs` in `audit` mode over the same entries. Its changes are committed in
   `../nota-docs`. Missing docs don't block the release; list them in the report.
+- Rebuild the Assistant's manual index from the `nota-docs` revision this release ships with
+  (specs/098): `scripts/build-manual-index.sh ../nota-docs` (a clean checkout of the docs'
+  `develop`, not a working copy with local edits), and commit `assets/manual/manual-index.json.gz`
+  with the release. Then run the smoke test's `--assistant` check: every Show me anchor must name
+  a control this build has, and translations must carry their English section's anchors. A
+  failure means the docs and the app disagree — fix the anchor (docs) or `AnchorRegistry`.
 
 ### P7. Release image
 

@@ -52,7 +52,18 @@ public partial class MainWindow
             return;
         }
         if (_vm.SuspendEnginePolling || PaletteOpen) return;   // the palette has the keyboard
+        // The Assistant's key is a chord, so it types nothing: it closes the panel from its own
+        // input too (specs/098). Every other key stays with a focused text field (FR-005).
+        if (Keys.Is(e, "view.assistant") && KeyTokens.Chord(e) is { IsChord: true })
+        {
+            ToggleAssistant();
+            e.Handled = true;
+            return;
+        }
         if (e.Source is TextBox || e.Source is NumericUpDown) return;
+        // Keys in the Assistant panel (its links, Back / Next / Done) are the panel's: Return or
+        // Space on a focused link runs the link, not Stop or Play (specs/098).
+        if (InAssistant(e.Source)) return;
         if (TakesOverflowKey(e)) { e.Handled = true; return; }   // ⋯ focused by Tab (#520)
 
         if (Keys.Is(e, "session.launchSelection") && SessionFocused)
@@ -152,7 +163,8 @@ public partial class MainWindow
     // Shared with the floating detail window (see HandleFloatingKeyDown).
     internal void HandleKeyDown(KeyEventArgs e)
     {
-        if (_vm is null || Keys.Capturing || _vm.SuspendEnginePolling || e.Source is TextBox || e.Source is NumericUpDown) { base.OnKeyDown(e); return; }
+        if (_vm is null || Keys.Capturing || _vm.SuspendEnginePolling || e.Source is TextBox || e.Source is NumericUpDown
+            || InAssistant(e.Source)) { base.OnKeyDown(e); return; }
 
         // Every key here is a binding (specs/096): Keys.Is asks the user's keys, so the gates
         // and the order below are what decides between actions, never a hard-coded key.

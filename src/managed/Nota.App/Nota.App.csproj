@@ -24,6 +24,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <!-- QR code for Connect Phone (Nota Remote). MIT. -->
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="3.2.1" />
+    <!-- Markdown in the Assistant panel (specs/098). BSD-2-Clause. -->
+    <PackageReference Include="Markdig" Version="1.6.0" />
   </ItemGroup>
 
   <!-- App icon for the window / taskbar. The macOS .app dock & Finder icon comes

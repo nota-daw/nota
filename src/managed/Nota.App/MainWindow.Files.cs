@@ -457,6 +457,7 @@ public partial class MainWindow
         _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project, and so do device windows
+        _showMe?.Stop();                   // a Show me walkthrough points at the old project's controls (specs/098)
         _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
         PianoRollView.ForgetBendPicks();   // and the Bend lane ranges picked per clip

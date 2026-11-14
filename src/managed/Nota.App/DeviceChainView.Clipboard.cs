@@ -606,6 +606,22 @@ public sealed partial class DeviceChainView
         Margin = new Thickness(-4, 6, 1, 6), IsHitTestVisible = false,
     };
 
+    /// <summary>The card of the first built-in device of this group and engine kind on the shown
+    /// track, or null (Show me, specs/098).</summary>
+    internal Control? CardOf(Nota.Presentation.Assistant.DeviceGroup group, int engineKind)
+    {
+        if (_trackId < 0) return null;
+        switch (group)
+        {
+            case Nota.Presentation.Assistant.DeviceGroup.Instrument:
+                return _engine.TrackInstrumentKind(_trackId) == engineKind ? _instrumentCard : null;
+            case Nota.Presentation.Assistant.DeviceGroup.MidiEffect:
+                return DomainCards(ChainKind.Midi).FirstOrDefault(c => c.Tag is DevTag t && _engine.MidiEffectKind(_trackId, t.Index) == engineKind);
+            default:
+                return DomainCards(ChainKind.Effect).FirstOrDefault(c => c.Tag is DevTag t && _engine.TrackDeviceBuiltinKind(_trackId, t.Index) == engineKind);
+        }
+    }
+
     // The device cards in _row that belong to the given domain, in visual order.
     private System.Collections.Generic.List<Control> DomainCards(ChainKind kind)
         => _row.Children.OfType<Control>().Where(c => c.Tag is DevTag t && t.Kind == kind).ToList();
