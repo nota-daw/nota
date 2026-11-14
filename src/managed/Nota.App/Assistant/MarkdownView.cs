@@ -9,9 +9,10 @@
 // asides), tables, rules, links and <kbd> key caps. Text is selectable (FR-014). Colours are the
 // palette's live brushes, so a theme switch repaints without a rebuild (FR-013); a look or
 // skin switch re-rounds through NotaSkin like every other control.
-// Key caps are runs in the text. Links are small focusable elements in the line, so they work
-// from the keyboard (Tab, Return / Space) and for screen readers. LinkClicked hands the target to
-// the panel, which opens nota-manual: and web links in the browser and runs nota: links (Show me).
+// Key caps and links are runs in the text, so a selected passage copies with them. A click on a
+// link is hit-tested to its run; from the keyboard, Tab walks a paragraph's links and Return /
+// Space runs one. LinkClicked hands the target to the panel, which opens nota-manual: and web
+// links in the browser and runs nota: links (Show me).
 
 using System;
 using System.Linq;
@@ -99,6 +100,7 @@ internal sealed class MarkdownView : StackPanel
         var inlines = tb.Inlines ??= new InlineCollection();
         if (plain is not null) inlines.Add(new Run(plain));
         else if (inline is not null) AddInlines(inlines, inline, Style.None);
+        if (inlines.OfType<LinkRun>().Any()) HookLinks(tb);
         return tb;
     }
 
@@ -279,13 +281,13 @@ internal sealed class MarkdownView : StackPanel
                     });
                     break;
                 case LinkInline link when !link.IsImage:
-                    into.Add(LinkInlineControl(PlainText(link), link.Url ?? ""));
+                    into.Add(new LinkRun(PlainText(link), link.Url ?? ""));
                     break;
                 case LinkInline image:
-                    into.Add(LinkInlineControl(PlainText(image) is { Length: > 0 } alt ? alt : image.Url ?? "", image.Url ?? ""));
+                    into.Add(new LinkRun(PlainText(image) is { Length: > 0 } alt ? alt : image.Url ?? "", image.Url ?? ""));
                     break;
                 case AutolinkInline auto:
-                    into.Add(LinkInlineControl(auto.Url, auto.IsEmail ? "mailto:" + auto.Url : auto.Url));
+                    into.Add(new LinkRun(auto.Url, auto.IsEmail ? "mailto:" + auto.Url : auto.Url));
                     break;
                 case HtmlInline html when html.Tag.StartsWith("<kbd", StringComparison.OrdinalIgnoreCase):
                 {
@@ -333,50 +335,77 @@ internal sealed class MarkdownView : StackPanel
         return sb.ToString();
     }
 
-    /// <summary>A link: accent, underlined words in the line that take the keyboard too — Tab
-    /// reaches it, Return or Space runs it, an accent ring shows focus — and carry their name for
-    /// screen readers. A pointer click runs it as well.</summary>
-    private InlineUIContainer LinkInlineControl(string text, string url)
+    /// <summary>A link's words: accent, underlined, part of the paragraph's text — selectable and
+    /// copied with the passage around them.</summary>
+    private sealed class LinkRun : Run
     {
-        var label = new TextBlock
+        public LinkRun(string text, string url) : base(text)
         {
-            Text = text,
-            FontFamily = NotaFonts.UiFamily,
-            FontSize = BodySize,
-            Foreground = NotaPalette.Accent,
-            TextDecorations = TextDecorations.Underline,
-            LineHeight = BodySize * 1.45,   // exactly the paragraph's line: the link sits in it, no taller
-        };
-        var link = new Border
+            Url = url;
+            Foreground = NotaPalette.Accent;
+            TextDecorations = Avalonia.Media.TextDecorations.Underline;
+        }
+        public string Url { get; }
+    }
+
+    // A paragraph with links: the mouse runs the link under it (hit-tested to its run); from the
+    // keyboard, Tab enters the paragraph on its first link and moves link to link (⇧Tab back),
+    // the focused one tinted; Return or Space runs it; past the last link Tab moves on.
+    private void HookLinks(SelectableTextBlock tb)
+    {
+        var links = tb.Inlines!.OfType<LinkRun>().ToList();
+        int focused = -1;
+        tb.Focusable = true;
+        tb.IsTabStop = true;
+        Avalonia.Automation.AutomationProperties.SetName(tb, string.Join(", ", links.Select(l => l.Text)));
+        void Mark(int i)
         {
-            Child = label,
-            Focusable = true,
-            IsTabStop = true,
-            Background = Brushes.Transparent,
-            CornerRadius = NotaRadius.Fine,
-            Cursor = new Cursor(StandardCursorType.Hand),
-            // An inline control sits on the text's baseline by its bottom edge; drop it by the
-            // font's descent so its words line up with the words around it.
-            RenderTransform = new TranslateTransform(0, BodySize * 0.25),
-        };
-        Avalonia.Automation.AutomationProperties.SetName(link, text);
-        if (!url.StartsWith("nota:", StringComparison.Ordinal)) ToolTip.SetTip(link, url.StartsWith("nota-manual:", StringComparison.Ordinal) ? null : url);
-        // Focus shows as the "picked" tint behind the words (a ring would make the line taller).
-        link.GotFocus += (_, _) => link.Background = NotaPalette.AccentSoft;
-        link.LostFocus += (_, _) => link.Background = Brushes.Transparent;
-        link.KeyDown += (_, e) =>
+            if (focused >= 0) links[focused].Background = null;
+            focused = i;
+            if (focused >= 0) links[focused].Background = NotaPalette.AccentSoft;
+        }
+        tb.GotFocus += (_, e) => { if (e.NavigationMethod == NavigationMethod.Tab && focused < 0) Mark(0); };
+        tb.LostFocus += (_, _) => Mark(-1);
+        tb.KeyDown += (_, e) =>
         {
-            if (e.Key is not (Key.Enter or Key.Space)) return;
-            e.Handled = true;
-            LinkClicked?.Invoke(url);
+            if (e.Key == Key.Tab && focused >= 0)
+            {
+                int next = focused + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
+                if (next < 0 || next >= links.Count) { Mark(-1); return; }   // leave the paragraph
+                Mark(next);
+                e.Handled = true;
+            }
+            else if (e.Key is Key.Enter or Key.Space && focused >= 0)
+            {
+                e.Handled = true;
+                LinkClicked?.Invoke(links[focused].Url);
+            }
         };
-        link.PointerReleased += (_, e) =>
+        tb.PointerMoved += (_, e) =>
+            tb.Cursor = RunAt(tb, e.GetPosition(tb)) is LinkRun ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+        tb.PointerReleased += (_, e) =>
         {
-            if (e.InitialPressMouseButton != MouseButton.Left) return;
-            e.Handled = true;
-            LinkClicked?.Invoke(url);
+            if (e.InitialPressMouseButton != MouseButton.Left || tb.SelectionEnd != tb.SelectionStart) return;
+            if (RunAt(tb, e.GetPosition(tb)) is LinkRun link)
+            {
+                e.Handled = true;
+                LinkClicked?.Invoke(link.Url);
+            }
         };
-        return new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline };
+    }
+
+    private static Avalonia.Controls.Documents.Inline? RunAt(SelectableTextBlock tb, Point p)
+    {
+        var hit = tb.TextLayout.HitTestPoint(p);
+        if (!hit.IsInside || tb.Inlines is null) return null;
+        int at = hit.TextPosition, pos = 0;
+        foreach (var inline in tb.Inlines)
+        {
+            int len = inline switch { Run r => r.Text?.Length ?? 0, LineBreak => Environment.NewLine.Length, _ => 1 };
+            if (at >= pos && at < pos + len) return inline;
+            pos += len;
+        }
+        return null;
     }
 
     // A key as the manual writes it: the key's name on a raised ground, in the text's own line.

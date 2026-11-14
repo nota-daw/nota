@@ -30,12 +30,15 @@ internal sealed class ShowMeController
     private readonly AssistantView _view;
     private Walkthrough? _walk;
     private int _step;
+    // Windows Show me has brought forward (a popped-out Mixer or Detail): Escape there stops the
+    // walkthrough too, before that window's own Escape (closing it) sees the key.
+    private readonly System.Collections.Generic.HashSet<Window> _hooked = new();
 
     public ShowMeController(MainWindow window, AssistantView view)
     {
         _window = window;
         _view = view;
-        _window.AddHandler(InputElement.KeyDownEvent, OnKey, RoutingStrategies.Tunnel);
+        Hook(_window);
     }
 
     public bool Running => _walk is not null;
@@ -57,6 +60,13 @@ internal sealed class ShowMeController
         _walk = null;
         _view.WalkthroughBar.IsVisible = false;
         _view.WalkthroughBar.Child = null;
+    }
+
+    private void Hook(Window w)
+    {
+        if (!_hooked.Add(w)) return;
+        w.AddHandler(InputElement.KeyDownEvent, OnKey, RoutingStrategies.Tunnel);
+        w.Closed += (_, _) => _hooked.Remove(w);
     }
 
     private void OnKey(object? sender, KeyEventArgs e)
@@ -119,7 +129,11 @@ internal sealed class ShowMeController
             if (target is null) { LastGuidance = Loc.T("assistant.control_missing"); DrawBar(_walk!.Steps[_step], LastGuidance); return; }
             target = _window.ShedFallback(target) ?? target;
             // The control may live in a popped-out Detail or Mixer window: bring that one forward.
-            if (TopLevel.GetTopLevel(target) is Window w && !w.IsActive) w.Activate();
+            if (TopLevel.GetTopLevel(target) is Window w)
+            {
+                Hook(w);
+                if (!w.IsActive) w.Activate();
+            }
             target.BringIntoView();
             Outline(target);
         }, Avalonia.Threading.DispatcherPriority.Loaded);
