@@ -349,7 +349,7 @@ internal sealed class MarkdownView : StackPanel
     }
 
     // A paragraph with links: the mouse runs the link under it (hit-tested to its run); from the
-    // keyboard, Tab enters the paragraph on its first link and moves link to link (⇧Tab back),
+    // keyboard, Tab enters the paragraph on its first link (⇧Tab on its last) and moves link to link,
     // the focused one tinted; Return or Space runs it; past the last link Tab moves on.
     private void HookLinks(SelectableTextBlock tb)
     {
@@ -364,7 +364,12 @@ internal sealed class MarkdownView : StackPanel
             focused = i;
             if (focused >= 0) links[focused].Background = NotaPalette.AccentSoft;
         }
-        tb.GotFocus += (_, e) => { if (e.NavigationMethod == NavigationMethod.Tab && focused < 0) Mark(0); };
+        // Tab enters on the first link, Shift+Tab (coming back) on the last.
+        tb.GotFocus += (_, e) =>
+        {
+            if (e.NavigationMethod == NavigationMethod.Tab && focused < 0)
+                Mark(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? links.Count - 1 : 0);
+        };
         tb.LostFocus += (_, _) => Mark(-1);
         tb.KeyDown += (_, e) =>
         {
