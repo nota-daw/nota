@@ -285,7 +285,9 @@ set_target_properties(nota_engine PROPERTIES
 )
 
 if(APPLE)
+    target_compile_definitions(nota_engine PRIVATE SIGNALSMITH_USE_ACCELERATE)
     target_link_libraries(nota_engine PRIVATE
+        "-framework Accelerate"
         "-framework AudioToolbox"
         "-framework CoreAudio"
         "-framework CoreMIDI"
@@ -312,6 +314,16 @@ elseif(UNIX AND NOT APPLE)
     # host needs libasound2-dev; libpulse is optional at runtime.
     target_compile_definitions(nota_engine PRIVATE __LINUX_ALSA__)
     target_link_libraries(nota_engine PRIVATE asound pthread dl m)
+endif()
+
+if(NOT APPLE)
+    add_library(nota_pffft STATIC ${pffft_SOURCE_DIR}/src/pffft.c ${pffft_SOURCE_DIR}/src/pffft_common.c)
+    set_target_properties(nota_pffft PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(nota_pffft PRIVATE ${pffft_SOURCE_DIR}/include/pffft)
+    target_compile_definitions(nota_pffft PUBLIC PFFFT_STATIC_DEFINE)
+    target_include_directories(nota_engine SYSTEM PRIVATE ${pffft_SOURCE_DIR}/include)
+    target_compile_definitions(nota_engine PRIVATE SIGNALSMITH_USE_PFFFT)
+    target_link_libraries(nota_engine PRIVATE nota_pffft)
 endif()
 
 # --- Audio codecs for export (FLAC encode, MP3 encode) ----------------------
