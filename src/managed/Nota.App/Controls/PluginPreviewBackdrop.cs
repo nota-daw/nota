@@ -4,9 +4,10 @@
 // The picture of a hosted plug-in's own window behind its device card (specs/046): the
 // engine keeps a JPEG of the window as it was last hidden; this draws it covering the area
 // — one uniform scale, anchored to the top where plug-ins put their logo, centred across,
-// cropped, never stretched — under NotaPalette.PluginPreviewWash, the card's own surface
-// colour, so the card's text reads as on the plain card in every theme. Decoration only: it takes no clicks.
-// No preview yet → draws nothing, the card looks as it always did.
+// cropped, never stretched — under NotaPalette.PluginPreviewWash, the section's own surface
+// colour, so the card's text reads as on a plain section in every theme. Decoration only: it
+// takes no clicks. It stands under an unfilled RuleSection and paints that section's surface
+// first, so with no preview yet the card looks as it always did.
 
 using System;
 using System.Collections.Generic;
@@ -85,19 +86,26 @@ internal sealed class PluginPreviewBackdrop : Control
 
     private void OnThemeChanged() => InvalidateVisual();
 
+    // It stands under an unfilled section (PluginCard), so it paints that section's surface
+    // itself, in its rounded shape: with no picture the card looks like any other section.
     public override void Render(DrawingContext ctx)
     {
+        double w = Bounds.Width, h = Bounds.Height;
+        if (w <= 0 || h <= 0) return;
+        var shape = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.GroupValue);
+        ctx.DrawRectangle(NotaPalette.DeviceSection, null, shape);
         if (_image is not { } img) return;
-        double w = Bounds.Width, h = Bounds.Height, iw = img.Size.Width, ih = img.Size.Height;
-        if (w <= 0 || h <= 0 || iw <= 0 || ih <= 0) return;
+        double iw = img.Size.Width, ih = img.Size.Height;
+        if (iw <= 0 || ih <= 0) return;
 
         // Cover: the larger of the two fits, so no edge is left empty and nothing stretches.
         double s = Math.Max(w / iw, h / ih);
         double dw = iw * s, dh = ih * s;
         var dest = new Rect((w - dw) / 2, 0, dw, dh);
-        using (ctx.PushClip(new Rect(0, 0, w, h)))
+        using (ctx.PushClip(shape))
+        {
             ctx.DrawImage(img, new Rect(img.Size), dest);
-
-        ctx.FillRectangle(NotaPalette.PluginPreviewWash, new Rect(0, 0, w, h));
+            ctx.FillRectangle(NotaPalette.PluginPreviewWash, new Rect(0, 0, w, h));
+        }
     }
 }

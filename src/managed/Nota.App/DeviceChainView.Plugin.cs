@@ -27,10 +27,8 @@ public sealed partial class DeviceChainView
             Bypassed: _engine.DeviceBypassed(_trackId, effect ? di : -1), Bypassable: true,
             CanMove: effect, CanDelete: true, PresetKind: -1, IsInstrument: !effect, Width: width, Kind: k,
             HeaderExtra: toggle, Compact: state.Mini);
+        // The picture of the plug-in's window stands behind the info section (PluginCard).
         Control padded = new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body };
-        // On S the picture of the plug-in's window fills the body (on L, PluginCard puts it
-        // behind the info column only).
-        if (state.Mini) padded = new Panel { Children = { PluginCard.Backdrop(ctx, di), padded } };
         return BuildCardShell(spec, padded);
     }
 }

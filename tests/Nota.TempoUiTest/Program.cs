@@ -14,6 +14,7 @@ using Avalonia.VisualTree;
 using Nota.App;
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Application.Input;
 using Nota.Infrastructure;
 using SkiaSharp;
 
@@ -87,6 +88,48 @@ Check(engine.TempoPoints.Count == 2 && engine.TempoPoints[0].Beat == 0, "Delete 
 Check(engine.Undo() && engine.TempoPoints.SequenceEqual(original) && !engine.CanUndo, "multi-point deletion is one undo step");
 Check(engine.Redo() && engine.TempoPoints.Count == 2, "multi-point deletion redoes");
 Reset();
+
+// The merge with editable shortcuts must preserve the shared Delete/Cancel bindings.
+var previousBindings = KeyBindings.Instance;
+KeyBindings.Instance = new KeyBindings(KeyActionCatalog.Create(), new Settings());
+try
+{
+    KeyBindings.Instance.Set("edit.delete", KeySlot.Primary, Shortcut.None("F8"));
+    KeyBindings.Instance.Set("edit.delete", KeySlot.Alternative, null);
+    KeyBindings.Instance.Set("edit.cancel", KeySlot.Primary, Shortcut.None("F9"));
+    Down(20, 20, MouseButton.Right); Move(420, lane.Bounds.Height - 8, RawInputModifiers.RightMouseButton);
+    Up(420, lane.Bounds.Height - 8, MouseButton.Right);
+    SendKey(Key.Delete);
+    Check(engine.TempoPoints.SequenceEqual(original), "tempo deletion ignores an unbound default key");
+    Nota.App.Input.Keys.Capturing = true;
+    SendKey(Key.F8);
+    Check(engine.TempoPoints.SequenceEqual(original), "shortcut capture cannot delete tempo points");
+    Nota.App.Input.Keys.Capturing = false;
+    SendKey(Key.F8);
+    Check(engine.TempoPoints.Count == 2 && engine.TempoPoints[0].Beat == 0,
+        "tempo selection uses the rebound shared Delete action");
+    Reset();
+    Down(X(12), 35, MouseButton.Left, RawInputModifiers.Control);
+    Move(X(12) + 50, 35, RawInputModifiers.Control | RawInputModifiers.LeftMouseButton);
+    SendKey(Key.F9); Up(X(12) + 50, 35, MouseButton.Left);
+    Check(engine.TempoPoints.SequenceEqual(original) && !engine.CanUndo,
+        "tempo mapping uses the rebound shared Cancel action");
+    KeyBindings.Instance.Set("edit.cancel", KeySlot.Primary, Shortcut.Alt("F9"));
+    Down(X(12), 35, MouseButton.Left, RawInputModifiers.Control | RawInputModifiers.Alt);
+    Move(X(12) + 50, 35, RawInputModifiers.Control | RawInputModifiers.Alt | RawInputModifiers.LeftMouseButton);
+    SendKey(Key.F9, RawInputModifiers.Control | RawInputModifiers.Alt); Up(X(12) + 50, 35, MouseButton.Left);
+    Check(engine.TempoPoints.SequenceEqual(original) && !engine.CanUndo,
+        "rebound Cancel keeps its own modifiers while the mapping modifiers are held");
+    var tempoGroup = ShortcutLayout.Build(KeyBindings.Instance.Actions, false).Single(g => g.Title == "Tempo track");
+    Check(tempoGroup.Rows.Count == 5 && tempoGroup.Rows.All(r => r.IsFixed),
+        "Shortcuts retains all five tempo mouse gestures after the merge");
+}
+finally
+{
+    Nota.App.Input.Keys.Capturing = false;
+    KeyBindings.Instance = previousBindings;
+    Reset();
+}
 
 Down(X(4), Y(80), MouseButton.Left); Move(X(5), Y(100), RawInputModifiers.LeftMouseButton); Up(X(5), Y(100), MouseButton.Left);
 Check(Math.Abs(engine.TempoPoints[1].Bpm - 100) < 1 && engine.CanUndo, "point drag edits BPM and commits once");
@@ -209,10 +252,88 @@ using (var waveEngine = new NotaEngine())
     }
 }
 
+// The viewport has a fixed duration, while its beat span changes as it crosses the map.
+foreach (var (first, last, mapped) in new[] { (240.0, 20.0, true), (20.0, 240.0, true),
+    (120.0, 120.0, true), (60.0, 60.0, false) })
+{
+    using var scrollEngine = new NotaEngine();
+    scrollEngine.SetBpm(first); scrollEngine.RenderOffline(new float[2], 1, 48000);
+    if (mapped) scrollEngine.SetTempoPoints(new[] { new TempoPoint(0, first), new TempoPoint(100, last) });
+    int track = scrollEngine.AddInstrumentTrack();
+    scrollEngine.AddMidiClip(track, 136, 4);
+    var view = new ArrangementView { Engine = scrollEngine };
+    var scrollWindow = new Window { Width = 1100, Height = 600, Content = view };
+    scrollWindow.Show(); view.Refresh(); Pump();
+    void SetField(string name, object value) => typeof(ArrangementView)
+        .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(view, value);
+    SetField("_pixelsPerBeat", 20.0); SetField("_scrollBeats", 0.0);
+    var scroll = Get<object>(view, "_hScroll");
+    double Maximum() => (double)scroll.GetType().GetProperty("Maximum")!.GetValue(scroll)!;
+    double end = Get<double>(view, "_totalBeats");
+    double expected = mapped ? Math.Max(0, scrollEngine.SecondsToBeat(Math.Max(0,
+        scrollEngine.BeatToSeconds(end) - 800.0 / 40))) : Math.Max(0, end - 800.0 / 20);
+    Invoke(view, "SyncScroll", 800.0);
+    Check(Math.Abs(Maximum() - expected) < 1e-7,
+        $"scroll limit uses mapped project-end time ({first} → {last})");
+    Invoke(view, "ScrollByBeats", 10000.0);
+    double maximum = Maximum();
+    Invoke(view, "SyncScroll", 800.0);
+    Check(Math.Abs(Maximum() - maximum) < 1e-7,
+        $"scroll limit stays stable after scrolling ({first} → {last})");
+    // The padded ending can itself be wider than the viewport. Navigate to the
+    // final clip's end and verify it is on screen, rather than accepting negative X.
+    double revealStart = mapped ? scrollEngine.SecondsToBeat(Math.Max(0,
+        scrollEngine.BeatToSeconds(140) - 800.0 / 40)) : Math.Max(0, 140 - 800.0 / 20);
+    Invoke(view, "ScrollByBeats", revealStart - Get<double>(view, "_scrollBeats"));
+    double clipLeft = (double)Invoke(view, "BeatToX", 136.0)!, clipRight = (double)Invoke(view, "BeatToX", 140.0)!;
+    Check(clipLeft >= -1e-6 && clipRight <= 800 + 1e-6 && clipRight > clipLeft,
+        $"last clip is reachable through the scrollbar ({first} → {last})");
+    if (first == 240 && last == 20)
+    {
+        Pump();
+        string shot = Path.ChangeExtension(args.Length > 0 ? args[0] : "out/tempo-ui.png", null) + "-scroll.png";
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(shot))!);
+        using var image = scrollWindow.CaptureRenderedFrame(); image?.Save(shot, PngBitmapEncoderOptions.Default);
+    }
+    SetField("_pixelsPerBeat", 40.0);
+    Invoke(view, "SyncScroll", 800.0); Invoke(view, "ScrollByBeats", 10000.0);
+    Invoke(view, "SyncScroll", 800.0);
+    Check(Math.Abs((double)Invoke(view, "BeatToX", end)! - 800) < 1e-6,
+        $"scroll reaches the padded ending after zoom ({first} → {last})");
+    Invoke(view, "SyncScroll", 100000.0);
+    Check(Maximum() == 0 && Get<double>(view, "_scrollBeats") == 0,
+        $"content shorter than the viewport needs no scrolling ({first} → {last})");
+    Invoke(view, "SyncScroll", 0.0);
+    Check(Maximum() == 0 && Get<double>(view, "_scrollBeats") == 0,
+        $"zero-width viewport safely resets scrolling ({first} → {last})");
+    if (first == 240 && last == 20)
+    {
+        var previewPoints = new[] { new TempoPoint(0, 20), new TempoPoint(100, 240) };
+        using var preview = scrollEngine.CreateTempoPreview(previewPoints);
+        Invoke(view, "PreviewTempo", previewPoints);
+        Invoke(view, "SyncScroll", 800.0);
+        double previewMaximum = preview.SecondsToBeat(Math.Max(0, preview.BeatToSeconds(end) - 800.0 / 80));
+        Check(Math.Abs(Maximum() - previewMaximum) < 1e-7,
+            "scroll extent uses the preview map during tempo editing");
+        Invoke(view, "EndTempoPreview", false, previewPoints);
+        Check(scrollEngine.TempoPoints[0].Bpm == first,
+            "scrolling with a preview leaves the committed tempo map unchanged");
+    }
+    scrollWindow.Close();
+}
+
 string output = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.GetFullPath("out/tempo-ui.png");
 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
 using (var image = window.CaptureRenderedFrame()) image?.Save(output, PngBitmapEncoderOptions.Default);
 Console.WriteLine("Screenshot: " + output);
+var preferences = new PreferencesWindow(null!);
+typeof(PreferencesWindow).GetField("_shortcutFilter", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(preferences, "tempo");
+preferences.ShowPage("Shortcuts"); preferences.Show(); Pump();
+Check(preferences.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Tempo track" && t.IsEffectivelyVisible),
+    "Settings → Shortcuts renders the tempo gesture group in its editable pane");
+using (var image = preferences.CaptureRenderedFrame())
+    image?.Save(Path.ChangeExtension(output, null) + "-shortcuts.png", PngBitmapEncoderOptions.Default);
+preferences.Close();
 window.Close();
 return failures == 0 ? 0 : 1;
 

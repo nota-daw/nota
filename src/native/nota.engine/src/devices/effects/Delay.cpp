@@ -8,6 +8,8 @@
 
 #include "Delay.h"
 
+#include <type_traits>
+
 #include "dsp/math/FastMath.h"
 #include "dsp/math/SimdAudio.h"
 
@@ -176,7 +178,7 @@ void Delay::process(float* buf, int32_t frames) {
     // so the wake-up echo has no timing jump. Sleep engages only after the
     // loop's full flight time (an echo can arrive long after the input and the
     // output both read silent), tracked below via loopPk_/quietSamples_.
-    hist_.begin(); // a gap since the last block (track muted or asleep) scrolls the graph on
+    const bool graph = hist_.begin(); // kept only while the card reads it; a gap scrolls it on
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     if (inSilent && !freeze && idle_) {
         wowPhase_ += wowInc * frames;
@@ -187,85 +189,93 @@ void Delay::process(float* buf, int32_t frames) {
 
     float wetPk = 0.0f, outPkL = 0.0f, outPkR = 0.0f, pushPk = 0.0f;
 
-    for (int32_t i = 0; i < frames; ++i) {
-        if (!fade) {
-            curL_ += std::clamp(tgtL - curL_, -glide, glide);
-            curR_ += std::clamp(tgtR - curR_, -glide, glide);
-        } else if (fadePos_ < fadeLen_) {
-            ++fadePos_;
-        }
-        const float lfo = fast_math::sin((float)wowPhase_);
-        wowPhase_ += wowInc;
-        if (wowPhase_ >= 1.0) wowPhase_ -= 1.0;
-        const double mod = static_cast<double>(lfo * wowDepth);
-
-        float rdL, rdR;
-        if (fadePos_ < fadeLen_) {
-            const float t = static_cast<float>(fadePos_) / static_cast<float>(fadeLen_);
-            const float a = 1.0f - t;
-            // NOTE: DelayLine.readLinear(x) == orig read(x + 1) — the original
-            // interpolates toward the newer sample, so all taps are offset by −1.
-            rdL = bufL_.readLinear((float)(oldL_ + mod) - 1.0f) * a + bufL_.readLinear((float)(curL_ + mod) - 1.0f) * t;
-            rdR = bufR_.readLinear((float)(oldR_ - mod) - 1.0f) * a + bufR_.readLinear((float)(curR_ - mod) - 1.0f) * t;
-        } else {
-            rdL = bufL_.readLinear((float)(curL_ + mod) - 1.0f);
-            rdR = bufR_.readLinear((float)(curR_ - mod) - 1.0f);
-        }
-
-        const float l = buf[i * 2], r = buf[i * 2 + 1];
-        float wl = ping ? rdR : rdL, wr = ping ? rdL : rdR;
-        float inpL = l * inGain + wl * fb;
-        float inpR = r * inGain + wr * fb;
-        if (!freeze) {
-            // The loop's tone: cuts, tape head loss + saturation. Frozen, the loop is
-            // left untouched so it holds instead of slowly dulling.
-            if (hpOn) {
-                hpL_ += hpC * (inpL - hpL_);
-                inpL -= hpL_;
-                hpR_ += hpC * (inpR - hpR_);
-                inpR -= hpR_;
+    // The sample loop twice over, with and without the card's graph, so the plain one (the card
+    // closed) carries no trace of it.
+    auto run = [&](auto withGraph) {
+        for (int32_t i = 0; i < frames; ++i) {
+            if (!fade) {
+                curL_ += std::clamp(tgtL - curL_, -glide, glide);
+                curR_ += std::clamp(tgtR - curR_, -glide, glide);
+            } else if (fadePos_ < fadeLen_) {
+                ++fadePos_;
             }
-            if (lpOn) {
-                lpL_ += lpC * (inpL - lpL_);
-                inpL = lpL_;
-                lpR_ += lpC * (inpR - lpR_);
-                inpR = lpR_;
-            }
-            if (tape) {
-                tapeL_ += tapeC * (inpL - tapeL_);
-                inpL = fast_math::tanhPrecise(tapeL_ * drive) * invTanhDrive;
-                tapeR_ += tapeC * (inpR - tapeR_);
-                inpR = fast_math::tanhPrecise(tapeR_ * drive) * invTanhDrive;
-            }
-        }
-        inpL = ap_[1].tick(ap_[0].tick(inpL, apG), apG);
-        inpR = ap_[3].tick(ap_[2].tick(inpR, apG), apG);
-        pushPk = std::max(pushPk, std::max(std::fabs(inpL), std::fabs(inpR)));
-        bufL_.push(inpL);
-        bufR_.push(inpR);
+            const float lfo = fast_math::sin((float)wowPhase_);
+            wowPhase_ += wowInc;
+            if (wowPhase_ >= 1.0) wowPhase_ -= 1.0;
+            const double mod = static_cast<double>(lfo * wowDepth);
 
-        // ---- output stage: width, bass mono, mix, trim ----
-        float outWetL = rdL, outWetR = rdR;
-        if (width != 1.0f || monoOn) {
-            float mid = (outWetL + outWetR) * 0.5f, side = (outWetL - outWetR) * 0.5f * width;
-            if (monoOn) {
-                monoL_ += monoC * (side - monoL_);
-                side -= monoL_;
+            float rdL, rdR;
+            if (fadePos_ < fadeLen_) {
+                const float t = static_cast<float>(fadePos_) / static_cast<float>(fadeLen_);
+                const float a = 1.0f - t;
+                // NOTE: DelayLine.readLinear(x) == orig read(x + 1) — the original
+                // interpolates toward the newer sample, so all taps are offset by −1.
+                rdL = bufL_.readLinear((float)(oldL_ + mod) - 1.0f) * a + bufL_.readLinear((float)(curL_ + mod) - 1.0f) * t;
+                rdR = bufR_.readLinear((float)(oldR_ - mod) - 1.0f) * a + bufR_.readLinear((float)(curR_ - mod) - 1.0f) * t;
+            } else {
+                rdL = bufL_.readLinear((float)(curL_ + mod) - 1.0f);
+                rdR = bufR_.readLinear((float)(curR_ - mod) - 1.0f);
             }
-            outWetL = mid + side;
-            outWetR = mid - side;
-        }
-        hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outWetL), std::fabs(outWetR)),
-            (outWetL + outWetR) * 0.5f);
-        const float oL = (dryG * l + wetG * outWetL) * outG;
-        const float oR = (dryG * r + wetG * outWetR) * outG;
-        buf[i * 2] = oL;
-        buf[i * 2 + 1] = oR;
 
-        wetPk = std::max(wetPk, std::fabs(outWetL * wetG));
-        outPkL = std::max(outPkL, std::fabs(oL));
-        outPkR = std::max(outPkR, std::fabs(oR));
-    }
+            const float l = buf[i * 2], r = buf[i * 2 + 1];
+            float wl = ping ? rdR : rdL, wr = ping ? rdL : rdR;
+            float inpL = l * inGain + wl * fb;
+            float inpR = r * inGain + wr * fb;
+            if (!freeze) {
+                // The loop's tone: cuts, tape head loss + saturation. Frozen, the loop is
+                // left untouched so it holds instead of slowly dulling.
+                if (hpOn) {
+                    hpL_ += hpC * (inpL - hpL_);
+                    inpL -= hpL_;
+                    hpR_ += hpC * (inpR - hpR_);
+                    inpR -= hpR_;
+                }
+                if (lpOn) {
+                    lpL_ += lpC * (inpL - lpL_);
+                    inpL = lpL_;
+                    lpR_ += lpC * (inpR - lpR_);
+                    inpR = lpR_;
+                }
+                if (tape) {
+                    tapeL_ += tapeC * (inpL - tapeL_);
+                    inpL = fast_math::tanhPrecise(tapeL_ * drive) * invTanhDrive;
+                    tapeR_ += tapeC * (inpR - tapeR_);
+                    inpR = fast_math::tanhPrecise(tapeR_ * drive) * invTanhDrive;
+                }
+            }
+            inpL = ap_[1].tick(ap_[0].tick(inpL, apG), apG);
+            inpR = ap_[3].tick(ap_[2].tick(inpR, apG), apG);
+            pushPk = std::max(pushPk, std::max(std::fabs(inpL), std::fabs(inpR)));
+            bufL_.push(inpL);
+            bufR_.push(inpR);
+
+            // ---- output stage: width, bass mono, mix, trim ----
+            float outWetL = rdL, outWetR = rdR;
+            if (width != 1.0f || monoOn) {
+                float mid = (outWetL + outWetR) * 0.5f, side = (outWetL - outWetR) * 0.5f * width;
+                if (monoOn) {
+                    monoL_ += monoC * (side - monoL_);
+                    side -= monoL_;
+                }
+                outWetL = mid + side;
+                outWetR = mid - side;
+            }
+            if constexpr (decltype(withGraph)::value)
+                hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outWetL), std::fabs(outWetR)),
+                    (outWetL + outWetR) * 0.5f);
+            const float oL = (dryG * l + wetG * outWetL) * outG;
+            const float oR = (dryG * r + wetG * outWetR) * outG;
+            buf[i * 2] = oL;
+            buf[i * 2 + 1] = oR;
+
+            wetPk = std::max(wetPk, std::fabs(outWetL * wetG));
+            outPkL = std::max(outPkL, std::fabs(oL));
+            outPkR = std::max(outPkR, std::fabs(oR));
+        }
+    };
+    if (graph) run(std::true_type{});
+    else
+        run(std::false_type{});
 
     // Loop-feed peak (decays slowly so a ringing tail blocks accrual); sleep
     // additionally waits out the loop's flight time so an in-flight echo is

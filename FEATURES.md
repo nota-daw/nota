@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.59.2** (plus changes in development on `main`). This document describes what is
+**0.60.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -127,8 +127,9 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ## Views
 
 Three top-level views, switched by three icon keys in the transport (**Arrangement ·
-Session · Modular**; each names its view in a tooltip). The Mixer (**View → Mixer**, ⌘⇧M)
-docks as a panel under any of the three, or floats in its own window — see
+Session · Modular**; each names its view in a tooltip). The Mixer (**View → Mixer**, ⌘⇧M,
+or the toolbar's **Mixer** button) docks as a panel under any of the three, or floats in its
+own window — see
 [Tracks and mixer](#tracks-and-mixer).
 
 - **Arrangement View** — a linear timeline:
@@ -253,7 +254,14 @@ docks as a panel under any of the three, or floats in its own window — see
   (param → param). A **CV Scope** oscilloscope reads any modulator signal: drag its trace
   taller (76–320 px) or open it in its own window, set its time window in ms or in beats,
   zoom it 1–8×, hold a repeating shape still with a rising-edge trigger, or freeze it. CV
-  ports are drawn only where they actually work.
+  ports are drawn only where they actually work. Nodes come from the browser's **Modular**
+  tab (dragged to a spot on the canvas, or double-clicked into the middle) and the command
+  palette. Beside the canvas, Track view shows the arrangement's own track headers — every
+  control, menu, tray and meter, on the side **Track headers on the right** picks: click one
+  to see its graph, or drop a CV cable on another track's header to modulate it. A group's
+  header opens the group's effect chain (Tracks in → effects → out), patched like any
+  track's. **Show in Modular** in the arrangement's and Session's track menus opens a track
+  here.
 
 ---
 
@@ -288,8 +296,10 @@ docks as a panel under any of the three, or floats in its own window — see
   arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
   default) arms the instrument track you select.
   Double-click resets to the default.
-- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track in the Arrangement's
-  order — each group, then its tracks — then the returns, then the master (I/O, A/B sends,
+- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M, or the toolbar's **Mixer** button after
+  Automation, which reads as on while the Mixer is shown, docked or in its window): a strip
+  per track in the Arrangement's order — each group, then its tracks — then the returns,
+  then the master (I/O, A/B sends,
   pan, fader with a stereo meter and dB read-out, M / S / Arm), the
   **Strips | Stereo map** switch and the pan law footer. It docks as a resizable panel under
   Arrangement, Session or Modular, above the Devices / Clip panel (either, both or neither),
@@ -586,6 +596,10 @@ docks as a panel under any of the three, or floats in its own window — see
   permissions (play only / play and control) in **Settings → Remote**. Phone notes record like
   the computer keyboard's; knobs and XY axes map through MIDI Learn (XY and tilt per track);
   several phones play at once, each on its own track, with players' names on the tracks.
+  On a computer with several networks, the address in the link and QR is chosen
+  automatically (USB, then Wi-Fi, then Ethernet) or by hand, in Settings → Remote or with a
+  click on another address in Connect phone; the link opens in the browser or copies with a
+  click.
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
@@ -649,6 +663,10 @@ docks as a panel under any of the three, or floats in its own window — see
   aligned, one undo step; a mono input records a mono file.
 - **Inputs setup** (Settings → Inputs): switch inputs off and name inputs and stereo
   pairs per device; track input menus follow.
+- **Several Session slots in one take**: while a Session take records, launching an empty
+  slot on another armed track (audio or MIDI) records into it too, each from its own input;
+  clicking a recording slot stops it alone, the toolbar's stop ends them all. MCP
+  `stop_session_record_slot`.
 - **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
   header shows a disclosure and the take count; open it for one row per take (**Take 1**,
   **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
@@ -1316,7 +1334,9 @@ audio effects after it keep running and keep their settings; saved with the proj
 ## Browser and assets
 
 - An **island panel** with an icon rail down its left edge: **Instruments / Audio Effects /
-  MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
+  MIDI Effects** (and, while Modular is the view, **Modular** — its nodes with category and
+  description, searchable by name, category or alias; the browser keeps a separate last tab
+  for Modular), then **Files** (with folder tree navigation), **Presets** (a tree of
   category → device → preset), **Projects**, **Map** (MIDI Learn mappings), **History**
   (the open project's versions) and the **Track inspector**. A hairline
   separates the device tabs from the library tabs, and the active one carries an orange edge.
@@ -1525,6 +1545,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   with **Alt** (alone) or **F10**. **View ▸ Show menu bar** or Settings → Appearance → **Menu
   bar** brings the row back, and the key steps aside. The Windows title bar reads
   "Nota — *project*". On macOS the menu stays in the system menu bar.
+- **The ⋯ key at the end of the transport bar**: on a narrow window or a large interface
+  scale the bar hides its least-needed parts (Tap, Key, Grid, Snap, Follow, Automation, Mixer,
+  MIDI learn, Remote, time signature, loop, loop-record mode, master, DSP meter), and the ⋯ menu
+  lists each one, in bar order, working as in the bar — check items, Grid and time-signature
+  submenus, Tap that stays open, the master fader in place. An accent dot on ⋯ says something
+  is in it. At any width the menu also switches the **Interface scale**.
 - **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
   release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
@@ -1584,8 +1610,14 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
-- **A shortcut list** in Preferences → Shortcuts, grouped by section (File, Command palette,
-  Transport, Arrangement & Editing, Piano roll, Play notes, Mouse).
+- **Custom keyboard shortcuts** in Preferences → Shortcuts (specs/096): every key is
+  rebindable — menu commands, view keys (piano roll, arrangement, Session, devices, Files
+  browser, Modular) and the computer-keyboard note map — with a second key per action,
+  capture with Confirm / Cancel / Clear, conflict detection before saving (Replace or
+  Cancel; system-reserved keys refused), an edited mark with the default and a per-row reset,
+  **Edited only**, **Reset all to defaults**, and a filter that matches names and keys. Only
+  changed keys are stored; menus, context menus, tooltips and the palette follow them. Mouse
+  gestures and list / typing keys are listed read-only.
 
 ---
 
@@ -1634,7 +1666,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   colour too close to the record red, mute, solo or the meter green is refused with the
   reason. Applied live, Esc in the picker puts the previous one back. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
+  remembered (also from the transport bar's ⋯ menu); timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
   layout (device cards keep theirs), live and remembered. **Waveform** —
   **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Phrase
@@ -1665,7 +1697,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   code or a language file's path) sets the language for one run. On macOS the system's own
   text (application menu, open and save panels) follows the language from the next start. The
   Remote phone page, MCP tool descriptions and logs are not translated.
-- **Shortcuts**: the shortcut list.
+- **Shortcuts**: every keyboard shortcut, editable (custom keys, conflicts, reset); mouse gestures for reference.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
   `%APPDATA%\Nota` (Windows).
 
@@ -1716,7 +1748,7 @@ Coverage:
   mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
   release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
-  scene recording with a fixed length, back to arrangement, slot ↔ arrangement).
+  scene recording with a fixed length, stopping one recording slot, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
   8 macros and their mappings (range, curve), rack volume, glide and mono, a chain's MIDI

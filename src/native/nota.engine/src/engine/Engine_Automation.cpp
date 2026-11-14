@@ -91,8 +91,21 @@ bool Engine::automationCurveSelfTest() {
     if (std::fabs(lane.valueAt(2.0) - 0.5f) > 1e-4f) return false; // linear baseline
     lane.points[0].curve = 1.0f;                                   // ease-out
     if (lane.valueAt(2.0) < 0.6f) return false;
+    // No jump at the start (#591): the old power curve was ~75 % there by 1 % of the span.
+    if (lane.valueAt(0.04) > 0.1f) return false;
+    const float easeOutMid = lane.valueAt(2.0);
     lane.points[0].curve = -1.0f; // ease-in
     if (lane.valueAt(2.0) > 0.4f) return false;
+    // Ease-in and ease-out mirror each other.
+    if (std::fabs(lane.valueAt(2.0) - (1.0f - easeOutMid)) > 1e-4f) return false;
+    // A piece of a shaped segment, with subCurve, reads the same values (shift-invariance).
+    {
+        TrackLane cut;
+        cut.target = AutomationTarget::Volume;
+        cut.points = {{1.0, lane.valueAt(1.0), AutomationLane::subCurve(-1.0f, 0.5)}, {3.0, lane.valueAt(3.0), 0.0f}};
+        for (double b = 1.0; b <= 3.0; b += 0.25)
+            if (std::fabs(cut.valueAt(b) - lane.valueAt(b)) > 1e-4f) return false;
+    }
     // Endpoints unaffected by curvature.
     if (std::fabs(lane.valueAt(0.0) - 0.0f) > 1e-4f) return false;
     if (std::fabs(lane.valueAt(4.0) - 1.0f) > 1e-4f) return false;
@@ -1069,6 +1082,38 @@ int32_t Engine::midiCtlSelfTest() {
             if (!w || !near(w->valueAt(1.0), 0.2f) || !near(w->valueAt(2.5), 0.8f) || !near(w->valueAt(4.0), 0.2f) ||
                 !near(w->valueAt(7.0), 0.2f))
                 fail = 8;
+        }
+        // 9: the same take over a curved segment (#591): the old curve keeps its shape before
+        // the take and from the hand-back at beat 4 on, not a straight line.
+        if (!fail) {
+            for (auto& f : ctlFold_) f = CtlFold{};
+            ControllerCurve was;
+            was.ctl = kCtlModWheel;
+            was.points = {{0.0, 0.0f, -0.8f}, {8.0, 1.0f, 0.0f}};
+            MidiClip e;
+            e.lengthBeats = 8.0;
+            e.setController(kCtlModWheel, was.points);
+            ctlBatch_ = {{kCtlModWheel, 2.0, 0.8f, 0}, {kCtlModWheel, 3.0, 0.8f, 0}};
+            ctlStopPending_ = true;
+            ctlStopAt_ = 4.0;
+            foldRecordedCtl(e, 0.0);
+            const ControllerCurve* w = e.controller(kCtlModWheel);
+            if (!w) fail = 9;
+            else
+                for (double b : {0.5, 1.0, 1.9, 4.5, 5.0, 6.0, 7.0, 7.9})
+                    if (!near(w->valueAt(b), was.valueAt(b))) fail = 9;
+        }
+        // 10: a slice of a curved segment keeps its shape at both edges.
+        if (!fail) {
+            ControllerCurve c;
+            c.ctl = kCtlModWheel;
+            c.points = {{0.0, 0.0f, 0.7f}, {4.0, 1.0f, -0.5f}, {8.0, 0.2f, 0.0f}};
+            const double from = 1.0, to = 6.0;
+            ControllerCurve s;
+            s.ctl = kCtlModWheel;
+            s.points = sliceCtlPoints(c, from, to);
+            for (double b = from; b <= to; b += 0.25)
+                if (!near(s.valueAt(b - from), c.valueAt(b))) fail = 10;
         }
     }
     ctlFold_ = savedFold;

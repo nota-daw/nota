@@ -976,7 +976,7 @@ public sealed class AudioClipEditorView : UserControl
         // The value axis spans the wave area below the ruler and the marker strip.
         private double EnvValToY(double v, double h) { double pad = 6, top = WaveTop + pad; double t = (Math.Clamp(v, _envMin, _envMax) - _envMin) / (_envMax - _envMin); return top + (1 - t) * Math.Max(1, h - pad - top); }
         private double EnvYToVal(double y, double h) { double pad = 6, top = WaveTop + pad; double t = (h - pad - y) / Math.Max(1, h - pad - top); return _envMin + Math.Clamp(t, 0, 1) * (_envMax - _envMin); }
-        private static double EnvShape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        private static double EnvShape(double t, float curve) => AutomationCurve.Shape(t, curve);
         private int HitEnv(double x, double y, double w, double h)
         {
             for (int i = 0; i < _env.Count; i++)
@@ -1321,9 +1321,8 @@ public sealed class AudioClipEditorView : UserControl
                     if (Math.Abs(v1 - v0) < 1e-4) bl.curve = 0f;
                     else
                     {
-                        double frac = Math.Clamp((EnvYToVal(p.Y, Bounds.Height) - v0) / (v1 - v0), 0.02, 0.98);
-                        double ee = Math.Log(frac) / Math.Log(0.5);
-                        bl.curve = (float)Math.Clamp(-Math.Log2(ee) / 4.0, -1.0, 1.0);
+                        double frac = Math.Clamp((EnvYToVal(p.Y, Bounds.Height) - v0) / (v1 - v0), 0.01, 0.99);
+                        bl.curve = AutomationCurve.FromMidpoint(frac);
                     }
                     Redraw();
                 }
@@ -1865,9 +1864,10 @@ public sealed class AudioClipEditorView : UserControl
                     double ax = EnvBeatToX(a.beat, w), ay = EnvValToY(a.val, h), bx = EnvBeatToX(b.beat, w), by = EnvValToY(b.val, h);
                     if (a.curve == 0f) { ctx.DrawLine(pen, new Point(ax, ay), new Point(bx, by)); continue; }
                     Point prev = new(ax, ay);
-                    for (int s = 1; s <= 16; s++)
+                    int steps = AutomationCurve.DrawSteps(bx - ax);
+                    for (int s = 1; s <= steps; s++)
                     {
-                        double tt = s / 16.0;
+                        double tt = s / (double)steps;
                         double vy = a.val + (b.val - a.val) * EnvShape(tt, a.curve);
                         Point cur = new(ax + (bx - ax) * tt, EnvValToY(vy, h));
                         ctx.DrawLine(pen, prev, cur); prev = cur;

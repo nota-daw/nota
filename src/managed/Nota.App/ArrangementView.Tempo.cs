@@ -18,6 +18,8 @@ using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Localization;
+using Nota.Application.Input;
+using Nota.App.Input;
 
 namespace Nota.App;
 
@@ -178,15 +180,17 @@ public sealed partial class ArrangementView
         }
         private void TrackKey(object? sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Escape && IsDragging) { Cancel(); e.Handled = true; return; }
+            if (Keys.Capturing) return;
+            if (IsDragging && e.RoutedEvent == KeyDownEvent && IsCancelKey(e)) { Cancel(); e.Handled = true; return; }
             bool ctrl = (e.KeyModifiers & KeyModifiers.Control) != 0;
             if (e.RoutedEvent == KeyUpEvent && e.Key is Key.LeftCtrl or Key.RightCtrl) ctrl = false;
             if (_ctrl != ctrl) { _ctrl = ctrl; UpdateCursor(); InvalidateVisual(); }
         }
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (e.Key == Key.Escape) { Cancel(); _selection.Clear(); InvalidateVisual(); e.Handled = true; }
-            else if (e.Key is Key.Delete or Key.Back)
+            if (Keys.Capturing) return;
+            if (IsCancelKey(e)) { Cancel(); _selection.Clear(); InvalidateVisual(); e.Handled = true; }
+            else if (Keys.Owns(e, "edit.delete"))
             {
                 if (_selection.Count > 0)
                 {
@@ -197,6 +201,20 @@ public sealed partial class ArrangementView
                 e.Handled = true; // an initial-only selection must never delete clips underneath
             }
             else base.OnKeyDown(e);
+        }
+        private bool IsCancelKey(KeyEventArgs e)
+        {
+            if (Keys.Owns(e, "edit.cancel")) return true;
+            if (_drag != Drag.Scale || KeyTokens.Chord(e) is not { } pressed) return false;
+            // Ctrl and Alt select the time-scale gesture. Holding them must not
+            // prevent its Cancel binding, including a binding with its own modifiers.
+            var gesture = ShortcutModifiers.Alt |
+                (OperatingSystem.IsMacOS() ? ShortcutModifiers.Ctrl : ShortcutModifiers.Primary);
+            foreach (var slot in new[] { KeySlot.Primary, KeySlot.Alternative })
+                if (Keys.Bindings.Current("edit.cancel", slot) is { } cancel &&
+                    (pressed with { Modifiers = pressed.Modifiers & ~(gesture & ~cancel.Modifiers) }) == cancel)
+                    return true;
+            return false;
         }
         private void UpdateCursor() => Cursor = _ctrl ? ScaleCursor : _pointer.Y >= Bounds.Height - 5 ? ResizeCursor : PointCursor;
         protected override void OnPointerEntered(PointerEventArgs e) {

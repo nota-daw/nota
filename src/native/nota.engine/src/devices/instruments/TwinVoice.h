@@ -181,12 +181,13 @@ struct Env {
     }
     // The stage for the graphs (EnvShape.h's code) and its progress.
     int teleStage() const {
-        return st == Attack ? 0 : st == Decay ? (sh.last == 2 ? 2 : 1) : st == Sustain ? 2 : st == Release ? 3 : 4;
+        if (st == Decay) return sh.last == 2 || std::fabs(lvl - sus) < 1e-3f ? 2 : 1;
+        return st == Attack ? 0 : st == Sustain ? 2 : st == Release ? 3 : 4;
     }
     // The progress through the stage. The RC generator works it out here, when the graphs
     // or a change of shape ask, rather than on every sample.
     float progress() const {
-        if (!native) return sh.p;
+        if (!native && sh.p >= 0.0f) return sh.p; // a bent stage keeps it; a straight one leaves −1
         switch (sh.last) {
         case 0: return sh.from < 1.0f ? std::clamp((lvl - sh.from) / (1.0f - sh.from), 0.0f, 1.0f) : 1.0f;
         case 1:
@@ -247,7 +248,9 @@ struct Env {
         case Decay:
             if (!native) return tickShaped();
             lvl += (sus - lvl) * dC;
-            if (std::fabs(lvl - sus) < 1e-3f) {
+            // Only the loop needs to know the decay has arrived; the graphs tell it themselves
+            // (teleStage), so the plain decay doesn't check it on every sample.
+            if (loop && std::fabs(lvl - sus) < 1e-3f) {
                 sh.last = 2; // the graph's sustain
                 st = Sustain;
                 loopAt();

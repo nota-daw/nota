@@ -85,6 +85,7 @@ public partial class MainWindow
     private void OnBrowserItemActivated(BrowserItem item, KeyModifiers mods)
     {
         if (_vm is null) return;
+        if (item.Kind == BrowserItemKind.ModularNode) { AddModularNode(item); return; }
         try
         {
             RecordUse(PaletteIdOf(item), fromPalette: false);
@@ -313,5 +314,16 @@ public partial class MainWindow
         {
             _vm.StatusText = Loc.F("main.browser.save_preset_failed", ex.Message);
         }
+    }
+
+    // A Modular node double-clicked (or Enter) in the browser's Modular tab (specs/095): onto
+    // the shown track's canvas, unconnected, in the middle of the view — as the palette does.
+    private void AddModularNode(BrowserItem item)
+    {
+        if (_vm is null || _modular is null) return;
+        if (!_modular.IsVisible || !_modular.CanAddNodes) { _vm.StatusText = Loc.T("modular.open_a_track_to_add_nodes"); return; }
+        if (_modular.AddModulatorAt(item.BuiltinKind) < 0) { _vm.StatusText = Loc.F("main.palette.couldnt_add", item.Name); return; }
+        Timeline.Refresh();
+        _vm.StatusText = Loc.F("modular.node_added", item.Name);
     }
 }

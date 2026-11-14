@@ -626,7 +626,7 @@ public sealed partial class ArrangementView
             if (r.Width <= 22) return;
             var ft = new NotaFormattedText(_o.SectionDisplayName(s), CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, Typeface.Default, 9, warm ? WarmInk : ColdInk)
-            { MaxTextWidth = Math.Max(8, r.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+            { MaxTextWidth = Math.Max(8, r.Width - 10), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(ft, new Point(r.X + 7, r.Y + (r.Height - ft.Height) / 2));
         }
 

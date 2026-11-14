@@ -265,7 +265,7 @@ void PhysicalSynth::render(float* out, int32_t frames) {
                 if (v.mEnv < 1.0e-4f) v.mActive = false;
             }
             if (v.nStage != Stage::Off) {
-                advanceShapedEnv(v.nEnv, v.nStage, v.nShape, nA, nD, nS, nR, nBend);
+                stepEnv(v.nEnv, v.nStage, v.nShape, nA, nD, nS, nR, nBend);
                 // A burst with no sustain ends at the end of its decay, so a quiet voice
                 // can be freed (noteOff never moves the noise stage on).
                 if (v.nStage == Stage::Sustain && nS <= 1.0e-4f) {
@@ -323,9 +323,9 @@ void PhysicalSynth::render(float* out, int32_t frames) {
         if (v.active && !v.choke) ++n;
     activeVoices_.store(n, std::memory_order_relaxed);
     {
-        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
         const bool on = lv && lv->active;
-        publishEnvTele(envTele_, on, on ? lv->nStage : Stage::Off, on ? lv->nShape : EnvShapeState{});
+        publishEnvTele(envTele_, on, on ? lv->nStage : Stage::Off, on ? &lv->nShape : nullptr, on ? lv->nEnv : 0.0f, nS);
     }
     // Peak hold for the telemetry: ~300 ms fall.
     const float fall = static_cast<float>(std::exp(-static_cast<double>(frames) / (0.3 * sampleRate_)));

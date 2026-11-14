@@ -420,8 +420,10 @@ public sealed partial class ArrangementView : UserControl
         }
         zoomBar.SizeChanged += (_, _) => FitZoomLabel();
         _overviewRange.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) FitZoomLabel(); };
-        var topLeft = HeaderPanel(zoomBar);
-        var topGrid = new Grid { Height = RulerH };
+        _zoomBar = zoomBar;
+        _tracksCaption.Text = Loc.T("modular.tracks");
+        var topLeft = HeaderPanel(new Panel { Children = { zoomBar, _tracksCaption } });
+        var topGrid = _topGrid = new Grid { Height = RulerH };
         topGrid.Children.Add(topLeft);
         topGrid.Children.Add(_ruler);
         AddSideRow(topGrid, topLeft, _ruler);
@@ -522,7 +524,7 @@ public sealed partial class ArrangementView : UserControl
         };
 
         // Bottom: a thin horizontal scrollbar under the lanes, on the well, past a hairline.
-        var bottomGrid = new Grid();
+        var bottomGrid = _bottomGrid = new Grid();
         var bottomLeft = HeaderPanel(null);
         bottomLeft.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         bottomGrid.Children.Add(bottomLeft);
@@ -1311,9 +1313,14 @@ public sealed partial class ArrangementView : UserControl
     internal void SyncScroll(double laneWidth)
     {
         double viewportBeats = laneWidth > 0 ? XToBeat(laneWidth) - XToBeat(0) : _totalBeats;
-        _hScroll.ViewportSize = viewportBeats;
-        _hScroll.Maximum = Math.Max(0, _totalBeats - viewportBeats);
+        // A mapped viewport spans fixed seconds, but a different number of beats at
+        // each origin. Find its last origin from the project ending, not today's span.
+        double maximum = laneWidth > 0 && TempoAxis
+            ? TempoBeat(Math.Max(0, TempoSeconds(_totalBeats) - laneWidth / (_pixelsPerBeat * 2)))
+            : _totalBeats - viewportBeats;
+        _hScroll.Maximum = Math.Max(0, maximum);
         if (_scrollBeats > _hScroll.Maximum) { _scrollBeats = _hScroll.Maximum; }
+        _hScroll.ViewportSize = laneWidth > 0 ? XToBeat(laneWidth) - XToBeat(0) : _totalBeats;
         _hScroll.Value = _scrollBeats;
     }
 
@@ -2886,6 +2893,7 @@ public sealed partial class ArrangementView : UserControl
         var vm = _tracks.FirstOrDefault(v => v.Id == trackId);
 
         var rename = MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
+        var showInModular = ShowInModularItem(trackId);
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked and shown on the item.
@@ -2983,7 +2991,7 @@ public sealed partial class ArrangementView : UserControl
         MenuKit.AddGroups(flyout.Items,
             new Control[] { MenuKit.Header(vm?.Name ?? "", TrackBrush(EffectiveColorIndex(_engine, trackId)), TrackBadge(trackId)) },
             new Control[] { TrackColourRow(one), TrackHeightRow(one) },
-            new Control?[] { rename, recInput, midiInput, midiFrom }.OfType<Control>(),
+            new Control?[] { rename, showInModular, recInput, midiInput, midiFrom }.OfType<Control>(),
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,
@@ -3527,7 +3535,9 @@ public sealed partial class ArrangementView : UserControl
                                            TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? Loc.T("common.return") : Loc.T("common.master")) },
             new Control[] { TrackColourRow(new[] { trackId }) },
             new Control[] { FooterHeightRow(isReturn ? _returns.FindIndex(r => r.Id == trackId) : _returns.Count) },
-            new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
+            isReturn
+                ? new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)), ShowInModularItem(trackId) }
+                : new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
             isReturn ? new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
@@ -3565,9 +3575,9 @@ public sealed partial class ArrangementView : UserControl
         return b;
     }
 
-    // Power-curve shaping, mirroring native AutomationLane::shape (M9-D).
+    // Segment shaping (M9-D, #591): the shared AutomationCurve, mirroring native AutomationLane::shape.
     internal static double Shape(double t, float curve)
-        => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        => AutomationCurve.Shape(t, curve);
 
     // ---- data colours (mirror the tokens in NotaTheme.axaml) --
     private static readonly IBrush LaneBgA = NotaPalette.BgApp;    // lanes on the ground

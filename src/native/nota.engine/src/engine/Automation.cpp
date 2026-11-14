@@ -3,6 +3,8 @@
 
 #include "Automation.h"
 
+#include <algorithm>
+
 namespace nota {
 
 float AutomationLane::valueAt(double beat) const {
@@ -20,6 +22,17 @@ float AutomationLane::valueAt(double beat) const {
         }
     }
     return p.back().value;
+}
+
+float AutomationLane::pieceCurve(const std::vector<AutomationPoint>& p, double from, double to) {
+    constexpr double eps = 1e-9; // a cut a hair before a point belongs to that point's segment
+    const auto next = std::upper_bound(p.begin(), p.end(), from + eps,
+                                       [](double b, const AutomationPoint& q) { return b < q.beat; });
+    if (next == p.begin() || next == p.end()) return 0.0f;
+    const AutomationPoint& a = *(next - 1);
+    const double span = next->beat - a.beat;
+    if (span <= 0.0 || a.curve == 0.0f) return 0.0f;
+    return subCurve(a.curve, (std::min(to, next->beat) - std::max(from, a.beat)) / span);
 }
 
 } // namespace nota

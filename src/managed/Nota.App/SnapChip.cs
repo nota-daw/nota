@@ -10,6 +10,7 @@
 // stay in step with it.
 
 using System;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -114,27 +115,36 @@ internal sealed class SnapChip
 
     private void OpenMenu()
     {
-        var s = Grids.Get(_kind);
         var f = new MenuFlyout();
+        foreach (var item in BuildItems()) f.Items.Add(item);
+        f.ShowAt(_button);
+    }
+
+    /// <summary>The grid menu's items — the chip's own menu, and the Grid submenu of the
+    /// transport bar's ⋯ menu when the chip is shed (#520).</summary>
+    public List<Control> BuildItems()
+    {
+        var s = Grids.Get(_kind);
+        var f = new List<Control>();
         void Item(string header, bool on, Func<GridSetting, GridSetting> apply, KeyGesture? gesture = null)
         {
             var mi = new MenuItem { Header = header, InputGesture = gesture };
             mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = on;
             mi.Click += (_, _) => Grids.Set(_kind, apply(Grids.Get(_kind)));
-            f.Items.Add(mi);
+            f.Add(mi);
         }
 
         foreach (var d in new[] { GridDensity.Narrow, GridDensity.Medium, GridDensity.Wide })
             Item(Loc.F("snap_chip.auto", d), s.Adaptive && s.Density == d, g => SnapGrid.PickAdaptive(g, d));
-        f.Items.Add(new Separator());
+        f.Add(new Separator());
         for (int i = 0; i < GridStep.Count; i++)
         {
             int idx = i;
             Item(GridStep.Of(i, s.Triplets).Label, !s.Adaptive && s.FixedIndex == i, g => SnapGrid.PickFixed(g, idx));
         }
-        f.Items.Add(new Separator());
+        f.Add(new Separator());
         Item(Loc.T("snap_chip.triplets"), s.Triplets, SnapGrid.ToggleTriplets, MenuKit.Cmd(Key.D3));
         Item(Loc.T("snap_chip.snap_to_grid"), s.SnapOn, SnapGrid.ToggleSnap, MenuKit.Cmd(Key.D4));
-        f.ShowAt(_button);
+        return f;
     }
 }
