@@ -915,6 +915,14 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// A Session clip's follow bypass alone (fast iteration): `--follow-bypass`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--follow-bypass")
+{
+    Console.WriteLine("-- follow bypass --");
+    foreach (var (ok, label) in FollowBypassTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "FOLLOW BYPASS PASSED" : $"FOLLOW BYPASS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Main / Cue outputs alone (fast iteration): `--cue`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--cue")
 {
@@ -15822,6 +15830,8 @@ Console.WriteLine("-- take lanes --");
 foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+Console.WriteLine("-- follow bypass --");
+foreach (var (ok, label) in FollowBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- multi-channel input --");
 foreach (var (ok, label) in MultiInputRecordTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);

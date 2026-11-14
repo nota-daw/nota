@@ -118,6 +118,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     `"font": { "values": "…" }`.
   - AI control (MCP): `set_look` switches the look. `list_themes` reports it, and
     `get_theme` / `preview_theme` take an optional `look`.
+- **Bypass one Session clip's follow actions** (#499, specs/095). The Follow action section of
+  the clip inspector has a **Bypass** key. While it is on, the clip keeps looping and neither
+  follow action fires, but its A and B actions, their chances, the Jump target and the time
+  stay as you set them, dimmed, and the section reads **Bypassed**. Other clips and the global
+  Follow switch are not affected, and the clip still launches and stops as usual.
+  - Turn Bypass off and the follow action fires at the end of the follow time that is running,
+    counted in whole follow times from the launch. A time that ran out while the clip was
+    bypassed doesn't fire late.
+  - Saved with the project (format 33). The MCP `get_session` and `set_session_clip` tools read
+    and set it as `followBypass`.
 - **Nota Remote shows what is in each clip on the Scenes screen** (#557, specs/090). A filled
   cell reads like the desktop's Session slot: the clip's name and length on top, and below
   them its notes as a small piano roll, or its waveform, in the clip's colour. Editing,

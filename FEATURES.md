@@ -224,7 +224,8 @@ own window — see
   previews and a progress pie on the clip's own clock; selection apart from launching,
   keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag between slots;
   launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato, one-shot,
-  velocity amount and follow actions with a global switch; scenes with names, colours,
+  velocity amount and follow actions with a global switch and a per-clip **Bypass** that keeps
+  a clip's follow settings but holds it on its loop; scenes with names, colours,
   tempo / signature and scene follow, inserted, duplicated, captured and reordered without
   stopping playback; Session rec with fixed length; group columns that fold; returns +
   master; I/O · Sends · Mixer sections; removable stop buttons; per-track Back to
@@ -1737,7 +1738,7 @@ Coverage:
   (a built-in's classic palette) and `preview_theme` take an optional `look`.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch
-  mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /
+  mode / quantize / legato / loop / follow actions and their bypass, scene name / colour / tempo / signature /
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
   release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
   scene recording with a fixed length, stopping one recording slot, back to arrangement, slot ↔ arrangement).

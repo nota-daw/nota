@@ -184,7 +184,9 @@ typedef struct NotaSessionAudioSlot {
  * the global launch quantum. follow_a/b: 0 None, 1 Stop, 2 Again, 3 Previous, 4 Next,
  * 5 First, 6 Last, 7 Any, 8 Other, 9 Jump (to jump_scene); chance_a/b are relative weights
  * 0..100; follow_beats 0 = after one pass. velocity_amount 0..1 scales the clip by the
- * launch velocity. */
+ * launch velocity. follow_bypass = 1 keeps the follow settings but fires neither action
+ * (#499): its follow time runs on in whole periods from the launch, so turning the bypass
+ * off fires at the end of the period then running, never late for one that passed. */
 typedef struct NotaSessionClipProps {
     int32_t color;
     int32_t launch_mode;
@@ -198,6 +200,7 @@ typedef struct NotaSessionClipProps {
     int32_t chance_b;
     double  follow_beats;
     int32_t jump_scene;
+    int32_t follow_bypass;
 } NotaSessionClipProps;
 
 /* Scene row properties (Session P0). color: track-palette index, -1 = neutral. tempo > 0

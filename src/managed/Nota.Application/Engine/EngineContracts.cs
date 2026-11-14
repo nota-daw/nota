@@ -309,6 +309,8 @@ public struct NotaSessionClipProps
     public int ChanceB;
     public double FollowBeats;
     public int JumpScene;
+    /// <summary>1 = the follow actions are bypassed: kept as set, but neither fires (#499).</summary>
+    public int FollowBypass;
 }
 
 /// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a
