@@ -1940,7 +1940,13 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
     for (auto& it : items)
         if (!it.snips.empty())
             applyClipAutomation(
-                *clones[it.req->dstTrackId], it.req->dstTrackId, it.snips, it.newStart, it.len, it.layoutMatch);
+                *clones[it.req->dstTrackId], it.req->dstTrackId, it.snips, it.newStart, it.len, it.layoutMatch,
+                ClipAutomationPass::Clear);
+    for (auto& it : items)
+        if (!it.snips.empty())
+            applyClipAutomation(
+                *clones[it.req->dstTrackId], it.req->dstTrackId, it.snips, it.newStart, it.len, it.layoutMatch,
+                ClipAutomationPass::Insert);
 
     for (size_t i = 0; i < items.size(); ++i) lastPlaced_.emplace_back(items[i].req->dstTrackId, newIndex[i]);
 
@@ -3248,11 +3254,12 @@ bool Engine::tracksDeviceLayoutMatch(const Track& a, const Track& b) {
 
 // Re-land captured automation onto `nt`, placing the snippet's relative beats at
 // placedStart..placedStart+len. Each matching lane's target span is cleared first so
-// the pasted envelope replaces (not overlaps) whatever was there. Device/plugin/MIDI
+// the pasted envelope replaces (not overlaps) whatever was there. Blocks separate
+// clearing from insertion so one landing cannot erase another's copied points. Device/plugin/MIDI
 // lanes only apply when sameTrack — their indices are positional, so a cross-track
 // paste would otherwise bind them to the wrong device.
 void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips,
-    double placedStart, double len, bool sameTrack) const {
+    double placedStart, double len, bool sameTrack, ClipAutomationPass pass) const {
     const double s = placedStart, e = placedStart + len;
     for (const auto& snip : snips) {
         if (!sameTrack && !isMixTarget(snip.target)) continue;
@@ -3278,6 +3285,7 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
             }
         }
         if (!lane) {
+            if (pass == ClipAutomationPass::Clear) continue;
             TrackLane nl;
             nl.target = snip.target;
             nl.deviceIndex = snip.deviceIndex;
@@ -3292,9 +3300,11 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
         }
         auto& pts = lane->points;
         constexpr double eps = 1e-6;
-        pts.erase(std::remove_if(pts.begin(), pts.end(),
-                      [&](const AutomationPoint& p) { return p.beat >= s - eps && p.beat <= e + eps; }),
-            pts.end());
+        if (pass != ClipAutomationPass::Insert)
+            pts.erase(std::remove_if(pts.begin(), pts.end(),
+                          [&](const AutomationPoint& p) { return p.beat >= s - eps && p.beat <= e + eps; }),
+                pts.end());
+        if (pass == ClipAutomationPass::Clear) continue;
         for (const auto& p : snip.points) {
             AutomationPoint q = p;
             q.beat = placedStart + p.beat;
@@ -3503,6 +3513,16 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
         }
     }
 
+    // Clear every landing before inserting any copied automation. Mapped audio
+    // spans can overlap even when their beat-relative point offsets do not.
+    for (const auto& b : items) {
+        auto it = clones.find(b.trackId);
+        if (it == clones.end()) continue;
+        const double start = placedStart + b.relStart + d;
+        applyClipAutomation(*it->second, b.trackId, b.autom, start, lengthAt(b, start), b.sameTrack,
+            ClipAutomationPass::Clear);
+    }
+
     // Insert the shifted copies + their automation, remembering each new clip's index.
     for (const auto& b : items) {
         auto it = clones.find(b.trackId);
@@ -3522,7 +3542,8 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
             nt.clips.push_back(a);
             newIdx = static_cast<int32_t>(nt.clips.size()) - 1;
         }
-        applyClipAutomation(nt, b.trackId, b.autom, start, lengthAt(b, start), b.sameTrack);
+        applyClipAutomation(nt, b.trackId, b.autom, start, lengthAt(b, start), b.sameTrack,
+            ClipAutomationPass::Insert);
         lastPlaced_.emplace_back(b.trackId, newIdx);
     }
 

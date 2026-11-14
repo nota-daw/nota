@@ -31,6 +31,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   save with the project, and playback follows their integrated timing.
 
 ### Fixed
+- **Multi-clip automation across tempo changes** (#535): duplicate, paste and
+  block moves retain every copied point regardless of selection order, clearing
+  all landing spans before inserting their automation.
 - **Tempo-map copies and comp edits** (#535): range duplication clears the copied
   audio's actual landing span, and block paste clears automation only under its
   destination span. Section moves, duplication and deletion keep partial takes

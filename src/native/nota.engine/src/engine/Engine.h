@@ -1829,9 +1829,11 @@ class Engine {
     // applyClipAutomation re-lands them at placedStart (clearing that span first on each
     // matching lane); non-Volume/Pan lanes are applied only on the source track (sameTrack)
     // since device/param indices are positional. removeAutomationInRange clears a span.
+    // Blocks clear all landing spans first, then insert; ordinary callers replace in one pass.
+    enum class ClipAutomationPass { Replace, Clear, Insert };
     std::vector<TrackLane> captureClipAutomation(const Track& t, double start, double end) const;
     void applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips, double placedStart,
-        double len, bool sameTrack) const;
+        double len, bool sameTrack, ClipAutomationPass pass = ClipAutomationPass::Replace) const;
     static void removeAutomationInRange(Track& t, double start, double end);
     // Two tracks have an identical device layout (same instrument kind + same device kinds in
     // order), so device/plugin automation can safely follow a clip between them (req 8.3.4).
