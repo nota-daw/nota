@@ -22,6 +22,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **An Assistant that answers from the manual** (#606, specs/098). A chat panel on the right of
+  the main window, the full height of the work area — the toolbar's speech-bubble key, View →
+  Assistant or ⌘⇧H (Ctrl+Shift+H) open and close it. Ask in your own words, in English or Russian:
+  the reply quotes the two or three manual sections that answer it, in the language you asked in,
+  with a link to each page. It works offline and needs no AI model: the manual ships inside Nota.
+  Replies read like the manual — headings, lists, tables, code, key caps and the note / tip /
+  caution boxes, in every theme and the classic look — and can be copied. Under a how-to,
+  **Show me** walks you through the steps: it opens the view or panel a control lives in and
+  outlines the control, with Back / Next / Done. Install **Manual search** in Settings → Downloads →
+  AI Models (multilingual-e5-small, about 135 MB) and questions phrased differently from the
+  manual find their answer too. The panel remembers its width and whether it was open.
+
 ## [0.60.1] — 2026-11-13
 
 ### Added

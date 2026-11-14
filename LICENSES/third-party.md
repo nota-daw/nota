@@ -32,6 +32,8 @@ public domain, or AGPL-compatible copyleft.
 | ONNX Runtime — native library | 1.23.2 | The same, downloaded with the first AI model | MIT | ✅ downloaded, not bundled — see note 6 |
 | htdemucs (Demucs v4, Meta) | v4 weights, ONNX export | Separate Stems model | MIT | ✅ downloaded, not bundled — see note 6 |
 | basic-pitch (Spotify) | 0.4.0 | Convert Melody / Harmony model | Apache-2.0 | ✅ downloaded, not bundled — see note 6 |
+| multilingual-e5-small (intfloat, int8 ONNX export by Xenova) | HF commit 761b726 | Assistant panel's Manual search model (meaning-based search) | MIT | ✅ downloaded, not bundled — see note 6 |
+| Markdig | 1.6.0 | Markdown parsing for the Assistant panel's replies | BSD-2-Clause | ✅ in use — NuGet |
 | Freeverb (algorithm only) | — | Built-in reverb | public domain | ✅ in use — own implementation of the Jezar algorithm; no vendored code (`src/native/nota.engine/src/Reverb.h`) |
 
 Status key: ✅ cleared · ⚠️ cleared with a condition · ⏳ planned · ❌ rejected (incompatible).

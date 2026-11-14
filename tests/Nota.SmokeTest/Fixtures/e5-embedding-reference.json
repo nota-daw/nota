@@ -1,0 +1,17 @@
+{
+ "query": "how do I duck the bass when the kick hits?",
+ "passage": "Nota Compressor \u2014 Sidechain. Turn on Sidechain and pick the kick's track as the source.",
+ "other": "Export audio. Choose File, Export audio to render the arrangement to a WAV file.",
+ "query_head": [
+  0.02132338099181652,
+  -0.03946830704808235,
+  -0.041827574372291565,
+  -0.04844997450709343,
+  0.046513184905052185,
+  -0.03507227450609207,
+  4.6500095777446404e-05,
+  0.016832036897540092
+ ],
+ "cos_passage": 0.852879524230957,
+ "cos_other": 0.7999100089073181
+}

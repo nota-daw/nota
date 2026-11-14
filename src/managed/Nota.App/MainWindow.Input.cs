@@ -52,6 +52,14 @@ public partial class MainWindow
             return;
         }
         if (_vm.SuspendEnginePolling || PaletteOpen) return;   // the palette has the keyboard
+        // The Assistant's key is a chord, so it types nothing: it closes the panel from its own
+        // input too (specs/098). Every other key stays with a focused text field (FR-005).
+        if (Keys.Is(e, "view.assistant") && KeyTokens.Chord(e) is { IsChord: true })
+        {
+            ToggleAssistant();
+            e.Handled = true;
+            return;
+        }
         if (e.Source is TextBox || e.Source is NumericUpDown) return;
         if (TakesOverflowKey(e)) { e.Handled = true; return; }   // ⋯ focused by Tab (#520)
 

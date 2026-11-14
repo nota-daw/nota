@@ -54,14 +54,17 @@ public sealed class ModelStore : IModelStore
     public long DownloadSize(string id)
     {
         var m = Find(id) ?? throw new StoreException(Loc.F("model_store.unknown_ai_model", id));
-        long size = Installed(m) ? 0 : m.Asset.Size;
-        if (id != AiModels.Runtime && _runtime is not null && !Installed(_runtime)) size += _runtime.Asset.Size;
+        long size = Installed(m) ? 0 : m.Asset.TotalSize;
+        if (id != AiModels.Runtime && _runtime is not null && !Installed(_runtime)) size += _runtime.Asset.TotalSize;
         return size;
     }
 
     public string? RuntimePath => _runtime is not null && Installed(_runtime) ? EntryPath(_runtime) : null;
 
     public string? ModelPath(string id) => Find(id) is { } m && Installed(m) ? EntryPath(m) : null;
+
+    public string? ModelFile(string id, string name)
+        => Find(id) is { } m && Installed(m) && m.Asset.Extras.Any(e => e.Name == name) ? Path.Combine(FolderOf(m), name) : null;
 
     public async Task InstallAsync(string id, IProgress<StoreProgress>? progress = null, CancellationToken ct = default)
     {
@@ -126,6 +129,13 @@ public sealed class ModelStore : IModelStore
                     File.Copy(src, Path.Combine(staging, Path.GetFileName(src)));
                 }
             }
+            foreach (var extra in a.Extras)
+            {
+                if (!RegistryClient.IsValidId(Path.GetFileNameWithoutExtension(extra.Name)) || extra.Name.Contains('/') || extra.Name.Contains('\\'))
+                    throw new StoreException(Loc.F("model_store.invalid_model_id", extra.Name));
+                var dest = Path.Combine(staging, extra.Name);
+                await _http.DownloadAsync(extra.Url, extra.Size, extra.Sha256, dest, m.Info.Name, progress, ct).ConfigureAwait(false);
+            }
             if (!File.Exists(Path.Combine(staging, a.Entry))) throw new StoreException(Loc.F("model_store.the_download_of_doesnt_contain", m.Info.Name, a.Entry));
             File.WriteAllText(Path.Combine(staging, MarkerFile), a.Sha256);
 
@@ -150,7 +160,7 @@ public sealed class ModelStore : IModelStore
     {
         long need = 0;
         foreach (var m in new[] { Find(id), id == AiModels.Runtime ? null : _runtime })
-            if (m is not null && !Installed(m)) need += m.Asset.Size + m.Info.UnpackedSize;
+            if (m is not null && !Installed(m)) need += m.Asset.TotalSize + m.Info.UnpackedSize;
         need += need / 20;
         if (FreeBytes(_root) is { } free && free < need)
             throw new StoreException(Loc.F("model_store.installing_this_model_needs_of", Mb(need), Mb(free)));
@@ -178,7 +188,8 @@ public sealed class ModelStore : IModelStore
         try
         {
             var marker = Path.Combine(FolderOf(m), MarkerFile);
-            return File.Exists(marker) && File.ReadAllText(marker).Trim() == m.Asset.Sha256 && File.Exists(EntryPath(m));
+            return File.Exists(marker) && File.ReadAllText(marker).Trim() == m.Asset.Sha256 && File.Exists(EntryPath(m))
+                   && m.Asset.Extras.All(e => File.Exists(Path.Combine(FolderOf(m), e.Name)));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

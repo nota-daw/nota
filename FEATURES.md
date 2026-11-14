@@ -1602,6 +1602,14 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
+- **Assistant panel** (#606, specs/098) — a chat docked on the right, full height (toolbar key,
+  **View ▸ Assistant**, ⌘⇧H): questions in English or Russian are answered offline from the
+  manual, which ships inside each release (word search with typo, keyboard-layout and word-form
+  tolerance); replies quote up to three sections in the question's language with links, rendered
+  as Markdown (tables, code, key caps, note / tip / caution boxes) and copyable. **Show me** under a
+  how-to walks its steps — opens the view or panel and outlines each control (Back / Next / Done).
+  Optional **Manual search** model (multilingual-e5-small, Settings → Downloads → AI Models) adds
+  search by meaning. Width and open state are remembered.
 - **Custom keyboard shortcuts** in Preferences → Shortcuts (specs/096): every key is
   rebindable — menu commands, view keys (piano roll, arrangement, Session, devices, Files
   browser, Modular) and the computer-keyboard note map — with a second key per action,

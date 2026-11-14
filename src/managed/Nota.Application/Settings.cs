@@ -95,6 +95,12 @@ public sealed class Settings
     /// <summary>The Mixer was shown when the user last showed or hid it; restored on launch
     /// (specs/054). Quitting the app does not count as hiding it.</summary>
     public bool MixerShown { get; set; }
+    /// <summary>The Assistant panel (specs/098) was shown when the user last showed or hid it;
+    /// restored on launch, like <see cref="MixerShown"/>.</summary>
+    public bool AssistantShown { get; set; }
+    /// <summary>Width of the Assistant panel in design units, set by dragging its left edge
+    /// (specs/098). Clamped 280 – 560; 360 by default.</summary>
+    public double AssistantWidth { get; set; } = 360;
     /// <summary>Height of the docked Mixer panel in design units, set by dragging its top edge
     /// (specs/054). 0 = its natural height (full strips), clamped to what the window fits.</summary>
     public double MixerDockHeight { get; set; }

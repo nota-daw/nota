@@ -485,6 +485,20 @@ public sealed partial class BrowserView : UserControl
     }
 
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
+    // ---- Show me (specs/098): the rail tabs, the search field and the fold key by name ----
+    // Order as AnchorRegistry.BrowserTabs lists them (= the tab indices).
+    internal Control? RailTabControl(int index) => index >= 0 && index < _tabs.Length ? _tabs[index] : null;
+    internal Control SearchControl => _search;
+    internal Control CollapseControl => _collapseBtn;
+    /// <summary>Show a tab without remembering a fold change — Show me only reveals.</summary>
+    internal void RevealTab(int index)
+    {
+        if (index < 0 || index >= _tabs.Length || !_tabs[index].IsVisible) return;
+        if (_collapsed) SetCollapsed(false, persist: false);
+        SelectTab(index);
+    }
+    internal void RevealBrowser() { if (_collapsed) SetCollapsed(false, persist: false); }
+
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
     /// <summary>Opens the History tab (the project's versions).</summary>
     public void ShowHistory() { SelectTab(HistoryTab); SetCollapsed(false, persist: true); }

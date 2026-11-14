@@ -559,6 +559,7 @@ public partial class MainWindow : Window
         Opened += (_, _) => Activate();
         // Bring the Mixer back docked / in its window / hidden as the user left it (specs/054).
         Opened += (_, _) => RestoreMixer();
+        Opened += (_, _) => RestoreAssistant();
 
         // Remember the detail panel's height once the user drags the splitter — but only
         // on the Clip tab. The Devices tab keeps its natural card-fitting height, so its

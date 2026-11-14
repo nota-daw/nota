@@ -50,6 +50,7 @@ public partial class MainWindow
         ToolbarPart.Follow => [FollowBtn],              // View ▸ Follow playhead
         ToolbarPart.Automation => [AutomationToggle],   // ⌘⇧A
         ToolbarPart.Mixer => [MixerToggle],             // View ▸ Mixer, ⌘⇧M
+        ToolbarPart.Assistant => [AssistantToggle],     // View ▸ Assistant, ⌘⇧H
         ToolbarPart.TimeSignature => [TimeSigCell],     // set once per project
         ToolbarPart.MidiLearn => [RemotePanel],         // MIDI learn (the panel goes with its last chip)
         ToolbarPart.Grid => [GridSep, SnapChip],        // the grid; snapping itself stays switchable

@@ -42,12 +42,14 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Markdig" Version="1.6.0" />
     <Compile Include="..\..\src\managed\Nota.App\Input\ShortcutAvaloniaExtensions.cs" Link="ShortcutAvaloniaExtensions.cs" />
     <Compile Include="..\..\src\managed\Nota.App\Input\KeyTokens.cs" Link="KeyTokens.cs" />
     <!-- The Menu key's copy of the application menu (specs/093; Avalonia base only). -->
     <Compile Include="..\..\src\managed\Nota.App\MenuMirror.cs" Link="MenuMirror.cs" />
     <!-- What's New's changelog / release-notes parsers (no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\Changelog.cs" Link="Changelog.cs" />
+    <Compile Include="..\..\src\managed\Nota.App\Assistant\MarkdownPipeline.cs" Link="MarkdownPipeline.cs" />
     <!-- Which language of the manual the app opens (nota#539; no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\ManualLanguage.cs" Link="ManualLanguage.cs" />
     <!-- Typed value entry's parser / read-out search (no Avalonia inside). -->

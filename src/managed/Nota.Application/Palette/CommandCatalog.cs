@@ -55,6 +55,7 @@ public static class CommandCatalog
         C("view.session", Loc.T("commands.show_session"), Loc.T("commands.view"), "", "clips grid launch"),
         C("view.modular", Loc.T("commands.show_modular"), Loc.T("commands.view"), "", "graph patch cv"),
         C("view.mixer", Loc.T("commands.show_mixer"), Loc.T("commands.view"), Shortcut.CmdShift('M'), "faders channels"),
+        C("view.assistant", Loc.T("commands.show_assistant"), Loc.T("commands.view"), Shortcut.CmdShift('H'), "help manual docs chat ask how assistant"),
         C("view.mixerFloat", Loc.T("commands.mixer_in_its_own_window"), Loc.T("commands.view"), "", "dock undock float pop out mixer window"),
         C("view.connectPhone", Loc.T("commands.connect_phone"), Loc.T("commands.view"), "", "remote mobile qr"),
         C("view.articulationMaps", Loc.T("commands.articulation_maps"), Loc.T("commands.view"), "", "expression map keyswitch articulation manager library"),
