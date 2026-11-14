@@ -46,6 +46,7 @@ OperatorSynth::OperatorSynth() {
         set((Param)(ShapeBase + o * 3), 0.5f);
         set((Param)(ShapeBase + o * 3 + 1), 0.5f);
         set((Param)(ShapeBase + o * 3 + 2), 0.0f);
+        set((Param)(SemisBase + o), 0.5f); // 0 st: the operator sits on its ratio
     }
 }
 
@@ -87,10 +88,14 @@ std::string OperatorSynth::pluginParamId(int32_t i) const {
         "cwave", "catk", "cdec", "csus", "crel", "dcoarse", "dfine", "dlevel", "dwave", "datk", "ddec", "dsus", "drel",
         "filtype", "filfreq", "filreso", "volume", "fmdepth", "glide", "veltofm", "keylevel", "mono", "bend",
         "bendrange", "modwheel", "filkeytrk", "veltolevel"};
-    if (i >= ShapeBase && i < kNumParams) {
+    if (i >= ShapeBase && i < SemisBase) {
         static const char* sh[] = {"dcurve", "rcurve", "envexp"};
         const int j = i - ShapeBase;
         return std::string(1, static_cast<char>('a' + j / 3)) + sh[j % 3];
+    }
+    if (i >= SemisBase && i < kNumParams) {
+        static const char* sm[] = {"asemi", "bsemi", "csemi", "dsemi"};
+        return sm[i - SemisBase];
     }
     return (i >= 0 && i < kNumParams) ? std::string(ids[i]) : std::string{};
 }
@@ -102,10 +107,14 @@ std::string OperatorSynth::pluginParamName(int32_t i) const {
         "C Release", "D Coarse", "D Fine", "D Level", "D Wave", "D Attack", "D Decay", "D Sustain", "D Release",
         "Filter Type", "Filter Freq", "Filter Reso", "Volume", "FM Depth", "Glide", "Vel to FM", "Key to Level", "Mono",
         "Pitch Bend", "Bend Range", "Mod Wheel", "Filter Key Track", "Vel to Level"};
-    if (i >= ShapeBase && i < kNumParams) {
+    if (i >= ShapeBase && i < SemisBase) {
         static const char* sh[] = {" Decay Curve", " Release Curve", " Env Exp"};
         const int j = i - ShapeBase;
         return std::string(1, static_cast<char>('A' + j / 3)) + sh[j % 3];
+    }
+    if (i >= SemisBase && i < kNumParams) {
+        static const char* sm[] = {"A Semi", "B Semi", "C Semi", "D Semi"};
+        return sm[i - SemisBase];
     }
     return (i >= 0 && i < kNumParams) ? std::string(nm[i]) : std::string{};
 }
@@ -209,13 +218,17 @@ void OperatorSynth::render(float* out, int32_t frames) {
     gexpr_.offsets(wheelRange(), exAdd);
     const double bendMul = std::exp2(bendSemis / 12.0);
     const double keyTrk = get(FilKeyTrk);
-    double ratio[4], fineMul[4], level[4], atk[4], dec[4], sus[4], rel[4];
+    double ratio[4], fineMul[4], semiMul[4], level[4], atk[4], dec[4], sus[4], rel[4];
     EnvBends bend[4];
     int wave[4];
     for (int o = 0; o < 4; ++o) {
         const int base = ACoarse + o * 8;
         ratio[o] = kRatio[std::clamp((int)std::lround(get((Param)(base + F_Coarse)) * 15.0f), 0, 15)];
         fineMul[o] = std::exp2(((double)get((Param)(base + F_Fine)) - 0.5) * 0.08); // ±~0.7 semitone
+        // The Semitones knob: whole steps around 0, so a ratio and an interval compose
+        // (×1 with +7 sounds a fifth, ×2 with −5 an octave and a fourth below).
+        const double semis = std::round(((double)get((Param)(SemisBase + o)) - 0.5) * 2.0 * kSemisRange);
+        semiMul[o] = std::exp2(semis / 12.0);
         level[o] = get((Param)(base + F_Level));
         wave[o] = std::clamp((int)std::lround(get((Param)(base + F_Wave)) * 3.0f), 0, 3);
         atk[o] = rateOf((Param)(base + F_A), 0.001, 4.0);
@@ -296,7 +309,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
                 if (o == 0 && fb > 0.0) pmod += fb * v.fbLast;
                 const double s = waveform(wave[o], v.phase[o] + pmod) * level[o] * v.env[o];
                 opOut[o] = s;
-                v.phase[o] += pitchHz * ratio[o] * fineMul[o] * invSr;
+                v.phase[o] += pitchHz * ratio[o] * semiMul[o] * fineMul[o] * invSr;
                 if (v.phase[o] >= 1.0) v.phase[o] -= std::floor(v.phase[o]);
                 const int t = tgt[o];
                 if (t < 4) modIn[t] += s * modScale;

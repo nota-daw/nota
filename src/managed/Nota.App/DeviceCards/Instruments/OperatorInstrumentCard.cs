@@ -7,8 +7,9 @@
 //   Wheels 56   pitch bend and mod wheel, on screen on every tab — the two hand controls
 //               a player reaches for first.
 //   Centre      three tabs:
-//               Operators   — the four operators as a table: role in words, wave, coarse
-//                             ratio, fine detune, level with its dB.
+//               Operators   — the four operators as a table: role in words, wave (four
+//                             drawn glyphs in a 2 × 2 block), coarse ratio, semitones,
+//                             fine detune, level with its dB.
 //               Algorithm   — the 11 topologies as sketches, feedback, and the routing
 //                             diagram (drag one operator onto another to re-route).
 //               Filter · Amp— the subtractive filter's response and the live harmonic
@@ -44,6 +45,9 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     // Coarse ratio table — mirrors OperatorSynth::kRatio.
     private static readonly double[] Ratios = { 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16 };
     private static readonly string[] WaveShort = { "Sin", "Tri", "Saw", "Sqr" };
+    // The drawn glyph for each — WaveIcon's own order is saw, square, triangle, sine, the
+    // engine's here is sine, triangle, saw, square.
+    private static readonly int[] WaveGlyph = { 3, 2, 0, 1 };
     private static readonly string[] FilterNames = { "LP", "HP", "BP" };
     private static readonly string[] KeyTrkNames = { "0", "½", "1" };
     private static readonly string[] BendNames = { "±2", "±5", "±12" };
@@ -53,7 +57,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     private static readonly string[] RailTabs = { "Global" };
     private static readonly string[] TabHints =
     {
-        "wave · ratio · fine · level",
+        "wave · ratio · semi · fine · level",
         Loc.T("device.operator.11_topologies_feedback_on_a"),
         Loc.T("device.operator.env_tab_hint"),
         "type · freq · reso · key track",
@@ -73,6 +77,13 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         return "×" + NotaNum.Str(r, r < 1 ? "0.0#" : "0");
     }
     private static int BendRange(float v) => (int)Math.Round(1 + v * 11);
+
+    // The Semitones knob: whole steps, 0 at centre (±12 st of travel, as Volt's Semi knob) — and
+    // the same rounding as the engine (std::round: halves away from zero, in double), or a value
+    // at a half step would read +4 while the operator already plays +5.
+    private const int SemisRange = 12;
+    private static string Semis(float v)
+        => NotaNum.Str(Math.Round(((double)v - 0.5) * 2 * SemisRange, MidpointRounding.AwayFromZero), "+0;−0;0");
 
     public Control Build(DeviceCardContext ctx)
     {
@@ -171,6 +182,69 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             return seg;
         }
 
+        // The wave: the four shapes drawn (WaveIcon, as Volt's osc strip draws them) in a
+        // 2 × 2 block (as Grain lays out its windows). The words the chips spelled — "Sin",
+        // "Tri", "Saw", "Sqr" — took the width the SEMI column needs in the 700 card, and a
+        // waveform reads faster drawn than named. The picked cell rises in the soft tint with
+        // an accent glyph; the click is handled so right-click still bubbles to the parameter
+        // menu, and the cells carry the words as tooltips.
+        Control WavePicker(string id)
+        {
+            var grid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"),
+                ColumnSpacing = 1, RowSpacing = 1,
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+            };
+            var cells = new Border[4];
+            var icons = new WaveIcon[4];
+            for (int i = 0; i < 4; i++)
+            {
+                int iv = i;
+                var ic = new WaveIcon(WaveGlyph[i])
+                {
+                    Width = 15, Height = 11,
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                };
+                var c = new Border
+                {
+                    CornerRadius = NotaRadius.Cell, Padding = new Thickness(2), Background = Brushes.Transparent,
+                    Cursor = new Cursor(StandardCursorType.Hand), Child = ic,
+                };
+                ToolTip.SetTip(c, WaveShort[i]);
+                c.PointerPressed += (_, e) =>
+                {
+                    if (!e.GetCurrentPoint(c).Properties.IsLeftButtonPressed) return;
+                    SetP(id, iv / 3f); applyEnv(); Refresh(); e.Handled = true;
+                };
+                Grid.SetColumn(c, i % 2); Grid.SetRow(c, i / 2);
+                cells[i] = c; icons[i] = ic; grid.Children.Add(c);
+            }
+            void Paint()
+            {
+                int cur = Sel(id, 4);
+                for (int i = 0; i < 4; i++)
+                {
+                    bool on = i == cur;
+                    cells[i].Background = on ? NotaPalette.AccentSoft : Brushes.Transparent;
+                    if (on) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+                    else cells[i].BoxShadow = default;
+                    icons[i].Stroke = on ? AccentBright : TextTertiary;
+                    icons[i].InvalidateVisual();
+                }
+            }
+            readouts.Add(Paint); Paint();
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(grid, MidiTarget.PluginParam(track, -1, pi), id);
+            var host = new Border
+            {
+                Background = NotaPalette.Groove, CornerRadius = NotaRadius.Cell, Padding = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+                Child = grid,
+            };
+            host.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
+            return host;
+        }
+
         Grid Slider(string label, string id, Func<string> text, double labelW = 54, double valueW = 38)
         {
             int pi = I(id);
@@ -251,7 +325,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         // own content and the headers would drift off the cells they name.
         var opsGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("62,Auto,64,64,*"), ColumnSpacing = 6,
+            ColumnDefinitions = new ColumnDefinitions("58,Auto,64,58,64,*"), ColumnSpacing = 5,
             RowDefinitions = new RowDefinitions("Auto,*,*,*,*"),
         };
         void Cell(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); opsGrid.Children.Add(c); }
@@ -259,7 +333,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var levelHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var dbCap = Cap("dB"); Grid.SetColumn(dbCap, 1);
         levelHead.Children.Add(Cap("LEVEL")); levelHead.Children.Add(dbCap);
-        var headCells = new Control[] { Cap("OP"), Cap("WAVE"), Cap("CRS"), Cap("FINE"), levelHead };
+        var headCells = new Control[] { Cap("OP"), Cap("WAVE"), Cap("CRS"), Cap("SEMI"), Cap("FINE"), levelHead };
         for (int c = 0; c < headCells.Length; c++) Cell(headCells[c], 0, c);
 
         for (int o = 0; o < 4; o++)
@@ -290,7 +364,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             if (op > 0)
             {
                 var rule = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0) };
-                Grid.SetRow(rule, op + 1); Grid.SetColumnSpan(rule, 5); opsGrid.Children.Add(rule);
+                Grid.SetRow(rule, op + 1); Grid.SetColumnSpan(rule, 6); opsGrid.Children.Add(rule);
             }
             string lid = pre + "level";
             Cell(new StackPanel
@@ -298,10 +372,11 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
                 Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
                 Children = { bar, letter, role },
             }, op + 1, 0);
-            Cell(Chips(pre + "wave", WaveShort), op + 1, 1);
+            Cell(WavePicker(pre + "wave"), op + 1, 1);
             Cell(TableKnob(pre + "coarse", OperatorTopo.Names[op] + " Coarse", RatioText), op + 1, 2);
-            Cell(TableKnob(pre + "fine", OperatorTopo.Names[op] + " Fine", Cents, arc: Teal), op + 1, 3);
-            Cell(Slider("", lid, () => Level(G(lid)), labelW: 0, valueW: 42), op + 1, 4);
+            Cell(TableKnob(pre + "semi", OperatorTopo.Names[op] + " Semi", Semis), op + 1, 3);
+            Cell(TableKnob(pre + "fine", OperatorTopo.Names[op] + " Fine", Cents, arc: Teal), op + 1, 4);
+            Cell(Slider("", lid, () => Level(G(lid)), labelW: 0, valueW: 36), op + 1, 5);
         }
         var opsBody = new Border { Padding = new Thickness(7, 3), Child = opsGrid };
 

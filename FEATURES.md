@@ -840,10 +840,11 @@ audio effects after it keep running and keep their settings; saved with the proj
   becomes one cycle, and a recording is cut into 16 frames. Tables are band-limited, are
   saved inside the project and in user presets, and the window follows the position each
   note plays. 25 factory presets.
-- **Nota Operator** — FM synth: 4 operators (wave, coarse ratio, fine detune, level and
-  their own ADSR each), 11 algorithms with interactive diagrams and drag-to-reroute,
-  feedback, a live harmonic spectrum, an LP/HP/BP filter with keyboard tracking, pitch-bend
-  (±2/±5/±12) and modulation wheels, VEL→FM, VEL→LEVEL, KEY→LEVEL, Glide, Mono.
+- **Nota Operator** — FM synth: 4 operators (wave, coarse ratio, semitone offset, fine
+  detune, level and their own ADSR each), 11 algorithms with interactive diagrams and
+  drag-to-reroute, feedback, a live harmonic spectrum, an LP/HP/BP filter with keyboard
+  tracking, pitch-bend (±2/±5/±12) and modulation wheels, VEL→FM, VEL→LEVEL, KEY→LEVEL,
+  Glide, Mono.
 - **Nota Pendulum** — a "pendulum" sequencer: swinging balls generate notes, with swing
   curves (Linear/Pendulum/Ease/Bounce), bipolar Rate, a held chord, Scale, Hold, First
   Note, Reset, Humanize and Pan Spread. The card draws one lane per ball from the engine's
