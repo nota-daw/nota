@@ -24,6 +24,7 @@ public sealed class ProjectDocument
     public int FormatVersion { get; set; } = ProjectService.CurrentFormatVersion;
     public string App { get; set; } = "Nota";
     public TransportDto Transport { get; set; } = new();
+    public List<TempoPoint>? TempoPoints { get; set; }
     public int SceneCount { get; set; } = 8;
     /// <summary>Session view settings + scene rows (names, colours, tempo, follow). Null in
     /// files from before Session P0 = defaults.</summary>

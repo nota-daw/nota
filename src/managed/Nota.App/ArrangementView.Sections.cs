@@ -346,7 +346,7 @@ public sealed partial class ArrangementView
             Cursor = HandCursor;
         }
 
-        private double BeatAt(double x) => _o._scrollBeats + x / _o._pixelsPerBeat;
+        private double BeatAt(double x) => _o.XToBeat(x);
 
         private ArrangementSection? HitTest(double x, out bool onLeft, out bool onRight)
         {
@@ -674,7 +674,7 @@ public sealed partial class ArrangementView
                 {
                     var me = list[_from];
                     double gx = _o.BeatToX(_dragBeat - _grabOffset);
-                    var g = new Rect(gx, 2, Math.Max(2, me.LengthBeats * _o._pixelsPerBeat), h - 4);
+                    var g = new Rect(gx, 2, Math.Max(2, _o.BeatToX(me.StartBeat + me.LengthBeats) - _o.BeatToX(me.StartBeat)), h - 4);
                     using (ctx.PushOpacity(0.8))
                     {
                         DrawSpan(ctx, me, g, true);

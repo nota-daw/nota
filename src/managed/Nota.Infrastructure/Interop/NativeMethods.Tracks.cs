@@ -445,6 +445,8 @@ internal static partial class NativeMethods
     internal static partial void TrackFreezeCancel(IntPtr engine);
     [LibraryImport(Lib, EntryPoint = "nota_track_bounce_begin")]
     internal static partial long TrackBounceBegin(IntPtr engine, int trackId, double lengthBeats);
+    [LibraryImport(Lib, EntryPoint = "nota_track_bounce_range_begin")]
+    internal static partial long TrackBounceRangeBegin(IntPtr engine, int trackId, double startBeat, double endBeat);
     [LibraryImport(Lib, EntryPoint = "nota_track_freeze_take")]
     internal static partial long TrackFreezeTake(IntPtr engine, [Out] float[] outFrames, long capFrames);
     [LibraryImport(Lib, EntryPoint = "nota_track_paste_audio_frames", StringMarshalling = StringMarshalling.Utf8)]

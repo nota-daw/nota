@@ -9,6 +9,18 @@
 
 namespace nota {
 
+double Transport::mappedBpm() const {
+    return map_ ? map_->clockBpm(mappedBeatAtSamples(playheadSamples_)) : uiBpm();
+}
+
+double Transport::mappedSamplesAtBeat(double beat) const {
+    return map_->secondsAt(beat) * sampleRate_;
+}
+
+double Transport::mappedBeatAtSamples(double sample) const {
+    return map_->beatAt(sample / sampleRate_);
+}
+
 void Transport::setLoop(bool enabled, double startBeat, double endBeat) {
     ++presentationEpoch_;
     loopEnabled_ = enabled && endBeat > startBeat;
@@ -22,12 +34,11 @@ void Transport::advanceBy(int32_t frames) {
 }
 
 TransportInfo Transport::transportInfo(double blockStartSamples) const {
-    const double spb = samplesPerBeat();
     TransportInfo ti;
-    ti.bpm = bpm_;
+    ti.bpm = bpm();
     ti.tsNum = tsNum_;
     ti.tsDenom = tsDenom_;
-    ti.ppqPosition = spb > 0.0 ? blockStartSamples / spb : 0.0;
+    ti.ppqPosition = beatAtSamples(blockStartSamples);
     ti.timeInSamples = static_cast<int64_t>(blockStartSamples);
     ti.timeInSeconds = sampleRate_ > 0.0 ? blockStartSamples / sampleRate_ : 0.0;
     ti.isPlaying = playing_;
@@ -38,9 +49,19 @@ TransportInfo Transport::transportInfo(double blockStartSamples) const {
 }
 
 void Transport::publish() {
+    // The ordinary clock needs one conversion factor, without querying mapped
+    // state separately for each published value.
+    if (!map_ && !lastMap_) {
+        uiBpm_.store(bpm_, std::memory_order_relaxed);
+        uiBeats_.store(playheadSamples_ / fixedSpb_, std::memory_order_relaxed);
+        uiPlaying_.store(playing_, std::memory_order_relaxed);
+        uiAnchorBeats_.store(startAnchorSamples_ / fixedSpb_, std::memory_order_relaxed);
+        return;
+    }
+    uiBpm_.store(bpm(), std::memory_order_relaxed);
     uiBeats_.store(positionBeats(), std::memory_order_relaxed);
     uiPlaying_.store(playing_, std::memory_order_relaxed);
-    uiAnchorBeats_.store(startAnchorSamples_ / samplesPerBeat(), std::memory_order_relaxed);
+    uiAnchorBeats_.store(beatAtSamples(startAnchorSamples_), std::memory_order_relaxed);
 }
 
 static int64_t presentationNow() {
@@ -59,24 +80,27 @@ void Transport::publishPresentation(double startSamples, int32_t playingFrames, 
     // Loop seams round to whole samples. Re-anchor the history at each real block
     // start so fractional-sample loop lengths cannot accumulate display drift.
     if (presentationFrames_ > 0 && playingFrames > 0) {
-        double predicted = (presentationOrigin_ + presentationFrames_) / samplesPerBeat();
-        const double actual = startSamples / samplesPerBeat();
-        if (loopEnabled_ && predicted >= loopEndBeat_)
-            predicted = loopStartBeat_ + std::fmod(predicted - loopStartBeat_, loopEndBeat_ - loopStartBeat_);
+        double predicted = presentationOrigin_ + presentationFrames_;
+        const double actual = startSamples;
+        const double loopStart = samplesAtBeat(loopStartBeat_);
+        const double loopEnd = samplesAtBeat(loopEndBeat_);
+        const double loopLength = loopEnd - loopStart;
+        if (loopEnabled_ && loopLength > 0 && predicted >= loopEnd)
+            predicted = loopStart + std::fmod(predicted - loopStart, loopLength);
         double correction = actual - predicted;
-        if (loopEnabled_ && actual >= loopStartBeat_ && predicted >= loopStartBeat_)
-            correction = std::remainder(correction, loopEndBeat_ - loopStartBeat_);
-        presentationOrigin_ += correction * samplesPerBeat();
+        if (loopEnabled_ && loopLength > 0 && actual >= loopStart && predicted >= loopStart)
+            correction = std::remainder(correction, loopLength);
+        presentationOrigin_ += correction;
     }
     presentationFrames_ += playingFrames;
     const auto span = std::min<int64_t>(presentationFrames_, std::max(windowFrames, playingFrames));
-    double startBeat = (presentationOrigin_ + (presentationFrames_ - span)) / samplesPerBeat();
+    double startBeat = beatAtSamples(presentationOrigin_ + (presentationFrames_ - span));
     if (loopEnabled_ && startBeat >= loopEndBeat_)
         startBeat = loopStartBeat_ + std::fmod(startBeat - loopStartBeat_, loopEndBeat_ - loopStartBeat_);
     presentationSequence_.fetch_add(1, std::memory_order_relaxed);
     presentationStart_.store(startBeat, std::memory_order_release);
     presentationEnd_.store(positionBeats(), std::memory_order_release);
-    presentationBpm_.store(bpm_, std::memory_order_release);
+    presentationBpm_.store(bpm(), std::memory_order_release);
     presentationLoopStart_.store(loopStartBeat_, std::memory_order_release);
     presentationLoopEnd_.store(loopEndBeat_, std::memory_order_release);
     presentationDuration_.store(sampleRate_ > 0 ? span / sampleRate_ : 0.0, std::memory_order_release);

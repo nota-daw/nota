@@ -650,6 +650,19 @@ void Engine::backToArrangement() {
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
 void Engine::setBpm(double bpm) {
+    if (!std::isfinite(bpm) || bpm < 1 || bpm > 999) return;
+    if (const auto* map = tempoMap()) {
+        const double beat = std::max(0.0, transport_.uiPositionBeats());
+        if (std::abs(map->bpmAt(beat) - bpm) < 1e-9) return;
+        auto points = map->points;
+        auto it = std::lower_bound(points.begin(), points.end(), beat,
+            [](const auto& p, double b) { return p.beat < b; });
+        if (it != points.end() && std::abs(it->beat - beat) < 1e-6) it->bpm = bpm;
+        else if (it != points.begin() && std::abs((it - 1)->beat - beat) < 1e-6) (it - 1)->bpm = bpm;
+        else points.insert(it, NotaTempoPoint{beat, bpm, 0, 1.0/3, 0, 2.0/3, 1, 0});
+        setTempoPoints(std::move(points), true);
+        return;
+    }
     Command c;
     c.type = CommandType::SetBpm;
     c.d0 = bpm;
@@ -666,7 +679,7 @@ void Engine::setBpm(double bpm) {
     }
 }
 double Engine::bpm() const {
-    return transport_.bpm();
+    return transport_.uiBpm();
 }
 void Engine::setTimeSignature(int num, int denom) {
     Command c;
@@ -747,6 +760,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
+    nt->frozenTiming = t.frozenTiming;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
     nt->pianoFold = t.pianoFold;
@@ -850,6 +864,23 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             if (!t || articulationsCurrent(*t) || playing(t)) continue; // cheap test first: `playing` scans the graph
             if (restored) t = cloneTrack(*t);
             settleArticulations(*t);
+        }
+    }
+    // A mapped stretch is prepared before publication, never in render. Reuse it
+    // across unrelated edits; clone only the tracks whose cache identity changed.
+    if (g && g->tempoMap) for (auto& t : g->tracks) {
+        bool copied = false;
+        for (size_t i = 0; i < t->clips.size(); ++i) {
+            const auto& c = t->clips[i];
+            if (!c.warpEnabled || !c.sample) continue;
+            const auto* cache = c.tempoWarpCache();
+            if (cache && c.tempoWarp->map == g->tempoMap && cache->devSR == transport_.sampleRate() &&
+                c.tempoWarp->startBeat == c.startBeat && c.tempoWarp->reversed == c.reversed &&
+                cache->inputs.sample == c.sample.get() && cache->inputs.markers == c.warpMarkers &&
+                cache->inputs.playStart == c.warpPlayStart && cache->inputs.playEnd == c.warpPlayEndEff() &&
+                cache->inputs.pitch == c.pitchSemitones && cache->inputs.mode == c.warpMode) continue;
+            if (!copied) { t = cloneTrack(*t); copied = true; }
+            configureTempoWarp(t->clips[i], g->tempoMap, transport_.sampleRate());
         }
     }
     authoring_ = g;
@@ -1283,6 +1314,36 @@ bool Engine::setPanLaw(PanLaw law, bool checkpoint) {
 }
 
 // --- arrangement sections (specs/016) ---------------------------------------
+
+bool Engine::setTempoPoints(std::vector<NotaTempoPoint> points, bool checkpoint) {
+    if (!authoring_ || !TempoMap::valid(points)) return false;
+    const TempoMap* old = tempoMap();
+    auto equal = [](const NotaTempoPoint& a, const NotaTempoPoint& b) {
+        return a.beat == b.beat && a.bpm == b.bpm && a.shape == b.shape &&
+            a.x1 == b.x1 && a.y1 == b.y1 && a.x2 == b.x2 && a.y2 == b.y2 && a.incoming_bpm == b.incoming_bpm;
+    };
+    if ((!old && points.empty()) || (old && old->points.size() == points.size() &&
+        std::equal(points.begin(), points.end(), old->points.begin(), equal))) return true;
+    auto g = std::make_shared<Graph>(*authoring_);
+    g->tempoMap = points.empty() ? nullptr : std::make_shared<const TempoMap>(std::move(points));
+    // Natural-rate recordings are physical-time anchors. Reproject their beat
+    // placement, never their source samples, when the musical ruler changes.
+    for (auto& t : g->tracks) {
+        if (t->takes.empty() && std::none_of(t->clips.begin(), t->clips.end(), [](const auto& c) { return !c.warpEnabled; })) continue;
+        t = cloneTrack(*t);
+        for (auto& c : t->clips) if (!c.warpEnabled) {
+            const double seconds = beatToSeconds(c.startBeat);
+            c.startBeat = g->tempoMap ? g->tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
+        }
+        for (auto& take : t->takes) {
+            const double seconds = beatToSeconds(take.originBeat);
+            take.originBeat = g->tempoMap ? g->tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
+            take.tempoMap = g->tempoMap;
+        }
+    }
+    if (checkpoint) publish(std::move(g)); else publishRaw(std::move(g));
+    return true;
+}
 
 void Engine::setSections(std::vector<Section> sections, bool checkpoint) {
     if (!authoring_) return;

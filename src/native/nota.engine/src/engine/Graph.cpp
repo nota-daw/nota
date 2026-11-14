@@ -6,6 +6,7 @@
 namespace nota {
 
 void inheritGraphLevel(Graph& dst, const Graph& src) {
+    dst.tempoMap = src.tempoMap;
     dst.sceneCount = src.sceneCount;
     dst.scenes = src.scenes;
     dst.masterVolume = src.masterVolume;

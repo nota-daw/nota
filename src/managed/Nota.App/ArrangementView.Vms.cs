@@ -89,6 +89,7 @@ public sealed partial class ArrangementView
         public double StartBeat;
         public double LengthBeats;
         public bool IsMidi;
+        public bool Warped; // peak buckets are uniform in beats, rather than elapsed seconds
         public bool Active = true;   // false = deactivated (key 0): stays but silent + greyed
         public int TakeId;           // the take this comp section came from (specs/067), 0 = none
         public double SourceOffsetFrames; // where in the take that section starts; the lane highlight uses it

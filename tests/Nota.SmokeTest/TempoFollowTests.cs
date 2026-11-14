@@ -55,6 +55,14 @@ internal static class TempoFollowTests
         // After the field's change has landed, an outside change is followed again.
         e.SetBpm(100); Apply(e); vm.Tick();
         yield return (vm.Bpm == 100m, "outside changes are followed again after the field's own lands");
+
+        // Project loading restores the persisted transport readout after the authoritative
+        // tempo map.  It must not send a fresh SetBpm at the current playhead and mutate that map.
+        var map = new[] { new TempoPoint(0, 80), new TempoPoint(8, 140) };
+        e.SetTempoPoints(map); e.Seek(8); Apply(e);
+        vm.RestoreBpm(80); Apply(e);
+        yield return (vm.Bpm == 80m && e.TempoPoints.SequenceEqual(map),
+            "restoring the project BPM readout does not edit the loaded tempo map");
     }
 
     // Stand-in for the audio thread: one render drains the queued commands.
