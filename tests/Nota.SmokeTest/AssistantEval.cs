@@ -5,7 +5,7 @@
 // Russian, not copied from headings), each with the manual pages that answer it. Prints the
 // share whose reply quotes one of those pages — words only, and with the meaning model when a
 // model folder is given. `--assistant-eval [<folder with model_quantized.onnx + tokenizer.json>]`.
-// Targets: ≥ 80 % words only, ≥ 90 % with the model.
+// Targets: ≥ 80 % words only, ≥ 90 % with the model; the exit code is 1 below either.
 
 using System.Text.Json;
 using Nota.Application.Assistant;
@@ -70,7 +70,10 @@ internal static class AssistantEval
             Console.WriteLine($"query time: median {qTimes.Order().ElementAt(qTimes.Count / 2):F0} ms, max {qTimes.Max():F0} ms");
         }
         emb?.Dispose();
-        return 0;
+        // Below the targets is a failure, so a script (or CI with the model) catches a drop.
+        bool ok = words * 100 >= 80 * qs.Count && (emb is null || fused * 100 >= 90 * qs.Count);
+        Console.WriteLine(ok ? "ASSISTANT EVAL PASSED" : "ASSISTANT EVAL FAILED (below the SC-001 targets)");
+        return ok ? 0 : 1;
     }
 
     private static bool Hit(ChatMessage reply, string[] pages) => reply.Quoted.Any(s => pages.Contains(s.Page));

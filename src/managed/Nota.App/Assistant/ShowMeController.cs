@@ -118,6 +118,8 @@ internal sealed class ShowMeController
             var target = _window.LocateAnchor(def.Locator);
             if (target is null) { LastGuidance = Loc.T("assistant.control_missing"); DrawBar(_walk!.Steps[_step], LastGuidance); return; }
             target = _window.ShedFallback(target) ?? target;
+            // The control may live in a popped-out Detail or Mixer window: bring that one forward.
+            if (TopLevel.GetTopLevel(target) is Window w && !w.IsActive) w.Activate();
             target.BringIntoView();
             Outline(target);
         }, Avalonia.Threading.DispatcherPriority.Loaded);

@@ -24,12 +24,12 @@ public partial class MainWindow
             return Browser.RailTabControl(BrowserTabIndex(locator["Browser.Tab.".Length..]));
         if (locator.StartsWith(LocatorPrefix.Device, StringComparison.Ordinal))
             return DeviceSlugs.ByAnchor(locator[LocatorPrefix.Device.Length..]) is { } d && _deviceChain is not null
-                   && ReferenceEquals(DetailBody.Content, _deviceChain) ? _deviceChain.CardOf(d.Group, d.EngineKind) : null;
+                   && ReferenceEquals(DeviceHost.Content, _deviceChain) ? _deviceChain.CardOf(d.Group, d.EngineKind) : null;
         return locator switch
         {
-            "Detail.ClipEditor" => DetailBody.Content as ClipEditorView,
-            "Detail.AudioEditor" => DetailBody.Content as AudioClipEditorView,
-            "Detail.Pattern" => DetailBody.Content as DrumPatternView,
+            "Detail.ClipEditor" => ClipDetailHost.Content as ClipEditorView,
+            "Detail.AudioEditor" => ClipDetailHost.Content as AudioClipEditorView,
+            "Detail.Pattern" => ClipDetailHost.Content as DrumPatternView,
             "Browser.Search" => Browser.SearchControl,
             "Browser.Collapse" => Browser.CollapseControl,
             "Main.Session" => _session,
@@ -49,9 +49,17 @@ public partial class MainWindow
         return cmd is null ? "" : "**" + cmd.Title + "** (" + cmd.Category + ")";
     }
 
-    /// <summary>The control a toolbar part shed for lack of room moved behind: the ⋯ key.</summary>
-    internal Control? ShedFallback(Control target) =>
-        !target.IsEffectivelyVisible && TransportBar.IsVisualAncestorOf(target) ? OverflowBtn : null;
+    /// <summary>Where a control that isn't on screen went: a toolbar part shed for lack of room
+    /// is behind the ⋯ key; the docked Mixer's or Detail panel's own header buttons stand for
+    /// the Mixer or the Detail panel in its window when that is popped out.</summary>
+    internal Control? ShedFallback(Control target)
+    {
+        if (target.IsEffectivelyVisible) return null;
+        if (TransportBar.IsVisualAncestorOf(target)) return OverflowBtn;
+        if (_mixerWindow is not null && MixerPanel.IsVisualAncestorOf(target)) return _mixer;
+        if (_detailWindow is not null && DetailPanel.IsVisualAncestorOf(target)) return _detailWindow.Content as Control;
+        return null;
+    }
 
     internal bool HasSelectedTrack => Timeline.SelectedTrackId > 0;
 
@@ -70,7 +78,7 @@ public partial class MainWindow
                 if (_mixerDocked && _detailMaximized) SetDetailMaximized(false);
                 return true;
             case RevealKind.Panel when step.Arg == "detail":
-                if (DetailPanel.IsVisible) return true;
+                if (DetailPanel.IsVisible || DetailFloating) return true;
                 if (Timeline.SelectedTrackId <= 0) return false;
                 ShowDevices(Timeline.SelectedTrackId);
                 return true;
@@ -82,11 +90,11 @@ public partial class MainWindow
                 return true;
             case RevealKind.DetailTab when step.Arg == "devices":
                 if (Timeline.SelectedTrackId <= 0) return false;
-                if (!DetailPanel.IsVisible || !ReferenceEquals(DetailBody.Content, _deviceChain) || _deviceChain?.TrackId != Timeline.SelectedTrackId)
+                if (!(DetailPanel.IsVisible || DetailFloating) || !ReferenceEquals(DeviceHost.Content, _deviceChain) || _deviceChain?.TrackId != Timeline.SelectedTrackId)
                     ShowDevices(Timeline.SelectedTrackId);
                 return true;
             case RevealKind.DetailTab:
-                return DetailPanel.IsVisible;
+                return DetailPanel.IsVisible || DetailFloating;
             default:
                 return false;
         }
@@ -105,7 +113,7 @@ public partial class MainWindow
             var page = requires["device:".Length..];
             var d = System.Linq.Enumerable.FirstOrDefault(DeviceSlugs.All(), x => x.Page == page);
             if (d is null) return null;
-            if (!ReferenceEquals(DetailBody.Content, _deviceChain) || _deviceChain?.TrackId != Timeline.SelectedTrackId)
+            if (!ReferenceEquals(DeviceHost.Content, _deviceChain) || _deviceChain?.TrackId != Timeline.SelectedTrackId)
                 ShowDevices(Timeline.SelectedTrackId);
             if (_deviceChain?.CardOf(d.Group, d.EngineKind) is not null) return null;
             string name = BuiltinDeviceCatalog.Find((BuiltinDeviceType)(int)d.Group, d.EngineKind)?.Name ?? page;
@@ -115,9 +123,9 @@ public partial class MainWindow
         }
         return requires switch
         {
-            "clip:midi" when DetailBody.Content is not ClipEditorView => (Loc.T("assistant.requires_midi_clip"), Timeline),
-            "clip:audio" when DetailBody.Content is not AudioClipEditorView => (Loc.T("assistant.requires_audio_clip"), Timeline),
-            "clip:pattern" when DetailBody.Content is not DrumPatternView => (Loc.T("assistant.requires_pattern"), Timeline),
+            "clip:midi" when ClipDetailHost.Content is not ClipEditorView => (Loc.T("assistant.requires_midi_clip"), Timeline),
+            "clip:audio" when ClipDetailHost.Content is not AudioClipEditorView => (Loc.T("assistant.requires_audio_clip"), Timeline),
+            "clip:pattern" when ClipDetailHost.Content is not DrumPatternView => (Loc.T("assistant.requires_pattern"), Timeline),
             _ => null,
         };
     }

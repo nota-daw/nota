@@ -33,7 +33,19 @@ internal sealed class TextEmbedder : IDisposable
 
     public UnigramTokenizer Tokenizer => _tokenizer;
 
-    public void Dispose() => _session.Dispose();
+    private bool _disposed;
+
+    /// <summary>Waits for a run in progress (it holds the same lock), then frees the session; a
+    /// later call throws ObjectDisposedException instead of touching a freed session.</summary>
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _session.Dispose();
+        }
+    }
 
     public float[] Embed(string text, bool query) => EmbedBatch([text], query)[0];
 
@@ -60,6 +72,7 @@ internal sealed class TextEmbedder : IDisposable
 
         lock (_gate)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             using var results = _session.Run(inputs);
             var hidden = results.First(r => r.Name == _output).AsTensor<float>();   // [batch, len, dim]
             int dim = hidden.Dimensions[2];

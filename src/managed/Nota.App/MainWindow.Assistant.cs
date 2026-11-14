@@ -31,6 +31,10 @@ public partial class MainWindow
 
     internal bool IsAssistantShown => AssistantPanel.IsVisible;
 
+    /// <summary>Whether a key event comes from inside the Assistant panel.</summary>
+    private bool InAssistant(object? source) =>
+        source is Avalonia.Visual v && AssistantPanel.IsVisible && (ReferenceEquals(v, AssistantPanel) || Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(AssistantPanel, v));
+
     private void OnToggleAssistantButton(object? sender, RoutedEventArgs e)
     {
         _commands.Run("view.assistant");

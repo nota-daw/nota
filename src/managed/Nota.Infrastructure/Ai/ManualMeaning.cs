@@ -41,7 +41,23 @@ public sealed class ManualMeaning : IMeaningSearch
     {
         _store = store;
         _cacheDir = cacheDir;
-        _store.Changed += () => { lock (_gate) { _vectors = null; DropEmbedder(); } };
+        _store.Changed += OnStoreChanged;
+    }
+
+    // Another model installed or removed leaves this one alone; only a change to the Manual
+    // search model (or the runtime) drops the session and the vectors built with it.
+    private string? _modelPath = null;
+
+    private void OnStoreChanged()
+    {
+        string? now = Available ? _store.ModelPath(AiModels.ManualSearch) : null;
+        lock (_gate)
+        {
+            if (now is not null && now == _modelPath) return;
+            _modelPath = now;
+            _vectors = null;
+            DropEmbedder();
+        }
     }
 
     /// <summary>Whether the model is installed (the panel's search uses it then).</summary>
@@ -68,7 +84,11 @@ public sealed class ManualMeaning : IMeaningSearch
             if (!vectorsTask.IsCompleted) return (null, null);
             var vectors = await vectorsTask.ConfigureAwait(false);
             if (vectors is null) return (null, null);
-            var q = await Task.Run(() => Embedder()?.Embed(question, query: true), ct).ConfigureAwait(false);
+            var q = await Task.Run(() =>
+            {
+                try { return Embedder()?.Embed(question, query: true); }
+                catch (ObjectDisposedException) { return Embedder()?.Embed(question, query: true); }   // unloaded meanwhile
+            }, ct).ConfigureAwait(false);
             return (q, vectors);
         }
         catch (Exception e) when (e is not OperationCanceledException)
@@ -91,6 +111,7 @@ public sealed class ManualMeaning : IMeaningSearch
                 var tok = _store.ModelFile(AiModels.ManualSearch, "tokenizer.json");
                 if (runtime is null || model is null || tok is null) return null;
                 _embedder = new TextEmbedder(runtime, model, tok);
+                _modelPath = model;
             }
             _unload ??= new Timer(_ => { lock (_gate) DropEmbedder(); });
             _unload.Change(Idle, Timeout.InfiniteTimeSpan);
@@ -117,8 +138,13 @@ public sealed class ManualMeaning : IMeaningSearch
             var t = new TaskCompletionSource<SectionVectorSet?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var thread = new Thread(() =>
             {
-                try { t.SetResult(LoadOrBuild(index, key)); }
-                catch (Exception e) { Log(e); t.SetResult(null); }
+                SectionVectorSet? result = null;
+                try { result = LoadOrBuild(index, key); }
+                catch (Exception e) { Log(e); }
+                // A pass that failed (model removed or changed meanwhile) is not kept: the next
+                // question starts a new one.
+                if (result is null) lock (_gate) { if (_vectorsKey == key) { _vectors = null; _vectorsKey = ""; } }
+                t.SetResult(result);
             })
             { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "Assistant vectors" };
             thread.Start();
@@ -142,7 +168,13 @@ public sealed class ManualMeaning : IMeaningSearch
         {
             while (Busy?.Invoke() == true) Thread.Sleep(500);
             var batch = index.Sections.Skip(start).Take(BatchSize).Select(PassageText).ToList();
-            var vecs = (Embedder() ?? embedder).EmbedBatch(batch, query: false);
+            float[][] vecs;
+            try { vecs = (Embedder() ?? throw new InvalidOperationException("Manual search model removed")).EmbedBatch(batch, query: false); }
+            catch (ObjectDisposedException)
+            {
+                // Unloaded for idleness between taking it and running: take the fresh one.
+                vecs = (Embedder() ?? throw new InvalidOperationException("Manual search model removed")).EmbedBatch(batch, query: false);
+            }
             for (int i = 0; i < vecs.Length; i++) vecs[i].CopyTo(data, (start + i) * TextEmbedder.Dim);
         }
         var set = new SectionVectorSet(n, TextEmbedder.Dim, data);

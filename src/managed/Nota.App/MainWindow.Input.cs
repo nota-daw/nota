@@ -61,6 +61,9 @@ public partial class MainWindow
             return;
         }
         if (e.Source is TextBox || e.Source is NumericUpDown) return;
+        // Keys in the Assistant panel (its links, Back / Next / Done) are the panel's: Return or
+        // Space on a focused link runs the link, not Stop or Play (specs/098).
+        if (InAssistant(e.Source)) return;
         if (TakesOverflowKey(e)) { e.Handled = true; return; }   // ⋯ focused by Tab (#520)
 
         if (Keys.Is(e, "session.launchSelection") && SessionFocused)
@@ -160,7 +163,8 @@ public partial class MainWindow
     // Shared with the floating detail window (see HandleFloatingKeyDown).
     internal void HandleKeyDown(KeyEventArgs e)
     {
-        if (_vm is null || Keys.Capturing || _vm.SuspendEnginePolling || e.Source is TextBox || e.Source is NumericUpDown) { base.OnKeyDown(e); return; }
+        if (_vm is null || Keys.Capturing || _vm.SuspendEnginePolling || e.Source is TextBox || e.Source is NumericUpDown
+            || InAssistant(e.Source)) { base.OnKeyDown(e); return; }
 
         // Every key here is a binding (specs/096): Keys.Is asks the user's keys, so the gates
         // and the order below are what decides between actions, never a hard-coded key.
