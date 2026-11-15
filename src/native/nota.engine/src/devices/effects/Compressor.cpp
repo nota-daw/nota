@@ -152,7 +152,10 @@ void Compressor::process(float* buf, int32_t frames) {
     float maxGr = 0.0f, inPk = 0.0f, outPk = 0.0f, keyPk = 0.0f;
     const int nDet = linked ? 1 : 2;
     int kw = keyW_.load(std::memory_order_relaxed); // block-decimated key-ring index
+    makeupRamp_.begin(makeupDb, frames);
+    mixRamp_.begin(mix, frames);
     for (int32_t i = 0; i < frames; ++i) {
+        const float mkDb = makeupRamp_.next(), mx = mixRamp_.next();
         const float l = buf[i * 2], r = buf[i * 2 + 1];
         const float kl = (sc ? sc[i * 2] : l) * keyGain, kr = (sc ? sc[i * 2 + 1] : r) * keyGain;
         const float keyRaw[2] = {linked ? (kl + kr) * 0.5f : kl, kr};
@@ -212,8 +215,8 @@ void Compressor::process(float* buf, int32_t frames) {
         maxGr = std::max(maxGr, grMax);
         keyPk = std::max(keyPk, std::max(std::fabs(key[0]), std::fabs(key[1])));
 
-        const float gainL = (1.0f - mix) + mix * fast_math::dbToLin(makeupDb + autoMk - gr[0]);
-        const float gainR = linked ? gainL : (1.0f - mix) + mix * fast_math::dbToLin(makeupDb + autoMk - gr[1]);
+        const float gainL = (1.0f - mx) + mx * fast_math::dbToLin(mkDb + autoMk - gr[0]);
+        const float gainR = linked ? gainL : (1.0f - mx) + mx * fast_math::dbToLin(mkDb + autoMk - gr[1]);
 
         // Look-ahead: apply the current gain to the delayed audio.
         laBuf_[laW_ * 2] = l;

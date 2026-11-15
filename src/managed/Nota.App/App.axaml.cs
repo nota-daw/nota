@@ -98,6 +98,28 @@ public partial class App : Avalonia.Application
         log.Info($"App started · v{AppInfo.Version}");
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             log.Error("Unhandled exception", e.ExceptionObject as Exception);
+        // A control moved between windows (the popped-out Detail window, the Mixer window) can
+        // leave an entry in its old window's layout queue; that window's next arrange pass then
+        // throws "Attempt to call InvalidateArrange on wrong LayoutManager" from Avalonia's
+        // render loop, and the unhandled exception closed Nota (#164). The layout is only one
+        // pass behind: keep running, note it, and lay every window out again.
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            if (e.Exception is not ArgumentException ae
+                || !ae.Message.Contains("wrong LayoutManager", StringComparison.Ordinal)
+                || ae.StackTrace?.Contains("Avalonia.Layout.LayoutManager", StringComparison.Ordinal) != true) return;
+            e.Handled = true;
+            log.Warn($"Layout pass recovered after a control moved between windows (#164): {ae.Message}\n{ae.StackTrace}");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return;
+                foreach (var w in desktop.Windows)
+                {
+                    w.InvalidateMeasure();
+                    w.InvalidateArrange();
+                }
+            }, Avalonia.Threading.DispatcherPriority.Background);
+        };
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             log.Error("Unobserved task exception", e.Exception);

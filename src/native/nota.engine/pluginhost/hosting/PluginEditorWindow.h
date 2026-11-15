@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// PluginEditorWindow — native window hosting a plugin's editor + computer
-// keyboard injection . Mirrors JUCE's AudioPluginHost idiom.
-// Message thread only. macOS-only NSEvent monitor (native NSViews swallow JUCE
-// key events there); on Windows JUCE key events reach the editor normally.
+// PluginEditorWindow — native window hosting a plugin's editor. Mirrors JUCE's
+// AudioPluginHost idiom. Message thread only. The computer keyboard the app plays with
+// (note map, octave, velocity) is caught here and handed to the app (engine/EditorKeys.h,
+// #221): on macOS by an NSEvent monitor (native NSViews swallow JUCE key events there),
+// elsewhere by the window's own JUCE key handling, which sees what the editor leaves.
 
 #pragma once
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -35,8 +37,9 @@ using GuiNoteQueue = nota::SpscRingBuffer<GuiNote, 256>;
 // editor when the plugin provides none.
 class PluginEditorWindow : public juce::DocumentWindow {
   public:
-    // Set by the owning adapter (message thread) before/at open; called from the
-    // key monitor to inject computer-keyboard MIDI into THIS plugin.
+    // Set by the owning adapter (message thread) before/at open. The window's computer
+    // keyboard now plays through the app (#221), as over its main window, not into the
+    // plug-in directly; these stay for the adapters that wire them.
     std::function<void(int32_t, float)> onNoteOn;
     std::function<void(int32_t)> onNoteOff;
 
@@ -48,12 +51,24 @@ class PluginEditorWindow : public juce::DocumentWindow {
     ~PluginEditorWindow() override;
     void closeButtonPressed() override {
         if (onHide) onHide();
+        releaseHeldKeys();
         setVisible(false);
+    }
+    bool keyPressed(const juce::KeyPress& key) override;
+    bool keyStateChanged(bool isKeyDown) override;
+    void activeWindowStatusChanged() override {
+        juce::DocumentWindow::activeWindowStatusChanged();
+        if (!isActiveWindow()) releaseHeldKeys(); // its key-ups go to another window now
     }
 
   private:
     void installKeyMonitor();
     void removeKeyMonitor();
+    // Ups for every app key still held down: a key released after the window lost the
+    // keyboard must not leave its note hanging.
+    void releaseHeldKeys();
+
+    std::map<int, int32_t> held_; // JUCE key code → token character (keys passed to the app)
 
 #if JUCE_MAC
     void* keyMonitor_ = nullptr; // NSEvent monitor (opaque here; AppKit in the .cpp)

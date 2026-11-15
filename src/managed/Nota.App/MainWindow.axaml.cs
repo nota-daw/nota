@@ -497,7 +497,7 @@ public partial class MainWindow : Window
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         _session.SlotSelected += OnSessionSlotSelected;
         InitLocate();   // clip menus' Locate ▸ and the Files highlight (spec 092)
-        Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
+        Timeline.SessionChanged += () => { _session?.Refresh(); DropDeadEditors(); };   // M5-6; a removed track takes its editors (#530)
         MainContent.Children.Add(_session);
 
         // The Mixer is created here once and hosted docked under the main view or in its own
@@ -539,6 +539,7 @@ public partial class MainWindow : Window
         vm.AutosaveRequested += OnAutosaveTick;
         vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
         InitGamepad();   // poll pad buttons on each UI tick (live note source)
+        InitEditorKeys();   // the note keys over a plug-in's editor window (#221), on the same tick
         InitRemote();    // Nota Remote: phones as controllers (ticked on the same clock)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)

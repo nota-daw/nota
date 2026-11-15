@@ -169,16 +169,33 @@ void Forge::process(float* buf, int32_t frames) {
     }
 
     // --- Oversampled nonlinear core: pre-gain + saturation stages. ---
+    // A stage trim that moved since the last block glides to its new value over this one.
+    Cfg cr = c;
+    bool trimRamp = false;
+    for (int s = 0; s < kStages; ++s) {
+        if (!trimPrimed_) trimFrom_[s] = c.trim[s];
+        trimRamp |= trimFrom_[s] != c.trim[s];
+    }
+    const int32_t rampN = std::min<int32_t>(frames, dsp::BlockRamp::kMaxFrames);   // as BlockRamp
+    const float invRamp = rampN > 0 ? 1.0f / (float)rampN : 0.0f;
     float wetPk = 0.0f;
     os_.process(buf, frames, [&](float& l, float& r, int i) {
+        if (trimRamp) {
+            const float t = std::min(1.0f, (float)(i + 1) * invRamp);
+            for (int s = 0; s < kStages; ++s) cr.trim[s] = trimFrom_[s] + (c.trim[s] - trimFrom_[s]) * t;
+        }
         l *= c.amt;
         r *= c.amt;
-        route(c, k, driveMod_[i], l, r);
+        route(cr, k, driveMod_[i], l, r);
         wetPk = std::max(wetPk, std::max(std::fabs(l), std::fabs(r)));
     });
 
+    for (int s = 0; s < kStages; ++s) trimFrom_[s] = c.trim[s];
+    trimPrimed_ = true;
+
     // --- Base-rate post: master tilt, width, output, dry/wet, meters. ---
     float outPk = 0.0f;
+    outRamp_.begin(c.outGain, frames);
     for (int32_t i = 0; i < frames; ++i) {
         float wl = buf[i * 2], wr = buf[i * 2 + 1];
 
@@ -193,8 +210,9 @@ void Forge::process(float* buf, int32_t frames) {
             wr = m - s2;
         }
 
-        wl *= c.outGain;
-        wr *= c.outGain;
+        const float og = outRamp_.next();
+        wl *= og;
+        wr *= og;
         const float ol = dryL_[i] * (1.0f - c.wet) + wl * c.wet;
         const float orr = dryR_[i] * (1.0f - c.wet) + wr * c.wet;
         buf[i * 2] = ol;

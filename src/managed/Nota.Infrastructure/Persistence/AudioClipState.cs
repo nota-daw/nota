@@ -32,8 +32,8 @@ internal static class AudioClipState
         // Warp off keeps its markers for a later re-enable (#310), so they're saved either way.
         if (ac.WarpEnabled != 0 || ac.WarpBeats > 0)
         {
-            var ms = new double[128]; var mb = new double[128];
-            int nm = Math.Min(engine.GetClipWarpMarkers(trackId, clipIndex, ms, mb), 128);
+            var (ms, mb) = WarpMarkers.Read(engine, trackId, clipIndex);   // all of them (#537)
+            int nm = ms.Length;
             if (nm >= 2)
             {
                 dto.WarpMarkers = new List<WarpMarkerDto>(nm);

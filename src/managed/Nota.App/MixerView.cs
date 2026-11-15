@@ -23,6 +23,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -195,6 +196,9 @@ public sealed partial class MixerView : UserControl
     /// fit its width to them.</summary>
     public event Action? StripsChanged;
 
+    /// <summary>Raised when a press on a track's strip asks to select that track (#538).</summary>
+    public event Action<int>? TrackPicked;
+
     /// <summary>Raised after a group strip's Link key changed the group's Link (specs/076).</summary>
     public event Action? GroupLinkChanged;
 
@@ -355,6 +359,13 @@ public sealed partial class MixerView : UserControl
         body.Child = null;   // detach before re-parenting
         body.Child = new Panel { Children = { inner, e.Outline } };
         e.Strip = body;
+        // A press anywhere on the strip — its name, fader, buttons — selects its track, as a
+        // click on its arrangement header does, so the Detail panel can follow from the Mixer (#538).
+        body.AddHandler(PointerPressedEvent, (_, pe) =>
+        {
+            if (!pe.GetCurrentPoint(body).Properties.IsLeftButtonPressed || e.Id == _selectedId) return;
+            TrackPicked?.Invoke(e.Id);
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
         _strips.Add(e);
         _stripById[e.Id] = e;
         _row.Children.Add(body);

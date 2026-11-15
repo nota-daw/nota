@@ -8,6 +8,8 @@
 
 #include "nota_engine_internal.h"
 
+#include "engine/EditorKeys.h"
+
 #include "dsp/primitives/CompensationDelay.h"
 #include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
@@ -579,6 +581,13 @@ NotaResult nota_plugin_close_editor(NotaEngine* e, int32_t track_id, int32_t dev
 }
 int32_t nota_plugin_editor_is_open(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return (e && CENG(e)->trackEditorOpen(track_id, device_index)) ? 1 : 0;
+}
+void nota_editor_keys_set_claimed(const int32_t* chars, int32_t count) {
+    nota::editorkeys::setClaimed(chars, count);
+}
+int32_t nota_editor_keys_drain(int32_t* out_chars, uint8_t* out_down, int32_t max) {
+    if (!out_chars || !out_down || max <= 0) return 0;
+    return nota::editorkeys::drain(out_chars, out_down, max);
 }
 int32_t nota_plugin_get_state(
     const NotaEngine* e, int32_t track_id, int32_t device_index, uint8_t* out, int32_t capacity) {

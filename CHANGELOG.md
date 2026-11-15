@@ -22,6 +22,44 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Removing a track with its clip open in the piano roll no longer crashes Nota** (#530). The
+  Clip editor closes with the track, and pressing Delete in a roll left behind is harmless.
+- **"To transients" no longer runs the clip editor's playhead ahead of the waveform** (#537).
+  The editor read only the first 128 warp markers, and "To transients" can place up to 258, so
+  it measured the warp by the wrong one. A save now keeps every marker too (it also stopped at
+  128). Undoing a warp redraws the editor, and an editor whose clip was undone away closes.
+- **Duplicate on a section makes room for the copy** (#529): the copy goes right after the
+  section and the sections and music after it move later, as with Duplicate with content.
+- **Resizing one clip of a selection resizes them all** (#604): the selection stays, and each
+  selected clip's edge moves by the same amount.
+- **Notes stay put while a MIDI clip's left edge is dragged** (#565); before, they rode along
+  with the edge and jumped back on release.
+- **Clicking a strip in the Mixer selects its track** (#538), so the Detail panel follows.
+- **Up and Down no longer walk into the File menu** (#548), and a click on a clip takes the
+  keyboard back from the menu bar, so the arrow keys nudge clips again.
+- **The piano roll no longer scrolls away as a selection starts** (#445): pressing on the note
+  grid scrolled it to bring the grid into view, and a drag that merely started near the top or
+  bottom row pulled the view along. Edge scrolling now needs a move toward that edge.
+- **A split or an overwrite keeps the clip as it was** (#467): a deactivated MIDI clip's pieces
+  stay deactivated, MIDI pieces keep their part of the velocity and volume envelopes, and the
+  right-hand piece of an audio clip plays its envelopes from where it begins.
+- **Output, Gain, Makeup and Mix glide on more devices** (#559): Valve (Output, Mix), Vintage
+  (Output), Crush (Output), Ceiling (Gain), Compressor (Makeup, Mix) and Forge (Output and the
+  stage trims) now ramp across each audio block instead of stepping once per block.
+- **Aurora's wavetable stack fits its window on a scaled display** (#573); at 125 % it was drawn
+  magnified and cut off.
+- **The computer keyboard plays while a plug-in's window has the focus** (#221), with the whole
+  note map, the octave and velocity keys and your own bindings, as over the main window, on
+  every platform. Other keys, chords and typing in the plug-in's own fields still go to the
+  plug-in.
+- **A layout mix-up after moving a panel between windows no longer closes Nota** (#164): the
+  layout catches up on the next pass, and the log notes it.
+- **Indexing a very large sample folder no longer slows the whole system down** (#358): linked
+  folders aren't walked into (a link back up the tree made the walk endless), a big index is
+  saved less often, and on Linux the indexer reads the disk only when nothing else wants it.
+- **A plug-in that won't load says why in the log** (#544).
+
 ## [0.60.1] — 2026-11-13
 
 ### Added

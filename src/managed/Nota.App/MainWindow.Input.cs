@@ -107,7 +107,10 @@ public partial class MainWindow
         top.AddHandler(PointerPressedEvent, (_, e) =>
         {
             if (top.FocusManager?.GetFocusedElement() is not Visual focused) return;
-            Visual? field = focused.FindAncestorOfType<TextBox>(includeSelf: true);
+            // The in-window menu bar keeps the keyboard the same way once an arrow key or Alt
+            // reached it: a click on a clip left the arrows moving through the menu (#548).
+            Visual? field = focused.FindAncestorOfType<TextBox>(includeSelf: true)
+                            ?? (Visual?)focused.FindAncestorOfType<Menu>(includeSelf: true);
             if (field is null) return;
             field = field.FindAncestorOfType<NumericUpDown>() ?? field;
             if (e.Source is Visual src && src.GetSelfAndVisualAncestors().Contains(field)) return;
@@ -377,6 +380,11 @@ public partial class MainWindow
             Engine.NoteOn(pitch, _typingVelocity / 127f);
             e.Handled = true;
         }
+        // An arrow key nobody used must not move the keyboard focus around the window: with
+        // nothing focused, Avalonia's arrow navigation walked into the menu bar and kept the
+        // keys there (#548). A focused control (a list, a slider) has had its turn already.
+        else if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right && FocusManager?.GetFocusedElement() is null or Window)
+            e.Handled = true;
         else base.OnKeyDown(e);
     }
 

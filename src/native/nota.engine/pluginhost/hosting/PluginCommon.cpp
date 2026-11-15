@@ -115,7 +115,14 @@ int32_t paramIndexOfIdImpl(juce::AudioPluginInstance* p, const std::string& id) 
 std::unique_ptr<juce::AudioPluginInstance> createInstance(
     const juce::PluginDescription& desc, double sr, int maxBlock) {
     juce::String err;
-    return scanner::sharedFormatManager().createPluginInstance(desc, sr, maxBlock, err);
+    auto inst = scanner::sharedFormatManager().createPluginInstance(desc, sr, maxBlock, err);
+    // The format's reason was dropped, so a plug-in that wouldn't load left nothing to go on
+    // (#544): the log now says which plug-in and why.
+    if (!inst)
+        std::fprintf(stderr, "[nota plugin] could not load '%s' (%s, %s): %s\n", desc.name.toRawUTF8(),
+            desc.pluginFormatName.toRawUTF8(), desc.fileOrIdentifier.toRawUTF8(),
+            err.isNotEmpty() ? err.toRawUTF8() : "no reason given");
+    return inst;
 }
 
 void advanceTransport(nota::TransportInfo& ti, int32_t frames, double sr) {
@@ -153,7 +160,10 @@ std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
     catalog.loadOnce();
     juce::PluginDescription desc; // one entry, copied under one lock
     if (!catalog.typeAt(catalogIndex, desc)) return nullptr;
-    if (instrumentOnly && !desc.isInstrument) return nullptr;
+    if (instrumentOnly && !desc.isInstrument) {
+        std::fprintf(stderr, "[nota plugin] '%s' is not listed as an instrument\n", desc.name.toRawUTF8());
+        return nullptr;
+    }
     return createInstance(desc, sr, maxBlock);
 }
 

@@ -161,7 +161,18 @@ public sealed partial class ArrangementView
         private bool IsPartner((int track, int clip, ClipVM vm, double origStart, int origRow) m) => _groupPartners.Contains((m.track, m.clip));
         // Trim / resize of a linked clip: its selected partners, previewed with it (specs/076).
         // Hidden ones (a folded inner group's tracks) have no ClipVM: edited from engine data, not previewed.
-        private List<(int track, int clip, bool midi, ClipVM? vm)> _trimPartners = new();
+        // The other clips a trim drag resizes: a linked clip's partners (specs/076), or every
+        // other clip of a multi-selection whose member was grabbed (#604). Each keeps its own
+        // edges and takes the grabbed edge's shift; Start/Len are the live preview (also for
+        // clips on hidden rows, which have no VM).
+        private sealed class TrimTarget
+        {
+            public int Track, Clip;
+            public bool Midi;
+            public ClipVM? Vm;
+            public double OrigStart, OrigLen, Start, Len;
+        }
+        private List<TrimTarget> _trimPartners = new();
         // Selected clips on rows not shown (a folded group's tracks): they take the move's time shift.
         private List<(int track, int clip, double origStart)> _groupHidden = new();
         private double _grabOrigStart;   // grabbed clip's original start (delta reference)
@@ -499,19 +510,36 @@ public sealed partial class ArrangementView
                 else
                 {
                     // A trim acts on its clip — and on a linked group, on the clips paired with it (specs/076).
-                    // A clip picked alone (⌥-click) stays alone.
-                    bool alone = _o.IsPickedAlone(_pendingTrackId, _pendingClipIndex);
-                    _o.Select(_pendingTrackId, _pendingClipIndex, linked: !alone);
+                    // A clip picked alone (⌥-click) stays alone. Grabbing the edge of a clip in a
+                    // multi-selection trims every selected clip by the same amount and keeps the
+                    // selection (#604).
+                    bool group = _pendingWasSelected && _o.SelectionCount > 1;
+                    if (!group)
+                    {
+                        bool alone = _o.IsPickedAlone(_pendingTrackId, _pendingClipIndex);
+                        _o.Select(_pendingTrackId, _pendingClipIndex, linked: !alone);
+                    }
                     var trimEng = _o._engine;
-                    _trimPartners = _o.SelectedPartnersOf(_pendingTrackId, _pendingClipIndex)
-                        .Select(p => (p.track, p.clip,
-                                      midi: trimEng is not null && trimEng.TryGetClipInfo(p.track, p.clip, out var pci) && pci.IsMidi,
-                                      vm: _o.FindClipVM(p.track, p.clip))).ToList();
+                    var others = group
+                        ? _o.Selection.Where(p => p != (_pendingTrackId, _pendingClipIndex)).ToList()
+                        : _o.SelectedPartnersOf(_pendingTrackId, _pendingClipIndex);
+                    _trimPartners = new();
+                    foreach (var (pt, pc) in others)
+                    {
+                        if (trimEng is null || !trimEng.TryGetClipInfo(pt, pc, out var pci)) continue;
+                        _trimPartners.Add(new TrimTarget
+                        {
+                            Track = pt, Clip = pc, Midi = pci.IsMidi, Vm = _o.FindClipVM(pt, pc),
+                            OrigStart = pci.StartBeat, OrigLen = pci.LengthBeats, Start = pci.StartBeat, Len = pci.LengthBeats,
+                        });
+                    }
                     _drag = _pendingMode;
                     _dragTrackId = _pendingTrackId; _dragClipIndex = _pendingClipIndex;
                     _dragClip = _pendingClip; _origStart = _pendingClip!.StartBeat; _origLen = _pendingClip.LengthBeats;
                     _grabBeat = _pendingGrabBeat;
-                    _snapTargets = _o.SnapTargets(new HashSet<(int, int)> { (_pendingTrackId, _pendingClipIndex) });
+                    var dragged = new HashSet<(int, int)> { (_pendingTrackId, _pendingClipIndex) };
+                    foreach (var p in _trimPartners) dragged.Add((p.Track, p.Clip));
+                    _snapTargets = _o.SnapTargets(dragged);
                     if (!_dragClip.IsMidi) CaptureResizePreview(_dragTrackId, _dragClipIndex);   // real-audio resize preview (point 2)
                 }
             }
@@ -566,16 +594,31 @@ public sealed partial class ArrangementView
                 case Drag.TrimR:
                     double newEnd = _o.SnapMagnetic(_origStart + _origLen + d, mods, _snapTargets);
                     _dragClip.LengthBeats = Math.Max(0.25, newEnd - _dragClip.StartBeat);
-                    foreach (var p in _trimPartners) if (p.vm is { } pv) { pv.StartBeat = _dragClip.StartBeat; pv.LengthBeats = _dragClip.LengthBeats; }
+                    double dEnd = _dragClip.StartBeat + _dragClip.LengthBeats - (_origStart + _origLen);
+                    foreach (var p in _trimPartners) { p.Start = p.OrigStart; p.Len = Math.Max(0.25, p.OrigLen + dEnd); ShowTrim(p); }
                     break;
                 case Drag.TrimL:
                     double ns = Math.Clamp(_o.SnapMagnetic(_origStart + d, mods, _snapTargets), 0, _origStart + _origLen - 0.25);
                     _dragClip.StartBeat = ns;
                     _dragClip.LengthBeats = (_origStart + _origLen) - ns;
-                    foreach (var p in _trimPartners) if (p.vm is { } pv) { pv.StartBeat = _dragClip.StartBeat; pv.LengthBeats = _dragClip.LengthBeats; }
+                    double dStart = ns - _origStart;
+                    foreach (var p in _trimPartners)
+                    {
+                        double end = p.OrigStart + p.OrigLen;
+                        p.Start = Math.Clamp(p.OrigStart + dStart, 0, end - 0.25);
+                        p.Len = end - p.Start;
+                        ShowTrim(p);
+                    }
                     break;
             }
             InvalidateVisual();
+        }
+
+        private static void ShowTrim(TrimTarget p)
+        {
+            if (p.Vm is not { } v) return;
+            v.StartBeat = p.Start;
+            v.LengthBeats = p.Len;
         }
 
         // --- autoscroll near the viewport edges during a drag (req 2.10) --------
@@ -756,17 +799,22 @@ public sealed partial class ArrangementView
                 // dragged past their source) stretch, otherwise trim — the engine picks.
                 // MIDI clips trim as before. A linked clip's partners get the same edges, all
                 // in one undo step (specs/076).
-                var targets = new List<(int track, int clip, bool midi)> { (_dragTrackId, _dragClipIndex, _dragClip.IsMidi) };
-                foreach (var p in _trimPartners) targets.Add((p.track, p.clip, p.midi));
-                double start = _dragClip.StartBeat, len = _dragClip.LengthBeats;
+                var targets = new List<(int track, int clip, bool midi, double start, double len)>
+                    { (_dragTrackId, _dragClipIndex, _dragClip.IsMidi, _dragClip.StartBeat, _dragClip.LengthBeats) };
+                foreach (var p in _trimPartners) targets.Add((p.Track, p.Clip, p.Midi, p.Start, p.Len));
+                // Several clips of one track: a grown edge may reach the next selected clip, so
+                // the clip whose grown edge leads goes first and nothing is carved before it
+                // is resized (ends: latest first; starts: earliest first).
+                bool growsRight = _drag == Drag.TrimR;
+                targets.Sort((a, b) => growsRight ? b.start.CompareTo(a.start) : a.start.CompareTo(b.start));
                 _o.OneUndoStep(() =>
                 {
-                    foreach (var (track, clip, midi) in targets)
+                    foreach (var (track, clip, midi, start, len) in targets)
                         if (midi) eng.TrimClip(track, clip, start, len);
                         else eng.ResizeAudioClip(track, clip, start, len);
                 });
                 // An editor open on these clips still holds the pre-drag geometry.
-                foreach (var (track, clip, _) in targets) _o.RaiseClipGeometryChanged(track, clip);
+                foreach (var t in targets) _o.RaiseClipGeometryChanged(t.track, t.clip);
             }
             _trimPartners = new();
             _drag = Drag.None;
@@ -1431,6 +1479,10 @@ public sealed partial class ArrangementView
             // needs far more height than one lane row, so mapping it with a min
             // bar height pushes high notes above the clip and into the row above.
             var (lo, hi) = pitches ?? TrackPitchRange(new[] { c })!.Value;
+            // While a left edge is dragged the clip's start moves but its notes keep their
+            // place in the song (the engine re-bases them on release), so they draw shifted
+            // by how far the start moved instead of riding along with the edge (#565).
+            double shift = TrimNoteShift(c);
             int span = Math.Max(1, hi - lo + 1);
             // Row step may drop below a pixel on a wide track range; the bar keeps 1px so
             // it stays visible, and the top note still lands inside the clip.
@@ -1440,7 +1492,7 @@ public sealed partial class ArrangementView
             using (var g = geo.Open())
                 foreach (var n in c.Notes)
                 {
-                    double nx = r.X + (n.StartBeat / c.LengthBeats) * r.Width;
+                    double nx = r.X + ((n.StartBeat + shift) / c.LengthBeats) * r.Width;
                     double nw = Math.Max(2, (n.LengthBeats / c.LengthBeats) * r.Width);
                     double ny = Math.Max(r.Y, r.Bottom - (n.Pitch - lo + 1) * step);
                     double ww = Math.Min(nw, r.Right - nx);
@@ -1452,6 +1504,16 @@ public sealed partial class ArrangementView
             ctx.DrawGeometry(brush, null, geo);
             foreach (var (ar, p) in _appearing) ctx.FillRectangle(AppearBrush(brush, p), ar);
             _appearing.Clear();
+        }
+
+        // How far a clip's notes sit from its previewed start during a left-edge trim (0 otherwise).
+        private double TrimNoteShift(ClipVM c)
+        {
+            if (_drag != Drag.TrimL) return 0;
+            if (ReferenceEquals(c, _dragClip)) return _origStart - c.StartBeat;
+            foreach (var p in _trimPartners)
+                if (ReferenceEquals(p.Vm, c)) return p.OrigStart - c.StartBeat;
+            return 0;
         }
 
         // Scratch buffer for live capture peaks — reused each frame (no per-render alloc).

@@ -86,6 +86,8 @@ public partial class MainWindow
         }
         if (_modular?.IsVisible == true) _modular.Refresh();
         FollowMoveThroughHistory();                      // undoing a clip move re-indexes clips
+        DropDeadEditors();                               // an undone import / track takes its editor along (#537)
+        _audioEditor?.Reload();                          // an undone warp (To transients…) redraws as it plays (#537)
         ReloadEditorNotes();                             // reflect clip/note edits
         // Volume / pan / master steps (specs/009): the master volume lives on the view model
         // (MST, Master row, Mixer and Remote follow it), the track strips in the Mixer rebuild.

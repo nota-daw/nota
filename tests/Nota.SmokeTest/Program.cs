@@ -475,6 +475,14 @@ if (args.Length >= 1 && args[0] == "--multiclip")
     Console.WriteLine(failures == 0 ? "MULTICLIP PASSED" : $"MULTICLIP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The milestone 0.60.2 fixes alone: `--m0602`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--m0602")
+{
+    Console.WriteLine("-- milestone 0.60.2 fixes --");
+    foreach (var (ok, label) in Milestone0602Tests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "M0602 PASSED" : $"M0602 FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Default project template alone: `--template`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--template")
 {
@@ -11180,14 +11188,14 @@ Console.WriteLine("-- Nota Valve (effect kind 6) --");
     // Auto Comp pulls a hot / quiet amp toward the input level; Mix 0 = the dry signal.
     aveng.SetDeviceBypassed(avt, avd, true); ARender(); float aDry = Rms(abuf, 4096); aveng.SetDeviceBypassed(avt, avd, false);
     aveng.DeviceSetParam(avt, avd, AOutput, 10f);
-    ARender(); float aHot = Rms(abuf, 4096);
+    ARender(8192); float aHot = Rms(abuf, 4096);   // Output glides in over the first block (#559)
     aveng.DeviceSetParam(avt, avd, AOutput, 5f); aveng.DeviceSetParam(avt, avd, AComp, 1f);
     ARender(16384); float aComped = Rms(abuf, 4096);
     Check(Math.Abs(20 * Math.Log10(aComped / aDry)) < 2.5 && Math.Abs(20 * Math.Log10(aHot / aDry)) > 3,
           $"Auto Comp matches the dry level ({20 * Math.Log10(aHot / aDry):+0.0;-0.0;0.0} dB at +12 → {20 * Math.Log10(aComped / aDry):+0.0;-0.0;0.0} dB)");
     aveng.DeviceSetParam(avt, avd, AComp, 0f);
     aveng.DeviceSetParam(avt, avd, AMix, 0f);
-    ARender(); float aMix0 = Rms(abuf, 4096);
+    ARender(8192); float aMix0 = Rms(abuf, 4096);   // so does Mix (#559)
     Check(Math.Abs(aMix0 - aDry) < aDry * 0.02f, $"Mix 0 passes the dry signal ({aMix0:0.000} vs {aDry:0.000})");
     aveng.DeviceSetParam(avt, avd, AMix, 1f);
 
@@ -15893,6 +15901,9 @@ foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- multi-clip editing --");
 foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- milestone 0.60.2 fixes --");
+foreach (var (ok, label) in Milestone0602Tests.Run()) Check(ok, label);
 
 Console.WriteLine("-- default project template --");
 foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);

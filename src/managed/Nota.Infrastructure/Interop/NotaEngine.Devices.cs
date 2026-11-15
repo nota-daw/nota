@@ -405,6 +405,18 @@ public sealed partial class NotaEngine
         return NativeMethods.PluginEditorIsOpen(_handle, trackId, deviceIndex) != 0;
     }
 
+    public void SetEditorTypingKeys(int[] tokenChars)
+    {
+        ThrowIfDisposed();
+        NativeMethods.EditorKeysSetClaimed(tokenChars, tokenChars.Length);
+    }
+
+    public int DrainEditorKeys(int[] tokenChars, byte[] down)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.EditorKeysDrain(tokenChars, down, Math.Min(tokenChars.Length, down.Length));
+    }
+
     /// <summary>Reads a hosted plugin's opaque state blob (for project save). Empty for built-ins.</summary>
     public byte[] GetPluginState(int trackId, int deviceIndex)
     {

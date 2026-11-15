@@ -62,7 +62,11 @@ public sealed class ClipSet
     public bool IsMulti => _clips.Count > 1 || TrackMode;
     /// <summary>Slot of the active clip: it receives new notes and drives header, inspector and envelopes.</summary>
     public int Active { get; private set; }
-    public OpenClip ActiveClip => _clips[Active];
+    /// <summary>The active clip. Once every clip has left the set (its track was removed while
+    /// the editor was open, #530) this is the last clip that was active, so a gesture still in
+    /// flight reads a dead clip the host refuses instead of throwing.</summary>
+    public OpenClip ActiveClip => _clips.Count > 0 ? _clips[Active] : _lastActive;
+    private OpenClip _lastActive = new(-1, -1, 0, 4);
 
     /// <summary>Arrangement beat of editor beat 0 (cached: the roll reads it per note per frame).</summary>
     public double Origin { get; private set; }
@@ -112,6 +116,7 @@ public sealed class ClipSet
     {
         int slot = IndexOf(trackId, clipIndex);
         if (slot < 0) return -1;
+        if (_clips.Count == 1) _lastActive = _clips[0];
         _clips.RemoveAt(slot);
         Measure();
         if (_clips.Count == 0) { Active = 0; return slot; }

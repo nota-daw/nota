@@ -7,6 +7,7 @@
 #include "PluginEditorWindow.h"
 
 #include "EditorSnapshot.h"
+#include "engine/EditorKeys.h"
 
 #if JUCE_MAC
 #import <AppKit/AppKit.h> // NSEvent monitor for computer-keyboard MIDI
@@ -14,31 +15,6 @@
 
 namespace nota {
 namespace hosting {
-namespace {
-
-// Typing-keyboard row -> MIDI pitch, matching the app's own
-// KeyToPitch map (W = C#4 = 61 … K = C5 = 72). Keyed by macOS ANSI virtual
-// keycodes so it works regardless of which control has JUCE key focus. -1 = not
-// a note key.
-int keycodeToPitch(unsigned short kc) {
-    switch (kc) {
-    case 0x0D: return 61; // W
-    case 0x01: return 62; // S
-    case 0x0E: return 63; // E
-    case 0x02: return 64; // D
-    case 0x03: return 65; // F
-    case 0x11: return 66; // T
-    case 0x05: return 67; // G
-    case 0x10: return 68; // Y
-    case 0x04: return 69; // H
-    case 0x20: return 70; // U
-    case 0x26: return 71; // J
-    case 0x28: return 72; // K
-    default: return -1;
-    }
-}
-
-} // namespace
 
 PluginEditorWindow::PluginEditorWindow(juce::AudioPluginInstance& p)
     : juce::DocumentWindow(p.getName().isNotEmpty() ? p.getName() : juce::String("Plugin"), juce::Colours::black,
@@ -68,29 +44,87 @@ PluginEditorWindow::PluginEditorWindow(juce::AudioPluginInstance& p)
 
 PluginEditorWindow::~PluginEditorWindow() {
     removeKeyMonitor();
+    releaseHeldKeys();
     clearContentComponent();
+}
+
+// Windows / Linux: a key the editor left unhandled bubbles up to the window. One the app
+// plays with goes to the app (once per press: auto-repeat stays here); anything else, and
+// every chord, stays with the plug-in.
+bool PluginEditorWindow::keyPressed(const juce::KeyPress& key) {
+#if JUCE_MAC
+    (void)key;
+    return false; // the NSEvent monitor has the keys on macOS
+#else
+    const auto mods = key.getModifiers();
+    if (mods.isCommandDown() || mods.isCtrlDown() || mods.isAltDown()) return false;
+    const int32_t ch = static_cast<int32_t>(key.getTextCharacter());
+    if (!editorkeys::claims(ch)) return false;
+    if (held_.count(key.getKeyCode()) == 0) {
+        held_[key.getKeyCode()] = editorkeys::tokenOf(ch);
+        editorkeys::push(ch, true);
+    }
+    return true;
+#endif
+}
+
+// JUCE reports releases only as a change of key state: whichever held key is no longer down
+// was released.
+bool PluginEditorWindow::keyStateChanged(bool isKeyDown) {
+#if !JUCE_MAC
+    if (!isKeyDown)
+        for (auto it = held_.begin(); it != held_.end();) {
+            if (juce::KeyPress::isKeyCurrentlyDown(it->first)) {
+                ++it;
+                continue;
+            }
+            editorkeys::push(it->second, false);
+            it = held_.erase(it);
+        }
+#else
+    (void)isKeyDown;
+#endif
+    return false;
+}
+
+void PluginEditorWindow::releaseHeldKeys() {
+    for (const auto& [code, ch] : held_) editorkeys::push(ch, false);
+    held_.clear();
 }
 
 void PluginEditorWindow::installKeyMonitor() {
 #if JUCE_MAC
+    // The keys the app plays with (its note map, octave and velocity keys, as bound) go to
+    // the app, which plays them as it does over its own window (#221). A chord, a key the app
+    // doesn't claim, and anything typed into one of the plug-in's text fields stay with the
+    // plug-in. A held key is remembered, so its release reaches the app even if the
+    // plug-in took the keyboard in between.
     keyMonitor_ = [[NSEvent
         addLocalMonitorForEventsMatchingMask:(NSEventMaskKeyDown | NSEventMaskKeyUp)
                                      handler:^NSEvent*(NSEvent* ev) {
                                        void* handle = this->getWindowHandle();
                                        if (handle == nullptr || ev.window != ((NSView*)handle).window)
                                            return ev; // not our window — leave the event alone
+                                       NSString* chars = ev.charactersIgnoringModifiers;
+                                       const int32_t ch = chars.length > 0 ? (int32_t)[chars characterAtIndex:0] : 0;
+                                       const int code = (int)ev.keyCode;
+                                       if (ev.type == NSEventTypeKeyUp) {
+                                           auto it = held_.find(code);
+                                           if (it == held_.end()) return ev;
+                                           editorkeys::push(it->second, false);
+                                           held_.erase(it);
+                                           return nil;
+                                       }
                                        if (ev.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
                                                                   NSEventModifierFlagOption))
-                                           return ev;                          // shortcut chord, not a note
-                                       if (!onNoteOn && !onNoteOff) return ev; // no note sink (e.g. effect plugin)
-                                       const int pitch = keycodeToPitch(ev.keyCode);
-                                       if (pitch < 0) return ev;
-                                       if (ev.type == NSEventTypeKeyDown) {
-                                           if (!ev.isARepeat && onNoteOn) onNoteOn(pitch, 0.85f);
-                                       } else if (onNoteOff) {
-                                           onNoteOff(pitch);
-                                       }
-                                       return nil; // consume the note key (no system beep, no double-handle)
+                                           return ev; // a shortcut chord, not a note
+                                       if ([ev.window.firstResponder isKindOfClass:[NSText class]])
+                                           return ev; // typing into the plug-in's own field
+                                       if (held_.count(code) != 0) return nil; // auto-repeat of a key the app has
+                                       if (!editorkeys::claims(ch)) return ev;
+                                       held_[code] = editorkeys::tokenOf(ch);
+                                       editorkeys::push(ch, true);
+                                       return nil; // consumed: no system beep, no double handling
                                      }] retain];
 #endif
 }

@@ -352,10 +352,12 @@ public sealed class AudioClipEditorView : UserControl
             // window without stretching).
             int n = _engine.GetClipWarpFullPeaks(TrackId, ClipIndex, peaks, 1024, rms);
             _wave.SetPeaks(peaks, rms, n);
-            var ms = new double[128]; var mb = new double[128];
-            markers = Math.Min(_engine.GetClipWarpMarkers(TrackId, ClipIndex, ms, mb), 128);
+            // Every marker: the last one is the warp's length, which the playhead, ruler and
+            // brackets measure by (a 128-marker buffer cut transient-warped clips short, #537).
+            var (ms, mb) = WarpMarkers.Read(_engine, TrackId, ClipIndex);
+            markers = ms.Length;
             _wave.SetMarkers(ms, mb, markers);
-            _mkSrc = ms[..markers]; _mkBeat = mb[..markers];
+            _mkSrc = ms; _mkBeat = mb;
             _playStart = gi.WarpPlayStart; _playEnd = gi.WarpPlayEnd;
             _wave.SetSourceRegion(0, 0, 0);   // source-frame brackets off (warped)
             _wave.SetWarpTrim(gi.WarpPlayStart, gi.WarpPlayEnd, gi.WarpBeats);

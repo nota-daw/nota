@@ -139,7 +139,9 @@ void Crush::process(float* buf, int32_t frames) {
     float inPk = 0.0f, outPk = 0.0f, drvPk = 0.0f, feedPk = 0.0f;
     uint32_t w = ringW_.load(std::memory_order_relaxed);
 
+    outRamp_.begin(outGain, frames);
     for (int32_t i = 0; i < frames; ++i) {
+        const float og = outRamp_.next();
         const float dryL = buf[i * 2], dryR = buf[i * 2 + 1];
         inPk = std::max(inPk, std::max(std::fabs(dryL), std::fabs(dryR)));
 
@@ -227,8 +229,8 @@ void Crush::process(float* buf, int32_t frames) {
                 gT = autoG_; // hold through silence
         }
         autoG_ += gSlew * (gT - autoG_);
-        oL *= autoG_ * outGain;
-        oR *= autoG_ * outGain;
+        oL *= autoG_ * og;
+        oR *= autoG_ * og;
         buf[i * 2] = oL;
         buf[i * 2 + 1] = oR;
         outPk = std::max(outPk, std::max(std::fabs(oL), std::fabs(oR)));

@@ -449,6 +449,10 @@ public sealed partial class PianoRollView : UserControl
             Background = Bg,   // the well below the rows when they don't fill the viewport
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            // A press focuses the note grid (it takes the keys); the grid is taller than the
+            // view, so bringing it into view on focus scrolled the rows away under the pointer
+            // just as a selection started (#445).
+            BringIntoViewOnFocusChange = false,
         };
 
         // Ruler row (corner + ruler) pinned above; velocity row pinned below.
@@ -2166,6 +2170,7 @@ public sealed partial class PianoRollView : UserControl
         // Vertical auto-scroll while a drag runs past the viewport edges.
         private DispatcherTimer? _autoScroll;
         private double _autoVelY;
+        private double _autoPressY = double.NaN;   // grid-y where the drag began (#445)
         private Point _lastGrid;
 
         private readonly List<(Rect, Color)> _doomed = new();   // per-frame scratch for the overwrite marks
@@ -2738,6 +2743,7 @@ public sealed partial class PianoRollView : UserControl
         private void EndDrag()
         {
             StopAutoScroll();
+            _autoPressY = double.NaN;
             if (_drag == Mode.None) return;
             var was = _drag;
             _drag = Mode.None;
@@ -2805,10 +2811,13 @@ public sealed partial class PianoRollView : UserControl
             double top = sv.Offset.Y, vh = sv.Viewport.Height;
             if (vh <= 0) { StopAutoScroll(); return; }
             double yInView = gridP.Y - top;
-            const double margin = 28, speed = 14;
+            const double margin = 28, speed = 14, intent = 6;
+            // Scroll only toward an edge the pointer has moved to: a drag that merely starts
+            // near the top or bottom row (a selection there) must not pull the view (#445).
+            if (double.IsNaN(_autoPressY)) _autoPressY = gridP.Y;
             double vel = 0;
-            if (yInView < margin) vel = -speed * (1 - Math.Clamp(yInView, 0, margin) / margin);
-            else if (yInView > vh - margin) vel = speed * (1 - Math.Clamp(vh - yInView, 0, margin) / margin);
+            if (yInView < margin && gridP.Y < _autoPressY - intent) vel = -speed * (1 - Math.Clamp(yInView, 0, margin) / margin);
+            else if (yInView > vh - margin && gridP.Y > _autoPressY + intent) vel = speed * (1 - Math.Clamp(vh - yInView, 0, margin) / margin);
             _autoVelY = vel;
             if (Math.Abs(vel) < 0.01) StopAutoScroll(); else StartAutoScroll();
         }

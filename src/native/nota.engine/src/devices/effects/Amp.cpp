@@ -106,6 +106,8 @@ void Amp::process(float* buf, int32_t frames) {
     os_.setActive(1 << P.os);
     if (frames > maxFrames_) frames = maxFrames_;
     float inPk = 0.0f, outPk = 0.0f, gateSum = 0.0f, feedPk = 0.0f;
+    outRamp_.begin(outGain, frames);
+    mixRamp_.begin(mix, frames);
 
     // Base-rate pre: stash the dry input, then replace the buffer with what feeds the shaper.
     for (int32_t i = 0; i < frames; ++i) {
@@ -164,8 +166,9 @@ void Amp::process(float* buf, int32_t frames) {
             compG_ = 1.0f;
             inMs_ = wetMs_ = 0.0;
         }
+        const float og = outRamp_.next(), mx = mixRamp_.next();
         for (int c = 0; c < 2; ++c) {
-            float wet = y[c] * outGain;
+            float wet = y[c] * og;
             const float in = dry_[i * 2 + c];
             if (gateThr > 0.0f) { // noise gate keyed on the input level
                 const float lvl = std::fabs(in);
@@ -176,12 +179,14 @@ void Amp::process(float* buf, int32_t frames) {
             } else {
                 gateGain_[c] = 1.0f;
             }
-            const float o = in * (1.0f - mix) + wet * mix;
+            const float o = in * (1.0f - mx) + wet * mx;
             buf[i * 2 + c] = o;
             outPk = std::max(outPk, std::fabs(o));
         }
         gateSum += 0.5f * (gateGain_[0] + gateGain_[1]);
     }
+    outRamp_.end();
+    mixRamp_.end();
 
     // Wet peak (decays slowly so a ringing filter blocks accrual); sleep
     // additionally waits out the oversampler transient + filter ring, though the

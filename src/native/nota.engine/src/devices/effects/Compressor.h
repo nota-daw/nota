@@ -10,6 +10,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/Parameter.h"
 #include "dsp/primitives/SvfFilter.h"
 
 #include <algorithm>
@@ -132,6 +133,7 @@ class Compressor : public Device {
     static float decayPeak(float held, float now) { return now > held ? now : held * 0.86f; }
 
     double sr_ = 44100.0, spb_ = 0.0;
+    dsp::BlockRamp makeupRamp_, mixRamp_; // Makeup (dB) and Mix glide across a block (#559)
     Chan ch_[2];
     std::vector<float> laBuf_;
     int laSize_ = 0, laW_ = 0;
