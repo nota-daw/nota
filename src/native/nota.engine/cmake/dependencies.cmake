@@ -35,6 +35,14 @@ CPMAddPackage(
     URL_HASH "SHA256=578acaef191a3e7aa0330fc699cc0b8f3b56f0316f45bf553f57d7bdd618f12b"
     DOWNLOAD_ONLY YES
 )
+if(NOT APPLE)
+    CPMAddPackage(
+        NAME pffft
+        URL "https://github.com/marton78/pffft/archive/v1.3.0.tar.gz"
+        URL_HASH "SHA256=055058d886e72b45e797179681b0d8b658688a37c1dc6fdbff2094074d9515ac"
+        DOWNLOAD_ONLY YES
+    )
+endif()
 CPMAddPackage(
     NAME signalsmith_stretch
     URL "https://github.com/Signalsmith-Audio/signalsmith-stretch/archive/57b93f4e9206a089a45387eaa39bdc9f310d3308.tar.gz"

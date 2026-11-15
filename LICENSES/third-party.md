@@ -12,6 +12,7 @@ public domain, or AGPL-compatible copyleft.
 |---|---|---|---|---|
 | .NET runtime | 10 | Managed runtime | MIT | ✅ in use |
 | Avalonia | 12 | UI framework | MIT | ✅ in use |
+| Avalonia.Headless | 12.1.4 | Tempo interaction test harness (test only) | MIT | ✅ in use — package license expression checked |
 | JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM release tarball — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
 | miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM release tarball, fetched to build dir |
@@ -22,6 +23,7 @@ public domain, or AGPL-compatible copyleft.
 | LAME | 3.100 (sources byte-identical to former snapshot; wrapper moved to `cmake/lame/`) | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
 | signalsmith-stretch | header v1.3.2 (byte-identical to former snapshot) | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use — CPM pinned tarball, fetched to build dir |
 | signalsmith-linear | fft.h (byte-identical to former snapshot) | FFT / linear DSP primitives | MIT | ✅ in use — CPM pinned tarball, fetched to build dir |
+| PFFFT | v1.3.0 | SIMD FFT on Linux and Windows | BSD-3-Clause | CPM pinned tarball; see THIRD-PARTY-NOTICES.md |
 | nlohmann/json | 3.12.0 | `audio.json` / `midi.json` device config (engine) | MIT | ✅ in use — CPM release tarball, fetched to build dir |
 | CPM.cmake | v0.43.2 | CMake package manager (build-time only, not linked) | MIT | ✅ in use — downloaded at configure time, never vendored |
 | HIIR (Laurent de Soras) | 1.50 (bump ex 1.40; snapshot unavailable upstream — null-gated, see note 4) | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — CPM URL+HASH zip, fetched to build dir — see note 4 |
@@ -31,6 +33,8 @@ public domain, or AGPL-compatible copyleft.
 | ONNX Runtime — native library | 1.23.2 | The same, downloaded with the first AI model | MIT | ✅ downloaded, not bundled — see note 6 |
 | htdemucs (Demucs v4, Meta) | v4 weights, ONNX export | Separate Stems model | MIT | ✅ downloaded, not bundled — see note 6 |
 | basic-pitch (Spotify) | 0.4.0 | Convert Melody / Harmony model | Apache-2.0 | ✅ downloaded, not bundled — see note 6 |
+| multilingual-e5-small (intfloat, int8 ONNX export by Xenova) | HF commit 761b726 | Assistant panel's Manual search model (meaning-based search) | MIT | ✅ downloaded, not bundled — see note 6 |
+| Markdig | 1.6.0 | Markdown parsing for the Assistant panel's replies | BSD-2-Clause | ✅ in use — NuGet |
 | Freeverb (algorithm only) | — | Built-in reverb | public domain | ✅ in use — own implementation of the Jezar algorithm; no vendored code (`src/native/nota.engine/src/Reverb.h`) |
 
 Status key: ✅ cleared · ⚠️ cleared with a condition · ⏳ planned · ❌ rejected (incompatible).

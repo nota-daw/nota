@@ -2500,6 +2500,7 @@ Nota.Application/Palette/CommandCatalog.cs	fold scale rows drum pads names hide 
 Nota.Application/Palette/CommandCatalog.cs	folder bus	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	gap space	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	graph patch cv	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	help manual docs chat ask how assistant	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	join merge glue	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	key fix	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	library sidebar	# data: search keyword or alias of the palette and the browser, not shown

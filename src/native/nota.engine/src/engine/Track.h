@@ -89,6 +89,15 @@ struct AudioClip {
     // shared across snapshots; rebuilt on tempo/pitch/mode/marker/window/SR change.
     // Null when warp is off (or while a rebuild is pending).
     std::shared_ptr<const WarpCache> warpCache;
+    // Tempo-map stretch (specs/086): one pointer so an unmapped clip stays small to copy.
+    struct TempoWarp {
+        std::shared_ptr<const WarpCache> cache;
+        std::shared_ptr<const class TempoMap> map; // the map it was built for (identity)
+        double startBeat = -1.0;                   // the clip start it was built for
+        bool reversed = false;                    // direction was baked before mapped stretching
+    };
+    std::shared_ptr<const TempoWarp> tempoWarp;
+    const WarpCache* tempoWarpCache() const { return tempoWarp ? tempoWarp->cache.get() : nullptr; }
     // Clip volume envelope (M9 follow-up): breakpoints in clip-local beats, value
     // 0..1, multiplying the per-sample output. Empty = no envelope (fast path).
     AutomationLane volumeEnvelope;
@@ -148,6 +157,9 @@ struct AudioTake {
     // Beats per frame of `sample` that the take and its comp sections are laid out with: the
     // tempo's mapping when they were placed. A tempo change re-places both (placeTakesForTempo).
     double beatsPerFrame = 0.0;
+    std::shared_ptr<const class TempoMap> tempoMap;
+    double beatAtFrame(double frame) const;
+    double frameAtBeat(double beat) const;
 };
 
 // A Session-view clip slot (M5). One per scene on each track. Holds a MIDI clip
@@ -435,6 +447,12 @@ class Track {
     // (un)freeze structural edit, so the audio thread reads it lock-free like `instrument`.
     std::shared_ptr<const std::vector<float>> frozenBuf;
     double frozenSpb = 0.0;
+    struct FrozenTiming {
+        std::shared_ptr<const class TempoMap> map;
+        double sampleRate = 0.0;
+        double startBeat = 0.0;
+    };
+    std::shared_ptr<const FrozenTiming> frozenTiming; // immutable capture clock, not the current project map
 
   private:
     int32_t id_;

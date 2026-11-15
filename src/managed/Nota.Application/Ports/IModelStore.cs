@@ -10,6 +10,9 @@ public static class AiModels
     public const string Stems = "htdemucs";
     /// <summary>basic-pitch: polyphonic audio → notes (Convert Melody / Harmony).</summary>
     public const string Transcription = "basic-pitch";
+    /// <summary>multilingual-e5-small: the Assistant's Manual search — finds the manual's
+    /// sections by meaning, English and Russian (specs/098).</summary>
+    public const string ManualSearch = "multilingual-e5-small";
     /// <summary>ONNX Runtime, the library every model runs on; installed with the first one.</summary>
     public const string Runtime = "onnxruntime";
 }
@@ -55,6 +58,9 @@ public interface IModelStore
 
     /// <summary>The installed model's file, or null.</summary>
     string? ModelPath(string id);
+
+    /// <summary>An extra file installed with a model (a tokenizer beside it), or null.</summary>
+    string? ModelFile(string id, string name) => null;
 
     /// <summary>Raised (on any thread) after an install or uninstall.</summary>
     event Action? Changed;

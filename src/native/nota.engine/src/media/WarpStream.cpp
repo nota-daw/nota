@@ -45,6 +45,7 @@ struct ClipWarpStream::Impl {
     float pitch = 0.0f;
     double devSR = 0.0;
     bool rePitch = false;
+    bool reverseSource = false; // virtual source coordinates still advance monotonically
     std::atomic<bool> ready{false};
 
     // audio-thread playback state
@@ -84,7 +85,7 @@ struct ClipWarpStream::Impl {
     void readSource(const SampleBuffer& src, int64_t start, int n) {
         const int srcCh = src.channels;
         for (int i = 0; i < n; ++i) {
-            const int64_t f = start + i;
+            const int64_t f = reverseSource ? src.frames - 1 - (start + i) : start + i;
             in[0][static_cast<size_t>(i)] = src.at(f, 0);
             if (channels == 2) in[1][static_cast<size_t>(i)] = src.at(f, srcCh >= 2 ? 1 : 0);
         }
@@ -98,7 +99,8 @@ bool ClipWarpStream::ready() const {
     return d_->ready.load(std::memory_order_acquire);
 }
 
-void ClipWarpStream::configure(int channels, WarpMode mode, float pitchSemitones, double srcSR, double devSR) {
+void ClipWarpStream::configure(int channels, WarpMode mode, float pitchSemitones, double srcSR, double devSR,
+    bool reverseSource) {
     Impl& d = *d_;
     d.ready.store(false, std::memory_order_release);
     d.channels = std::clamp(channels, 1, 2);
@@ -107,6 +109,7 @@ void ClipWarpStream::configure(int channels, WarpMode mode, float pitchSemitones
     d.devSR = devSR > 0.0 ? devSR : 44100.0;
     const double srSR = srcSR > 0.0 ? srcSR : d.devSR;
     d.rePitch = (mode == WarpMode::RePitch);
+    d.reverseSource = reverseSource;
     d.expectedOutPos = kNoPos;
     d.fedInt = 0;
     d.lead = 0.0;
@@ -164,8 +167,10 @@ void ClipWarpStream::render(float* out, int frames, double outStartSamples, cons
             const double sp = Impl::srcAtOutput(outStartSamples + i, markers, warpBeats, spb);
             const int64_t i0 = static_cast<int64_t>(sp);
             const double frac = sp - i0;
-            const float l0 = src.at(i0, 0), l1 = src.at(i0 + 1, 0);
-            const float r0 = src.at(i0, srcCh >= 2 ? 1 : 0), r1 = src.at(i0 + 1, srcCh >= 2 ? 1 : 0);
+            const int64_t a = d.reverseSource ? src.frames - 1 - i0 : i0;
+            const int64_t b = d.reverseSource ? a - 1 : a + 1;
+            const float l0 = src.at(a, 0), l1 = src.at(b, 0);
+            const float r0 = src.at(a, srcCh >= 2 ? 1 : 0), r1 = src.at(b, srcCh >= 2 ? 1 : 0);
             out[i * 2] += static_cast<float>(l0 + (l1 - l0) * frac) * gain;
             out[i * 2 + 1] += static_cast<float>(r0 + (r1 - r0) * frac) * gain;
         }

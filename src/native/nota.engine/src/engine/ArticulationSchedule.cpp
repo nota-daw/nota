@@ -15,6 +15,7 @@
 // reorder the triggers, and a chase after a seek all agree with straight playback.
 
 #include "ArticulationSchedule.h"
+#include "TempoMap.h"
 
 #include "MidiClip.h"
 
@@ -156,7 +157,10 @@ Ctx makeCtx(const ArticulationTable& table, const ArticulationBlock& b) {
 }
 
 // Where a note at clip-local `beat` sounds before its articulation's own offset.
-double noteTime(const Ctx& c, const Placement& p, double beat) { return p.start + std::max(0.0, beat) * c.b.spb + c.trackShift; }
+double placementTime(const Ctx& c, const Placement& p, double beat) {
+    return c.b.tempoMap ? c.b.tempoMap->secondsAt(p.clip->startBeat + beat) * c.b.sampleRate : p.start + beat * c.b.spb;
+}
+double noteTime(const Ctx& c, const Placement& p, double beat) { return placementTime(c, p, std::max(0.0, beat)) + c.trackShift; }
 
 double trigOf(const Ctx& c, const Placement& p, const ArticulationChange& x, const ArticulationEntry& e) {
     return noteTime(c, p, x.beat) + (e.offsetMs - e.leadMs) * c.msToS;
@@ -176,7 +180,7 @@ bool before(const Key& a, const Key& k) {
 
 // Index of the first timeline point whose note time can reach `t` (samples) in placement `p`.
 size_t firstFrom(const Ctx& c, const Placement& p, const std::vector<ArticulationChange>& ch, double t) {
-    const double beat = (t - p.start - c.trackShift) / c.b.spb;
+    const double beat = c.b.tempoMap ? c.b.tempoMap->beatAt((t - c.trackShift) / c.b.sampleRate) - p.clip->startBeat : (t - p.start - c.trackShift) / c.b.spb;
     if (beat <= 0.0) return 0; // notes before the clip start sound from it
     return static_cast<size_t>(std::lower_bound(ch.begin(), ch.end(), beat,
                                    [](const ArticulationChange& x, double v) { return x.beat < v; }) -
@@ -223,15 +227,15 @@ bool keyHeldAcross(const Ctx& c, const All& all, int32_t channel, int32_t pitch,
     bool held = false;
     all([&](const Placement& p) {
         if (held) return;
-        const double end = p.start + p.lengthBeats * c.b.spb;
+        const double end = placementTime(c, p, p.lengthBeats);
         for (const Note& note : p.clip->notes) {
             if (&note == self && p.order == selfOrder) continue;
             if (note.startBeat >= p.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
             const ArticulationEntry* e = c.table.resolve(note.articulation);
             if (!e || e->trigger != ArticulationTrigger::Momentary || !hasKey(c.table, *e, channel, pitch)) continue;
             const double shift = c.trackShift + e->offsetMs * c.msToS;
-            const double on = p.start + std::max(0.0, note.startBeat) * c.b.spb + shift - e->leadMs * c.msToS;
-            const double noteEnd = p.start + (note.startBeat + note.lengthBeats) * c.b.spb;
+            const double on = placementTime(c, p, std::max(0.0, note.startBeat)) + shift - e->leadMs * c.msToS;
+            const double noteEnd = placementTime(c, p, note.startBeat + note.lengthBeats);
             const double off = (p.trimEnd ? std::min(end, noteEnd) : noteEnd) + shift;
             if (on <= at && off > at) {
                 held = true;
@@ -252,7 +256,7 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
 
     // ---- latching: each point sends when it changes what is in force ----
     emit([&](const Placement& p) {
-        const double end = p.start + p.lengthBeats * b.spb;
+        const double end = placementTime(c, p, p.lengthBeats);
         if (win.start < end) covered = true;
         const ArticulationTimeline* tl = p.clip->articulations.get();
         if (!tl) return;
@@ -304,14 +308,14 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
 
     // ---- momentary: per note, held while the note sounds ----
     emit([&](const Placement& p) {
-        const double end = p.start + p.lengthBeats * b.spb;
+        const double end = placementTime(c, p, p.lengthBeats);
         for (const Note& note : p.clip->notes) {
             if (note.startBeat >= p.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
             const ArticulationEntry* e = c.table.resolve(note.articulation);
             if (!e || e->trigger != ArticulationTrigger::Momentary) continue;
             const double shift = c.trackShift + e->offsetMs * c.msToS;
-            const double onS = p.start + std::max(0.0, note.startBeat) * b.spb + shift;
-            const double noteEnd = p.start + (note.startBeat + note.lengthBeats) * b.spb;
+            const double onS = placementTime(c, p, std::max(0.0, note.startBeat)) + shift;
+            const double noteEnd = placementTime(c, p, note.startBeat + note.lengthBeats);
             const double offS = (p.trimEnd ? std::min(end, noteEnd) : noteEnd) + shift;
             const double trig = onS - e->leadMs * c.msToS;
             sendActions(w, c.table, *e, trig, win);
@@ -366,7 +370,7 @@ int scheduleArticulations(const std::vector<MidiClip>& clips, const Articulation
     auto active = [&](auto&& f) {
         long i = 0;
         for (const MidiClip& clip : clips) {
-            if (clip.active) f(Placement{&clip, clip.startBeat * b.spb, clip.lengthBeats, i});
+            if (clip.active) f(Placement{&clip, b.tempoMap ? b.tempoMap->secondsAt(clip.startBeat) * b.sampleRate : clip.startBeat * b.spb, clip.lengthBeats, i});
             ++i;
         }
     };

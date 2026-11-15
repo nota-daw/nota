@@ -26,6 +26,10 @@
   <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-FF9F1C" alt="Documentation"></a>
 </p>
 
+<p align="center">
+  <a href="https://upstar.dev/r/nota-daw/nota"><picture><source media="(prefers-color-scheme: dark)" srcset="https://upstar.dev/badge/nota-daw/nota/award/audio-dark.svg"><img alt="Upstar: #3 Riser Of The Week in Audio, November 2026" src="https://upstar.dev/badge/nota-daw/nota/award/audio.svg" width="250" height="55"></picture></a>
+</p>
+
 ![Nota playing a song in the Arrangement view, with the selected track's devices open below](assets/screenshots/playback.webp)
 
 <p align="center">▶ <a href="https://www.youtube.com/watch?v=zmvKOCIm4ig"><b>Watch the demo with sound</b></a> (1:45, YouTube)</p>
