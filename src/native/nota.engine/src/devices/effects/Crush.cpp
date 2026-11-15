@@ -139,9 +139,7 @@ void Crush::process(float* buf, int32_t frames) {
     float inPk = 0.0f, outPk = 0.0f, drvPk = 0.0f, feedPk = 0.0f;
     uint32_t w = ringW_.load(std::memory_order_relaxed);
 
-    outRamp_.begin(outGain, frames);
-    for (int32_t i = 0; i < frames; ++i) {
-        const float og = outRamp_.next();
+    const auto sample = [&](int32_t i, float og) NOTA_FORCE_INLINE_LAMBDA {
         const float dryL = buf[i * 2], dryR = buf[i * 2 + 1];
         inPk = std::max(inPk, std::max(std::fabs(dryL), std::fabs(dryR)));
 
@@ -234,7 +232,16 @@ void Crush::process(float* buf, int32_t frames) {
         buf[i * 2] = oL;
         buf[i * 2 + 1] = oR;
         outPk = std::max(outPk, std::max(std::fabs(oL), std::fabs(oR)));
+    };
+    // Output glide (#559): only the frames right after the knob moved run the ramp —
+    // a settled block is the plain fixed-gain loop, byte-for-byte the pre-glide work.
+    const int32_t glide = outRamp_.begin(outGain, frames);
+    int32_t from = 0;
+    if (glide > 0) {
+        for (int32_t i = 0; i < glide; ++i) sample(i, outRamp_.next());
+        from = glide;
     }
+    for (int32_t i = from; i < frames; ++i) sample(i, outGain);
     ringW_.store(w, std::memory_order_release);
 
     // Crushed-path peak (decays slowly so a ringing filter blocks accrual); sleep

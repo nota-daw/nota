@@ -266,8 +266,7 @@ void Vintage::process(float* buf, int32_t frames) {
     });
 
     // --- Base-rate post: tone/bump/shelves/band/hp, + hiss + crackle, auto-comp, dry/wet. ---
-    outRamp_.begin(outGain, frames);
-    for (int32_t i = 0; i < frames; ++i) {
+    const auto sample = [&](int32_t i, float og) NOTA_FORCE_INLINE_LAMBDA {
         float yL = buf[i * 2], yR = buf[i * 2 + 1];
         yL = toneSh_[0].process(yL);
         yL = bumpSh_[0].process(yL);
@@ -302,14 +301,21 @@ void Vintage::process(float* buf, int32_t frames) {
             compG_ = 1.0f;
             inMs_ = wetMs_ = 0.0;
         }
-        const float og = outRamp_.next();
         const float oL = dry_[i * 2] * (1.0f - mix) + yL * og * mix;
         const float oR = dry_[i * 2 + 1] * (1.0f - mix) + yR * og * mix;
         buf[i * 2] = oL;
         buf[i * 2 + 1] = oR;
         outPk = std::max(outPk, std::max(std::fabs(oL), std::fabs(oR)));
+    };
+    // Output glide (#559): the ramp runs only over the frames right after a move; a
+    // settled block is the plain fixed-output loop.
+    const int32_t glide = outRamp_.begin(outGain, frames);
+    int32_t from = 0;
+    if (glide > 0) {
+        for (int32_t i = 0; i < glide; ++i) sample(i, outRamp_.next());
+        from = glide;
     }
-    outRamp_.end();
+    for (int32_t i = from; i < frames; ++i) sample(i, outGain);
 
     // Delay-tap peak (decays slowly so a flushing line blocks accrual); sleep
     // additionally waits out the line's flight time so a late tap is never cut:

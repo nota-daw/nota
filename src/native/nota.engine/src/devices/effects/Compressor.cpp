@@ -152,10 +152,7 @@ void Compressor::process(float* buf, int32_t frames) {
     float maxGr = 0.0f, inPk = 0.0f, outPk = 0.0f, keyPk = 0.0f;
     const int nDet = linked ? 1 : 2;
     int kw = keyW_.load(std::memory_order_relaxed); // block-decimated key-ring index
-    makeupRamp_.begin(makeupDb, frames);
-    mixRamp_.begin(mix, frames);
-    for (int32_t i = 0; i < frames; ++i) {
-        const float mkDb = makeupRamp_.next(), mx = mixRamp_.next();
+    const auto sample = [&](int32_t i, float mkDb, float mx) NOTA_FORCE_INLINE_LAMBDA {
         const float l = buf[i * 2], r = buf[i * 2 + 1];
         const float kl = (sc ? sc[i * 2] : l) * keyGain, kr = (sc ? sc[i * 2 + 1] : r) * keyGain;
         const float keyRaw[2] = {linked ? (kl + kr) * 0.5f : kl, kr};
@@ -262,7 +259,16 @@ void Compressor::process(float* buf, int32_t frames) {
             kw = 0;
             keyW_.store(0, std::memory_order_relaxed);
         }
+    };
+    // Makeup / Mix glide (#559): the ramps run only over the frames right after a move;
+    // a settled block is the plain fixed-makeup, fixed-mix loop.
+    const int32_t glide = std::max(makeupRamp_.begin(makeupDb, frames), mixRamp_.begin(mix, frames));
+    int32_t from = 0;
+    if (glide > 0) {
+        for (int32_t i = 0; i < glide; ++i) sample(i, makeupRamp_.next(), mixRamp_.next());
+        from = glide;
     }
+    for (int32_t i = from; i < frames; ++i) sample(i, makeupDb, mix);
     keyW_.store(kw, std::memory_order_relaxed); // single block-rate publish (was per-sample)
     gr_.store(maxGr, std::memory_order_relaxed);
     scBuf_ = nullptr;

@@ -169,34 +169,40 @@ void Forge::process(float* buf, int32_t frames) {
     }
 
     // --- Oversampled nonlinear core: pre-gain + saturation stages. ---
-    // A stage trim that moved since the last block glides to its new value over this one.
-    Cfg cr = c;
-    bool trimRamp = false;
+    // A stage trim that moved since the last block glides to its new value over this one
+    // (#559); settled blocks run the core on the plain config, with no per-sample branch
+    // inside the oversampled loop.
+    bool trimMoved = false;
     for (int s = 0; s < kStages; ++s) {
         if (!trimPrimed_) trimFrom_[s] = c.trim[s];
-        trimRamp |= trimFrom_[s] != c.trim[s];
+        trimMoved |= trimFrom_[s] != c.trim[s];
     }
-    const int32_t rampN = std::min<int32_t>(frames, dsp::BlockRamp::kMaxFrames);   // as BlockRamp
-    const float invRamp = rampN > 0 ? 1.0f / (float)rampN : 0.0f;
     float wetPk = 0.0f;
-    os_.process(buf, frames, [&](float& l, float& r, int i) {
-        if (trimRamp) {
-            const float t = std::min(1.0f, (float)(i + 1) * invRamp);
-            for (int s = 0; s < kStages; ++s) cr.trim[s] = trimFrom_[s] + (c.trim[s] - trimFrom_[s]) * t;
-        }
+    const auto core = [&](float& l, float& r, int i, const Cfg& cfg) NOTA_FORCE_INLINE_LAMBDA {
         l *= c.amt;
         r *= c.amt;
-        route(cr, k, driveMod_[i], l, r);
+        route(cfg, k, driveMod_[i], l, r);
         wetPk = std::max(wetPk, std::max(std::fabs(l), std::fabs(r)));
-    });
+    };
+    if (trimMoved) {
+        const int32_t rampN = std::min<int32_t>(frames, dsp::BlockRamp::kMaxFrames); // as BlockRamp
+        const float invRamp = rampN > 0 ? 1.0f / (float)rampN : 0.0f;
+        Cfg cr = c;
+        os_.process(buf, frames, [&](float& l, float& r, int i) {
+            const float t = std::min(1.0f, (float)(i + 1) * invRamp);
+            for (int s = 0; s < kStages; ++s) cr.trim[s] = trimFrom_[s] + (c.trim[s] - trimFrom_[s]) * t;
+            core(l, r, i, cr);
+        });
+    } else {
+        os_.process(buf, frames, [&](float& l, float& r, int i) { core(l, r, i, c); });
+    }
 
     for (int s = 0; s < kStages; ++s) trimFrom_[s] = c.trim[s];
     trimPrimed_ = true;
 
     // --- Base-rate post: master tilt, width, output, dry/wet, meters. ---
     float outPk = 0.0f;
-    outRamp_.begin(c.outGain, frames);
-    for (int32_t i = 0; i < frames; ++i) {
+    const auto sample = [&](int32_t i, float og) NOTA_FORCE_INLINE_LAMBDA {
         float wl = buf[i * 2], wr = buf[i * 2 + 1];
 
         lpTone_[0] = wl + toneCoef * (lpTone_[0] - wl);
@@ -210,7 +216,6 @@ void Forge::process(float* buf, int32_t frames) {
             wr = m - s2;
         }
 
-        const float og = outRamp_.next();
         wl *= og;
         wr *= og;
         const float ol = dryL_[i] * (1.0f - c.wet) + wl * c.wet;
@@ -218,7 +223,16 @@ void Forge::process(float* buf, int32_t frames) {
         buf[i * 2] = ol;
         buf[i * 2 + 1] = orr;
         outPk = std::max(outPk, std::max(std::fabs(ol), std::fabs(orr)));
+    };
+    // Output glide (#559): the ramp runs only over the frames right after a move; a
+    // settled block is the plain fixed-output loop.
+    const int32_t glide = outRamp_.begin(c.outGain, frames);
+    int32_t from = 0;
+    if (glide > 0) {
+        for (int32_t i = 0; i < glide; ++i) sample(i, outRamp_.next());
+        from = glide;
     }
+    for (int32_t i = from; i < frames; ++i) sample(i, c.outGain);
 
     // Saturated-path peak (decays slowly so ringing states block accrual); sleep
     // additionally waits out the flight time so in-flight oversampler ringing is

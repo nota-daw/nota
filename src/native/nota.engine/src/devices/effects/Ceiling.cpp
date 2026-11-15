@@ -220,9 +220,7 @@ void Ceiling::process(float* buf, int32_t frames) {
 
     float inPk = 0.0f, outPk = 0.0f, tpPk = 0.0f, maxGr = 0.0f;
 
-    gainRamp_.begin(inGain, frames);
-    for (int32_t i = 0; i < frames; ++i) {
-        const float ig = gainRamp_.next();
+    const auto sample = [&](int32_t i, float ig) NOTA_FORCE_INLINE_LAMBDA {
         // Control rate: the auto stage slows the release as the reduction deepens
         // (×1 at 1 dB … ×5 at 7 dB and deeper), so dense passages don't pump.
         if ((i & 15) == 0) {
@@ -332,7 +330,16 @@ void Ceiling::process(float* buf, int32_t frames) {
             hop_ = 0;
             onHop();
         }
+    };
+    // Gain glide (#559): the ramp runs only over the frames right after a move; a settled
+    // block is the plain fixed-gain loop.
+    const int32_t glide = gainRamp_.begin(inGain, frames);
+    int32_t from = 0;
+    if (glide > 0) {
+        for (int32_t i = 0; i < glide; ++i) sample(i, gainRamp_.next());
+        from = glide;
     }
+    for (int32_t i = from; i < frames; ++i) sample(i, inGain);
 
     if (selfSilent && keySilent && outPk <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
     else {
