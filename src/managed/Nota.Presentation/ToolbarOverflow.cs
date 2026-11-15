@@ -20,6 +20,7 @@ public enum ToolbarPart
     Follow,
     Automation,
     Mixer,          // the Mixer show / hide key (#516)
+    Assistant,      // the Assistant panel key (specs/098)
     TimeSignature,
     MidiLearn,      // the MIDI learn chip — the panel goes with its last chip
     Grid,
@@ -45,6 +46,7 @@ public static class ToolbarOverflow
         ToolbarPart.Follow,
         ToolbarPart.Automation,
         ToolbarPart.Mixer,
+        ToolbarPart.Assistant,
         ToolbarPart.TimeSignature,
         ToolbarPart.MidiLearn,
         ToolbarPart.Grid,
@@ -68,6 +70,7 @@ public static class ToolbarOverflow
         ToolbarPart.Snap,
         ToolbarPart.Automation,
         ToolbarPart.Mixer,
+        ToolbarPart.Assistant,
         ToolbarPart.MidiLearn,
         ToolbarPart.Remote,
         ToolbarPart.RemoteLabel,

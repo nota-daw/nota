@@ -10,6 +10,8 @@
 //   htdemucs — Demucs v4 (Meta, MIT) exported to ONNX without its STFT by
 //     nota-daw/nota-models/scripts/export_htdemucs.py, published on that repo's releases.
 //   basic-pitch — nmp.onnx straight from spotify/basic-pitch at the v0.4.0 tag.
+//   multilingual-e5-small — intfloat's model (MIT) as the int8 ONNX export and tokenizer published
+//     at Xenova/multilingual-e5-small, pinned to a commit; the Assistant's Manual search (specs/098).
 
 using System.Runtime.InteropServices;
 using Nota.Application.Localization;
@@ -20,7 +22,16 @@ namespace Nota.Infrastructure;
 /// <param name="Archive">"file" (the download is the model), "tar" or "zip".</param>
 /// <param name="Keep">For archives: the paths inside it to install (flat, by file name).</param>
 /// <param name="Entry">The installed file Nota loads (model or runtime library).</param>
-public sealed record ModelAsset(string Url, string Sha256, long Size, string Archive, IReadOnlyList<string> Keep, string Entry);
+public sealed record ModelAsset(string Url, string Sha256, long Size, string Archive, IReadOnlyList<string> Keep, string Entry,
+                                IReadOnlyList<ModelFile>? Extra = null)
+{
+    public IReadOnlyList<ModelFile> Extras => Extra ?? [];
+    /// <summary>Everything the asset downloads: the model and its extra files.</summary>
+    public long TotalSize => Size + Extras.Sum(e => e.Size);
+}
+
+/// <summary>A file installed beside a model, downloaded and verified on its own (a tokenizer).</summary>
+public sealed record ModelFile(string Url, string Sha256, long Size, string Name);
 
 public sealed record CatalogModel(StoreModel Info, ModelAsset Asset);
 
@@ -47,7 +58,18 @@ public static class ModelCatalog
                 230444, 230444),
             new ModelAsset("https://raw.githubusercontent.com/spotify/basic-pitch/v0.4.0/basic_pitch/saved_models/icassp_2022/nmp.onnx",
                 "2c3c1d144bfa61ad236e92e169c13535c880469a12a047d4e73451f2c059a0ec", 230444, "file", [], "nmp.onnx")),
+        new(new StoreModel(AiModels.ManualSearch, "multilingual-e5-small", Loc.T("model_store.model_catalog.manual_search"),
+                Loc.T("model_store.model_catalog.finds_manual_sections_by_meaning"),
+                "intfloat (Microsoft)", "MIT", "https://huggingface.co/intfloat/multilingual-e5-small",
+                E5Size + E5TokenizerSize, E5Size + E5TokenizerSize),
+            new ModelAsset(E5Base + "onnx/model_quantized.onnx",
+                "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193", E5Size, "file", [], "model_quantized.onnx",
+                [new ModelFile(E5Base + "tokenizer.json",
+                    "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39", E5TokenizerSize, "tokenizer.json")])),
     ];
+
+    private const string E5Base = "https://huggingface.co/Xenova/multilingual-e5-small/resolve/761b726dd34fb83930e26aab4e9ac3899aa1fa78/";
+    private const long E5Size = 118308185, E5TokenizerSize = 17082730;
 
     /// <summary>"osx-arm64", "win-x64", "linux-aarch64", … — ONNX Runtime's archive names.</summary>
     public static string Rid()
