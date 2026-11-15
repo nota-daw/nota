@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Remote: slide a held pad to change Repeat's rate and pitch** (#558, specs/100). With
+  Repeat on, a finger holding a pad now plays rolls and fills the way a hardware pad controller
+  does.
+  - **Rate**: slide up for a faster rate and down for a slower one, one step every half a pad's
+    height: 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, in the project's tempo. The next hit
+    follows the new rate from the last one, with no gap and no double hit. The rate chip picks
+    the rate a press starts at (1/16 at first).
+  - **Pitch**: on a track whose instrument takes per-note expression (MPE), slide sideways to
+    bend the repeated note, a pad's width per semitone. Only that pad bends, and the next press
+    starts in tune.
+  - The pad shows its rate and bend under the finger, and a hint under the pads says what a
+    slide does. Each finger keeps its own rate and pitch. Velocity still comes from where the
+    finger lands, or is full with Full velocity. Without Repeat, Pads work as before.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
   OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
   always shown, even when a folder doesn't exist on disk. They are removable, and
