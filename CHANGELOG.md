@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
+  OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
+  always shown, even when a folder doesn't exist on disk. They are removable, and
+  **Restore defaults** re-adds the missing ones without touching folders you added
+  yourself. Removed defaults stay removed across restarts. Existing installs gain
+  the missing defaults once, with no duplicates.
+  The defaults are read live from each format's own standard locations, so adding a
+  future format (CLAP, LV2) needs no UI or settings rework.
 - **An Assistant that answers from the manual** (#606, specs/098). A chat panel on the right of
   the main window, the full height of the work area — the toolbar's speech-bubble key, View →
   Assistant or ⌘⇧H (Ctrl+Shift+H) open and close it. Ask in your own words, in English or Russian:
