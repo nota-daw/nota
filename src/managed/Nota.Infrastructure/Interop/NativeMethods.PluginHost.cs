@@ -53,4 +53,16 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan_path")]
     internal static partial IntPtr PluginHostScanPath(int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_default_scan_path_count", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int PluginHostDefaultScanPathCount(string? format);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_default_scan_path", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial IntPtr PluginHostDefaultScanPath(string? format, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_restore_default_scan_paths", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int PluginHostRestoreDefaultScanPaths(string? format);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_is_scan_path_removed", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int PluginHostIsScanPathRemoved(string? dir);
 }

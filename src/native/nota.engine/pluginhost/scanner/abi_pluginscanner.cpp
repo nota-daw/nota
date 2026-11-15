@@ -331,3 +331,45 @@ extern "C" NOTA_API const char* nota_pluginhost_scan_path(int32_t index) {
     path = catalog.scanPathAt(index);
     return path.empty() ? nullptr : path.c_str();
 }
+
+extern "C" NOTA_API int32_t nota_pluginhost_default_scan_path_count(const char* format) {
+    try {
+        return static_cast<int32_t>(nota::scanner::PluginCatalog::defaultScanPathsFor(format).size());
+    } catch (...) {
+        return 0; // AR-7: nothing unwinds across the C ABI
+    }
+}
+
+extern "C" NOTA_API const char* nota_pluginhost_default_scan_path(const char* format, int32_t index) {
+    try {
+        const auto all = nota::scanner::PluginCatalog::defaultScanPathsFor(format);
+        if (index < 0 || index >= static_cast<int32_t>(all.size())) return nullptr;
+        thread_local std::string path;
+        path = all[static_cast<size_t>(index)];
+        return path.c_str();
+    } catch (...) {
+        return nullptr; // AR-7: nothing unwinds across the C ABI
+    }
+}
+
+extern "C" NOTA_API int32_t nota_pluginhost_restore_default_scan_paths(const char* format) {
+    if (format == nullptr) return 0;
+    try {
+        auto& catalog = nota::scanner::PluginCatalog::instance();
+        catalog.loadScanPathsOnce();
+        return catalog.restoreDefaultScanPaths(format);
+    } catch (...) {
+        return 0; // AR-7: nothing unwinds across the C ABI
+    }
+}
+
+extern "C" NOTA_API int32_t nota_pluginhost_is_scan_path_removed(const char* dir) {
+    if (dir == nullptr) return 0;
+    try {
+        auto& catalog = nota::scanner::PluginCatalog::instance();
+        catalog.loadScanPathsOnce();
+        return catalog.isScanPathRemoved(dir) ? 1 : 0;
+    } catch (...) {
+        return 0; // AR-7: nothing unwinds across the C ABI
+    }
+}
