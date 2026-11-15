@@ -2470,8 +2470,13 @@ class Engine {
     static constexpr int32_t kSincTable = 256; // kernel table points per zero crossing
     static constexpr int32_t kMonitorSrcHalfMax = 160; // taps each side at most (a ratio up to 8)
     static constexpr int32_t kMonitorSrcFrames = 4096 + 2 * kMonitorSrcHalfMax + 8; // input window, frames
-    std::vector<float> monitorSinc_;           // Kaiser-windowed sinc over [0, kSincZeros], built once
-    std::vector<float> monitorSrc_;            // input frames in layoutAudio_ columns; history first
+    // Kaiser-windowed sinc over [0, kSincZeros]: built once per process, when an input first
+    // opens (control thread), so an engine that never monitors one doesn't pay for it. Null
+    // until then; the audio thread converts only once it is set.
+    std::atomic<const float*> monitorSinc_{nullptr};
+    static const float* monitorSincTable();
+    std::vector<float> monitorSrc_;            // input frames in layoutAudio_ columns; history first (sized with the kernel)
+    void prepareMonitorResampler();            // control thread: window + kernel, once, before the audio thread may convert
     int32_t monitorSrcFrames_ = 0;             // frames held in monitorSrc_
     double monitorSrcPos_ = 0.0;               // read position in monitorSrc_ (>= the half-length)
     double monitorSrcRatio_ = 0.0;             // the ratio the kernel below was sized for

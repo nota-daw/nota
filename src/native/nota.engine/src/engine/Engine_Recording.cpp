@@ -207,7 +207,9 @@ bool Engine::ensureAudioInput() {
     const bool asioFallback = asioSupported() && config_.audioSystem == AudioSystem::Asio && activeSystem_ != AudioSystem::Asio;
     const uint32_t inputDev = resolveAudioDeviceId(asioFallback ? std::string{} : config_.inputDeviceUid, /*inputScope=*/true);
     // The input thread only touches the lock-free rings (RT-safe).
-    // At the engine's rate where the device can run it (#563); live monitoring converts the rest.
+    // At the engine's rate where the device can run it (#563); live monitoring converts the rest,
+    // with a window and kernel made ready here, off the audio thread.
+    prepareMonitorResampler();
     const double engineRate = transport_.sampleRate();
     const bool ok = input_->start([this](const float* s, int32_t n, int32_t channels) { onInputBlock(s, n, channels); },
         inputDev, engineRate);
@@ -283,7 +285,8 @@ void Engine::pullMonitorInput(int32_t frames) {
     const bool sharedClock = monitorSharedClock_.load(std::memory_order_relaxed);
     const double inRate = monitorInRate_.load(std::memory_order_relaxed);
     const double outRate = transport_.sampleRate();
-    const bool convert = !sharedClock && inRate > 0.0 && outRate > 0.0 && std::fabs(inRate - outRate) > 0.5;
+    const bool convert = !sharedClock && inRate > 0.0 && outRate > 0.0 && std::fabs(inRate - outRate) > 0.5 &&
+                         monitorSinc_.load(std::memory_order_acquire) != nullptr;
     if (convert != monitorConverting_) { // a device at another rate opened (or closed): start over
         monitorConverting_ = convert;
         monitorPrimed_ = false;
@@ -347,6 +350,42 @@ size_t Engine::readMonitorRing(float* dst, size_t want, bool& adopted, bool& lay
         i += static_cast<size_t>(monitorRing_.read(dst + i * w, static_cast<int32_t>(want - i)));
     }
     return i;
+}
+
+// The monitor resampler's kernel (#563): sinc(x) under a Kaiser window (beta 7, ~70 dB),
+// x in [0, kSincZeros], kSincTable points per zero crossing. Built on first use, once per
+// process (thread-safe static init); control thread only.
+const float* Engine::monitorSincTable() {
+    static const std::vector<float> table = [] {
+        constexpr double kBeta = 7.0, kPi = 3.14159265358979323846;
+        auto i0 = [](double x) { // modified Bessel function of the first kind, order 0
+            double sum = 1.0, term = 1.0;
+            for (int k = 1; k < 64 && term > 1e-12 * sum; ++k) {
+                term *= (x / (2.0 * k)) * (x / (2.0 * k));
+                sum += term;
+            }
+            return sum;
+        };
+        const int32_t n = kSincZeros * kSincTable;
+        std::vector<float> t(static_cast<size_t>(n) + 2, 0.0f);
+        for (int32_t k = 0; k <= n; ++k) {
+            const double x = static_cast<double>(k) / kSincTable;
+            const double r = x / kSincZeros;
+            const double sinc = k == 0 ? 1.0 : std::sin(kPi * x) / (kPi * x);
+            t[static_cast<size_t>(k)] = static_cast<float>(sinc * i0(kBeta * std::sqrt(std::max(0.0, 1.0 - r * r))) / i0(kBeta));
+        }
+        return t;
+    }();
+    return table.data();
+}
+
+// Control thread: the resampler's window (this engine's) and kernel (the process's), the first
+// time an input opens. Never resized after, so the audio thread can't see it move; it converts
+// only once monitorSinc_ is set, which is published last.
+void Engine::prepareMonitorResampler() {
+    if (monitorSinc_.load(std::memory_order_acquire)) return;
+    monitorSrc_.assign(static_cast<size_t>(kMonitorSrcFrames) * kMaxInputChannels, 0.0f);
+    monitorSinc_.store(monitorSincTable(), std::memory_order_release);
 }
 
 void Engine::resetMonitorResampler(double ratio) {
@@ -432,7 +471,7 @@ void Engine::resampleMonitorInput(int32_t frames, double ratio) {
     const size_t w = static_cast<size_t>(std::max(layoutAudio_.count, 0));
     if (w == 0) return;
     float* src = monitorSrc_.data();
-    const float* table = monitorSinc_.data();
+    const float* table = monitorSinc_.load(std::memory_order_relaxed);
     const double cut = monitorSrcCut_;
     const double tableScale = cut * kSincTable; // table points per input frame of distance
     const double tableEnd = static_cast<double>(kSincZeros) * kSincTable;
@@ -509,6 +548,7 @@ void Engine::skipMonitorFrames(size_t frames) {
 
 void Engine::setMonitorInputForTest(double sampleRate, int32_t blockFrames) {
     inputTestMode_ = true; // the pushed frames are the input: never open (or feed from) a real device
+    prepareMonitorResampler();
     monitorInRate_.store(sampleRate > 0.0 ? sampleRate : 0.0, std::memory_order_relaxed);
     if (blockFrames > 0) inputBlockFrames_.store(blockFrames, std::memory_order_relaxed);
 }
