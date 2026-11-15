@@ -13,7 +13,7 @@ AsioInput::~AsioInput() {
     stop();
 }
 
-bool AsioInput::start(InputCallback cb, uint32_t) {
+bool AsioInput::start(InputCallback cb, uint32_t, double) { // the driver's rate is the engine's
     if (registered_) return isRunning();
     auto& s = asio::sharedAsioSession();
     if (!s.isRunning() || !s.hasInputs()) return false; // no driver, or one without inputs
