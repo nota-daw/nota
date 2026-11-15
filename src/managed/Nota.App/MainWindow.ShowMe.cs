@@ -83,9 +83,10 @@ public partial class MainWindow
                 ShowDevices(Timeline.SelectedTrackId);
                 return true;
             case RevealKind.Panel when step.Arg == "browser":
-                Browser.RevealBrowser();
+                ShowBrowserForShowMe();
                 return true;
             case RevealKind.BrowserTab:
+                ShowBrowserForShowMe();
                 Browser.RevealTab(BrowserTabIndex(step.Arg));
                 return true;
             case RevealKind.DetailTab when step.Arg == "devices":
@@ -118,9 +119,14 @@ public partial class MainWindow
             if (_deviceChain?.CardOf(d.Group, d.EngineKind) is not null) return null;
             string name = BuiltinDeviceCatalog.Find((BuiltinDeviceType)(int)d.Group, d.EngineKind)?.Name ?? page;
             int tab = d.Group switch { DeviceGroup.Instrument => 0, DeviceGroup.AudioEffect => 1, _ => 2 };
+            ShowBrowserForShowMe();
             Browser.RevealTab(tab);
             return (Loc.F("assistant.requires_device", name), Browser.RailTabControl(tab));
         }
+        // An editor that is open but hidden (Detail toggled off): show it again as it is.
+        if (requires is "clip:midi" or "clip:audio" or "clip:pattern"
+            && ClipDetailHost.Content is ClipEditorView or AudioClipEditorView or DrumPatternView)
+            ShowDetailAsIs();
         return requires switch
         {
             "clip:midi" when ClipDetailHost.Content is not ClipEditorView => (Loc.T("assistant.requires_midi_clip"), Timeline),
@@ -130,10 +136,27 @@ public partial class MainWindow
         };
     }
 
+    // The browser hidden with View ▸ Toggle browser (or by the clip editor filling the window)
+    // comes back, then unfolds, the way the user's own toggle brings it.
+    private void ShowBrowserForShowMe()
+    {
+        if (_detailMaximized) SetDetailMaximized(false);
+        Browser.IsVisible = true;
+        Browser.RevealBrowser();
+    }
+
+    // The docked Detail panel toggled off keeps what it showed; bring it back unchanged.
+    private void ShowDetailAsIs()
+    {
+        if (DetailFloating || DetailPanel.IsVisible) return;
+        DetailPanel.IsVisible = true;
+    }
+
     /// <summary>The view an anchor lives in, shown first.</summary>
     internal void RevealView(AnchorView view)
     {
-        if (view == AnchorView.Arrangement && !Timeline.IsVisible) SetView(MainView.Arrangement);
+        // Modular keeps the arrangement's headers as a column, so Timeline alone isn't the view.
+        if (view == AnchorView.Arrangement && !ArrangementShown) SetView(MainView.Arrangement);
         else if (view == AnchorView.Session && _session is { IsVisible: false }) SetView(MainView.Session);
         else if (view == AnchorView.Modular && _modular is { IsVisible: false }) SetView(MainView.Modular);
     }
