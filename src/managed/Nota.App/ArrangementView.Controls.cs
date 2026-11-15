@@ -40,7 +40,7 @@ public sealed partial class ArrangementView
         private double _pressBeat, _pressX;
         private double _origS, _origE;
 
-        private double BeatAt(PointerEventArgs e) => _o._scrollBeats + e.GetPosition(this).X / _o._pixelsPerBeat;
+        private double BeatAt(PointerEventArgs e) => _o.XToBeat(e.GetPosition(this).X);
 
         // Which loop edge (−1 start, +1 end, 0 none) is under x; the closer one on a short loop.
         private int EdgeAt(double x)
@@ -178,12 +178,13 @@ public sealed partial class ArrangementView
         {
             // Bar numbers in mono 7. The almanac labels every 4 bars at its base scale
             // (16px a bar); zoomed in far enough that a single bar has room, every bar is named.
-            int firstBar = (int)Math.Floor(_o._scrollBeats / _o._beatsPerBar);
-            double barPx = _o._pixelsPerBeat * _o._beatsPerBar;
+            double barLength = _o.TempoAxis ? _o.TempoBarLength : _o._beatsPerBar;
+            int firstBar = (int)Math.Floor(_o.XToBeat(0) / barLength);
+            double barPx = _o.BeatToX((firstBar + 1) * barLength) - _o.BeatToX(firstBar * barLength);
             int labelEvery = barPx >= 40 ? 1 : 4;
             for (int bar = firstBar; ; bar++)
             {
-                double beat = bar * _o._beatsPerBar;
+                double beat = bar * barLength;
                 double x = _o.BeatToX(beat);
                 if (x > w) break;
                 if (x < 0) continue;
@@ -201,7 +202,7 @@ public sealed partial class ArrangementView
         // Ticks at whole time steps wide enough for their label, read m:ss[.f] like the transport.
         private void RenderTime(DrawingContext ctx, double w, double h, double bpm)
         {
-            double pxPerSec = _o._pixelsPerBeat * bpm / 60.0;
+            double pxPerSec = _o._pixelsPerBeat * (_o.TempoAxis ? 2 : bpm / 60.0);
             if (_charW <= 0 || _charWKey != (NotaTextSize.Step, NotaFonts.FaceStamp))   // re-measure when Text size or the face changes
             {
                 _charWKey = (NotaTextSize.Step, NotaFonts.FaceStamp);
@@ -215,11 +216,11 @@ public sealed partial class ArrangementView
                 int chars = st >= 1 ? 5 : st >= 0.1 ? 7 : st >= 0.01 ? 8 : 9;
                 if (st * pxPerSec >= chars * charW + 14) { stepS = st; break; }
             }
-            double t0 = RulerLabels.Seconds(_o._scrollBeats, bpm);
+            double t0 = _o.TempoAxis ? _o.AxisOriginSeconds : RulerLabels.Seconds(_o._scrollBeats, bpm);
             for (long k = Math.Max(0, (long)Math.Floor(t0 / stepS)); ; k++)
             {
                 double t = k * stepS;
-                double x = _o.BeatToX(RulerLabels.BeatsAt(t, bpm));
+                double x = _o.TempoAxis ? _o.SecondsToX(t) : _o.BeatToX(RulerLabels.BeatsAt(t, bpm));
                 if (x > w) break;
                 if (x < 0) continue;
                 ctx.DrawLine(BarPen, new Point(x, h - 7), new Point(x, h));
@@ -358,7 +359,7 @@ public sealed partial class ArrangementView
             var pos = e.GetPosition(this);
             if (pos.Y < MasterRowTop) { _auto.AutoPointerPressed(e); return; }   // a return row
             bool right = e.GetCurrentPoint(this).Properties.IsRightButtonPressed;
-            double beat = Math.Max(0, _o.Snap(_o._scrollBeats + pos.X / _o._pixelsPerBeat));
+            double beat = Math.Max(0, _o.Snap(_o.XToBeat(pos.X)));
 
             // Hit an existing point? Right-click / double-click removes it; left grabs it.
             for (int i = 0; i < _o._masterAuto.Count; i++)
@@ -392,7 +393,7 @@ public sealed partial class ArrangementView
             }
             if (_mDrag is null) { if (_o._automationMode) _auto.AutoPointerMoved(e); return; }
             var pos = e.GetPosition(this);
-            _mDrag.Beat = Math.Max(0, _o.Snap(_o._scrollBeats + pos.X / _o._pixelsPerBeat));
+            _mDrag.Beat = Math.Max(0, _o.Snap(_o.XToBeat(pos.X)));
             _mDrag.Value = MasterYToValue(pos.Y);
             InvalidateVisual();
         }

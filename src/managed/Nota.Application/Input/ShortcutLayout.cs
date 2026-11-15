@@ -119,6 +119,15 @@ public static class ShortcutLayout
             if (rows.Count > 0) groups.Add(new ShortcutGroup(cat, rows));
         }
 
+        groups.Add(new(Loc.T("tempo.shortcuts"),
+        [
+            F(Loc.T("tempo.shortcut_add"), Loc.T("tempo.shortcut_add_action")),
+            F(Loc.T("tempo.shortcut_shape"), Loc.T("tempo.shortcut_shape_action")),
+            F(Loc.T("tempo.shortcut_select"), Loc.T("tempo.shortcut_selection")),
+            F(Loc.T("tempo.shortcut_map"), Loc.T("tempo.shortcut_map_action")),
+            F(Loc.T("tempo.shortcut_map_alt"), Loc.T("tempo.shortcut_map_alt_action")),
+        ]));
+
         // Fixed only: keys of lists and dialogs, and what the mouse, trackpad and gamepad do.
         groups.Add(new(Loc.T("preferences.command_palette"),
         [

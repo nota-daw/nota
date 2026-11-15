@@ -22,6 +22,35 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Tempo track and Time Scale Tool** (#535): collapse or resize the tempo lane,
+  add and move points, and shape stepped, linear or Bezier tempo ramps. Right-drag
+  a marquee and Delete to remove several points in one undo step; the initial
+  point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
+  recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
+  save with the project, and playback follows their integrated timing.
+
+### Fixed
+- **Multi-clip automation across tempo changes** (#535): duplicate, paste and
+  block moves retain every copied point regardless of selection order, clearing
+  all landing spans before inserting their automation.
+- **Tempo-map copies and comp edits** (#535): range duplication clears the copied
+  audio's actual landing span, and block paste clears automation only under its
+  destination span. Section moves, duplication and deletion keep partial takes
+  aligned with their comp clips, so subsequent comp edits select the same source audio.
+- **Tempo-map moves and scrolling** (#535): moving natural-rate audio carries the
+  automation from its whole original span and clears only its landing span. The
+  horizontal scrollbar reaches the last clip across large tempo changes.
+- **Tempo-map rendering** (#535): reversed warped clips keep their musical positions,
+  Consolidate captures the full mapped range, and natural-rate clip releases fade at
+  the mapped ending.
+- **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
+  mapped source boundaries. Loop recording, freeze and range bounce retain audio across
+  tempo changes; saved freezes retain their timing. Transport BPM edits stay in the tempo
+  lane, bar snapping respects the time-signature denominator, and warped waveforms align
+  with the audible content at every zoom level.
+- Starting or seeking between beats no longer produces an immediate extra metronome click.
+
 ## [0.60.1] — 2026-11-13
 
 ### Added

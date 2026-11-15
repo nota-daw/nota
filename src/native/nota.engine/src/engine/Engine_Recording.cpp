@@ -851,6 +851,7 @@ bool Engine::takeTransportPlaying() const {
 // Decide the capture layout at take start: loop punch if the transport loop is on
 // (record start point mapped into the loop), else a linearly growing buffer.
 void Engine::beginCaptureLayout() {
+    captureTempoMap_ = authoring_ ? authoring_->tempoMap : nullptr;
     captureLoop_ = false;
     captureWrapped_ = false;
     captureWritePos_ = 0;
@@ -868,17 +869,22 @@ void Engine::beginCaptureLayout() {
 // start (loop already on) or the first drain after loop is enabled mid-take (discarding the
 // linear pre-roll — the point of enabling the loop is to (re)record the loop region).
 void Engine::activateLoopPunch(double atBeat) {
+    captureTempoMap_ = authoring_ ? authoring_->tempoMap : nullptr;
     const double devSR = transport_.sampleRate();
     const double fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
     const double loopLen = loopEnd_ - loopStart_;
     if (loopLen <= 0.0 || fpb <= 0.0) return;
-    captureLoopFrames_ = static_cast<size_t>(std::llround(loopLen * fpb));
+    captureLoopFrames_ = static_cast<size_t>(std::llround(captureTempoMap_
+        ? (captureTempoMap_->secondsAt(loopEnd_) - captureTempoMap_->secondsAt(loopStart_)) * audioRecordSampleRate_
+        : loopLen * fpb));
     if (captureLoopFrames_ == 0) return;
     double local = atBeat - loopStart_;
     local -= std::floor(local / loopLen) * loopLen; // wrap into [0, loopLen)
     if (local < 0.0) local = 0.0;
     captureLoopStartBeat_ = loopStart_;
-    captureOrigin_ = static_cast<size_t>(std::llround(local * fpb)) % captureLoopFrames_;
+    captureOrigin_ = static_cast<size_t>(std::llround(captureTempoMap_
+        ? (captureTempoMap_->secondsAt(loopStart_ + local) - captureTempoMap_->secondsAt(loopStart_)) * audioRecordSampleRate_
+        : local * fpb)) % captureLoopFrames_;
     captureWritePos_ = captureOrigin_;
     captureWrapped_ = false;
     for (auto& l : captureLanes_) {
@@ -922,6 +928,10 @@ double Engine::audioRecordLengthBeats(int32_t trackId) const {
     const double sampleSR = audioRecordSampleRate_ > 0 ? audioRecordSampleRate_ : devSR;
     if (spb <= 0.0 || sampleSR <= 0.0) return 0.0;
     const double frames = static_cast<double>(l->buf.size() / static_cast<size_t>(l->channels));
+    if (captureTempoMap_ && l->scene < 0) {
+        const double origin = captureLoop_ ? captureLoopStartBeat_ : audioRecordStartBeat_;
+        return captureTempoMap_->beatAt(captureTempoMap_->secondsAt(origin) + frames / sampleSR) - origin;
+    }
     return frames * devSR / sampleSR / spb;
 }
 
@@ -1192,6 +1202,7 @@ void Engine::stopAudioRecording() {
     beginUndoGroup();
     for (auto& l : lanes) materialiseCaptureLane(l, g);
     endUndoGroup();
+    captureTempoMap_.reset();
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
     retryKeepFrom_ = -1;
 }
@@ -1342,6 +1353,10 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
     const double devSR = transport_.sampleRate();
     const double sampleSR = sample->sourceSampleRate > 0 ? sample->sourceSampleRate : devSR;
     const double beatsPerFrame = (spb > 0.0 && sampleSR > 0.0) ? devSR / sampleSR / spb : 0.0;
+    auto beatAtFrame = [&](double origin, double frame) {
+        return captureTempoMap_ ? captureTempoMap_->beatAt(captureTempoMap_->secondsAt(origin) + frame / sampleSR)
+            : origin + frame * beatsPerFrame;
+    };
 
     AudioClip clip;
     clip.sample = sample;
@@ -1350,13 +1365,13 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
         if (g.wrapped) { // at least one full pass → the whole loop
             clip.startBeat = g.loopStartBeat;
             ns = g.loopStartBeat;
-            ne = g.loopStartBeat + static_cast<double>(g.loopFrames) * beatsPerFrame;
+            ne = beatAtFrame(g.loopStartBeat, static_cast<double>(g.loopFrames));
         } else if (g.reached > g.origin) { // partial pass → just what was recorded
             clip.sourceOffsetFrames = static_cast<double>(g.origin);
             clip.lengthFrames = static_cast<int64_t>(g.reached - g.origin);
-            clip.startBeat = g.loopStartBeat + static_cast<double>(g.origin) * beatsPerFrame;
+            clip.startBeat = beatAtFrame(g.loopStartBeat, static_cast<double>(g.origin));
             ns = clip.startBeat;
-            ne = clip.startBeat + static_cast<double>(g.reached - g.origin) * beatsPerFrame;
+            ne = beatAtFrame(g.loopStartBeat, static_cast<double>(g.reached));
         } else {
             return; // loop armed but nothing captured
         }
@@ -1365,6 +1380,11 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
         // playing when it was performed. (Loop and session takes keep their grid as before.)
         double trimDevice = 0.0;
         clip.startBeat = latencyCompensatedStart(audioRecordStartBeat_, audioRecordLatencyFrames_, spb, &trimDevice);
+        if (captureTempoMap_) {
+            const double seconds = captureTempoMap_->secondsAt(audioRecordStartBeat_) - audioRecordLatencyFrames_ / devSR;
+            clip.startBeat = captureTempoMap_->beatAt(std::max(0.0, seconds));
+            trimDevice = std::max(0.0, -seconds * devSR);
+        }
         double kept = static_cast<double>(sample->frames);
         if (trimDevice > 0.0 && devSR > 0.0) {
             const double trim = std::min(kept, trimDevice * sampleSR / devSR);
@@ -1373,7 +1393,7 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
             clip.lengthFrames = static_cast<int64_t>(kept);
         }
         ns = clip.startBeat;
-        ne = clip.startBeat + kept * beatsPerFrame;
+        ne = beatAtFrame(clip.startBeat, kept);
     }
     if (ne <= ns) return;
     overwriteAudioClipsInRange(nt->clips, ns, ne, spb);
@@ -1387,6 +1407,10 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
 void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,
                                   double sampleRate) {
     const double bpf = beatsPerSourceFrame(sampleRate);
+    auto beatAtFrame = [&](double frame) {
+        return captureTempoMap_ ? captureTempoMap_->beatAt(captureTempoMap_->secondsAt(loopStartBeat) + frame / sampleRate)
+            : loopStartBeat + frame * bpf;
+    };
     const int32_t group = ++nextTakeGroup_;
     int32_t number = 0;
     for (const auto& k : nt.takes) number = std::max(number, k.number);
@@ -1408,11 +1432,12 @@ void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size
         k.sourceOffsetFrames = static_cast<double>(p.from);
         k.lengthFrames = static_cast<int64_t>(p.to - p.from);
         k.beatsPerFrame = bpf;
+        k.tempoMap = captureTempoMap_;
         takes.push_back(std::move(k));
     }
 
     overwriteAudioClipsInRange(nt.clips, loopStartBeat,
-                               loopStartBeat + static_cast<double>(loopFrames) * bpf, authoringSamplesPerBeat());
+                               beatAtFrame(static_cast<double>(loopFrames)), authoringSamplesPerBeat());
     std::vector<std::pair<size_t, size_t>> open{{0, loopFrames}}; // loop frames no newer pass covers yet
     for (size_t i = passes.size(); i-- > 0 && !open.empty();) {
         const size_t from = passes[i].from, to = passes[i].to;
@@ -1425,7 +1450,7 @@ void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size
             }
             AudioClip clip;
             clip.sample = takes[i].sample;
-            clip.startBeat = loopStartBeat + static_cast<double>(s) * bpf;
+            clip.startBeat = beatAtFrame(static_cast<double>(s));
             clip.sourceOffsetFrames = static_cast<double>(s);
             clip.lengthFrames = static_cast<int64_t>(e - s);
             clip.takeId = takes[i].id;
@@ -1519,6 +1544,7 @@ void Engine::pushInputFramesForTestN(const float* interleaved, int32_t frames, i
 
 // Tests: one lane on `trackId` with this pick, the cursor at the start (no device).
 void Engine::beginTestLane(int32_t trackId, int32_t first, int32_t width) {
+    captureTempoMap_ = authoring_ ? authoring_->tempoMap : nullptr;
     captureLanes_.clear();
     CaptureLane lane;
     lane.trackId = trackId;
@@ -1556,7 +1582,50 @@ bool Engine::audioRecordSelfTest() {
     double sum = 0.0;
     for (float s : sb.samples) sum += static_cast<double>(s) * s;
     const double rms = sb.samples.empty() ? 0.0 : std::sqrt(sum / sb.samples.size());
-    return sb.frames >= kFrames - 4 && rms > 0.01;
+    if (sb.frames < kFrames - 4 || rms <= 0.01) return false;
+    for (double start : {0.0, 5.0}) {
+        auto mappedStorage = std::make_unique<Engine>();
+        Engine& mapped = *mappedStorage;
+        mapped.transport_.setSampleRate(48000);
+        mapped.transport_.setBpm(120);
+        mapped.setTempoPoints({{0, 120, 0, 1.0/3, 0, 2.0/3, 1, 0}, {4, 60, 0, 1.0/3, 0, 2.0/3, 1, 0}}, false);
+        const int32_t track = mapped.addAudioTrack();
+        mapped.beginTestLane(track, 0, 2);
+        mapped.audioRecordStartBeat_ = start;
+        mapped.audioRecordSampleRate_ = 48000;
+        mapped.audioRecordLatencyFrames_ = 0;
+        mapped.audioRecording_ = true;
+        mapped.loopEnabled_ = true; mapped.loopStart_ = 0; mapped.loopEnd_ = 8;
+        mapped.beginCaptureLayout();
+        if (mapped.captureLoopFrames_ != 6 * 48000 ||
+            mapped.captureOrigin_ != (start == 0 ? 0 : 3 * 48000)) return false;
+        const int frames = (start == 0 ? 7 : 2) * 48000;
+        std::vector<float> input(static_cast<size_t>(frames) * 2, .25f);
+        mapped.feedInputForTest(input.data(), frames, 2);
+        mapped.stopAudioRecording();
+        auto recorded = mapped.findTrackAuthoring(track);
+        if (!recorded || recorded->clips.empty()) return false;
+        double end = 0;
+        for (size_t i = 0; i < recorded->clips.size(); ++i) {
+            NotaClipInfo info{};
+            if (!mapped.clipInfo(track, static_cast<int32_t>(i), &info)) return false;
+            end = std::max(end, info.start_beat + info.length_beats);
+        }
+        if (std::abs(end - (start == 0 ? 8 : 7)) > 1e-6) return false;
+        if (start != 0 && std::abs(recorded->clips[0].startBeat - start) > 1e-6) return false;
+        if (start == 0) {
+            NotaTakeInfo pass{};
+            if (mapped.takeCount(track) != 2 || !mapped.takeInfo(track, 0, &pass) || std::abs(pass.length_beats - 8) > 1e-6)
+                return false;
+            if (!mapped.compTake(track, pass.id, 5, 6)) return false;
+            bool correct = false;
+            for (const auto& c : mapped.findTrackAuthoring(track)->clips)
+                if (std::abs(c.startBeat - 5) < 1e-6 && std::abs(c.sourceOffsetFrames - 3 * 48000) < 1)
+                    correct = true;
+            if (!correct) return false;
+        }
+    }
+    return true;
 }
 
 bool Engine::sessionAudioRecordSelfTest() {
