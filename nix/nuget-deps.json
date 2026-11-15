@@ -100,6 +100,11 @@
     "hash": "sha256-WNUQmLWVFSwBKT9x7UdhSz9T2FA7wibvwjuPew/3yUM="
   },
   {
+    "pname": "Markdig",
+    "version": "1.6.0",
+    "hash": "sha256-WkFmiIGyhqpTGtN7XJ1MiL9o2l3xzsnxKPT84I5RC7I="
+  },
+  {
     "pname": "MicroCom.Runtime",
     "version": "0.11.6",
     "hash": "sha256-RTr200R3sZuyxi0XQ25ox2p1kVt5R1CbH/YBs21+eNg="

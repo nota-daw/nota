@@ -1,0 +1,42 @@
+name: Sync Nix dependencies
+
+# Updates nix/nix-deps.json and nix/nuget-deps.json when upstream CMake, npm, or
+# NuGet dependencies change on develop, and opens a PR for manual review (like
+# Dependabot) so non-Nix contributors do not have to run Nix locally.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'src/native/nota.engine/CMakeLists.txt'
+      - 'src/native/nota.engine/cmake/dependencies.cmake'
+      - 'src/web/remote/package-lock.json'
+      - 'src/managed/**/*.csproj'
+      - 'flake.nix'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Update Nix dependency pins
+        run: bash scripts/update-nix-deps.sh
+      - name: Verify Nix build
+        run: nix build --no-link
+      - name: Open PR if pins changed
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: '(chore) Sync Nix dependency pins'
+          branch: chore/nix-deps-sync
+          delete-branch: true
+          title: 'Sync Nix dependency pins'
+          body: |
+            Automated update of `nix/nix-deps.json` and `nix/nuget-deps.json`
+            after upstream CMake, npm, or NuGet dependency changes on `develop`.
