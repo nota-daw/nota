@@ -28,6 +28,25 @@ Engine::Engine()
     mixTmp_.assign(kMaxBlock * 2, 0.0f);
     monitorHwBuf_.assign(static_cast<size_t>(kMaxBlock) * kMaxInputChannels, 0.0f); // every carried column (specs/086)
     monitorSrc_.assign(static_cast<size_t>(kMonitorSrcFrames) * kMaxInputChannels, 0.0f); // #563 resampler window
+    { // #563: the monitor resampler's kernel, sinc(x) under a Kaiser window (beta 7, ~70 dB), x in [0, kSincZeros]
+        constexpr double kBeta = 7.0, kPi = 3.14159265358979323846;
+        auto i0 = [](double x) { // modified Bessel function of the first kind, order 0
+            double sum = 1.0, term = 1.0;
+            for (int k = 1; k < 64 && term > 1e-12 * sum; ++k) {
+                term *= (x / (2.0 * k)) * (x / (2.0 * k));
+                sum += term;
+            }
+            return sum;
+        };
+        const int32_t n = kSincZeros * kSincTable;
+        monitorSinc_.assign(static_cast<size_t>(n) + 2, 0.0f);
+        for (int32_t k = 0; k <= n; ++k) {
+            const double x = static_cast<double>(k) / kSincTable;
+            const double r = x / kSincZeros;
+            const double sinc = k == 0 ? 1.0 : std::sin(kPi * x) / (kPi * x);
+            monitorSinc_[static_cast<size_t>(k)] = static_cast<float>(sinc * i0(kBeta * std::sqrt(std::max(0.0, 1.0 - r * r))) / i0(kBeta));
+        }
+    }
     clipEnvScratch_.assign(kMaxBlock * 2, 0.0f);
     for (auto& b : returnBus_) b.assign(kMaxBlock * 2, 0.0f); // M6-1 send buses
     for (auto& b : groupBus_) b.assign(kMaxBlock * 2, 0.0f);  // group submix buses

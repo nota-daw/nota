@@ -10,7 +10,8 @@
 The capture device now opens at the engine's rate where it can (macOS: the input device's
 nominal rate is set, as the output already did; miniaudio: it is asked for the engine's rate
 and converts). Where the rates still differ (Bluetooth, a device that doesn't list the rate),
-live monitoring reads the input through a cubic resampler whose step follows the queue, so
+live monitoring reads the input through a windowed-sinc resampler (cut at the lower Nyquist,
+so a faster input is low-passed before it is decimated) whose step follows the queue, so
 neither the rate nor the drift between the two clocks turns into trims and re-primes (clicks).
 At matching rates the monitor path is the old one, unchanged.
 
@@ -25,7 +26,7 @@ At matching rates the monitor path is the old one, unchanged.
 | `src/native/nota.engine/src/audio_io/desktop/MiniaudioInput.{h,cpp}` | modified | `config.sampleRate` = the engine's rate (miniaudio converts) |
 | `src/native/nota.engine/src/audio_io/windows/AsioInput.{h,cpp}` | modified | signature only: the ASIO driver already runs at the engine's rate |
 | `src/native/nota.engine/src/engine/Engine_Recording.cpp` | modified | `ensureAudioInput` passes the engine's rate and keeps the device's in `monitorInRate_`; `pullMonitorInput` splits into the direct path (as before) and `resampleMonitorInput`; the ring read is factored into `readMonitorRing` |
-| `src/native/nota.engine/src/engine/Engine.h`, `Engine.cpp` | modified | resampler state, window sized in the constructor (4104 frames × 64 columns) |
+| `src/native/nota.engine/src/engine/Engine.h`, `Engine.cpp` | modified | resampler state; window (4424 frames × 64 columns) and the Kaiser-windowed sinc table built in the constructor |
 | `src/native/nota.engine/include/nota/nota_engine.h`, `src/abi/nota_engine_track.cpp` | modified | test hook `nota_engine_set_monitor_input_test(engine, rate, block_frames)` |
 | `src/managed/Nota.Infrastructure/Interop/NativeMethods.Tracks.cs`, `NotaEngine.Tracks.cs` | modified | `SetMonitorInputForTest` |
 | `tests/Nota.SmokeTest/MonitorInputRateTests.cs` | added test | see below |
@@ -36,14 +37,20 @@ At matching rates the monitor path is the old one, unchanged.
 
 The resampler (`Engine::resampleMonitorInput`), per output segment:
 
-- `need = ceil(frames · ratio) + 2` input frames, `target = need + one capture block`;
-  `queued` = ring + frames held past the read position.
-- Primes until `queued ≥ target`; drops the backlog only past `target + 2 blocks + 256` (a
-  real stall), as the direct path does.
-- Drift control: `fillAvg` follows `queued` over ~0.5 s (the capture blocks' sawtooth
-  averages out); `step = ratio · (1 + clamp((fillAvg − target) / (2 · ratio · outRate), ±0.5 %))`.
-- Catmull-Rom over a window of input frames (one history frame kept, the rest slid down); an
-  empty ring mid-segment re-primes; a block of a newer capture layout restarts the window.
+- Kernel: sinc under a Kaiser window (β 7, ~70 dB), 20 zero crossings each side, tabulated
+  (256 points per crossing, linear between them). Cutoff at the lower Nyquist: `1/ratio` of
+  the input's when decimating (the kernel widens to `ceil(20 · ratio)` taps a side), the
+  input's own when interpolating. Weights are normalised per output frame (unity at DC).
+- `need = ceil(frames · ratio) + half + 1` input frames, `target = need + one capture block`;
+  `queued` = ring + frames held past the read position. Primes until `queued ≥ target`;
+  drops the backlog only past `need + 4 blocks + 256` (a real stall).
+- Drift control: `fillAvg` follows `queued` over ~0.5 s. Within a band one block wide around
+  `need + 1.5 blocks` nothing is corrected: the sampled queue swings by up to a block as
+  capture blocks land, slowly when the two block rates are close, and chasing it bent the
+  pitch. Past the band `step = ratio · (1 + clamp(over / (2 · ratio · outRate), ±0.2 %))`.
+- A window of input frames (the kernel's history kept, the rest slid down); an empty ring
+  mid-segment re-primes; a block of a newer capture layout restarts the window, and the
+  output is cleared in the new layout's columns first (review on #620).
 
 ## Tests Added or Updated
 
@@ -51,17 +58,27 @@ The resampler (`Engine::resampleMonitorInput`), per output segment:
   monitors the "hardware" input; a fake capture device delivers 512-frame blocks of a
   330 Hz sine on its own clock while the engine renders 512-frame blocks on another:
   - 48 kHz input → 44.1 kHz engine: continuous (worst second difference 0.00063, the sine's
-    own) at 330.4 Hz;
-  - 44.1 kHz → 48 kHz: continuous (0.00053) at 330.3 Hz;
-  - capture clock 200 ppm fast, 20 s: no click (0.00063), 330.1 Hz;
+    own) at 330.0 Hz;
+  - 44.1 kHz → 48 kHz: continuous (0.00053) at 330.0 Hz;
+  - capture clock 200 ppm fast, 20 s: no click (0.00063), 330.00 Hz;
+  - 96 kHz input → 44.1 kHz: a 30 kHz tone (which would alias to 14.1 kHz) is −84 dB against
+    a 15 kHz one, which passes whole (review on #620);
   - matching rates: the direct path, unchanged (0.000625, 330.0 Hz).
+  The test sets the hook before monitoring is turned on, and the hook puts the engine in input
+  test mode: otherwise turning monitoring on opened the machine's real microphone, whose blocks
+  landed in the same ring (stray clicks in the first run of the test, and the microphone's rate
+  set to the engine's).
 - Against the old path (the hook's rate set to 0, so the frames are played one for one) the
   first three fail: worst jump 0.0625 / 0.283 / 0.071, pitch 303.3 Hz.
 
 ## Local Verification
 
 - `cmake --build src/native/nota.engine/build` (Release) → builds.
-- `dotnet Nota.SmokeTest.dll --monitor-input-rate` → MONITOR INPUT RATE PASSED (6/6).
+- `dotnet Nota.SmokeTest.dll --monitor-input-rate` → MONITOR INPUT RATE PASSED (7/7), twice.
+- Cost, offline render of 20 s at 44.1 kHz in 512-frame blocks, two input columns, median of
+  5 (Apple M4 Max): direct 0.14 ms per second of audio; resampled from 48 kHz 2.83 ms, from
+  96 kHz 5.24 ms (the kernel is ~44 / ~88 taps). Only while a hardware input is monitored
+  through the resampler; once per capture block whatever the number of monitoring tracks.
 - Live, real CoreAudio devices (`/private/tmp/n563harness`, not in the repo): a second engine
   plays a 330 Hz sine into BlackHole 2ch; the engine under test monitors BlackHole and outputs
   to the MacBook speakers (master at 0), and a track records the monitoring track:
@@ -77,6 +94,9 @@ The resampler (`Engine::resampleMonitorInput`), per output segment:
 
 ## Deviations from Assessment
 
+- Review on #620 (Greptile): the cubic resampler had no anti-alias filter when decimating, and
+  a widened capture layout could replay a previous segment's samples. Both fixed (windowed
+  sinc; output cleared in the new layout).
 - The device's rate has to be set **before** the AUHAL is bound to it: set after binding, the
   unit kept the old hardware format and capture delivered nothing (found in the live check,
   fixed before it shipped).

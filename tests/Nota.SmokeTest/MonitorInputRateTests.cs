@@ -41,6 +41,20 @@ internal static class MonitorInputRateTests
                 $"…and a capture clock 200 ppm fast is followed for 20 s without a click (worst jump {jump:G3}, {pitch:F2} Hz)");
         }
 
+        // Decimating, nothing above the engine's Nyquist may fold back as a false tone (#620
+        // review): a 96 kHz input under a 44.1 kHz engine low-passes before it decimates. 30 kHz
+        // would alias to 14.1 kHz; it must be gone, while 15 kHz passes whole.
+        {
+            const double outRate = 44100.0;
+            var hi = Monitor(96000.0, 96000.0, outRate, seconds: 2, tone: 30000.0);
+            var (_, hiRms, _) = Measure(hi, (int)outRate, from: (int)outRate, to: hi.Length / 2);
+            var mid = Monitor(96000.0, 96000.0, outRate, seconds: 2, tone: 15000.0);
+            var (_, midRms, _) = Measure(mid, (int)outRate, from: (int)outRate, to: mid.Length / 2);
+            double db = 20 * Math.Log10(Math.Max(hiRms, 1e-9) / Math.Max(midRms, 1e-9));
+            yield return (midRms > 0.18 && db < -60,
+                $"…and a 96 kHz input's 30 kHz tone doesn't alias into the band ({db:F0} dB against 15 kHz at rms {midRms:F3})");
+        }
+
         // The rates match: the direct path, as before.
         {
             const double outRate = 44100.0;
@@ -55,13 +69,15 @@ internal static class MonitorInputRateTests
     // "device" reports `nominalIn` and delivers InBlock-frame blocks of a sine on its own clock,
     // `actualIn` frames a second; each output block renders once the input blocks captured by
     // its end have arrived (a capture callback lands just before the output one).
-    private static float[] Monitor(double nominalIn, double actualIn, double outRate, int seconds)
+    private static float[] Monitor(double nominalIn, double actualIn, double outRate, int seconds, double tone = Hz)
     {
         using var e = new NotaEngine();
         e.SetBpm(120);
+        // Before monitoring is on: it would otherwise open the machine's real input, whose
+        // blocks would land in the same ring as the test's.
+        e.SetMonitorInputForTest(nominalIn, InBlock);
         int t = e.AddAudioTrack();
         e.SetTrackMonitor(t, true);
-        e.SetMonitorInputForTest(nominalIn, InBlock);
         int total = (int)(seconds * outRate);
         var all = new float[total * 2];
         var buf = new float[OutBlock * 2];
@@ -73,7 +89,7 @@ internal static class MonitorInputRateTests
             while ((inDone + InBlock) / actualIn <= until)
             {
                 for (int i = 0; i < InBlock; i++)
-                    block[i * 2] = block[i * 2 + 1] = Amp * (float)Math.Sin(2 * Math.PI * Hz * (inDone + i) / nominalIn);
+                    block[i * 2] = block[i * 2 + 1] = Amp * (float)Math.Sin(2 * Math.PI * tone * (inDone + i) / nominalIn);
                 e.PushMonitorFramesForTest(block, InBlock);
                 inDone += InBlock;
             }
