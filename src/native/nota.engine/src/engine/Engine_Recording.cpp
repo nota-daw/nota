@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstring>
 
 namespace nota {
 
@@ -206,9 +207,14 @@ bool Engine::ensureAudioInput() {
     const bool asioFallback = asioSupported() && config_.audioSystem == AudioSystem::Asio && activeSystem_ != AudioSystem::Asio;
     const uint32_t inputDev = resolveAudioDeviceId(asioFallback ? std::string{} : config_.inputDeviceUid, /*inputScope=*/true);
     // The input thread only touches the lock-free rings (RT-safe).
+    // At the engine's rate where the device can run it (#563); live monitoring converts the rest.
+    const double engineRate = transport_.sampleRate();
     const bool ok = input_->start([this](const float* s, int32_t n, int32_t channels) { onInputBlock(s, n, channels); },
-        inputDev);
-    if (ok) rememberInputChannels();
+        inputDev, engineRate);
+    if (ok) {
+        rememberInputChannels();
+        monitorInRate_.store(input_->sampleRate(), std::memory_order_relaxed);
+    }
     return ok;
 }
 
@@ -261,20 +267,34 @@ void Engine::updateMonitorInput() {
 // The capture and output devices run on separate clocks, so keep a cushion of about one
 // capture block queued (re-primed after an underrun) and trim any excess so latency can't
 // build up. A block written under another layout ends the segment early; the next segment
-// adopts that layout (a short gap, as a device reopen gives).
+// adopts that layout (a short gap, as a device reopen gives). A capture device at another
+// rate than the engine's goes through the resampler instead (#563).
 void Engine::pullMonitorInput(int32_t frames) {
     const int32_t width0 = std::max(layoutAudio_.count, 0);
     std::fill_n(monitorHwBuf_.data(), static_cast<size_t>(frames) * static_cast<size_t>(width0), 0.0f);
     if (!hwMonitorTap_.load(std::memory_order_relaxed)) {
         monitorPrimed_ = false;
+        monitorConverting_ = false;
         return;
     }
-    const size_t block = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
-    const size_t n = static_cast<size_t>(frames);
     // ASIO duplex pushes a whole driver block before rendering it (one clock), so nothing has
     // to be primed (R8). But render may split that block into segments (a loop boundary): the
     // rest of the current block is not a backlog — only input older than one block is.
     const bool sharedClock = monitorSharedClock_.load(std::memory_order_relaxed);
+    const double inRate = monitorInRate_.load(std::memory_order_relaxed);
+    const double outRate = transport_.sampleRate();
+    const bool convert = !sharedClock && inRate > 0.0 && outRate > 0.0 && std::fabs(inRate - outRate) > 0.5;
+    if (convert != monitorConverting_) { // a device at another rate opened (or closed): start over
+        monitorConverting_ = convert;
+        monitorPrimed_ = false;
+        resetMonitorResampler();
+    }
+    if (convert) {
+        resampleMonitorInput(frames, inRate / outRate);
+        return;
+    }
+    const size_t block = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
+    const size_t n = static_cast<size_t>(frames);
     const size_t cushion = sharedClock ? 0 : block;
     const size_t keep = sharedClock ? std::max(block, n) : n + cushion;
     size_t avail = monitorRing_.framesQueued();
@@ -286,8 +306,22 @@ void Engine::pullMonitorInput(int32_t frames) {
         if (avail < n + cushion) return; // still filling the cushion: silence
         monitorPrimed_ = true;
     }
+    bool adopted = false, layoutBreak = false;
+    const size_t got = readMonitorRing(monitorHwBuf_.data(), n, adopted, layoutBreak);
+    if (adopted) { // the newer layout's columns: the rest of the segment is silent in them
+        const size_t w = static_cast<size_t>(std::max(layoutAudio_.count, 0));
+        std::fill(monitorHwBuf_.data() + got * w, monitorHwBuf_.data() + n * w, 0.0f);
+    }
+    if (layoutBreak) return; // this segment's columns follow the old layout: finish it silent
+    if (got < n) monitorPrimed_ = false; // underrun: rebuild the cushion
+}
+
+// Audio thread: read up to `want` frames of the monitor ring, in layoutAudio_'s columns, into
+// `dst`. A block written under a newer layout is adopted when nothing was read yet (`adopted`);
+// after some frames it ends the read (`layoutBreak`), the caller's frames keep the old columns.
+size_t Engine::readMonitorRing(float* dst, size_t want, bool& adopted, bool& layoutBreak) {
     size_t i = 0;
-    while (i < n) {
+    while (i < want) {
         if (monitorRing_.remaining() == 0) {
             CaptureBlock b;
             if (!monitorRing_.next(b)) break;
@@ -295,11 +329,14 @@ void Engine::pullMonitorInput(int32_t frames) {
             monitorBlockGen_ = b.generation;
         }
         if (monitorBlockGen_ != layoutAudio_.generation) {
-            if (i > 0) return; // this segment's columns follow the old layout: finish it silent
+            if (i > 0) {
+                layoutBreak = true;
+                return i;
+            }
             CaptureLayoutSnapshot L;
             if (captureLayout_.read(L) && L.generation == monitorBlockGen_) {
                 layoutAudio_ = L;
-                std::fill_n(monitorHwBuf_.data(), n * static_cast<size_t>(std::max(L.count, 0)), 0.0f);
+                adopted = true;
             }
         }
         if (monitorBlockGen_ != layoutAudio_.generation || monitorRing_.width() != layoutAudio_.count) {
@@ -307,9 +344,120 @@ void Engine::pullMonitorInput(int32_t frames) {
             continue;
         }
         const size_t w = static_cast<size_t>(layoutAudio_.count);
-        i += static_cast<size_t>(monitorRing_.read(monitorHwBuf_.data() + i * w, static_cast<int32_t>(n - i)));
+        i += static_cast<size_t>(monitorRing_.read(dst + i * w, static_cast<int32_t>(want - i)));
     }
-    if (i < n) monitorPrimed_ = false; // underrun: rebuild the cushion
+    return i;
+}
+
+void Engine::resetMonitorResampler() {
+    monitorSrcFrames_ = 1; // one history frame of silence before the first input frame
+    monitorSrcPos_ = 1.0;
+    monitorFillAvg_ = -1.0; // unset: the first primed segment starts it
+    monitorSrcGen_ = layoutAudio_.generation;
+    const size_t w = static_cast<size_t>(std::max(layoutAudio_.count, 0));
+    std::fill_n(monitorSrc_.data(), w, 0.0f);
+}
+
+// Audio thread (#563): `frames` output frames of a capture device running `ratio` times the
+// engine's rate. A cubic (Catmull-Rom) read of the input at a step of `ratio`, nudged by the
+// average queued input so the two clocks can't drift apart: the queue settles on one capture
+// block of cushion instead of being trimmed or re-primed (a click each time).
+void Engine::resampleMonitorInput(int32_t frames, double ratio) {
+    const size_t block = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
+    // The next block's layout, adopted before the window is sized in its columns (the direct
+    // path adopts it inside the read; here the held frames must all share one layout).
+    if (monitorRing_.remaining() == 0) {
+        CaptureBlock b;
+        while (monitorRing_.next(b))
+            if (!(b.flags & CaptureBlock::kMarker)) {
+                monitorBlockGen_ = b.generation;
+                break;
+            }
+    }
+    if (monitorRing_.remaining() > 0 && monitorBlockGen_ != layoutAudio_.generation) {
+        CaptureLayoutSnapshot L;
+        if (captureLayout_.read(L) && L.generation == monitorBlockGen_) layoutAudio_ = L;
+    }
+    if (monitorSrcGen_ != layoutAudio_.generation) {
+        monitorPrimed_ = false;
+        resetMonitorResampler();
+    }
+    const double held = static_cast<double>(monitorSrcFrames_) - monitorSrcPos_; // read, not yet played
+    const double need = std::ceil(frames * ratio) + 2.0;                         // this segment, plus the cubic's reach
+    const double target = need + static_cast<double>(block);
+    double queued = static_cast<double>(monitorRing_.framesQueued()) + held;
+    if (queued > target + 2.0 * static_cast<double>(block) + 256.0) { // stalled: drop the stale backlog
+        const double drop = std::min(queued - target, static_cast<double>(monitorRing_.framesQueued()));
+        skipMonitorFrames(static_cast<size_t>(drop));
+        queued -= drop;
+        monitorFillAvg_ = queued;
+    }
+    if (!monitorPrimed_) {
+        if (queued < target) return; // still filling the cushion: silence
+        monitorPrimed_ = true;
+        monitorFillAvg_ = queued;
+    }
+    // Drift control: the average queue (over ~0.5 s, so the capture blocks' sawtooth averages
+    // out) is steered back to the target within a few seconds, by at most 0.5 % of speed.
+    const double outRate = std::max(1.0, transport_.sampleRate());
+    const double a = std::min(1.0, frames / (0.5 * outRate));
+    monitorFillAvg_ += (queued - monitorFillAvg_) * a;
+    const double adj = std::clamp((monitorFillAvg_ - target) / (2.0 * ratio * outRate), -0.005, 0.005);
+    const double step = ratio * (1.0 + adj);
+
+    const size_t w = static_cast<size_t>(std::max(layoutAudio_.count, 0));
+    if (w == 0) return;
+    float* src = monitorSrc_.data();
+    float* out = monitorHwBuf_.data();
+    int32_t i = 0;
+    bool dry = false; // the ring held less than the window wanted
+    while (i < frames) {
+        // Fill the window as far as the rest of the segment reads (or as it holds).
+        const double lastPos = monitorSrcPos_ + (frames - 1 - i) * step;
+        const int32_t want = std::min(kMonitorSrcFrames, static_cast<int32_t>(lastPos) + 3);
+        if (want > monitorSrcFrames_) {
+            bool adopted = false, layoutBreak = false;
+            const size_t got = readMonitorRing(src + static_cast<size_t>(monitorSrcFrames_) * w,
+                static_cast<size_t>(want - monitorSrcFrames_), adopted, layoutBreak);
+            if (got < static_cast<size_t>(want - monitorSrcFrames_)) dry = true;
+            if (adopted) { // frames of another layout: start over in it next segment
+                monitorPrimed_ = false;
+                resetMonitorResampler();
+                std::fill_n(out, static_cast<size_t>(frames) * static_cast<size_t>(std::max(layoutAudio_.count, 0)), 0.0f);
+                return;
+            }
+            monitorSrcFrames_ += static_cast<int32_t>(got);
+        }
+        // Play every output frame whose four input frames are held.
+        for (; i < frames; ++i) {
+            const int32_t k = static_cast<int32_t>(monitorSrcPos_);
+            if (k + 2 >= monitorSrcFrames_) break;
+            const float f = static_cast<float>(monitorSrcPos_ - k);
+            const float* xm = src + static_cast<size_t>(k - 1) * w;
+            const float* x0 = xm + w;
+            const float* x1 = x0 + w;
+            const float* x2 = x1 + w;
+            float* o = out + static_cast<size_t>(i) * w;
+            for (size_t c = 0; c < w; ++c)
+                o[c] = x0[c] + 0.5f * f *
+                                   (x1[c] - xm[c] +
+                                       f * (2.0f * xm[c] - 5.0f * x0[c] + 4.0f * x1[c] - x2[c] +
+                                               f * (3.0f * (x0[c] - x1[c]) + x2[c] - xm[c])));
+            monitorSrcPos_ += step;
+        }
+        // Keep one frame of history before the read position; slide the rest down.
+        const int32_t drop = std::min(static_cast<int32_t>(monitorSrcPos_) - 1, monitorSrcFrames_ - 1);
+        if (drop > 0) {
+            std::memmove(src, src + static_cast<size_t>(drop) * w,
+                static_cast<size_t>(monitorSrcFrames_ - drop) * w * sizeof(float));
+            monitorSrcFrames_ -= drop;
+            monitorSrcPos_ -= drop;
+        }
+        if (i < frames && dry) { // the ring ran dry: rebuild the cushion
+            monitorPrimed_ = false;
+            return;
+        }
+    }
 }
 
 void Engine::skipMonitorFrames(size_t frames) {
@@ -324,6 +472,11 @@ void Engine::skipMonitorFrames(size_t frames) {
         monitorRing_.skip(k);
         frames -= static_cast<size_t>(k);
     }
+}
+
+void Engine::setMonitorInputForTest(double sampleRate, int32_t blockFrames) {
+    monitorInRate_.store(sampleRate > 0.0 ? sampleRate : 0.0, std::memory_order_relaxed);
+    if (blockFrames > 0) inputBlockFrames_.store(blockFrames, std::memory_order_relaxed);
 }
 
 void Engine::pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames) {

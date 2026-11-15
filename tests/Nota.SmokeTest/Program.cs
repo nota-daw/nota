@@ -682,6 +682,14 @@ if (args.Length >= 1 && args[0] == "--track-monitor")
     Console.WriteLine(failures == 0 ? "TRACK MONITOR PASSED" : $"TRACK MONITOR FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Monitoring a capture device at another rate (#563) alone: `--monitor-input-rate`. Also in the full run.
+if (args.Length >= 1 && args[0] == "--monitor-input-rate")
+{
+    Console.WriteLine("-- monitoring an input at another rate --");
+    foreach (var (ok, label) in MonitorInputRateTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MONITOR INPUT RATE PASSED" : $"MONITOR INPUT RATE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
 if (args.Length >= 3 && args[0] == "--hosted-plugin")
 {
@@ -15999,6 +16007,8 @@ Console.WriteLine("-- audio-track tails after Stop --");
 foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- monitoring a track --");
 foreach (var (ok, label) in TrackMonitorTests.Run()) Check(ok, label);
+Console.WriteLine("-- monitoring an input at another rate --");
+foreach (var (ok, label) in MonitorInputRateTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);

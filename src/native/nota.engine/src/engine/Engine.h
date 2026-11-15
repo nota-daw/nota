@@ -1359,6 +1359,7 @@ class Engine {
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
     void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
+    void setMonitorInputForTest(double sampleRate, int32_t blockFrames); // the pushed frames' rate + callback size, #563
     // Device-free: under a shared input clock (ASIO) one driver block rendered in two segments
     // (a loop boundary) reaches monitoring whole — the rest of the block isn't trimmed as stale.
     bool monitorSharedClockSelfTest();
@@ -2457,6 +2458,23 @@ class Engine {
     void releaseAudioInputIfIdle();            // close it when nothing records/monitors
     void updateMonitorInput();                 // (re)evaluate hw monitoring after edits
     void pullMonitorInput(int32_t frames);     // audio thread: ring -> monitorHwBuf_
+    // Live monitoring of a capture device at another rate than the engine's (#563): a device
+    // that can't run at the engine's rate (Bluetooth, a fixed-rate USB mic) would otherwise
+    // play at the wrong speed, and the cushion logic would drop or re-prime several times a
+    // second. Its frames go through a cubic resampler whose step is the rate ratio, nudged by
+    // the ring's average fill so the two device clocks can't drift apart. Audio thread only;
+    // sized in the constructor.
+    std::atomic<double> monitorInRate_{0.0};   // the capture device's rate (0: the engine's)
+    static constexpr int32_t kMonitorSrcFrames = 4096 + 8; // resampler input window, frames
+    std::vector<float> monitorSrc_;            // input frames in layoutAudio_ columns; [0] = history
+    int32_t monitorSrcFrames_ = 0;             // frames held in monitorSrc_
+    double monitorSrcPos_ = 1.0;               // read position in monitorSrc_ (>= 1)
+    double monitorFillAvg_ = 0.0;              // smoothed input frames queued, for the drift control
+    uint32_t monitorSrcGen_ = 0;               // layout the held frames follow
+    bool monitorConverting_ = false;           // the last segment went through the resampler
+    size_t readMonitorRing(float* dst, size_t want, bool& adopted, bool& layoutBreak); // audio thread
+    void resampleMonitorInput(int32_t frames, double ratio); // audio thread: ring -> monitorHwBuf_
+    void resetMonitorResampler();              // audio thread
     void skipMonitorFrames(size_t frames);     // audio thread: drop a backlog across blocks
     void onInputBlock(const float* s, int32_t n, int32_t channels); // input thread
 

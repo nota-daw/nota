@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 #include "CoreAudioInput.h"
+#include "CoreAudioDevice.h"
 
 #if defined(__APPLE__)
 
@@ -52,7 +53,7 @@ CoreAudioInput::~CoreAudioInput() {
     delete impl_;
 }
 
-bool CoreAudioInput::start(InputCallback cb, uint32_t device) {
+bool CoreAudioInput::start(InputCallback cb, uint32_t device, double preferredRate) {
     if (running_) return true;
     cb_ = std::move(cb);
 
@@ -86,6 +87,13 @@ bool CoreAudioInput::start(InputCallback cb, uint32_t device) {
             return false;
         }
     }
+    // Run the device at the engine's rate where it can (#563): AUHAL does not convert the rate
+    // on input, so a microphone left at 48 kHz under a 44.1 kHz engine would reach live
+    // monitoring at the wrong speed. Not on Bluetooth, nor at a rate the device doesn't list;
+    // the engine converts what still differs. Before binding: the unit reads
+    // the device's format when it is bound.
+    if (preferredRate > 0.0) coreaudio::setDeviceNominalSampleRate(dev, preferredRate);
+
     if (AudioUnitSetProperty(impl_->unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &dev,
             sizeof(dev)) != noErr) {
         stop();

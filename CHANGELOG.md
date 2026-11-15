@@ -31,6 +31,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   save with the project, and playback follows their integrated timing.
 
 ### Fixed
+- **Input monitoring clicks** (#563): monitoring a microphone or audio interface
+  no longer clicks several times a second or plays at the wrong pitch when the
+  input device runs at another sample rate than Nota (a MacBook microphone at
+  48 kHz under a 44.1 kHz project). Nota now runs the input device at its own
+  rate where the device allows it, and converts the rate where it doesn't
+  (Bluetooth, fixed-rate microphones), following the two clocks so they can't
+  drift apart. Recording was not affected.
 - **Multi-clip automation across tempo changes** (#535): duplicate, paste and
   block moves retain every copied point regardless of selection order, clearing
   all landing spans before inserting their automation.

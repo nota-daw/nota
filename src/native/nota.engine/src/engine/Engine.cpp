@@ -27,6 +27,7 @@ Engine::Engine()
     scratch_.assign(kMaxBlock * 2, 0.0f);
     mixTmp_.assign(kMaxBlock * 2, 0.0f);
     monitorHwBuf_.assign(static_cast<size_t>(kMaxBlock) * kMaxInputChannels, 0.0f); // every carried column (specs/086)
+    monitorSrc_.assign(static_cast<size_t>(kMonitorSrcFrames) * kMaxInputChannels, 0.0f); // #563 resampler window
     clipEnvScratch_.assign(kMaxBlock * 2, 0.0f);
     for (auto& b : returnBus_) b.assign(kMaxBlock * 2, 0.0f); // M6-1 send buses
     for (auto& b : groupBus_) b.assign(kMaxBlock * 2, 0.0f);  // group submix buses

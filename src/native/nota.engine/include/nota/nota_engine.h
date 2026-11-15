@@ -1772,6 +1772,10 @@ NOTA_API int32_t    nota_audio_scatter_test(const NotaEngine* engine, const floa
 NOTA_API NotaResult nota_track_set_monitor(NotaEngine* engine, int32_t track_id, int32_t on);
 NOTA_API int32_t    nota_track_get_monitor(NotaEngine* engine, int32_t track_id);
 NOTA_API void       nota_engine_push_monitor_frames(NotaEngine* engine, const float* interleaved_stereo, int32_t frames);
+/* Tests only: the rate the pushed monitor frames were "captured" at (0 = the engine's), as a
+ * capture device that can't run at the engine's rate reports it, and its callback size in
+ * frames (0 = leave it) — what sizes the monitoring cushion (#563). */
+NOTA_API void       nota_engine_set_monitor_input_test(NotaEngine* engine, double sample_rate, int32_t block_frames);
 
 /* MIDI routing: forward an instrument track's MIDI to another instrument track
  * (source_track_id = -1 turns it off). */

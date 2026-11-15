@@ -858,6 +858,10 @@ int32_t nota_track_get_monitor(NotaEngine* e, int32_t track_id) {
 void nota_engine_push_monitor_frames(NotaEngine* e, const float* interleaved_stereo, int32_t frames) {
     if (e && interleaved_stereo && frames > 0) ENG(e)->pushMonitorFramesForTest(interleaved_stereo, frames);
 }
+
+void nota_engine_set_monitor_input_test(NotaEngine* e, double sample_rate, int32_t block_frames) {
+    if (e) ENG(e)->setMonitorInputForTest(sample_rate, block_frames);
+}
 NotaResult nota_track_set_midi_source(NotaEngine* e, int32_t track_id, int32_t source_track_id) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMidiSource(track_id, source_track_id);
