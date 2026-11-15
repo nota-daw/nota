@@ -32,15 +32,17 @@ public partial class MainWindow
         _vm.PlayheadUpdated += _ => DrainEditorKeys();
     }
 
-    // The bare keys of the note map and the octave / velocity actions, as token characters.
+    // The bare keys of the note map and the octave / velocity actions, as editor key codes —
+    // every bare key a binding can name, F2 or an arrow as well as a letter.
     private void PushEditorTypingKeys()
     {
         var ids = KeyActionCatalog.NoteKeys.Select(n => n.Id).Concat(TypingControlIds);
         var chars = new List<int>();
         foreach (var id in ids)
             foreach (var slot in new[] { KeySlot.Primary, KeySlot.Alternative })
-                if (Keys.Bindings.Current(id, slot) is { Modifiers: ShortcutModifiers.None, Key: { Length: 1 } k })
-                    chars.Add(k[0]);
+                if (Keys.Bindings.Current(id, slot) is { Modifiers: ShortcutModifiers.None, Key: { Length: > 0 } k }
+                    && EditorKeyCodes.Of(k) is > 0 and var code)
+                    chars.Add(code);
         Engine.SetEditorTypingKeys(chars.Distinct().ToArray());
     }
 
@@ -51,7 +53,8 @@ public partial class MainWindow
         {
             for (int i = 0; i < n; i++)
             {
-                var key = KeyTokens.ToKey(((char)_editorKeyChars[i]).ToString());
+                if (EditorKeyCodes.TokenOf(_editorKeyChars[i]) is not { } token) continue;
+                var key = KeyTokens.ToKey(token);
                 if (key == Key.None) continue;
                 if (_editorKeyDown[i] != 0) EditorKeyDown(key);
                 else EditorKeyUp(key);

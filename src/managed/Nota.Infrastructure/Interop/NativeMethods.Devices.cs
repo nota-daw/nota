@@ -325,6 +325,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_editor_keys_set_claimed")]
     internal static partial void EditorKeysSetClaimed(int[] chars, int count);
 
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_push")]
+    internal static partial void EditorKeysPush(int code, int down);
+
     [LibraryImport(Lib, EntryPoint = "nota_editor_keys_drain")]
     internal static partial int EditorKeysDrain([Out] int[] outChars, [Out] byte[] outDown, int max);
 

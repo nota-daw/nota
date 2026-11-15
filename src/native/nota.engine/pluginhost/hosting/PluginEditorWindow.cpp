@@ -16,6 +16,41 @@
 namespace nota {
 namespace hosting {
 
+#if !JUCE_MAC
+namespace {
+// A JUCE key as the code the app names it by (Nota.Application.Input.EditorKeyCodes): its
+// character, or for a named key the number AppKit gives it, as the macOS window reads them.
+int32_t editorKeyCode(const juce::KeyPress& key) {
+    const int code = key.getKeyCode();
+    static const int fkeys[] = {juce::KeyPress::F1Key, juce::KeyPress::F2Key, juce::KeyPress::F3Key,
+        juce::KeyPress::F4Key, juce::KeyPress::F5Key, juce::KeyPress::F6Key, juce::KeyPress::F7Key,
+        juce::KeyPress::F8Key, juce::KeyPress::F9Key, juce::KeyPress::F10Key, juce::KeyPress::F11Key,
+        juce::KeyPress::F12Key, juce::KeyPress::F13Key, juce::KeyPress::F14Key, juce::KeyPress::F15Key,
+        juce::KeyPress::F16Key, juce::KeyPress::F17Key, juce::KeyPress::F18Key, juce::KeyPress::F19Key,
+        juce::KeyPress::F20Key, juce::KeyPress::F21Key, juce::KeyPress::F22Key, juce::KeyPress::F23Key,
+        juce::KeyPress::F24Key};
+    for (int i = 0; i < 24; ++i)
+        if (code == fkeys[i]) return 0xF704 + i;
+    if (code == juce::KeyPress::upKey) return 0xF700;
+    if (code == juce::KeyPress::downKey) return 0xF701;
+    if (code == juce::KeyPress::leftKey) return 0xF702;
+    if (code == juce::KeyPress::rightKey) return 0xF703;
+    if (code == juce::KeyPress::homeKey) return 0xF729;
+    if (code == juce::KeyPress::endKey) return 0xF72B;
+    if (code == juce::KeyPress::pageUpKey) return 0xF72C;
+    if (code == juce::KeyPress::pageDownKey) return 0xF72D;
+    if (code == juce::KeyPress::deleteKey) return 0xF728;
+    if (code == juce::KeyPress::backspaceKey) return 0x7F;
+    if (code == juce::KeyPress::returnKey) return '\r';
+    if (code == juce::KeyPress::escapeKey) return 0x1B;
+    if (code == juce::KeyPress::tabKey) return '\t';
+    if (code == juce::KeyPress::spaceKey) return ' ';
+    const auto ch = key.getTextCharacter();
+    return ch > 0x20 && ch != 0x7F ? static_cast<int32_t>(ch) : 0;
+}
+} // namespace
+#endif
+
 PluginEditorWindow::PluginEditorWindow(juce::AudioPluginInstance& p)
     : juce::DocumentWindow(p.getName().isNotEmpty() ? p.getName() : juce::String("Plugin"), juce::Colours::black,
           juce::DocumentWindow::minimiseButton | juce::DocumentWindow::closeButton) {
@@ -58,7 +93,7 @@ bool PluginEditorWindow::keyPressed(const juce::KeyPress& key) {
 #else
     const auto mods = key.getModifiers();
     if (mods.isCommandDown() || mods.isCtrlDown() || mods.isAltDown()) return false;
-    const int32_t ch = static_cast<int32_t>(key.getTextCharacter());
+    const int32_t ch = editorKeyCode(key);
     if (!editorkeys::claims(ch)) return false;
     if (held_.count(key.getKeyCode()) == 0) {
         held_[key.getKeyCode()] = editorkeys::tokenOf(ch);

@@ -593,19 +593,19 @@ public sealed partial class ArrangementView
             {
                 case Drag.TrimR:
                     double newEnd = _o.SnapMagnetic(_origStart + _origLen + d, mods, _snapTargets);
-                    _dragClip.LengthBeats = Math.Max(0.25, newEnd - _dragClip.StartBeat);
+                    _dragClip.LengthBeats = Math.Max(MinTrimLen(_origLen), newEnd - _dragClip.StartBeat);
                     double dEnd = _dragClip.StartBeat + _dragClip.LengthBeats - (_origStart + _origLen);
-                    foreach (var p in _trimPartners) { p.Start = p.OrigStart; p.Len = Math.Max(0.25, p.OrigLen + dEnd); ShowTrim(p); }
+                    foreach (var p in _trimPartners) { p.Start = p.OrigStart; p.Len = Math.Max(MinTrimLen(p.OrigLen), p.OrigLen + dEnd); ShowTrim(p); }
                     break;
                 case Drag.TrimL:
-                    double ns = Math.Clamp(_o.SnapMagnetic(_origStart + d, mods, _snapTargets), 0, _origStart + _origLen - 0.25);
+                    double ns = Math.Clamp(_o.SnapMagnetic(_origStart + d, mods, _snapTargets), 0, _origStart + _origLen - MinTrimLen(_origLen));
                     _dragClip.StartBeat = ns;
                     _dragClip.LengthBeats = (_origStart + _origLen) - ns;
                     double dStart = ns - _origStart;
                     foreach (var p in _trimPartners)
                     {
                         double end = p.OrigStart + p.OrigLen;
-                        p.Start = Math.Clamp(p.OrigStart + dStart, 0, end - 0.25);
+                        p.Start = Math.Clamp(p.OrigStart + dStart, 0, end - MinTrimLen(p.OrigLen));
                         p.Len = end - p.Start;
                         ShowTrim(p);
                     }
@@ -613,6 +613,11 @@ public sealed partial class ArrangementView
             }
             InvalidateVisual();
         }
+
+        // A trim leaves a clip at least a quarter beat long — or as long as it already was, for
+        // a shorter piece (a split near a clip's start): growing it then, never shrinking it
+        // past its own length, and never a clamp whose upper bound falls below 0 (#604 review).
+        private static double MinTrimLen(double origLen) => Math.Min(0.25, origLen);
 
         private static void ShowTrim(TrimTarget p)
         {

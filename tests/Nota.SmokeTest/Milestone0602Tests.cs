@@ -8,10 +8,13 @@
 //   a save depend on the last one (#537).
 // - A Clip editor whose clips all left (their track removed) still answers its active clip
 //   instead of throwing (#530).
+// - The keys plug-in editor windows hand the app: every bare key a binding can name has a code
+//   both ways, and the queue drains oldest first into bounded buffers (#221).
 // Also runnable alone: `dotnet run --project tests/Nota.SmokeTest -- --m0602`.
 
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Application.Input;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
@@ -26,6 +29,33 @@ internal static class Milestone0602Tests
         foreach (var r in AudioSplitRebases()) yield return r;
         foreach (var r in ManyWarpMarkers()) yield return r;
         foreach (var r in EmptyClipSet()) yield return r;
+        foreach (var r in EditorKeys()) yield return r;
+    }
+
+    // #221: key codes and the editor-window key queue through the managed wrappers.
+    private static IEnumerable<(bool, string)> EditorKeys()
+    {
+        var tokens = new[] { "A", "Z", "0", ";", "F2", "F24", "↑", "→", "Space", "Return", "Esc", "⌫", "⌦", "PgUp", "Home" };
+        var bad = tokens.Where(t => EditorKeyCodes.Of(t) <= 0 || EditorKeyCodes.TokenOf(EditorKeyCodes.Of(t)) != t).ToList();
+        yield return (bad.Count == 0 && EditorKeyCodes.Of("F2") == 0xF705 && EditorKeyCodes.Of("a") == 'A',
+            $"editor key codes: every bare key a binding can name round-trips (F2 = 0x{EditorKeyCodes.Of("F2"):X}; failing: {string.Join(" ", bad)})");
+
+        using var e = new NotaEngine();
+        var codes = new int[2];
+        var down = new byte[2];
+        while (e.DrainEditorKeys(codes, down) > 0) { }   // whatever an earlier check left
+        e.SetEditorTypingKeys(new[] { (int)'A', EditorKeyCodes.Of("F2") });
+        bool empty = e.DrainEditorKeys(codes, down) == 0;
+        e.PushEditorKey('a', true);                      // a typed lower-case letter is its key's code
+        e.PushEditorKey(EditorKeyCodes.Of("F2"), true);
+        e.PushEditorKey('A', false);
+        int n1 = e.DrainEditorKeys(codes, down);
+        bool first = n1 == 2 && codes[0] == 'A' && down[0] == 1 && codes[1] == 0xF705 && down[1] == 1;
+        int n2 = e.DrainEditorKeys(codes, down);
+        bool second = n2 == 1 && codes[0] == 'A' && down[0] == 0;
+        bool after = e.DrainEditorKeys(codes, down) == 0;
+        yield return (empty && first && second && after,
+            $"editor key queue: empty drains 0, presses and releases come out oldest first into a 2-slot buffer ({n1} then {n2})");
     }
 
     private static float ValueAt(AutomationPoint[] pts, double beat)

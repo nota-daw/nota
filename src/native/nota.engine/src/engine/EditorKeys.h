@@ -5,8 +5,9 @@
 // reach the app's key handling, so the window catches the keys the app plays with — the note
 // map, octave and velocity, as the user bound them — and queues them here; the app drains the
 // queue on its UI tick and plays them exactly as it plays keys pressed over its own window.
-// Keys travel as their binding token's character ('A'–'Z', '0'–'9', punctuation): the app
-// says which ones it claims, everything else stays with the plug-in. Message / UI thread only
+// Keys travel as codes (Nota.Application.Input.EditorKeyCodes): a character key's character
+// ('A'–'Z', '0'–'9', punctuation), a named key's AppKit function-key code (F1 = 0xF704, the
+// arrows 0xF700…). The app says which ones it claims; everything else stays with the plug-in. Message / UI thread only
 // (a mutex guards it: the editor windows and the app's tick are not one thread everywhere).
 
 #pragma once
@@ -35,7 +36,7 @@ inline State& state() {
     return s;
 }
 
-// The token character a typed character stands for: letters upper-case, the rest as typed.
+// The code a typed character stands for: letters upper-case, the rest as they are.
 inline int32_t tokenOf(int32_t ch) { return (ch >= 'a' && ch <= 'z') ? ch - 'a' + 'A' : ch; }
 
 inline void setClaimed(const int32_t* chars, int32_t count) {

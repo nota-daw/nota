@@ -68,7 +68,7 @@ class PluginEditorWindow : public juce::DocumentWindow {
     // keyboard must not leave its note hanging.
     void releaseHeldKeys();
 
-    std::map<int, int32_t> held_; // JUCE key code → token character (keys passed to the app)
+    std::map<int, int32_t> held_; // JUCE key code → editor key code (keys passed to the app)
 
 #if JUCE_MAC
     void* keyMonitor_ = nullptr; // NSEvent monitor (opaque here; AppKit in the .cpp)

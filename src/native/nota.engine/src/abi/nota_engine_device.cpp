@@ -589,6 +589,9 @@ int32_t nota_editor_keys_drain(int32_t* out_chars, uint8_t* out_down, int32_t ma
     if (!out_chars || !out_down || max <= 0) return 0;
     return nota::editorkeys::drain(out_chars, out_down, max);
 }
+void nota_editor_keys_push(int32_t code, int32_t down) {
+    nota::editorkeys::push(code, down != 0);
+}
 int32_t nota_plugin_get_state(
     const NotaEngine* e, int32_t track_id, int32_t device_index, uint8_t* out, int32_t capacity) {
     return e ? CENG(e)->getPluginState(track_id, device_index, out, capacity) : 0;

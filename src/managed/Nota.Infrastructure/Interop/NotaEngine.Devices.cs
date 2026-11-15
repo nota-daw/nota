@@ -411,6 +411,13 @@ public sealed partial class NotaEngine
         NativeMethods.EditorKeysSetClaimed(tokenChars, tokenChars.Length);
     }
 
+    /// <summary>Queues a key press / release as a plug-in editor window would (tests).</summary>
+    public void PushEditorKey(int code, bool down)
+    {
+        ThrowIfDisposed();
+        NativeMethods.EditorKeysPush(code, down ? 1 : 0);
+    }
+
     public int DrainEditorKeys(int[] tokenChars, byte[] down)
     {
         ThrowIfDisposed();
