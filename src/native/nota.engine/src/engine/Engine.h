@@ -2654,6 +2654,8 @@ class Engine {
     // kRtMaxHoldSeconds), so a wrong guess costs one late block, rarely.
     int64_t leafWorkNs_ = 0;
     int64_t parWorkNs_ = 0;
+    int64_t sizeWorkNs_ = 0; // the work the pool is sized for: single-thread cost, grown on sustained overruns
+    double overrunShare_ = 0.0; // smoothed share of parallel phases that overran the buffer
     int64_t leafPeakNs_ = 0; // largest indivisible task: total work alone can under-size helpers
     bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
     bool rtParallel_ = false;

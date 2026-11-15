@@ -3013,7 +3013,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     }
                 }
                 if (rtParallel_) {
-                    const double work = (double)std::max(leafWorkNs_, parWorkNs_);
+                    // Sized from what the work costs on one thread, not from parWorkNs_: tasks
+                    // cost more the more threads run them (cold cores, shared caches), so
+                    // sizing by the pool's own task time added threads that raised it further
+                    // until the pool ran on every thread and its wake-ups made late blocks.
+                    // sizeWorkNs_ starts at that single-thread cost and grows only when a
+                    // parallel phase overruns the buffer (see below).
+                    const double work = (double)std::max(leafWorkNs_, sizeWorkNs_);
                     const double target = kRtSizeLoad * periodNs;
                     int threads = (int)std::ceil(work / target);
                     // Track jobs are indivisible: four 1.4 ms jobs cannot meet a
@@ -3040,6 +3046,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
+            const auto phase0 = std::chrono::steady_clock::now();
             pool_->dispatch(
                 m,
                 [&](int wid, int j) {
@@ -3070,6 +3077,21 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 leafPeakNs_ += (peak - leafPeakNs_) / 16;
                 if (rtParallel_) {
                     parWorkNs_ += (work - parWorkNs_) / 16;
+                    // The sizing grows by a quarter when parallel phases keep overrunning the
+                    // buffer (the work grew while the pool ran) — a share of overruns, smoothed
+                    // over ~32 blocks, past a fifth. A lone overrun is a late wake-up, which more
+                    // threads only make likelier, so it doesn't count. The sizing never passes the
+                    // pool's own over-reading task time (the old sizing), and it eases back toward
+                    // the single-thread cost while phases finish in under half the buffer.
+                    const double phase = (double)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - phase0).count();
+                    overrunShare_ += ((phase > periodNs ? 1.0 : 0.0) - overrunShare_) / 32.0;
+                    if (overrunShare_ > 0.2) {
+                        sizeWorkNs_ = std::min(std::max(sizeWorkNs_, leafWorkNs_) * 5 / 4, std::max(parWorkNs_, leafWorkNs_));
+                        overrunShare_ = 0.0;
+                    } else if (phase < 0.5 * periodNs) {
+                        sizeWorkNs_ -= (sizeWorkNs_ - leafWorkNs_) / 64;
+                    }
                 } else {
                     // Just left the pool: one block over its period proves the bound wrong.
                     // Rejoin at once and wait twice as long before the next try.
@@ -3081,6 +3103,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         rtParallelLeftNs_ = rtHoldNs_;
                         rtProbeLeftNs_ = 0;
                         parWorkNs_ = std::max(leafWorkNs_, work);
+                        sizeWorkNs_ = std::max(leafWorkNs_, work);
+                        overrunShare_ = 0.0;
                     } else if (rtProbeLeftNs_ > 0 && (rtProbeLeftNs_ -= periodNs) <= 0) {
                         rtHoldNs_ = kRtHoldSeconds * 1e9; // the probe held: back to the short hold
                     }

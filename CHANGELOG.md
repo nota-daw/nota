@@ -59,6 +59,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   folders aren't walked into (a link back up the tree made the walk endless), a big index is
   saved less often, and on Linux the indexer reads the disk only when nothing else wants it.
 - **A plug-in that won't load says why in the log** (#544).
+- **Small buffers under a heavy session make fewer late blocks.** When one thread couldn't keep
+  up, the render threads that join it could pile on until they all ran and their wake-ups made
+  the dropouts worse. They now join as many as the work needs and add more only while blocks
+  keep running over.
 
 ## [0.60.1] — 2026-11-13
 
