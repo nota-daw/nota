@@ -19,32 +19,82 @@
         dotnetSdk = pkgs.dotnetCorePackages.sdk_10_0;
         dotnetRuntime = pkgs.dotnetCorePackages.aspnetcore_10_0;
 
-        runtimeLibs = with pkgs; [
-          alsa-lib
-          libGL
-          libxkbcommon
-          fontconfig
-          freetype
-          icu
-          openssl
-          libx11
-          libxcursor
-          libxext
-          libxi
-          libxinerama
-          libxrandr
-          libxrender
-          libxfixes
-          libice
-          libsm
-          xorgproto
-          zlib
-        ];
+        runtimeLibs = import ./nix/runtime-libs.nix pkgs;
+
+        cpmCmake = pkgs.fetchurl {
+          url = "https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.43.2/CPM.cmake";
+          sha256 = "49a3bef91ceb65bb66d57255e12d1ffd22abc2f6408fa9fe4534c544a2f232aa";
+        };
+
+        cmakeDeps = {
+          nlohmann_json = pkgs.fetchzip {
+            url = "https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz";
+            hash = "sha256-tOInM4YYi/cbHCWP2R0jlFzlaTN0ZVgHFMWagz9Wnvk=";
+          };
+          dr_libs = pkgs.fetchzip {
+            url = "https://github.com/mackron/dr_libs/archive/cd99e2cca5ccb48f8d000f1cd844424dcdbbaf59.tar.gz";
+            hash = "sha256-MbeC6gGz68bto0MK0xFb9iQ65w8uN7Vm7ZxYZj7IT+8=";
+          };
+          miniaudio = pkgs.fetchzip {
+            url = "https://github.com/mackron/miniaudio/archive/refs/tags/0.11.25.tar.gz";
+            hash = "sha256-2k346Z/ueINPbaY20P2cbBvRfFXXH0ugdv4d7WaYt2w=";
+          };
+          signalsmith_linear = pkgs.fetchzip {
+            url = "https://github.com/Signalsmith-Audio/linear/archive/7f53cdd1ccd52b409dacf2af24e7ff838c5580cd.tar.gz";
+            hash = "sha256-3IwQgT4LlCKryKyxr1w8CzdpNSdzU8DIMEsfqAZ8ZGI=";
+          };
+          signalsmith_stretch = pkgs.fetchzip {
+            url = "https://github.com/Signalsmith-Audio/signalsmith-stretch/archive/57b93f4e9206a089a45387eaa39bdc9f310d3308.tar.gz";
+            hash = "sha256-UFZsof6eclOlLqYzq4oK40waMGBEFmZAzMm67tL9pxs=";
+          };
+          hiir = pkgs.fetchzip {
+            url = "https://ldesoras.fr/src/hiir-1.50.zip";
+            stripRoot = false;
+            hash = "sha256-ML5xnmwmJlp7K5nxH3iiB8E17kt+SIXukFTKAwdqxfc=";
+          };
+          flac = pkgs.fetchzip {
+            url = "https://github.com/xiph/flac/archive/refs/tags/1.5.0.tar.gz";
+            hash = "sha256-B6XRai5UOAtY/7JXNbI3YuBgazi1Xd2ZOs6vvLq9LIs=";
+          };
+          rtmidi = pkgs.fetchzip {
+            url = "https://github.com/thestk/rtmidi/archive/518f8f1168afe745ea9660e11eeee044e74eeaa1.tar.gz";
+            hash = "sha256-4AXjOvSGSeM7m/Pc62a0Bsr2To4ljAekCZ5R398cAKg=";
+          };
+          lame = pkgs.fetchzip {
+            url = "https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz/download";
+            extension = "tar.gz";
+            hash = "sha256-bBJ8Ox4pbXujRQhS40sDhmtbk09H419PDDN1VFHKhoM=";
+          };
+          JUCE = pkgs.fetchzip {
+            url = "https://github.com/juce-framework/JUCE/archive/refs/tags/8.0.14.tar.gz";
+            hash = "sha256-oXFYfFqySW2XtM1e5/ifxAp9qSIVLzY1WAUKE3EscoQ=";
+          };
+        };
+
+        cmakeFetchContentFlags = pkgs.lib.escapeShellArgs (
+          [ "-DFETCHCONTENT_FULLY_DISCONNECTED=ON" ]
+          ++ pkgs.lib.mapAttrsToList (name: dep: "-DCPM_${name}_SOURCE=${dep}") cmakeDeps
+        );
+
+        remoteNpmDeps = pkgs.fetchNpmDeps {
+          name = "nota-remote-npm-deps";
+          src = ./src/web/remote;
+          hash = "sha256-7409zkTqYl+fPWxq68KMIxnTy7YFwUpcmeo13mTqSyY=";
+        };
+
+        nugetDeps = pkgs.mkNugetDeps {
+          name = "nota-nuget-deps";
+          sourceFile = ./nix/nuget-deps.json;
+          installable = true;
+        };
 
         notaPackage = pkgs.stdenv.mkDerivation {
           pname = "nota";
           version = "git";
           src = ./.;
+
+          npmDeps = remoteNpmDeps;
+          npmRoot = "src/web/remote";
 
           nativeBuildInputs = with pkgs; [
             cmake
@@ -52,6 +102,7 @@
             pkg-config
             dotnetSdk
             nodejs
+            npmHooks.npmConfigHook
             curl
             makeWrapper
           ];
@@ -63,15 +114,23 @@
           buildPhase = ''
             runHook preBuild
 
+            export HOME="$TMPDIR"
             export DOTNET_CLI_HOME="$TMPDIR/dotnet"
+            export NUGET_PACKAGES="$TMPDIR/nuget-packages"
             export DOTNET_NOLOGO=1
             export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 
-            # 1. Build C++20 core engine
-            cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build -DCMAKE_BUILD_TYPE=Release
+            # 1. Build C++20 core engine with pre-fetched CPM.cmake and dependencies
+            mkdir -p src/native/nota.engine/build/_cpm
+            cp ${cpmCmake} src/native/nota.engine/build/_cpm/CPM.cmake
+            cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build \
+              -DCMAKE_BUILD_TYPE=Release \
+              ${cmakeFetchContentFlags}
             cmake --build src/native/nota.engine/build
 
-            # 2. Publish Avalonia UI
+            # 2. Restore and publish Avalonia UI offline
+            dotnet restore src/managed/Nota.App/Nota.App.csproj \
+              --source ${nugetDeps}/share/nuget/source
             dotnet publish src/managed/Nota.App/Nota.App.csproj \
               -c Release \
               --no-restore \
@@ -138,11 +197,11 @@
           export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" (runtimeLibs ++ [ pkgs.curl ])}"
           export LD_LIBRARY_PATH="$NATIVE:${pkgs.lib.makeLibraryPath runtimeLibs}:''${LD_LIBRARY_PATH:-}"
 
-          if [ ! -f "$NATIVE/libnota_engine.so" ]; then
-            echo "==> Building native engine..."
+          echo "==> Building native engine..."
+          if [ ! -f "$NATIVE/build.ninja" ]; then
             cmake -G Ninja -S "$WORK_DIR/src/native/nota.engine" -B "$NATIVE" -DCMAKE_BUILD_TYPE=Release
-            ninja -C "$NATIVE"
           fi
+          cmake --build "$NATIVE"
 
           echo "==> Launching Nota..."
           exec ${dotnetSdk}/bin/dotnet run --project "$WORK_DIR/src/managed/Nota.App" -c Release -- "$@"
@@ -155,35 +214,9 @@
           drv = runScript;
         };
 
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            cmake
-            ninja
-            pkg-config
-            dotnetSdk
-            nodejs
-            curl
-            gcc
-          ];
-          buildInputs = runtimeLibs;
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
-          CI = "1";
-
-          shellHook = ''
-            export CI=1
-            echo "Nota development environment loaded."
-            echo "Run 'scripts/build-linux.sh' to build and run smoke tests."
-          '';
-        };
-
-        devShells.devenv = devenv.lib.mkShell {
+        devShells.default = devenv.lib.mkShell {
           inherit inputs pkgs;
-          modules = [
-            {
-              devenv.root = "${./.}";
-            }
-            ./devenv.nix
-          ];
+          modules = [ ./devenv.nix ];
         };
       });
 }

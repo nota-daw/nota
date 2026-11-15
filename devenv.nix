@@ -3,27 +3,7 @@
 { pkgs, lib, ... }:
 
 let
-  runtimeLibs = with pkgs; [
-    alsa-lib
-    libGL
-    libxkbcommon
-    fontconfig
-    freetype
-    icu
-    openssl
-    libx11
-    libxcursor
-    libxext
-    libxi
-    libxinerama
-    libxrandr
-    libxrender
-    libxfixes
-    libice
-    libsm
-    xorgproto
-    zlib
-  ];
+  runtimeLibs = import ./nix/runtime-libs.nix pkgs;
 in
 {
   # Packages available in the dev shell
@@ -55,25 +35,23 @@ in
 
   # Set library search path for native engine and Avalonia dependencies
   env.LD_LIBRARY_PATH = lib.makeLibraryPath runtimeLibs;
-  env.CI = "1";
 
   # Convenient development scripts
   scripts = {
     build-native.exec = ''
-      cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build -DCMAKE_BUILD_TYPE=Release
+      if [ ! -f "src/native/nota.engine/build/build.ninja" ]; then
+        cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build -DCMAKE_BUILD_TYPE=Release
+      fi
       cmake --build src/native/nota.engine/build
     '';
     build-managed.exec = ''
       dotnet build Nota.sln -c Release --nologo
     '';
     build-all.exec = ''
-      CI=1 scripts/build-linux.sh
+      scripts/build-linux.sh
     '';
     run-nota.exec = ''
-      if [ ! -f "src/native/nota.engine/build/libnota_engine.so" ]; then
-        echo "Native engine not found. Building native engine first..."
-        build-native
-      fi
+      build-native
       dotnet run --project src/managed/Nota.App -c Release
     '';
   };
@@ -86,7 +64,7 @@ in
     echo "  build-native   - build the C++20 engine"
     echo "  build-managed  - build the .NET solution"
     echo "  build-all      - run full Linux build + smoke test"
-    echo "  run-nota       - build engine if needed & launch Nota"
+    echo "  run-nota       - build engine & launch Nota"
     echo ""
   '';
 }
