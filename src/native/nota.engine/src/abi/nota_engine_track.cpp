@@ -904,6 +904,9 @@ void nota_track_freeze_cancel(NotaEngine* e) {
 int64_t nota_track_bounce_begin(NotaEngine* e, int32_t track_id, double length_beats) {
     return e ? ENG(e)->beginFreeze(track_id, length_beats, 0.0) : 0;
 }
+int64_t nota_track_bounce_range_begin(NotaEngine* e, int32_t track_id, double start_beat, double end_beat) {
+    return e ? ENG(e)->beginFreeze(track_id, end_beat - start_beat, 0.0, start_beat) : 0;
+}
 int64_t nota_track_freeze_take(NotaEngine* e, float* out, int64_t cap_frames) {
     return e ? ENG(e)->takeFreezeCapture(out, cap_frames) : 0;
 }

@@ -69,7 +69,7 @@ public sealed partial class ArrangementView
 
     /// <summary>Beats currently visible in the lane column.</summary>
     internal double ViewportBeats
-        => _lanes.Bounds.Width > 0 && _pixelsPerBeat > 0 ? _lanes.Bounds.Width / _pixelsPerBeat : _totalBeats;
+        => _lanes.Bounds.Width > 0 && _pixelsPerBeat > 0 ? XToBeat(_lanes.Bounds.Width) - XToBeat(0) : _totalBeats;
 
     /// <summary>The beat span the strip maps onto its width: the project length, stretched
     /// if the viewport somehow reaches past it (very low zoom) so the window always fits.</summary>
@@ -91,7 +91,8 @@ public sealed partial class ArrangementView
     {
         double w = _lanes.Bounds.Width;
         if (w <= 0) return;
-        ApplyOverviewView(w / OverviewSpan, 0);
+        double ppb = TempoAxis ? w / Math.Max(1e-9, 2 * (TempoSeconds(OverviewSpan) - TempoSeconds(0))) : w / OverviewSpan;
+        ApplyOverviewView(ppb, 0);
     }
 
     // Bar range readout on the ruler row ("bars 1 to 8 of 36") — refreshed with every redraw,
@@ -209,8 +210,9 @@ public sealed partial class ArrangementView
                 // window centres on the click, then keep dragging from its middle.
                 _drag = Drag.Pan;
                 bool inside = p.X >= x0 && p.X <= x1;
-                _grabFrac = inside && vb > 0 ? Math.Clamp((BeatAt(p.X) - _o._scrollBeats) / vb, 0, 1) : 0.5;
-                if (!inside) _o.ApplyOverviewView(_o._pixelsPerBeat, BeatAt(p.X) - vb * 0.5);
+                _grabFrac = inside && x1 > x0 ? Math.Clamp((p.X - x0) / (x1 - x0), 0, 1) : 0.5;
+                if (!inside) _o.ApplyOverviewView(_o._pixelsPerBeat,
+                    _o.ScrollBeatForX(BeatAt(p.X), _o._lanes.Bounds.Width * 0.5));
             }
             e.Pointer.Capture(this);
             e.Handled = true;
@@ -244,8 +246,7 @@ public sealed partial class ArrangementView
                 double ppb = _axis == Axis.Vertical
                     ? Math.Clamp(_pressPpb * Math.Pow(1.012, p.Y - _pressY), 4, 240)
                     : _pressPpb;
-                double vb = laneW / ppb;
-                _o.ApplyOverviewView(ppb, BeatAt(p.X) - _grabFrac * vb);
+                _o.ApplyOverviewView(ppb, _o.ScrollBeatForX(BeatAt(p.X), _grabFrac * laneW, ppb));
                 return;
             }
 
@@ -254,8 +255,12 @@ public sealed partial class ArrangementView
             double beat = BeatAt(p.X);
             double span = _drag == Drag.EdgeLeft ? _fixedBeat - beat : beat - _fixedBeat;
             span = Math.Max(laneW / 240.0, span);
-            double newPpb = Math.Clamp(laneW / span, 4, 240);
-            double start = _drag == Drag.EdgeLeft ? _fixedBeat - laneW / newPpb : _fixedBeat;
+            double newPpb = _o.TempoAxis
+                ? Math.Clamp(laneW / Math.Max(1e-9, 2 * Math.Abs(_o.TempoSeconds(_fixedBeat) - _o.TempoSeconds(beat))), 4, 240)
+                : Math.Clamp(laneW / span, 4, 240);
+            // Left edge: derive the start from the pinned right edge and the clamped zoom, so the
+            // pinned edge stays put once the zoom limit is reached.
+            double start = _drag == Drag.EdgeLeft ? _o.ScrollBeatForX(_fixedBeat, laneW, newPpb) : _fixedBeat;
             _o.ApplyOverviewView(newPpb, start);
         }
 
@@ -270,7 +275,7 @@ public sealed partial class ArrangementView
         // (⌘ zooms toward the cursor, shift/horizontal scrolls), so the gesture set is one.
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
         {
-            double laneX = (BeatAt(e.GetPosition(this).X) - _o._scrollBeats) * _o._pixelsPerBeat;
+            double laneX = _o.BeatToX(BeatAt(e.GetPosition(this).X));
             _o.HandleLaneWheel(e, laneX);
             if (!e.Handled) { _o.ScrollByBeats(-WheelInput.Pixels(e.Delta.Y) / _o._pixelsPerBeat); e.Handled = true; }
         }
