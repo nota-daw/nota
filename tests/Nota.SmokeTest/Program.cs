@@ -4433,6 +4433,9 @@ Console.WriteLine("-- Sampler --");
             ne.SetClipNotes(st, 0, notes);
             var b = new float[frames * 2];
             ne.Seek(0); ne.Play(); ne.RenderOffline(b, frames); ne.StopTransport();
+            // Let the stop land (it silences the voices) before the next render's Play: each
+            // render starts from silence, not from the last one's notes still ringing.
+            ne.RenderOffline(new float[256], 128);
             return b;
         }
         static double Diff(float[] a, float[] b) { double d = 0; for (int i = 0; i < a.Length; i++) { double x = a[i] - b[i]; d += x * x; } return Math.Sqrt(d / a.Length); }

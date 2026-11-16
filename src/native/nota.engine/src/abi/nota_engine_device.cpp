@@ -133,6 +133,9 @@ int32_t nota_rack_chain_set_sidechain(NotaEngine* e, int32_t t, int32_t di, int3
     int32_t pre, float gain, float mix) {
     return e ? ENG(e)->rackChainSetSidechain(t, di, c, slot, src, pre, gain, mix) : -1;
 }
+int32_t nota_rack_chain_accepts_sidechain(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot) {
+    return e && CENG(e)->rackChainAcceptsSidechain(t, di, c, slot) ? 1 : 0;
+}
 int32_t nota_midi_effect_set_cc_dest_path(NotaEngine* e, int32_t t, int32_t i, int32_t chain, int32_t slot) {
     return e && ENG(e)->setMidiEffectCcDestPath(t, i, chain, slot) ? 0 : -1;
 }

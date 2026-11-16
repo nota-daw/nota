@@ -113,6 +113,9 @@ internal static partial class NativeMethods
     internal static partial int RackChainSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
                                                    out int sourceTrack, out int tapPre, out float gainDb, out float mix);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_accepts_sidechain")]
+    internal static partial int RackChainAcceptsSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot);
+
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain")]
     internal static partial int RackChainSetSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
                                                       int sourceTrack, int tapPre, float gainDb, float mix);

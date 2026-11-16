@@ -1184,7 +1184,7 @@ public sealed partial class ArrangementView
             var del = MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () =>
             {
                 if (inGroup) _o.DeleteSelectedClips();
-                else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
+                else { _o.RemovingClips(new[] { trackId }, () => _o._engine?.DeleteClip(trackId, idx)); _o.Select(-1, -1); _o.Refresh(); }
             }, MenuKit.DeleteKey);
 
             // Locate ▸ In browser / In Finder: the file the audio came from (spec 092, #581).

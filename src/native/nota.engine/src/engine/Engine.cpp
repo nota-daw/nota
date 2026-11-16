@@ -820,6 +820,79 @@ bool Engine::setRenderThreads(int n) {
     return true;
 }
 
+// A clip note sounds until the render reaches its note-off. An edit that takes a sounding note
+// away — its clip deleted or cut, the note deleted, moved or shortened, an undo, a tool preview
+// put back — leaves that note-off nowhere to come from, and the voice held on until Stop
+// (#649). While playing, each instrument track an edit replaced is compared with the one
+// before it: a note of its arrangement clips around the playhead that the edit took away has
+// its pitch released on the audio thread (ReleaseNote, which spares a key held live), unless
+// the track still holds that pitch now. The window is wide because the UI's playhead trails
+// the render's; releasing a pitch that had already stopped is harmless, and notes the edit
+// left as they were release nothing.
+void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
+    const double pos = transport_.uiPositionBeats();
+    constexpr double kWindow = 0.5; // beats: what may be sounding around the UI's playhead
+    constexpr double kAhead = 0.05; // beats: what the render may already have started past it
+    struct Span {
+        int32_t pitch;
+        double on, off;
+    };
+    // The notes a track's clips sound within the window around the playhead, in absolute beats.
+    const auto around = [&](const Track& t, std::vector<Span>& out) {
+        for (const MidiClip& clip : t.midiClips) {
+            const double end = clip.startBeat + clip.lengthBeats;
+            if (clip.startBeat > pos + kWindow || end < pos - kWindow) continue;
+            for (const Note& n : clip.notes) {
+                if (n.pitch < 0 || n.pitch >= 128 || n.startBeat >= clip.lengthBeats) continue;
+                const double on = clip.startBeat + std::max(0.0, n.startBeat);
+                const double off = std::min(end, clip.startBeat + n.startBeat + n.lengthBeats);
+                if (off > on && on <= pos + kWindow && off >= pos - kWindow) out.push_back({n.pitch, on, off});
+            }
+        }
+    };
+    std::vector<Span> was, is;
+    for (const auto& old : before.tracks) {
+        if (!old || old->type() != TrackType::Instrument || old->midiClips.empty()) continue;
+        const Track* now = nullptr;
+        bool same = false;
+        for (const auto& t : after.tracks)
+            if (t && t->id() == old->id()) {
+                now = t.get();
+                same = (t == old);
+                break;
+            }
+        if (same || !now) continue; // untouched, or gone with its instrument
+        was.clear();
+        around(*old, was);
+        if (was.empty()) continue;
+        is.clear();
+        around(*now, is);
+        // Only a note the edit took away counts: one still there as it was (a rename, an edit
+        // elsewhere) releases nothing. A vanished note's pitch is let go unless the edited
+        // track holds that pitch right now — a later note of the pitch doesn't keep it ringing.
+        uint32_t gone[4] = {};
+        for (const Span& w : was) {
+            bool kept = false;
+            for (const Span& n : is)
+                if (n.pitch == w.pitch && std::fabs(n.on - w.on) < 1e-6 && std::fabs(n.off - w.off) < 1e-6) {
+                    kept = true;
+                    break;
+                }
+            if (!kept) gone[w.pitch >> 5] |= 1u << (w.pitch & 31);
+        }
+        for (const Span& n : is)
+            if (n.on <= pos + kAhead && n.off >= pos) gone[n.pitch >> 5] &= ~(1u << (n.pitch & 31));
+        for (int p = 0; p < 128; ++p) {
+            if (!((gone[p >> 5] >> (p & 31)) & 1u)) continue;
+            Command c;
+            c.type = CommandType::ReleaseNote;
+            c.i0 = old->id();
+            c.i1 = p;
+            commands_.push(c);
+        }
+    }
+}
+
 void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     // Fade flags are derived, not stored. A track this graph shares with the one still
     // playing is the audio thread's — leave it. Any other one an edit just cloned is
@@ -883,6 +956,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             configureTempoWarp(t->clips[i], g->tempoMap, transport_.sampleRate());
         }
     }
+    if (g && authoring_ && transport_.uiIsPlaying()) releaseVanishedClipNotes(*authoring_, *g);
     authoring_ = g;
     if (g) ensureRenderScratch(g->tracks.size());
     // Fresh track objects only: the audio thread never sees them change. Before any CC target

@@ -317,6 +317,7 @@ class Engine {
         int32_t* destSlot, int32_t* param, float* depth) const;
     bool rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t dev, int32_t destChain,
         int32_t destSlot, int32_t param, float depth);
+    bool rackChainAcceptsSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot) const; // #643
     bool rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src, int32_t* tapPre,
         float* gainDb, float* mix) const;
     int32_t rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
@@ -1656,6 +1657,8 @@ class Engine {
     // before (undo, redo, a take retry) that a render may still be reading, so a track whose
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
+    // Releases the clip notes an edit took away while they sounded (#649); see Engine.cpp.
+    void releaseVanishedClipNotes(const Graph& before, const Graph& after);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
     void configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR, bool force = false);
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
