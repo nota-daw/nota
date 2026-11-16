@@ -2501,7 +2501,12 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // through the master track's devices, then the pan stage, in kMaxBlock chunks so each
     // device sees at most a full block — and the master's own lanes (Pan, device params) are
     // read per chunk, as track lanes are per segment, however long the call (export).
-    if (g && g->masterTrack) {
+    // Fast path: no devices, no lanes, centred and nothing ramping — the master is a wire, as it
+    // was before the pan stage, and the per-block cost stays what it was (perf gate).
+    const bool masterWire = !g || !g->masterTrack ||
+        (g->masterTrack->devices.empty() && g->masterTrack->automation.empty() && g->masterTrack->pan() == 0.0f &&
+         masterPanG_[0] == 1.0f && masterPanG_[1] == 0.0f && masterPanG_[2] == 0.0f && masterPanG_[3] == 1.0f);
+    if (!masterWire) {
         Track& master = *g->masterTrack;
         const bool mappedMaster = transport_.hasTempoMap();
         const bool lanes = !master.automation.empty();
