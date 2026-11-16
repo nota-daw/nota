@@ -22,6 +22,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/Parameter.h"
 #include "dsp/primitives/Oversampler.h"
 
 #include <algorithm>
@@ -261,6 +262,7 @@ class Vintage : public Device {
     float inEnv_ = 0.0f;
     double inMs_ = 0.0, wetMs_ = 0.0;
     float compG_ = 1.0f;
+    dsp::BlockRamp outRamp_; // Output glides across a block (#559)
     uint32_t rng_ = 0x9E3779B9u;
 
     double beatStart_ = 0.0, spb_ = 0.0; // transport (for wow sync)

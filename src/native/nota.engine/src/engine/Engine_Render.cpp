@@ -967,7 +967,13 @@ void Engine::render(float* out, float* cue, int32_t numFrames) {
     dsp::ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
     deviceBlock_ = true; // a deadline, whatever the gap since the last block
+    phaseNs_ = 0.0;
     processBlock(out, cue, numFrames);
+    // The transport's rate, as mixGraph sizes by (a device-block render in tests has no device).
+    if (phaseNs_ > 0.0 && numFrames > 0 && transport_.sampleRate() > 0.0)
+        adjustPoolSizing((double)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now() - t0).count(),
+            1e9 * numFrames / transport_.sampleRate());
     // DSP load = render time / block budget, smoothed (Phase 11). Live-device
     // path only; renderOffline stays untimed.
     const double sr = sampleRate();
@@ -976,6 +982,32 @@ void Engine::render(float* out, float* cue, int32_t numFrames) {
         const double load = elapsed / (numFrames / sr);
         const float prev = cpuLoad_.load(std::memory_order_relaxed);
         cpuLoad_.store(static_cast<float>(prev * 0.9 + load * 0.1), std::memory_order_relaxed);
+    }
+}
+
+// After a device callback that rendered leaves: what the callback spent outside them (its
+// serial work), and — while the pool runs — its sizing (see mixGraph).
+// The parallel phase has the buffer less the callback's serial work (serial tracks, groups,
+// returns, the master): that is its time. The sizing grows by a quarter when callbacks keep
+// coming in late with the phase over its time — the work grew while the pool ran — a share,
+// smoothed over ~32 blocks, past kOverrunShare. A callback that made its deadline doesn't count,
+// however its time split: a late wake-up or a preempted thread stretches the phase or the
+// serial part for a block, and more threads only make that likelier. A phase that overran
+// while the serial work alone made the callback late doesn't count either: helpers can't
+// shorten that. The sizing never passes the pool's own over-reading task time (the old
+// sizing), and eases back toward the single-thread cost while phases take under half their time.
+void Engine::adjustPoolSizing(double totalNs, double periodNs) {
+    const double serial = std::max(0.0, totalNs - phaseNs_);
+    serialNs_ += (serial - serialNs_) / 16.0;
+    if (!rtParallel_) return;
+    const double room = std::max(0.25 * periodNs, periodNs - serialNs_);
+    const bool overrun = totalNs > periodNs && phaseNs_ > room && serial < periodNs;
+    overrunShare_ += ((overrun ? 1.0 : 0.0) - overrunShare_) / 32.0;
+    if (overrunShare_ > kOverrunShare) {
+        sizeWorkNs_ = std::min(std::max(sizeWorkNs_, leafWorkNs_) * 5 / 4, std::max(parWorkNs_, leafWorkNs_));
+        overrunShare_ = 0.0;
+    } else if (phaseNs_ < 0.5 * room) {
+        sizeWorkNs_ -= (sizeWorkNs_ - leafWorkNs_) / 64;
     }
 }
 
@@ -3095,11 +3127,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             // with the encoder's work between them, and an overloaded callback arrives late.)
             const bool offline = !deviceBlock_;
             const double periodNs = 1e9 * frames / std::max(1.0, transport_.sampleRate());
+            // The leaves don't have the whole buffer: the callback's serial work (tracks that
+            // can't go to the pool, groups, returns, the master — measured in render(), see
+            // adjustPoolSizing) needs its share. Joining, leaving and sizing all go by what
+            // is left; by the whole period the pool could leave while every callback ran late.
+            const double roomNs = std::max(0.25 * periodNs, periodNs - serialNs_);
             int helpers = -1;
             if (!offline) {
                 helpers = 0;
                 if (rtParallel_ && (rtParallelLeftNs_ -= periodNs) <= 0) {
-                    if (parWorkNs_ <= periodNs) {
+                    if (parWorkNs_ <= roomNs) {
                         rtParallel_ = false; // even the over-reading bound fits: try alone
                         leafWorkNs_ = parWorkNs_;
                         rtProbeLeftNs_ = kRtProbeSeconds * 1e9;
@@ -3108,8 +3145,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     }
                 }
                 if (rtParallel_) {
-                    const double work = (double)std::max(leafWorkNs_, parWorkNs_);
-                    const double target = kRtSizeLoad * periodNs;
+                    // Sized from what the work costs on one thread, not from parWorkNs_: tasks
+                    // cost more the more threads run them (cold cores, shared caches), so
+                    // sizing by the pool's own task time added threads that raised it further
+                    // until the pool ran on every thread and its wake-ups made late blocks.
+                    // sizeWorkNs_ starts at that single-thread cost and grows only when a
+                    // parallel phase overruns the buffer (see below).
+                    const double work = (double)std::max(leafWorkNs_, sizeWorkNs_);
+                    const double target = kRtSizeLoad * roomNs;
                     int threads = (int)std::ceil(work / target);
                     // Track jobs are indivisible: four 1.4 ms jobs cannot meet a
                     // 2.67 ms deadline on three threads even though their total
@@ -3135,6 +3178,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
+            const auto phase0 = std::chrono::steady_clock::now();
             pool_->dispatch(
                 m,
                 [&](int wid, int j) {
@@ -3163,19 +3207,25 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     alone = alone && w.wid == pool_->workerCount();
                 }
                 leafPeakNs_ += (peak - leafPeakNs_) / 16;
+                // Timed, alone or not, for render() to tell the callback's serial work from it
+                // and to size the pool (see adjustPoolSizing).
+                phaseNs_ += (double)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - phase0).count();
                 if (rtParallel_) {
                     parWorkNs_ += (work - parWorkNs_) / 16;
                 } else {
                     // Just left the pool: one block over its period proves the bound wrong.
                     // Rejoin at once and wait twice as long before the next try.
-                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work > periodNs;
+                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work > roomNs;
                     if (alone) leafWorkNs_ += (work - leafWorkNs_) / 16;
-                    if (probeMissed || (alone && leafWorkNs_ > periodNs)) {
+                    if (probeMissed || (alone && leafWorkNs_ > roomNs)) {
                         if (probeMissed) rtHoldNs_ = std::min(2 * rtHoldNs_, kRtMaxHoldSeconds * 1e9);
                         rtParallel_ = true;
                         rtParallelLeftNs_ = rtHoldNs_;
                         rtProbeLeftNs_ = 0;
                         parWorkNs_ = std::max(leafWorkNs_, work);
+                        sizeWorkNs_ = std::max(leafWorkNs_, work);
+                        overrunShare_ = 0.0;
                     } else if (rtProbeLeftNs_ > 0 && (rtProbeLeftNs_ -= periodNs) <= 0) {
                         rtHoldNs_ = kRtHoldSeconds * 1e9; // the probe held: back to the short hold
                     }

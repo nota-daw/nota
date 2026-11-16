@@ -42,6 +42,18 @@
 #define NOTA_ALWAYS_INLINE inline
 #endif
 
+// NOTA_FORCE_INLINE_LAMBDA: a lambda body that must inline into every call site — the
+// shared per-sample DSP bodies split into a glide head and a settled loop (#559), where
+// the instruction gate of specs/034 budgets the settled loop. Placed after the parameter
+// list it needs the GNU spelling ([[gnu::always_inline]] there appertains to the closure
+// type and is ignored). MSVC has no force-inline for lambdas; its inliner is trusted
+// there (the instruction gate runs on Linux only).
+#if defined(__GNUC__) || defined(__clang__)
+#define NOTA_FORCE_INLINE_LAMBDA __attribute__((always_inline))
+#else
+#define NOTA_FORCE_INLINE_LAMBDA
+#endif
+
 namespace nota {
 
 inline constexpr std::size_t kCacheLineSize = 64;

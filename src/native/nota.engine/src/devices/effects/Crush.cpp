@@ -233,6 +233,20 @@ void Crush::process(float* buf, int32_t frames) {
         buf[i * 2 + 1] = oR;
         outPk = std::max(outPk, std::max(std::fabs(oL), std::fabs(oR)));
     }
+    // Output glide (#559): the loop above is the plain fixed-gain one, the pre-glide work
+    // exactly; only a block right after the knob moved re-scales its first frames from
+    // the block's gain to the ramp's (the gain is ±12 dB, never 0). The peak above may have
+    // read the unscaled head — at most a 5 ms over-read on the meter, and it only delays sleep.
+    const int32_t glide = outRamp_.begin(outGain, frames);
+    if (glide > 0) {
+        const float inv = 1.0f / outGain;
+        for (int32_t i = 0; i < glide; ++i) {
+            const float k = outRamp_.next() * inv;
+            buf[i * 2] *= k;
+            buf[i * 2 + 1] *= k;
+            outPk = std::max(outPk, std::max(std::fabs(buf[i * 2]), std::fabs(buf[i * 2 + 1])));
+        }
+    }
     ringW_.store(w, std::memory_order_release);
 
     // Crushed-path peak (decays slowly so a ringing filter blocks accrual); sleep

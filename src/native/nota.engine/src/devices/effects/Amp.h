@@ -19,6 +19,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/Parameter.h"
 #include "dsp/primitives/Oversampler.h"
 
 #include <algorithm>
@@ -254,6 +255,7 @@ class Amp : public Device {
     float dcX_[2] = {0, 0}, dcY_[2] = {0, 0};
     double inMs_ = 0.0, wetMs_ = 0.0;
     float compG_ = 1.0f;
+    dsp::BlockRamp outRamp_, mixRamp_; // Output and Mix glide across a block (#559)
     std::atomic<bool> resetReq_{false};
 
     // Telemetry.

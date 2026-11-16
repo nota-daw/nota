@@ -39,6 +39,13 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
     private const uint Magic = 0x3158534E;   // "NSX1"
     private const int FileVersion = 1;
     private static readonly TimeSpan SaveEvery = TimeSpan.FromSeconds(5);
+    // A save rewrites every entry, so a big library saves less often: about a second per 2000
+    // entries, never more often than SaveEvery. Rewriting the whole index every 5 s made the
+    // disk work grow with the square of the library (#358).
+    private TimeSpan SaveInterval
+    {
+        get { int n; lock (_gate) n = _entries.Count; return TimeSpan.FromSeconds(Math.Max(SaveEvery.TotalSeconds, n / 2000.0)); }
+    }
     private static readonly TimeSpan NotifyEvery = TimeSpan.FromMilliseconds(750);
 
     // Timbre weights for "similar sounds": the band shape is the sound's colour; brightness,
@@ -142,7 +149,7 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
             _scanCts = cts = new CancellationTokenSource();
             gen = ++_scanGen;
         }
-        var thread = new Thread(() => Scan(list, gen, cts.Token)) { IsBackground = true, Name = "Sample index", Priority = ThreadPriority.BelowNormal };
+        var thread = new Thread(() => { BackgroundIo.Lower(); Scan(list, gen, cts.Token); }) { IsBackground = true, Name = "Sample index", Priority = ThreadPriority.BelowNormal };
         thread.Start();
     }
 
@@ -262,6 +269,7 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
             {
                 var t = new Thread(() =>
                 {
+                    BackgroundIo.Lower();   // the rest of the system first, on disk and CPU (#358)
                     while (!ct.IsCancellationRequested)
                     {
                         int i = Interlocked.Increment(ref next);
@@ -325,7 +333,7 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
             _dirty = true;
             if (gen == _scanGen) _done++;
         }
-        if (DateTime.UtcNow - _lastSave > SaveEvery) Save();
+        if (DateTime.UtcNow - _lastSave > SaveInterval) Save();
         Notify(force: false);
     }
 
@@ -346,7 +354,15 @@ public sealed class SampleLibraryIndex : ISampleIndex, IDisposable
         var files = new List<string>();
         if (!Directory.Exists(root)) return files;
         var opts = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };
-        foreach (var f in Directory.EnumerateFiles(root, "*", opts))
+        // A linked folder is not walked into (a linked sample file still counts): a link back
+        // up the tree, or to / or a whole other drive, made the walk endless (#358).
+        var walk = new System.IO.Enumeration.FileSystemEnumerable<string>(root,
+            (ref System.IO.Enumeration.FileSystemEntry e) => e.ToFullPath(), opts)
+        {
+            ShouldIncludePredicate = (ref System.IO.Enumeration.FileSystemEntry e) => !e.IsDirectory,
+            ShouldRecursePredicate = (ref System.IO.Enumeration.FileSystemEntry e) => (e.Attributes & FileAttributes.ReparsePoint) == 0,
+        };
+        foreach (var f in walk)
         {
             ct.ThrowIfCancellationRequested();
             if (AudioExts.Contains(Path.GetExtension(f).ToLowerInvariant())) files.Add(f);

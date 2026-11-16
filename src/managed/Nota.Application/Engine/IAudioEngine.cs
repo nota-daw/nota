@@ -821,6 +821,12 @@ public interface IAudioEngine : IDisposable
     void ClosePluginEditor(int trackId, int deviceIndex);
     /// <summary>Whether the plugin's editor window is on screen (false when it failed to open).</summary>
     bool PluginEditorIsOpen(int trackId, int deviceIndex);
+    /// <summary>The keys the app plays with, as editor key codes (<see cref="Input.EditorKeyCodes"/>),
+    /// that a plug-in editor window hands to the app instead of the plug-in (#221).</summary>
+    void SetEditorTypingKeys(int[] tokenChars);
+    /// <summary>Moves the key presses / releases queued by plug-in editor windows into the
+    /// arrays (down = 1); returns how many (#221).</summary>
+    int DrainEditorKeys(int[] tokenChars, byte[] down);
     byte[] GetPluginState(int trackId, int deviceIndex);
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
     /// <summary>Editor preview (specs/046): the plug-in window's last look as JPEG, kept on the device;

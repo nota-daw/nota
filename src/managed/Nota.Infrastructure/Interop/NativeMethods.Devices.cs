@@ -322,6 +322,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_plugin_editor_is_open")]
     internal static partial int PluginEditorIsOpen(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_set_claimed")]
+    internal static partial void EditorKeysSetClaimed(int[] chars, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_push")]
+    internal static partial void EditorKeysPush(int code, int down);
+
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_drain")]
+    internal static partial int EditorKeysDrain([Out] int[] outChars, [Out] byte[] outDown, int max);
+
     [LibraryImport(Lib, EntryPoint = "nota_plugin_get_state")]
     internal static partial int PluginGetState(IntPtr engine, int trackId, int deviceIndex,
                                                [Out] byte[]? outBuffer, int capacity);

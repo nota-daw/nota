@@ -859,6 +859,8 @@ public partial class MainWindow
     // hide the Clip tab if it's the one on screen, so no further gesture pushes stale ids.
     private void InvalidateClipEditor()
     {
+        bool shown = _clipEditor is not null && ClipEditorShown(_clipEditor);
+        if (shown && DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
         _editorRoll = null;
         _clipEditor = null;
         _editorTrackId = -1;
@@ -1041,6 +1043,29 @@ public partial class MainWindow
                 if (shown) ShowPatternPanel();
             }
         }
+    }
+
+    // Drops every clip editor whose clip is gone (its track removed, an import undone, #530 /
+    // #537): the piano roll loses its dead clips (and goes when none is left), the audio
+    // editor and the step grid go with theirs, so nothing keeps drawing — or editing — a clip
+    // that no longer exists.
+    private void DropDeadEditors()
+    {
+        if (_editorRoll is { } roll && _editorTrackId > 0) PruneDeadClips(roll);
+        if (_audioEditor is { } audio && _audioEditorTrackId > 0 && SessionClip.SceneOf(_audioEditorClipIndex) < 0
+            && !(Engine.TryGetClipInfo(_audioEditorTrackId, _audioEditorClipIndex, out var ai) && !ai.IsMidi))
+        {
+            bool shown = ClipEditorShown(audio);
+            _audioEditor = null;
+            _audioEditorTrackId = -1;
+            _audioEditorClipIndex = -1;
+            if (shown && DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
+            else if (shown) DetailPanel.IsVisible = false;
+            SyncClipTab();
+        }
+        if (_patternView is not null && _patternTrackId > 0 && _patternScene < 0
+            && !(Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var pi) && pi.IsMidi))
+            InvalidatePatternView();
     }
 
     // Whether this editor is the one on screen (the docked detail panel, or the floating window's top pane).

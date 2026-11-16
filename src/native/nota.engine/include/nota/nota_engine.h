@@ -2557,6 +2557,17 @@ NOTA_API NotaResult nota_plugin_close_editor(NotaEngine* engine, int32_t track_i
 /* 1 while the plugin's editor window is on screen, else 0 (never opened, hidden by its close
  * button, failed to open, or not a hosted plugin). Call from the UI/main thread. */
 NOTA_API int32_t    nota_plugin_editor_is_open(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* The computer keyboard over plug-in editor windows (#221). The app names the keys it plays
+ * with (note map, octave, velocity) by key code: a character key's character ('A'-'Z',
+ * '0'-'9', punctuation), a named key's AppKit code (F1 = 0xF704 ... F24, arrows 0xF700-0xF703,
+ * Home 0xF729, End 0xF72B, Page Up / Down 0xF72C / 0xF72D, forward delete 0xF728, backspace
+ * 0x7F, Return '\r', Tab '\t', Esc 0x1B, Space ' '). An editor window hands those keys to the
+ * app instead of the plug-in. drain moves up to `max` queued presses (down = 1) and releases
+ * (down = 0), oldest first, into the arrays and returns how many; push queues one as an
+ * editor window would (tests). UI/main thread. */
+NOTA_API void       nota_editor_keys_set_claimed(const int32_t* codes, int32_t count);
+NOTA_API int32_t    nota_editor_keys_drain(int32_t* out_codes, uint8_t* out_down, int32_t max);
+NOTA_API void       nota_editor_keys_push(int32_t code, int32_t down);
 
 /* Opaque plugin state (M3-5, FR-36), for project save/restore. get writes up to
  * `capacity` bytes into `out` (pass out=NULL to query the size) and returns the
