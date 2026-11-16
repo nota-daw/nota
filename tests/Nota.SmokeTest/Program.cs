@@ -354,6 +354,31 @@ if (args.Length >= 2 && args[0] == "--scan-scale")
     Console.WriteLine(failures == 0 ? "SCAN SCALE PASSED" : $"SCAN SCALE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+if (args.Length >= 1 && args[0] == "--default-scan-paths")
+{
+    Console.WriteLine("-- plugin scan paths: OS defaults (fresh profile) --");
+    foreach (var (ok, label) in DefaultScanPathsTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEFAULT SCAN PATHS PASSED" : $"DEFAULT SCAN PATHS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 1 && args[0] == "--default-scan-paths-upgrade")
+{
+    Console.WriteLine("-- plugin scan paths: pre-feature upgrade + removal persistence --");
+    foreach (var (ok, label) in DefaultScanPathsTests.RunUpgrade()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEFAULT SCAN PATHS UPGRADE PASSED" : $"DEFAULT SCAN PATHS UPGRADE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 2 && args[0] == "--default-scan-paths-identity")
+{
+    Console.WriteLine("-- plugin scan paths: scan identity across list changes --");
+    foreach (var (ok, label) in DefaultScanPathsTests.RunIdentity(args[1])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEFAULT SCAN PATHS IDENTITY PASSED" : $"DEFAULT SCAN PATHS IDENTITY FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 3 && args[0] == "--default-scan-paths-scan")
+{
+    return DefaultScanPathsTests.RunChildScan(args[1], args[2]);
+}
 if (args.Length >= 3 && args[0] == "--store-live")
 {
     Console.WriteLine("-- get plug-ins: live installs --");

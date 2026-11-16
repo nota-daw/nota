@@ -31,4 +31,12 @@ $env:NOTA_DATA_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ("nota-scan-sca
 dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll --scan-scale (Resolve-Path "$Native/nota-scanworker.exe").Path
 Remove-Item Env:NOTA_DATA_DIR
 
+Write-Host "==> Plugin scan paths check (OS defaults, scratch data dir)"
+$env:NOTA_DATA_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ("nota-default-paths-" + [guid]::NewGuid().ToString('N'))
+dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll --default-scan-paths
+Remove-Item Env:NOTA_DATA_DIR
+$env:NOTA_DATA_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ("nota-default-paths-up-" + [guid]::NewGuid().ToString('N'))
+dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll --default-scan-paths-upgrade (Resolve-Path "$Native/nota-scanworker.exe").Path
+Remove-Item Env:NOTA_DATA_DIR
+
 Write-Host "==> Done. Run the app with: dotnet run --project src/managed/Nota.App"

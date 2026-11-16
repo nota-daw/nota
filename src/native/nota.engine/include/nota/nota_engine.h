@@ -2780,6 +2780,27 @@ NOTA_API int32_t     nota_pluginhost_scan_path_count(void);
 /* Directory at `index`, UTF-8, owned by the engine, valid until the next call. */
 NOTA_API const char* nota_pluginhost_scan_path(int32_t index);
 
+/* OS-standard default scan folders for a plugin format ("VST3" today;
+ * unknown formats, e.g. "CLAP" for now, report none). Read live from the
+ * format's own standard locations — the same set the scan searches — so
+ * the listing can never drift from it. A new format only needs its own
+ * defaults entry (issue #622); the shape below stays format-agnostic. */
+/* Number of OS defaults for `format` (0 for unknown/NULL format, never negative). */
+NOTA_API int32_t     nota_pluginhost_default_scan_path_count(const char* format);
+/* Absolute default folder `index` for `format`, UTF-8, owned by the engine,
+ * valid until the next call; NULL when out of range or format unknown. */
+NOTA_API const char* nota_pluginhost_default_scan_path(const char* format, int32_t index);
+/* Re-adds the missing OS defaults for `format`, keeps everything else
+ * (defaults and user-added) untouched and ordered, and clears the restored
+ * paths from the removed-set so they stay. Returns how many were added,
+ * 0 when complete or format unknown. */
+NOTA_API int32_t     nota_pluginhost_restore_default_scan_paths(const char* format);
+/* 1 when `dir` is in the user-removed set (backfill skips it), else 0.
+ * Lets the app tell an explicit removal apart from "never had it": the
+ * startup ensure skips removed folders, while "Restore defaults" (an
+ * explicit add) still brings them back. */
+NOTA_API int32_t     nota_pluginhost_is_scan_path_removed(const char* dir);
+
 /* --- audio device settings (M7-1) -----------------------------------------
  * The chosen output/input device (by stable UID), sample rate and buffer size
  * are persisted to audio.json in the data dir (nota_set_data_dir) and applied on
