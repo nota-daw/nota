@@ -99,6 +99,40 @@ for id in instrument-01 audio-tails-8; do
   done
 done
 
+for side in base head; do
+  lib=$(ls "$WORK/engine-$side"/libnota_engine.so* | head -1)
+  sym=$(nm -C --defined-only "$lib" 2>/dev/null | grep -m1 " nota::Engine::processBlock(float\*, float\*, int)" | awk '{print $1}')
+  mangled=$(nm --defined-only "$lib" | grep -m1 "processBlockEPfS" | awk '{print $3}')
+  echo "sym $sym $mangled" >"$WORK/diag-$side-sym.log"
+  objdump -d --no-show-raw-insn --disassemble="$mangled" "$lib" >"$WORK/diag-$side-asm.log" 2>&1 || true
+  valgrind --tool=callgrind --instr-atstart=no --cache-sim=no --dump-instr=yes \
+    --callgrind-out-file="$WORK/cg/instr-$side.cg" "$WORK/tools-$side/nota_perf" run instrument-01 "$SECONDS_PER" >/dev/null 2>&1 || true
+  python3 - "$WORK/cg/instr-$side.cg" >"$WORK/diag-$side-instr.log" <<'PY'
+import sys, re
+fn = None; names = {}; costs = {}; cur = None
+for line in open(sys.argv[1]):
+    m = re.match(r"fn=\((\d+)\)(?: (.*))?", line)
+    if m:
+        if m.group(2): names[m.group(1)] = m.group(2)
+        cur = names.get(m.group(1), "")
+        continue
+    if line.startswith(("cfn=", "calls=")): skip = line.startswith("calls="); continue
+    m = re.match(r"(0x[0-9a-f]+|\+\d+|-\d+|\*)\s+(\d+)", line)
+    if m and cur and "processBlock" in cur:
+        tok = m.group(1)
+        if tok.startswith("0x"): addr = int(tok, 16)
+        elif tok == "*": pass
+        else: addr = last + int(tok)
+        last = addr
+        costs[addr] = costs.get(addr, 0) + int(m.group(2))
+    elif m:
+        tok = m.group(1)
+        if tok.startswith("0x"): last = int(tok, 16)
+        elif tok != "*": last = last + int(tok)
+for a, c in sorted(costs.items(), key=lambda x: -x[1])[:400]: print(hex(a), c)
+PY
+done
+
 # Timing: one scenario at a time (no contention), base and head back to back, each round.
 : >"$WORK/timing-base.tsv"; : >"$WORK/timing-head.tsv"
 ROUNDS=${PERF_ROUNDS:-1}
