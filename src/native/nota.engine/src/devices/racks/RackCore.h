@@ -61,6 +61,7 @@ class RackCore {
                                             // relaxed so a rack fork can carry it over
         bool retrig = false;                // audio-thread only: noteOn asks for an env kick
         uint32_t hitSerial = 0;             // audio-thread only: the Drum Rack render its last hit came before
+        bool silentNow = false;             // audio-thread only: muted / solo-gated for this Drum Rack render
         // v9 (specs/040): the MIDI Effect Rack's select range (the Audio Effect Rack keeps
         // using velLo/velHi for it, so its v7/v8 blobs keep their meaning), and a MIDI
         // chain's transpose and velocity scale (its "Volume": 1 = unchanged, 0 = silent).

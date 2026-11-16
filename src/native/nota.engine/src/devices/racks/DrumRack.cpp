@@ -63,8 +63,11 @@ void DrumRack::beginRender(RackState& st, int32_t frames) {
     for (auto& c : st.chains) anySolo |= c.ctl->solo.load(std::memory_order_relaxed);
     for (auto& c : st.chains) {
         if (!c.instrument) continue;
+        // Mute and solo are read once per render, here: render() uses this, so a toggle from the
+        // UI between the two passes can't render a pad twice or not at all.
         const bool silent = c.ctl->mute.load(std::memory_order_relaxed) ||
                             (anySolo && !c.ctl->solo.load(std::memory_order_relaxed));
+        c.ctl->silentNow = silent;
         if (!silent || (taps_.any() && taps_.find(c.uid))) continue; // heard, or a ghost key's pad
         if (!c.instrument->isIdle()) {
             std::memset(scratch_, 0, sizeof(float) * frames * 2);
@@ -89,21 +92,13 @@ void DrumRack::render(float* out, int32_t frames) {
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
     beginRender(*st, frames);
-    bool anySolo = false;
-    for (auto& c : st->chains)
-        if (c.ctl->solo.load(std::memory_order_relaxed)) {
-            anySolo = true;
-            break;
-        }
     const float rv = rackVolume_.load(std::memory_order_relaxed);
     for (auto& c : st->chains) {
         if (!c.instrument) continue;
-        const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
-        const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
         // A pad a sidechain key listens to (specs/050) renders even when muted or solo-gated:
         // the "ghost kick" drives the key without being heard.
         const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
-        const bool silent = mute || (anySolo && !solo);
+        const bool silent = c.ctl->silentNow; // as beginRender read it
         if (silent && !tap) { // kept in time by beginRender
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
             c.ctl->retrig = false;
