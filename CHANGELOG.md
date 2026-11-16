@@ -50,6 +50,37 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   save with the project, and playback follows their integrated timing.
 
 ### Fixed
+- **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
+  clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
+  acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid
+  give up the keyboard.
+- **Deleting a clip closes its editor** (#647): deleting (or cutting) the MIDI clip open in the
+  piano roll closes the roll instead of leaving the clip's notes on screen, where an edit
+  crashed Nota. An editor on a later clip of the same track follows it to its new place, and
+  undo and redo of the delete take the editors along too.
+- **Resizing a clip while a MIDI tool previews** (#648): changing the length of a clip whose
+  Euclid, Melody step or other tool preview is showing no longer crashes Nota on the next
+  tool change. The preview is dropped and the clip comes back as it was; the next tool change
+  previews over the new length.
+- **Notes that kept sounding** (#649): a clip deleted while one of its notes plays, a note
+  deleted, moved or shortened under the playhead, or an undo that takes one away now stops that
+  note instead of holding it until Stop. Keys held on Nota Volt while a preset (or the Mono
+  switch) turns it mono stop when they come up, and a note auditioned in the piano roll stops
+  when another clip's editor replaces it.
+- **Nota Monolith: repeated notes of one pitch** (#645): back-to-back notes of the same pitch
+  each sound and retrigger, with Legato on or off — only the first one was heard. Legato still
+  glides between overlapping notes while a key is held.
+- **Drum Rack: unmuting a pad mid-playback** (#650): a muted pad (or one silenced by another
+  pad's solo) keeps time, so unmuting it no longer fires a stray hit at full level; it is heard
+  from its next note. The same holds for Instrument Rack chains.
+- **Drum Rack: hits lost in a choke group** (#644): with the kit's Humanize on, hits on the same
+  step now move together, and a pad struck at the very same moment as another pad of its choke
+  group is no longer cut by it — an open hat programmed with a closed hat on every 1/8 sounded
+  on some steps only, different ones every pass.
+- **Drum Rack: sidechain on a chain's Compressor** (#643): a Compressor (or any keyed effect)
+  inside a Drum Rack or Instrument Rack chain now takes a sidechain source from another track or
+  one of its parts, with its gain, mix and Pre / Post tap, like a device on a track. The picker
+  used to fall back to Internal.
 - **Input monitoring clicks** (#563): monitoring a microphone or audio interface
   no longer clicks several times a second or plays at the wrong pitch when the
   input device runs at another sample rate than Nota (a MacBook microphone at

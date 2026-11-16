@@ -2026,6 +2026,10 @@ NOTA_API int32_t     nota_rack_chain_sidechain(const NotaEngine* engine, int32_t
 NOTA_API int32_t     nota_rack_chain_set_sidechain(NotaEngine* engine, int32_t track_id, int32_t device_index,
                                                    int32_t chain, int32_t slot, int32_t source_track, int32_t tap_pre,
                                                    float gain_db, float mix);
+/* Whether a rack chain's device (slot >= 0) can be keyed from a sidechain source, as
+ * nota_device_accepts_sidechain for a track's device (#643). 1 = yes, 0 = no or bad address. */
+NOTA_API int32_t     nota_rack_chain_accepts_sidechain(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                       int32_t chain, int32_t slot);
 NOTA_API float       nota_midi_effect_cc_depth(const NotaEngine* engine, int32_t track_id, int32_t index);
 
 /* ---- Built-in devices + generic params (M4-4/5) -------------------------- */

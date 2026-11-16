@@ -434,6 +434,12 @@ void RackInstrument::render(float* out, int32_t frames) {
                 const MidiEv* evs = chainEvs_ + ci * kChainEvents;
                 for (; k < chainCount_[ci] && evs[k].off < blockPos_ + frames; ++k) deliver(ci, *c.instrument, evs[k]);
             }
+            // ...and plays them into nothing, so a note it took while silent isn't held at its
+            // start and heard all at once on unmute (#650).
+            if (!c.instrument->isIdle()) {
+                std::memset(scratch_, 0, sizeof(float) * frames * 2);
+                c.instrument->render(scratch_, frames);
+            }
             continue;
         }
         std::memset(scratch_, 0, sizeof(float) * frames * 2);

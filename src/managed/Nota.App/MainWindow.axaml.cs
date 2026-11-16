@@ -473,6 +473,7 @@ public partial class MainWindow : Window
         Timeline.TrackDevicesRequested += id => ShowDevices(id);   // header double-click (#308)
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.ClipsSplit += SyncTrackModeClips;   // a split re-indexes the track's later clips
+        Timeline.ClipsRemoving += () => _editorRoll?.CancelPreview();   // before the indices shift (#647)
         Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
@@ -582,9 +583,18 @@ public partial class MainWindow : Window
         // sees every press regardless of what consumes it.
         AddHandler(PointerPressedEvent, (_, e) =>
         {
-            if (e.Source is Visual v)
+            // The in-window menu bar is how Edit → Delete is reached on Windows / Linux: a press
+            // there must not move "last used" off the area the command is meant for (#646).
+            if (e.Source is Visual v && v.FindAncestorOfType<Menu>(includeSelf: true) is null)
             {
                 _detailWasLastFocused = DetailPanel.IsVisible && v.GetSelfAndVisualAncestors().Contains(DetailPanel);
+                // The roll's grid keeps the keyboard after a click elsewhere (the arrangement and
+                // the other custom-drawn views take no focus), so Delete / ⌘C / ⌘X still reached
+                // its selected notes after a clip was clicked. A press outside the detail area
+                // lets it go; a focusable control pressed there still takes focus as usual (#646).
+                if (!_detailWasLastFocused && _editorRoll is { GridFocused: true } roll
+                    && TopLevel.GetTopLevel(roll) == this)
+                    FocusManager?.Focus(null);
                 // Likewise the docked Mixer, so the palette opens with its context (specs/054).
                 _mixerWasLastFocused = _mixerDocked && v.GetSelfAndVisualAncestors().Contains(MixerPanel);
             }

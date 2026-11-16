@@ -1678,8 +1678,13 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
     if (auto* dr = dynamic_cast<DrumRack*>(t.instrument.get())) {
         const float sw = dr->swing(), hz = dr->humanize();
         if ((sw > 0.0f || hz > 0.0f) && spb > 0.0) {
-            static uint32_t rng = 0x9E3779B9u;
+            static thread_local uint32_t rng = 0x9E3779B9u; // tracks may run on the render pool
             const double sixteenth = spb * 0.25; // samples per 1/16 note
+            // Hits on one step move together: one jitter per moment, not per note. Jittered
+            // apart, an open and a closed hat on one step (one choke group) landed in a random
+            // order and the open one was cut on random passes (#644).
+            int32_t stepAt = -1;
+            double stepJitter = 0.0;
             for (int k = 0; k < n; ++k) {
                 if (!evs[k].on) continue;
                 double delay = 0.0;
@@ -1688,9 +1693,12 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
                     if (idx & 1L) delay += (double)sw * sixteenth * 0.6; // up to 60% of a 1/16
                 }
                 if (hz > 0.0f) {
-                    rng = rng * 1664525u + 1013904223u;
-                    const double j = ((rng >> 9) & 0xFFFF) / 65535.0; // 0..1
-                    delay += j * (double)hz * sixteenth * 0.35;
+                    if (evs[k].off != stepAt) {
+                        stepAt = evs[k].off;
+                        rng = rng * 1664525u + 1013904223u;
+                        stepJitter = ((rng >> 9) & 0xFFFF) / 65535.0; // 0..1
+                    }
+                    delay += stepJitter * (double)hz * sixteenth * 0.35;
                 }
                 evs[k].off = std::clamp(evs[k].off + (int32_t)std::llround(delay), 0, frames - 1);
             }

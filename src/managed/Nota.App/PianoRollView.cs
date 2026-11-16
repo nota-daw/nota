@@ -823,7 +823,11 @@ public sealed partial class PianoRollView : UserControl
 
     private void Load(IEnumerable<NotaNote> notes, IEnumerable<int> owners, double lengthBeats)
     {
+        // A reload ends any preview in flight; the backup and its owners go together, or the
+        // next preview would pair a fresh backup with the old owners and index past it (#648).
         _previewBackup = null;
+        _previewOwners = null;
+        _ghosts.Clear();
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
         // A Session slot has no live path, so a velocity-wheel burst lives only in _notes until
         // the idle timer commits it. Recording reloads this roll ~60 Hz; dropping the burst

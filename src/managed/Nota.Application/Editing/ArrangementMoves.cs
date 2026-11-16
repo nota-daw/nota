@@ -95,6 +95,28 @@ public static class ArrangementMoves
         return map;
     }
 
+    /// <summary>Where each clip of <paramref name="startsBefore"/>'s tracks is after an edit that
+    /// only removed clips (a delete or a cut, #647): the rest keep their order and starts, so
+    /// each one is the next clip after it with its start; null for a removed clip. The map an
+    /// open editor follows, as for a block move — and the one an undo or redo of it walks back.</summary>
+    public static Dictionary<(int Track, int Clip), (int Track, int Clip)?> AfterRemoval(
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsBefore,
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsAfter)
+    {
+        var map = new Dictionary<(int, int), (int, int)?>();
+        foreach (var (track, starts) in startsBefore)
+        {
+            var after = startsAfter.TryGetValue(track, out var a) ? a : Array.Empty<double>();
+            int j = 0;
+            for (int c = 0; c < starts.Count; c++)
+            {
+                if (j < after.Count && Math.Abs(after[j] - starts[c]) < 1e-9) map[(track, c)] = (track, j++);
+                else map[(track, c)] = null;
+            }
+        }
+        return map;
+    }
+
     /// <summary>The way back: where each clip is after undoing a move that re-indexed with
     /// <paramref name="map"/>. A clip the move didn't produce on a touched track (a carve's right
     /// piece) has no place before it: null. Clips of other tracks are not in either map.</summary>

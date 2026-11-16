@@ -18,11 +18,16 @@ void DrumRack::noteOn(int32_t pitch, float velocity) {
         if (!c.instrument || c.ctl->triggerNote.load(std::memory_order_relaxed) != pitch) continue;
         const int32_t grp = c.ctl->chokeGroup.load(std::memory_order_relaxed);
         if (grp > 0) {
+            // A pad of the group struck at this same sample (an open and a closed hat on one
+            // step) is not cut: both are heard, and the group's next hit chokes them. Before,
+            // which of them survived came down to the order of two simultaneous events —
+            // with the kit's humanize, a different one every pass (#644).
             for (auto& o : st->chains) {
-                if (&o == &c || !o.instrument) continue;
+                if (&o == &c || !o.instrument || o.ctl->hitSerial == renderSerial_) continue;
                 if (o.ctl->chokeGroup.load(std::memory_order_relaxed) == grp) o.instrument->allNotesOff();
             }
         }
+        c.ctl->hitSerial = renderSerial_;
         c.ctl->retrig = true; // kick the pad decay VCA (audio thread)
         c.instrument->noteOn(tunedNote(*c.ctl, pitch), velocity);
     }
@@ -50,6 +55,7 @@ void DrumRack::allNotesOff() {
 void DrumRack::render(float* out, int32_t frames) {
     const auto done = renderScope();
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
+    if (frames > 0) ++renderSerial_;              // hits from here on are at a later sample
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
     bool anySolo = false;
@@ -68,8 +74,25 @@ void DrumRack::render(float* out, int32_t frames) {
         const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
         const bool silent = mute || (anySolo && !solo);
         if (silent && !tap) {
+            // A silent pad keeps time: its instrument plays the hits it gets into nothing and
+            // its decay runs on, so unmuting is heard from the pad's next hit. Before, the hit
+            // it took while silent waited, frozen at its start, and fired at full level the
+            // moment it was unmuted (#650).
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
-            c.ctl->retrig = false;
+            if (!c.instrument->isIdle()) {
+                std::memset(scratch_, 0, sizeof(float) * frames * 2);
+                c.instrument->render(scratch_, frames);
+            }
+            if (c.ctl->retrig) {
+                c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
+                c.ctl->retrig = false;
+            }
+            const float dec = c.ctl->decay.load(std::memory_order_relaxed);
+            if (dec < 0.999f) {
+                const double tauMs = 20.0 * std::pow(100.0, (double)dec);
+                const double fall = std::exp(-(double)frames / (tauMs * 0.001 * sampleRate_));
+                c.ctl->ampEnv.store(c.ctl->ampEnv.load(std::memory_order_relaxed) * (float)fall, std::memory_order_relaxed);
+            }
             continue;
         }
         std::memset(scratch_, 0, sizeof(float) * frames * 2);

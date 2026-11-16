@@ -895,16 +895,51 @@ internal class RackChainDeviceEngineProxy : System.Reflection.DispatchProxy
             case nameof(Nota.Application.IAudioEngine.DeviceScope):           return Access.ChainDeviceScope(Chain, Dev, (float[])args![2]!, (int)args![3]!);
             case nameof(Nota.Application.IAudioEngine.DeviceLayerWave):       return Access.ChainDeviceLayerWave(Chain, Dev, (int)args![2]!, (float[])args![3]!, (int)args![4]!);
             case nameof(Nota.Application.IAudioEngine.DeviceAction):          Access.ChainDeviceAction(Chain, Dev, (int)args![2]!, (int)args![3]!, (float)args![4]!); return null;
-            case nameof(Nota.Application.IAudioEngine.DeviceAcceptsSidechain): return false;
-            case nameof(Nota.Application.IAudioEngine.DeviceSidechainSource):  return -1;
-            case nameof(Nota.Application.IAudioEngine.DeviceSidechainKey):     return Nota.Application.SidechainKey.None;
-            case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainKey):  return -1;
-            case nameof(Nota.Application.IAudioEngine.DeviceSidechainGain):    return 0f;
+            // The key of a chain device is the chain's own (#643): source, part and shaping go
+            // to the rack's chain key, not to the track's device at the same index. A strip that
+            // isn't a rack (Nota Rhythm's voices) has no address and takes no key.
+            case nameof(Nota.Application.IAudioEngine.DeviceAcceptsSidechain):
+                return Access.RackAddress is int rack && Inner.RackChainAcceptsSidechain((int)args![0]!, rack, Chain, Dev);
+            case nameof(Nota.Application.IAudioEngine.DeviceSidechainSource):
+                return Key((int)args![0]!)?.SourceTrack ?? -1;
+            case nameof(Nota.Application.IAudioEngine.DeviceSidechainKey):
+            {
+                int t = (int)args![0]!;
+                if (Key(t) is not { SourceTrack: > 0 } k || Access.RackAddress is not int rk) return Nota.Application.SidechainKey.None;
+                return new Nota.Application.SidechainKey(k.SourceTrack, Inner.RackChainSidechainPart(t, rk, Chain, Dev));
+            }
+            case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainKey):
+            {
+                int t = (int)args![0]!;
+                if (Access.RackAddress is not int rs) return -1;
+                var k = Key(t) ?? new Nota.Application.NestedSidechain(-1, false, 0f, 1f);
+                return Inner.RackChainSetSidechainKey(t, rs, Chain, Dev, k with { SourceTrack = (int)args[2]! }, (int)args[3]!);
+            }
             case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainSource):
+                SetKey((int)args![0]!, k => k with { SourceTrack = (int)args[2]! }); return null;
+            case nameof(Nota.Application.IAudioEngine.DeviceSidechainGain):    return Key((int)args![0]!)?.GainDb ?? 0f;
             case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainGain):
+                SetKey((int)args![0]!, k => k with { GainDb = (float)args[2]! }); return null;
+            case nameof(Nota.Application.IAudioEngine.DeviceSidechainMix):     return Key((int)args![0]!)?.Mix ?? 1f;
+            case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainMix):
+                SetKey((int)args![0]!, k => k with { Mix = (float)args[2]! }); return null;
+            case nameof(Nota.Application.IAudioEngine.DeviceSidechainTapPre):  return Key((int)args![0]!)?.TapPre ?? false;
+            case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainTapPre):
+                SetKey((int)args![0]!, k => k with { TapPre = (bool)args[2]! }); return null;
             case nameof(Nota.Application.IAudioEngine.BeginAutomationWrite):
             case nameof(Nota.Application.IAudioEngine.EndAutomationWrite):   return null;
             default: return m!.Invoke(Inner, args);
         }
+    }
+
+    private Nota.Application.NestedSidechain? Key(int track)
+        => Access.RackAddress is int ra ? Inner.RackChainSidechain(track, ra, Chain, Dev) : null;
+
+    // Shaping changes keep the source and its part: the whole key is set again in one step.
+    private void SetKey(int track, Func<Nota.Application.NestedSidechain, Nota.Application.NestedSidechain> change)
+    {
+        if (Access.RackAddress is not int ra || Key(track) is not { } k) return;
+        int part = k.SourceTrack > 0 ? Inner.RackChainSidechainPart(track, ra, Chain, Dev) : Nota.Application.SidechainKey.WholeTrack;
+        Inner.RackChainSetSidechainKey(track, ra, Chain, Dev, change(k), part);
     }
 }

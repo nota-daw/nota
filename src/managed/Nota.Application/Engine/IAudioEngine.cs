@@ -742,6 +742,8 @@ public interface IAudioEngine : IDisposable
     NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index);
     bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest);
     NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot);
+    /// <summary>Whether a rack chain's device can be keyed from a sidechain source (#643).</summary>
+    bool RackChainAcceptsSidechain(int trackId, int rackAddress, int chain, int slot);
     /// <summary>0 = set, -1 = bad address, -2 = no free route (the key is left as it was).</summary>
     int RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
     float MidiEffectCcDepth(int trackId, int index);
