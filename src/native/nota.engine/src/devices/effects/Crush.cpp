@@ -139,7 +139,7 @@ void Crush::process(float* buf, int32_t frames) {
     float inPk = 0.0f, outPk = 0.0f, drvPk = 0.0f, feedPk = 0.0f;
     uint32_t w = ringW_.load(std::memory_order_relaxed);
 
-    const auto sample = [&](int32_t i, float og) NOTA_FORCE_INLINE_LAMBDA {
+    for (int32_t i = 0; i < frames; ++i) {
         const float dryL = buf[i * 2], dryR = buf[i * 2 + 1];
         inPk = std::max(inPk, std::max(std::fabs(dryL), std::fabs(dryR)));
 
@@ -227,21 +227,26 @@ void Crush::process(float* buf, int32_t frames) {
                 gT = autoG_; // hold through silence
         }
         autoG_ += gSlew * (gT - autoG_);
-        oL *= autoG_ * og;
-        oR *= autoG_ * og;
+        oL *= autoG_ * outGain;
+        oR *= autoG_ * outGain;
         buf[i * 2] = oL;
         buf[i * 2 + 1] = oR;
         outPk = std::max(outPk, std::max(std::fabs(oL), std::fabs(oR)));
-    };
-    // Output glide (#559): only the frames right after the knob moved run the ramp —
-    // a settled block is the plain fixed-gain loop, byte-for-byte the pre-glide work.
-    const int32_t glide = outRamp_.begin(outGain, frames);
-    int32_t from = 0;
-    if (glide > 0) {
-        for (int32_t i = 0; i < glide; ++i) sample(i, outRamp_.next());
-        from = glide;
     }
-    for (int32_t i = from; i < frames; ++i) sample(i, outGain);
+    // Output glide (#559): the loop above is the plain fixed-gain one, the pre-glide work
+    // exactly; only a block right after the knob moved re-scales its first frames from
+    // the block's gain to the ramp's (the gain is ±12 dB, never 0). The peak above may have
+    // read the unscaled head — at most a 5 ms over-read on the meter, and it only delays sleep.
+    const int32_t glide = outRamp_.begin(outGain, frames);
+    if (glide > 0) {
+        const float inv = 1.0f / outGain;
+        for (int32_t i = 0; i < glide; ++i) {
+            const float k = outRamp_.next() * inv;
+            buf[i * 2] *= k;
+            buf[i * 2 + 1] *= k;
+            outPk = std::max(outPk, std::max(std::fabs(buf[i * 2]), std::fabs(buf[i * 2 + 1])));
+        }
+    }
     ringW_.store(w, std::memory_order_release);
 
     // Crushed-path peak (decays slowly so a ringing filter blocks accrual); sleep
