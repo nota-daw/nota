@@ -16,6 +16,9 @@ public readonly record struct ProjectLoadResult(TransportState Transport, IReadO
 {
     /// <summary>Hosted-plugin identifiers the project uses that aren't installed (distinct).</summary>
     public IReadOnlyList<string> MissingPlugins { get; init; } = [];
+    /// <summary>A #568 tempo map in the file went outside 20–300 BPM and was limited on open
+    /// (specs/099): the app says so once. Saving drops the flag.</summary>
+    public bool TempoClamped { get; init; }
 }
 
 /// <summary>Save/load of the <c>.nota</c> project bundle. Hides the on-disk document

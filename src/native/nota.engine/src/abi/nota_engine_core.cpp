@@ -181,46 +181,21 @@ NotaResult nota_transport_stop(NotaEngine* e) {
 NotaResult nota_transport_set_bpm(NotaEngine* e, double bpm) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     if (!(bpm > 0.0) || bpm > 999.0) return NOTA_ERR_INVALID_ARG;
-    ENG(e)->setBpm(bpm);
-    return NOTA_OK;
+    return ENG(e)->setBpm(bpm) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 double nota_transport_bpm(const NotaEngine* e) {
     return e ? CENG(e)->bpm() : 120.0;
-}
-int32_t nota_tempo_point_count(const NotaEngine* e) {
-    return e && CENG(e)->tempoMap() ? static_cast<int32_t>(CENG(e)->tempoMap()->points.size()) : 0;
-}
-NotaResult nota_tempo_get_point(const NotaEngine* e, int32_t index, NotaTempoPoint* p) {
-    if (!e || !p || index < 0 || index >= nota_tempo_point_count(e)) return NOTA_ERR_INVALID_ARG;
-    *p = CENG(e)->tempoMap()->points[index];
-    return NOTA_OK;
-}
-NotaResult nota_tempo_set_points(NotaEngine* e, const NotaTempoPoint* p, int32_t count, int32_t checkpoint) {
-    if (!e || count < 0 || count > 4096 || (count && !p)) return NOTA_ERR_INVALID_ARG;
-    std::vector<NotaTempoPoint> points;
-    if (count) points.assign(p, p + count);
-    return ENG(e)->setTempoPoints(std::move(points), checkpoint != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 double nota_tempo_beat_to_seconds(const NotaEngine* e, double b) { return e ? CENG(e)->beatToSeconds(b) : 0; }
 double nota_tempo_seconds_to_beat(const NotaEngine* e, double s) { return e ? CENG(e)->secondsToBeat(s) : 0; }
 double nota_tempo_bpm_at(const NotaEngine* e, double b) {
     return e ? (CENG(e)->tempoMap() ? CENG(e)->tempoMap()->bpmAt(b) : CENG(e)->bpm()) : 120;
 }
-NotaTempoPreview* nota_tempo_preview_create(const NotaTempoPoint* p, int32_t count) {
-    if (!p || count < 1 || count > 4096) return nullptr;
-    std::vector<NotaTempoPoint> points(p, p + count);
-    if (!nota::TempoMap::valid(points)) return nullptr;
-    return reinterpret_cast<NotaTempoPreview*>(new nota::TempoMap(std::move(points)));
+int32_t nota_engine_tempo_automated(const NotaEngine* e) {
+    return e && CENG(e)->tempoAutomated() ? 1 : 0;
 }
-void nota_tempo_preview_destroy(NotaTempoPreview* p) { delete reinterpret_cast<nota::TempoMap*>(p); }
-double nota_tempo_preview_seconds(const NotaTempoPreview* p, double b) {
-    return p ? reinterpret_cast<const nota::TempoMap*>(p)->secondsAt(b) : 0;
-}
-double nota_tempo_preview_beat(const NotaTempoPreview* p, double s) {
-    return p ? reinterpret_cast<const nota::TempoMap*>(p)->beatAt(s) : 0;
-}
-double nota_tempo_preview_bpm(const NotaTempoPreview* p, double b) {
-    return p ? reinterpret_cast<const nota::TempoMap*>(p)->bpmAt(b) : 120;
+int32_t nota_engine_tempo_lane_selftest(NotaEngine* e) {
+    return e ? ENG(e)->tempoLaneSelfTest() : -1;
 }
 NotaResult nota_transport_set_time_signature(NotaEngine* e, int32_t num, int32_t denom) {
     if (!e) return NOTA_ERR_INVALID_ARG;
@@ -269,6 +244,18 @@ NotaResult nota_engine_set_master_volume(NotaEngine* e, float v) {
     if (v < 0.0f || v > 4.0f) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setMasterVolume(v);
     return NOTA_OK;
+}
+
+NotaResult nota_engine_set_master_pan(NotaEngine* e, float p) {
+    if (!e || !std::isfinite(p)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setMasterPan(p);
+    return NOTA_OK;
+}
+float nota_engine_master_pan(const NotaEngine* e) {
+    return e ? CENG(e)->masterPan() : 0.0f;
+}
+int32_t nota_engine_master_automation_selftest(NotaEngine* e) {
+    return e ? ENG(e)->masterAutomationSelfTest() : -1;
 }
 
 // ---- Live MIDI, arming & recording (M2) -----------------------------------

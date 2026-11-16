@@ -32,7 +32,15 @@ static float MonoRms(float[] buf)
 Console.WriteLine($"engine v{NotaEngine.Version}");
 if (args.Contains("--tempo"))
 {
+    using (var tempoLane = new NotaEngine())
+    {
+        int failed = tempoLane.TempoLaneSelfTest();
+        Check(failed == 0, $"tempo lane: the master Tempo lane drives the tempo map (engine self-test, failed check {failed})");
+    }
     foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMigrationTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MasterTempoLaneTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MasterAutomationTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
     foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
@@ -15919,7 +15927,15 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+using (var tempoLane = new NotaEngine())
+{
+    int failed = tempoLane.TempoLaneSelfTest();
+    Check(failed == 0, $"tempo lane: the master Tempo lane drives the tempo map (engine self-test, failed check {failed})");
+}
 foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMigrationTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MasterTempoLaneTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MasterAutomationTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
 foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);

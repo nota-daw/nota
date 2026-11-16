@@ -1815,7 +1815,11 @@ bool Engine::audioRecordSelfTest() {
         Engine& mapped = *mappedStorage;
         mapped.transport_.setSampleRate(48000);
         mapped.transport_.setBpm(120);
-        mapped.setTempoPoints({{0, 120, 0, 1.0/3, 0, 2.0/3, 1, 0}, {4, 60, 0, 1.0/3, 0, 2.0/3, 1, 0}}, false);
+        { // 120 BPM stepping to 60 at beat 4, on the master Tempo lane (specs/099)
+            const int32_t lane = mapped.addAutomationLane(kMasterTrackId, static_cast<int32_t>(AutomationTarget::Tempo), -1, -1);
+            const NotaAutomationPoint tempo[] = {{0, 120, 0}, {4, 120, 0}, {4, 60, 0}};
+            if (lane < 0 || !mapped.setAutomationPoints(kMasterTrackId, lane, tempo, 3)) return false;
+        }
         const int32_t track = mapped.addAudioTrack();
         mapped.beginTestLane(track, 0, 2);
         mapped.audioRecordStartBeat_ = start;
