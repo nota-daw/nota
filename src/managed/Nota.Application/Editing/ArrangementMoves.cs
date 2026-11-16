@@ -96,9 +96,11 @@ public static class ArrangementMoves
     }
 
     /// <summary>Where each clip of <paramref name="startsBefore"/>'s tracks is after an edit that
-    /// only removed clips (a delete or a cut, #647): the rest keep their order and starts, so
-    /// each one is the next clip after it with its start; null for a removed clip. The map an
-    /// open editor follows, as for a block move — and the one an undo or redo of it walks back.</summary>
+    /// removed or carved clips (a delete, a cut, a range cut or delete, #647): the clips left keep
+    /// their order, and one that kept its start is the next clip after the last match with that
+    /// start; null for a removed clip or one that lost its head. Pieces a range carve adds (the
+    /// right part of a split clip) are passed over. The map an open editor follows, as for a block
+    /// move — and the one an undo or redo of it walks back.</summary>
     public static Dictionary<(int Track, int Clip), (int Track, int Clip)?> AfterRemoval(
         IReadOnlyDictionary<int, IReadOnlyList<double>> startsBefore,
         IReadOnlyDictionary<int, IReadOnlyList<double>> startsAfter)
@@ -110,7 +112,9 @@ public static class ArrangementMoves
             int j = 0;
             for (int c = 0; c < starts.Count; c++)
             {
-                if (j < after.Count && Math.Abs(after[j] - starts[c]) < 1e-9) map[(track, c)] = (track, j++);
+                int k = j;
+                while (k < after.Count && after[k] < starts[c] - 1e-9) k++;
+                if (k < after.Count && Math.Abs(after[k] - starts[c]) < 1e-9) { map[(track, c)] = (track, k); j = k + 1; }
                 else map[(track, c)] = null;
             }
         }

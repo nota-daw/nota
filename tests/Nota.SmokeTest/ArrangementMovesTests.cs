@@ -107,6 +107,16 @@ internal static class ArrangementMovesTests
                 "moves: undoing the delete is recognised, and the later clips go back to their indices");
         }
 
+        // A range cut that removes clip 0 whole and carves clip 1's tail into two: clip 2 keeps
+        // its place by its start, the carved right piece is passed over, a cut head is gone.
+        {
+            var before = new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 0.0, 4.0, 8.0, 12.0 } };
+            var after = new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 4.0, 6.5, 8.0, 12.0 } };
+            var map = ArrangementMoves.AfterRemoval(before, after);
+            yield return (map[(1, 0)] is null && map[(1, 1)] == (1, 0) && map[(1, 2)] == (1, 2) && map[(1, 3)] == (1, 3),
+                $"moves: after a range cut, clips are found past the pieces it carved ({string.Join(", ", map.Select(kv => $"{kv.Key.Clip}→{kv.Value?.Clip.ToString() ?? "gone"}"))})");
+        }
+
         // A track like the source.
         using var eng = new NotaEngine();
         int inst = eng.AddInstrumentTrack();

@@ -22,3 +22,11 @@
 | #643 | `include/nota/nota_engine.h`, `src/abi/nota_engine_device.cpp`, `Engine.h`, `Engine_Rack.cpp`, `Nota.Infrastructure/Interop/*`, `IAudioEngine.cs` | `nota_rack_chain_accepts_sidechain` |
 | #643 | `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` | the chain-device proxy reads and sets the chain key (`RackChainSidechain` / `RackChainSetSidechainKey` / `RackChainSidechainPart`), gain, mix and tap included |
 | all | `tests/Nota.SmokeTest/Milestone0602Tests.cs`, `ArrangementMovesTests.cs`, `CHANGELOG.md` | smoke checks (`--m0602`, `--moves`); changelog entries |
+
+## Review follow-up (Greptile on #651)
+
+| Finding | Change |
+|---------|--------|
+| A later note of the same pitch kept a deleted one ringing | `releaseVanishedClipNotes` looks half a beat around the playhead on the old side only; on the new side just at notes already held (0.05 beat ahead, for the render running ahead of the UI) |
+| Range cut / delete left editors on old indices | `CutTimeSelection` and `DeleteTimeSelection` go through `RemovingClips`; `AfterRemoval` finds each kept clip by its start past the pieces a carve added (a clip whose head was cut closes its editor) |
+| A silent MIDI chain aged its notes for the whole segment | the silent path renders event by event like the audible one |

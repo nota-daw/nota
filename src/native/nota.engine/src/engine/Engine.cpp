@@ -830,16 +830,20 @@ bool Engine::setRenderThreads(int n) {
 // already stopped is harmless.
 void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
     const double pos = transport_.uiPositionBeats();
-    constexpr double kWindow = 0.5; // beats
-    const auto sounding = [&](const Track& t, uint32_t (&bits)[4]) {
+    constexpr double kWindow = 0.5; // beats: what may be sounding before the edit
+    constexpr double kAhead = 0.05; // beats: what the render may already have started after it
+    // The pitches a track's clips sound from `ahead` before the playhead to `ahead` after it. The
+    // edit's old side looks wide; its new side only at notes already held, so a later note of the
+    // same pitch doesn't keep the removed one ringing until its own note-off.
+    const auto sounding = [&](const Track& t, double ahead, uint32_t (&bits)[4]) {
         for (const MidiClip& clip : t.midiClips) {
             const double end = clip.startBeat + clip.lengthBeats;
-            if (clip.startBeat > pos + kWindow || end < pos - kWindow) continue;
+            if (clip.startBeat > pos + ahead || end < pos - kWindow) continue;
             for (const Note& n : clip.notes) {
                 if (n.pitch < 0 || n.pitch >= 128 || n.startBeat >= clip.lengthBeats) continue;
                 const double on = clip.startBeat + std::max(0.0, n.startBeat);
                 const double off = std::min(end, clip.startBeat + n.startBeat + n.lengthBeats);
-                if (off > on && on <= pos + kWindow && off >= pos - kWindow) bits[n.pitch >> 5] |= 1u << (n.pitch & 31);
+                if (off > on && on <= pos + ahead && off >= pos - kWindow) bits[n.pitch >> 5] |= 1u << (n.pitch & 31);
             }
         }
     };
@@ -855,9 +859,9 @@ void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
             }
         if (same || !now) continue; // untouched, or gone with its instrument
         uint32_t was[4] = {}, is[4] = {};
-        sounding(*old, was);
+        sounding(*old, kWindow, was);
         if ((was[0] | was[1] | was[2] | was[3]) == 0) continue;
-        sounding(*now, is);
+        sounding(*now, kAhead, is);
         for (int p = 0; p < 128; ++p) {
             if (!(((was[p >> 5] & ~is[p >> 5]) >> (p & 31)) & 1u)) continue;
             Command c;

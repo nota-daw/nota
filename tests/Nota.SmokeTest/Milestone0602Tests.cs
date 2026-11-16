@@ -214,6 +214,25 @@ internal static class Milestone0602Tests
             yield return (deleted && playing > 0.001f && end < 1e-4f,
                 $"a clip deleted while its note sounds lets the note go (playing {playing:F4}, after {end:E1})");
         }
+        // A sounding note deleted with a later note of its pitch just ahead: it still stops.
+        {
+            using var e = new NotaEngine();
+            e.SetBpm(120);
+            int t = e.AddVoltSynthTrack();
+            e.AddMidiClip(t, 0.0, 16.0);
+            var later = new NotaNote(60, 1.0, 0.1, 0.8f);
+            e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 8.0, 0.8f), later });
+            var buf = new float[4096 * 2];
+            e.Seek(0.0); e.Play();
+            for (int i = 0; i < 4; i++) e.RenderOffline(buf, 4096);   // ≈ 0.74 beats: the next C is ≈ 0.26 beats away
+            e.SetClipNotes(t, 0, new[] { later });
+            int sr = OfflineRate;
+            var tail = new float[sr * 3 * 2];
+            RenderLong(e, tail, sr * 3);
+            e.StopTransport();
+            float end = RmsOf(tail, sr * 3 - 4096, sr * 3);
+            yield return (end < 1e-4f, $"a deleted note stops even with a later note of its pitch just ahead (after {end:E1})");
+        }
     }
 
     // RenderOffline takes a block at a time.

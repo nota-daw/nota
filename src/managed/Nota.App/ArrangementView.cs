@@ -1994,7 +1994,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || !HasTimeSelection) return false;
         var ids = TimeSelectionTrackIds();
-        if (ids.Length > 0) _engine.DeleteClipsInRange(ids, _timeSelStart, _timeSelEnd);
+        if (ids.Length > 0) RemovingClips(ids, () => _engine.DeleteClipsInRange(ids, _timeSelStart, _timeSelEnd));
         Refresh();
         return true;
     }
@@ -2060,7 +2060,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || !HasTimeSelection) return false;
         var ids = TimeSelectionTrackIds();
-        if (ids.Length == 0 || !_engine.CutRange(ids, _timeSelStart, _timeSelEnd)) return false;
+        bool cut = false;
+        if (ids.Length > 0) RemovingClips(ids, () => cut = _engine.CutRange(ids, _timeSelStart, _timeSelEnd));   // editors follow (#647)
+        if (!cut) return false;
         ClipTransfer.TookFromArrangement();
         FocusTrackId = ids[0];
         Refresh();
