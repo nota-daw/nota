@@ -2315,6 +2315,61 @@ void Engine::triggerPassReplace() {
     replaceUpTo_.store(recordPass_, std::memory_order_release);
 }
 
+// The master section when the master is more than a wire (specs/099): devices, lanes and the
+// pan stage, per chunk. Out of line on purpose: inlined into processBlock it took the
+// registers of the output loop below it (the perf gate's GCC build spilled the clamp bound
+// there, two loads a sample).
+#if defined(__GNUC__) || defined(__clang__)
+[[gnu::noinline]]
+#elif defined(_MSC_VER)
+__declspec(noinline)
+#endif
+void Engine::processMasterChain(Graph& g, float* out, int32_t numFrames, double spb, int32_t nAnchors) {
+    const SegAnchor* const anchors = segAnchors_;
+    Track& master = *g.masterTrack;
+    const bool mappedMaster = transport_.hasTempoMap();
+    const bool lanes = !master.automation.empty();
+    int32_t ai = 0;
+    for (int32_t off = 0; off < numFrames;) {
+        while (ai + 1 < nAnchors && anchors[ai + 1].off <= off) ++ai;
+        const SegAnchor& an = anchors[ai];
+        const int32_t pieceEnd = ai + 1 < nAnchors ? anchors[ai + 1].off : numFrames;
+        const int32_t n = std::min({numFrames - off, kMaxBlock, pieceEnd - off});
+        const bool snap = an.jump && off == an.off; // first chunk after a seek / start / wrap
+        const double s0 = an.samples + (an.rolling ? off - an.off : 0);
+        const double s1 = s0 + (an.rolling ? n : 0);
+        double beat = 0.0, endBeat = 0.0, chunkSpb = spb;
+        float pan = std::clamp(master.pan(), -1.0f, 1.0f), startPan = pan;
+        if (spb > 0.0) {
+            if (mappedMaster) {
+                beat = transport_.beatAtSamples(s0);
+                endBeat = transport_.beatAtSamples(s1);
+                chunkSpb = endBeat > beat ? n / (endBeat - beat) : spb;
+            } else { // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
+                beat = s0 / spb;
+                endBeat = s1 / spb;
+            }
+            if (lanes) {
+                applyMasterLanes(master, beat);
+                // The pan stage ramps to the lane's value at the chunk's end, so a drawn
+                // pan sweep is followed exactly, not one chunk late.
+                if (const TrackLane* pl = masterPanLane(master)) {
+                    startPan = std::clamp(pl->valueAt(beat), -1.0f, 1.0f);
+                    pan = std::clamp(pl->valueAt(endBeat), -1.0f, 1.0f);
+                }
+            }
+        }
+        for (auto& d : master.devices) {
+            if (!d || d->bypassed()) continue;
+            if (spb > 0.0) d->setTransport(beat, chunkSpb, an.rolling);
+            d->process(out + off * 2, n);
+        }
+        if (snap) masterPanSnap(startPan, g.panLaw); // from where the playhead landed
+        masterPanStage(out + off * 2, n, pan, g.panLaw);
+        off += n;
+    }
+}
+
 void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
     // live MIDI, capture), so this scope keeps the player it points at alive.
@@ -2506,50 +2561,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     const bool masterWire = !g || !g->masterTrack ||
         (g->masterTrack->devices.empty() && g->masterTrack->automation.empty() && g->masterTrack->pan() == 0.0f &&
          masterPanG_[0] == 1.0f && masterPanG_[1] == 0.0f && masterPanG_[2] == 0.0f && masterPanG_[3] == 1.0f);
-    if (!masterWire) {
-        Track& master = *g->masterTrack;
-        const bool mappedMaster = transport_.hasTempoMap();
-        const bool lanes = !master.automation.empty();
-        int32_t ai = 0;
-        for (int32_t off = 0; off < numFrames;) {
-            while (ai + 1 < nAnchors && anchors[ai + 1].off <= off) ++ai;
-            const SegAnchor& an = anchors[ai];
-            const int32_t pieceEnd = ai + 1 < nAnchors ? anchors[ai + 1].off : numFrames;
-            const int32_t n = std::min({numFrames - off, kMaxBlock, pieceEnd - off});
-            const bool snap = an.jump && off == an.off; // first chunk after a seek / start / wrap
-            const double s0 = an.samples + (an.rolling ? off - an.off : 0);
-            const double s1 = s0 + (an.rolling ? n : 0);
-            double beat = 0.0, endBeat = 0.0, chunkSpb = spb;
-            float pan = std::clamp(master.pan(), -1.0f, 1.0f), startPan = pan;
-            if (spb > 0.0) {
-                if (mappedMaster) {
-                    beat = transport_.beatAtSamples(s0);
-                    endBeat = transport_.beatAtSamples(s1);
-                    chunkSpb = endBeat > beat ? n / (endBeat - beat) : spb;
-                } else { // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
-                    beat = s0 / spb;
-                    endBeat = s1 / spb;
-                }
-                if (lanes) {
-                    applyMasterLanes(master, beat);
-                    // The pan stage ramps to the lane's value at the chunk's end, so a drawn
-                    // pan sweep is followed exactly, not one chunk late.
-                    if (const TrackLane* pl = masterPanLane(master)) {
-                        startPan = std::clamp(pl->valueAt(beat), -1.0f, 1.0f);
-                        pan = std::clamp(pl->valueAt(endBeat), -1.0f, 1.0f);
-                    }
-                }
-            }
-            for (auto& d : master.devices) {
-                if (!d || d->bypassed()) continue;
-                if (spb > 0.0) d->setTransport(beat, chunkSpb, an.rolling);
-                d->process(out + off * 2, n);
-            }
-            if (snap) masterPanSnap(startPan, g->panLaw); // from where the playhead landed
-            masterPanStage(out + off * 2, n, pan, g->panLaw);
-            off += n;
-        }
-    }
+    if (!masterWire) processMasterChain(*g, out, numFrames, spb, nAnchors);
 
     const float mv = masterVolume_.load(std::memory_order_relaxed);
     float mpkL = 0.0f, mpkR = 0.0f;

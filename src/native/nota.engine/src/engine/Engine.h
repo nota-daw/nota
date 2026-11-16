@@ -1623,6 +1623,7 @@ class Engine {
     static const TrackLane* masterPanLane(const Track& master); // the playing master Pan lane, or null
     void masterPanStage(float* out, int32_t frames, float pan, PanLaw law); // specs/099, audio thread
     void masterPanSnap(float pan, PanLaw law); // the stage's gains jump to `pan` (no ramp)
+    void processMasterChain(Graph& g, float* out, int32_t numFrames, double spb, int32_t nAnchors); // specs/099
 
     // CV modulation (Phase 3): swing modulated device params around their base for
     // this block, then restore the base afterwards (RT; called inside mixGraph).
