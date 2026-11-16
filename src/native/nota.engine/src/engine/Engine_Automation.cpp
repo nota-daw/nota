@@ -71,10 +71,12 @@ const TrackLane* Engine::masterPanLane(const Track& master) {
 }
 
 void Engine::applyAutomation(Graph* g, double beat) {
-    for (auto& tptr : g->tracks) applyTrackLanes(*tptr, beat);
+    // Most tracks carry no lanes: skip them before the (out-of-line) per-lane body.
+    for (auto& tptr : g->tracks)
+        if (!tptr->automation.empty()) applyTrackLanes(*tptr, beat);
     // Master lanes (specs/099): Pan and the master chain's device / plug-in parameters.
     // A master Volume lane is not added there — master volume stays the graph-level lane.
-    if (g->masterTrack) applyTrackLanes(*g->masterTrack, beat);
+    if (g->masterTrack && !g->masterTrack->automation.empty()) applyTrackLanes(*g->masterTrack, beat);
     // Master-volume lane (graph-level, M9 follow-up): write the master gain atomic.
     if (!g->masterVolume.points.empty() && !g->masterVolume.suppressRead)
         masterVolume_.store(std::clamp(g->masterVolume.valueAt(beat), 0.0f, 2.0f), std::memory_order_relaxed);
