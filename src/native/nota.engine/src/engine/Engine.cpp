@@ -824,29 +824,33 @@ bool Engine::setRenderThreads(int n) {
 // away — its clip deleted or cut, the note deleted, moved or shortened, an undo, a tool preview
 // put back — leaves that note-off nowhere to come from, and the voice held on until Stop
 // (#649). While playing, each instrument track an edit replaced is compared with the one
-// before it: a pitch its arrangement clips sound around the playhead before the edit and not
-// after is released on the audio thread (ReleaseNote, which spares a key held live). The
-// window is wide because the UI's playhead trails the render's; releasing a pitch that had
-// already stopped is harmless.
+// before it: a note of its arrangement clips around the playhead that the edit took away has
+// its pitch released on the audio thread (ReleaseNote, which spares a key held live), unless
+// the track still holds that pitch now. The window is wide because the UI's playhead trails
+// the render's; releasing a pitch that had already stopped is harmless, and notes the edit
+// left as they were release nothing.
 void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
     const double pos = transport_.uiPositionBeats();
-    constexpr double kWindow = 0.5; // beats: what may be sounding before the edit
-    constexpr double kAhead = 0.05; // beats: what the render may already have started after it
-    // The pitches a track's clips sound from `ahead` before the playhead to `ahead` after it. The
-    // edit's old side looks wide; its new side only at notes already held, so a later note of the
-    // same pitch doesn't keep the removed one ringing until its own note-off.
-    const auto sounding = [&](const Track& t, double ahead, uint32_t (&bits)[4]) {
+    constexpr double kWindow = 0.5; // beats: what may be sounding around the UI's playhead
+    constexpr double kAhead = 0.05; // beats: what the render may already have started past it
+    struct Span {
+        int32_t pitch;
+        double on, off;
+    };
+    // The notes a track's clips sound within the window around the playhead, in absolute beats.
+    const auto around = [&](const Track& t, std::vector<Span>& out) {
         for (const MidiClip& clip : t.midiClips) {
             const double end = clip.startBeat + clip.lengthBeats;
-            if (clip.startBeat > pos + ahead || end < pos - kWindow) continue;
+            if (clip.startBeat > pos + kWindow || end < pos - kWindow) continue;
             for (const Note& n : clip.notes) {
                 if (n.pitch < 0 || n.pitch >= 128 || n.startBeat >= clip.lengthBeats) continue;
                 const double on = clip.startBeat + std::max(0.0, n.startBeat);
                 const double off = std::min(end, clip.startBeat + n.startBeat + n.lengthBeats);
-                if (off > on && on <= pos + ahead && off >= pos - kWindow) bits[n.pitch >> 5] |= 1u << (n.pitch & 31);
+                if (off > on && on <= pos + kWindow && off >= pos - kWindow) out.push_back({n.pitch, on, off});
             }
         }
     };
+    std::vector<Span> was, is;
     for (const auto& old : before.tracks) {
         if (!old || old->type() != TrackType::Instrument || old->midiClips.empty()) continue;
         const Track* now = nullptr;
@@ -858,12 +862,28 @@ void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
                 break;
             }
         if (same || !now) continue; // untouched, or gone with its instrument
-        uint32_t was[4] = {}, is[4] = {};
-        sounding(*old, kWindow, was);
-        if ((was[0] | was[1] | was[2] | was[3]) == 0) continue;
-        sounding(*now, kAhead, is);
+        was.clear();
+        around(*old, was);
+        if (was.empty()) continue;
+        is.clear();
+        around(*now, is);
+        // Only a note the edit took away counts: one still there as it was (a rename, an edit
+        // elsewhere) releases nothing. A vanished note's pitch is let go unless the edited
+        // track holds that pitch right now — a later note of the pitch doesn't keep it ringing.
+        uint32_t gone[4] = {};
+        for (const Span& w : was) {
+            bool kept = false;
+            for (const Span& n : is)
+                if (n.pitch == w.pitch && std::fabs(n.on - w.on) < 1e-6 && std::fabs(n.off - w.off) < 1e-6) {
+                    kept = true;
+                    break;
+                }
+            if (!kept) gone[w.pitch >> 5] |= 1u << (w.pitch & 31);
+        }
+        for (const Span& n : is)
+            if (n.on <= pos + kAhead && n.off >= pos) gone[n.pitch >> 5] &= ~(1u << (n.pitch & 31));
         for (int p = 0; p < 128; ++p) {
-            if (!(((was[p >> 5] & ~is[p >> 5]) >> (p & 31)) & 1u)) continue;
+            if (!((gone[p >> 5] >> (p & 31)) & 1u)) continue;
             Command c;
             c.type = CommandType::ReleaseNote;
             c.i0 = old->id();

@@ -233,6 +233,29 @@ internal static class Milestone0602Tests
             float end = RmsOf(tail, sr * 3 - 4096, sr * 3);
             yield return (end < 1e-4f, $"a deleted note stops even with a later note of its pitch just ahead (after {end:E1})");
         }
+        // An edit that removes no note (a rename) releases nothing: a note the track plays
+        // through MIDI routing isn't cut by its own unchanged later note of that pitch.
+        {
+            using var e = new NotaEngine();
+            e.SetBpm(120);
+            int src = e.AddInstrumentTrack();
+            e.AddMidiClip(src, 0.0, 16.0);
+            e.SetClipNotes(src, 0, new[] { new NotaNote(60, 0.0, 8.0, 0.8f) });
+            int dst = e.AddVoltSynthTrack();
+            e.SetTrackMidiSource(dst, src);
+            e.AddMidiClip(dst, 0.0, 16.0);
+            e.SetClipNotes(dst, 0, new[] { new NotaNote(60, 1.0, 0.1, 0.8f) });
+            var buf = new float[4096 * 2];
+            e.Seek(0.0); e.Play();
+            for (int i = 0; i < 4; i++) e.RenderOffline(buf, 4096);   // ≈ 0.74 beats
+            float before = Rms(buf);
+            e.SetTrackName(dst, "Renamed");
+            e.RenderOffline(buf, 2048);                                // to ≈ 0.84, before the later note
+            e.StopTransport();
+            float after = RmsOf(buf, 1024, 2048);   // Volt's release would have faded by here
+            yield return (before > 0.001f && after > before * 0.9f,
+                $"a rename while a routed note plays doesn't cut it (before {before:F4}, after {after:F4})");
+        }
     }
 
     // RenderOffline takes a block at a time.
