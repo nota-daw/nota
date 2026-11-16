@@ -39,6 +39,12 @@ public interface IAudioEngine : IDisposable
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
+    IReadOnlyList<TempoPoint> TempoPoints { get; }
+    void SetTempoPoints(IReadOnlyList<TempoPoint> points, bool checkpoint = true);
+    double BeatToSeconds(double beat);
+    double SecondsToBeat(double seconds);
+    double TempoAt(double beat);
+    ITempoPreview CreateTempoPreview(IReadOnlyList<TempoPoint> points);
     void SetTimeSignature(int num, int denom);
     void SetLoop(bool enabled, double startBeat, double endBeat);
     void SetMetronome(bool enabled);
@@ -430,6 +436,8 @@ public interface IAudioEngine : IDisposable
     void CancelFreeze();
     /// <summary>Arms a capture exactly <paramref name="lengthBeats"/> long (no ring-out tail); returns frames.</summary>
     long BeginBounce(int trackId, double lengthBeats);
+    /// <summary>Arms a capture over both mapped range endpoints, without a tail.</summary>
+    long BeginBounceRange(int trackId, double startBeat, double endBeat);
     /// <summary>Paste Bounced Audio: copies the armed capture's frames into <paramref name="outFrames"/>
     /// (interleaved stereo) and disarms it without freezing the track. Returns frames copied.</summary>
     long TakeFreezeCapture(float[] outFrames);

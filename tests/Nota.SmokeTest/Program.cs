@@ -30,6 +30,17 @@ static float MonoRms(float[] buf)
 }
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
+if (args.Contains("--tempo"))
+{
+    foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapCopyTakeTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoBlockAutomationTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 
 if (args.Length >= 2 && args[0] == "--profile-project")
 {
@@ -182,6 +193,36 @@ if (args.Length >= 2 && args[0] == "--splash-sheet")
     return sheetError is null ? 0 : 1;
 }
 // Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
+// Manual index for the Assistant (specs/098): `--manual-index-build <nota-docs dir> <out.json.gz>`.
+// Tooling, run by scripts/build-manual-index.sh; not part of the full run.
+if (args.Length >= 3 && args[0] == "--manual-index-build")
+{
+    var built = ManualIndexBuilder.Build(args[1], ManualIndexBuilder.AppVersion());
+    Console.WriteLine(built.Summary);
+    foreach (var w in built.Warnings) Console.WriteLine("  warning: " + w);
+    foreach (var e in built.Errors) Console.WriteLine("  error: " + e);
+    if (built.Errors.Count > 0) { Console.WriteLine($"MANUAL INDEX FAILED ({built.Errors.Count})"); return 1; }
+    ManualIndexBuilder.WriteGz(built.Json, args[2]);
+    Console.WriteLine("MANUAL INDEX WRITTEN " + args[2]);
+    return 0;
+}
+// SC-001 question set: `--assistant-eval [<model dir>]` (specs/098).
+if (args.Length >= 1 && args[0] == "--assistant-eval")
+    return AssistantEval.Run(args.Length >= 2 ? args[1] : null);
+// Ask the manual from the command line: `--assistant-ask [--ui ru] <question>` prints the hits.
+if (args.Length >= 2 && args[0] == "--assistant-ask")
+{
+    AssistantTests.Ask(args[1..]);
+    return 0;
+}
+// Assistant alone (fast iteration): `--assistant`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--assistant")
+{
+    Console.WriteLine("-- assistant --");
+    foreach (var (ok, label) in AssistantTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "ASSISTANT PASSED" : $"ASSISTANT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
 if (args.Length >= 1 && args[0] == "--palette")
 {
@@ -677,6 +718,14 @@ if (args.Length >= 1 && args[0] == "--track-monitor")
     Console.WriteLine("-- monitoring a track --");
     foreach (var (ok, label) in TrackMonitorTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TRACK MONITOR PASSED" : $"TRACK MONITOR FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Monitoring a capture device at another rate (#563) alone: `--monitor-input-rate`. Also in the full run.
+if (args.Length >= 1 && args[0] == "--monitor-input-rate")
+{
+    Console.WriteLine("-- monitoring an input at another rate --");
+    foreach (var (ok, label) in MonitorInputRateTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MONITOR INPUT RATE PASSED" : $"MONITOR INPUT RATE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
@@ -15773,6 +15822,7 @@ foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
 // --- Toolbar overflow (specs/097): the shed parts the ⋯ menu lists ---
 Console.WriteLine("-- toolbar overflow --");
 foreach (var (ok, label) in ToolbarOverflowTests.Run()) Check(ok, label);
+foreach (var (ok, label) in AssistantTests.Run()) Check(ok, label);
 
 // --- Modular browser tab (specs/095): catalogue rows, search, per-view tab memory ---
 Console.WriteLine("-- modular browser tab --");
@@ -15844,6 +15894,12 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapCopyTakeTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoBlockAutomationTests.Run()) Check(ok, label);
 Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
@@ -15993,6 +16049,8 @@ Console.WriteLine("-- audio-track tails after Stop --");
 foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- monitoring a track --");
 foreach (var (ok, label) in TrackMonitorTests.Run()) Check(ok, label);
+Console.WriteLine("-- monitoring an input at another rate --");
+foreach (var (ok, label) in MonitorInputRateTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);

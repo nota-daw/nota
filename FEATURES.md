@@ -50,6 +50,14 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 
 ## Project and transport
 
+- **Tempo track**: collapsible, vertically resizable Arrangement lane; stepped, linear
+  and Bezier ramps with draggable handles. Right-drag selects points; Delete removes
+  them together, preserving the first point. Edits undo/redo and save with the project.
+- **Time Scale Tool**: Ctrl-hover location indicator; Ctrl-drag maps a bar to an
+  unwarped reference recording, preserving earlier anchors and the audio's real timing.
+  Ctrl+Alt omits the ending marker; Escape cancels. Existing markers and available
+  transient markers snap. MIDI, metronome and warped audio follow the tempo map.
+
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation — including volume, pan and master-volume moves and the parameters of effects,
   MIDI effects, instruments and plug-ins, from any source (device cards, Mixer, track
@@ -1602,6 +1610,14 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
+- **Assistant panel** (#606, specs/098) — a chat docked on the right, full height (toolbar key,
+  **View ▸ Assistant**, ⌘⇧H): questions in English or Russian are answered offline from the
+  manual, which ships inside each release (word search with typo, keyboard-layout and word-form
+  tolerance); replies quote up to three sections in the question's language with links, rendered
+  as Markdown (tables, code, key caps, note / tip / caution boxes) and copyable. **Show me** under a
+  how-to walks its steps — opens the view or panel and outlines each control (Back / Next / Done).
+  Optional **Manual search** model (multilingual-e5-small, Settings → Downloads → AI Models) adds
+  search by meaning. Width and open state are remembered.
 - **Custom keyboard shortcuts** in Preferences → Shortcuts (specs/096): every key is
   rebindable — menu commands, view keys (piano roll, arrangement, Session, devices, Files
   browser, Modular) and the computer-keyboard note map — with a second key per action,

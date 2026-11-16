@@ -553,6 +553,26 @@ NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_loop_record_mode(NotaEngine* engine, int32_t mode);
 NOTA_API int32_t    nota_transport_loop_record_mode(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
+// Outgoing shape: 0 step, 1 linear BPM, 2 cubic Bezier BPM. Handles normalized.
+typedef struct NotaTempoPoint {
+    double beat, bpm;
+    int32_t shape;
+    double x1, y1, x2, y2;
+    double incoming_bpm; // 0 = same as bpm; preserves the preceding ramp at a mapping anchor
+} NotaTempoPoint;
+NOTA_API int32_t nota_tempo_point_count(const NotaEngine* engine);
+NOTA_API NotaResult nota_tempo_get_point(const NotaEngine* engine, int32_t index, NotaTempoPoint* point);
+NOTA_API NotaResult nota_tempo_set_points(NotaEngine* engine, const NotaTempoPoint* points, int32_t count, int32_t checkpoint);
+NOTA_API double nota_tempo_beat_to_seconds(const NotaEngine* engine, double beat);
+NOTA_API double nota_tempo_seconds_to_beat(const NotaEngine* engine, double seconds);
+NOTA_API double nota_tempo_bpm_at(const NotaEngine* engine, double beat);
+// UI-only preview uses the very same compiler without publishing a project edit.
+typedef struct NotaTempoPreview NotaTempoPreview;
+NOTA_API NotaTempoPreview* nota_tempo_preview_create(const NotaTempoPoint* points, int32_t count);
+NOTA_API void nota_tempo_preview_destroy(NotaTempoPreview* preview);
+NOTA_API double nota_tempo_preview_seconds(const NotaTempoPreview* preview, double beat);
+NOTA_API double nota_tempo_preview_beat(const NotaTempoPreview* preview, double seconds);
+NOTA_API double nota_tempo_preview_bpm(const NotaTempoPreview* preview, double beat);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);
 NOTA_API NotaResult nota_transport_set_loop(NotaEngine* engine, int32_t enabled,
@@ -1752,6 +1772,10 @@ NOTA_API int32_t    nota_audio_scatter_test(const NotaEngine* engine, const floa
 NOTA_API NotaResult nota_track_set_monitor(NotaEngine* engine, int32_t track_id, int32_t on);
 NOTA_API int32_t    nota_track_get_monitor(NotaEngine* engine, int32_t track_id);
 NOTA_API void       nota_engine_push_monitor_frames(NotaEngine* engine, const float* interleaved_stereo, int32_t frames);
+/* Tests only: the rate the pushed monitor frames were "captured" at (0 = the engine's), as a
+ * capture device that can't run at the engine's rate reports it, and its callback size in
+ * frames (0 = leave it) — what sizes the monitoring cushion (#563). */
+NOTA_API void       nota_engine_set_monitor_input_test(NotaEngine* engine, double sample_rate, int32_t block_frames);
 
 /* MIDI routing: forward an instrument track's MIDI to another instrument track
  * (source_track_id = -1 turns it off). */
@@ -1816,6 +1840,8 @@ NOTA_API void       nota_track_unfreeze(NotaEngine* engine, int32_t track_id);
  * an audio track at at_beat as a new clip, overwriting what it covers (one undo step);
  * returns the clip index or -1. name_utf8 may be NULL. */
 NOTA_API int64_t    nota_track_bounce_begin(NotaEngine* engine, int32_t track_id, double length_beats);
+/* Range-aware bounce: capture precisely [start_beat, end_beat), including tempo changes. */
+NOTA_API int64_t    nota_track_bounce_range_begin(NotaEngine* engine, int32_t track_id, double start_beat, double end_beat);
 NOTA_API int64_t    nota_track_freeze_take(NotaEngine* engine, float* out, int64_t cap_frames);
 NOTA_API int32_t    nota_track_paste_audio_frames(NotaEngine* engine, int32_t track_id, const float* interleaved,
                                                   int64_t frames, double at_beat, const char* name_utf8);

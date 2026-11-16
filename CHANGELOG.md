@@ -22,7 +22,52 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **An Assistant that answers from the manual** (#606, specs/098). A chat panel on the right of
+  the main window, the full height of the work area — the toolbar's speech-bubble key, View →
+  Assistant or ⌘⇧H (Ctrl+Shift+H) open and close it. Ask in your own words, in English or Russian:
+  the reply quotes the two or three manual sections that answer it, in the language you asked in,
+  with a link to each page. It works offline and needs no AI model: the manual ships inside Nota.
+  Replies read like the manual — headings, lists, tables, code, key caps and the note / tip /
+  caution boxes, in every theme and the classic look — and can be copied. Under a how-to,
+  **Show me** walks you through the steps: it opens the view or panel a control lives in and
+  outlines the control, with Back / Next / Done. Install **Manual search** in Settings → Downloads →
+  AI Models (multilingual-e5-small, about 135 MB) and questions phrased differently from the
+  manual find their answer too. The panel remembers its width and whether it was open.
+- **Tempo track and Time Scale Tool** (#535): collapse or resize the tempo lane,
+  add and move points, and shape stepped, linear or Bezier tempo ramps. Right-drag
+  a marquee and Delete to remove several points in one undo step; the initial
+  point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
+  recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
+  save with the project, and playback follows their integrated timing.
+
 ### Fixed
+- **Input monitoring clicks** (#563): monitoring a microphone or audio interface
+  no longer clicks several times a second or plays at the wrong pitch when the
+  input device runs at another sample rate than Nota (a MacBook microphone at
+  48 kHz under a 44.1 kHz project). Nota now runs the input device at its own
+  rate where the device allows it, and converts the rate where it doesn't
+  (Bluetooth, fixed-rate microphones), following the two clocks so they can't
+  drift apart. Recording was not affected.
+- **Multi-clip automation across tempo changes** (#535): duplicate, paste and
+  block moves retain every copied point regardless of selection order, clearing
+  all landing spans before inserting their automation.
+- **Tempo-map copies and comp edits** (#535): range duplication clears the copied
+  audio's actual landing span, and block paste clears automation only under its
+  destination span. Section moves, duplication and deletion keep partial takes
+  aligned with their comp clips, so subsequent comp edits select the same source audio.
+- **Tempo-map moves and scrolling** (#535): moving natural-rate audio carries the
+  automation from its whole original span and clears only its landing span. The
+  horizontal scrollbar reaches the last clip across large tempo changes.
+- **Tempo-map rendering** (#535): reversed warped clips keep their musical positions,
+  Consolidate captures the full mapped range, and natural-rate clip releases fade at
+  the mapped ending.
+- **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
+  mapped source boundaries. Loop recording, freeze and range bounce retain audio across
+  tempo changes; saved freezes retain their timing. Transport BPM edits stay in the tempo
+  lane, bar snapping respects the time-signature denominator, and warped waveforms align
+  with the audible content at every zoom level.
+- Starting or seeking between beats no longer produces an immediate extra metronome click.
 - **Removing a track with its clip open in the piano roll no longer crashes Nota** (#530). The
   Clip editor closes with the track, and pressing Delete in a roll left behind is harmless.
 - **"To transients" no longer runs the clip editor's playhead ahead of the waveform** (#537).

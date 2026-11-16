@@ -412,6 +412,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_push_monitor_frames")]
     internal static partial void EnginePushMonitorFrames(IntPtr engine, float[] interleavedStereo, int frames);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_monitor_input_test")]
+    internal static partial void EngineSetMonitorInputTest(IntPtr engine, double sampleRate, int blockFrames);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_source")]
     internal static partial NotaResult TrackSetMidiSource(IntPtr engine, int trackId, int sourceTrackId);
 
@@ -445,6 +448,8 @@ internal static partial class NativeMethods
     internal static partial void TrackFreezeCancel(IntPtr engine);
     [LibraryImport(Lib, EntryPoint = "nota_track_bounce_begin")]
     internal static partial long TrackBounceBegin(IntPtr engine, int trackId, double lengthBeats);
+    [LibraryImport(Lib, EntryPoint = "nota_track_bounce_range_begin")]
+    internal static partial long TrackBounceRangeBegin(IntPtr engine, int trackId, double startBeat, double endBeat);
     [LibraryImport(Lib, EntryPoint = "nota_track_freeze_take")]
     internal static partial long TrackFreezeTake(IntPtr engine, [Out] float[] outFrames, long capFrames);
     [LibraryImport(Lib, EntryPoint = "nota_track_paste_audio_frames", StringMarshalling = StringMarshalling.Utf8)]

@@ -195,7 +195,7 @@ public sealed partial class ArrangementView
         private double _takePressX;
         private bool _takeMoved;
 
-        private double BeatAt(double x) => _o._scrollBeats + x / _o._pixelsPerBeat;
+        private double BeatAt(double x) => _o.XToBeat(x);
 
         private bool TakeLanePressed(PointerPressedEventArgs e)
         {
