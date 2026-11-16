@@ -107,6 +107,7 @@ for side in base head; do
   objdump -d --no-show-raw-insn --disassemble="$mangled" "$lib" >"$WORK/diag-$side-asm.log" 2>&1 || true
   valgrind --tool=callgrind --instr-atstart=no --cache-sim=no --dump-instr=yes \
     --callgrind-out-file="$WORK/cg/instr-$side.cg" "$WORK/tools-$side/nota_perf" run instrument-01 "$SECONDS_PER" >/dev/null 2>&1 || true
+  cp "$WORK/cg/instr-$side.cg" "$WORK/diag-$side-instrcg.log" || true
   python3 - "$WORK/cg/instr-$side.cg" >"$WORK/diag-$side-instr.log" <<'PY'
 import sys, re
 fn = None; names = {}; costs = {}; cur = None
