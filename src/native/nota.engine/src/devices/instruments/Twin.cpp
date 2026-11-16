@@ -844,6 +844,16 @@ void Twin::freeStart() {
     arpStartK_ = 0;
 }
 
+void Twin::pluginParamLane(int32_t i, const AutomationLane& lane, double beatFrom, double beatTo) {
+    if (i == twin::GSeqPattern) patLane_.fill(lane, beatFrom, beatTo, stepBeats());
+}
+
+int Twin::wantPattern(int64_t k) const {
+    float v = get(twin::GSeqPattern);
+    if (playing_ && seqStepBeats_ == stepBeats()) patLane_.at(k, v); // k counts song steps then
+    return twin::stepOf(v, twin::kPatterns);
+}
+
 double Twin::stepBeats() const {
     static constexpr double kRates[6] = {1.0, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0, 0.125}; // 1/4 1/8 1/8T 1/16 1/16T 1/32
     return kRates[twin::stepOf(get(twin::GSeqRate), 6)];
@@ -878,7 +888,7 @@ int Twin::seqService(int offset) {
         nextK_ = static_cast<int64_t>(std::ceil(now / spb_ / sb - 1e-9));
         while (onsetSample(nextK_) < now) ++nextK_;
         if (!seqRunning_) {
-            curPat_ = twin::stepOf(get(twin::GSeqPattern), twin::kPatterns);
+            curPat_ = wantPattern(nextK_);
             pendPat_ = -1;
             patStartK_ = 0; // a pattern started from stopped sits on the song's grid
         }
@@ -911,7 +921,7 @@ void Twin::fireStep(int64_t k, double onset) {
     float vel = 0.8f;
     double off = onset + 0.5 * stepLen;
     bool tie = false;
-    const int want = twin::stepOf(get(twin::GSeqPattern), twin::kPatterns);
+    const int want = wantPattern(k);
     pendPat_ = want == curPat_ ? -1 : want; // switches at the pattern's end; picking the playing one cancels
     if (twin::stepOf(get(twin::GSeqKind), 2) == 1) {
         // The arpeggiator: the held (or held-over) chord, one note — or all of it — per step.
@@ -1010,6 +1020,7 @@ void Twin::setTransport(double beatStart, double samplesPerBeat, bool playing) {
     const double pos = std::round(beatStart * samplesPerBeat);
     const bool jumped = playing && playing_ && std::fabs(pos - (tPos_ + tFrames_)) > 2.0;
     if (jumped || playing != playing_) seqResync_ = true;
+    patLane_.transport(beatStart);
     if ((jumped || (playing && !playing_))) {
         bool any = false;
         for (const auto& V : voices_) any |= V.active;
@@ -1490,6 +1501,7 @@ void Twin::render(float* out, int32_t frames) {
     }
     if (idle_.load(std::memory_order_relaxed) && !seqActive()) {
         tFrames_ += frames;
+        if (spb_ > 0.0) patLane_.rendered(clockAt(0) / spb_, playing_);
         return;
     }
     for (int32_t done = 0; done < frames;) {
@@ -1505,6 +1517,7 @@ void Twin::render(float* out, int32_t frames) {
     }
     tFrames_ += frames;
     if (!playing_) freeT_ += frames;
+    if (spb_ > 0.0) patLane_.rendered(clockAt(0) / spb_, playing_); // the block's lane samples go with it
     if (activeVoices_.load(std::memory_order_relaxed) == 0 && blockPeak_ <= 1.0e-5f && !seqRunning_) quiet_ += static_cast<uint64_t>(frames);
     else quiet_ = 0;
     // A delay holds its echoes in silence: while one is on, wait out its longest time too.

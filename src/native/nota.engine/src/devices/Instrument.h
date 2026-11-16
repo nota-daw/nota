@@ -24,6 +24,7 @@
 namespace nota {
 
 struct MidiEv;
+struct AutomationLane;
 
 class RackCore;
 
@@ -355,6 +356,17 @@ class Instrument {
     virtual void pluginParamSet(int32_t index, float normalized) {
         (void)index;
         (void)normalized;
+    }
+    // Exact-time automation (specs/100): applyAutomation sets a lane's value at the block start
+    // (pluginParamSet above), then hands the lane itself here with the block's span in beats, so
+    // a param that switches something at a musical moment (a Rhythm bank, a Twin pattern) can
+    // read the lane at that moment instead — the same at every block size. `lane` is valid only
+    // during the call: copy what is needed (ParamLaneSteps), never keep it. Audio thread.
+    virtual void pluginParamLane(int32_t index, const AutomationLane& lane, double beatFrom, double beatTo) {
+        (void)index;
+        (void)lane;
+        (void)beatFrom;
+        (void)beatTo;
     }
     virtual int32_t pluginParamIndexOfId(const std::string& id) const {
         (void)id;

@@ -1605,7 +1605,9 @@ class Engine {
         float gain);                                  // one sample of the click voice, Main and/or Cue
     void finishCue(float* cue, int32_t numFrames);    // Cue level, safety net, meter (specs/089)
     void renderTone(float* out, int32_t numFrames);
-    void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
+    // M9: eval lanes -> target atomics. beatEnd (< beat = beat) is the block's end, for the
+    // instruments that read a lane at their own steps (pluginParamLane, specs/100).
+    void applyAutomation(Graph* g, double beat, double beatEnd = -1.0);
 
     // CV modulation (Phase 3): swing modulated device params around their base for
     // this block, then restore the base afterwards (RT; called inside mixGraph).

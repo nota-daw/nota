@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Automate the Nota Rhythm bank** (#609, specs/100): the pattern bank (A–D) is now a parameter,
+  **Perform › Bank** in the automation menu, so a lane in the arrangement switches a groove to its
+  fill and back — and MIDI learn and rack macros can drive it too. The A–D buttons set the same
+  parameter: they follow a playing lane, a click is one undo step, and with automation write armed
+  it records. **Bank Switch** (the bank buttons' right-click menu, or Perform › Bank Switch) chooses
+  when a new bank takes over: at the next step (as before) or at the pattern start, where a chosen
+  bank waits, tinted, until the next bar. A bank lane is read at each step, so a switch drawn on a
+  bar line plays on the downbeat — the same in playback and export. Projects saved before open on
+  the bank they were saved with.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
   OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
   always shown, even when a folder doesn't exist on disk. They are removable, and
@@ -50,6 +59,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   save with the project, and playback follows their integrated timing.
 
 ### Fixed
+- **Nota Twin's Pattern automation lands on the bar** (#609, specs/100): a Sequencer Pattern lane
+  that changes on the bar line where the playing pattern ends now starts the new pattern on that
+  bar, instead of one whole pattern later.
+- **Nota Rhythm no longer double-fires steps around MIDI notes**: a note on a Rhythm track that fell
+  mid-block restarted the sequencer's clock for the rest of the block, so a step could play twice.
 - **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
   clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
   acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid

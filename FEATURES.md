@@ -878,7 +878,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   (Age/Motion/Filter/Env/Space), glide, tune and volume. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
-  banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
+  banks (A–D, copy / clear; the bank is an automatable **Bank** parameter, read at each step,
+  so an arrangement lane, MIDI learn or a macro switches patterns in the song — at the next
+  step or at the pattern start, per **Bank Switch**), accents, quiet steps, per-step velocity, Swing/Humanize, a
   **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
   Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
   contour or sample region, Perform rail (Swing, Humanize, Accent, Volume, Glue), a full-width step strip with

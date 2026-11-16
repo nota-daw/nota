@@ -16,7 +16,8 @@
 namespace nota {
 
 // --- parameter automation (M9) ---------------------------------------------
-void Engine::applyAutomation(Graph* g, double beat) {
+void Engine::applyAutomation(Graph* g, double beat, double beatEnd) {
+    if (beatEnd < beat) beatEnd = beat;
     for (auto& tptr : g->tracks) {
         Track& t = *tptr;
         for (const TrackLane& lane : t.automation) {
@@ -26,8 +27,10 @@ void Engine::applyAutomation(Graph* g, double beat) {
                 const ParamOwner o = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot);
                 if (lane.target == AutomationTarget::PluginParam) {
                     if (lane.paramIndex < 0) continue;
-                    if (o.instrument) o.instrument->pluginParamSet(lane.paramIndex, v);
-                    else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
+                    if (o.instrument) {
+                        o.instrument->pluginParamSet(lane.paramIndex, v);
+                        o.instrument->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
+                    } else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
                 } else if (o.device) o.device->setParam(lane.paramIndex, v);
                 else if (o.midi) o.midi->setParam(lane.paramIndex, v);
                 continue;
@@ -49,7 +52,10 @@ void Engine::applyAutomation(Graph* g, double beat) {
                 // targets the instrument; paramIndex is pre-resolved from paramId.
                 if (lane.paramIndex < 0) break;
                 if (lane.deviceIndex < 0) {
-                    if (t.instrument) t.instrument->pluginParamSet(lane.paramIndex, v);
+                    if (t.instrument) {
+                        t.instrument->pluginParamSet(lane.paramIndex, v);
+                        t.instrument->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
+                    }
                 } else if (lane.deviceIndex < static_cast<int32_t>(t.devices.size())) {
                     if (auto* d = t.devices[lane.deviceIndex].get()) d->pluginParamSet(lane.paramIndex, v);
                 }

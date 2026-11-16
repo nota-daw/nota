@@ -39,9 +39,12 @@ RhythmMachine::RhythmMachine() {
     pn_[Volume].store(0.8f);
     pn_[Glue].store(0.0f);
     for (int m = 0; m < kMacros; ++m) pn_[Macro0 + m].store(0.0f);
+    pn_[Bank].store(0.0f);       // A
+    pn_[BankSwitch].store(0.0f); // Step
     for (auto& p : pendingTrig_) p.store(-1.0f, std::memory_order_relaxed);
     for (auto& sc : scope_) sc.store(0.0f, std::memory_order_relaxed);
     scope_[S_Step].store(-1.0f, std::memory_order_relaxed);
+    scope_[S_Bank].store(-1.0f, std::memory_order_relaxed); // stopped: scopeRead reports the param
     for (int v = 0; v < kVoices; ++v) scope_[S_Pos0 + v].store(-1.0f, std::memory_order_relaxed);
     clearAll();
     commitFx(std::make_shared<FxState>());
@@ -69,6 +72,7 @@ void RhythmMachine::setTransport(double beatStart, double spb, bool playing) {
     if (playing && !playing_) wake();
     if (spb > 0.0) spb_ = spb;
     beatStart_ = beatStart;
+    bankLane_.transport(beatStart);
     playing_ = playing;
     if (FxState* fx = fxStates_.live()) // tempo-synced voice FX (a synced Delay)
         for (auto& ch : fx->chain)
@@ -85,6 +89,8 @@ void RhythmMachine::setTransportInfo(const TransportInfo& ti) {
 
 std::string RhythmMachine::pluginParamId(int32_t i) const {
     if (i < 0 || i >= kNumParams) return {};
+    if (i == Bank) return "bank";
+    if (i == BankSwitch) return "bank_switch";
     if (i >= Macro0) return "macro" + std::to_string(i - Macro0 + 1);
     if (i == Glue) return "glue";
     if (i >= kExtra) {
@@ -102,6 +108,8 @@ std::string RhythmMachine::pluginParamId(int32_t i) const {
 
 std::string RhythmMachine::pluginParamName(int32_t i) const {
     if (i < 0 || i >= kNumParams) return {};
+    if (i == Bank) return "Perform Bank";
+    if (i == BankSwitch) return "Perform Bank Switch";
     if (i >= Macro0) return "Macro " + std::to_string(i - Macro0 + 1);
     if (i == Glue) return "Master Glue";
     if (i >= kExtra) {
@@ -121,8 +129,27 @@ void RhythmMachine::pluginParamSet(int32_t i, float v) {
     if (i < 0 || i >= kNumParams) return;
     v = std::clamp(v, 0.0f, 1.0f);
     pn_[i].store(v, std::memory_order_relaxed);
-    if (i >= Macro0) applyMacro(i - Macro0, v);
+    if (i >= Macro0 && i < Macro0 + kMacros) applyMacro(i - Macro0, v);
     wake();
+}
+
+std::string RhythmMachine::pluginParamText(int32_t i) const {
+    if (i == Bank) return std::string(1, static_cast<char>('A' + editBank()));
+    if (i == BankSwitch) return get(BankSwitch) >= 0.5f ? "Pattern" : "Step";
+    return {};
+}
+
+void RhythmMachine::pluginParamLane(int32_t i, const AutomationLane& lane, double beatFrom, double beatTo) {
+    if (i == Bank) bankLane_.fill(lane, beatFrom, beatTo, 0.25); // a 1/16 step
+}
+
+int RhythmMachine::stepBank(long absStep, int barStep) {
+    float v = 0.0f;
+    const int want = bankLane_.at(absStep, v) ? bankOf(v) : editBank();
+    const bool fresh = absStep != lastTrigStep_ + 1; // a start, a seek, a loop wrap
+    lastTrigStep_ = absStep;
+    if (fresh || barStep == 0 || get(BankSwitch) < 0.5f) playBank_ = want;
+    return playBank_;
 }
 
 int32_t RhythmMachine::pluginParamIndexOfId(const std::string& id) const {
@@ -135,31 +162,32 @@ void RhythmMachine::action(int32_t id, int32_t iarg, float farg) {
     // Any edit (or audition) wakes the machine — a sleeping kit must catch the change.
     wake();
     if (id != A_SelectVoice && id != A_Audition) rev_.fetch_add(1, std::memory_order_relaxed);
+    const int eb = editBank(); // edits land in the bank the param holds (the card's)
     switch (id) {
     case A_ToggleStep: {
         int v = iarg / kSteps, s = iarg % kSteps;
         if (valid(v, s)) {
-            uint8_t& o = on_[bank_][v][s];
+            uint8_t& o = on_[eb][v][s];
             o = o ? 0 : 1;
-            if (o && vel_[bank_][v][s] == 0) vel_[bank_][v][s] = 180;
+            if (o && vel_[eb][v][s] == 0) vel_[eb][v][s] = 180;
         }
         break;
     }
     case A_SetVel: {
         int v = iarg / kSteps, s = iarg % kSteps;
-        if (valid(v, s)) vel_[bank_][v][s] = (uint8_t)std::clamp((int)std::lround(farg * 255.0f), 0, 255);
+        if (valid(v, s)) vel_[eb][v][s] = (uint8_t)std::clamp((int)std::lround(farg * 255.0f), 0, 255);
         break;
     }
     case A_ToggleAccent: {
         int v = iarg / kSteps, s = iarg % kSteps;
-        if (valid(v, s)) acc_[bank_][v][s] = acc_[bank_][v][s] ? 0 : 1;
+        if (valid(v, s)) acc_[eb][v][s] = acc_[eb][v][s] ? 0 : 1;
         break;
     }
-    case A_SelectBank:
-        if (iarg >= 0 && iarg < kBanks) bank_ = (uint8_t)iarg;
+    case A_SelectBank: // the Bank param (specs/100): MCP and older callers
+        if (iarg >= 0 && iarg < kBanks) pn_[Bank].store(bankNorm(iarg), std::memory_order_relaxed);
         break;
     case A_ClearBank: {
-        int b = (iarg >= 0 && iarg < kBanks) ? iarg : bank_;
+        int b = (iarg >= 0 && iarg < kBanks) ? iarg : eb;
         for (int v = 0; v < kVoices; ++v)
             for (int s = 0; s < kSteps; ++s) {
                 on_[b][v][s] = 0;
@@ -189,8 +217,8 @@ void RhythmMachine::action(int32_t id, int32_t iarg, float farg) {
     case A_ClearVoice:
         if (iarg >= 0 && iarg < kVoices)
             for (int s = 0; s < kSteps; ++s) {
-                on_[bank_][iarg][s] = 0;
-                acc_[bank_][iarg][s] = 0;
+                on_[eb][iarg][s] = 0;
+                acc_[eb][iarg][s] = 0;
             }
         break;
     default: break;
@@ -356,7 +384,7 @@ std::vector<uint8_t> RhythmMachine::getState() const {
         std::memcpy(t, &v, 4);
         b.insert(b.end(), t, t + 4);
     }
-    b.push_back(bank_);
+    b.push_back(static_cast<uint8_t>(editBank())); // kept for older readers; RTH4 reads the param
     b.push_back(selVoice_);
     b.push_back(0);
     b.push_back(0);
@@ -424,6 +452,8 @@ void RhythmMachine::setState(const uint8_t* data, int32_t size) {
     off = 4;
     int nParams;
     if (magic == kMagic) nParams = kNumParams;
+    else if (magic == kMagicV3)
+        nParams = kNumParamsV3;
     else if (magic == kMagicV2)
         nParams = kNumParamsV2;
     else if (magic == kMagicV1)
@@ -436,8 +466,12 @@ void RhythmMachine::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + off, 4);
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    if (magic != kMagic) { // before the Bank params: the bank byte below, switching per step
+        pn_[Bank].store(0.0f, std::memory_order_relaxed);
+        pn_[BankSwitch].store(0.0f, std::memory_order_relaxed);
+    }
     if (off + 2 <= size) {
-        bank_ = (uint8_t)std::min<int>(data[off], kBanks - 1);
+        if (magic != kMagic) pn_[Bank].store(bankNorm(std::min<int>(data[off], kBanks - 1)), std::memory_order_relaxed);
         selVoice_ = (uint8_t)std::min<int>(data[off + 1], kVoices - 1);
         off += 4;
     }
@@ -537,7 +571,7 @@ std::shared_ptr<Instrument> RhythmMachine::clone() const {
     std::memcpy(r->on_, on_, sizeof(on_));
     std::memcpy(r->vel_, vel_, sizeof(vel_));
     std::memcpy(r->acc_, acc_, sizeof(acc_));
-    r->bank_ = bank_;
+    r->playBank_ = playBank_;
     r->selVoice_ = selVoice_;
     r->rev_.store(rev_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     for (int v = 0; v < kVoices; ++v) {
@@ -570,7 +604,11 @@ std::shared_ptr<Instrument> RhythmMachine::clone() const {
 int32_t RhythmMachine::scopeRead(float* out, int32_t maxN) const {
     const int n = std::min(maxN, (int)kScopeN);
     for (int i = 0; i < n; ++i) out[i] = scope_[i].load(std::memory_order_relaxed);
-    if (n > S_Bank) out[S_Bank] = (float)bank_;
+    // The playing bank: in Step mode the param's (the steps take it at the next one, so the two
+    // differ for a step at most), so the card follows a click or a lane without waiting for a
+    // render; in Pattern mode the bank the steps play, which trails a queued pick until the
+    // pattern start — the param's again when stopped.
+    if (n > S_Bank && (out[S_Bank] < 0.0f || get(BankSwitch) < 0.5f)) out[S_Bank] = (float)editBank();
     if (n > S_Rev) out[S_Rev] = (float)(rev_.load(std::memory_order_relaxed) & 0xFFFFFF);
     return n;
 }
@@ -613,12 +651,21 @@ void RhythmMachine::render(float* out, int32_t frames) {
                 if (stepArmed_ && frac >= trigFrac) {
                     stepArmed_ = false;
                     curStep_ = barStep;
+                    stepBank(absStep, barStep); // the bank follows its lane while asleep too
                 }
             }
         } else {
             curStep_ = -1;
+            playBank_ = editBank();
+            lastTrigStep_ = -999999;
         }
+        scope_[S_Bank].store(playing_ ? (float)playBank_ : -1.0f, std::memory_order_relaxed);
+        advanceClock(frames);
         return;
+    }
+    if (!playing_) { // stopped: the next start takes the param's bank at its first step
+        playBank_ = editBank();
+        lastTrigStep_ = -999999;
     }
     const float swing = get(Swing), human = get(Humanize);
     const float accentG = 1.0f + get(Accent) * 1.0f; // up to +6 dB-ish
@@ -698,10 +745,11 @@ void RhythmMachine::render(float* out, int32_t frames) {
                 if (stepArmed_ && frac >= trigFrac) {
                     stepArmed_ = false;
                     curStep_ = barStep;
+                    const int bk = stepBank(absStep, barStep);
                     for (int v = 0; v < kVoices; ++v)
-                        if (on_[bank_][v][barStep]) {
-                            float vv = vel_[bank_][v][barStep] / 255.0f;
-                            if (acc_[bank_][v][barStep]) vv = std::min(1.0f, vv * accentG);
+                        if (on_[bk][v][barStep]) {
+                            float vv = vel_[bk][v][barStep] / 255.0f;
+                            if (acc_[bk][v][barStep]) vv = std::min(1.0f, vv * accentG);
                             if (human > 0.0f)
                                 vv = std::clamp(vv + (vdsp_.noiseF() * 2.0f - 1.0f) * human * 0.25f, 0.0f, 1.0f);
                             triggerVoice(v, vv);
@@ -773,6 +821,8 @@ void RhythmMachine::render(float* out, int32_t frames) {
 
     // publish telemetry
     scope_[S_Step].store((float)(playing_ ? curStep_ : -1), std::memory_order_relaxed);
+    scope_[S_Bank].store(playing_ ? (float)playBank_ : -1.0f, std::memory_order_relaxed);
+    advanceClock(frames);
     scope_[S_Glue].store(grMax, std::memory_order_relaxed);
     int active = 0;
     for (int v = 0; v < kVoices; ++v) {
