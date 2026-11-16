@@ -89,9 +89,19 @@ for side in base head; do
   xargs -P "$JOBS" -I{} bash -c "run_one $side {}" <"$WORK/scenarios-$side.txt" | sort >"$WORK/results-$side.tsv"
 done
 
+# TEMP diagnostics for nota-daw/nota#642 (scratch branch, never merged): per-function
+# instruction counts of the scenarios that regress, both sides.
+lscpu >"$WORK/diag-cpu.log" 2>&1 || true
+for id in instrument-01 audio-tails-8; do
+  for side in base head; do
+    callgrind_annotate --inclusive=no --threshold=100 "$WORK/cg/$side-$id.cg" >"$WORK/diag-$side-$id-self.log" 2>&1 || true
+    callgrind_annotate --inclusive=yes --threshold=99 "$WORK/cg/$side-$id.cg" >"$WORK/diag-$side-$id-incl.log" 2>&1 || true
+  done
+done
+
 # Timing: one scenario at a time (no contention), base and head back to back, each round.
 : >"$WORK/timing-base.tsv"; : >"$WORK/timing-head.tsv"
-ROUNDS=${PERF_ROUNDS:-5}
+ROUNDS=${PERF_ROUNDS:-1}
 echo "==> timing $ROUNDS interleaved rounds"
 for r in $(seq "$ROUNDS"); do
   while read -r id; do
