@@ -52,6 +52,27 @@ void DrumRack::allNotesOff() {
         if (c.instrument) c.instrument->allNotesOff();
 }
 
+// A silent pad keeps time: its instrument plays the hits it gets into nothing and its decay runs
+// on, so unmuting is heard from the pad's next hit. Before, the hit it took while silent waited,
+// frozen at its start, and fired at full level the moment it was unmuted (#650).
+void DrumRack::keepSilentPadTime(RackChain& c, int32_t frames) {
+    c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+    if (!c.instrument->isIdle()) {
+        std::memset(scratch_, 0, sizeof(float) * frames * 2);
+        c.instrument->render(scratch_, frames);
+    }
+    if (c.ctl->retrig) {
+        c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
+        c.ctl->retrig = false;
+    }
+    const float dec = c.ctl->decay.load(std::memory_order_relaxed);
+    if (dec < 0.999f) {
+        const double tauMs = 20.0 * std::pow(100.0, (double)dec);
+        const double fall = std::exp(-(double)frames / (tauMs * 0.001 * sampleRate_));
+        c.ctl->ampEnv.store(c.ctl->ampEnv.load(std::memory_order_relaxed) * (float)fall, std::memory_order_relaxed);
+    }
+}
+
 void DrumRack::render(float* out, int32_t frames) {
     const auto done = renderScope();
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
@@ -74,25 +95,7 @@ void DrumRack::render(float* out, int32_t frames) {
         const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
         const bool silent = mute || (anySolo && !solo);
         if (silent && !tap) {
-            // A silent pad keeps time: its instrument plays the hits it gets into nothing and
-            // its decay runs on, so unmuting is heard from the pad's next hit. Before, the hit
-            // it took while silent waited, frozen at its start, and fired at full level the
-            // moment it was unmuted (#650).
-            c.ctl->meter.store(0.0f, std::memory_order_relaxed);
-            if (!c.instrument->isIdle()) {
-                std::memset(scratch_, 0, sizeof(float) * frames * 2);
-                c.instrument->render(scratch_, frames);
-            }
-            if (c.ctl->retrig) {
-                c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
-                c.ctl->retrig = false;
-            }
-            const float dec = c.ctl->decay.load(std::memory_order_relaxed);
-            if (dec < 0.999f) {
-                const double tauMs = 20.0 * std::pow(100.0, (double)dec);
-                const double fall = std::exp(-(double)frames / (tauMs * 0.001 * sampleRate_));
-                c.ctl->ampEnv.store(c.ctl->ampEnv.load(std::memory_order_relaxed) * (float)fall, std::memory_order_relaxed);
-            }
+            keepSilentPadTime(c, frames); // out of line: the audible loop stays as it was
             continue;
         }
         std::memset(scratch_, 0, sizeof(float) * frames * 2);
