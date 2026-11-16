@@ -249,6 +249,14 @@ public partial class MainWindow : Window
         var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: NotaType.Readout, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
+        // specs/099: while the master Tempo lane drives the tempo the field only shows it.
+        void ApplyBpmEditable()
+        {
+            bpmField.IsEnabled = vm.Transport.BpmEditable;
+            ToolTip.SetTip(bpmField, vm.Transport.BpmEditable ? null : Loc.T("transport.tempo_automated"));
+            ToolTip.SetShowOnDisabled(bpmField, true);
+        }
+        ApplyBpmEditable();
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
         var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
@@ -265,7 +273,8 @@ public partial class MainWindow : Window
 
         vm.Transport.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(vm.Transport.Bpm))
+            if (e.PropertyName == nameof(vm.Transport.BpmEditable)) ApplyBpmEditable();
+            else if (e.PropertyName == nameof(vm.Transport.Bpm))
             {
                 bpmField.Value = (double)vm.Transport.Bpm;
                 RequestTempoRefresh();   // un-warped audio clips change beat length with the tempo

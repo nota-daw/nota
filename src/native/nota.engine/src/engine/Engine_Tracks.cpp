@@ -2360,7 +2360,9 @@ bool Engine::insertTimeInto(Graph& g, double at, double len, bool duplicate) {
             for (auto& c : copies) out.push_back(std::move(c));
             nt->clips.swap(out);
         }
-        for (auto& lane : nt->automation) changed |= shiftLane(lane);
+        // The master Tempo lane (specs/099) is the ruler itself, not content on it: time and
+        // section edits leave it where it is, as they left the tempo map before it was a lane.
+        for (auto& lane : nt->automation) if (lane.target != AutomationTarget::Tempo) changed |= shiftLane(lane);
         return changed ? nt : nullptr;
     };
 
@@ -2551,7 +2553,8 @@ void Engine::remapTimeline(double lo, double hi, const std::vector<TimeRegion>& 
             changed |= remapClips(
                 nt->clips, lo, hi, rs, [&](const AudioClip& c) { return audioDisplayLenBeats(c, spb, devSR, tempoMap()); },
                 [&](const AudioClip& c, double a, double b) { return audioSlice(c, a, b, spb, devSR, tempoMap()); });
-        for (auto& lane : nt->automation) changed |= laneRemap(lane, lo, hi, rs);
+        for (auto& lane : nt->automation)   // not the master Tempo lane: the ruler stays (specs/099)
+            if (lane.target != AutomationTarget::Tempo) changed |= laneRemap(lane, lo, hi, rs);
         // A take travels with the region its first played frame is in, so the comp sections
         // still where it put them stay on it (specs/067).
         for (auto& k : nt->takes)
@@ -2692,7 +2695,7 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
         auto nt = cloneTrack(*t);
         for (size_t j = 0; j < nt->automation.size() && j < orig.automation.size(); ++j) {
             nt->automation[j].points = orig.automation[j].points;
-            laneDuplicate(nt->automation[j], a, b);
+            if (nt->automation[j].target != AutomationTarget::Tempo) laneDuplicate(nt->automation[j], a, b); // specs/099
         }
         t = nt;
     };
@@ -4471,9 +4474,14 @@ int32_t Engine::clipNoteCount(int32_t trackId, int32_t clipIndex) const {
 // bumps the whole project format).
 namespace {
 constexpr int kFreezeHeaderBytes = static_cast<int>(sizeof(double) + sizeof(int64_t));
-constexpr uint32_t kFreezeMapMagic = 0x314d5446; // FTM1; negative spb distinguishes this from legacy PCM
+// Negative spb distinguishes a mapped freeze from legacy PCM. FTM2 (specs/099) stores
+// {beat, bpm, incomingBpm, curve}; FTM1 (#568 builds) stored the old step/linear/Bezier
+// points and is read back approximately (Bezier segments as linear).
+constexpr uint32_t kFreezeMapMagicV1 = 0x314d5446; // FTM1
+constexpr uint32_t kFreezeMapMagic = 0x324d5446;   // FTM2
 constexpr int kFreezeMapHeaderBytes = 2 * sizeof(uint32_t) + 2 * sizeof(double);
-constexpr int kFreezePointBytes = 8 * sizeof(double); // explicit fields, never native struct padding
+constexpr int kFreezePointBytesV1 = 8 * sizeof(double);
+constexpr int kFreezePointBytes = 4 * sizeof(double); // explicit fields, never native struct padding
 }
 
 int64_t Engine::beginFreeze(int32_t trackId, double lengthBeats, double tailSec, double startBeat) {
@@ -4571,7 +4579,7 @@ int32_t Engine::freezeGetState(int32_t trackId, uint8_t* out, int32_t cap) const
             auto write = [&](const auto& value) { std::memcpy(cursor, &value, sizeof(value)); cursor += sizeof(value); };
             write(kFreezeMapMagic); write(count); write(timing->sampleRate); write(timing->startBeat);
             if (timing->map) for (const auto& p : timing->map->points) {
-                const double values[] = {p.beat, p.bpm, static_cast<double>(p.shape), p.x1, p.y1, p.x2, p.y2, p.incoming_bpm};
+                const double values[] = {p.beat, p.bpm, p.incomingBpm, static_cast<double>(p.curve)};
                 std::memcpy(cursor, values, sizeof(values)); cursor += sizeof(values);
             }
         }
@@ -4598,18 +4606,29 @@ void Engine::freezeSetState(int32_t trackId, const uint8_t* data, int32_t size) 
         uint32_t magic = 0, count = 0;
         double sr = 0, start = 0;
         read(magic); read(count); read(sr); read(start);
-        if (magic != kFreezeMapMagic || count > 4096 || !std::isfinite(sr) || sr <= 0 ||
+        const bool v1 = magic == kFreezeMapMagicV1;
+        if ((magic != kFreezeMapMagic && !v1) || count > TempoMap::kMaxPoints || !std::isfinite(sr) || sr <= 0 ||
             !std::isfinite(start) || start < 0) return;
-        header += kFreezeMapHeaderBytes + static_cast<int64_t>(count) * kFreezePointBytes;
+        header += kFreezeMapHeaderBytes + static_cast<int64_t>(count) * (v1 ? kFreezePointBytesV1 : kFreezePointBytes);
         if (header > size || frames > (size - header) / (2 * static_cast<int64_t>(sizeof(float)))) return;
-        std::vector<NotaTempoPoint> points;
+        std::vector<TempoMap::Point> points;
         points.reserve(count);
+        double prevBpm = 0; int prevShape = 1;
         for (uint32_t i = 0; i < count; ++i) {
-            double v[8]; std::memcpy(v, cursor, sizeof(v)); cursor += sizeof(v);
-            if (!std::isfinite(v[2]) || v[2] < 0 || v[2] > 2 || std::floor(v[2]) != v[2]) return;
-            points.push_back({v[0], v[1], static_cast<int32_t>(v[2]), v[3], v[4], v[5], v[6], v[7]});
+            if (v1) { // beat, bpm, shape, x1, y1, x2, y2, incoming_bpm
+                double v[8]; std::memcpy(v, cursor, sizeof(v)); cursor += sizeof(v);
+                if (!std::isfinite(v[2]) || v[2] < 0 || v[2] > 2) return;
+                const double bpm = TempoMap::clampBpm(v[1]);
+                const double incoming = i == 0 ? bpm : prevShape == 0 ? prevBpm
+                    : TempoMap::clampBpm(v[7] > 0 ? v[7] : v[1]);
+                points.push_back({v[0], bpm, incoming, 0.0f});
+                prevBpm = bpm; prevShape = static_cast<int>(v[2]);
+            } else {
+                double v[4]; std::memcpy(v, cursor, sizeof(v)); cursor += sizeof(v);
+                points.push_back({v[0], v[1], v[2], static_cast<float>(v[3])});
+            }
         }
-        if (!TempoMap::valid(points)) return;
+        if (!points.empty() && !TempoMap::valid(points)) return;
         auto map = points.empty() ? nullptr : std::make_shared<const TempoMap>(std::move(points));
         timing = std::make_shared<const Track::FrozenTiming>(Track::FrozenTiming{std::move(map), sr, start});
         spb = -spb;

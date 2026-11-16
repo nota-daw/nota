@@ -186,6 +186,8 @@ class Engine {
     // --- parameter automation (M9) ---
     // Device-free: interpolation + block-rate apply write the target atomic.
     bool automationSelfTest();
+    int32_t tempoLaneSelfTest(); // specs/099: master Tempo lane -> tempo map; 0 = pass, else the failed check
+    int32_t masterAutomationSelfTest(); // specs/099: master Pan / device lanes; 0 = pass, else the failed check
     bool automationCurveSelfTest(); // M9-D: per-segment curvature shaping
 
     // --- CV modulation (Phase 3, Modular editor) ---
@@ -372,7 +374,8 @@ class Engine {
     // backToArrangement stops every session clip and hands all tracks back to the timeline.
     bool arrangementActive() const { return arrangementActive_.load(std::memory_order_relaxed); }
     void backToArrangement();
-    void setBpm(double bpm);
+    // False (nothing changes) while the master Tempo lane drives the tempo (specs/099).
+    bool setBpm(double bpm);
     double bpm() const;
     void setTimeSignature(int num, int denom);
     void setLoop(bool enabled, double startBeat, double endBeat);
@@ -389,6 +392,9 @@ class Engine {
 
     // --- mixer ---
     void setMasterVolume(float v) { masterVolume_.store(v, std::memory_order_relaxed); }
+    // Master pan (specs/099), -1..1: the master track's pan, applied after the master chain.
+    void setMasterPan(float p) { setTrackPan(kMasterTrackId, std::clamp(p, -1.0f, 1.0f)); }
+    float masterPan() const;
     // Reserved id for the master effect chain (not a real track in the graph list). The
     // device/name/colour ops accept it via findTrackAuthoring, so the UI drives the master
     // chain through the same path as any track. Large so it never collides with real ids.
@@ -1514,7 +1520,14 @@ class Engine {
     // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
     // one undo step (an identical list makes none); false = baseline (project load).
     void setSections(std::vector<Section> sections, bool checkpoint);
-    bool setTempoPoints(std::vector<NotaTempoPoint> points, bool checkpoint);
+    // Tempo map from the master Tempo lane (specs/099). Run on every publish of a new edit
+    // (not undo/redo: a restored snapshot already holds its matching map): rebuilds
+    // `g.tempoMap` when the lane differs from what the map was compiled from, and keeps the
+    // unwarped clips and takes of tracks this edit did not touch at their physical time.
+    void deriveTempoMap(Graph& g) const;
+    // The master Tempo lane, or nullptr.
+    static const TrackLane* masterTempoLane(const Graph& g);
+    bool tempoAutomated() const;
     const TempoMap* tempoMap() const { return authoring_ ? authoring_->tempoMap.get() : nullptr; }
     double beatToSeconds(double beat) const { return tempoMap() ? tempoMap()->secondsAt(beat) : beat * 60.0 / authoringBpm_; }
     double secondsToBeat(double seconds) const { return tempoMap() ? tempoMap()->beatAt(seconds) : seconds * authoringBpm_ / 60.0; }
@@ -1605,6 +1618,9 @@ class Engine {
     void finishCue(float* cue, int32_t numFrames);    // Cue level, safety net, meter (specs/089)
     void renderTone(float* out, int32_t numFrames);
     void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
+    void applyMasterLanes(Track& master, double beat); // specs/099: the master's lanes, per master chunk
+    static const TrackLane* masterPanLane(const Track& master); // the playing master Pan lane, or null
+    void masterPanStage(float* out, int32_t frames, float pan, PanLaw law); // specs/099, audio thread
 
     // CV modulation (Phase 3): swing modulated device params around their base for
     // this block, then restore the base afterwards (RT; called inside mixGraph).
@@ -1964,6 +1980,9 @@ class Engine {
     size_t undoGroupBase_ = 0;   // undoStack_ size when the outermost group began
 
     std::atomic<float> masterVolume_{1.0f};
+    // Master pan stage gains (specs/099), audio thread only: the last block's ll, lr, rl, rr,
+    // so a pan change ramps across the next block instead of stepping.
+    float masterPanG_[4] = {1.0f, 0.0f, 0.0f, 1.0f};
     std::atomic<float> masterPeakL_{0.0f};
     std::atomic<float> masterPeakR_{0.0f};
     std::atomic<float> masterRmsL_{0.0f};

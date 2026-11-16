@@ -46,6 +46,40 @@ inline PanGains panGains(float pan, float vol, PanLaw law) {
     return {static_cast<float>(c) * vol, 0.0f, static_cast<float>(b) * vol, static_cast<float>(s - b) * vol};
 }
 
+// The master pan stage (specs/099): the project pan law with centre at unity (0 dB) — the
+// track gains scaled by √2 — and no channel ever boosted above its input, so centre is
+// bit-exact pass-through and a full pan never adds level.
+inline PanGains masterPanGains(float pan, PanLaw law) {
+    if (pan == 0.0f) return {1.0f, 0.0f, 0.0f, 1.0f};
+    PanGains k = panGains(pan, 1.0f, law);
+    constexpr float kRoot2 = 1.41421356f;
+    k = {std::min(1.0f, k.ll * kRoot2), k.lr * kRoot2, k.rl * kRoot2, std::min(1.0f, k.rr * kRoot2)};
+    return k;
+}
+
+}  // namespace (reopened below)
+
+// Master pan over one chunk (specs/099): gains ramp linearly from the last chunk's, so a
+// pan change never steps; centre with nothing to ramp is skipped (bit-exact pass-through).
+void Engine::masterPanStage(float* out, int32_t n, float pan, PanLaw law) {
+    const PanGains to = masterPanGains(pan, law);
+    float* f = masterPanG_;
+    const bool same = f[0] == to.ll && f[1] == to.lr && f[2] == to.rl && f[3] == to.rr;
+    if (same && to.ll == 1.0f && to.lr == 0.0f && to.rl == 0.0f && to.rr == 1.0f) return;
+    const float inv = n > 0 ? 1.0f / static_cast<float>(n) : 1.0f;
+    for (int32_t i = 0; i < n; ++i) {
+        const float x = same ? 1.0f : static_cast<float>(i + 1) * inv;
+        const float ll = f[0] + (to.ll - f[0]) * x, lr = f[1] + (to.lr - f[1]) * x;
+        const float rl = f[2] + (to.rl - f[2]) * x, rr = f[3] + (to.rr - f[3]) * x;
+        const float inL = out[i * 2], inR = out[i * 2 + 1];
+        out[i * 2] = ll * inL + lr * inR;
+        out[i * 2 + 1] = rl * inL + rr * inR;
+    }
+    f[0] = to.ll, f[1] = to.lr, f[2] = to.rl, f[3] = to.rr;
+}
+
+namespace {
+
 // One track's pan for one segment. Without cross terms or a law crossfade it is the plain
 // two-gain multiply (so Balance renders stay bit-identical); during a crossfade the gains
 // blend from the old law's to the new law's per sample.
@@ -2447,28 +2481,45 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     renderTone(out, numFrames);
     renderPreview(out, numFrames); // audition voice (M7-4a), pre-master
 
-    // Master effect chain (post-mix, pre-fader): run the whole mix through the master
-    // track's devices, in kMaxBlock chunks so each device sees at most a full block.
+    // Master effect chain (post-mix, pre-fader) and master pan (specs/099): run the whole mix
+    // through the master track's devices, then the pan stage, in kMaxBlock chunks so each
+    // device sees at most a full block — and the master's own lanes (Pan, device params) are
+    // read per chunk, as track lanes are per segment, however long the call (export).
     if (g && g->masterTrack) {
         // The master runs after the transport advanced past this block; recover the
         // block's start beat so tempo-synced master devices line up.
+        Track& master = *g->masterTrack;
         const bool mappedMaster = transport_.hasTempoMap();
         const double masterStartBeat = mappedMaster ? transport_.beatAtSamples(presentationStart)
             : spb > 0.0 ? transport_.positionBeats() - numFrames / spb : 0.0;
-        for (auto& d : g->masterTrack->devices) {
-            if (!d || d->bypassed()) continue;
-            for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
-                const int32_t n = std::min(numFrames - off, kMaxBlock);
-                if (spb > 0.0) {
-                    if (mappedMaster) {
-                        const double beat = transport_.beatAtSamples(presentationStart + off);
-                        const double end = transport_.beatAtSamples(presentationStart + off + n);
-                        d->setTransport(beat, end > beat ? n / (end - beat) : spb, playing);
-                    } else // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
-                        d->setTransport(masterStartBeat + off / spb, spb, playing);
+        const bool lanes = !master.automation.empty();
+        for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
+            const int32_t n = std::min(numFrames - off, kMaxBlock);
+            double beat = 0.0, endBeat = 0.0, chunkSpb = spb;
+            float pan = std::clamp(master.pan(), -1.0f, 1.0f);
+            if (spb > 0.0) {
+                if (mappedMaster) {
+                    beat = transport_.beatAtSamples(presentationStart + off);
+                    endBeat = transport_.beatAtSamples(presentationStart + off + n);
+                    chunkSpb = endBeat > beat ? n / (endBeat - beat) : spb;
+                } else { // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
+                    beat = masterStartBeat + off / spb;
+                    endBeat = beat + n / spb;
                 }
+                if (lanes) {
+                    applyMasterLanes(master, beat);
+                    // The pan stage ramps to the lane's value at the chunk's end, so a drawn
+                    // pan sweep is followed exactly, not one chunk late.
+                    if (const TrackLane* pl = masterPanLane(master))
+                        pan = std::clamp(pl->valueAt(playing ? endBeat : beat), -1.0f, 1.0f);
+                }
+            }
+            for (auto& d : master.devices) {
+                if (!d || d->bypassed()) continue;
+                if (spb > 0.0) d->setTransport(beat, chunkSpb, playing);
                 d->process(out + off * 2, n);
             }
+            masterPanStage(out + off * 2, n, pan, g->panLaw);
         }
     }
 

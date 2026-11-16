@@ -71,6 +71,10 @@ public sealed partial class ArrangementView
         private TrackVM? _rangeTrack;            // Shift-drag time-range selection in progress (Phase 2)
         private double _rangeAnchor;
         internal bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
+        /// <summary>The point being dragged on <paramref name="t"/>, else the one hovered there.</summary>
+        internal AutoPt? ActivePoint(TrackVM t)
+            => ReferenceEquals(_autoDragTrack, t) && _autoDrag is { } d ? d
+             : ReferenceEquals(_hoverTrack, t) ? _hoverPoint : null;
 
         // Target-selector pill: width fits its label so nothing clips.
         private const double PillH = 16;
