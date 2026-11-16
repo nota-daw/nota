@@ -61,6 +61,13 @@ inline PanGains masterPanGains(float pan, PanLaw law) {
 
 // Master pan over one chunk (specs/099): gains ramp linearly from the last chunk's, so a
 // pan change never steps; centre with nothing to ramp is skipped (bit-exact pass-through).
+// After a seek, a start or a loop wrap (an export starts with one) masterPanSnap first sets
+// the gains for where the playhead landed: there is nothing continuous to ramp from.
+void Engine::masterPanSnap(float pan, PanLaw law) {
+    const PanGains g = masterPanGains(pan, law);
+    masterPanG_[0] = g.ll, masterPanG_[1] = g.lr, masterPanG_[2] = g.rl, masterPanG_[3] = g.rr;
+}
+
 void Engine::masterPanStage(float* out, int32_t n, float pan, PanLaw law) {
     const PanGains to = masterPanGains(pan, law);
     float* f = masterPanG_;
@@ -2387,6 +2394,13 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     int32_t nLoopSeams = 0; // block offsets where the loop wrapped
     double presentationStart = transport_.playheadSamples();
     int32_t presentationFrames = 0, presentationLead = 0;
+    // Where each segment starts on the timeline (specs/099): the master section runs after this
+    // loop and reads its lanes / tempo from these, so a loop wrap or a count-in ending inside the
+    // block puts each master chunk at the beat that actually sounded there. `jump`: the playhead
+    // got there by a seek, a start or a wrap (the master pan snaps instead of ramping).
+    struct SegAnchor { int32_t off; double samples; bool rolling, jump; };
+    SegAnchor anchors[32];
+    int32_t nAnchors = 0;
     while (done < numFrames) {
         if (playing && transport_.isLooping() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             // No voice flush here: clip notes crossing the loop end get note-offs in the next
@@ -2431,6 +2445,8 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
             presentationFrames += seg;
         }
+        if (nAnchors < 32 && (nAnchors == 0 || chase || playing != anchors[nAnchors - 1].rolling))
+            anchors[nAnchors++] = {done, segStart, playing, chase};
         chaseNotes_ = chase;
         if (chase) articulationChaseStart_ = transport_.hasTempoMap() ? segStart : musicalStart;
         cueSeg_ = cue ? cue + done * 2 : nullptr; // this segment of the Cue bus (specs/089)
@@ -2486,40 +2502,47 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // device sees at most a full block — and the master's own lanes (Pan, device params) are
     // read per chunk, as track lanes are per segment, however long the call (export).
     if (g && g->masterTrack) {
-        // The master runs after the transport advanced past this block; recover the
-        // block's start beat so tempo-synced master devices line up.
         Track& master = *g->masterTrack;
         const bool mappedMaster = transport_.hasTempoMap();
-        const double masterStartBeat = mappedMaster ? transport_.beatAtSamples(presentationStart)
-            : spb > 0.0 ? transport_.positionBeats() - numFrames / spb : 0.0;
         const bool lanes = !master.automation.empty();
-        for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
-            const int32_t n = std::min(numFrames - off, kMaxBlock);
+        int32_t ai = 0;
+        for (int32_t off = 0; off < numFrames;) {
+            while (ai + 1 < nAnchors && anchors[ai + 1].off <= off) ++ai;
+            const SegAnchor& an = anchors[ai];
+            const int32_t pieceEnd = ai + 1 < nAnchors ? anchors[ai + 1].off : numFrames;
+            const int32_t n = std::min({numFrames - off, kMaxBlock, pieceEnd - off});
+            const bool snap = an.jump && off == an.off; // first chunk after a seek / start / wrap
+            const double s0 = an.samples + (an.rolling ? off - an.off : 0);
+            const double s1 = s0 + (an.rolling ? n : 0);
             double beat = 0.0, endBeat = 0.0, chunkSpb = spb;
-            float pan = std::clamp(master.pan(), -1.0f, 1.0f);
+            float pan = std::clamp(master.pan(), -1.0f, 1.0f), startPan = pan;
             if (spb > 0.0) {
                 if (mappedMaster) {
-                    beat = transport_.beatAtSamples(presentationStart + off);
-                    endBeat = transport_.beatAtSamples(presentationStart + off + n);
+                    beat = transport_.beatAtSamples(s0);
+                    endBeat = transport_.beatAtSamples(s1);
                     chunkSpb = endBeat > beat ? n / (endBeat - beat) : spb;
                 } else { // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
-                    beat = masterStartBeat + off / spb;
-                    endBeat = beat + n / spb;
+                    beat = s0 / spb;
+                    endBeat = s1 / spb;
                 }
                 if (lanes) {
                     applyMasterLanes(master, beat);
                     // The pan stage ramps to the lane's value at the chunk's end, so a drawn
                     // pan sweep is followed exactly, not one chunk late.
-                    if (const TrackLane* pl = masterPanLane(master))
-                        pan = std::clamp(pl->valueAt(playing ? endBeat : beat), -1.0f, 1.0f);
+                    if (const TrackLane* pl = masterPanLane(master)) {
+                        startPan = std::clamp(pl->valueAt(beat), -1.0f, 1.0f);
+                        pan = std::clamp(pl->valueAt(endBeat), -1.0f, 1.0f);
+                    }
                 }
             }
             for (auto& d : master.devices) {
                 if (!d || d->bypassed()) continue;
-                if (spb > 0.0) d->setTransport(beat, chunkSpb, playing);
+                if (spb > 0.0) d->setTransport(beat, chunkSpb, an.rolling);
                 d->process(out + off * 2, n);
             }
+            if (snap) masterPanSnap(startPan, g->panLaw); // from where the playhead landed
             masterPanStage(out + off * 2, n, pan, g->panLaw);
+            off += n;
         }
     }
 

@@ -258,7 +258,8 @@ class Engine {
     // to the master gain in applyAutomation; persisted in `.nota` v5.
     int32_t masterVolumeAutomationCount() const;
     int32_t getMasterVolumeAutomation(NotaAutomationPoint* out, int32_t cap) const;
-    bool setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count);
+    // live: no undo checkpoint (a drag's later moves — the first write checkpointed).
+    bool setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count, bool live = false);
 
     // Per-clip volume envelope (M9 follow-up): 0..1 curve in clip-local beats that
     // multiplies the audio clip's output. get(out=null) returns the point count.
@@ -1621,6 +1622,7 @@ class Engine {
     void applyMasterLanes(Track& master, double beat); // specs/099: the master's lanes, per master chunk
     static const TrackLane* masterPanLane(const Track& master); // the playing master Pan lane, or null
     void masterPanStage(float* out, int32_t frames, float pan, PanLaw law); // specs/099, audio thread
+    void masterPanSnap(float pan, PanLaw law); // the stage's gains jump to `pan` (no ramp)
 
     // CV modulation (Phase 3): swing modulated device params around their base for
     // this block, then restore the base afterwards (RT; called inside mixGraph).

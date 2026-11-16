@@ -151,14 +151,43 @@ internal static class MasterAutomationTests
             yield return (removed == before - 1 && e.TrackDeviceCount(m) == 1 && undone && e.AutomationLaneCount(m) == before,
                 $"master device: removing it drops its lane, undo restores both ({before} → {removed} → {e.AutomationLaneCount(m)})");
 
+            // An export starts where it starts: no ramp from the pan the last playback left behind.
+            e.RemoveAutomationLane(m, e.AutomationLaneCount(m) - 1);   // the Pan lane: the knob leads
+            e.SetMasterPan(1f);
+            e.Seek(0); e.Play(); Render(e, Sr / 2); e.StopTransport();
+            e.SetMasterPan(0f);
+            string centred = Path.Combine(temp, "centred.wav");
+            new AudioExporter().ExportMaster(e, new ExportRequest(centred, 2, 120, Sr, WavBitDepth.Float32,
+                RestoreLoop: false, RestoreMetronome: false));
+            var cx = ReadFloatWav(centred);
+            double cl = Rms(cx, 0, .01, .1), cr = Rms(cx, 1, .01, .1);
+            yield return (cl > .01 && Math.Abs(cl - cr) / cr < .01,
+                $"master pan: an export at centre starts centred after right-panned playback (L {cl:0.000} / R {cr:0.000})");
+
+            // Master lanes follow a loop wrap inside one render call: loop beats 0–4 (2 s) with a
+            // −1 → 1 pan lane; just after the wrap the pan is back near −1.
+            int wrapLane = e.AddAutomationLane(m, AutomationTarget.Pan, -1, -1);
+            e.SetAutomationPoints(m, wrapLane, new[] { new AutomationPoint(0, -1, 0), new AutomationPoint(4, 1, 0) });
+            e.SetLoop(true, 0, 4);
+            e.Seek(0); e.Play();
+            var looped = Render(e, Sr * 3);
+            e.StopTransport(); e.SetLoop(false, 0, 4);
+            double wl = Rms(looped, 0, 2.15, 2.25) / refL, wr = Rms(looped, 1, 2.15, 2.25) / refR;
+            // R/L: the master EQ's Output lane still moves the level, the balance is the pan's.
+            yield return (wl > .05 && wr / wl < .3,
+                $"master pan: a lane follows the loop wrap inside one render (after the wrap R/L {wr / wl:0.00}, ≈0.17 expected)");
+            e.RemoveAutomationLane(m, wrapLane);
+
             // MCP: master pan and master lanes.
             var disp = new SyncDispatch(); var refresh = new NoRefresh();
             var automation = new Nota.Mcp.Tools.AutomationTools(e, disp, refresh);
             var transport = new Nota.Mcp.Tools.TransportTools(e, disp, refresh);
             transport.SetMasterPan(.75f).Wait();
             int volumeLane = automation.AddAutomationLane(m, "volume").Result;
+            int mcpPan = automation.AddAutomationLane(m, "pan").Result;
             var lanes = automation.ListAutomation(m).Result;
-            yield return (Math.Abs(e.MasterPan - .75f) < 1e-6 && volumeLane == -1
+            lanes = automation.ListAutomation(m).Result;
+            yield return (Math.Abs(e.MasterPan - .75f) < 1e-6 && volumeLane == -1 && mcpPan >= 0
                           && lanes.Any(l => l.Target == "pan") && lanes.Any(l => l.Target == "device_param"),
                 "master automation: MCP sets the master pan and lists the master's pan and device lanes");
         }

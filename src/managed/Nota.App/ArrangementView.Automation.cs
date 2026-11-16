@@ -421,6 +421,13 @@ public sealed partial class ArrangementView
         _frozenAxisSeconds = table;
     }
 
+    /// <summary>A point / curve drag is about to write its first value: a Tempo drag freezes
+    /// the axis now, so the point stays under the pointer from the first move to release.</summary>
+    internal void BeginAutoDrag(TrackVM t)
+    {
+        if (IsMaster(t) && t.AutoTarget == AutomationTarget.Tempo) FreezeTempoAxis();
+    }
+
     internal void ThawTempoAxis()
     {
         if (_frozenAxisSeconds is null) return;
@@ -444,15 +451,15 @@ public sealed partial class ArrangementView
     private void CommitAutoImpl(TrackVM t, bool live)
     {
         if (_engine is not { } e) return;
-        if (IsMasterVolume(t))   // graph-level lane: one undo step per edit, committed on release
+        if (IsMasterVolume(t))   // graph-level lane: a drag's first write checkpoints, the rest follow live
         {
-            if (live) return;
-            e.SetMasterVolumeAutomation(t.AutoPoints.OrderBy(p => p.Beat)
-                .Select(p => new AutomationPoint(p.Beat, p.Value, p.Curve)).ToArray());
+            var mv = t.AutoPoints.OrderBy(p => p.Beat).Select(p => new AutomationPoint(p.Beat, p.Value, p.Curve)).ToArray();
+            if (live) e.SetMasterVolumeAutomationLive(mv);
+            else e.SetMasterVolumeAutomation(mv);
             return;
         }
         bool tempo = IsMaster(t) && t.AutoTarget == AutomationTarget.Tempo;
-        if (tempo && live) FreezeTempoAxis();
+        if (tempo && live) FreezeTempoAxis();   // normally already frozen by BeginAutoDrag
         int lane = t.AutoChain >= 0 && NestedLaneStill(e, t, t.AutoLane) ? t.AutoLane   // the lane itself, wherever its device moved
             : t.AutoChain >= 0   // a lane into a rack (specs/044): reused, never a new track-level one
             ? e.AddNestedAutomationLane(t.Id, t.AutoTarget, t.AutoDeviceIndex, t.AutoChain, t.AutoSlot, t.AutoParamIndex,

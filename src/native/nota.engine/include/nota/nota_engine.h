@@ -474,6 +474,8 @@ NOTA_API int32_t nota_track_param_modulated(const NotaEngine* engine, int32_t ta
 NOTA_API int32_t nota_engine_master_volume_automation_count(const NotaEngine* engine);
 NOTA_API int32_t nota_engine_master_volume_automation_get(const NotaEngine* engine, NotaAutomationPoint* out, int32_t cap);
 NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine, const NotaAutomationPoint* pts, int32_t count);
+/* As _set, without an undo checkpoint: the later moves of a drag whose first write used _set. */
+NOTA_API NotaResult nota_engine_master_volume_automation_set_live(NotaEngine* engine, const NotaAutomationPoint* pts, int32_t count);
 
 /* ---- hosted-plugin parameters (M9-B) ------------------------------------
  * device_index < 0 = the track's instrument; otherwise the effect at that chain

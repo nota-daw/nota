@@ -796,9 +796,20 @@ bool Engine::setAutomationPointsImpl(
     auto old = findTrackAuthoring(trackId);
     if (!old || laneIndex < 0 || laneIndex >= static_cast<int32_t>(old->automation.size())) return false;
     const bool tempo = old->automation[laneIndex].target == AutomationTarget::Tempo;
-    if (tempo && count > static_cast<int32_t>(TempoMap::kMaxPoints) - 1) return false;
+    // The limit is on the compiled map, not the lane: a jump is two lane points on one beat,
+    // so a migrated #568 map of kMaxPoints steps becomes about twice as many lane points.
+    if (tempo && count > 2 * static_cast<int32_t>(TempoMap::kMaxPoints)) return false;
     for (int32_t i = 0; tempo && i < count; ++i)
         if (!std::isfinite(pts[i].beat) || !std::isfinite(pts[i].value)) return false;
+    if (tempo && count > static_cast<int32_t>(TempoMap::kMaxPoints) - 1) {
+        std::vector<double> beats(static_cast<size_t>(count));
+        for (int32_t i = 0; i < count; ++i) beats[i] = std::max(0.0, pts[i].beat);
+        std::sort(beats.begin(), beats.end());
+        size_t distinct = beats.front() > 0.0 ? 1 : 0; // a first point after 0 holds back to 0
+        for (size_t i = 0; i < beats.size(); ++i)
+            if (i == 0 || beats[i] - beats[i - 1] >= 1e-6) ++distinct;
+        if (distinct > TempoMap::kMaxPoints) return false;
+    }
     auto nt = cloneTrack(*old);
     auto& lane = nt->automation[laneIndex];
     lane.points.clear();
@@ -937,7 +948,7 @@ int32_t Engine::getMasterVolumeAutomation(NotaAutomationPoint* out, int32_t cap)
     return n;
 }
 
-bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count) {
+bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count, bool live) {
     if (!authoring_) return false;
     auto g = std::make_shared<Graph>(*authoring_); // copy tracks (shared) + sceneCount + masterVolume
     auto& lane = g->masterVolume;
@@ -946,7 +957,8 @@ bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t c
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
     std::sort(lane.points.begin(), lane.points.end(),
         [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
-    publish(std::move(g)); // structural edit → undo checkpoint
+    if (live) publishRaw(std::move(g)); // a drag's later moves: heard at once, no undo step
+    else publish(std::move(g));         // structural edit → undo checkpoint
     return true;
 }
 

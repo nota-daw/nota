@@ -91,6 +91,15 @@ internal static class TempoMigrationTests
                 yield return (!plain.IsTempoAutomated && plain.AutomationLaneCount(plain.MasterTrackId) == 0,
                     "tempo migration: a project without tempo points keeps its single tempo");
 
+            // 2,049 alternating steps: each change is a same-beat pair on the lane (4,097 points),
+            // still 2,049 tempo map points — the project must open with its timing.
+            var many = new JsonArray();
+            for (int i = 0; i < 2049; i++) many.Add(Point(i * 2, i % 2 == 0 ? 120 : 90, 0));
+            var (mm, _) = Open(Bundle(root, "many-steps", many));
+            using (mm)
+                yield return (mm.IsTempoAutomated && Math.Abs(mm.TempoAt(4096.5) - 120) < 1e-9 && Math.Abs(mm.TempoAt(4095) - 90) < 1e-9,
+                    $"tempo migration: a 2,049-step map opens ({mm.GetAutomationPoints(mm.MasterTrackId, 0).Length} lane points)");
+
             var broken = new JsonArray { Point(4, 120), Point(2, 90) };   // first point not at 0, beats backwards
             var (b, _) = Open(Bundle(root, "malformed", broken));
             using (b)

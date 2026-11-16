@@ -91,4 +91,7 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_master_volume_automation_set")]
     internal static partial NotaResult MasterVolumeAutomationSet(IntPtr engine, [In] AutomationPoint[] points, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_master_volume_automation_set_live")]
+    internal static partial NotaResult MasterVolumeAutomationSetLive(IntPtr engine, [In] AutomationPoint[] points, int count);
 }

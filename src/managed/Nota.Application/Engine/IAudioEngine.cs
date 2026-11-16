@@ -1510,6 +1510,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Master-volume automation (graph-level, not tied to a track).</summary>
     AutomationPoint[] GetMasterVolumeAutomation();
     void SetMasterVolumeAutomation(AutomationPoint[] points);
+    /// <summary>As <see cref="SetMasterVolumeAutomation"/> without an undo step: a drag's later moves.</summary>
+    void SetMasterVolumeAutomationLive(AutomationPoint[] points);
     /// <summary>Per-clip volume envelope for an audio clip (0..1, clip-local beats).</summary>
     AutomationPoint[] GetClipVolumeEnvelope(int trackId, int clipIndex);
     void SetClipVolumeEnvelope(int trackId, int clipIndex, AutomationPoint[] points);
