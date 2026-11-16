@@ -2398,8 +2398,8 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // loop and reads its lanes / tempo from these, so a loop wrap or a count-in ending inside the
     // block puts each master chunk at the beat that actually sounded there. `jump`: the playhead
     // got there by a seek, a start or a wrap (the master pan snaps instead of ramping).
-    struct SegAnchor { int32_t off; double samples; bool rolling, jump; };
-    SegAnchor anchors[32];
+    // (a member, not a local: a compiler that zero-fills locals would clear it every block)
+    SegAnchor* const anchors = segAnchors_;
     int32_t nAnchors = 0;
     while (done < numFrames) {
         if (playing && transport_.isLooping() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
@@ -2445,7 +2445,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
             presentationFrames += seg;
         }
-        if (nAnchors < 32 && (nAnchors == 0 || chase || playing != anchors[nAnchors - 1].rolling))
+        if (nAnchors < kMaxSegAnchors && (nAnchors == 0 || chase || playing != anchors[nAnchors - 1].rolling))
             anchors[nAnchors++] = {done, segStart, playing, chase};
         chaseNotes_ = chase;
         if (chase) articulationChaseStart_ = transport_.hasTempoMap() ? segStart : musicalStart;

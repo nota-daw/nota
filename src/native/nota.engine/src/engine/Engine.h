@@ -1985,6 +1985,11 @@ class Engine {
     // Master pan stage gains (specs/099), audio thread only: the last block's ll, lr, rl, rr,
     // so a pan change ramps across the next block instead of stepping.
     float masterPanG_[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+    // Where each segment of the current block starts on the timeline (processBlock, audio
+    // thread): the master section reads its beats from these (specs/099).
+    struct SegAnchor { int32_t off; double samples; bool rolling, jump; };
+    static constexpr int32_t kMaxSegAnchors = 32;
+    SegAnchor segAnchors_[kMaxSegAnchors] = {};
     std::atomic<float> masterPeakL_{0.0f};
     std::atomic<float> masterPeakR_{0.0f};
     std::atomic<float> masterRmsL_{0.0f};
