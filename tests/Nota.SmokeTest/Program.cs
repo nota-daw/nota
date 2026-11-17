@@ -14172,7 +14172,7 @@ Console.WriteLine("-- Nota Rhythm --");
     Check(re.TrackInstrumentKind(t) == 12, $"instrument kind is 12 ({re.TrackInstrumentKind(t)})");
     Check(re.DeviceName(t, -1) == "Nota Rhythm", $"name is Nota Rhythm ('{re.DeviceName(t, -1)}')");
     int pc = re.PluginParamCount(t, -1);
-    Check(pc == 93, $"param count 93 — 85 + eight macros (got {pc})");
+    Check(pc == 95, $"param count 95 — 85 + eight macros + Bank, Bank Switch (got {pc})");
     int RIdx(NotaEngine e, int tr, string id) { for (int i = 0; i < e.PluginParamCount(tr, -1); i++) if (e.PluginParamId(tr, -1, i) == id) return i; return -1; }
     Check(re.PluginParamName(t, -1, RIdx(re, t, "v4_decay")) == "Closed Hat Decay" && re.PluginParamName(t, -1, RIdx(re, t, "swing")) == "Perform Swing"
           && re.PluginParamName(t, -1, RIdx(re, t, "glue")) == "Master Glue" && re.PluginParamName(t, -1, RIdx(re, t, "v2_start")) == "Clap Start",
@@ -14222,7 +14222,7 @@ Console.WriteLine("-- Nota Rhythm --");
         var v1 = new List<byte>();
         v1.AddRange(BitConverter.GetBytes(0x31485452u));
         v1.AddRange(v2.Skip(4).Take(60 * 4));
-        v1.AddRange(v2.Skip(4 + 93 * 4));
+        v1.AddRange(v2.Skip(4 + 95 * 4));
         using var old = new NotaEngine();
         int to = old.AddRhythmTrack();
         old.InstrumentAction(to, 4, 0, 0);   // clear, so the steps must come from the blob
@@ -14231,7 +14231,7 @@ Console.WriteLine("-- Nota Rhythm --");
         Check(Math.Abs(old.PluginParamGet(to, -1, RIdx(old, to, "v0_tune")) - 0.9f) < 0.02f && op.On[0, 0, 0] && op.On[0, 0, 4] && op.On[0, 4, 2]
               && Math.Abs(old.PluginParamGet(to, -1, RIdx(old, to, "v0_length")) - 1f) < 1e-4f,
             "an RTH1 blob (older projects) restores params and steps; new params keep defaults");
-        var legacy = RhythmModel.Parse(v1.ToArray(), 93);
+        var legacy = RhythmModel.Parse(v1.ToArray(), 95);
         Check(legacy.On[0, 0, 0] && legacy.On[0, 4, 2] && !legacy.On[0, 1, 0], "RhythmModel.Parse reads an RTH1 blob");
     }
 
@@ -14284,6 +14284,9 @@ Console.WriteLine("-- Nota Rhythm --");
         Check(float.IsFinite(glued.Rms) && glued.Rms > 0.001f && glued.Rms < dry.Rms * 0.9f && glued.Peak <= dry.Peak * 1.02f,
             $"Glue compresses the kit (RMS {dry.Rms:F3} → {glued.Rms:F3}, peak {dry.Peak:F2} → {glued.Peak:F2})");
     }
+
+    // specs/100: the bank as an automatable param, read at the step.
+    foreach (var (ok, label) in RhythmBankTests.Run()) Check(ok, label);
 
     // Kits: Rhythm has no presets of its own — its kits are the factory drum kits (the Drum
     // Rack's). Every kit loads onto the eight voices, plays its pattern finite and unclipped,
@@ -14677,7 +14680,7 @@ Console.WriteLine("-- Kit macros --");
         int nV2 = RhythmModel.ParamsV2;
         var v2 = new List<byte>(BitConverter.GetBytes(0x32485452u));
         v2.AddRange(blob.Skip(4).Take(nV2 * 4));
-        v2.AddRange(blob.Skip(4 + (nV2 + 8) * 4));
+        v2.AddRange(blob.Skip(4 + (nV2 + 8 + 2) * 4)); // + the macros, Bank, Bank Switch
         int macTag = Enumerable.Range(0, v2.Count - 3).Last(i => v2[i] == (byte)'R' && v2[i + 1] == (byte)'M' && v2[i + 2] == (byte)'C' && v2[i + 3] == (byte)'1');
         int lt2 = le.AddRhythmTrack();
         le.SetPluginState(lt2, -1, v2.Take(macTag).ToArray());

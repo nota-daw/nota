@@ -20,7 +20,9 @@ namespace nota {
 // One track's lanes at `beat` (block rate, audio thread, allocation-free). Shared by the
 // tracks and the master (specs/099): master Pan writes the master pan stage's value, master
 // device / plug-in lanes drive the master chain; Tempo plays through the tempo map instead.
-static void applyTrackLanes(Track& t, double beat) {
+// `beatEnd` is the block's end, for the instruments that read a lane at their own steps
+// (pluginParamLane, specs/100).
+static void applyTrackLanes(Track& t, double beat, double beatEnd) {
     for (const TrackLane& lane : t.automation) {
         if (lane.points.empty() || lane.suppressRead) continue; // M9-C: control leads while writing
         if (lane.target == AutomationTarget::Tempo) continue; // specs/099: plays through the tempo map
@@ -60,9 +62,20 @@ static void applyTrackLanes(Track& t, double beat) {
             break;
         }
     }
+    // Exact-time lanes (specs/100), once every lane above has set its block-start value: an
+    // instrument samples a lane on its step grid, and the grid can be another param of the
+    // same block (Twin's Rate), so the order the lanes were added in must not matter.
+    for (const TrackLane& lane : t.automation) {
+        if (lane.points.empty() || lane.suppressRead || lane.target != AutomationTarget::PluginParam || lane.paramIndex < 0)
+            continue;
+        Instrument* inst = nullptr;
+        if (lane.nested()) inst = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot).instrument;
+        else if (lane.deviceIndex < 0) inst = t.instrument.get();
+        if (inst) inst->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
+    }
 }
 
-void Engine::applyMasterLanes(Track& master, double beat) { applyTrackLanes(master, beat); }
+void Engine::applyMasterLanes(Track& master, double beat) { applyTrackLanes(master, beat, beat); }
 
 const TrackLane* Engine::masterPanLane(const Track& master) {
     for (const TrackLane& l : master.automation)
@@ -70,13 +83,14 @@ const TrackLane* Engine::masterPanLane(const Track& master) {
     return nullptr;
 }
 
-void Engine::applyAutomation(Graph* g, double beat) {
+void Engine::applyAutomation(Graph* g, double beat, double beatEnd) {
+    if (beatEnd < beat) beatEnd = beat;
     // Most tracks carry no lanes: skip them before the (out-of-line) per-lane body.
     for (auto& tptr : g->tracks)
-        if (!tptr->automation.empty()) applyTrackLanes(*tptr, beat);
+        if (!tptr->automation.empty()) applyTrackLanes(*tptr, beat, beatEnd);
     // Master lanes (specs/099): Pan and the master chain's device / plug-in parameters.
     // A master Volume lane is not added there — master volume stays the graph-level lane.
-    if (g->masterTrack && !g->masterTrack->automation.empty()) applyTrackLanes(*g->masterTrack, beat);
+    if (g->masterTrack && !g->masterTrack->automation.empty()) applyTrackLanes(*g->masterTrack, beat, beatEnd);
     // Master-volume lane (graph-level, M9 follow-up): write the master gain atomic.
     if (!g->masterVolume.points.empty() && !g->masterVolume.suppressRead)
         masterVolume_.store(std::clamp(g->masterVolume.valueAt(beat), 0.0f, 2.0f), std::memory_order_relaxed);
@@ -172,6 +186,16 @@ std::string Engine::pluginParamText(int32_t trackId, int32_t deviceIndex, int32_
     if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return {};
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamText(paramIndex) : std::string{};
+}
+// Stepped params (specs/100): only an instrument declares them; effects' plugin params stay
+// continuous for the lane editor.
+int32_t Engine::pluginParamSteps(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && deviceIndex < 0 && t->instrument ? t->instrument->pluginParamSteps(paramIndex) : 0;
+}
+std::string Engine::pluginParamStepText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, int32_t step) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && deviceIndex < 0 && t->instrument ? t->instrument->pluginParamStepText(paramIndex, step) : std::string{};
 }
 float Engine::pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);
@@ -475,7 +499,9 @@ void Engine::beginAutomationWrite(
     if (activeWrites_.empty()) pushUndo();
     setLaneSuppressRead(trackId, laneIndex, true);
     const double beat = transport_.uiPositionBeats();
-    activeWrites_.push_back({trackId, target, deviceIndex, resolvedParam, id, laneIndex, beat, latch});
+    ActiveWrite aw{trackId, target, deviceIndex, resolvedParam, id, laneIndex, beat, latch};
+    if (auto tw = findTrackAuthoring(trackId)) aw.before = currentTargetValue(*tw, target, deviceIndex, resolvedParam);
+    activeWrites_.push_back(std::move(aw));
 }
 
 void Engine::endAutomationWrite(
@@ -489,6 +515,10 @@ void Engine::endAutomationWrite(
         if (aw.trackId == trackId &&
             sameTarget(aw.target, aw.deviceIndex, aw.paramIndex, aw.paramId, target, deviceIndex, paramIndex, id)) {
             if (aw.latch) return;
+            // A discrete edit (a click: a bank button, a mode chip) begins and ends its write before
+            // poll() samples it, so it would leave the lane as it was. Record it at the playhead.
+            if (!aw.sampled && autoRecord_.load(std::memory_order_relaxed) && transport_.uiIsPlaying())
+                recordAutomationClick(aw, transport_.uiPositionBeats());
             setLaneSuppressRead(aw.trackId, aw.laneIndex, false);
             activeWrites_.erase(activeWrites_.begin() + i);
             return;
@@ -524,7 +554,39 @@ void Engine::sampleAutomationWritesAt(double beat) {
             pts.begin(), pts.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
         republishWithTrackRaw(aw.trackId, nt); // grow the take, not an undo step
         aw.lastBeat = beat;
+        aw.sampled = true;
     }
+}
+
+// A click while recording (specs/100): the lane's value just before the playhead, then the new
+// value, both at the playhead — a step, so a stepped target (a Rhythm bank) switches right there
+// instead of ramping in from the point before. Part of the write's undo step (begin pushed it).
+void Engine::recordAutomationClick(const ActiveWrite& aw, double beat) {
+    auto old = findTrackAuthoring(aw.trackId);
+    if (!old || aw.laneIndex < 0 || aw.laneIndex >= static_cast<int32_t>(old->automation.size())) return;
+    const float v = currentTargetValue(*old, aw.target, aw.deviceIndex, aw.paramIndex);
+    const auto& was = old->automation[aw.laneIndex].points;
+    auto nt = cloneTrack(*old);
+    auto& pts = nt->automation[aw.laneIndex].points;
+    // The step starts from what the lane plays there, or — a fresh lane — what the target was.
+    // The segment the click cuts keeps its shape on both sides: the piece before it ends at the
+    // step with the curve of that piece (AutomationLane::pieceCurve), so nothing before the
+    // click plays differently, and the step runs on to the next point with the rest of it.
+    float after = 0.0f;
+    if (!was.empty()) {
+        const auto next = std::upper_bound(was.begin(), was.end(), beat,
+            [](double b, const AutomationPoint& q) { return b < q.beat; });
+        if (next != was.begin() && next != was.end()) {
+            const size_t prev = static_cast<size_t>(next - was.begin()) - 1;
+            pts[prev].curve = AutomationLane::pieceCurve(was, was[prev].beat, beat);
+            after = AutomationLane::pieceCurve(was, beat, next->beat);
+        }
+    }
+    pts.push_back({beat, was.empty() ? aw.before : old->automation[aw.laneIndex].valueAt(beat), 0.0f});
+    pts.push_back({beat, v, after});
+    std::stable_sort(
+        pts.begin(), pts.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
+    republishWithTrackRaw(aw.trackId, nt);
 }
 
 bool Engine::automationWriteSelfTest() {

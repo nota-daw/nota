@@ -29,6 +29,7 @@
 
 #include "devices/Device.h"
 #include "devices/Instrument.h"
+#include "devices/ParamLaneSteps.h"
 #include "devices/instruments/TwinSeq.h"
 #include "devices/instruments/TwinVoice.h"
 #include "engine/SnapshotHistory.h"
@@ -344,7 +345,12 @@ class Twin final : public Instrument {
         wake();
     }
     std::string pluginParamText(int32_t i) const override;
+    int32_t pluginParamSteps(int32_t i) const override;
+    std::string pluginParamStepText(int32_t i, int32_t step) const override;
     float pluginParamDefault(int32_t i) const override;
+    // A Pattern lane is read at each step's grid beat (specs/100), so a pattern change drawn on
+    // the bar where the playing pattern ends is queued in time, not one whole pattern late.
+    void pluginParamLane(int32_t i, const AutomationLane& lane, double beatFrom, double beatTo) override;
     int32_t pluginParamIndexOfId(const std::string& id) const override;
 
     // ---- project state --------------------------------------------------------
@@ -489,6 +495,10 @@ class Twin final : public Instrument {
     int64_t patStartK_ = 0; // the step index the playing pattern's first step fell on
     float seqStepV_ = 0.0f; // the Seq step source: the playing step, 0 (first) … 1 (last)
     int curPat_ = 0, pendPat_ = -1, playStep_ = -1;
+    ParamLaneSteps patLane_; // this block's Pattern lane at each step (specs/100)
+    // The pattern step k asks for: its Pattern lane sample while the song plays, else the param.
+    int wantPattern(int64_t k) const;
+    std::string valueText(int32_t i, float v) const; // pluginParamText for value v
     struct SeqNote {
         int pitch;
         double off; // absolute sample of its note-off (a tie: until the next step decides)

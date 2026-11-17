@@ -291,6 +291,8 @@ class Engine {
     std::string pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    int32_t pluginParamSteps(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;       // specs/100
+    std::string pluginParamStepText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, int32_t step) const;
     float pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     void pluginParamSet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float normalized);
     int32_t pluginParamIndexOfId(int32_t trackId, int32_t deviceIndex, const std::string& id) const;
@@ -1619,7 +1621,9 @@ class Engine {
         float gain);                                  // one sample of the click voice, Main and/or Cue
     void finishCue(float* cue, int32_t numFrames);    // Cue level, safety net, meter (specs/089)
     void renderTone(float* out, int32_t numFrames);
-    void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
+    // M9: eval lanes -> target atomics. beatEnd (< beat = beat) is the block's end, for the
+    // instruments that read a lane at their own steps (pluginParamLane, specs/100).
+    void applyAutomation(Graph* g, double beat, double beatEnd = -1.0);
     void applyMasterLanes(Track& master, double beat); // specs/099: the master's lanes, per master chunk
     static const TrackLane* masterPanLane(const Track& master); // the playing master Pan lane, or null
     void masterPanStage(float* out, int32_t frames, float pan, PanLaw law); // specs/099, audio thread
@@ -2269,6 +2273,8 @@ class Engine {
         int32_t laneIndex;
         double lastBeat;
         bool latch;
+        bool sampled = false; // poll() has written a point for it (a click ends before it does)
+        float before = 0.0f;  // the target's value when the write began (a click's step starts there)
     };
     // A lane the user took over by hand while NOT recording: it stops reading until
     // reenableAutomation() (Live's "Re-Enable Automation").
@@ -2277,6 +2283,7 @@ class Engine {
         int32_t laneIndex;
     };
     std::vector<ActiveWrite> activeWrites_;
+    void recordAutomationClick(const ActiveWrite& aw, double beat); // a discrete edit's step (specs/100)
     // Value gestures opened by unlatched parameter touches (specs/016), closed by the
     // matching endAutomationWrite. One per touch identity.
     struct TouchGesture {

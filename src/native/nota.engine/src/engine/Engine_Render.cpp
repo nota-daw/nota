@@ -2922,7 +2922,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // Automation (M9): read-mode block-rate eval — write each active lane's
         // value into its target atomic before the mix reads it. Always runs (also
         // when stopped: the playhead is static, so scrub shows automation too).
-        if (spb > 0.0) applyAutomation(g, blockStart / spb);
+        if (spb > 0.0) applyAutomation(g, blockStart / spb, (blockStart + frames) / spb);
 
         // CV modulation (Phase 3): drive modulated device params to base∘mod for this
         // segment. The device atomic holds the live modulated value continuously (no

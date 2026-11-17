@@ -99,6 +99,10 @@ public sealed partial class ArrangementView
             double frac = Math.Clamp((bot - py) / (bot - top), 0, 1);
             return (float)(min + frac * (max - min));
         }
+        // A stepped target (specs/100) takes only its levels: a point snaps to the nearest one when
+        // it is placed or moved (a curve bend reads the pointer height unsnapped).
+        private float Level(TrackVM t, float v) => _o.AutoSteps(t) is var n and >= 2 ? Quantize(v, n) : v;
+        private static float Quantize(float v, int n) => (float)(Math.Round(Math.Clamp(v, 0f, 1f) * (n - 1), MidpointRounding.AwayFromZero) / (n - 1));   // as the engine rounds (lround)
 
         // --- automation editing (M9-A3) ------------------------------------
         internal void AutoPointerPressed(PointerPressedEventArgs e)
@@ -165,7 +169,7 @@ public sealed partial class ArrangementView
                 {
                     // Double-click adds a breakpoint at the cursor, then grabs it for immediate drag.
                     _o.ClearAutoSelection();
-                    hit = new AutoPt { Beat = curBeat, Value = YToValue(t, i, pos.Y) };
+                    hit = new AutoPt { Beat = curBeat, Value = Level(t, YToValue(t, i, pos.Y)) };
                     t.AutoPoints.Add(hit);
                 }
                 else
@@ -208,6 +212,17 @@ public sealed partial class ArrangementView
                 if (span <= 0) return null;
                 double tt = (beat - a.Beat) / span;
                 double vy = a.Value + (b.Value - a.Value) * Shape(tt, a.Curve);
+                if (_o.AutoSteps(t) is var n and >= 2 && a.Value != b.Value)
+                {
+                    // A stepped target: the stair under the pointer, or one of its risers.
+                    if (Math.Abs(ValueToY(t, row, Quantize((float)vy, n)) - pos.Y) <= 6) return (a, b);
+                    foreach (var (ct, from, to) in Risers(a, b, n))
+                    {
+                        double x = _o.BeatToX(a.Beat + (b.Beat - a.Beat) * ct), y0 = ValueToY(t, row, from), y1 = ValueToY(t, row, to);
+                        if (Math.Abs(x - pos.X) <= 6 && pos.Y >= Math.Min(y0, y1) - 6 && pos.Y <= Math.Max(y0, y1) + 6) return (a, b);
+                    }
+                    return null;
+                }
                 double cy = ValueToY(t, row, (float)vy);
                 return Math.Abs(cy - pos.Y) <= 6 ? (a, b) : null;
             }
@@ -277,9 +292,9 @@ public sealed partial class ArrangementView
             _autoDrag.Beat = Math.Clamp(cand, _autoDragLo, _autoDragHi);
             // Value: free, but Shift = fine-mode (quarter sensitivity, anchored at the grab value, 8.2.2).
             float full = YToValue(_autoDragTrack, i, pos.Y);
-            _autoDrag.Value = (e.KeyModifiers & KeyModifiers.Shift) != 0
+            _autoDrag.Value = Level(_autoDragTrack, (e.KeyModifiers & KeyModifiers.Shift) != 0
                 ? _autoDragStartVal + (full - _autoDragStartVal) * 0.25f
-                : full;
+                : full);
             CommitAutoDuringDrag(_autoDragTrack);   // engine follows live (device updates at the playhead)
             _owner.InvalidateVisual();
         }
@@ -344,6 +359,57 @@ public sealed partial class ArrangementView
 
         private static readonly IPen AutoCurvePen = new Pen(NotaPalette.VizInk, 1.6);
 
+        // A stepped target's levels (specs/100): a faint guide per level, named at the right edge
+        // ("A" … "D") when the row has room, so a point lands where a bank or a pattern is.
+        private void DrawLevels(DrawingContext ctx, TrackVM t, int row, double w, int n)
+        {
+            double gap = (_rows.Height(row) - 16) / (n - 1);
+            bool named = gap >= 9;
+            for (int k = 0; k < n; k++)
+            {
+                double y = ValueToY(t, row, k / (float)(n - 1));
+                ctx.DrawLine(AutoLevelPen, new Point(0, y), new Point(w, y));
+                if (!named || _o.AutoStepText(t, k) is not { Length: > 0 } label) continue;
+                var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.SansMedium, 8, NotaPalette.TextTertiary);
+                ctx.DrawText(ft, new Point(w - ft.Width - 6, y - ft.Height / 2));
+            }
+        }
+
+        // A segment of a stepped target as it plays: the engine interpolates the points and the
+        // instrument takes the nearest level, so the line holds a level and jumps where the
+        // interpolated value crosses half-way to the next one.
+        private void DrawStairs(DrawingContext ctx, IPen pen, TrackVM t, int row, AutoPt a, AutoPt b, double ax, double bx, int n)
+        {
+            double x0 = ax, y0 = ValueToY(t, row, Quantize(a.Value, n));
+            foreach (var (ct, _, to) in Risers(a, b, n))
+            {
+                // In beats, then to X: on a tempo axis (specs/099) X isn't even in beats.
+                double x = _o.BeatToX(a.Beat + (b.Beat - a.Beat) * ct), y = ValueToY(t, row, to);
+                ctx.DrawLine(pen, new Point(x0, y0), new Point(x, y0));
+                ctx.DrawLine(pen, new Point(x, y0), new Point(x, y));
+                x0 = x; y0 = y;
+            }
+            ctx.DrawLine(pen, new Point(x0, y0), new Point(bx, y0));
+        }
+
+        // Where a segment between two levels of an n-level target changes level: the interpolated
+        // value crosses half-way between neighbouring levels at most n − 1 times, at a fraction the
+        // curve's inverse gives directly — so a long segment costs its crossings, not its length.
+        private static IEnumerable<(double t, float from, float to)> Risers(AutoPt a, AutoPt b, int n)
+        {
+            int qa = (int)Math.Round(Math.Clamp(a.Value, 0f, 1f) * (n - 1), MidpointRounding.AwayFromZero);
+            int qb = (int)Math.Round(Math.Clamp(b.Value, 0f, 1f) * (n - 1), MidpointRounding.AwayFromZero);
+            int dir = Math.Sign(qb - qa);
+            for (int q = qa; q != qb; q += dir)
+            {
+                double mid = (q + dir * 0.5) / (n - 1);   // the value where q gives way to q + dir
+                double frac = (mid - a.Value) / (b.Value - a.Value);
+                yield return (Nota.Application.Editing.AutomationCurve.InverseShape(frac, a.Curve), q / (float)(n - 1), (q + dir) / (float)(n - 1));
+            }
+        }
+        private static readonly IPen AutoLevelPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x33), 1);
+
         internal void DrawAutomation(DrawingContext ctx, double w)
         {
             var (rLo, rHi) = _rows.VisibleRange;
@@ -360,6 +426,8 @@ public sealed partial class ArrangementView
                 var pen = AutoCurvePen;
 
                 var ordered = t.AutoPoints.OrderBy(p => p.Beat).ToList();
+                int levels = _o.AutoSteps(t);
+                if (levels >= 2) DrawLevels(ctx, t, i, w, levels);
                 if (ordered.Count == 0)
                 {
                     // Empty lane: dashed baseline at the current value (grab to start).
@@ -376,6 +444,7 @@ public sealed partial class ArrangementView
                         var segPen = ReferenceEquals(t, _hoverTrack) && ReferenceEquals(a, _hoverSegLeft) ? AutoHoverPen : pen;
                         double ax = _o.BeatToX(a.Beat), ay = ValueToY(t, i, a.Value);
                         double bx = _o.BeatToX(b.Beat), by2 = ValueToY(t, i, b.Value);
+                        if (levels >= 2 && a.Value != b.Value) { DrawStairs(ctx, segPen, t, i, a, b, ax, bx, levels); continue; }
                         // A lane moves evenly in beats; on a tempo axis X is seconds, so even a straight
                         // segment bends on screen (specs/099) — sample it in beats like a curve.
                         bool timeAxis = _o.TempoAxis;
