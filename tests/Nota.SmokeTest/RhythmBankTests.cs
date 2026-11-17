@@ -197,6 +197,27 @@ internal static class RhythmBankTests
             finally { try { System.IO.File.Delete(wav); } catch { } }
         }
 
+        // A forward seek inside the pattern cycle (beat 0.5 → 2.5, where the lane holds B): Pattern
+        // mode takes the destination's bank at the first step after it, not at the next bar.
+        {
+            var (e, t) = Rig();
+            using (e)
+            {
+                e.PluginParamSet(t, -1, Idx(e, t, RhythmModel.BankSwitchId), 1f);
+                Lane(e, t, (0, 0), (2.5, 0), (2.5, 1));
+                var tmp = new float[512 * 2];
+                e.Seek(0); e.Play();
+                for (int i = 0; i < 24; i++) e.RenderOffline(tmp, 512, Sr);   // ≈ beat 0.5
+                e.Seek(2.5);
+                for (int i = 0; i < 12; i++) e.RenderOffline(tmp, 512, Sr);   // ≈ beat 3, before bar 2
+                var sc = new float[RhythmModel.ScopeLength];
+                e.InstrumentScope(t, sc);
+                int playing = (int)sc[RhythmModel.S_Bank];
+                e.StopTransport();
+                yield return (playing == 1, $"Pattern mode: a forward seek inside the pattern plays the destination's bank at once (playing {playing})");
+            }
+        }
+
         // An RTH3 blob (before the bank params) opens on its saved bank with Bank Switch Step.
         {
             using var e = new NotaEngine();

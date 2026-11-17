@@ -70,12 +70,17 @@ void RhythmMachine::setTransport(double beatStart, double spb, bool playing) {
     // A transport start wakes the machine: a stopped kit with a pattern must not sleep
     // through the downbeat.
     if (playing && !playing_) wake();
+    // A seek or a loop wrap while playing: the block doesn't start where the last one ended. The
+    // first step after it takes the bank wanted there, even in Pattern mode (a copy swapped in
+    // mid-song has no transport yet, so it never reads as a jump and keeps its running switch).
+    const bool jumped = playing && playing_ && spb > 0.0 && std::fabs(beatStart - beatStart_) * spb > 2.0;
     if (spb > 0.0) spb_ = spb;
     beatStart_ = beatStart;
     bankLane_.transport(beatStart);
     // Stopped: the playing bank is the param's, and the next start takes it at its first step.
     // Decided here, from the transport, not in render(): a copy swapped in mid-song (a sample
     // load) starts with no transport yet and must keep the running switch it was given.
+    if (jumped) lastTrigStep_.store(kNoStep, std::memory_order_relaxed);
     if (!playing) {
         playBank_.store(editBank(), std::memory_order_relaxed);
         lastTrigStep_.store(kNoStep, std::memory_order_relaxed);

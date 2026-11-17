@@ -93,9 +93,10 @@ public sealed partial class ArrangementView
             var (min, max) = _o.AutoRange(t);
             double top = _rows.Top(row) + 8, bot = _rows.Top(row) + _rows.Height(row) - 8;
             double frac = Math.Clamp((bot - py) / (bot - top), 0, 1);
-            return Level(t, (float)(min + frac * (max - min)));
+            return (float)(min + frac * (max - min));
         }
-        // A stepped target (specs/100) takes only its levels: a point snaps to the nearest one.
+        // A stepped target (specs/100) takes only its levels: a point snaps to the nearest one when
+        // it is placed or moved (a curve bend reads the pointer height unsnapped).
         private float Level(TrackVM t, float v) => _o.AutoSteps(t) is var n and >= 2 ? Quantize(v, n) : v;
         private static float Quantize(float v, int n) => (float)(Math.Round(Math.Clamp(v, 0f, 1f) * (n - 1), MidpointRounding.AwayFromZero) / (n - 1));   // as the engine rounds (lround)
 
@@ -164,7 +165,7 @@ public sealed partial class ArrangementView
                 {
                     // Double-click adds a breakpoint at the cursor, then grabs it for immediate drag.
                     _o.ClearAutoSelection();
-                    hit = new AutoPt { Beat = curBeat, Value = YToValue(t, i, pos.Y) };
+                    hit = new AutoPt { Beat = curBeat, Value = Level(t, YToValue(t, i, pos.Y)) };
                     t.AutoPoints.Add(hit);
                 }
                 else
@@ -207,6 +208,18 @@ public sealed partial class ArrangementView
                 if (span <= 0) return null;
                 double tt = (beat - a.Beat) / span;
                 double vy = a.Value + (b.Value - a.Value) * Shape(tt, a.Curve);
+                if (_o.AutoSteps(t) is var n and >= 2 && a.Value != b.Value)
+                {
+                    // A stepped target: the stair under the pointer, or one of its risers.
+                    if (Math.Abs(ValueToY(t, row, Quantize((float)vy, n)) - pos.Y) <= 6) return (a, b);
+                    double ax = _o.BeatToX(a.Beat), bx = _o.BeatToX(b.Beat);
+                    foreach (var (ct, from, to) in Risers(a, b, n))
+                    {
+                        double x = ax + (bx - ax) * ct, y0 = ValueToY(t, row, from), y1 = ValueToY(t, row, to);
+                        if (Math.Abs(x - pos.X) <= 6 && pos.Y >= Math.Min(y0, y1) - 6 && pos.Y <= Math.Max(y0, y1) + 6) return (a, b);
+                    }
+                    return null;
+                }
                 double cy = ValueToY(t, row, (float)vy);
                 return Math.Abs(cy - pos.Y) <= 6 ? (a, b) : null;
             }
@@ -360,19 +373,30 @@ public sealed partial class ArrangementView
         // interpolated value crosses half-way to the next one.
         private void DrawStairs(DrawingContext ctx, IPen pen, TrackVM t, int row, AutoPt a, AutoPt b, double ax, double bx, int n)
         {
-            int samples = Math.Max(2, (int)Math.Ceiling((bx - ax) / 2));
-            float level = Quantize(a.Value, n);
-            double x0 = ax, y0 = ValueToY(t, row, level);
-            for (int s = 1; s <= samples; s++)
+            double x0 = ax, y0 = ValueToY(t, row, Quantize(a.Value, n));
+            foreach (var (ct, _, to) in Risers(a, b, n))
             {
-                double tt = s / (double)samples;
-                float v = Quantize((float)(a.Value + (b.Value - a.Value) * Shape(tt, a.Curve)), n);
-                if (v == level && s < samples) continue;
-                double x = ax + (bx - ax) * tt;
+                double x = ax + (bx - ax) * ct, y = ValueToY(t, row, to);
                 ctx.DrawLine(pen, new Point(x0, y0), new Point(x, y0));
-                double y = ValueToY(t, row, v);
-                if (v != level) ctx.DrawLine(pen, new Point(x, y0), new Point(x, y));
-                x0 = x; y0 = y; level = v;
+                ctx.DrawLine(pen, new Point(x, y0), new Point(x, y));
+                x0 = x; y0 = y;
+            }
+            ctx.DrawLine(pen, new Point(x0, y0), new Point(bx, y0));
+        }
+
+        // Where a segment between two levels of an n-level target changes level: the interpolated
+        // value crosses half-way between neighbouring levels at most n − 1 times, at a fraction the
+        // curve's inverse gives directly — so a long segment costs its crossings, not its length.
+        private static IEnumerable<(double t, float from, float to)> Risers(AutoPt a, AutoPt b, int n)
+        {
+            int qa = (int)Math.Round(Math.Clamp(a.Value, 0f, 1f) * (n - 1), MidpointRounding.AwayFromZero);
+            int qb = (int)Math.Round(Math.Clamp(b.Value, 0f, 1f) * (n - 1), MidpointRounding.AwayFromZero);
+            int dir = Math.Sign(qb - qa);
+            for (int q = qa; q != qb; q += dir)
+            {
+                double mid = (q + dir * 0.5) / (n - 1);   // the value where q gives way to q + dir
+                double frac = (mid - a.Value) / (b.Value - a.Value);
+                yield return (Nota.Application.Editing.AutomationCurve.InverseShape(frac, a.Curve), q / (float)(n - 1), (q + dir) / (float)(n - 1));
             }
         }
         private static readonly IPen AutoLevelPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x33), 1);
