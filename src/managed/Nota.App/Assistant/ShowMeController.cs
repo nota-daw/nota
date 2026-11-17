@@ -30,6 +30,9 @@ internal sealed class ShowMeController
     private readonly AssistantView _view;
     private Walkthrough? _walk;
     private int _step;
+    // Bumped by every step entered and by Stop: a locate posted by an earlier step (or a
+    // walkthrough that has ended) sees it changed and does nothing.
+    private int _entry;
     // Windows Show me has brought forward (a popped-out Mixer or Detail): Escape there stops the
     // walkthrough too, before that window's own Escape (closing it) sees the key.
     private readonly System.Collections.Generic.HashSet<Window> _hooked = new();
@@ -57,6 +60,7 @@ internal sealed class ShowMeController
     public void Stop()
     {
         HighlightAdorner.Hide();
+        _entry++;
         _walk = null;
         _view.WalkthroughBar.IsVisible = false;
         _view.WalkthroughBar.Child = null;
@@ -91,6 +95,7 @@ internal sealed class ShowMeController
     private string? Enter(string anchor)
     {
         HighlightAdorner.Hide();
+        int entry = ++_entry;
         AnchorDefinition? def = null;
         string? commandId = null;
         if (anchor.StartsWith(AnchorRegistry.CommandPrefix, StringComparison.Ordinal))
@@ -125,8 +130,9 @@ internal sealed class ShowMeController
         // The layout settles after a reveal; find and outline the control once it has.
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
+            if (entry != _entry || _walk is not { } walk) return;   // stopped, or another step entered
             var target = _window.LocateAnchor(def.Locator);
-            if (target is null) { LastGuidance = Loc.T("assistant.control_missing"); DrawBar(_walk!.Steps[_step], LastGuidance); return; }
+            if (target is null) { LastGuidance = Loc.T("assistant.control_missing"); DrawBar(walk.Steps[_step], LastGuidance); return; }
             target = _window.ShedFallback(target) ?? target;
             // The control may live in a popped-out Detail or Mixer window: bring that one forward.
             if (TopLevel.GetTopLevel(target) is Window w)

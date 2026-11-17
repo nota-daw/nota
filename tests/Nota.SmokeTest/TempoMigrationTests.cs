@@ -100,6 +100,26 @@ internal static class TempoMigrationTests
                 yield return (mm.IsTempoAutomated && Math.Abs(mm.TempoAt(4096.5) - 120) < 1e-9 && Math.Abs(mm.TempoAt(4095) - 90) < 1e-9,
                     $"tempo migration: a 2,049-step map opens ({mm.GetAutomationPoints(mm.MasterTrackId, 0).Length} lane points)");
 
+            // 600 steep Bezier ramps between 40 and 280 BPM: split as finely as one ramp alone
+            // would be (up to 64 pieces), the lane would pass the engine's 4,096 map points and
+            // the project would fail to open. The migration splits less finely until it fits.
+            var curvy = new List<TempoMigration.LegacyPoint>();
+            for (int i = 0; i <= 600; i++)
+                curvy.Add(new TempoMigration.LegacyPoint(i * 2, i % 2 == 0 ? 40 : 280, i == 600 ? 0 : 2, .95, 0, 1, .05));
+            var curvyLane = TempoMigration.Convert(curvy, out _);
+            int curvyBeats = TempoMigration.DistinctBeats(curvyLane);
+            var curvyArr = new JsonArray();
+            foreach (var p in curvy) curvyArr.Add(Point(p.Beat, p.Bpm, p.Shape, p.X1, p.Y1, p.X2, p.Y2, p.IncomingBpm));
+            var (cv, _) = Open(Bundle(root, "many-curves", curvyArr));
+            using (cv)
+            {
+                double cvWorst = 0;
+                foreach (int beat in new[] { 2, 301, 600, 899, 1200 })   // the reference is slow: a few beats
+                    cvWorst = Math.Max(cvWorst, Math.Abs(cv.BeatToSeconds(beat) - LegacyTempoReference.Seconds(curvy, beat)));
+                yield return (cv.IsTempoAutomated && curvyBeats <= TempoMigration.MaxMapPoints && curvyBeats > 1201 && cvWorst < 0.05,
+                    $"tempo migration: 600 steep curves fit the engine's map ({curvyBeats} of {TempoMigration.MaxMapPoints} points, worst {cvWorst * 1000:0.0} ms)");
+            }
+
             var broken = new JsonArray { Point(4, 120), Point(2, 90) };   // first point not at 0, beats backwards
             var (b, _) = Open(Bundle(root, "malformed", broken));
             using (b)

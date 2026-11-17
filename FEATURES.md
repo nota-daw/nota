@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.60.1** (plus changes in development on `main`). This document describes what is
+**0.60.2** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -1305,7 +1305,8 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
-  paths in Preferences, and Rescan. Four plugins load at a time, each with a time limit
+  paths in Preferences — the system's standard VST3 folders listed as removable `Default`
+  entries, with **Restore defaults** — and Rescan. Four plugins load at a time, each with a time limit
   (a stuck one is retried alone, then skipped); progress shows as "312 of 1,000"; results
   are saved as the scan goes; plugins that failed are skipped until they change or a Rescan;
   each scan writes `logs/plugin-scan.log`.
@@ -1667,7 +1668,8 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
-- **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
+- **Plug-ins**: scan paths (the OS-standard VST3 folders as `Default` entries, **Restore
+  defaults**), Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: **Sample folders** — the list the browser's Files tab shows (Add folder…,
@@ -1829,5 +1831,7 @@ Coverage:
   pull requests: instruction counts (fails above 1%) and timing (above 15%) per scenario
   against the base branch, plus an idle-CPU check on all three OSes
   (`scripts/perf-gate.sh`).
+- **Accelerated FFT**: spectral processing (convolution, analyzers) runs on Accelerate on
+  macOS and PFFFT on Windows and Linux.
 - **Third-party notices**: bundled/linked dependencies and their copyrights are recorded in
   [`LICENSES/THIRD-PARTY-NOTICES.md`](LICENSES/THIRD-PARTY-NOTICES.md).

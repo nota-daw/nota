@@ -25,6 +25,9 @@ public static class TempoMigration
     public const double MinBpm = 20, MaxBpm = 300;
     private const double MaxPieceErrorSeconds = 1e-4;
     private const int MaxSplitDepth = 6; // ≤ 64 pieces per segment
+    /// <summary>The most distinct beats a tempo lane may hold: the engine's TempoMap::kMaxPoints.
+    /// A lane past it is rejected, and the project would not open.</summary>
+    public const int MaxMapPoints = 4096;
 
     /// <summary>Lane points for <paramref name="legacy"/>; <paramref name="clamped"/> is true when a
     /// tempo had to be limited to 20–300 BPM. Empty for an invalid map (the project then keeps
@@ -32,8 +35,34 @@ public static class TempoMigration
     public static List<LanePoint> Convert(IReadOnlyList<LegacyPoint> legacy, out bool clamped)
     {
         clamped = false;
+        if (legacy.Count == 0 || !Valid(legacy)) return new List<LanePoint>();
+        // Many curved segments, each split up to 64 ways, can pass the engine's point limit:
+        // split less finely until the lane fits. Unsplit, a lane has one beat per old point.
+        var fits = new Dictionary<(double, double), (float Curve, bool Split)>();
+        for (int depth = MaxSplitDepth; depth >= 0; depth--)
+        {
+            var lane = Convert(legacy, depth, fits, out clamped);
+            if (DistinctBeats(lane) <= MaxMapPoints) return lane;
+        }
+        clamped = false;
+        return new List<LanePoint>();
+    }
+
+    /// <summary>Distinct beats in <paramref name="lane"/>, counted as the engine counts its map
+    /// points: a same-beat pair is one point, and a lane starting after beat 0 gains one there.</summary>
+    public static int DistinctBeats(IReadOnlyList<LanePoint> lane)
+    {
+        int n = 0;
+        for (int i = 0; i < lane.Count; i++)
+            if (i == 0 || lane[i].Beat - lane[i - 1].Beat >= 1e-6) n++;
+        if (lane.Count > 0 && lane[0].Beat > 0) n++;
+        return n;
+    }
+
+    private static List<LanePoint> Convert(IReadOnlyList<LegacyPoint> legacy, int maxDepth,
+        Dictionary<(double, double), (float Curve, bool Split)> fits, out bool clamped)
+    {
         var lane = new List<LanePoint>();
-        if (legacy.Count == 0 || !Valid(legacy)) return lane;
         bool anyClamped = false;
         float C(double bpm)
         {
@@ -58,7 +87,7 @@ public static class TempoMigration
                 continue;
             }
             Func<double, double> f = beat => BezierBpm(a, end, (beat - a.Beat) / (b.Beat - a.Beat));
-            Fit(f, a.Beat, b.Beat, 0, lane, C);
+            Fit(f, a.Beat, b.Beat, 0, maxDepth, fits, lane, C);
         }
         clamped = anyClamped;
         return lane;
@@ -106,9 +135,30 @@ public static class TempoMigration
         return sum * h / 3;
     }
 
-    private static void Fit(Func<double, double> f, double l, double r, int depth, List<LanePoint> lane, Func<double, float> clampBpm)
+    private static void Fit(Func<double, double> f, double l, double r, int depth, int maxDepth,
+        Dictionary<(double, double), (float Curve, bool Split)> fits, List<LanePoint> lane, Func<double, float> clampBpm)
     {
         float v0 = clampBpm(f(l)), v1 = clampBpm(f(r));
+        // A piece's fit doesn't depend on how deep the split may go: a coarser retry reuses it.
+        if (!fits.TryGetValue((l, r), out var known))
+        {
+            known = FitPiece(f, l, r, v0, v1);
+            fits[(l, r)] = known;
+        }
+        if (known.Split && depth < maxDepth)
+        {
+            double m = (l + r) * 0.5;
+            Fit(f, l, m, depth + 1, maxDepth, fits, lane, clampBpm);
+            Fit(f, m, r, depth + 1, maxDepth, fits, lane, clampBpm);
+            return;
+        }
+        lane.Add(new LanePoint(l, v0, known.Curve));
+    }
+
+    // The automation curve that lasts exactly as long as f over l..r, and whether some beat
+    // inside is still off by more than MaxPieceErrorSeconds (so a finer split would help).
+    private static (float Curve, bool Split) FitPiece(Func<double, double> f, double l, double r, float v0, float v1)
+    {
         Func<double, double> target = x => Math.Clamp(f(x), MinBpm, MaxBpm);
         double want = Seconds(target, l, r);
         Func<float, Func<double, double>> piece = c => x => v0 + (v1 - v0) * AutomationCurve.Shape((x - l) / (r - l), c);
@@ -134,13 +184,6 @@ public static class TempoMigration
             double x = l + (r - l) * i / 16;
             worst = Math.Max(worst, Math.Abs(Seconds(target, l, x, 64) - Seconds(fit, l, x, 64)));
         }
-        if (worst > MaxPieceErrorSeconds && depth < MaxSplitDepth)
-        {
-            double m = (l + r) * 0.5;
-            Fit(f, l, m, depth + 1, lane, clampBpm);
-            Fit(f, m, r, depth + 1, lane, clampBpm);
-            return;
-        }
-        lane.Add(new LanePoint(l, v0, curve));
+        return (curve, worst > MaxPieceErrorSeconds);
     }
 }
