@@ -233,6 +233,15 @@ public sealed partial class ModularView
         return r;
     }
 
+    /// <summary>What a control drives, or — for a part of an XS parameter row (its name or value,
+    /// siblings of the row's slider) — what the row's slider drives.</summary>
+    private (Control control, TargetRef target)? BoundTarget(Control c, GNode node)
+    {
+        if (TargetOfControl(c, node) is { } r) return (c, r);
+        if (c is Grid { Tag: SliderTrack slider } && TargetOfControl(slider, node) is { } rr) return (slider, rr);
+        return null;
+    }
+
     /// <summary>The bound parameter control under a viewport point, walking up from the hit
     /// element to its node.</summary>
     private (Control control, GNode node, TargetRef target)? ParamControlAt(Point viewportPoint)
@@ -248,7 +257,7 @@ public sealed partial class ModularView
         foreach (var anc in hit.GetSelfAndVisualAncestors())
         {
             if (anc == node.View) break;
-            if (anc is Control c && TargetOfControl(c, node) is { } r) return (c, node, r);
+            if (anc is Control c && BoundTarget(c, node) is { } b) return (b.control, node, b.target);
         }
         return null;
     }
@@ -282,7 +291,7 @@ public sealed partial class ModularView
         foreach (var anc in control.GetSelfAndVisualAncestors())
         {
             if (anc == node.View) break;
-            if (anc is Control c && TargetOfControl(c, node) is { } r) { LinkHere(modId, r.Kind, r.Device, r.Param); return true; }
+            if (anc is Control c && BoundTarget(c, node) is { } b) { LinkHere(modId, b.target.Kind, b.target.Device, b.target.Param); return true; }
         }
         return false;
     }

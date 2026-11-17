@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -359,6 +360,41 @@ static class CardChecks
         typeof(ModularView).GetMethod("ZoomAround", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(view, new object[] { new Point(300, 300), 1 / 0.8 });
         pump();
+
+        // Right-click a card knob: Modular's parameter menu (with Expose as CV output), not only Type value….
+        Popup? menuPopup = null;
+        Popup.IsOpenProperty.Changed.AddClassHandler<Popup>((p, _) => { if (p.IsOpen) menuPopup = p; });
+        cn = Node($"dev{comp}");
+        var ratioKnob = Bound(cn, MidiTargetKind.DeviceParam, comp, ratio).First();
+        ratioKnob.RaiseEvent(new Avalonia.Input.ContextRequestedEventArgs { RoutedEvent = Control.ContextRequestedEvent, Source = ratioKnob });
+        pump();
+        var headers = menuPopup?.Child is Control mc ? mc.GetVisualDescendants().OfType<MenuItem>().Select(m => m.Header?.ToString() ?? "").ToList() : new List<string>();
+        check(headers.Contains(Nota.Application.Localization.Loc.T("modular.expose_as_cv_output")),
+            $"right-clicking a card knob opens Modular's menu ({string.Join(", ", headers.Take(6))})");
+        if (menuPopup is not null) { menuPopup.IsOpen = false; pump(); }
+
+        // A cable dropped on an XS row's name or value links that row's parameter.
+        view.SetNodeSize(cn, ModularNodeSize.XS); pump(); pump();
+        cn = Node($"dev{comp}");
+        var rowGrid = cn.View.GetVisualDescendants().OfType<Grid>().First(g => g.Tag is SliderTrack);
+        var rowValue = rowGrid.Children.OfType<TextBlock>().Last();
+        int linksBeforeRow = engine.CvLinkCount(t);
+        int lfo2 = engine.ModulatorAdd(t, 0); view.Show(t); pump(); pump();
+        cn = Node($"dev{comp}");
+        rowGrid = cn.View.GetVisualDescendants().OfType<Grid>().First(g => g.Tag is SliderTrack);
+        rowValue = rowGrid.Children.OfType<TextBlock>().Last();
+        check(view.TryLinkAtControl(rowValue, lfo2) && engine.CvLinkCount(t) == linksBeforeRow + 1, "a drop on an XS row's value text links the row's parameter");
+        view.SetNodeSize(cn, ModularNodeSize.S); pump(); pump();
+
+        // EQ-8 behind the size proxy keeps its band-label / note controls (only rack proxies drop them).
+        int eqT = engine.AddAudioTrack(); int eq = engine.AddBuiltinDevice(eqT, 0);
+        DeviceCardContext Ctx(Nota.Application.IAudioEngine e) => new(e, eqT, _ => { }, () => { }, (_, _, _, _) => { }, _ => { }, _ => { },
+            () => 0, _ => { }, _ => { }, () => { }, () => { }, _ => { }, () => { });
+        // The text controls are built either way but hidden without text support: count the hidden ones.
+        int Count(Control c) => Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(c).OfType<Control>().Count(x => !x.IsVisible);
+        var direct = new EqDeviceBody().Build(Ctx(engine), eq);
+        var viaProxy = new EqDeviceBody().Build(Ctx(CardSizeEngineProxy.Create(engine, eqT, CardFamily.Effect, eq, () => false, _ => { })), eq);
+        check(Count(direct) == Count(viaProxy), $"EQ-8 through the size proxy shows the same controls as direct (hidden: {Count(viaProxy)} vs {Count(direct)})");
 
         // US4 (T026): XS ↔ L in place, cables re-anchored, neighbours still.
         cn = Node($"dev{comp}");

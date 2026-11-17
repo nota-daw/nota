@@ -17,6 +17,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Nota.Application;
 using Nota.Application.Localization;
 
@@ -228,7 +229,30 @@ public sealed partial class ModularView
             Console.Error.WriteLine($"[modular] card body for {n.Title} failed: {ex.Message}");
             return null;
         }
-        return Host(body, width, CardBodyH, fullBleed, n.Bypassed);
+        var host = Host(body, width, CardBodyH, fullBleed, n.Bypassed);
+        AttachModulateMenu(host, n);
+        return host;
+    }
+
+    /// <summary>A right-click on a card knob opens Modular's parameter menu — modulate from a
+    /// source, edit / remove its modulation, expose it as a CV output — as on an XS row; Type
+    /// value… and Reset stay in it. Caught on the way down, before the knob's own menu. The
+    /// instrument's knobs keep their card menu (its parameters are patched by dragging, as at XS).</summary>
+    private void AttachModulateMenu(Control host, GNode n)
+    {
+        host.AddHandler(ContextRequestedEvent, (_, e) =>
+        {
+            if (e.Handled || e.Source is not Visual from) return;
+            foreach (var anc in from.GetSelfAndVisualAncestors())
+            {
+                if (ReferenceEquals(anc, host)) break;
+                if (anc is not Control c || TargetOfControl(c, n) is not { } r) continue;
+                if (r.Kind == 1) return;
+                e.Handled = true;
+                ShowModulateMenu(c, r.Kind, r.Device, r.Param, ParamName(_trackId, r.Kind, r.Device, r.Param));
+                return;
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
     private PluginCard.ViewState PluginState(string key, bool mini)
