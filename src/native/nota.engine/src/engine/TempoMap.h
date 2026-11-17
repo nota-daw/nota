@@ -1,66 +1,88 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 // Immutable, authoring-thread compiled tempo. Render only searches/interpolates.
+// Built from the master track's Tempo automation lane (specs/099): each segment follows
+// the lane's own curve (AutomationLane::shape), so what is drawn is what plays.
 
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <vector>
-#include "nota/nota_engine.h"
+#include "Automation.h"
 
 namespace nota {
 class TempoMap {
   public:
+    static constexpr double kMinBpm = 20.0, kMaxBpm = 300.0;
+    static constexpr size_t kMaxPoints = 4096;
+    // incomingBpm is the tempo arriving at `beat` from the previous segment (a jump when it
+    // differs from bpm); curve shapes the segment from this point to the next.
+    struct Point { double beat, bpm, incomingBpm; float curve; };
     struct Node { double beat, seconds; };
-    std::vector<NotaTempoPoint> points;
+    std::vector<AutomationPoint> source; // the lane points this map was compiled from
+    std::vector<Point> points;
     std::vector<Node> nodes;
 
-    static bool valid(const std::vector<NotaTempoPoint>& p) {
-        if (p.size() > 4096 || (!p.empty() && p.front().beat != 0.0)) return false;
+    static double clampBpm(double v) { return std::isfinite(v) ? std::clamp(v, kMinBpm, kMaxBpm) : kMinBpm; }
+
+    static bool valid(const std::vector<Point>& p) {
+        if (p.empty() || p.size() > kMaxPoints || p.front().beat != 0.0) return false;
         double prev = -1.0;
         for (const auto& a : p) {
-            if (!std::isfinite(a.beat) || a.beat < 0 || a.beat > 1e8 || a.beat - prev < 1e-6 ||
-                !std::isfinite(a.bpm) || a.bpm < 1 || a.bpm > 999 || a.shape < 0 || a.shape > 2) return false;
-            for (double h : {a.x1, a.y1, a.x2, a.y2})
-                if (!std::isfinite(h) || h < 0 || h > 1) return false;
-            if (a.x1 > a.x2) return false;
-            if (!std::isfinite(a.incoming_bpm) || (a.incoming_bpm != 0 && (a.incoming_bpm < 1 || a.incoming_bpm > 999))) return false;
+            if (!std::isfinite(a.beat) || a.beat > 1e8 || a.beat - prev < 1e-6) return false;
+            if (!(a.bpm >= kMinBpm && a.bpm <= kMaxBpm) || !(a.incomingBpm >= kMinBpm && a.incomingBpm <= kMaxBpm)) return false;
+            if (!(a.curve >= -1.0f && a.curve <= 1.0f)) return false;
             prev = a.beat;
         }
         return true;
     }
-    static double bezier(double t, double c1, double c2) {
-        const double u = 1 - t;
-        return 3*u*u*t*c1 + 3*u*t*t*c2 + t*t*t;
+
+    // Lane points (sorted by beat, as lanes keep them) -> map points. A same-beat pair is a
+    // jump (more than two on one beat: the first and the last count, as AutomationLane::valueAt
+    // reads them); a first point after 0 holds back to 0. nullptr for an empty or unusable lane.
+    static std::shared_ptr<const TempoMap> fromLane(const std::vector<AutomationPoint>& lane) {
+        std::vector<Point> p;
+        p.reserve(lane.size() + 1);
+        for (size_t i = 0; i < lane.size(); ++i) {
+            const auto& a = lane[i];
+            if (!std::isfinite(a.beat)) return nullptr;
+            const double beat = std::max(0.0, a.beat);
+            const double v = clampBpm(a.value);
+            const float curve = std::isfinite(a.curve) ? std::clamp(a.curve, -1.0f, 1.0f) : 0.0f;
+            if (!p.empty() && beat - p.back().beat < 1e-6) { // same beat: the later point is the outgoing side
+                p.back().bpm = v;
+                p.back().curve = curve;
+                continue;
+            }
+            p.push_back({beat, v, v, curve});
+        }
+        if (p.empty()) return nullptr;
+        if (p.front().beat > 0.0) p.insert(p.begin(), Point{0.0, p.front().incomingBpm, p.front().incomingBpm, 0.0f});
+        if (p.size() > kMaxPoints || !valid(p)) return nullptr;
+        auto map = std::make_shared<TempoMap>(std::move(p));
+        map->source = lane;
+        return map;
     }
+
     double bpmAt(double beat) const {
         auto it = std::upper_bound(points.begin(), points.end(), beat,
             [](double b, const auto& p) { return b < p.beat; });
         if (it == points.begin()) return points.front().bpm;
         const auto& a = *--it;
-        if (it + 1 == points.end() || a.shape == 0) return a.bpm;
+        if (it + 1 == points.end()) return a.bpm;
         const auto& b = *(it + 1);
-        double x = std::clamp((beat - a.beat) / (b.beat - a.beat), 0.0, 1.0);
-        if (a.shape == 2) {
-            double lo = 0, hi = 1;
-            for (int i = 0; i < 32; ++i) {
-                double t = (lo + hi) * 0.5;
-                if (bezier(t, a.x1, a.x2) < x) lo = t; else hi = t;
-            }
-            x = bezier((lo + hi) * 0.5, a.y1, a.y2);
-        }
-        const double endBpm = b.incoming_bpm > 0 ? b.incoming_bpm : b.bpm;
-        return a.bpm + (endBpm - a.bpm) * x;
+        const double x = std::clamp((beat - a.beat) / (b.beat - a.beat), 0.0, 1.0);
+        return a.bpm + (b.incomingBpm - a.bpm) * AutomationLane::shape(x, a.curve);
     }
-    explicit TempoMap(std::vector<NotaTempoPoint> p) : points(std::move(p)) {
+    explicit TempoMap(std::vector<Point> p) : points(std::move(p)) {
         nodes.push_back({0, 0});
         for (size_t i = 0; i + 1 < points.size(); ++i) {
             const auto& a = points[i]; const auto& b = points[i + 1];
             // Adaptive Simpson integration is authoring-only. Also bound each leaf's
             // time interpolation error, so inverse conversion needs no root solving in RT.
-            compile(a.beat, b.beat, 60.0 / a.bpm,
-                60.0 / bpmAt((a.beat + b.beat) * .5),
-                60.0 / (a.shape == 0 ? a.bpm : b.incoming_bpm > 0 ? b.incoming_bpm : b.bpm), 0);
+            seg_ = i; // the segment compile() evaluates (no search per sample point)
+            compile(a.beat, b.beat, 60.0 / a.bpm, 60.0 / segBpm((a.beat + b.beat) * .5), 60.0 / b.incomingBpm, 0);
         }
     }
     double secondsAt(double beat) const {
@@ -85,9 +107,16 @@ class TempoMap {
         return 60 * (b.beat - a.beat) / (b.seconds - a.seconds);
     }
   private:
+    size_t seg_ = 0;
+    // bpmAt() inside segment seg_ — the same formula, without the search.
+    double segBpm(double beat) const {
+        const auto& a = points[seg_]; const auto& b = points[seg_ + 1];
+        const double x = std::clamp((beat - a.beat) / (b.beat - a.beat), 0.0, 1.0);
+        return a.bpm + (b.incomingBpm - a.bpm) * AutomationLane::shape(x, a.curve);
+    }
     void compile(double l, double r, double fl, double fm, double fr, int depth) {
         const double m = (l + r) * .5;
-        const double f1 = 60.0 / bpmAt((l + m) * .5), f3 = 60.0 / bpmAt((m + r) * .5);
+        const double f1 = 60.0 / segBpm((l + m) * .5), f3 = 60.0 / segBpm((m + r) * .5);
         const double left = (m - l) * (fl + 4*f1 + fm) / 6;
         const double right = (r - m) * (fm + 4*f3 + fr) / 6;
         const double whole = (r - l) * (fl + 4*fm + fr) / 6;

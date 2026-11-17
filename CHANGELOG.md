@@ -42,12 +42,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   outlines the control, with Back / Next / Done. Install **Manual search** in Settings → Downloads →
   AI Models (multilingual-e5-small, about 135 MB) and questions phrased differently from the
   manual find their answer too. The panel remembers its width and whether it was open.
-- **Tempo track and Time Scale Tool** (#535): collapse or resize the tempo lane,
-  add and move points, and shape stepped, linear or Bezier tempo ramps. Right-drag
-  a marquee and Delete to remove several points in one undo step; the initial
-  point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
-  recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
-  save with the project, and playback follows their integrated timing.
+- **Tempo automation on the master track** (#93, #535, specs/099): tempo changes are
+  automation now. In automation mode, the master row's target pill picks **Tempo** next to
+  **Volume**, and tempo is drawn like any other lane: click to add a point, drag it, bend a
+  segment for a smooth accelerando or ritardando, put two points on one beat for an instant
+  change; marquee, copy, paste and Delete work as on every lane. The lane reads in BPM, its
+  range set by the two labels at its right edge, and tempo stays within 20–300 BPM. The
+  grid, playback, metronome, warped audio, freeze, bounce and export follow it; unwarped
+  audio keeps its place in time. While the tempo is automated the transport's BPM field
+  shows the tempo under the playhead and can't be typed into. There is no separate tempo
+  row above the tracks, so the arrangement keeps its full height. Projects saved with the
+  earlier tempo track open with the same timing, their tempo moved onto the master lane.
+- **Master pan and master device automation** (#93, specs/099): the Mixer's master strip
+  has a pan knob — after the master devices, before the master fader, in the project pan law
+  with the centre at 0 dB — and the Master row's lane picks **Pan** or any parameter of a
+  device on the master chain, from the same target menu as a track's. Touching a master
+  device's knob in automation mode shows its lane; removing the device removes its lanes, and
+  undo brings both back. MCP gains `set_master_pan` and `add_plugin_param_automation`, and the
+  automation tools work on the master's pan and device lanes.
 
 ### Fixed
 - **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
@@ -103,9 +115,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the mapped ending.
 - **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
   mapped source boundaries. Loop recording, freeze and range bounce retain audio across
-  tempo changes; saved freezes retain their timing. Transport BPM edits stay in the tempo
-  lane, bar snapping respects the time-signature denominator, and warped waveforms align
-  with the audible content at every zoom level.
+  tempo changes; saved freezes retain their timing. Bar snapping respects the
+  time-signature denominator, and warped waveforms align with the audible content at
+  every zoom level.
 - Starting or seeking between beats no longer produces an immediate extra metronome click.
 - **Removing a track with its clip open in the piano roll no longer crashes Nota** (#530). The
   Clip editor closes with the track, and pressing Delete in a roll left behind is harmless.

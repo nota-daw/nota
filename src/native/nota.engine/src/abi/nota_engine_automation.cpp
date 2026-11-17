@@ -78,6 +78,10 @@ NotaResult nota_engine_master_volume_automation_set(NotaEngine* e, const NotaAut
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setMasterVolumeAutomation(pts, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+NotaResult nota_engine_master_volume_automation_set_live(NotaEngine* e, const NotaAutomationPoint* pts, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setMasterVolumeAutomation(pts, count, true) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 
 // ---- plugin-parameter automation lanes (M9-B) -----------------------------
 

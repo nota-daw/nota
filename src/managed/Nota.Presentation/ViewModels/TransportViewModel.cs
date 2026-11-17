@@ -24,6 +24,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private string _playLabel = "▶ Play";
     [ObservableProperty] private bool _isPlaying;
     [ObservableProperty] private decimal _bpm = 120; // decimal for NumericUpDown
+    /// <summary>False while the master Tempo lane drives the tempo (specs/099): the field then
+    /// shows the tempo under the playhead and takes no input.</summary>
+    [ObservableProperty] private bool _bpmEditable = true;
     [ObservableProperty] private int _timeSigNumerator = 4;
     [ObservableProperty] private int _timeSigDenominator = 4;
     /// <summary>The project key as a <see cref="Nota.Application.Samples.MusicalKey.Code"/>
@@ -78,6 +81,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     partial void OnBpmChanged(decimal value)
     {
         if (_followingBpm) return;   // the engine already has it (unrounded): don't echo it back
+        if (_engine.IsTempoAutomated) { FollowEngineBpm(); return; }   // the master Tempo lane leads (specs/099)
         _sentBpm = (double)value;
         _sentBpmAt = Environment.TickCount64;
         _engine.SetBpm((double)value);
@@ -314,6 +318,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     /// change is still in flight until the engine reports it, so wait for that first.</summary>
     private void FollowEngineBpm()
     {
+        bool automated = _engine.IsTempoAutomated;
+        if (BpmEditable == automated) BpmEditable = !automated;
+        if (automated) _sentBpm = null;   // nothing of ours can be in flight: the engine refuses it
         double engineBpm = _engine.Bpm;
         if (_sentBpm is double sent)
         {
