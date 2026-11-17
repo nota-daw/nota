@@ -1852,6 +1852,11 @@ void Engine::renderInstrumentRaw(
         // here, since their note-offs now go nowhere. A route switched away and back between
         // two renders changed nothing, so its notes end with their own note-offs.
         Track::LiveHeld* held = t.liveHeld.get();
+        // A replaced instrument never heard the old one's notes: forget them, not release them.
+        if (held && held->routedInst != inst) {
+            held->forgetRouted();
+            held->routedInst = inst;
+        }
         if (held && held->routedFrom != srcId) {
             n = releaseRouted(*held, evs, n);
             held->routedFrom = srcId;

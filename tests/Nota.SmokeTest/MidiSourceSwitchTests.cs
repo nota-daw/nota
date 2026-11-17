@@ -30,6 +30,7 @@ internal static class MidiSourceSwitchTests
         foreach (var r in StopForgetsRoutedNotes()) yield return r;
         foreach (var r in BypassedForgetsRoutedNotes()) yield return r;
         foreach (var r in SessionLaunchForgetsRoutedNotes()) yield return r;
+        foreach (var r in ReplacedInstrumentForgetsRoutedNotes()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats)
@@ -231,5 +232,27 @@ internal static class MidiSourceSwitchTests
         float released = Peak(e, 0.5);
         yield return (own > 0.01f && released < 1e-4f,
             $"a switch after a Session slot started and stopped doesn't cut the destination's new note (peak {own:F3} → {released:G2})");
+    }
+
+    // A key held on the source, then the destination's instrument replaced: the new instrument never
+    // heard that note, so a note played on the destination afterwards survives a switch.
+    private static IEnumerable<(bool, string)> ReplacedInstrumentForgetsRoutedNotes()
+    {
+        using var e = Routed(out _, out _, out int d);
+        e.NoteOn(60, 0.9f);
+        Beats(e, 0.5);
+        e.SetTrackBuiltinInstrument(d, 0);
+        Beats(e, 0.5);
+        e.TrackNoteOn(d, 60, 0.9f);
+        Beats(e, 0.5);
+        e.SetTrackMidiSource(d, -1);
+        Beats(e, 2.0);
+        float own = Peak(e, 0.5);
+        e.TrackNoteOff(d, 60);
+        e.NoteOff(60);
+        Beats(e, 2.0);
+        float released = Peak(e, 0.5);
+        yield return (own > 0.01f && released < 1e-4f,
+            $"a switch after the destination's instrument was replaced doesn't cut its new note (peak {own:F3} → {released:G2})");
     }
 }
