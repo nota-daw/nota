@@ -1,0 +1,94 @@
+name: Issue labels
+
+# Turns the answers of the issue forms (.github/ISSUE_TEMPLATE) into labels, so every
+# issue arrives with its domain and can go straight into the release whose focus matches
+# it (CONTRIBUTING.md § How issues are labelled). The forms set the type themselves
+# (`bug` / `enhancement`); a form can only add fixed labels, so this workflow adds the
+# ones that depend on an answer:
+#   - Area dropdown            -> `area: <domain>` (one per picked option)
+#   - "Only on this OS" ticked -> `platform: macos|windows|linux`, from the OS dropdown
+#   - no area at all           -> `needs-triage`, for a maintainer to sort out
+#
+# It only ever adds labels, and does nothing to an issue that already has an `area:`
+# label, so a maintainer's relabelling survives later edits of the issue text.
+#
+# The issue body is untrusted text. It is only parsed in JavaScript here, never passed
+# to a shell.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    name: Label from the issue form
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            // Form option text -> label. Keep in sync with the Area dropdown in
+            // bug_report.yml and feature_request.yml.
+            const AREAS = {
+              'Arrangement': 'arrangement',
+              'Session view': 'session',
+              'Mixer and routing': 'mixer',
+              'Modular': 'modular',
+              'Piano roll and clip editor': 'clip-editor',
+              'Automation': 'automation',
+              'Built-in instruments and effects': 'devices',
+              'Plug-ins (VST3 / AU)': 'plugins',
+              'Recording and inputs': 'recording',
+              'Transport and tempo': 'transport',
+              'Browser and samples': 'browser',
+              'MIDI controllers and gamepads': 'controllers',
+              'Keyboard shortcuts': 'shortcuts',
+              'Nota Remote': 'remote',
+              'MCP server': 'mcp',
+              'Assistant and AI': 'ai',
+              'Projects and import/export': 'project',
+              'Audio engine and performance': 'audio-engine',
+              'Interface and windows': 'ui',
+              'Preferences and Downloads': 'preferences',
+              'Install and build': 'build',
+            };
+
+            const issue = context.payload.issue;
+            const have = issue.labels.map(l => l.name);
+            if (have.some(n => n.startsWith('area: '))) return;
+
+            // An issue form renders each answer as "### <label>\n\n<answer>".
+            const sections = {};
+            for (const part of (issue.body || '').split(/^### /m).slice(1)) {
+              const nl = part.indexOf('\n');
+              sections[part.slice(0, nl).trim()] = part.slice(nl + 1).trim();
+            }
+
+            // A multi-select answer is the picked options joined by ", "; option text
+            // has no commas, so splitting is safe.
+            const picked = (sections['Area'] || '').split(',').map(s => s.trim());
+            const add = new Set();
+            for (const p of picked) if (AREAS[p]) add.add('area: ' + AREAS[p]);
+
+            const osOnly = /^- \[x\]/im.test(sections['Only on this operating system?'] || '');
+            const os = sections['Operating system'] || '';
+            if (osOnly) {
+              if (os.startsWith('macOS')) add.add('platform: macos');
+              else if (os.startsWith('Windows')) add.add('platform: windows');
+              else if (os.startsWith('Linux')) add.add('platform: linux');
+            }
+
+            if (![...add].some(n => n.startsWith('area: '))) add.add('needs-triage');
+
+            const labels = [...add].filter(n => !have.includes(n));
+            if (labels.length === 0) return;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels,
+            });
+            core.info(`#${issue.number}: added ${labels.join(', ')}`);
