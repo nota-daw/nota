@@ -106,7 +106,7 @@ public partial class MainWindow
             {
                 parts.Add("instrument");
                 int src = Engine.GetTrackMidiSource(trackId);
-                if (src > 0) parts.Add(Loc.T("main.detail.midi_from") + ChipTrackName(src));
+                if (src > 0) parts.Add(Loc.T("main.detail.midi_from") + (ChipTrackInfo(src, out _) ? ChipTrackName(src) : Loc.T("common.removed_track")));
             }
             else
             {

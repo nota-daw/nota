@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -212,10 +213,14 @@ inline constexpr int kMaxReturns = 4;
 
 class Track {
   public:
+    struct LiveHeld; // below
     explicit Track(int32_t id, TrackType type = TrackType::Audio)
         : Track(id, type, std::make_shared<SessionPlayer>()) {}
     Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player)
         : sessionPlayer(player), id_(id), type_(type) {}
+    // A graph clone: the existing player and live-note state, so an edit allocates neither.
+    Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player, std::shared_ptr<LiveHeld> held)
+        : liveHeld(std::move(held)), sessionPlayer(player), id_(id), type_(type) {}
 
     int32_t id() const { return id_; }
     TrackType type() const { return type_; }
@@ -265,6 +270,13 @@ class Track {
         int8_t source[128] = {}, channel[128] = {}; // where each held note came from (its off must too)
         bool release = false;
         int64_t tailQuiet = -1; // see tailQuiet() above
+        // The notes MIDI In (the track it takes MIDI from, routedFrom) started on this track's
+        // instrument and hasn't ended yet (#504). When MIDI In changes or its track is gone,
+        // the note-offs would never arrive, so the render ends these notes itself.
+        uint64_t routedBits[2] = {0, 0};
+        int32_t routedFrom = -1;
+        uint64_t routedInstUid = 0; // the instrument those notes sound on (Instrument::uid)
+        void forgetRouted() { routedBits[0] = routedBits[1] = 0; } // the voices were ended elsewhere
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 
