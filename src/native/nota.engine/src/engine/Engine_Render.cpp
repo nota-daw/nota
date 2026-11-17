@@ -1864,6 +1864,9 @@ void Engine::renderInstrumentRaw(
             held->routedFrom = srcId;
         }
         bool srcFound = false;
+        int32_t decidedAt[128]; // per pitch: offset of the latest event that sets or clears its routed bit
+        bool decidedSet[128];
+        std::fill(decidedAt, decidedAt + 128, -1);
         const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
         for (size_t j = 0; j < nt; ++j) {
             Track* p = g->tracks[j].get();
@@ -1880,16 +1883,16 @@ void Engine::renderInstrumentRaw(
             // reached the instrument, so it must not change what the route is holding (#504).
             // A note-on of the track's own (a clip, a key played on it) takes its pitch over:
             // its own note-off ends that pitch, and a later switch must not cut it, whatever
-            // happened to the instrument meanwhile (replaced, a rack chain swapped).
+            // happened to the instrument meanwhile (replaced, a rack chain swapped). The latest
+            // event per pitch decides, by time and not by track order (applied after the loop).
             for (int k = 0; k < m && n < 1024; ++k) {
                 evs[n++] = srcEvs[k];
                 const int pitch = srcEvs[k].pitch;
                 if (!held || pitch < 0 || pitch >= 128) continue;
-                const uint64_t bit = 1ull << (pitch & 63);
-                if (!routed) {
-                    if (srcEvs[k].on) held->routedBits[pitch >> 6] &= ~bit;
-                } else if (srcEvs[k].on) held->routedBits[pitch >> 6] |= bit;
-                else held->routedBits[pitch >> 6] &= ~bit;
+                if (!routed && !srcEvs[k].on) continue; // an own note-off changes nothing
+                if (srcEvs[k].off < decidedAt[pitch]) continue;
+                decidedAt[pitch] = srcEvs[k].off;
+                decidedSet[pitch] = routed && srcEvs[k].on;
             }
             if (j < rs_->blockExprN.size())
                 for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
@@ -1908,6 +1911,13 @@ void Engine::renderInstrumentRaw(
                     }
             }
         }
+        if (held)
+            for (int pitch = 0; pitch < 128; ++pitch) {
+                if (decidedAt[pitch] < 0) continue;
+                const uint64_t bit = 1ull << (pitch & 63);
+                if (decidedSet[pitch]) held->routedBits[pitch >> 6] |= bit;
+                else held->routedBits[pitch >> 6] &= ~bit;
+            }
         // MIDI In names a track that is gone (deleted): its notes end too (#504).
         if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
         // A switched-off instrument drops this block's events (playEvents), so nothing the route
