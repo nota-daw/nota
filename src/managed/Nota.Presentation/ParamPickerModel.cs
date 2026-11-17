@@ -130,13 +130,20 @@ public sealed class ParamPickerModel
 
     /// <summary>A display label for a raw parameter name: "Parameter N" (1-based) when the name
     /// is empty, and a " (2)", " (3)" … suffix for a name already used in the same group, so
-    /// every entry can be told apart. <paramref name="seenInGroup"/> is per group (case-insensitive).</summary>
+    /// every entry can be told apart — a generated label is never handed out twice, even against a
+    /// raw name that looks like one. <paramref name="seenInGroup"/> is per group (case-insensitive).</summary>
     public static string Label(string? raw, int index, Dictionary<string, int> seenInGroup, Func<int, string> fallback)
     {
         string name = string.IsNullOrWhiteSpace(raw) ? fallback(index + 1) : raw.Trim();
-        if (seenInGroup.TryGetValue(name, out int n)) { seenInGroup[name] = n + 1; return $"{name} ({n + 1})"; }
-        seenInGroup[name] = 1;
-        return name;
+        if (!seenInGroup.TryGetValue(name, out int n)) { seenInGroup[name] = 1; return name; }
+        // Every label handed out is reserved — the suffixed ones too — so "Gain", "Gain",
+        // "Gain (2)" read "Gain", "Gain (2)", "Gain (2) (2)": never two the same.
+        int k = n + 1;
+        while (seenInGroup.ContainsKey($"{name} ({k})")) k++;
+        seenInGroup[name] = k;
+        string label = $"{name} ({k})";
+        seenInGroup[label] = 1;
+        return label;
     }
 
     /// <summary>A fresh per-group "seen" set for <see cref="Label"/>.</summary>

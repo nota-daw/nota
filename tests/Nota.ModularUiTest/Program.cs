@@ -43,6 +43,9 @@ T Prop<T>(object obj, string name) => (T)(obj.GetType().GetProperty(name, Any)?.
         ParamPickerEntry.Item("Resonance", 11, "Auto Filter"),
     };
     Check(entries[3].Label == "Parameter 3" && entries[4].Label == "time (2)", "fallback label for an empty name, suffix for a duplicate");
+    var seen2 = ParamPickerModel.NewSeen();
+    var gains = new[] { "Gain", "Gain", "Gain (2)", "Gain (2)" }.Select((g, i) => ParamPickerModel.Label(g, i, seen2, Fb)).ToList();
+    Check(gains.Distinct().Count() == 4, $"generated labels never collide with raw names ({string.Join(" | ", gains)})");
     var m = new ParamPickerModel(entries, grouped: true);
     Check(m.Visible.Count == 8 && m.Highlight == 1, "unfiltered list shows headings; highlight starts on the first entry, not a heading");
     m.Query = "FREQ";
@@ -323,6 +326,40 @@ static class CardChecks
             && !c.GetVisualAncestors().OfType<Control>().Any(a => MidiLearn.GetBinding(a) is not null));
         check(plain is null || !view.TryLinkAtControl(plain, lfo), "a control that drives nothing doesn't link (the picker opens instead)");
 
+        // A real cable drag with the mouse, on a zoomed canvas: from the LFO's CV out onto the
+        // card's Release knob — the drop links it and no picker opens.
+        var win = (Window)TopLevel.GetTopLevel(view)!;
+        typeof(ModularView).GetMethod("ZoomAround", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(view, new object[] { new Point(300, 300), 0.8 });
+        pump();
+        cn = Node($"dev{comp}");
+        int release = ParamIndex(t, comp, "Release");   // on the S card
+        var attackKnob = Bound(cn, MidiTargetKind.DeviceParam, comp, release).First();
+        var lfoNode = view.Nodes.First(n => n.Slot == Slot.Modulator && n.ModId == lfo);
+        var cvOut = lfoNode.View.GetVisualDescendants().OfType<Border>().First(b => b.Cursor?.ToString()?.Contains("Cross") == true);
+        Point Center(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), win)!.Value;
+        var from = Center(cvOut); var to = Center(attackKnob);
+        win.MouseDown(from, Avalonia.Input.MouseButton.Left); pump();
+        for (int i = 1; i <= 6; i++) { win.MouseMove(from + (to - from) * (i / 6.0), Avalonia.Input.RawInputModifiers.LeftMouseButton); pump(); }
+        win.MouseUp(to, Avalonia.Input.MouseButton.Left); pump();
+        bool attackLinked = false;
+        for (int i = 0; i < engine.CvLinkCount(t); i++) attackLinked |= engine.CvLinkDevice(t, i) == comp && engine.CvLinkParam(t, i) == release;
+        check(attackLinked && ParamPickerPanel.Last is null, "a mouse drag from CV out onto a card knob (canvas zoomed) links it, no picker");
+        // …and released on the node's empty header area instead, the picker opens.
+        cn = Node($"dev{comp}");
+        var headerSpot = cn.View.TranslatePoint(new Point(cn.View.Bounds.Width * 0.45, 17), win)!.Value;
+        lfoNode = view.Nodes.First(n => n.Slot == Slot.Modulator && n.ModId == lfo);
+        cvOut = lfoNode.View.GetVisualDescendants().OfType<Border>().First(b => b.Cursor?.ToString()?.Contains("Cross") == true);
+        from = Center(cvOut);
+        win.MouseDown(from, Avalonia.Input.MouseButton.Left); pump();
+        win.MouseMove(headerSpot, Avalonia.Input.RawInputModifiers.LeftMouseButton); pump();
+        win.MouseUp(headerSpot, Avalonia.Input.MouseButton.Left); pump();
+        check(ParamPickerPanel.Last is not null, "a mouse drop elsewhere on the node opens the picker");
+        ParamPickerPanel.Last?.Flyout.Hide(); pump();
+        typeof(ModularView).GetMethod("ZoomAround", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(view, new object[] { new Point(300, 300), 1 / 0.8 });
+        pump();
+
         // US4 (T026): XS ↔ L in place, cables re-anchored, neighbours still.
         cn = Node($"dev{comp}");
         var at = cn.World;
@@ -356,6 +393,30 @@ static class CardChecks
         check(cn2.Size == ModularNodeSize.S && cn2.World == new Point(10, 20), "a legacy [x, y] sidecar loads with the default size");
         w2.Close();
         try { Directory.Delete(dir, true); } catch { }
+
+        // A card that fails to build falls back to XS with its parameter rows (not an empty node).
+        view.FailCardForTest = n => n.Id == $"dev{comp}";
+        view.Show(t); pump(); pump();
+        var failed = Node($"dev{comp}");
+        check(failed.Size == ModularNodeSize.XS && failed.Params.Count > 0 && failed.View.GetVisualDescendants().OfType<SliderTrack>().Any(),
+            $"a card that can't be built falls back to XS with its rows ({failed.Params.Count})");
+        view.FailCardForTest = null;
+
+        // A card moved a little below the row still pushes the auto-placed rest of the chain past it.
+        int t2 = engine.AddAudioTrack();
+        int a1 = engine.AddBuiltinDevice(t2, 1), a2 = engine.AddBuiltinDevice(t2, 7), a3 = engine.AddBuiltinDevice(t2, 2);
+        view.Show(t2); pump(); pump();
+        var moved = Node($"dev{a1}");
+        var savedPos = (Dictionary<string, Point>)typeof(ModularView).GetField("_savedPos", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view)!;
+        savedPos[$"{t2}/dev{a1}"] = new Point(moved.World.X + 30, moved.World.Y + 40);
+        view.SetNodeSize(moved, ModularNodeSize.XS); pump(); pump();
+        moved = Node($"dev{a1}");
+        view.SetNodeSize(moved, ModularNodeSize.L); pump(); pump();
+        moved = Node($"dev{a1}");
+        var next = Node($"dev{a2}");
+        bool vOverlap = next.World.Y < moved.World.Y + moved.View.Bounds.Height && next.World.Y + next.View.Bounds.Height > moved.World.Y;
+        check(!vOverlap || next.World.X >= moved.World.X + moved.View.Bounds.Width - 0.5,
+            $"a grown card moved off the row doesn't cover the next node (next at {next.World.X:0}, card ends {moved.World.X + moved.View.Bounds.Width:0})");
 
         // Every built-in effect, the default instrument and the Arpeggiator host their card (no XS fallback).
         int sweep = engine.AddAudioTrack();

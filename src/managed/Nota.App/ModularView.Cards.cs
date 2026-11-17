@@ -144,6 +144,9 @@ public sealed partial class ModularView
 
     /// <summary>The node's Detail card body at its size, sized like Detail's (its width, the card
     /// body height), or null when it can't be built (the node falls back to XS).</summary>
+    /// <summary>Tests only: make a node's card body fail to build, to exercise the XS fallback.</summary>
+    internal Func<GNode, bool>? FailCardForTest;
+
     private Control? BuildCardBody(GNode n)
     {
         int t = _trackId, i = n.SlotIndex;
@@ -159,6 +162,7 @@ public sealed partial class ModularView
         bool fullBleed = false;
         try
         {
+            if (FailCardForTest?.Invoke(n) == true) throw new InvalidOperationException("test: card body fails");
             switch (n.Slot)
             {
                 case Slot.Device:

@@ -556,7 +556,18 @@ public sealed partial class ModularView : UserControl
     // Where the next chain node goes: after this one. A node the user placed in the chain row
     // pushes the rest right of it, so auto-placed nodes never land under a wider card (specs/101).
     private static double NextX(GNode n, double x, double rowY)
-        => (Math.Abs(n.World.Y - rowY) < 0.5 ? Math.Max(x, n.World.X) : x) + n.NodeWidth + GapX;
+    {
+        // A node counts as in the row when it overlaps the row's band vertically (not only when
+        // its top is on the row): a card moved a little down still pushes what follows past it.
+        if (n.View.DesiredSize.Height <= 0) n.View.Measure(Size.Infinity);
+        double h = Math.Max(n.View.DesiredSize.Height, HeaderH);
+        bool inRow = n.World.Y < rowY + RowBandH && n.World.Y + h > rowY;
+        return (inRow ? Math.Max(x, n.World.X) : x) + n.NodeWidth + GapX;
+    }
+
+    // How tall the chain row is taken to be when deciding whether a placed node is in its way:
+    // a Detail card body plus a node's header and port rows.
+    private const double RowBandH = DeviceCardKit.CardH + HeaderH + 3 * PortRow;
 
     private void AddNode(GNode n)
     {
@@ -758,9 +769,7 @@ public sealed partial class ModularView : UserControl
         };
         n.CvInputLabels = CvInputsFor(1, -1);
         PrepareSize(n);
-        if (n.Size == ModularNodeSize.XS)   // the parameter rows are the XS node; S / L show the card
-            PopulateParams(n, _engine.PluginParamCount(_trackId, -1),
-                p => _engine.ParamModulated(1, _trackId, -1, p), p => InstrumentParam(p));
+        if (n.Size == ModularNodeSize.XS) PopulateXs(n);   // the parameter rows are the XS node; S / L show the card
         BuildNodeView(n);
         return n;
     }
@@ -776,9 +785,7 @@ public sealed partial class ModularView : UserControl
         };
         n.CvInputLabels = CvInputsFor(0, index);
         PrepareSize(n);
-        if (n.Size == ModularNodeSize.XS)   // the parameter rows are the XS node; S / L show the card
-            PopulateParams(n, _engine.DeviceParamCount(_trackId, index),
-                p => _engine.DeviceParamModulated(_trackId, index, p), p => DeviceParam(index, p));
+        if (n.Size == ModularNodeSize.XS) PopulateXs(n);   // the parameter rows are the XS node; S / L show the card
         BuildNodeView(n);
         return n;
     }
@@ -793,9 +800,7 @@ public sealed partial class ModularView : UserControl
         };
         n.CvInputLabels = CvInputsFor(2, index);
         PrepareSize(n);
-        if (n.Size == ModularNodeSize.XS)   // the parameter rows are the XS node; S / L show the card
-            PopulateParams(n, _engine.MidiEffectParamCount(_trackId, index),
-                p => _engine.ParamModulated(2, _trackId, index, p), p => MidiEffectParam(index, p));
+        if (n.Size == ModularNodeSize.XS) PopulateXs(n);   // the parameter rows are the XS node; S / L show the card
         BuildNodeView(n);
         return n;
     }
@@ -839,6 +844,22 @@ public sealed partial class ModularView : UserControl
         n.HiddenParamCount = expanded ? 0 : rest.Count;
     }
     private bool CanExpand(GNode n) => n.HiddenParamCount > 0;
+
+    // The XS rows of a chain-device node (its parameters, patched ones first).
+    private void PopulateXs(GNode n)
+    {
+        int t = _trackId, i = n.SlotIndex;
+        n.Params.Clear();
+        switch (n.Slot)
+        {
+            case Slot.Instrument:
+                PopulateParams(n, _engine.PluginParamCount(t, -1), p => _engine.ParamModulated(1, t, -1, p), InstrumentParam); break;
+            case Slot.Device:
+                PopulateParams(n, _engine.DeviceParamCount(t, i), p => _engine.DeviceParamModulated(t, i, p), p => DeviceParam(i, p)); break;
+            case Slot.MidiFx:
+                PopulateParams(n, _engine.MidiEffectParamCount(t, i), p => _engine.ParamModulated(2, t, i, p), p => MidiEffectParam(i, p)); break;
+        }
+    }
 
     // ---- param → knob cell (device/midi raw floats, instrument normalized) ----
 
@@ -1585,18 +1606,21 @@ public sealed partial class ModularView : UserControl
 
     private void BuildNodeView(GNode n)
     {
+        // S / L: the device's Detail card body under the ports (specs/101). One that can't be built
+        // here falls back to XS — with its parameter rows — before the header (and its size chip
+        // and chevron) is drawn.
+        Control? card = null;
+        if (n.Size != ModularNodeSize.XS && (card = BuildCardBody(n)) is null)
+        {
+            n.Size = ModularNodeSize.XS;
+            PopulateXs(n);
+        }
         var col = new StackPanel();
         var headBorder = NodeHeader(n);
         col.Children.Add(headBorder);
         // The ports come straight after the header, so their first row is level on every node.
         col.Children.Add(PortsBlock(n));
-        if (n.Size != ModularNodeSize.XS)
-        {
-            // S / L: the device's Detail card body under the ports (specs/101). One that can't be
-            // built here leaves the node at XS.
-            if (BuildCardBody(n) is { } body) col.Children.Add(body);
-            else n.Size = ModularNodeSize.XS;
-        }
+        if (card is not null) col.Children.Add(card);
         else if (n.Params.Count > 0) col.Children.Add(ParamsBlock(n));
         // An opened node says how to close it: a strip under it, as well as the header chevron and Esc (#261).
         if (n.Size == ModularNodeSize.XS && _expanded.Contains(n.Id)) col.Children.Add(CollapseStrip(n));
