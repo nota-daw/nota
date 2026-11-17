@@ -30,7 +30,11 @@ namespace nota {
 
 class ParamLaneSteps {
   public:
-    static constexpr int kMax = 32;
+    // Enough for any block the engine renders: a segment is at most 16384 frames (kMaxBlock),
+    // the tempo at most 999 BPM and the finest grid a 1/32 (Twin), which is 16384 · 999 /
+    // (60 · 0.125 · sr) ≈ 2.2 M / sr steps — 50 at 44.1 kHz, and within 512 down to 4.3 kHz.
+    // Past that a step falls back to the block-start value.
+    static constexpr int kMax = 512;
 
     void fill(const AutomationLane& lane, double beatFrom, double beatTo, double stepBeats) {
         n_ = 0;
@@ -39,8 +43,24 @@ class ParamLaneSteps {
         if (lane.points.empty() || !(stepBeats > 0.0) || !(beatTo >= beatFrom)) return;
         first_ = static_cast<int64_t>(std::ceil(beatFrom / stepBeats - 1e-9)) - 1;
         const int64_t last = static_cast<int64_t>(std::ceil(beatTo / stepBeats - 1e-9)) - 1;
-        for (int64_t k = first_; k <= last && n_ < kMax; ++k)
-            v_[n_++] = lane.valueAt(static_cast<double>(k) * stepBeats + kAfter);
+        // AutomationLane::valueAt, walked once: the beats rise, so the segment search resumes
+        // where the last step left it (a long lane costs its points once per block, not per step).
+        const auto& p = lane.points;
+        size_t seg = 1;
+        for (int64_t k = first_; k <= last && n_ < kMax; ++k) {
+            const double b = static_cast<double>(k) * stepBeats + kAfter;
+            float v;
+            if (b <= p.front().beat) v = p.front().value;
+            else if (b >= p.back().beat) v = p.back().value;
+            else {
+                while (seg < p.size() && b > p[seg].beat) ++seg;
+                const double b0 = p[seg - 1].beat, span = p[seg].beat - b0;
+                const float v0 = p[seg - 1].value, v1 = p[seg].value;
+                v = span <= 0.0 ? v1
+                                : static_cast<float>(v0 + (v1 - v0) * AutomationLane::shape((b - b0) / span, p[seg - 1].curve));
+            }
+            v_[n_++] = v;
+        }
     }
     // The lane's value at step k's grid beat, if this block sampled it.
     bool at(int64_t k, float& out) const {

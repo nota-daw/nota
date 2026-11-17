@@ -288,6 +288,8 @@ class Engine {
     std::string pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    int32_t pluginParamSteps(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;       // specs/100
+    std::string pluginParamStepText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, int32_t step) const;
     float pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     void pluginParamSet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float normalized);
     int32_t pluginParamIndexOfId(int32_t trackId, int32_t deviceIndex, const std::string& id) const;

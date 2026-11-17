@@ -90,6 +90,12 @@ internal static class RhythmBankTests
                 $"Bank reads A–D ('{c}'), Bank Switch Step / Pattern ('{pat}'); the stopped card and the blob follow the param");
             e.InstrumentAction(t, RhythmModel.A_SelectBank, 3, 0);
             yield return (RhythmModel.BankOf(e.PluginParamGet(t, -1, bi)) == 3, "select_rhythm_bank's action sets the Bank param");
+            // The lane editor's levels: Bank has four named ones, Bank Switch two, a knob none.
+            string names = string.Join(",", Enumerable.Range(0, 4).Select(k => e.PluginParamStepText(t, -1, bi, k)));
+            yield return (e.PluginParamSteps(t, -1, bi) == 4 && names == "A,B,C,D" && e.PluginParamSteps(t, -1, si) == 2
+                          && e.PluginParamStepText(t, -1, si, 1) == "Pattern" && e.PluginParamSteps(t, -1, Idx(e, t, "swing")) == 0
+                          && e.PluginParamStepText(t, -1, bi, 4) == "",
+                $"Bank lanes have four named levels ({names}), Bank Switch two, Swing none");
         }
 
         // A lane A → B with a vertical jump exactly on bar 2 (beat 4): the downbeat already plays B,
@@ -157,6 +163,38 @@ internal static class RhythmBankTests
                 e.StopTransport();
                 yield return (queued == 0 && after == 1, $"Pattern mode queues a picked bank until the pattern start (playing {queued} → {after})");
             }
+        }
+
+        // A bank queued in Pattern mode survives the copy a sample load swaps in mid-pattern: it
+        // still waits for the pattern start instead of playing at the copy's first step.
+        {
+            string wav = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "nota-609-" + Guid.NewGuid().ToString("N") + ".wav");
+            Nota.SmokeTest.WavWriter.WriteSine(wav, seconds: 0.1, freq: 440.0, sampleRate: 44100);
+            var (e, t) = Rig();
+            try
+            {
+                using (e)
+                {
+                    e.PluginParamSet(t, -1, Idx(e, t, RhythmModel.BankSwitchId), 1f);
+                    var tmp = new float[512 * 2];
+                    e.Seek(0); e.Play();
+                    for (int i = 0; i < 40; i++) e.RenderOffline(tmp, 512, Sr);   // inside bar 1
+                    e.PluginParamSet(t, -1, Idx(e, t, RhythmModel.BankId), RhythmModel.BankNorm(1));
+                    for (int i = 0; i < 4; i++) e.RenderOffline(tmp, 512, Sr);
+                    bool loaded = e.SetRhythmVoiceSample(t, 7, wav);               // swaps in a copy
+                    var sc = new float[RhythmModel.ScopeLength];
+                    for (int i = 0; i < 20; i++) e.RenderOffline(tmp, 512, Sr);   // still bar 1
+                    e.InstrumentScope(t, sc);
+                    int queued = (int)sc[RhythmModel.S_Bank];
+                    for (int i = 0; i < 140; i++) e.RenderOffline(tmp, 512, Sr);  // past bar 2's downbeat
+                    e.InstrumentScope(t, sc);
+                    int after = (int)sc[RhythmModel.S_Bank];
+                    e.StopTransport();
+                    yield return (loaded && queued == 0 && after == 1,
+                        $"a bank queued in Pattern mode stays queued across a sample load mid-pattern (playing {queued} → {after})");
+                }
+            }
+            finally { try { System.IO.File.Delete(wav); } catch { } }
         }
 
         // An RTH3 blob (before the bank params) opens on its saved bank with Bank Switch Step.

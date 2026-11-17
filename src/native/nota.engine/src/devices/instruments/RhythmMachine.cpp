@@ -73,6 +73,13 @@ void RhythmMachine::setTransport(double beatStart, double spb, bool playing) {
     if (spb > 0.0) spb_ = spb;
     beatStart_ = beatStart;
     bankLane_.transport(beatStart);
+    // Stopped: the playing bank is the param's, and the next start takes it at its first step.
+    // Decided here, from the transport, not in render(): a copy swapped in mid-song (a sample
+    // load) starts with no transport yet and must keep the running switch it was given.
+    if (!playing) {
+        playBank_.store(editBank(), std::memory_order_relaxed);
+        lastTrigStep_.store(kNoStep, std::memory_order_relaxed);
+    }
     playing_ = playing;
     if (FxState* fx = fxStates_.live()) // tempo-synced voice FX (a synced Delay)
         for (auto& ch : fx->chain)
@@ -139,17 +146,31 @@ std::string RhythmMachine::pluginParamText(int32_t i) const {
     return {};
 }
 
+std::string RhythmMachine::pluginParamStepText(int32_t i, int32_t step) const {
+    if (i == Bank && step >= 0 && step < kBanks) return std::string(1, static_cast<char>('A' + step));
+    if (i == BankSwitch && (step == 0 || step == 1)) return step ? "Pattern" : "Step";
+    return {};
+}
+
 void RhythmMachine::pluginParamLane(int32_t i, const AutomationLane& lane, double beatFrom, double beatTo) {
     if (i == Bank) bankLane_.fill(lane, beatFrom, beatTo, 0.25); // a 1/16 step
 }
 
 int RhythmMachine::stepBank(long absStep, int barStep) {
+    (void)barStep;
     float v = 0.0f;
     const int want = bankLane_.at(absStep, v) ? bankOf(v) : editBank();
-    const bool fresh = absStep != lastTrigStep_ + 1; // a start, a seek, a loop wrap
-    lastTrigStep_ = absStep;
-    if (fresh || barStep == 0 || get(BankSwitch) < 0.5f) playBank_ = want;
-    return playBank_;
+    const long last = lastTrigStep_.load(std::memory_order_relaxed);
+    lastTrigStep_.store(absStep, std::memory_order_relaxed);
+    // Pattern mode keeps the playing bank while the steps run on inside one pattern cycle; a new
+    // cycle (however it was reached — a skipped step 1 included), a jump back (loop wrap, seek)
+    // or a start takes the wanted bank. A forward gap inside the cycle (the steps a replacement
+    // copy didn't see, a short seek) keeps the queue, and so does the same step again (a copy
+    // swapped in mid-step arms the step it starts in).
+    auto cycle = [](long s) { return s >= 0 ? s / kSteps : -((-s + kSteps - 1) / kSteps); };
+    const bool take = get(BankSwitch) < 0.5f || last == kNoStep || absStep < last || cycle(absStep) != cycle(last);
+    if (take) playBank_.store(want, std::memory_order_relaxed);
+    return playBank_.load(std::memory_order_relaxed);
 }
 
 int32_t RhythmMachine::pluginParamIndexOfId(const std::string& id) const {
@@ -571,7 +592,10 @@ std::shared_ptr<Instrument> RhythmMachine::clone() const {
     std::memcpy(r->on_, on_, sizeof(on_));
     std::memcpy(r->vel_, vel_, sizeof(vel_));
     std::memcpy(r->acc_, acc_, sizeof(acc_));
-    r->playBank_ = playBank_;
+    // A running bank switch carries over (a sample load swaps in this copy mid-song): the bank
+    // playing and the last step, so a bank queued in Pattern mode still waits for its cycle.
+    r->playBank_.store(playBank_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    r->lastTrigStep_.store(lastTrigStep_.load(std::memory_order_relaxed), std::memory_order_relaxed);
     r->selVoice_ = selVoice_;
     r->rev_.store(rev_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     for (int v = 0; v < kVoices; ++v) {
@@ -656,16 +680,10 @@ void RhythmMachine::render(float* out, int32_t frames) {
             }
         } else {
             curStep_ = -1;
-            playBank_ = editBank();
-            lastTrigStep_ = -999999;
         }
-        scope_[S_Bank].store(playing_ ? (float)playBank_ : -1.0f, std::memory_order_relaxed);
+        scope_[S_Bank].store(playing_ ? (float)playBank_.load(std::memory_order_relaxed) : -1.0f, std::memory_order_relaxed);
         advanceClock(frames);
         return;
-    }
-    if (!playing_) { // stopped: the next start takes the param's bank at its first step
-        playBank_ = editBank();
-        lastTrigStep_ = -999999;
     }
     const float swing = get(Swing), human = get(Humanize);
     const float accentG = 1.0f + get(Accent) * 1.0f; // up to +6 dB-ish
@@ -821,7 +839,7 @@ void RhythmMachine::render(float* out, int32_t frames) {
 
     // publish telemetry
     scope_[S_Step].store((float)(playing_ ? curStep_ : -1), std::memory_order_relaxed);
-    scope_[S_Bank].store(playing_ ? (float)playBank_ : -1.0f, std::memory_order_relaxed);
+    scope_[S_Bank].store(playing_ ? (float)playBank_.load(std::memory_order_relaxed) : -1.0f, std::memory_order_relaxed);
     advanceClock(frames);
     scope_[S_Glue].store(grMax, std::memory_order_relaxed);
     int active = 0;

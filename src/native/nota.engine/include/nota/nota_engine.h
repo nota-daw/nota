@@ -486,6 +486,12 @@ NOTA_API const char* nota_plugin_param_name(const NotaEngine* engine, int32_t tr
  * normalized default. Engine-owned string, valid until the next call. */
 NOTA_API const char* nota_plugin_param_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API float       nota_plugin_param_default(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+/* A stepped param (specs/100): the number of values it takes — 0 for a continuous param, n >= 2
+ * for the normalized values k / (n - 1) — and the name of value `step` ("A", "Pattern"; "" for
+ * none; engine-owned string, valid until the next call). Built-in instruments only; 0 / "" for
+ * anything else. */
+NOTA_API int32_t     nota_plugin_param_steps(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+NOTA_API const char* nota_plugin_param_step_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index, int32_t step);
 NOTA_API float       nota_plugin_param_get(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API NotaResult  nota_plugin_param_set(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index, float normalized);
 /* Add (or reuse) a PluginParam automation lane bound to a stable paramID; the

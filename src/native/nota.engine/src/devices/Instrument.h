@@ -372,6 +372,18 @@ class Instrument {
         (void)id;
         return -1;
     }
+    // A stepped param (specs/100): how many values it takes — 0 for a continuous one, n ≥ 2 for
+    // the values k / (n − 1) — and the name of value k ("A", "Pattern"; "" for none), so an
+    // automation lane can draw and snap to its levels. Message thread.
+    virtual int32_t pluginParamSteps(int32_t index) const {
+        (void)index;
+        return 0;
+    }
+    virtual std::string pluginParamStepText(int32_t index, int32_t step) const {
+        (void)index;
+        (void)step;
+        return {};
+    }
     // "Learn" (M9-B3): index of the parameter last moved in the plugin's own GUI
     // since the previous call, or -1. Consume-once (returns then clears).
     virtual int32_t lastTouchedPluginParam() { return -1; }

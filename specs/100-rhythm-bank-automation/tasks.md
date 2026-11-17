@@ -48,6 +48,10 @@ description: "Tasks for specs/100 — automate the Nota Rhythm pattern bank (#60
 
 - [X] T018 Rhythm rendered in pieces (the engine splits a block at note events) restarted its step clock at the block start for every piece and re-fired the block's first steps; advance the clock per piece (`RhythmMachine::advanceClock`) and drop a block's lane samples at its end, not after the first piece (`ParamLaneSteps::rendered` / `transport`). Smoke: unmapped MIDI notes splitting blocks leave the render unchanged.
 - [X] T019 MCP `set_rhythm_perform` takes `bankSwitch` (step | pattern) in `src/managed/Nota.Mcp/Tools/RhythmTools.cs`
+- [X] T021 Review (PR #653): lane hooks run after every block-start value is set, so a Twin Pattern lane samples the grid of a Rate lane added after it (`Engine::applyAutomation` second pass; smoke: both lane orders)
+- [X] T022 Review: Rhythm's playing bank and last step are atomics and carry into `clone()`; Pattern mode keeps a queued bank across a forward gap inside the cycle (smoke: a sample load mid-pattern keeps the queue)
+- [X] T023 Review: `ParamLaneSteps` holds 512 steps (any block at 999 BPM, 1/32, ≥ 4.3 kHz) and samples a lane in one pass
+- [X] T024 Review: stepped params reach the lane editor — `nota_plugin_param_steps` / `nota_plugin_param_step_text`, `Instrument::pluginParamSteps` / `pluginParamStepText` (Rhythm Bank A–D, Bank Switch, Twin's stepped params); the lane draws named levels, snaps points to them and draws segments as the stairs they play
 - [ ] T020 RU strings for `device.rhythm.switch_at_*` and the updated bank tooltip in nota-translations (`languages/ru.json`) — follow-up, as for earlier features
 
 ## Dependencies

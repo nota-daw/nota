@@ -27,10 +27,8 @@ void Engine::applyAutomation(Graph* g, double beat, double beatEnd) {
                 const ParamOwner o = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot);
                 if (lane.target == AutomationTarget::PluginParam) {
                     if (lane.paramIndex < 0) continue;
-                    if (o.instrument) {
-                        o.instrument->pluginParamSet(lane.paramIndex, v);
-                        o.instrument->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
-                    } else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
+                    if (o.instrument) o.instrument->pluginParamSet(lane.paramIndex, v);
+                    else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
                 } else if (o.device) o.device->setParam(lane.paramIndex, v);
                 else if (o.midi) o.midi->setParam(lane.paramIndex, v);
                 continue;
@@ -52,15 +50,23 @@ void Engine::applyAutomation(Graph* g, double beat, double beatEnd) {
                 // targets the instrument; paramIndex is pre-resolved from paramId.
                 if (lane.paramIndex < 0) break;
                 if (lane.deviceIndex < 0) {
-                    if (t.instrument) {
-                        t.instrument->pluginParamSet(lane.paramIndex, v);
-                        t.instrument->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
-                    }
+                    if (t.instrument) t.instrument->pluginParamSet(lane.paramIndex, v);
                 } else if (lane.deviceIndex < static_cast<int32_t>(t.devices.size())) {
                     if (auto* d = t.devices[lane.deviceIndex].get()) d->pluginParamSet(lane.paramIndex, v);
                 }
                 break;
             }
+        }
+        // Exact-time lanes (specs/100), once every lane above has set its block-start value: an
+        // instrument samples a lane on its step grid, and the grid can be another param of the
+        // same block (Twin's Rate), so the order the lanes were added in must not matter.
+        for (const TrackLane& lane : t.automation) {
+            if (lane.points.empty() || lane.suppressRead || lane.target != AutomationTarget::PluginParam || lane.paramIndex < 0)
+                continue;
+            Instrument* inst = nullptr;
+            if (lane.nested()) inst = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot).instrument;
+            else if (lane.deviceIndex < 0) inst = t.instrument.get();
+            if (inst) inst->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
         }
     }
     // Master-volume lane (graph-level, M9 follow-up): write the master gain atomic.
@@ -158,6 +164,16 @@ std::string Engine::pluginParamText(int32_t trackId, int32_t deviceIndex, int32_
     if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return {};
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamText(paramIndex) : std::string{};
+}
+// Stepped params (specs/100): only an instrument declares them; effects' plugin params stay
+// continuous for the lane editor.
+int32_t Engine::pluginParamSteps(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && deviceIndex < 0 && t->instrument ? t->instrument->pluginParamSteps(paramIndex) : 0;
+}
+std::string Engine::pluginParamStepText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, int32_t step) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && deviceIndex < 0 && t->instrument ? t->instrument->pluginParamStepText(paramIndex, step) : std::string{};
 }
 float Engine::pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);

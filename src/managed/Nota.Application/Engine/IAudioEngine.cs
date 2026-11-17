@@ -1474,6 +1474,10 @@ public interface IAudioEngine : IDisposable
     string PluginParamText(int trackId, int deviceIndex, int paramIndex);
     /// <summary>The plugin's default for a param, normalized 0..1.</summary>
     float PluginParamDefault(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>How many values a stepped param takes (specs/100): 0 = continuous, n ≥ 2 = the values k / (n − 1).</summary>
+    int PluginParamSteps(int trackId, int deviceIndex, int paramIndex) => 0;
+    /// <summary>The name of a stepped param's value <paramref name="step"/> ("A", "Pattern"), or "".</summary>
+    string PluginParamStepText(int trackId, int deviceIndex, int paramIndex, int step) => "";
     void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized);
     int AddPluginAutomationLane(int trackId, int deviceIndex, string paramId);
     string AutomationLaneParamId(int trackId, int laneIndex);

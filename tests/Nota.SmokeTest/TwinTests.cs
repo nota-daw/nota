@@ -963,6 +963,26 @@ internal static class TwinTests
             bool Near(double beat) => on.Any(x => Math.Abs(x - beat * spb) < 64);
             yield return (Near(0) && Near(4) && !Near(8) && Near(10) && Near(14),
                 $"a Twin Pattern lane on a bar line starts the new pattern on that bar (onsets at beats {string.Join(", ", on.Select(x => (x / spb).ToString("0.##")))})");
+            yield return (e.PluginParamSteps(t, -1, Pi(e, t, "seq.pattern")) == 8 && e.PluginParamStepText(t, -1, Pi(e, t, "seq.pattern"), 1) == "2",
+                "the Twin Pattern lane has eight levels named 1–8");
+        }
+        // The Rate changes 1/16 → 1/32 in the block that holds beat 8, where the Pattern lane jumps
+        // too: the pattern is sampled on the new grid whichever lane was added first.
+        foreach (bool patternFirst in new[] { true, false })
+        {
+            var (re, rt) = SeqRig(120, p0);
+            using (re)
+            {
+                TwinPatterns.WritePattern(re, rt, 1, p1);
+                void PatternLane() { int l = re.AddPluginAutomationLane(rt, -1, "seq.pattern"); re.SetAutomationPoints(rt, l, new[] { new AutomationPoint(0, 0f), new AutomationPoint(8, 0f), new AutomationPoint(8, 1f / 7f) }); }
+                void RateLane() { int l = re.AddPluginAutomationLane(rt, -1, "seq.rate"); re.SetAutomationPoints(rt, l, new[] { new AutomationPoint(0, 0.6f), new AutomationPoint(7.99, 0.6f), new AutomationPoint(7.99, 1f) }); }
+                if (patternFirst) { PatternLane(); RateLane(); } else { RateLane(); PatternLane(); }
+                var on = Onsets(Roll(re, 5.0, 441), 2000);
+                double spb = Sr / 2.0;
+                bool Near(double beat) => on.Any(x => Math.Abs(x - beat * spb) < 64);
+                yield return (!Near(8) && Near(9),
+                    $"with the Rate also changing, the Pattern lane switches on the bar ({(patternFirst ? "Pattern" : "Rate")} lane added first; onsets at beats {string.Join(", ", on.Select(x => (x / spb).ToString("0.##")))})");
+            }
         }
     }
 

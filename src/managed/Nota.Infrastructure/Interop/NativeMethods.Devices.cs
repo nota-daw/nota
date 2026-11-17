@@ -407,6 +407,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_text")]
     internal static partial IntPtr PluginParamText(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_steps")]
+    internal static partial int PluginParamSteps(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_step_text")]
+    internal static partial IntPtr PluginParamStepText(IntPtr engine, int trackId, int deviceIndex, int paramIndex, int step);
+
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_default")]
     internal static partial float PluginParamDefault(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
 

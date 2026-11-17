@@ -153,6 +153,8 @@ class RhythmMachine final : public Instrument {
     }
     void pluginParamSet(int32_t i, float v) override;
     std::string pluginParamText(int32_t i) const override;
+    int32_t pluginParamSteps(int32_t i) const override { return i == Bank ? kBanks : i == BankSwitch ? 2 : 0; }
+    std::string pluginParamStepText(int32_t i, int32_t step) const override;
     int32_t pluginParamIndexOfId(const std::string& id) const override;
     void pluginParamLane(int32_t i, const AutomationLane& lane, double beatFrom, double beatTo) override;
 
@@ -298,7 +300,7 @@ class RhythmMachine final : public Instrument {
     float get2(int v, int p) const { return pn_[v * kPV + p].load(std::memory_order_relaxed); }
     static bool valid(int v, int s) { return v >= 0 && v < kVoices && s >= 0 && s < kSteps; }
     // The bank step absStep plays (audio thread): the Bank lane at the step's grid beat, else the
-    // param; Pattern mode takes it only on the pattern's first step or after a jump.
+    // param; Pattern mode takes it only in a new pattern cycle, after a jump back, or at a start.
     int stepBank(long absStep, int barStep);
     // A render piece is done: the clock moves past it — the engine renders a block in pieces
     // between note events and sets the transport once per block, so the next piece starts here,
@@ -326,8 +328,11 @@ class RhythmMachine final : public Instrument {
     uint8_t vel_[kBanks][kVoices][kSteps];
     uint8_t acc_[kBanks][kVoices][kSteps];
     uint8_t selVoice_ = 0;
-    int playBank_ = 0;           // audio thread: the bank the steps play (trails Bank in Pattern mode)
-    long lastTrigStep_ = -999999; // audio thread: the step that last fired (a jump = a fresh start)
+    // Bank switching (written by the audio thread; atomics because clone() reads them on the
+    // message thread to carry a running switch — a queued Pattern-mode bank — into the copy).
+    static constexpr long kNoStep = -999999;
+    std::atomic<int> playBank_{0};          // the bank the steps play (trails Bank in Pattern mode)
+    std::atomic<long> lastTrigStep_{kNoStep}; // the step that last fired; kNoStep after a stop
     ParamLaneSteps bankLane_;    // audio thread: this block's Bank lane at each step (specs/100)
     std::shared_ptr<SampleBuffer> smp_[kVoices]; // per-voice sample (Phase 2); null = synth
     uint8_t src_[kVoices] = {0};                 // per-voice source: 0 Synth, 1 Sample

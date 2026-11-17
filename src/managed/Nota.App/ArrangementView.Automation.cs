@@ -54,6 +54,14 @@ public sealed partial class ArrangementView
             : (0f, 1f),
     };
 
+    /// <summary>How many levels the target takes (specs/100): 0 for a continuous param, n ≥ 2 for a
+    /// stepped instrument param (a Rhythm bank, a Twin pattern) whose values are k / (n − 1).</summary>
+    internal int AutoSteps(TrackVM t) => t.AutoChain < 0 && t.AutoTarget == AutomationTarget.PluginParam && _engine is { } e
+        ? e.PluginParamSteps(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t)) : 0;
+    /// <summary>The name of a stepped target's level <paramref name="k"/> ("A"), or "".</summary>
+    internal string AutoStepText(TrackVM t, int k) => _engine is { } e
+        ? e.PluginParamStepText(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t), k) : "";
+
     /// <summary>Current live value of the target (baseline when the lane has no points).</summary>
     internal float AutoCurrent(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne ? NestedParam(ne, t).Value : t.AutoTarget switch
     {

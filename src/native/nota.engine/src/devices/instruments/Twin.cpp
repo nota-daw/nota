@@ -321,7 +321,24 @@ float Twin::pluginParamDefault(int32_t i) const {
 
 std::string Twin::pluginParamText(int32_t i) const {
     if (i < 0 || i >= kNumParams) return {};
-    const float v = pn_[i].load(std::memory_order_relaxed);
+    return valueText(i, pn_[i].load(std::memory_order_relaxed));
+}
+
+int32_t Twin::pluginParamSteps(int32_t i) const {
+    if (i < 0 || i >= kNumParams) return 0;
+    for (int p = 0; p < twin::kParts; ++p) // a matrix slot names a source / destination, not a level
+        if (const int r = i - twin::partIdx(p, twin::PRoute0); r >= 0 && r < 2 * twin::kRoutes) return 0;
+    const int n = twin::paramTable()[static_cast<size_t>(i)].steps;
+    return n > 1 ? n : 0;
+}
+
+std::string Twin::pluginParamStepText(int32_t i, int32_t step) const {
+    const int n = pluginParamSteps(i);
+    if (n < 2 || step < 0 || step >= n) return {};
+    return valueText(i, static_cast<float>(step) / static_cast<float>(n - 1));
+}
+
+std::string Twin::valueText(int32_t i, float v) const {
     // A matrix slot's source / destination reads as its name.
     for (int p = 0; p < twin::kParts; ++p) {
         const int r = i - twin::partIdx(p, twin::PRoute0);

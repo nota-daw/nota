@@ -29,7 +29,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   parameter: they follow a playing lane, a click is one undo step, and with automation write armed
   it records. **Bank Switch** (the bank buttons' right-click menu, or Perform › Bank Switch) chooses
   when a new bank takes over: at the next step (as before) or at the pattern start, where a chosen
-  bank waits, tinted, until the next bar. A bank lane is read at each step, so a switch drawn on a
+  bank waits, tinted, until the next bar. The lane shows the four banks as named levels and its
+  points snap to them (so do the levels of Nota Twin's stepped params, such as the sequencer
+  Pattern), drawn as the steps it plays. A bank lane is read at each step, so a switch drawn on a
   bar line plays on the downbeat — the same in playback and export. Projects saved before open on
   the bank they were saved with.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
