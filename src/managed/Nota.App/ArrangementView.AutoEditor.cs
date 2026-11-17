@@ -71,6 +71,10 @@ public sealed partial class ArrangementView
         private TrackVM? _rangeTrack;            // Shift-drag time-range selection in progress (Phase 2)
         private double _rangeAnchor;
         internal bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
+        /// <summary>The point being dragged on <paramref name="t"/>, else the one hovered there.</summary>
+        internal AutoPt? ActivePoint(TrackVM t)
+            => ReferenceEquals(_autoDragTrack, t) && _autoDrag is { } d ? d
+             : ReferenceEquals(_hoverTrack, t) ? _hoverPoint : null;
 
         // Target-selector pill: width fits its label so nothing clips.
         private const double PillH = 16;
@@ -212,10 +216,9 @@ public sealed partial class ArrangementView
                 {
                     // A stepped target: the stair under the pointer, or one of its risers.
                     if (Math.Abs(ValueToY(t, row, Quantize((float)vy, n)) - pos.Y) <= 6) return (a, b);
-                    double ax = _o.BeatToX(a.Beat), bx = _o.BeatToX(b.Beat);
                     foreach (var (ct, from, to) in Risers(a, b, n))
                     {
-                        double x = ax + (bx - ax) * ct, y0 = ValueToY(t, row, from), y1 = ValueToY(t, row, to);
+                        double x = _o.BeatToX(a.Beat + (b.Beat - a.Beat) * ct), y0 = ValueToY(t, row, from), y1 = ValueToY(t, row, to);
                         if (Math.Abs(x - pos.X) <= 6 && pos.Y >= Math.Min(y0, y1) - 6 && pos.Y <= Math.Max(y0, y1) + 6) return (a, b);
                     }
                     return null;
@@ -300,7 +303,12 @@ public sealed partial class ArrangementView
         // so a whole drag is one undo step while the device follows in real time.
         private void CommitAutoDuringDrag(TrackVM t)
         {
-            if (!_autoLiveStarted) { _o.CommitAuto(t); _autoLiveStarted = true; }
+            if (!_autoLiveStarted)
+            {
+                _o.BeginAutoDrag(t);   // a Tempo drag holds the axis from before its first write
+                _o.CommitAuto(t);
+                _autoLiveStarted = true;
+            }
             else _o.CommitAutoLive(t);
         }
 
@@ -376,7 +384,8 @@ public sealed partial class ArrangementView
             double x0 = ax, y0 = ValueToY(t, row, Quantize(a.Value, n));
             foreach (var (ct, _, to) in Risers(a, b, n))
             {
-                double x = ax + (bx - ax) * ct, y = ValueToY(t, row, to);
+                // In beats, then to X: on a tempo axis (specs/099) X isn't even in beats.
+                double x = _o.BeatToX(a.Beat + (b.Beat - a.Beat) * ct), y = ValueToY(t, row, to);
                 ctx.DrawLine(pen, new Point(x0, y0), new Point(x, y0));
                 ctx.DrawLine(pen, new Point(x, y0), new Point(x, y));
                 x0 = x; y0 = y;
@@ -436,7 +445,10 @@ public sealed partial class ArrangementView
                         double ax = _o.BeatToX(a.Beat), ay = ValueToY(t, i, a.Value);
                         double bx = _o.BeatToX(b.Beat), by2 = ValueToY(t, i, b.Value);
                         if (levels >= 2 && a.Value != b.Value) { DrawStairs(ctx, segPen, t, i, a, b, ax, bx, levels); continue; }
-                        if (a.Curve == 0f) { ctx.DrawLine(segPen, new Point(ax, ay), new Point(bx, by2)); continue; }
+                        // A lane moves evenly in beats; on a tempo axis X is seconds, so even a straight
+                        // segment bends on screen (specs/099) — sample it in beats like a curve.
+                        bool timeAxis = _o.TempoAxis;
+                        if (a.Curve == 0f && !timeAxis) { ctx.DrawLine(segPen, new Point(ax, ay), new Point(bx, by2)); continue; }
                         // Curved segment: polyline of shaped sub-samples (M9-D).
                         int steps = Nota.Application.Editing.AutomationCurve.DrawSteps(bx - ax);
                         var prev = new Point(ax, ay);
@@ -444,7 +456,8 @@ public sealed partial class ArrangementView
                         {
                             double tt = s / (double)steps;
                             double vy = a.Value + (b.Value - a.Value) * Shape(tt, a.Curve);
-                            var cur = new Point(ax + (bx - ax) * tt, ValueToY(t, i, (float)vy));
+                            double sx = timeAxis ? _o.BeatToX(a.Beat + (b.Beat - a.Beat) * tt) : ax + (bx - ax) * tt;
+                            var cur = new Point(sx, ValueToY(t, i, (float)vy));
                             ctx.DrawLine(segPen, prev, cur);
                             prev = cur;
                         }

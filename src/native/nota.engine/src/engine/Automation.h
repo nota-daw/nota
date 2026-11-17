@@ -19,7 +19,9 @@ namespace nota {
 
 // Send stays 5 so a stored lane does not land on another target. It is not automated
 // (specs/069): addAutomationLane rejects it and applyAutomation does not play it.
-enum class AutomationTarget : int32_t { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5 };
+// Tempo (specs/099) lives only on the master track; its values are BPM (20..300). It is
+// not played by applyAutomation: the engine derives the graph's tempo map from it.
+enum class AutomationTarget : int32_t { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5, Tempo = 6 };
 
 // The track's own mix values — volume and pan. Not tied to a device, so their lanes
 // follow clips to any track (a device lane's index is only meaningful on its own chain).

@@ -22,6 +22,7 @@ internal static class TempoMapTests
     public static IEnumerable<(bool, string)> Run()
     {
         using var e = new NotaEngine();
+        // Tempo is the master Tempo lane (specs/099); TempoLane writes these maps into it.
         var steps = new[] { new TempoPoint(0, 120), new TempoPoint(4, 60), new TempoPoint(8, 180) };
         e.SetTempoPoints(steps); Render(e, 1);
         yield return (Math.Abs(e.BeatToSeconds(8) - 6) < 1e-10 && Math.Abs(e.SecondsToBeat(3) - 5) < 1e-10,
@@ -29,7 +30,7 @@ internal static class TempoMapTests
         e.SetTempoPoints(new[] { new TempoPoint(0, 120, TempoShape.Linear), new TempoPoint(8, 240) });
         yield return (Math.Abs(e.BeatToSeconds(8) - 4 * Math.Log(2)) < 1e-7,
             "tempo: linear BPM integrates reciprocal tempo accurately");
-        var curved = new[] { new TempoPoint(0, 70, TempoShape.Smooth, .15, .8, .85, .2), new TempoPoint(12, 210), new TempoPoint(24, 95) };
+        var curved = new[] { new TempoPoint(0, 70, TempoShape.Curve, .6f), new TempoPoint(12, 210, TempoShape.Curve, -.5f), new TempoPoint(24, 95) };
         e.SetTempoPoints(curved);
         bool roundTrip = true, monotonic = true; double previous = -1;
         for (int i = 0; i < 2400; ++i)
@@ -38,55 +39,38 @@ internal static class TempoMapTests
             roundTrip &= Math.Abs(e.SecondsToBeat(seconds) - beat) < 1e-9;
             monotonic &= seconds > previous; previous = seconds;
         }
-        yield return (roundTrip && monotonic, "tempo: Bezier and trailing conversions are monotonic and invertible");
-        using (var preview = e.CreateTempoPreview(curved))
-            yield return (Enumerable.Range(0, 100).All(i => Math.Abs(preview.BeatToSeconds(i / 4.0) - e.BeatToSeconds(i / 4.0)) < 1e-12),
-                "tempo: UI preview and playback use identical compiled timing");
+        yield return (roundTrip && monotonic, "tempo: curved and trailing conversions are monotonic and invertible");
+        // specs/099: the tempo follows the lane's own curve — what is drawn is what plays.
+        yield return (Enumerable.Range(0, 96).All(i =>
+            {
+                double b = i / 4.0;
+                var (a, z) = b < 12 ? (curved[0], curved[1]) : (curved[1], curved[2]);
+                double want = AutomationCurve.Lerp(a.Bpm, z.Bpm, (b - a.Beat) / (z.Beat - a.Beat), a.Curve);
+                return Math.Abs(e.TempoAt(b) - want) < 1e-3;
+            }), "tempo: the map follows the Tempo lane's automation curve");
 
-        foreach (var invalid in new[]
-        {
-            new[] { new TempoPoint(1, 120) }, new[] { new TempoPoint(0, double.NaN) },
-            new[] { new TempoPoint(0, 120), new TempoPoint(0, 100) },
-            new[] { new TempoPoint(0, 120, TempoShape.Smooth, .9, 0, .1, 1) }
-        })
-        {
-            bool rejected = false;
-            try { e.SetTempoPoints(invalid); } catch (NotaEngineException) { rejected = true; }
-            yield return (rejected && e.TempoPoints.SequenceEqual(curved), "tempo: invalid map rejected without changing project");
-        }
+        // Tempo lives on the master only, and a lane value never leaves 20–300 BPM.
+        int track0 = e.AddAudioTrack();
+        yield return (e.AddAutomationLane(track0, Nota.Application.AutomationTarget.Tempo, -1, -1) < 0,
+            "tempo: a Tempo lane is refused on any track but the master");
+        e.RemoveTrack(track0);
+        bool nanRejected = false;
+        try { e.SetTempoPoints(new[] { new TempoPoint(0, double.NaN) }); } catch (NotaEngineException) { nanRejected = true; }
+        yield return (nanRejected && TempoLane.Holds(e, curved), "tempo: a non-finite tempo is rejected without changing the project");
+        e.SetTempoPoints(new[] { new TempoPoint(0, 999), new TempoPoint(4, 5) });
+        var limited = TempoLane.Points(e);
+        yield return (limited[0].Value == 300 && limited[^1].Value == 20 && Math.Abs(e.TempoAt(0) - 300) < 1e-9,
+            "tempo: lane values are limited to 20–300 BPM");
 
-        e.SetTempoPoints(new[] { new TempoPoint(0, 999) });
-        yield return (Math.Abs(e.TempoAt(0) - 999) < 1e-12,
-            "tempo: the persisted maximum matches the transport ABI maximum of 999 BPM");
-        bool thousandRejected = false;
-        try { e.SetTempoPoints(new[] { new TempoPoint(0, 1000) }); } catch (NotaEngineException) { thousandRejected = true; }
-        yield return (thousandRejected, "tempo: 1000 BPM is rejected before it can create an unloadable project");
-
+        // A multi-point edit of the lane is one undo step.
         e.SetTempoPoints(steps); e.ClearUndoHistory();
-        var remaining = TempoMapping.DeleteSelected(steps, new HashSet<int> { 0, 1, 2 });
+        var remaining = new[] { steps[0] };
         e.SetTempoPoints(remaining);
-        yield return (remaining.Length == 1 && remaining[0].Beat == 0 && e.Undo() && e.TempoPoints.SequenceEqual(steps) && !e.CanUndo,
-            "tempo: multi-delete preserves initial point and undoes in one step");
-        yield return (e.Redo() && e.TempoPoints.SequenceEqual(remaining), "tempo: multi-delete redoes as one operation");
-
-        e.SetTempoPoints(curved);
-        double fixedTime = e.BeatToSeconds(12);
-        var mapped = TempoMapping.MapBar(e, curved, 16, fixedTime + 3, true)!;
-        e.SetTempoPoints(mapped);
-        yield return (Math.Abs(e.BeatToSeconds(12) - fixedTime) < 1e-8 && Math.Abs(e.BeatToSeconds(16) - fixedTime - 3) < 1e-8,
-            "tempo: bar mapping preserves preceding curved phrase and reaches target seconds");
-        var map2 = TempoMapping.MapBar(e, mapped, 20, fixedTime + 5, true)!;
-        e.SetTempoPoints(map2);
-        var map3 = TempoMapping.MapBar(e, map2, 24, fixedTime + 8, true)!;
-        e.SetTempoPoints(map3);
-        yield return (Math.Abs(e.BeatToSeconds(16) - fixedTime - 3) < 1e-8 && Math.Abs(e.BeatToSeconds(20) - fixedTime - 5) < 1e-8 &&
-            Math.Abs(e.BeatToSeconds(24) - fixedTime - 8) < 1e-8 && e.TempoPoints.Count(p => p.Beat == 24) == 1,
-            "tempo: successive sections retain anchors without duplicate markers");
-        var noMarker = TempoMapping.MapBar(e, map3, 28, fixedTime + 10, false)!;
-        e.SetTempoPoints(noMarker);
-        yield return (noMarker.Length == map3.Length && Math.Abs(e.BeatToSeconds(28) - fixedTime - 10) < 1e-8,
-            "tempo: Ctrl+Alt mapping adjusts timing without inserting a point");
-        yield return (TempoMapping.MapBar(e, noMarker, 28, -1, true) is null, "tempo: crossing an anchor is rejected");
+        yield return (e.Undo() && TempoLane.Holds(e, steps) && !e.CanUndo,
+            "tempo: a multi-point delete undoes in one step");
+        yield return (e.Redo() && TempoLane.Holds(e, remaining), "tempo: …and redoes as one operation");
+        yield return (e.IsTempoAutomated && e.Undo() && Math.Abs(e.BeatToSeconds(8) - 6) < 1e-10,
+            "tempo: undo restores the map with the lane");
 
         e.SetTempoPoints(steps); e.Seek(0); e.Play(); Render(e, Sr * 3);
         yield return (Math.Abs(e.PositionBeats - 5) < 1e-8, "tempo: playback advances through step changes using integrated time");
@@ -165,8 +149,8 @@ internal static class TempoMapTests
             ProjectService.Save(doc, bundle, audio);
             using var restored = new NotaEngine();
             ProjectService.Apply(ProjectService.Load(bundle), restored, bundle);
-            yield return (restored.TempoPoints.SequenceEqual(curved) && Math.Abs(restored.BeatToSeconds(9) - audio.BeatToSeconds(9)) < 1e-12,
-                "tempo: save/reload preserves shapes, handles and compiled timing");
+            yield return (TempoLane.Holds(restored, curved) && Math.Abs(restored.BeatToSeconds(9) - audio.BeatToSeconds(9)) < 1e-12,
+                "tempo: save/reload preserves the Tempo lane and its timing");
         }
         finally { Directory.Delete(temp, recursive: true); }
     }

@@ -39,12 +39,12 @@ public interface IAudioEngine : IDisposable
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
-    IReadOnlyList<TempoPoint> TempoPoints { get; }
-    void SetTempoPoints(IReadOnlyList<TempoPoint> points, bool checkpoint = true);
+    /// <summary>True while the master track's Tempo automation lane has points (specs/099):
+    /// the tempo follows it and <see cref="SetBpm"/> does nothing.</summary>
+    bool IsTempoAutomated { get; }
     double BeatToSeconds(double beat);
     double SecondsToBeat(double seconds);
     double TempoAt(double beat);
-    ITempoPreview CreateTempoPreview(IReadOnlyList<TempoPoint> points);
     void SetTimeSignature(int num, int denom);
     void SetLoop(bool enabled, double startBeat, double endBeat);
     void SetMetronome(bool enabled);
@@ -60,6 +60,12 @@ public interface IAudioEngine : IDisposable
 
     // --- Mixer -------------------------------------------------------------
     void SetMasterVolume(float volume);
+    /// <summary>Master pan (specs/099), −1..1: after the master devices, before the master fader.
+    /// A plain set — wrap a drag in a mix gesture on <c>MixTarget.Pan(MasterTrackId)</c> for undo.</summary>
+    void SetMasterPan(float pan);
+    float MasterPan { get; }
+    /// <summary>Device-free engine self-test of master Pan / device lanes (specs/099); 0 = pass.</summary>
+    int MasterAutomationSelfTest();
 
     // --- Tracks & clips ----------------------------------------------------
     int AddAudioTrack();
@@ -1516,6 +1522,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Master-volume automation (graph-level, not tied to a track).</summary>
     AutomationPoint[] GetMasterVolumeAutomation();
     void SetMasterVolumeAutomation(AutomationPoint[] points);
+    /// <summary>As <see cref="SetMasterVolumeAutomation"/> without an undo step: a drag's later moves.</summary>
+    void SetMasterVolumeAutomationLive(AutomationPoint[] points);
     /// <summary>Per-clip volume envelope for an audio clip (0..1, clip-local beats).</summary>
     AutomationPoint[] GetClipVolumeEnvelope(int trackId, int clipIndex);
     void SetClipVolumeEnvelope(int trackId, int clipIndex, AutomationPoint[] points);

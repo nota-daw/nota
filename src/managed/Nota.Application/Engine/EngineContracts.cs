@@ -340,7 +340,8 @@ public struct NotaMeter
 /// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.
 /// <see cref="Send"/> (specs/072) is a track's send level into the return bus held in the
 /// lane's device index (0..3), values 0..1.</summary>
-public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5 }
+/// <summary>Tempo (specs/099) is valid only on the master track; its values are BPM (20–300).</summary>
+public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5, Tempo = 6 }
 
 /// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
 /// track's instrument. Matches nota_track_transfer_device's family.</summary>

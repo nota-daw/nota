@@ -299,36 +299,77 @@ public sealed partial class ArrangementView
         private readonly AutoEditor _auto;   // return rows edit their lanes like tracks (specs/045)
         public FooterLaneControl(ArrangementView o) { _o = o; ClipToBounds = true; _auto = new AutoEditor(o, this); }
 
-        // The return rows, as the automation editor sees them; the master row below them keeps
-        // its own master-volume editing.
+        // The return rows and, below them, the master row (specs/099), as the automation editor
+        // sees them: the master edits like any lane, its target picked from its pill.
         Control IAutoRows.Owner => this;
-        int IAutoRows.RowAtY(double y) { int r = _o.FooterRowAt(y); return r < _o._returns.Count ? r : -1; }
-        TrackVM IAutoRows.TrackAt(int i) => _o._returns[i];
-        int IAutoRows.IndexOf(TrackVM t) => _o._returns.IndexOf(t);
+        int IAutoRows.RowAtY(double y) { int r = _o.FooterRowAt(y); return r >= 0 && r <= _o._returns.Count ? r : -1; }
+        TrackVM IAutoRows.TrackAt(int i) => i < _o._returns.Count ? _o._returns[i] : _o._masterVm;
+        int IAutoRows.IndexOf(TrackVM t) => _o.IsMaster(t) ? _o._returns.Count : _o._returns.IndexOf(t);
         double IAutoRows.Top(int i) => _o.FooterRowTop(i);
         double IAutoRows.Height(int i) => _o.FooterRowHeight(i);
         bool IAutoRows.Editable(int i) => true;
-        (int lo, int hi) IAutoRows.VisibleRange => (0, _o._returns.Count - 1);
+        (int lo, int hi) IAutoRows.VisibleRange => (0, _o._returns.Count);
 
-        public bool IsEditingPoint => _auto.IsEditingPoint || _mDrag is not null;
-
-        private AutoPt? _mDrag;   // master-automation point being dragged
+        public bool IsEditingPoint => _auto.IsEditingPoint;
 
         private int MasterRow => _o._returns.Count;
         private double MasterRowTop => _o.FooterRowTop(MasterRow);
         private double MasterRowH => _o.FooterRowHeight(MasterRow);
-        private double MasterInset => Math.Min(6, MasterRowH * 0.15);   // a compact row keeps most of its height for the curve
-        private double MasterValueToY(float v)
+        private bool MasterShowsTempo => _o._automationMode && _o._masterVm.AutoTarget == AutomationTarget.Tempo;
+
+        // The Tempo lane's range labels (FR-003a): top-right is the highest tempo shown, bottom-
+        // right the lowest; clicking one edits it.
+        private Rect TempoRangeLabel(bool max, double w)
         {
-            double top = MasterRowTop + MasterInset, bot = MasterRowTop + MasterRowH - MasterInset;
-            double t = (v - ArrangementView.MasterAutoMin) / (ArrangementView.MasterAutoMax - ArrangementView.MasterAutoMin);
-            return bot - Math.Clamp(t, 0, 1) * (bot - top);
+            const double lw = 64, lh = 14;
+            return max ? new Rect(w - lw - 6, MasterRowTop + 3, lw, lh)
+                       : new Rect(w - lw - 6, MasterRowTop + MasterRowH - lh - 3, lw, lh);
         }
-        private float MasterYToValue(double py)
+
+        private void EditTempoRange(bool max)
         {
-            double top = MasterRowTop + MasterInset, bot = MasterRowTop + MasterRowH - MasterInset;
-            double t = (bot - py) / Math.Max(1, bot - top);
-            return ArrangementView.MasterAutoMin + (float)Math.Clamp(t, 0, 1) * (ArrangementView.MasterAutoMax - ArrangementView.MasterAutoMin);
+            var (lo, hi) = _o.AutoRange(_o._masterVm);
+            var box = new NumericUpDown
+            {
+                Minimum = max ? (decimal)lo + 1 : (decimal)ArrangementView.TempoMin,
+                Maximum = max ? (decimal)ArrangementView.TempoMax : (decimal)hi - 1,
+                Value = (decimal)(max ? hi : lo), Increment = 1, FormatString = "0", Width = 96,
+            };
+            ToolTip.SetTip(box, max ? Loc.T("tempo.range_max") : Loc.T("tempo.range_min"));
+            box.ValueChanged += (_, _) =>
+            {
+                if (box.Value is not decimal v) return;
+                if (max) _o.SetTempoLaneRange(lo, (double)v); else _o.SetTempoLaneRange((double)v, hi);
+                InvalidateVisual();
+            };
+            var flyout = new Flyout { Content = box };
+            flyout.ShowAt(this, showAtPointer: true);
+        }
+
+        // BPM scale of the master Tempo lane: the range ends (click to change) and, while a point
+        // is dragged or hovered, its tempo next to it.
+        private void DrawTempoScale(DrawingContext ctx, double w)
+        {
+            var (lo, hi) = _o.AutoRange(_o._masterVm);
+            foreach (bool max in new[] { true, false })
+            {
+                var r = TempoRangeLabel(max, w);
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, r, NotaRadius.FieldValue, NotaRadius.FieldValue);
+                var ft = new NotaFormattedText(Loc.F("browser.bpm", NotaNum.Str(max ? hi : lo, "0")),
+                    CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
+                ctx.DrawText(ft, new Point(r.Right - ft.Width - 6, r.Y + (r.Height - ft.Height) / 2));
+            }
+            if (_auto.ActivePoint(_o._masterVm) is { } p)
+            {
+                var ft = new NotaFormattedText(Loc.F("browser.bpm", NotaNum.Bpm(p.Value)),
+                    CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
+                double top = MasterRowTop + 8, bot = MasterRowTop + MasterRowH - 8;
+                double frac = hi > lo ? Math.Clamp((p.Value - lo) / (hi - lo), 0, 1) : 0.5;
+                double x = _o.BeatToX(p.Beat) + 8, y = bot - frac * (bot - top) - ft.Height - 4;
+                var bg = new Rect(x - 3, Math.Max(MasterRowTop + 1, y) - 1, ft.Width + 6, ft.Height + 2);
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, bg, NotaRadius.FieldValue, NotaRadius.FieldValue);
+                ctx.DrawText(ft, new Point(x, bg.Y + 1));
+            }
         }
 
         // Lane side of a footer row's bottom seam (specs/045): a thin band that resizes the row,
@@ -357,54 +398,29 @@ public sealed partial class ArrangementView
             }
             if (!_o._automationMode) return;
             var pos = e.GetPosition(this);
-            if (pos.Y < MasterRowTop) { _auto.AutoPointerPressed(e); return; }   // a return row
-            bool right = e.GetCurrentPoint(this).Properties.IsRightButtonPressed;
-            double beat = Math.Max(0, _o.Snap(_o.XToBeat(pos.X)));
-
-            // Hit an existing point? Right-click / double-click removes it; left grabs it.
-            for (int i = 0; i < _o._masterAuto.Count; i++)
-            {
-                var p = _o._masterAuto[i];
-                if (Math.Abs(_o.BeatToX(p.Beat) - pos.X) <= 6 && Math.Abs(MasterValueToY(p.Value) - pos.Y) <= 6)
-                {
-                    if (right || e.ClickCount == 2) { _o._masterAuto.RemoveAt(i); _o.CommitMasterAuto(); InvalidateVisual(); }
-                    else { _mDrag = p; e.Pointer.Capture(this); }
-                    e.Handled = true;
-                    return;
-                }
-            }
-            if (right) return;
-            var np = new AutoPt { Beat = beat, Value = MasterYToValue(pos.Y) };   // add + grab
-            _o._masterAuto.Add(np);
-            _mDrag = np;
-            e.Pointer.Capture(this);
-            e.Handled = true;
-            InvalidateVisual();
+            if (MasterShowsTempo && pt.Properties.IsLeftButtonPressed)
+                foreach (bool max in new[] { true, false })
+                    if (TempoRangeLabel(max, Bounds.Width).Contains(pos)) { e.Handled = true; EditTempoRange(max); return; }
+            _auto.AutoPointerPressed(e);
         }
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             if (_o.IsFooterResizing) { _o.UpdateFooterResize(e.GetPosition(_o).Y); return; }
-            if (_mDrag is null && _auto is { IsActive: false })
+            if (_auto is { IsActive: false })
             {
                 bool onSeam = _o.FooterSeamAtY(e.GetPosition(this).Y) >= 0;
                 SetSeamHover(onSeam);
                 if (onSeam) { _auto.ClearHover(); return; }
             }
-            if (_mDrag is null) { if (_o._automationMode) _auto.AutoPointerMoved(e); return; }
-            var pos = e.GetPosition(this);
-            _mDrag.Beat = Math.Max(0, _o.Snap(_o.XToBeat(pos.X)));
-            _mDrag.Value = MasterYToValue(pos.Y);
-            InvalidateVisual();
+            if (_o._automationMode) _auto.AutoPointerMoved(e);
         }
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             if (_o.IsFooterResizing) { e.Pointer.Capture(null); _o.EndFooterResize(); return; }
-            if (_mDrag is null) { if (_o._automationMode) _auto.AutoPointerReleased(e); return; }
-            _mDrag = null;
-            e.Pointer.Capture(null);
-            _o.CommitMasterAuto();
+            if (_o._automationMode) _auto.AutoPointerReleased(e);
+            _o.ThawTempoAxis();   // a Tempo drag held the axis still; settle it on the new map
         }
 
         protected override void OnPointerExited(PointerEventArgs e) { _auto.ClearHover(); SetSeamHover(false); base.OnPointerExited(e); }
@@ -417,8 +433,8 @@ public sealed partial class ArrangementView
             base.OnPointerCaptureLost(e);
         }
 
-        /// <summary>A return-lane edit, a master-volume point drag or a row resize is live.</summary>
-        public bool IsGesturing => _auto.IsActive || _mDrag is not null || _o.IsFooterResizing;
+        /// <summary>A return- or master-lane edit or a row resize is live.</summary>
+        public bool IsGesturing => _auto.IsActive || _o.IsFooterResizing;
 
         // Esc / lost window focus: drop a live edit with no model change and reload the lanes
         // from the engine (a resize keeps the height it reached — heights are view state).
@@ -426,8 +442,8 @@ public sealed partial class ArrangementView
         {
             if (!IsGesturing) return false;
             _auto.Cancel();
-            _mDrag = null;
             _o.EndFooterResize();
+            _o.ThawTempoAxis();
             _o.Refresh();
             return true;
         }
@@ -447,41 +463,12 @@ public sealed partial class ArrangementView
             // Vertical grid: the snap grid's lines at this zoom — what you see is what you snap to.
             _o.DrawGrid(ctx, w, h);
 
-            // Return rows: their lanes, edited like a track's (specs/045).
-            if (_o._automationMode) _auto.DrawAutomation(ctx, w);
-
-            // Master row: master-volume automation (M9 follow-up) in automation mode,
-            // else a quiet hint. Value axis 0..2 across the row.
+            // Return rows and the master row: their lanes, edited like a track's (specs/045, 099).
             double my = MasterRowTop, mh = MasterRowH;
             if (_o._automationMode)
             {
-                ctx.FillRectangle(AutoScrim, new Rect(0, my, w, mh));
-                var pts = _o._masterAuto;
-                if (pts.Count == 0)
-                {
-                    var hint = new NotaFormattedText(Loc.T("arrangement.controls.click_to_add_master_volume"), CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
-                    ctx.DrawText(hint, new Point(12, my + (mh - hint.Height) / 2));
-                }
-                else
-                {
-                    var ordered = pts.OrderBy(p => p.Beat).ToList();
-                    double fx = _o.BeatToX(ordered[0].Beat), fy = MasterValueToY(ordered[0].Value);
-                    ctx.DrawLine(new Pen(PlayheadBrush, 1), new Point(0, fy), new Point(fx, fy)); // hold before first
-                    for (int k = 1; k < ordered.Count; k++)
-                    {
-                        double ax = _o.BeatToX(ordered[k - 1].Beat), ay = MasterValueToY(ordered[k - 1].Value);
-                        double bx = _o.BeatToX(ordered[k].Beat), by = MasterValueToY(ordered[k].Value);
-                        ctx.DrawLine(new Pen(PlayheadBrush, 1.6), new Point(ax, ay), new Point(bx, by));
-                    }
-                    double lx = _o.BeatToX(ordered[^1].Beat), ly = MasterValueToY(ordered[^1].Value);
-                    ctx.DrawLine(new Pen(PlayheadBrush, 1), new Point(lx, ly), new Point(w, ly)); // hold after last
-                    foreach (var p in ordered)
-                    {
-                        double x = _o.BeatToX(p.Beat), y = MasterValueToY(p.Value);
-                        ctx.DrawEllipse(PlayheadBrush, null, new Point(x, y), 3, 3);
-                    }
-                }
+                _auto.DrawAutomation(ctx, w);
+                if (MasterShowsTempo) DrawTempoScale(ctx, w);
             }
             else
             {

@@ -549,7 +549,6 @@ public sealed partial class ArrangementView : UserControl
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(_sectionsRow);   // …then the named song sections
         root.Children.Add(top);
-        root.Children.Add(BuildTempoRow());
         root.Children.Add(bottom);
         root.Children.Add(_footerScroller);
         root.Children.Add(footerSeam);     // docked after the footer → sits on top of it
@@ -772,7 +771,6 @@ public sealed partial class ArrangementView : UserControl
 
     public void SetPlayhead(double beats, bool preserveDisplay = false)
     {
-        _tempoLane?.InvalidateVisual();
         _playheadBeats = beats;
         bool playing = _engine is { IsPlaying: true };
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
@@ -794,7 +792,6 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Frame-rate display update; does no meter, automation or loop polling.</summary>
     public void SetPlayheadFrame(double positionBeats, double displayBeats, bool playing)
     {
-        _tempoLane?.InvalidateVisual();
         _playheadBeats = positionBeats;
         UpdatePlayheadDisplay(displayBeats, playing, false);
     }
@@ -806,7 +803,7 @@ public sealed partial class ArrangementView : UserControl
         if (playing && !_wasPlaying) SetFollowSuspended(false);
         _wasPlaying = playing;
         // Follow must repaint the content as well as the moving overlay.
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && !_tempoLane.IsDragging && CenterOnPlayhead();
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
         if (scrolled) _lanes.InvalidateVisual();
         // Stopped with nothing moving: the playhead chrome is already right — repainting it
         // every tick kept the whole window redrawing ~30×/s while idle (#55).
@@ -1086,7 +1083,6 @@ public sealed partial class ArrangementView : UserControl
 
     private void Redraw()
     {
-        _tempoLane?.InvalidateVisual();
         _ruler.InvalidateVisual();
         _sectionsLane.InvalidateVisual();   // spans follow scroll + zoom
         _lanes.InvalidateVisual();
