@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 // Note repeat: a held note sounds again every step of its rate, one roll per note however
 // many fingers hold it. Free of the DOM and the app, so the timing can be tested with a clock
 // of its own (test/roll.test.ts).

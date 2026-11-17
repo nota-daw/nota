@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 // Note repeat timing (src/lib/roll.ts) on a clock the test moves by hand: rate changes, an
 // overdue hit, a timer the browser held back, and letting go. Run with `npm test`.
 import { test } from 'node:test';
