@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -212,10 +213,14 @@ inline constexpr int kMaxReturns = 4;
 
 class Track {
   public:
+    struct LiveHeld; // below
     explicit Track(int32_t id, TrackType type = TrackType::Audio)
         : Track(id, type, std::make_shared<SessionPlayer>()) {}
     Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player)
         : sessionPlayer(player), id_(id), type_(type) {}
+    // A graph clone: the existing player and live-note state, so an edit allocates neither.
+    Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player, std::shared_ptr<LiveHeld> held)
+        : liveHeld(std::move(held)), sessionPlayer(player), id_(id), type_(type) {}
 
     int32_t id() const { return id_; }
     TrackType type() const { return type_; }
