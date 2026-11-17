@@ -8,6 +8,7 @@
 // a transport stop ends the voices, and a switched-off instrument never heard the route's
 // notes, so a later switch has no old note left to release. A replaced instrument never heard
 // them either, while an edit that keeps the instrument (a rack chain renamed) keeps them to end.
+// A note the destination plays itself on a pitch takes it over: a switch never cuts it.
 // The source tracks are muted, so what reaches the master is the destination alone.
 
 using Nota.Application;
@@ -33,6 +34,7 @@ internal static class MidiSourceSwitchTests
         foreach (var r in SessionLaunchForgetsRoutedNotes()) yield return r;
         foreach (var r in ReplacedInstrumentForgetsRoutedNotes()) yield return r;
         foreach (var r in RackEditKeepsRoutedNotes()) yield return r;
+        foreach (var r in RackChainSwapKeepsOwnNote()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats)
@@ -278,5 +280,32 @@ internal static class MidiSourceSwitchTests
         e.NoteOff(60);
         yield return (held > 0.01f && after < 1e-4f,
             $"a switch after a rack chain was renamed still ends the routed note (peak {held:F3} → {after:G2})");
+    }
+
+    // A key held on the source into an Instrument Rack, then the chain's instrument replaced (the
+    // rack keeps its uid, the child and its voices are new), then the same pitch played on the
+    // destination itself: that note is the destination's own, and a switch doesn't cut it.
+    private static IEnumerable<(bool, string)> RackChainSwapKeepsOwnNote()
+    {
+        using var e = Routed(out int a, out _, out int plain);
+        e.SetTrackMute(plain, true);
+        int d = e.AddInstrumentRackTrack();
+        e.RackAddChain(d, 0); // a Synth chain (a new rack starts empty)
+        e.SetTrackMidiSource(d, a);
+        e.NoteOn(60, 0.9f);
+        Beats(e, 0.5);
+        bool swapped = e.RackSetChainInstrument(d, 0, 0);
+        Beats(e, 0.5);
+        e.TrackNoteOn(d, 60, 0.9f);
+        Beats(e, 0.5);
+        e.SetTrackMidiSource(d, -1);
+        Beats(e, 2.0);
+        float own = Peak(e, 0.5);
+        e.TrackNoteOff(d, 60);
+        e.NoteOff(60);
+        Beats(e, 2.0);
+        float released = Peak(e, 0.5);
+        yield return (swapped && own > 0.01f && released < 1e-4f,
+            $"a switch after a rack chain's instrument was replaced doesn't cut the destination's new note (peak {own:F3} → {released:G2})");
     }
 }

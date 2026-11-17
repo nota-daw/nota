@@ -1878,12 +1878,17 @@ void Engine::renderInstrumentRaw(
             if (routed) srcFound = true;
             // The route's notes are tracked as delivered: an event the full buffer drops never
             // reached the instrument, so it must not change what the route is holding (#504).
+            // A note-on of the track's own (a clip, a key played on it) takes its pitch over:
+            // its own note-off ends that pitch, and a later switch must not cut it, whatever
+            // happened to the instrument meanwhile (replaced, a rack chain swapped).
             for (int k = 0; k < m && n < 1024; ++k) {
                 evs[n++] = srcEvs[k];
                 const int pitch = srcEvs[k].pitch;
-                if (!routed || !held || pitch < 0 || pitch >= 128) continue;
+                if (!held || pitch < 0 || pitch >= 128) continue;
                 const uint64_t bit = 1ull << (pitch & 63);
-                if (srcEvs[k].on) held->routedBits[pitch >> 6] |= bit;
+                if (!routed) {
+                    if (srcEvs[k].on) held->routedBits[pitch >> 6] &= ~bit;
+                } else if (srcEvs[k].on) held->routedBits[pitch >> 6] |= bit;
                 else held->routedBits[pitch >> 6] &= ~bit;
             }
             if (j < rs_->blockExprN.size())
