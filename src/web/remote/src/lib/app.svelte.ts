@@ -28,11 +28,13 @@ export interface Prefs {
   xyHold: boolean;
   bank: number;
   groupsOpen: number[];
+  /** Scenes grid: scenes as rows ('down', tracks across) or as columns ('across', tracks down). */
+  sessionAxis: 'down' | 'across';
 }
 
 const defaultPrefs: Prefs = {
   theme: 'nota', haptics: true, countIn: true, fullVel: false, keysMode: 'Scale', expressive: false, octave: 3, key: null,
-  xyHold: true, bank: 0, groupsOpen: [],
+  xyHold: true, bank: 0, groupsOpen: [], sessionAxis: 'down',
 };
 
 function guessName(): string {

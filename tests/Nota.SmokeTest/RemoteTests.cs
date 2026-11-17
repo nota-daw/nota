@@ -448,6 +448,27 @@ internal static class RemoteTests
         e.RemoveTrack(aud);
         try { File.Delete(rampWav); } catch { }
 
+        // Groups on Scenes (#662; specs/102 contracts/session-message.md): a group comes with
+        // its tracks' ids and no slots of its own; launching or stopping it acts on every track
+        // below it, as the desktop's group slot does.
+        int m1 = e.AddInstrumentTrack(), m2 = e.AddInstrumentTrack();
+        int grp = e.CreateGroup(new[] { m1, m2 });
+        foreach (int m in new[] { m1, m2 }) { e.AddSessionMidiClip(m, 0, 4); e.SetSessionNotes(m, 0, new[] { new NotaNote(60, 0, 1, 0.8f) }); }
+        var gses = Wait("ses", 3000, m => m.GetProperty("tr").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() == grp));
+        var gEntry = gses?.GetProperty("tr").EnumerateArray().First(x => x.GetProperty("id").GetInt32() == grp);
+        yield return (grp > 0 && gEntry is { } ge && ge.TryGetProperty("k", out var gk)
+                && gk.EnumerateArray().Select(v => v.GetInt32()).SequenceEqual(new[] { m1, m2 }) && ge.GetProperty("c").GetArrayLength() == 0
+                && !gses!.Value.GetProperty("tr").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() != grp && x.TryGetProperty("k", out _)),
+            "Scenes lists a group with its tracks' ids and no slots of its own");
+        bool Live(int id) => e.SessionSlotState(id, 0) is 2 or 3;
+        Send(new { t = "launch", id = grp, i = 0 });
+        WaitFor(() => Live(m1) && Live(m2));
+        yield return (Live(m1) && Live(m2), "launching a group's slot launches each of its tracks' clips in that scene");
+        Send(new { t = "stopSlot", id = grp });
+        WaitFor(() => !Live(m1) && !Live(m2), 3000);
+        yield return (!Live(m1) && !Live(m2), "a group's Stop stops each of its tracks");
+        e.RemoveTrack(m1); e.RemoveTrack(m2); e.RemoveTrack(grp);
+
         // A big grid at the real UI clock (33 ms): an edit that keeps a slot's state and length
         // (only its notes change) still reaches the phone within a second — the sweep is sized
         // by time, not by a fixed number of slots per tick.

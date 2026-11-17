@@ -65,6 +65,14 @@
       </div>
       <span class="d2">{wearing}</span>
     </div>
+    <div class="block">
+      <span class="label">Session grid</span>
+      <div class="seg">
+        <button class:on={app.prefs.sessionAxis !== 'across'} onclick={() => (app.prefs.sessionAxis = 'down')}>Scenes down</button>
+        <button class:on={app.prefs.sessionAxis === 'across'} onclick={() => (app.prefs.sessionAxis = 'across')}>Scenes across</button>
+      </div>
+      <span class="d2">{app.prefs.sessionAxis === 'across' ? 'A scene per column, a track per row' : 'A scene per row, a track per column, as in Nota'}</span>
+    </div>
     <button class="toggle" onclick={() => (app.prefs.haptics = !app.prefs.haptics)}>
       <span class="switch" class:on={app.prefs.haptics}></span><span class="n2">Haptics on pads</span>
     </button>

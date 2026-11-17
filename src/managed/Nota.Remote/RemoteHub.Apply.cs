@@ -125,9 +125,16 @@ public sealed partial class RemoteHub
             }
 
             // ---- session ------------------------------------------------------------
-            case "launch": if (TrackExists(cmd.Id) && cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.LaunchSlot(cmd.Id, cmd.I); break;
+            // A group id launches / stops each of its members, as the desktop's group slot does (#662).
+            case "launch":
+                if (TrackExists(cmd.Id) && cmd.I >= 0 && cmd.I < _engine.SceneCount)
+                    foreach (int id in Members(cmd.Id) ?? new List<int> { cmd.Id }) _engine.LaunchSlot(id, cmd.I);
+                break;
             case "scene": if (cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.LaunchScene(cmd.I); break;
-            case "stopSlot": if (TrackExists(cmd.Id)) _engine.StopSlot(cmd.Id); break;
+            case "stopSlot":
+                if (TrackExists(cmd.Id))
+                    foreach (int id in Members(cmd.Id) ?? new List<int> { cmd.Id }) _engine.StopSlot(id);
+                break;
             case "stopAll": _engine.StopAllSession(); break;
         }
     }
@@ -230,6 +237,26 @@ public sealed partial class RemoteHub
 
     internal static void Toast(RemoteClient c, string msg)
         => c.Send(Json(w => { w.WriteString("t", "toast"); w.WriteString("msg", msg); }));
+
+    /// <summary>A group's members — every track below it that holds clips (not a group, not a
+    /// return), nested groups included, in project order, as the desktop's Session grid counts
+    /// them; null when <paramref name="trackId"/> is not a group.</summary>
+    private List<int>? Members(int trackId)
+    {
+        var infos = new List<NotaTrackInfo>();
+        int n = _engine.TrackCount;
+        for (int i = 0; i < n; i++)
+            if (_engine.TryGetTrackInfo(i, out var ti)) infos.Add(ti);
+        if (!infos.Any(t => t.Id == trackId && t.IsGroup)) return null;
+        var parent = infos.ToDictionary(t => t.Id, t => t.GroupId);
+        bool Under(int id)
+        {
+            int g = parent.GetValueOrDefault(id), guard = 0;
+            while (g > 0 && guard++ < 32) { if (g == trackId) return true; g = parent.TryGetValue(g, out int p) ? p : -1; }
+            return false;
+        }
+        return infos.Where(t => !t.IsGroup && !t.IsReturn && Under(t.Id)).Select(t => t.Id).ToList();
+    }
 
     private bool TrackExists(int trackId)
     {

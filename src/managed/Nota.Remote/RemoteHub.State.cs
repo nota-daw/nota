@@ -486,9 +486,21 @@ public sealed partial class RemoteHub
             w.WriteStartArray("tr");
             foreach (var r in _tracks)
             {
-                if (r.Kind is "group" or "return") continue;
+                if (r.Kind == "return") continue;
                 w.WriteStartObject();
                 w.WriteNumber("id", r.Id);
+                if (r.Kind == "group")
+                {
+                    // A group has no clips of its own: its members' ids, the phone draws the
+                    // summary slot from their rows (#662; specs/102 contracts/session-message.md).
+                    w.WriteStartArray("k");
+                    foreach (int id in Members(r.Id) ?? new List<int>()) w.WriteNumberValue(id);
+                    w.WriteEndArray();
+                    w.WriteStartArray("c");
+                    w.WriteEndArray();
+                    w.WriteEndObject();
+                    continue;
+                }
                 w.WriteStartArray("c");
                 for (int s = 0; s < scenes; s++)
                 {
