@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Device cards in Modular** (#656, #605, specs/101): a Modular node for a MIDI effect, the
+  instrument, an audio effect or a plug-in now shows the device's real card — the same one
+  Detail draws, playable right there — under the node's header and ports. A size chip in
+  the header switches it between **XS** (the compact parameter list Modular had before),
+  **S** and **L**; a device whose card comes in S starts at S, any other at L. The size is
+  the node's own (Detail's card size doesn't change) and is saved with the project's
+  Modular layout. Nodes you placed stay put when a card grows; the rest of the chain
+  moves aside. A CV cable dropped right on a knob (or on an XS parameter row) links that
+  parameter at once, with the knob outlined while you aim.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
   OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
   always shown, even when a folder doesn't exist on disk. They are removable, and
@@ -48,6 +57,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
   recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
   save with the project, and playback follows their integrated timing.
+
+### Changed
+- **Picking a parameter for a CV cable is a searchable panel** (#656, specs/101): a cable
+  dropped on a Modular node or on another track's header, and the **Modulate from a
+  parameter… / Modulate from another track…** items, open a compact panel (at most
+  320 × 420) instead of a menu that could grow past the screen. The search field has focus
+  at once — type to filter, ↑ ↓ to move, Enter to pick, Esc to close — and the list only
+  builds the rows it shows, so a plug-in with thousands of parameters opens instantly.
+  Another track's parameters are grouped by device, and the search covers them all.
 
 ### Fixed
 - **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,

@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- specs/101: the headless Modular checks drive the picker panel directly. -->
+    <InternalsVisibleTo Include="Nota.ModularUiTest" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />

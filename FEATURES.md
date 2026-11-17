@@ -243,11 +243,16 @@ own window — see
   on an instrument column replaces its instrument (a rack gets a chain or pad); on an audio
   column or right of the last column it starts a new track.
 - **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
-  effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
-  canvas (node positions are saved with the project), plus a **Global view** that shows
-  tracks as islands with cross-track connections. Its centrepiece is **CV modulation** —
-  drag a modulator's CV output onto any device, instrument or MIDI-FX parameter to link
-  them with a patch cable; click an edge to edit depth and mode, select and delete edges.
+  effects shown as nodes you can bypass, duplicate, delete and reorder right on the
+  canvas, plus a **Global view** that shows tracks as islands with cross-track
+  connections. A device node shows the device's own card, playable in place, at the size
+  its header's **XS · S · L** chip picks — XS is a compact, expandable parameter list; a
+  card that comes in S starts at S, otherwise at L. Sizes and positions are saved with the
+  project, independent of Detail's card size. Its centrepiece is **CV modulation** — drag a
+  modulator's CV output onto any device, instrument or MIDI-FX parameter to link them with
+  a patch cable: drop it on a knob to link that knob, or on the node to pick from a
+  searchable parameter panel (type to filter, ↑ ↓ and Enter; fast with plug-ins of
+  thousands of parameters); click an edge to edit depth and mode, select and delete edges.
   Modulators: **LFO** (with phase), an **envelope follower**, **MIDI→CV**
   (velocity/gate/note), **ADSR** (gated by notes), **Macro** (a manual control → CV) and
   **Math** (two CV inputs → one output); any parameter can also be a CV source
@@ -258,7 +263,8 @@ own window — see
   tab (dragged to a spot on the canvas, or double-clicked into the middle) and the command
   palette. Beside the canvas, Track view shows the arrangement's own track headers — every
   control, menu, tray and meter, on the side **Track headers on the right** picks: click one
-  to see its graph, or drop a CV cable on another track's header to modulate it. A group's
+  to see its graph, or drop a CV cable on another track's header to modulate it (the panel
+  then lists that track's parameters grouped by device). A group's
   header opens the group's effect chain (Tracks in → effects → out), patched like any
   track's. **Show in Modular** in the arrangement's and Session's track menus opens a track
   here.

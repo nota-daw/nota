@@ -524,7 +524,7 @@ public partial class MainWindow : Window
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
         // Docked like the arrangement it replaces in MainContent: no margin, it meets the browser on the seam.
-        _modular = new ModularView(vm.Engine) { IsVisible = false };
+        _modular = new ModularView(vm.Engine) { IsVisible = false, Factory = _factory };
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
