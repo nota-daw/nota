@@ -1864,9 +1864,13 @@ void Engine::renderInstrumentRaw(
             held->routedFrom = srcId;
         }
         bool srcFound = false;
-        int32_t decidedAt[128]; // per pitch: offset of the latest event that sets or clears its routed bit
+        // Per pitch: the offset of the latest event that sets or clears its routed bit, valid
+        // where `decided` has its bit. Only a track with a route or saved routed notes tracks
+        // anything, so the others pay nothing per block.
+        const bool trackRouted = held && (srcId >= 0 || (held->routedBits[0] | held->routedBits[1]) != 0);
+        uint64_t decided[2] = {0, 0};
+        int32_t decidedAt[128];
         bool decidedSet[128];
-        std::fill(decidedAt, decidedAt + 128, -1);
         const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
         for (size_t j = 0; j < nt; ++j) {
             Track* p = g->tracks[j].get();
@@ -1888,9 +1892,11 @@ void Engine::renderInstrumentRaw(
             for (int k = 0; k < m && n < 1024; ++k) {
                 evs[n++] = srcEvs[k];
                 const int pitch = srcEvs[k].pitch;
-                if (!held || pitch < 0 || pitch >= 128) continue;
+                if (!trackRouted || pitch < 0 || pitch >= 128) continue;
                 if (!routed && !srcEvs[k].on) continue; // an own note-off changes nothing
-                if (srcEvs[k].off < decidedAt[pitch]) continue;
+                const uint64_t bit = 1ull << (pitch & 63);
+                if ((decided[pitch >> 6] & bit) && srcEvs[k].off < decidedAt[pitch]) continue;
+                decided[pitch >> 6] |= bit;
                 decidedAt[pitch] = srcEvs[k].off;
                 decidedSet[pitch] = routed && srcEvs[k].on;
             }
@@ -1911,12 +1917,12 @@ void Engine::renderInstrumentRaw(
                     }
             }
         }
-        if (held)
-            for (int pitch = 0; pitch < 128; ++pitch) {
-                if (decidedAt[pitch] < 0) continue;
+        for (int h = 0; h < 2; ++h)
+            for (uint64_t bits = decided[h]; bits; bits &= bits - 1) {
+                const int pitch = h * 64 + std::countr_zero(bits);
                 const uint64_t bit = 1ull << (pitch & 63);
-                if (decidedSet[pitch]) held->routedBits[pitch >> 6] |= bit;
-                else held->routedBits[pitch >> 6] &= ~bit;
+                if (decidedSet[pitch]) held->routedBits[h] |= bit;
+                else held->routedBits[h] &= ~bit;
             }
         // MIDI In names a track that is gone (deleted): its notes end too (#504).
         if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
