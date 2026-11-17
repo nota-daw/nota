@@ -600,6 +600,9 @@ own window — see
   automatically (USB, then Wi-Fi, then Ethernet) or by hand, in Settings → Remote or with a
   click on another address in Connect phone; the link opens in the browser or copies with a
   click.
+  Pads' **Repeat** (1/4 … 1/32T, triplets included) plays rolls like a hardware pad controller:
+  sliding a held pad up or down changes its rate in time, and on an MPE track sliding sideways
+  bends the repeated note; the pad shows its rate and bend.
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the

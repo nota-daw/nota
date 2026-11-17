@@ -9,7 +9,7 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
-  import { NN, noteName, keyName, degreeNote, chords as chordsOf, type Key } from '../lib/music';
+  import { NN, noteName, keyName, degreeNote, chords as chordsOf, slideBend, type Key } from '../lib/music';
 
   let { form }: { form: Form } = $props();
   const MODES = ['Keyboard', 'Scale', 'Chords'] as const;
@@ -87,12 +87,7 @@
   // ---- expressive: the finger's note, where it landed, and how far one step is ----
   interface Touch { note: number; x0: number; unit: number; semis: number; top: number; h: number; force: boolean; p0: number }
   const touches = new Map<number, Touch>();
-  const DEAD = 0.2;   // semitones of wobble that stay in tune
-  function bendOf(f: Touch, x: number): number {
-    const s = ((x - f.x0) / f.unit) * f.semis;
-    const m = Math.max(0, Math.abs(s) - DEAD) * (f.semis / (f.semis - DEAD));   // a full step still lands on it
-    return Math.max(-24, Math.min(24, Math.sign(s) * m));
-  }
+  const bendOf = (f: Touch, x: number) => slideBend(x - f.x0, f.unit, f.semis);
   const slideOf = (f: Touch, y: number) => Math.max(0, Math.min(1, 1 - (y - f.top) / f.h));
   function express(id: number, e: PointerEvent, first: boolean) {
     const f = touches.get(id);
