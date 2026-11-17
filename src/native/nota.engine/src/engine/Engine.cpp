@@ -649,20 +649,9 @@ void Engine::backToArrangement() {
     sceneFollowScene_ = -1;
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
-void Engine::setBpm(double bpm) {
-    if (!std::isfinite(bpm) || bpm < 1 || bpm > 999) return;
-    if (const auto* map = tempoMap()) {
-        const double beat = std::max(0.0, transport_.uiPositionBeats());
-        if (std::abs(map->bpmAt(beat) - bpm) < 1e-9) return;
-        auto points = map->points;
-        auto it = std::lower_bound(points.begin(), points.end(), beat,
-            [](const auto& p, double b) { return p.beat < b; });
-        if (it != points.end() && std::abs(it->beat - beat) < 1e-6) it->bpm = bpm;
-        else if (it != points.begin() && std::abs((it - 1)->beat - beat) < 1e-6) (it - 1)->bpm = bpm;
-        else points.insert(it, NotaTempoPoint{beat, bpm, 0, 1.0/3, 0, 2.0/3, 1, 0});
-        setTempoPoints(std::move(points), true);
-        return;
-    }
+bool Engine::setBpm(double bpm) {
+    if (!std::isfinite(bpm) || bpm < 1 || bpm > 999) return false;
+    if (tempoMap()) return false; // the master Tempo lane leads (specs/099)
     Command c;
     c.type = CommandType::SetBpm;
     c.d0 = bpm;
@@ -677,6 +666,7 @@ void Engine::setBpm(double bpm) {
         authoringBpm_ = bpm;
         placeTakesForTempo(); // take lanes + their comp keep one mapping (specs/067)
     }
+    return true;
 }
 double Engine::bpm() const {
     return transport_.uiBpm();
@@ -894,6 +884,7 @@ void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
 }
 
 void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
+    if (g && !restored) deriveTempoMap(*g); // specs/099: the master Tempo lane is the tempo
     // Fade flags are derived, not stored. A track this graph shares with the one still
     // playing is the audio thread's — leave it. Any other one an edit just cloned is
     // settled in place. A restored track (undo, redo, take retry) was published before and
@@ -1387,37 +1378,57 @@ bool Engine::setPanLaw(PanLaw law, bool checkpoint) {
     return true;
 }
 
-// --- arrangement sections (specs/016) ---------------------------------------
+const TrackLane* Engine::masterTempoLane(const Graph& g) {
+    if (!g.masterTrack) return nullptr;
+    for (const auto& lane : g.masterTrack->automation)
+        if (lane.target == AutomationTarget::Tempo) return &lane;
+    return nullptr;
+}
 
-bool Engine::setTempoPoints(std::vector<NotaTempoPoint> points, bool checkpoint) {
-    if (!authoring_ || !TempoMap::valid(points)) return false;
-    const TempoMap* old = tempoMap();
-    auto equal = [](const NotaTempoPoint& a, const NotaTempoPoint& b) {
-        return a.beat == b.beat && a.bpm == b.bpm && a.shape == b.shape &&
-            a.x1 == b.x1 && a.y1 == b.y1 && a.x2 == b.x2 && a.y2 == b.y2 && a.incoming_bpm == b.incoming_bpm;
+bool Engine::tempoAutomated() const {
+    return tempoMap() != nullptr;
+}
+
+void Engine::deriveTempoMap(Graph& g) const {
+    const TrackLane* lane = masterTempoLane(g);
+    const bool hasPoints = lane && !lane->points.empty();
+    const auto& old = authoring_ ? authoring_->tempoMap : nullptr;
+    if (!hasPoints && !g.tempoMap) return;
+    if (hasPoints && g.tempoMap && g.tempoMap->source.size() == lane->points.size() &&
+        std::equal(lane->points.begin(), lane->points.end(), g.tempoMap->source.begin(),
+            [](const AutomationPoint& a, const AutomationPoint& b) {
+                return a.beat == b.beat && a.value == b.value && a.curve == b.curve;
+            })) return;
+    g.tempoMap = hasPoints ? TempoMap::fromLane(lane->points) : nullptr;
+    if (g.tempoMap == old) return;
+    // Natural-rate recordings are physical-time anchors: reproject their beat placement,
+    // never their source samples, when the musical ruler changes. Only tracks this edit left
+    // alone (still shared with the published graph): an edit that moved clips itself (a
+    // section move carrying clips and tempo together) placed them already.
+    auto shared = [&](const std::shared_ptr<Track>& t) {
+        if (!authoring_) return false;
+        for (const auto& o : authoring_->tracks) if (o == t) return true;
+        return false;
     };
-    if ((!old && points.empty()) || (old && old->points.size() == points.size() &&
-        std::equal(points.begin(), points.end(), old->points.begin(), equal))) return true;
-    auto g = std::make_shared<Graph>(*authoring_);
-    g->tempoMap = points.empty() ? nullptr : std::make_shared<const TempoMap>(std::move(points));
-    // Natural-rate recordings are physical-time anchors. Reproject their beat
-    // placement, never their source samples, when the musical ruler changes.
-    for (auto& t : g->tracks) {
+    auto toBeat = [&](double seconds) {
+        return g.tempoMap ? g.tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
+    };
+    for (auto& t : g.tracks) {
+        if (!shared(t)) { // this edit's own clone: its placement stands, its takes follow the map
+            for (auto& take : t->takes) take.tempoMap = g.tempoMap;
+            continue;
+        }
         if (t->takes.empty() && std::none_of(t->clips.begin(), t->clips.end(), [](const auto& c) { return !c.warpEnabled; })) continue;
         t = cloneTrack(*t);
-        for (auto& c : t->clips) if (!c.warpEnabled) {
-            const double seconds = beatToSeconds(c.startBeat);
-            c.startBeat = g->tempoMap ? g->tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
-        }
+        for (auto& c : t->clips) if (!c.warpEnabled) c.startBeat = toBeat(beatToSeconds(c.startBeat));
         for (auto& take : t->takes) {
-            const double seconds = beatToSeconds(take.originBeat);
-            take.originBeat = g->tempoMap ? g->tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
-            take.tempoMap = g->tempoMap;
+            take.originBeat = toBeat(beatToSeconds(take.originBeat));
+            take.tempoMap = g.tempoMap;
         }
     }
-    if (checkpoint) publish(std::move(g)); else publishRaw(std::move(g));
-    return true;
 }
+
+// --- arrangement sections (specs/016) ---------------------------------------
 
 void Engine::setSections(std::vector<Section> sections, bool checkpoint) {
     if (!authoring_) return;

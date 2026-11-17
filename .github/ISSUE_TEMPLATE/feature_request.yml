@@ -21,17 +21,33 @@ body:
     id: area
     attributes:
       label: Area
+      description: Which part of Nota is this about? Pick more than one if it spans several. The answer sets the issue's `area:` label.
+      multiple: true
       options:
-        - Arrangement / Session / editing
-        - Piano roll / MIDI
-        - Audio / recording / warp
+        - Arrangement
+        - Session view
+        - Mixer and routing
+        - Modular
+        - Piano roll and clip editor
+        - Automation
         - Built-in instruments and effects
-        - Plugins (VST3 / AU)
-        - Mixer / routing / automation
-        - Browser / samples / presets
-        - Export
-        - Nota Remote (phone)
-        - Other
+        - Plug-ins (VST3 / AU)
+        - Recording and inputs
+        - Transport and tempo
+        - Browser and samples
+        - MIDI controllers and gamepads
+        - Keyboard shortcuts
+        - Nota Remote
+        - MCP server
+        - Assistant and AI
+        - Projects and import/export
+        - Audio engine and performance
+        - Interface and windows
+        - Preferences and Downloads
+        - Install and build
+        - Not sure
+    validations:
+      required: true
   - type: textarea
     id: extra
     attributes:

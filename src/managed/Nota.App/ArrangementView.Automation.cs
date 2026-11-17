@@ -27,6 +27,7 @@ public sealed partial class ArrangementView
     {
         AutomationTarget.Volume => Loc.T("arrangement.vol"),
         AutomationTarget.Pan => Loc.T("common.pan"),
+        AutomationTarget.Tempo => Loc.T("tempo.target"),
         AutomationTarget.Send => Loc.F("arrangement.send", SendLetter(t.AutoDeviceIndex), Short(SendBusName(t.AutoDeviceIndex))),
         AutomationTarget.PluginParam => _engine is { } e
             ? Short(e.PluginParamName(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t))) : Loc.T("arrangement.automation.param"),
@@ -42,6 +43,7 @@ public sealed partial class ArrangementView
     {
         AutomationTarget.Volume => (0f, 2f),
         AutomationTarget.Pan => (-1f, 1f),
+        AutomationTarget.Tempo => ((float)TempoLaneMin, (float)TempoLaneMax),
         AutomationTarget.Send => (0f, 1f),
         AutomationTarget.PluginParam => (0f, 1f),   // normalized
         AutomationTarget.MidiDeviceParam => _engine is { } e
@@ -54,11 +56,20 @@ public sealed partial class ArrangementView
             : (0f, 1f),
     };
 
+    /// <summary>How many levels the target takes (specs/100): 0 for a continuous param, n ≥ 2 for a
+    /// stepped instrument param (a Rhythm bank, a Twin pattern) whose values are k / (n − 1).</summary>
+    internal int AutoSteps(TrackVM t) => t.AutoChain < 0 && t.AutoTarget == AutomationTarget.PluginParam && _engine is { } e
+        ? e.PluginParamSteps(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t)) : 0;
+    /// <summary>The name of a stepped target's level <paramref name="k"/> ("A"), or "".</summary>
+    internal string AutoStepText(TrackVM t, int k) => _engine is { } e
+        ? e.PluginParamStepText(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t), k) : "";
+
     /// <summary>Current live value of the target (baseline when the lane has no points).</summary>
     internal float AutoCurrent(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne ? NestedParam(ne, t).Value : t.AutoTarget switch
     {
         AutomationTarget.Volume => t.Volume,
         AutomationTarget.Pan => t.Pan,
+        AutomationTarget.Tempo => _engine is { } et ? (float)et.TempoAt(Math.Max(0, _playheadBeats)) : 120f,
         AutomationTarget.Send => _engine is { } es ? es.GetTrackSend(t.Id, t.AutoDeviceIndex) : 0f,
         AutomationTarget.PluginParam => _engine is { } e ? e.PluginParamGet(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t)) : 0f,
         AutomationTarget.MidiDeviceParam => _engine is { } e ? e.MidiEffectGetParam(t.Id, t.AutoDeviceIndex, t.AutoParamIndex) : 0f,
@@ -107,6 +118,12 @@ public sealed partial class ArrangementView
     {
         t.AutoPoints.Clear();
         if (_engine is not { } e) return;
+        if (IsMasterVolume(t))   // the master's volume is a graph-level lane (M9 follow-up)
+        {
+            foreach (var p in e.GetMasterVolumeAutomation())
+                t.AutoPoints.Add(new AutoPt { Beat = p.Beat, Value = p.Value, Curve = p.Curve });
+            return;
+        }
         int lane = FindAutoLane(t);
         if (lane < 0) return;
         foreach (var p in e.GetAutomationPoints(t.Id, lane))
@@ -118,8 +135,10 @@ public sealed partial class ArrangementView
     private void OnAutomationTouched(int trackId, AutomationTarget target, int dev, int param, string paramId)
     {
         if (!_automationMode) return;
-        var t = _tracks.FirstOrDefault(x => x.Id == trackId) ?? _returns.FirstOrDefault(x => x.Id == trackId);
+        var t = _tracks.FirstOrDefault(x => x.Id == trackId) ?? _returns.FirstOrDefault(x => x.Id == trackId)
+                ?? (_engine is { } me && trackId == me.MasterTrackId ? _masterVm : null);   // master knobs (specs/099)
         if (t is null) return;
+        if (IsMaster(t) && target is AutomationTarget.MidiDeviceParam or AutomationTarget.Send) return;
         // Already showing this exact target? leave it be (don't reload/redraw mid-gesture).
         bool same = t.AutoTarget == target && target switch
         {
@@ -333,27 +352,101 @@ public sealed partial class ArrangementView
         return true;
     }
 
-    // --- master-volume automation (graph-level, M9 follow-up) --------------
-    // Edited in the pinned footer master row. Value axis 0..2 (like track volume).
-    internal const float MasterAutoMin = 0f, MasterAutoMax = 2f;
-    internal readonly List<AutoPt> _masterAuto = new();
+    // --- master automation (specs/099) ----------------------------------------
+    // The pinned footer master row is an automation row like a return's: the shared editor,
+    // with the track target picker plus Tempo. Volume is the graph-level master-volume lane
+    // (M9 follow-up); every other target is a lane on the master track. Tempo drives the
+    // project's tempo map: its lane shows BPM between a range the user sets (view state).
+    internal readonly TrackVM _masterVm = new();
+    internal bool IsMaster(TrackVM t) => ReferenceEquals(t, _masterVm);
+    private bool IsMasterVolume(TrackVM t) => IsMaster(t) && t.AutoTarget == AutomationTarget.Volume;
+    internal const double TempoMin = 20, TempoMax = 300;
+    private double _tempoLaneMin = double.NaN, _tempoLaneMax = double.NaN;
+
+    /// <summary>The Tempo lane's shown range (FR-003a). NaN until set: the first look at the lane
+    /// picks the project tempo ±40, widened to cover its points. Saved with the project.</summary>
+    public (double Min, double Max)? TempoLaneRange
+    {
+        get => double.IsNaN(_tempoLaneMin) ? null : (_tempoLaneMin, _tempoLaneMax);
+        set
+        {
+            if (value is { } r && r.Min >= TempoMin && r.Max <= TempoMax && r.Max > r.Min) (_tempoLaneMin, _tempoLaneMax) = r;
+            else _tempoLaneMin = _tempoLaneMax = double.NaN;
+        }
+    }
+    private double TempoLaneMin { get { EnsureTempoRange(); return _tempoLaneMin; } }
+    private double TempoLaneMax { get { EnsureTempoRange(); return _tempoLaneMax; } }
+
+    private void EnsureTempoRange()
+    {
+        if (!double.IsNaN(_tempoLaneMin)) return;
+        double bpm = _engine?.TempoAt(0) ?? 120;
+        double lo = bpm - 40, hi = bpm + 40;
+        foreach (var p in _masterVm.AutoTarget == AutomationTarget.Tempo ? _masterVm.AutoPoints : new List<AutoPt>())
+        { lo = Math.Min(lo, p.Value); hi = Math.Max(hi, p.Value); }
+        _tempoLaneMin = Math.Clamp(Math.Floor(lo), TempoMin, TempoMax - 1);
+        _tempoLaneMax = Math.Clamp(Math.Ceiling(hi), _tempoLaneMin + 1, TempoMax);
+    }
+
+    /// <summary>Set the Tempo lane's shown range; values are kept within 20–300 and min below max.</summary>
+    internal void SetTempoLaneRange(double min, double max)
+    {
+        min = Math.Clamp(Math.Round(min), TempoMin, TempoMax - 1);
+        max = Math.Clamp(Math.Round(max), min + 1, TempoMax);
+        (_tempoLaneMin, _tempoLaneMax) = (min, max);
+        Redraw();
+        SessionChanged?.Invoke();   // view state the project saves
+    }
 
     internal void LoadMasterAuto()
     {
-        _masterAuto.Clear();
         if (_engine is not { } e) return;
-        foreach (var p in e.GetMasterVolumeAutomation())
-            _masterAuto.Add(new AutoPt { Beat = p.Beat, Value = p.Value, Curve = p.Curve });
+        _masterVm.Id = e.MasterTrackId;
+        _masterVm.Volume = e.MasterVolume;
+        _masterVm.Pan = e.MasterPan;
+        if (_automationMode && !_autoTargets.ContainsKey(_masterVm.Id) && FirstAutomatedTarget(e, _masterVm.Id) is { } first)
+            _autoTargets[_masterVm.Id] = first;
+        if (_autoTargets.TryGetValue(_masterVm.Id, out var sel))
+            (_masterVm.AutoTarget, _masterVm.AutoDeviceIndex, _masterVm.AutoParamIndex, _masterVm.AutoParamId,
+             _masterVm.AutoChain, _masterVm.AutoSlot, _masterVm.AutoLane) = sel;
+        _masterVm.AutoLabel = AutoLabelFor(_masterVm);
+        if (!_footerLanes.IsEditingPoint) LoadAutoPoints(_masterVm);
     }
 
-    internal void CommitMasterAuto()
+    // While a Tempo point is dragged the lane is committed live (heard at once), but the axis
+    // keeps the drag-start mapping so the point stays under the pointer: a beat↔seconds table
+    // sampled before the drag stands in for the engine until the gesture ends.
+    private double[]? _frozenAxisSeconds;   // seconds at beat i * FrozenAxisStep
+    private const double FrozenAxisStep = 0.125;
+
+    private void FreezeTempoAxis()
     {
-        if (_engine is not { } e) return;
-        e.SetMasterVolumeAutomation(_masterAuto
-            .OrderBy(p => p.Beat)
-            .Select(p => new AutomationPoint(p.Beat, p.Value, p.Curve))
-            .ToArray());
+        if (_frozenAxisSeconds is not null || _engine is not { } e) return;
+        double end = Math.Max(TotalBeatsForAxis(), _scrollBeats + 4096);
+        int n = (int)Math.Ceiling(end / FrozenAxisStep) + 2;
+        var table = new double[n];
+        for (int i = 0; i < n; i++) table[i] = e.BeatToSeconds(i * FrozenAxisStep);
+        _frozenAxisSeconds = table;
     }
+
+    /// <summary>A point / curve drag is about to write its first value: a Tempo drag freezes
+    /// the axis now, so the point stays under the pointer from the first move to release.</summary>
+    internal void BeginAutoDrag(TrackVM t)
+    {
+        if (IsMaster(t) && t.AutoTarget == AutomationTarget.Tempo) FreezeTempoAxis();
+    }
+
+    internal void ThawTempoAxis()
+    {
+        if (_frozenAxisSeconds is null) return;
+        _frozenAxisSeconds = null;
+        ReloadTempo();
+        BuildTempoWarpCaches();
+        Refresh();
+        SessionChanged?.Invoke();
+    }
+
+    private double TotalBeatsForAxis() => _totalBeats;
 
     /// <summary>Push a track's edited envelope back to the engine (creates/reuses the lane).</summary>
     internal void CommitAuto(TrackVM t) => CommitAutoImpl(t, live: false);
@@ -366,6 +459,15 @@ public sealed partial class ArrangementView
     private void CommitAutoImpl(TrackVM t, bool live)
     {
         if (_engine is not { } e) return;
+        if (IsMasterVolume(t))   // graph-level lane: a drag's first write checkpoints, the rest follow live
+        {
+            var mv = t.AutoPoints.OrderBy(p => p.Beat).Select(p => new AutomationPoint(p.Beat, p.Value, p.Curve)).ToArray();
+            if (live) e.SetMasterVolumeAutomationLive(mv);
+            else e.SetMasterVolumeAutomation(mv);
+            return;
+        }
+        bool tempo = IsMaster(t) && t.AutoTarget == AutomationTarget.Tempo;
+        if (tempo && live) FreezeTempoAxis();   // normally already frozen by BeginAutoDrag
         int lane = t.AutoChain >= 0 && NestedLaneStill(e, t, t.AutoLane) ? t.AutoLane   // the lane itself, wherever its device moved
             : t.AutoChain >= 0   // a lane into a rack (specs/044): reused, never a new track-level one
             ? e.AddNestedAutomationLane(t.Id, t.AutoTarget, t.AutoDeviceIndex, t.AutoChain, t.AutoSlot, t.AutoParamIndex,
@@ -378,14 +480,28 @@ public sealed partial class ArrangementView
             .OrderBy(p => p.Beat)
             .Select(p => new AutomationPoint(p.Beat, p.Value, p.Curve))
             .ToArray();
-        if (live) e.SetAutomationPointsLive(t.Id, lane, pts);
-        else      e.SetAutomationPoints(t.Id, lane, pts);
+        if (tempo) e.SetDeferWarpBuild(true);   // warped clips re-stretch off this thread
+        try
+        {
+            if (live) e.SetAutomationPointsLive(t.Id, lane, pts);
+            else      e.SetAutomationPoints(t.Id, lane, pts);
+        }
+        finally { if (tempo) e.SetDeferWarpBuild(false); }
+        if (tempo && !live && _frozenAxisSeconds is null)
+        {
+            ReloadTempo();
+            BuildTempoWarpCaches();
+            Refresh();
+        }
     }
 
     /// <summary>Target picker: Volume / Pan / built-in device params, plus a
     /// filterable param picker + "Learn" for each hosted plugin (M9-B3).</summary>
     internal void ShowAutoTargetMenu(Control anchor, TrackVM t)
     {
+        // The master (specs/099) shares this menu: Volume is its graph-level lane, Tempo and Pan
+        // are master lanes, then its devices; it has no instrument, MIDI effects or sends.
+        bool master = IsMaster(t);
         var flyout = new MenuFlyout();
 
         // Params that already carry automation (lane with points): pinned (automation glyph)
@@ -394,6 +510,8 @@ public sealed partial class ArrangementView
         if (_engine is { } eA)
         {
             var top = new List<(string label, Action apply)>();
+            if (master && eA.GetMasterVolumeAutomation().Length > 0 && automated.Add("V"))
+                top.Add((Loc.T("common.volume"), () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1)));
             int laneN = eA.AutomationLaneCount(t.Id);
             for (int i = 0; i < laneN; i++)
             {
@@ -410,6 +528,8 @@ public sealed partial class ArrangementView
                         key = "V"; apply = () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1); break;
                     case AutomationTarget.Pan:
                         key = "PAN"; apply = () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1); break;
+                    case AutomationTarget.Tempo:
+                        key = "TEMPO"; apply = () => SetAutoTarget(t, AutomationTarget.Tempo, -1, -1); break;
                     case AutomationTarget.Send:
                         continue;   // sends are not an automation target (specs/069)
                     case AutomationTarget.PluginParam:
@@ -435,6 +555,8 @@ public sealed partial class ArrangementView
         }
 
         flyout.Items.Add(Leaf(Loc.T("common.volume"), "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
+        if (master)
+            flyout.Items.Add(Leaf(Loc.T("tempo.target"), "TEMPO", () => SetAutoTarget(t, AutomationTarget.Tempo, -1, -1), automated));
         flyout.Items.Add(Leaf(Loc.T("common.pan"), "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
         if (_engine is { } e)
         {
@@ -665,6 +787,7 @@ public sealed partial class ArrangementView
     {
         AutomationTarget.Volume => Loc.T("common.volume"),
         AutomationTarget.Pan => Loc.T("common.pan"),
+        AutomationTarget.Tempo => Loc.T("tempo.target"),
         AutomationTarget.Send => Loc.F("arrangement.send", SendLetter(info.DeviceIndex), SendBusName(info.DeviceIndex)),
         AutomationTarget.MidiDeviceParam => $"{e.MidiEffectName(t.Id, info.DeviceIndex)} · {e.MidiEffectParamName(t.Id, info.DeviceIndex, info.ParamIndex)}",
         AutomationTarget.PluginParam => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {PluginParamNameById(e, t, info.DeviceIndex, e.AutomationLaneParamId(t.Id, laneIndex))}",

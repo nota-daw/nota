@@ -32,6 +32,30 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Modular layout. Nodes you placed stay put when a card grows; the rest of the chain
   moves aside. A CV cable dropped right on a knob (or on an XS parameter row) links that
   parameter at once, with the knob outlined while you aim.
+- **Nota Remote: slide a held pad to change Repeat's rate and pitch** (#558, specs/100). With
+  Repeat on, a finger holding a pad now plays rolls and fills the way a hardware pad controller
+  does.
+  - **Rate**: slide up for a faster rate and down for a slower one, one step every half a pad's
+    height: 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, in the project's tempo. The next hit
+    follows the new rate from the last one, with no gap and no double hit. The rate chip picks
+    the rate a press starts at (1/16 at first).
+  - **Pitch**: on a track whose instrument takes per-note expression (MPE), slide sideways to
+    bend the repeated note, a pad's width per semitone. Only that pad bends, and the next press
+    starts in tune.
+  - The pad shows its rate and bend under the finger, and a hint under the pads says what a
+    slide does. Each finger keeps its own rate and pitch. Velocity still comes from where the
+    finger lands, or is full with Full velocity. Without Repeat, Pads work as before.
+- **Automate the Nota Rhythm bank** (#609, specs/100): the pattern bank (A–D) is now a parameter,
+  **Perform › Bank** in the automation menu, so a lane in the arrangement switches a groove to its
+  fill and back — and MIDI learn and rack macros can drive it too. The A–D buttons set the same
+  parameter: they follow a playing lane, a click is one undo step, and with automation write armed
+  it records. **Bank Switch** (the bank buttons' right-click menu, or Perform › Bank Switch) chooses
+  when a new bank takes over: at the next step (as before) or at the pattern start, where a chosen
+  bank waits, tinted, until the next bar. The lane shows the four banks as named levels and its
+  points snap to them (so do the levels of Nota Twin's stepped params, such as the sequencer
+  Pattern), drawn as the steps it plays. A bank lane is read at each step, so a switch drawn on a
+  bar line plays on the downbeat — the same in playback and export. Projects saved before open on
+  the bank they were saved with.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
   OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
   always shown, even when a folder doesn't exist on disk. They are removable, and
@@ -51,12 +75,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   outlines the control, with Back / Next / Done. Install **Manual search** in Settings → Downloads →
   AI Models (multilingual-e5-small, about 135 MB) and questions phrased differently from the
   manual find their answer too. The panel remembers its width and whether it was open.
-- **Tempo track and Time Scale Tool** (#535): collapse or resize the tempo lane,
-  add and move points, and shape stepped, linear or Bezier tempo ramps. Right-drag
-  a marquee and Delete to remove several points in one undo step; the initial
-  point stays. Hold Ctrl to preview a location, then drag a bar onto a reference
-  recording; Ctrl+Alt omits the ending marker. Escape cancels. Maps and handles
-  save with the project, and playback follows their integrated timing.
+- **Tempo automation on the master track** (#93, #535, specs/099): tempo changes are
+  automation now. In automation mode, the master row's target pill picks **Tempo** next to
+  **Volume**, and tempo is drawn like any other lane: click to add a point, drag it, bend a
+  segment for a smooth accelerando or ritardando, put two points on one beat for an instant
+  change; marquee, copy, paste and Delete work as on every lane. The lane reads in BPM, its
+  range set by the two labels at its right edge, and tempo stays within 20–300 BPM. The
+  grid, playback, metronome, warped audio, freeze, bounce and export follow it; unwarped
+  audio keeps its place in time. While the tempo is automated the transport's BPM field
+  shows the tempo under the playhead and can't be typed into. There is no separate tempo
+  row above the tracks, so the arrangement keeps its full height. Projects saved with the
+  earlier tempo track open with the same timing, their tempo moved onto the master lane.
+- **Master pan and master device automation** (#93, specs/099): the Mixer's master strip
+  has a pan knob — after the master devices, before the master fader, in the project pan law
+  with the centre at 0 dB — and the Master row's lane picks **Pan** or any parameter of a
+  device on the master chain, from the same target menu as a track's. Touching a master
+  device's knob in automation mode shows its lane; removing the device removes its lanes, and
+  undo brings both back. MCP gains `set_master_pan` and `add_plugin_param_automation`, and the
+  automation tools work on the master's pan and device lanes.
 
 ### Changed
 - **Picking a parameter for a CV cable is a searchable panel** (#656, specs/101): a cable
@@ -68,6 +104,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Another track's parameters are grouped by device, and the search covers them all.
 
 ### Fixed
+- **Nota Twin's Pattern automation lands on the bar** (#609, specs/100): a Sequencer Pattern lane
+  that changes on the bar line where the playing pattern ends now starts the new pattern on that
+  bar, instead of one whole pattern later.
+- **Nota Rhythm no longer double-fires steps around MIDI notes**: a note on a Rhythm track that fell
+  mid-block restarted the sequencer's clock for the rest of the block, so a step could play twice.
 - **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
   clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
   acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid
@@ -121,9 +162,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the mapped ending.
 - **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
   mapped source boundaries. Loop recording, freeze and range bounce retain audio across
-  tempo changes; saved freezes retain their timing. Transport BPM edits stay in the tempo
-  lane, bar snapping respects the time-signature denominator, and warped waveforms align
-  with the audible content at every zoom level.
+  tempo changes; saved freezes retain their timing. Bar snapping respects the
+  time-signature denominator, and warped waveforms align with the audible content at
+  every zoom level.
 - Starting or seeking between beats no longer produces an immediate extra metronome click.
 - **Removing a track with its clip open in the piano roll no longer crashes Nota** (#530). The
   Clip editor closes with the track, and pressing Delete in a roll left behind is harmless.

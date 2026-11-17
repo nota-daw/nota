@@ -358,7 +358,10 @@ NOTA_API int32_t nota_engine_graph_retire_selftest(NotaEngine* engine);
  * Lanes are structural data on the track (snapshot + undo/redo, M6-6). A lane
  * targets track volume (target 0), pan (1), a built-in device param (2, with
  * device_index/param_index) or a send level (5, specs/072: device_index = the return bus
- * 0..3, values 0..1; deleting a return drops its bus's lanes and renumbers later buses);
+ * 0..3, values 0..1; deleting a return drops its bus's lanes and renumbers later buses).
+ * Tempo (6, specs/099) is valid only on nota_engine_master_track_id(): values are BPM, clamped
+ * to 20..300 on set; it is not a parameter but the project's tempo map, rebuilt from the lane
+ * on every edit (set, live set, section/time edits) and restored with it by undo/redo;
  * add/set/remove checkpoint undo. add returns the
  * lane index (an existing lane on the same target is reused, not duplicated).
  * get_points with out=NULL returns the point count. */
@@ -471,6 +474,8 @@ NOTA_API int32_t nota_track_param_modulated(const NotaEngine* engine, int32_t ta
 NOTA_API int32_t nota_engine_master_volume_automation_count(const NotaEngine* engine);
 NOTA_API int32_t nota_engine_master_volume_automation_get(const NotaEngine* engine, NotaAutomationPoint* out, int32_t cap);
 NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine, const NotaAutomationPoint* pts, int32_t count);
+/* As _set, without an undo checkpoint: the later moves of a drag whose first write used _set. */
+NOTA_API NotaResult nota_engine_master_volume_automation_set_live(NotaEngine* engine, const NotaAutomationPoint* pts, int32_t count);
 
 /* ---- hosted-plugin parameters (M9-B) ------------------------------------
  * device_index < 0 = the track's instrument; otherwise the effect at that chain
@@ -486,6 +491,12 @@ NOTA_API const char* nota_plugin_param_name(const NotaEngine* engine, int32_t tr
  * normalized default. Engine-owned string, valid until the next call. */
 NOTA_API const char* nota_plugin_param_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API float       nota_plugin_param_default(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+/* A stepped param (specs/100): the number of values it takes — 0 for a continuous param, n >= 2
+ * for the normalized values k / (n - 1) — and the name of value `step` ("A", "Pattern"; "" for
+ * none; engine-owned string, valid until the next call). Built-in instruments only; 0 / "" for
+ * anything else. */
+NOTA_API int32_t     nota_plugin_param_steps(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
+NOTA_API const char* nota_plugin_param_step_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index, int32_t step);
 NOTA_API float       nota_plugin_param_get(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index);
 NOTA_API NotaResult  nota_plugin_param_set(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t param_index, float normalized);
 /* Add (or reuse) a PluginParam automation lane bound to a stable paramID; the
@@ -553,26 +564,17 @@ NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_loop_record_mode(NotaEngine* engine, int32_t mode);
 NOTA_API int32_t    nota_transport_loop_record_mode(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
-// Outgoing shape: 0 step, 1 linear BPM, 2 cubic Bezier BPM. Handles normalized.
-typedef struct NotaTempoPoint {
-    double beat, bpm;
-    int32_t shape;
-    double x1, y1, x2, y2;
-    double incoming_bpm; // 0 = same as bpm; preserves the preceding ramp at a mapping anchor
-} NotaTempoPoint;
-NOTA_API int32_t nota_tempo_point_count(const NotaEngine* engine);
-NOTA_API NotaResult nota_tempo_get_point(const NotaEngine* engine, int32_t index, NotaTempoPoint* point);
-NOTA_API NotaResult nota_tempo_set_points(NotaEngine* engine, const NotaTempoPoint* points, int32_t count, int32_t checkpoint);
+/* Tempo (specs/099) comes from the master track's Tempo automation lane (target 6, BPM
+ * 20..300). While that lane has points the conversions below follow it and
+ * nota_transport_set_bpm is refused (NOTA_ERR_INVALID_ARG, tempo unchanged). */
+NOTA_API int32_t nota_engine_tempo_automated(const NotaEngine* engine);
+/* Device-free self-test of lane -> tempo map derivation (curve, jumps, first point after 0,
+ * clamping, live edits, undo/redo, unwarped clip reprojection, lane removal).
+ * 0 = pass, else the number of the failed check. */
+NOTA_API int32_t nota_engine_tempo_lane_selftest(NotaEngine* engine);
 NOTA_API double nota_tempo_beat_to_seconds(const NotaEngine* engine, double beat);
 NOTA_API double nota_tempo_seconds_to_beat(const NotaEngine* engine, double seconds);
 NOTA_API double nota_tempo_bpm_at(const NotaEngine* engine, double beat);
-// UI-only preview uses the very same compiler without publishing a project edit.
-typedef struct NotaTempoPreview NotaTempoPreview;
-NOTA_API NotaTempoPreview* nota_tempo_preview_create(const NotaTempoPoint* points, int32_t count);
-NOTA_API void nota_tempo_preview_destroy(NotaTempoPreview* preview);
-NOTA_API double nota_tempo_preview_seconds(const NotaTempoPreview* preview, double beat);
-NOTA_API double nota_tempo_preview_beat(const NotaTempoPreview* preview, double seconds);
-NOTA_API double nota_tempo_preview_bpm(const NotaTempoPreview* preview, double beat);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);
 NOTA_API NotaResult nota_transport_set_loop(NotaEngine* engine, int32_t enabled,
@@ -610,6 +612,15 @@ NOTA_API double     nota_transport_loop_end(const NotaEngine* engine);
 
 /* ---- Mixer / master ------------------------------------------------------ */
 NOTA_API NotaResult nota_engine_set_master_volume(NotaEngine* engine, float volume);
+/* Master pan (specs/099), -1..1 (clamped): a stage after the master devices and before the
+ * master fader, in the project pan law with centre at unity. Like the master volume it is a
+ * plain set — undo goes through a mix gesture (kind pan on nota_engine_master_track_id()).
+ * A master Pan automation lane (target 1 on the master id) drives it during playback. */
+NOTA_API NotaResult nota_engine_set_master_pan(NotaEngine* engine, float pan);
+NOTA_API float      nota_engine_master_pan(const NotaEngine* engine);
+/* Device-free self-test of master Pan / device-parameter lanes (specs/099).
+ * 0 = pass, else the number of the failed check. */
+NOTA_API int32_t    nota_engine_master_automation_selftest(NotaEngine* engine);
 
 /* ---- Tracks & clips (message thread) ------------------------------------- */
 /* Returns the new track id (>0), or 0 on failure. */

@@ -50,13 +50,13 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 
 ## Project and transport
 
-- **Tempo track**: collapsible, vertically resizable Arrangement lane; stepped, linear
-  and Bezier ramps with draggable handles. Right-drag selects points; Delete removes
-  them together, preserving the first point. Edits undo/redo and save with the project.
-- **Time Scale Tool**: Ctrl-hover location indicator; Ctrl-drag maps a bar to an
-  unwarped reference recording, preserving earlier anchors and the audio's real timing.
-  Ctrl+Alt omits the ending marker; Escape cancels. Existing markers and available
-  transient markers snap. MIDI, metronome and warped audio follow the tempo map.
+- **Tempo automation**: tempo is a lane on the master track — pick **Tempo** in the
+  master row's target pill (next to Volume) and draw it like any automation: points,
+  curved segments for smooth ramps, two points on one beat for an instant change, marquee,
+  copy/paste, undo. BPM scale with an editable range; 20–300 BPM. Playback, grid, metronome,
+  MIDI, warped audio, freeze, bounce and export follow it; unwarped audio keeps its time.
+  While automated, the transport BPM field shows the tempo under the playhead (read-only).
+  Projects from the earlier tempo track open with the same timing.
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation — including volume, pan and master-volume moves and the parameters of effects,
@@ -606,6 +606,9 @@ own window — see
   automatically (USB, then Wi-Fi, then Ethernet) or by hand, in Settings → Remote or with a
   click on another address in Connect phone; the link opens in the browser or copies with a
   click.
+  Pads' **Repeat** (1/4 … 1/32T, triplets included) plays rolls like a hardware pad controller:
+  sliding a held pad up or down changes its rate in time, and on an MPE track sliding sideways
+  bends the repeated note; the pad shows its rate and bend.
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
@@ -751,7 +754,8 @@ own window — see
 - **Automation lanes** on tracks and returns, with curved segments (Alt+drag) and points
   (double-click to add, double-click a point to remove). A track lane drives Volume, Pan or a
   device parameter. A return's lane (Volume, Pan or a
-  device on its chain) is edited in its footer row, the master's volume in the Master row.
+  device on its chain) is edited in its footer row. The Master row's lane drives the master's
+  Volume, Tempo, Pan or a parameter of a device on the master chain.
 - **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
   shows its first automated parameter.
 - **Draw mode** (the `A` key): drawn automation changes the device parameter in real time,
@@ -771,6 +775,9 @@ own window — see
 - **Overriding** — touch an automated parameter while not recording and the lane hands
   control to you; the toolbar's **Re-enable Automation** button gives it back.
 - **Reading** during playback and scrubbing (volume and pan controls follow the automation).
+- **Master pan**: a pan knob on the Mixer's master strip, after the master devices and before
+  the master fader, in the project pan law with the centre at 0 dB; automatable like a
+  track's, saved with the project.
 - **MIDI Learn** — the MIDI button in the top right enters learn mode: mappable controls
   light up, and a click plus a move on the controller creates the binding. Mappable
   targets cover every built-in instrument, effect and MIDI FX parameter (switches, ADSR
@@ -884,7 +891,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   (Age/Motion/Filter/Env/Space), glide, tune and volume. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
-  banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
+  banks (A–D, copy / clear; the bank is an automatable **Bank** parameter, read at each step,
+  so an arrangement lane, MIDI learn or a macro switches patterns in the song — at the next
+  step or at the pattern start, per **Bank Switch**), accents, quiet steps, per-step velocity, Swing/Humanize, a
   **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
   Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
   contour or sample region, Perform rail (Swing, Humanize, Accent, Volume, Glue), a full-width step strip with
@@ -1746,8 +1755,9 @@ Coverage:
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split; read and write a clip's controller curves (sustain, wheels, any CC).
-- **Automation**: create a lane (volume, pan, a device or instrument parameter),
-  read and write points. A send is not a lane target.
+- **Automation**: create a lane (volume, pan, a device, plug-in or instrument parameter),
+  read and write points — on the master too (tempo, pan, master device parameters;
+  `set_master_pan` sets its pan). A send is not a lane target.
 - **MIDI effects** and engine status.
 - **Themes and skins**: `list_themes`, `get_theme` (the file, as a template),
   `get_theme_catalogue` (every colour token with what it colours, the radius steps),

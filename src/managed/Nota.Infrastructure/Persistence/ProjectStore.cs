@@ -27,7 +27,7 @@ public sealed class ProjectStore : IProjectStore
             doc.Transport.TimeSigNumerator, doc.Transport.TimeSigDenominator,
             Nota.Application.Samples.MusicalKey.Parse(doc.Transport.Key)?.Code ?? -1,
             PanLawLegacy: doc.Mixer?.PanLawLegacy ?? true);
-        return new ProjectLoadResult(transport, warnings) { MissingPlugins = MissingPlugins(doc) };
+        return new ProjectLoadResult(transport, warnings) { MissingPlugins = MissingPlugins(doc), TempoClamped = doc.TempoClamped };
     }
 
     // Every "pluginId" in the document (instruments, effects on any track or bus) that the

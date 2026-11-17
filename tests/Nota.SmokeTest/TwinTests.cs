@@ -611,6 +611,7 @@ internal static class TwinTests
 
         // ---- the sequencer (US8) --------------------------------------------------------------------
         foreach (var r in SequencerChecks()) yield return r;
+        foreach (var r in PatternLaneChecks()) yield return r;
 
         // ---- Split / Layer (US9) ------------------------------------------------------------------
         foreach (var r in PartChecks()) yield return r;
@@ -940,6 +941,48 @@ internal static class TwinTests
             var rb = Render(e, Sr / 2);
             yield return (kept && Rms(rb) > 1e-3 && rb.All(float.IsFinite),
                 $"a Twin on an Instrument Rack chain plays, and duplicating the track keeps its side B ({Db(Rms(rb)):0} dB)");
+        }
+    }
+
+    // specs/100: a Pattern lane drawn on the bar where the playing pattern ends starts the new
+    // pattern on that bar. Pattern 1 sounds on its first step, pattern 2 only on its ninth; the
+    // lane jumps to pattern 2 on bar 3 (beat 8). Read at the block start — 441-frame blocks put
+    // one just before beat 8 — pattern 1 played bar 3's downbeat and pattern 2 queued to bar 4.
+    private static IEnumerable<(bool, string)> PatternLaneChecks()
+    {
+        var p0 = Enumerable.Range(0, 16).Select(i => i == 0 ? "C3:100:25%" : ".").ToArray();
+        var p1 = Enumerable.Range(0, 16).Select(i => i == 8 ? "C3:100:25%" : ".").ToArray();
+        var (e, t) = SeqRig(120, p0);
+        using (e)
+        {
+            TwinPatterns.WritePattern(e, t, 1, p1);
+            int lane = e.AddPluginAutomationLane(t, -1, "seq.pattern");
+            e.SetAutomationPoints(t, lane, new[] { new AutomationPoint(0, 0f), new AutomationPoint(8, 0f), new AutomationPoint(8, 1f / 7f) });
+            var on = Onsets(Roll(e, 7.5, 441), 2000);
+            double spb = Sr / 2.0;
+            bool Near(double beat) => on.Any(x => Math.Abs(x - beat * spb) < 64);
+            yield return (Near(0) && Near(4) && !Near(8) && Near(10) && Near(14),
+                $"a Twin Pattern lane on a bar line starts the new pattern on that bar (onsets at beats {string.Join(", ", on.Select(x => (x / spb).ToString("0.##")))})");
+            yield return (e.PluginParamSteps(t, -1, Pi(e, t, "seq.pattern")) == 8 && e.PluginParamStepText(t, -1, Pi(e, t, "seq.pattern"), 1) == "2",
+                "the Twin Pattern lane has eight levels named 1–8");
+        }
+        // The Rate changes 1/16 → 1/32 in the block that holds beat 8, where the Pattern lane jumps
+        // too: the pattern is sampled on the new grid whichever lane was added first.
+        foreach (bool patternFirst in new[] { true, false })
+        {
+            var (re, rt) = SeqRig(120, p0);
+            using (re)
+            {
+                TwinPatterns.WritePattern(re, rt, 1, p1);
+                void PatternLane() { int l = re.AddPluginAutomationLane(rt, -1, "seq.pattern"); re.SetAutomationPoints(rt, l, new[] { new AutomationPoint(0, 0f), new AutomationPoint(8, 0f), new AutomationPoint(8, 1f / 7f) }); }
+                void RateLane() { int l = re.AddPluginAutomationLane(rt, -1, "seq.rate"); re.SetAutomationPoints(rt, l, new[] { new AutomationPoint(0, 0.6f), new AutomationPoint(7.99, 0.6f), new AutomationPoint(7.99, 1f) }); }
+                if (patternFirst) { PatternLane(); RateLane(); } else { RateLane(); PatternLane(); }
+                var on = Onsets(Roll(re, 5.0, 441), 2000);
+                double spb = Sr / 2.0;
+                bool Near(double beat) => on.Any(x => Math.Abs(x - beat * spb) < 64);
+                yield return (!Near(8) && Near(9),
+                    $"with the Rate also changing, the Pattern lane switches on the bar ({(patternFirst ? "Pattern" : "Rate")} lane added first; onsets at beats {string.Join(", ", on.Select(x => (x / spb).ToString("0.##")))})");
+            }
         }
     }
 

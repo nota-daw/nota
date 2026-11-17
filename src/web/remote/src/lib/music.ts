@@ -20,6 +20,17 @@ export function degreeNote(k: Key, base: number, deg: number): number {
   return base + k.root + iv[d] + 12 * o;
 }
 
+/** A finger's sideways slide as a pitch bend in semitones: <paramref name="unit"/> pixels is
+ * <paramref name="semis"/> semitones (a key or pad width is its pitch step). A fifth of a semitone
+ * either side stays in tune, so a wobbling finger doesn't detune the note, and a full unit still
+ * lands on the step. At most two octaves either way. */
+export function slideBend(dx: number, unit: number, semis: number): number {
+  const DEAD = 0.2;
+  const s = (dx / unit) * semis;
+  const m = Math.max(0, Math.abs(s) - DEAD) * (semis / (semis - DEAD));
+  return Math.max(-24, Math.min(24, Math.sign(s) * m));
+}
+
 const ROMAN = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii'];
 
 export interface Chord { roman: string; name: string; notes: number[] }
