@@ -2472,6 +2472,13 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Ch("Triplet Shiver",     CClassic,  0.30f,  0.00f, 120, 0.45f, 180, div: "1/8T");
         Ch("Four-Bar Drift",     CClassic,  0.90f,  0.00f, 130, 0.50f, 180, div: "4/1");
 
+        // Experimental spectral retuning, kind 27. All values normalized.
+        Section("Color bass");
+        Fx("color", 27, "Gentle tuning", ("Amount", 1f), ("Resonance", 0.1f), ("Mix", 0.5f));
+        Fx("color", 27, "Color bass", ("Amount", 1f), ("Resonance", 0.65f), ("Mix", 1f));
+        Fx("color", 27, "Short chord", ("Scale", 1f), ("Resonance", 0.5f), ("Decay", 0.15f),
+            ("C", 1f), ("D", 0f), ("D#", 1f), ("F", 0f), ("G", 1f), ("G#", 0f), ("A#", 0f));
+
         // ---- Nota Vocoder (kind 26) — channel vocoder. Written in units through Vo(): bands
         //      8..32, Low Hz 20..1000, High Hz 2000..20000, Q 1..10, Formant −12..+12 st, Attack
         //      ms 0.5..100, Release ms 5..1000, carrier (VSaw / VNoise / VTrack), Tilt dB ±12, Pitch

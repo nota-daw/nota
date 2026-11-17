@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Chroma** adds stereo-linked Morph and spectral Gate controls, with phase tracking across moving spectral peaks for smoother retuning. Both spectral controls default off.
+- **Nota Chroma** card shows a live spectrum with Dry and Tuned lines and a piano-style note selector.
+- **Nota Chroma** (specs/100): spectral pitch quantizer for color bass,
+  with scale or custom-note tuning, harmonic resonance, decay, protected frequency range
+  and three presets. Quality-first processing adds about 43–46 ms latency.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
   OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
   always shown, even when a folder doesn't exist on disk. They are removable, and
@@ -50,6 +55,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   save with the project, and playback follows their integrated timing.
 
 ### Fixed
+- **Nota Chroma** spectrum uses smooth fading lines without horizontal bands or tiled edges.
 - **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
   clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
   acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid

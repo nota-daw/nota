@@ -1547,6 +1547,8 @@ matches anything.
 
 ## Accepted exceptions
 
+- **Nota Chroma spectrum** uses soft vertical spectral lines in the accent and blue, with brightness representing signal magnitude. This is signal content rather than device chrome.
+
 Places where a screen's needs override a general rule, kept on purpose:
 
 - **The round wheels keep their 0.56.1 look** inside device cards and never sit in a

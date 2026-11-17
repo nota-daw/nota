@@ -59,6 +59,7 @@
 #include "devices/effects/Utility.h"
 #include "devices/effects/Vintage.h"
 #include "devices/effects/Vocoder.h"
+#include "devices/effects/Chroma.h"
 #include "devices/instruments/VoltSynth.h"
 #include "devices/instruments/WavetableSynth.h"
 
@@ -92,6 +93,7 @@ std::shared_ptr<Device> makeBuiltinDevice(int32_t kind) {
     case 23: return std::make_shared<Flanger>();
     case 24: return std::make_shared<Phaser>();
     case 25: return std::make_shared<Chorus>();
+    case 27: return std::make_shared<Chroma>();
     case 26: return std::make_shared<Vocoder>();
     default: return nullptr; // Rack / plugin: no simple per-param default
     }

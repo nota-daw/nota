@@ -30,6 +30,7 @@
 #include "devices/effects/Phaser.h"
 #include "devices/effects/Chorus.h"
 #include "devices/effects/Vocoder.h"
+#include "devices/effects/Chroma.h"
 #include "devices/effects/Prism.h"
 #include "devices/effects/Ceiling.h"
 #include "devices/effects/Strata.h"
@@ -750,6 +751,8 @@ int32_t Engine::addTrackBuiltinDevice(int32_t trackId, int32_t kind) {
         dev = std::make_shared<Chorus>();
     else if (kind == 26)
         dev = std::make_shared<Vocoder>();
+    else if (kind == 27)
+        dev = std::make_shared<Chroma>();
     else
         return -1;
     dev->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0, kMaxBlock);

@@ -2758,3 +2758,9 @@ Nota.Application/Input/ReservedKeys.cs	Windows	# data: operating-system names (p
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unknown action '{id}'"	# data: log text for the support log, not shown
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unreadable key '{t}' for '{id}'"	# data: log text for the support log, not shown
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring an empty entry for '{id}'"	# data: log text for the support log, not shown
+
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Chroma	# data: device identity and semantic search metadata
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	color bass spectral resonator chroma	# data: device identity and semantic search metadata
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bright clean	# data: device identity and semantic search metadata
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bass synth	# data: device identity and semantic search metadata
+Nota.Application/Palette/DeviceCategories.cs	Nota Chroma	# data: device identity and semantic search metadata

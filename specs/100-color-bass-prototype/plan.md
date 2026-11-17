@@ -1,0 +1,18 @@
+# Implementation Plan: Nota Color
+## Summary
+Local quality-first prototype, kind 27, C++20 Device with C# Avalonia card. No new dependency or C ABI functions. Accepted user plan is the source of scope.
+## Technical Context
+Signalsmith RealFFT, 2048-point Hann analysis/synthesis at <=48 kHz, hop N/8, N doubled with sample rate (maximum 32768). Stereo linked peak detection using summed channel powers (not mono sum), instantaneous frequency from phase differences, nearest allowed equal-tempered note, identity phase locking across each peak region. Preserve outside-band bins. Normalized overlap-add (sum Hann² = 3), unnormalized IFFT scaled by 1/N. Packed DC/Nyquist remain untouched. Fixed N-sample latency with exact delayed dry path.
+Spectral peaks shift by a shared frequency shift (integer-bin region placement with exact phase advancement per hop); phase accumulators retain temporal coherence; each channel retains its input phase relationship. Smoothed amount and pitch shift, bounded resonant spectral envelope, exponential decay with input-driven gate. Parameters are normalized atomic floats, buffers prepared on message thread. Existing bypass semantics remain unchanged; use Dry/wet for time-aligned comparison.
+## Constitution Check
+User explicitly authorizes deferring issue until prototype listening. All real-time, ABI, licensing, UI and verification rules remain applicable. No hooks configured. New source headers required. Single local branch, no push/PR.
+## Structure and Integration
+Color.h/.cpp under devices/effects, CMake source registration, Engine device factory/clone/rack paths, palette category/catalog, ColorDeviceBody and device card factory, three FactoryPresetCatalog presets. Existing generic parameter persistence/automation. New text through localization keys. Docs and FEATURES updated with prototype status.
+## Validation
+Native executable directly exercises DSP, allocation-free render, dry reconstruction, tuning, stereo, block invariance, sample rates, extreme params, silence/tails and latency. Produces FM/growl/chord level-matched WAVs and performance metrics in ignored build directory. Managed smoke tests cover device identity, parameter persistence/clone and rendering. Full scripts/build.sh. Headless card preview if available; document actual evidence and limits.
+
+## Spectrum visualization
+Publish separate 512-bin log-frequency dry and shifted contributions through the existing scope ABI. Track shifted resonance independently in prepared buffers. Render theme-aware accent and blue lines with vertical intensity falloff; preserve band interaction and audio DSP.
+
+## Naturalness extension
+Use local one-to-one peak matching within four FFT bins, minimizing frequency distance, then preferring energy and lower index. Carry prior output phase forward by the target-frequency increment and derive a common rotation against current input phase. Never globally reset phase. Stereo-linked Morph interpolates magnitudes after resonance, with 20 ms parameter smoothing; Gate follows using a soft knee and 5/50 ms attack/release. Append indices 21–23, disabled by default; threshold default normalized .25 (−60 dBFS). Prepare all track/gate buffers off-thread. UI adds a second row, retaining original parameter order, dimensions and graph minimum. No new C ABI functions or dependencies.

@@ -468,6 +468,22 @@ internal static class NotaPalette
     public static readonly LinearGradientBrush PluginPreviewWash = VGradient(
         (Wash(DeviceSection, 0xDB), 0), (Wash(DeviceSection, 0x9E), 0.5), (Wash(DeviceSection, 0xE6), 1));
 
+    // Chroma's spectral content fades smoothly at the vertical edges (DESIGN exception).
+    public static readonly IBrush ChromaDrySpectrum = SpectralLine(Accent);
+    public static readonly IBrush ChromaTunedSpectrum = SpectralLine(Steel);
+
+    private static IBrush SpectralLine(SolidColorBrush ink)
+    {
+        var stops = new (SolidColorBrush Slot, double Offset)[17];
+        for (int i = 0; i < stops.Length; i++)
+        {
+            double y = i / 16.0;
+            double envelope = Math.Pow(Math.Sin(Math.PI * y), 2);
+            stops[i] = (Wash(ink, (byte)Math.Round(255 * envelope)), y);
+        }
+        return VGradient(stops);
+    }
+
     // ---- Lookup by XAML key ------------------------------------------------
 
     // Code-built views that read a token by its XAML key resolve it here instead of

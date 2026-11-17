@@ -949,6 +949,12 @@ if (args.Length >= 1 && args[0] == "--twin")
     Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Experimental color bass device, also exercised by the full run.
+if (args.Length >= 1 && args[0] == "--color")
+{
+    foreach (var (ok, label) in ColorTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--vocoder")
 {
@@ -15936,6 +15942,7 @@ Console.WriteLine("-- nota twin --");
 foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ColorTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- preset init --");
