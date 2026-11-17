@@ -6,7 +6,8 @@
 // track, or its track is removed; the new route plays; switching away and back before the next
 // block leaves the note to end with its own note-off; the destination's own notes keep sounding;
 // a transport stop ends the voices, and a switched-off instrument never heard the route's
-// notes, so a later switch has no old note left to release.
+// notes, so a later switch has no old note left to release. A replaced instrument never heard
+// them either, while an edit that keeps the instrument (a rack chain renamed) keeps them to end.
 // The source tracks are muted, so what reaches the master is the destination alone.
 
 using Nota.Application;
@@ -31,6 +32,7 @@ internal static class MidiSourceSwitchTests
         foreach (var r in BypassedForgetsRoutedNotes()) yield return r;
         foreach (var r in SessionLaunchForgetsRoutedNotes()) yield return r;
         foreach (var r in ReplacedInstrumentForgetsRoutedNotes()) yield return r;
+        foreach (var r in RackEditKeepsRoutedNotes()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats)
@@ -254,5 +256,27 @@ internal static class MidiSourceSwitchTests
         float released = Peak(e, 0.5);
         yield return (own > 0.01f && released < 1e-4f,
             $"a switch after the destination's instrument was replaced doesn't cut its new note (peak {own:F3} → {released:G2})");
+    }
+
+    // A key held on the source into an Instrument Rack, then a rack chain renamed: the edit forks
+    // the rack but keeps its voices, so the note still sounds and a switch must still end it.
+    private static IEnumerable<(bool, string)> RackEditKeepsRoutedNotes()
+    {
+        using var e = Routed(out int a, out _, out int plain);
+        e.SetTrackMute(plain, true);
+        int d = e.AddInstrumentRackTrack();
+        e.RackAddChain(d, 0); // a Synth chain (a new rack starts empty)
+        e.SetTrackMidiSource(d, a);
+        e.NoteOn(60, 0.9f);
+        Beats(e, 0.5);
+        e.RackSetChainName(d, 0, "Lead");
+        Beats(e, 0.5);
+        float held = Peak(e, 0.5);
+        e.SetTrackMidiSource(d, -1);
+        Beats(e, 2.0);
+        float after = Peak(e, 0.5);
+        e.NoteOff(60);
+        yield return (held > 0.01f && after < 1e-4f,
+            $"a switch after a rack chain was renamed still ends the routed note (peak {held:F3} → {after:G2})");
     }
 }

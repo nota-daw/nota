@@ -1853,9 +1853,11 @@ void Engine::renderInstrumentRaw(
         // two renders changed nothing, so its notes end with their own note-offs.
         Track::LiveHeld* held = t.liveHeld.get();
         // A replaced instrument never heard the old one's notes: forget them, not release them.
-        if (held && held->routedInst != inst) {
+        // Its uid tells a replacement from an edit: an edit that forks the object (a rack chain
+        // renamed) keeps the uid and the voices, so its notes are still the route's to end.
+        if (held && held->routedInstUid != inst->uid()) {
             held->forgetRouted();
-            held->routedInst = inst;
+            held->routedInstUid = inst->uid();
         }
         if (held && held->routedFrom != srcId) {
             n = releaseRouted(*held, evs, n);
