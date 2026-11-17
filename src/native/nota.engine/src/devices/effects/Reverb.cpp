@@ -161,7 +161,7 @@ void Reverb::process(float* buf, int32_t frames) {
     // so the wake-up tail has no timing jump. Sleep engages only after the full
     // feed-through flight time (pre-delay + early taps + longest comb), tracked
     // below — output silence alone proves nothing while the lines are full.
-    hist_.begin(); // a gap since the last block (track muted or asleep) scrolls the graph on
+    const bool graph = hist_.begin(); // kept only while the card reads it; a gap scrolls it on
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     if (inSilent && !freeze && idle_) {
         modPhase_ += modInc * frames;
@@ -248,7 +248,8 @@ void Reverb::process(float* buf, int32_t frames) {
         }
         outL = mid + side;
         outR = mid - side;
-        hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outL), std::fabs(outR)), mid);
+        if (graph)
+            hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outL), std::fabs(outR)), mid);
 
         // Final guard: a runaway (but finite) loop build-up here would blast the
         // speakers. A hard clamp bounds it but the clip itself sounds metallic, so

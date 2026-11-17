@@ -8,6 +8,8 @@
 
 #include "nota_engine_internal.h"
 
+#include "engine/EditorKeys.h"
+
 #include "dsp/primitives/CompensationDelay.h"
 #include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
@@ -130,6 +132,9 @@ int32_t nota_rack_chain_sidechain(const NotaEngine* e, int32_t t, int32_t di, in
 int32_t nota_rack_chain_set_sidechain(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t src,
     int32_t pre, float gain, float mix) {
     return e ? ENG(e)->rackChainSetSidechain(t, di, c, slot, src, pre, gain, mix) : -1;
+}
+int32_t nota_rack_chain_accepts_sidechain(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot) {
+    return e && CENG(e)->rackChainAcceptsSidechain(t, di, c, slot) ? 1 : 0;
 }
 int32_t nota_midi_effect_set_cc_dest_path(NotaEngine* e, int32_t t, int32_t i, int32_t chain, int32_t slot) {
     return e && ENG(e)->setMidiEffectCcDestPath(t, i, chain, slot) ? 0 : -1;
@@ -579,6 +584,16 @@ NotaResult nota_plugin_close_editor(NotaEngine* e, int32_t track_id, int32_t dev
 }
 int32_t nota_plugin_editor_is_open(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return (e && CENG(e)->trackEditorOpen(track_id, device_index)) ? 1 : 0;
+}
+void nota_editor_keys_set_claimed(const int32_t* chars, int32_t count) {
+    nota::editorkeys::setClaimed(chars, count);
+}
+int32_t nota_editor_keys_drain(int32_t* out_chars, uint8_t* out_down, int32_t max) {
+    if (!out_chars || !out_down || max <= 0) return 0;
+    return nota::editorkeys::drain(out_chars, out_down, max);
+}
+void nota_editor_keys_push(int32_t code, int32_t down) {
+    nota::editorkeys::push(code, down != 0);
 }
 int32_t nota_plugin_get_state(
     const NotaEngine* e, int32_t track_id, int32_t device_index, uint8_t* out, int32_t capacity) {

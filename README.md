@@ -26,6 +26,10 @@
   <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-FF9F1C" alt="Documentation"></a>
 </p>
 
+<p align="center">
+  <a href="https://upstar.dev/r/nota-daw/nota"><picture><source media="(prefers-color-scheme: dark)" srcset="https://upstar.dev/badge/nota-daw/nota/award/audio-dark.svg"><img alt="Upstar: #3 Riser Of The Week in Audio, November 2026" src="https://upstar.dev/badge/nota-daw/nota/award/audio.svg" width="250" height="55"></picture></a>
+</p>
+
 ![Nota playing a song in the Arrangement view, with the selected track's devices open below](assets/screenshots/playback.webp)
 
 <p align="center">▶ <a href="https://www.youtube.com/watch?v=zmvKOCIm4ig"><b>Watch the demo with sound</b></a> (1:45, YouTube)</p>
@@ -43,8 +47,9 @@
   (Surge XT, Dexed, Dragonfly Reverb …) install in one click from Settings.
 - **Your phone is a controller.** Scan a QR code and play pads, keys and an XY pad, or ride
   the mixer — over Wi-Fi or USB, nothing to install.
-- **Easy on the eyes.** A calm Studio look: neutral greys, one orange accent for what is
-  playing or chosen. Dark or light, or the warm Ember themes, and your phone follows along.
+- **Easy on the eyes, and yours to change.** A flat grey shell where the track colours carry
+  the music, and orange only for what is playing or picked. Dark or light, the warm Ember
+  themes, the classic look, or a theme of your own — and your phone follows along.
 - **Works where you do.** The same app on macOS, Windows and Linux, on Intel/AMD and ARM.
 
 ## Demo
@@ -68,7 +73,7 @@
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/arrangement-light.webp" alt="Arrangement view in the Studio Light theme"><br><sub><b>Studio Light</b> — the same look in light greys, for daytime sessions</sub></td>
-    <td width="50%"><img src="assets/screenshots/appearance.webp" alt="Settings → Appearance: Dark, Light or Follow system, with the Studio and Ember colour themes as preview cards"><br><sub><b>Colour themes</b> — Studio or Ember, dark or light, or follow the system</sub></td>
+    <td width="50%"><img src="assets/screenshots/appearance.webp" alt="Settings → Appearance: the New or Classic look, solid or tinted clips, and the colour themes as preview cards"><br><sub><b>Appearance</b> — Studio or Ember themes, the classic look, or your own theme</sub></td>
   </tr>
 </table>
 
@@ -93,9 +98,11 @@ A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised li
   branch off from it.
 - **Export** — the master or stems to WAV (16/24-bit or 32-bit float), with true-peak
   normalize and dither.
-- **Colour themes** — **Studio Dark** (the default), **Studio Light**, **Ember Graphite** and
-  **Ember Paper**; pick one, or follow the system's dark / light mode. Nota Remote on your
-  phone wears the same theme.
+- **Colour themes and looks** — **Studio Dark** (the default), **Studio Light**, **Ember
+  Graphite** and **Ember Paper**, or follow the system's dark / light mode; an accent colour
+  and a text size of your own; the **Classic** look of earlier versions; and **your own
+  themes** — a theme file sets the colours, a typeface and the corner roundness. Nota Remote
+  on your phone wears the same theme.
 - **AI control (optional)** — a local MCP server lets an AI assistant such as Claude work
   in the open project. Off by default.
 

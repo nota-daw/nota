@@ -36,7 +36,7 @@ public static class PhraseLines
 
     /// <summary>Whether a grid line at <paramref name="beat"/> is a phrase line: it sits on a
     /// bar line and that bar starts a phrase of <paramref name="phraseBars"/> bars.</summary>
-    public static bool IsPhraseLine(double beat, int phraseBars, int beatsPerBar)
+    public static bool IsPhraseLine(double beat, int phraseBars, double beatsPerBar)
     {
         if (Normalize(phraseBars) == 0) return false;
         double bars = beat / SnapGrid.BarBeats(beatsPerBar);

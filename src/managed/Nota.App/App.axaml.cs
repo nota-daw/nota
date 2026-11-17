@@ -98,6 +98,28 @@ public partial class App : Avalonia.Application
         log.Info($"App started · v{AppInfo.Version}");
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             log.Error("Unhandled exception", e.ExceptionObject as Exception);
+        // A control moved between windows (the popped-out Detail window, the Mixer window) can
+        // leave an entry in its old window's layout queue; that window's next arrange pass then
+        // throws "Attempt to call InvalidateArrange on wrong LayoutManager" from Avalonia's
+        // render loop, and the unhandled exception closed Nota (#164). The layout is only one
+        // pass behind: keep running, note it, and lay every window out again.
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            if (e.Exception is not ArgumentException ae
+                || !ae.Message.Contains("wrong LayoutManager", StringComparison.Ordinal)
+                || ae.StackTrace?.Contains("Avalonia.Layout.LayoutManager", StringComparison.Ordinal) != true) return;
+            e.Handled = true;
+            log.Warn($"Layout pass recovered after a control moved between windows (#164): {ae.Message}\n{ae.StackTrace}");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return;
+                foreach (var w in desktop.Windows)
+                {
+                    w.InvalidateMeasure();
+                    w.InvalidateArrange();
+                }
+            }, Avalonia.Threading.DispatcherPriority.Background);
+        };
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             log.Error("Unobserved task exception", e.Exception);
@@ -108,6 +130,11 @@ public partial class App : Avalonia.Application
         // exists — and before the themes, whose load problems are interface text (spec 087):
         // the language is fixed for the run, so those texts are built once, in it.
         InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
+        // Keyboard shortcuts (specs/096): the defaults with the user's keys on top. After the
+        // language, as the actions' titles are interface text.
+        var keySettings = Services.GetRequiredService<ISettingsService>();
+        Nota.Application.Input.KeyBindings.Instance = new Nota.Application.Input.KeyBindings(
+            Nota.Application.Input.KeyActionCatalog.Create(), keySettings.Current, keySettings.Save, warn: m => log.Warn(m));
         // Colour theme (Preferences → Appearance), applied before the first window paints so
         // nothing flashes one theme on the way to another. Old Dark / Light / System
         // settings resolve onto the Studio themes (Appearance.Resolve).

@@ -13,6 +13,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -317,14 +318,15 @@ public sealed partial class BrowserView
         if (paths.Count > 0) Say(SampleFolderUi.AddAll(_settings, paths));
     }
 
-    // ⌘[ ⌘] ⌘↑ (Ctrl elsewhere, where Alt+Left / Right / Up work too) walk the browse view;
-    // ⌘L / Ctrl+L edits the path.
+    /// <summary>The Files tab has the keyboard — its browse keys win over the window's (specs/096).</summary>
+    public bool FilesFocused => _active == FilesTab && !_collapsed && IsKeyboardFocusWithin && !_search.IsFocused && !_pathBox.IsFocused;
+
+    // Back / forward / up walk the browse view (⌘[ ⌘] ⌘↑ by default, Ctrl elsewhere, where
+    // Alt+Left / Right / Up work too); Edit path (⌘L) types a path. Bindings since specs/096.
     private void OnFilesKey(object? sender, KeyEventArgs e)
     {
-        if (_vm is null || _active != FilesTab || _collapsed || _search.IsFocused || _pathBox.IsFocused) return;
-        bool mac = OperatingSystem.IsMacOS();
-        var cmd = mac ? KeyModifiers.Meta : KeyModifiers.Control;
-        if (e.KeyModifiers == cmd && e.Key == Key.L)
+        if (_vm is null || Keys.Capturing || _active != FilesTab || _collapsed || _search.IsFocused || _pathBox.IsFocused) return;
+        if (Keys.Owns(e, "browser.editPath"))
         {
             if (!BrowseOn) { SetBrowseMode(true); }
             BeginPathEdit();
@@ -332,7 +334,7 @@ public sealed partial class BrowserView
             return;
         }
         if (!BrowseOn) return;
-        // Enter opens the selected folder (or drive) of the browse view.
+        // Enter opens the selected folder (or drive) of the browse view — a fixed list key.
         if (e.Key is Key.Enter or Key.Return && e.KeyModifiers == KeyModifiers.None
             && _pages[FilesTab].SelectedItem is BrowserItem { Kind: BrowserItemKind.Folder } folder)
         {
@@ -340,14 +342,13 @@ public sealed partial class BrowserView
             e.Handled = true;
             return;
         }
-        bool alt = !mac && e.KeyModifiers == KeyModifiers.Alt;
-        bool back = e.KeyModifiers == cmd && e.Key == Key.OemOpenBrackets || alt && e.Key == Key.Left;
-        bool fwd = e.KeyModifiers == cmd && e.Key == Key.OemCloseBrackets || alt && e.Key == Key.Right;
-        bool up = e.KeyModifiers == cmd && e.Key == Key.Up || alt && e.Key == Key.Up;
-        if (back) _vm.Browse.GoBack();
-        else if (fwd) _vm.Browse.GoForward();
-        else if (up) _vm.Browse.Up();
-        else return;
+        switch (Keys.OwnedBy(e, "browser.back", "browser.forward", "browser.up"))
+        {
+            case "browser.back": _vm.Browse.GoBack(); break;
+            case "browser.forward": _vm.Browse.GoForward(); break;
+            case "browser.up": _vm.Browse.Up(); break;
+            default: return;
+        }
         e.Handled = true;
     }
 

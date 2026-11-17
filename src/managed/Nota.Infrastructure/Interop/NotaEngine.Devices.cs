@@ -287,6 +287,8 @@ public sealed partial class NotaEngine
         return NativeMethods.RackChainSidechain(_handle, trackId, rackAddress, chain, slot, out int src, out int pre,
                                                 out float g, out float m) == 0 ? new NestedSidechain(src, pre != 0, g, m) : null;
     }
+    public bool RackChainAcceptsSidechain(int trackId, int rackAddress, int chain, int slot)
+    { ThrowIfDisposed(); return NativeMethods.RackChainAcceptsSidechain(_handle, trackId, rackAddress, chain, slot) != 0; }
     public int RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc)
     {
         ThrowIfDisposed();
@@ -403,6 +405,25 @@ public sealed partial class NotaEngine
     {
         ThrowIfDisposed();
         return NativeMethods.PluginEditorIsOpen(_handle, trackId, deviceIndex) != 0;
+    }
+
+    public void SetEditorTypingKeys(int[] tokenChars)
+    {
+        ThrowIfDisposed();
+        NativeMethods.EditorKeysSetClaimed(tokenChars, tokenChars.Length);
+    }
+
+    /// <summary>Queues a key press / release as a plug-in editor window would (tests).</summary>
+    public void PushEditorKey(int code, bool down)
+    {
+        ThrowIfDisposed();
+        NativeMethods.EditorKeysPush(code, down ? 1 : 0);
+    }
+
+    public int DrainEditorKeys(int[] tokenChars, byte[] down)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.EditorKeysDrain(tokenChars, down, Math.Min(tokenChars.Length, down.Length));
     }
 
     /// <summary>Reads a hosted plugin's opaque state blob (for project save). Empty for built-ins.</summary>

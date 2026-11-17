@@ -242,7 +242,7 @@ void Sampler::render(float* out, int32_t frames) {
                 }
             }
             // envelope
-            advanceShapedEnv(v.env, v.stage, v.shape, atkRate, decRate, sustain, relRate, bend);
+            stepEnv(v.env, v.stage, v.shape, atkRate, decRate, sustain, relRate, bend);
             if (v.stage == Stage::Off) v.active = false;
             if (!v.active) break;
 
@@ -293,7 +293,7 @@ void Sampler::render(float* out, int32_t frames) {
     }
     for (int32_t i = 0; i < frames * 2; ++i) peak = std::max(peak, std::abs(out[i]));
     // Publish the loudest active voice + the voice count for the UI.
-    const Voice* best = nullptr;
+    Voice* best = nullptr;
     int still = 0;
     for (auto& v : voices_)
         if (v.active) {
@@ -310,7 +310,7 @@ void Sampler::render(float* out, int32_t frames) {
     tele_[5].store(best && fType > 0 ? static_cast<float>(best->cutoff) : -1.0f, std::memory_order_relaxed);
     if (peak > tele_[6].load(std::memory_order_relaxed)) tele_[6].store(peak, std::memory_order_relaxed);
     tele_[7].store(static_cast<float>(heldN_), std::memory_order_relaxed);
-    publishEnvTele(tele_ + 8, best != nullptr, best ? best->stage : Stage::Off, best ? best->shape : EnvShapeState{});
+    publishEnvTele(tele_ + 8, best != nullptr, best ? best->stage : Stage::Off, best ? &best->shape : nullptr, best ? best->env : 0.0f, sustain);
 
     // Auto-sleep: a looping voice stays active until note-off, so no active voice plus
     // our own silent block means every tail (incl. release) has fully decayed.

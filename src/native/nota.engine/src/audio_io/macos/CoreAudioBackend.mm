@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 #include "CoreAudioBackend.h"
+#include "CoreAudioDevice.h"
 
 #if defined(__APPLE__)
 
@@ -14,6 +15,10 @@
 #include <vector>
 
 namespace nota {
+
+using coreaudio::deviceNominalSampleRate;
+using coreaudio::deviceSupportsSampleRate;
+using coreaudio::isBluetoothDevice;
 
 struct CoreAudioBackend::Impl {
     AudioUnit outputUnit = nullptr;
@@ -81,41 +86,6 @@ AudioDeviceID defaultOutputDevice() {
     UInt32 size = sizeof(dev);
     AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, &dev);
     return dev;
-}
-
-double deviceNominalSampleRate(AudioDeviceID dev) {
-    if (dev == kAudioObjectUnknown) return 0.0;
-    AudioObjectPropertyAddress addr{
-        kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
-    Float64 sr = 0.0;
-    UInt32 size = sizeof(sr);
-    if (AudioObjectGetPropertyData(dev, &addr, 0, nullptr, &size, &sr) != noErr) return 0.0;
-    return sr;
-}
-
-// Bluetooth outputs (AirPods etc.) get their rate from the link codec. Forcing a
-// nominal rate on them (e.g. 44.1 kHz on AirPods that run AAC at 48 kHz) leaves
-// the A2DP stream losing sync — a second of crackle, then silence — for every
-// app until Bluetooth restarts. Never touch their rate; AUHAL resamples instead.
-bool isBluetoothDevice(AudioDeviceID dev) {
-    AudioObjectPropertyAddress addr{
-        kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
-    UInt32 transport = 0;
-    UInt32 size = sizeof(transport);
-    if (AudioObjectGetPropertyData(dev, &addr, 0, nullptr, &size, &transport) != noErr) return false;
-    return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE;
-}
-
-bool deviceSupportsSampleRate(AudioDeviceID dev, double sr) {
-    AudioObjectPropertyAddress addr{kAudioDevicePropertyAvailableNominalSampleRates, kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain};
-    UInt32 size = 0;
-    if (AudioObjectGetPropertyDataSize(dev, &addr, 0, nullptr, &size) != noErr || size == 0) return false;
-    std::vector<AudioValueRange> ranges(size / sizeof(AudioValueRange));
-    if (AudioObjectGetPropertyData(dev, &addr, 0, nullptr, &size, ranges.data()) != noErr) return false;
-    for (const auto& r : ranges)
-        if (sr >= r.mMinimum - 0.5 && sr <= r.mMaximum + 0.5) return true;
-    return false;
 }
 
 } // namespace

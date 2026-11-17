@@ -195,6 +195,16 @@ A plugin is found by its JUCE identifier, `<format>-<name>-<path hash>-<uid>`. W
 catalog entry matches exactly, the lookup falls back to format + name + uid, so a project
 still finds a plugin that lives at another path on this machine.
 
+Default scan folders are provided per plugin format (`PluginCatalog::defaultScanPathsFor`,
+keyed by the JUCE format name — `"VST3"` today): the provider reads the format's own
+standard locations at runtime, so the Settings → Plug-ins listing can never drift from
+what the scan searches. The persisted list (`scanpaths.txt`) is backfilled with missing
+defaults once, on load — except paths the user removed (`scanpaths-removed.txt`),
+which stay removed until "Restore defaults" (or an explicit re-add) clears them.
+"Restore defaults" re-adds the missing ones without touching user-added
+folders. A future format (CLAP, LV2) adds one provider entry — the backfill / remove /
+restore behavior stays format-agnostic.
+
 **Downloads** (Settings → Downloads, formerly Get Plug-ins; `IPluginStore` →
 `Infrastructure/PluginStore/`) installs open-source VST3 plugins listed in the
 [plugin registry](https://github.com/nota-daw/nota-plugins-registry). The registry is one

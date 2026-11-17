@@ -23,6 +23,200 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
+  OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
+  always shown, even when a folder doesn't exist on disk. They are removable, and
+  **Restore defaults** re-adds the missing ones without touching folders you added
+  yourself. Removed defaults stay removed across restarts. Existing installs gain
+  the missing defaults once, with no duplicates.
+  The defaults are read live from each format's own standard locations, so adding a
+  future format (CLAP, LV2) needs no UI or settings rework.
+- **An Assistant that answers from the manual** (#606, specs/098). A chat panel on the right of
+  the main window, the full height of the work area — the toolbar's speech-bubble key, View →
+  Assistant or ⌘⇧H (Ctrl+Shift+H) open and close it. Ask in your own words, in English or Russian:
+  the reply quotes the two or three manual sections that answer it, in the language you asked in,
+  with a link to each page. It works offline and needs no AI model: the manual ships inside Nota.
+  Replies read like the manual — headings, lists, tables, code, key caps and the note / tip /
+  caution boxes, in every theme and the classic look — and can be copied. Under a how-to,
+  **Show me** walks you through the steps: it opens the view or panel a control lives in and
+  outlines the control, with Back / Next / Done. Install **Manual search** in Settings → Downloads →
+  AI Models (multilingual-e5-small, about 135 MB) and questions phrased differently from the
+  manual find their answer too. The panel remembers its width and whether it was open.
+- **Tempo automation on the master track** (#93, #535, specs/099): tempo changes are
+  automation now. In automation mode, the master row's target pill picks **Tempo** next to
+  **Volume**, and tempo is drawn like any other lane: click to add a point, drag it, bend a
+  segment for a smooth accelerando or ritardando, put two points on one beat for an instant
+  change; marquee, copy, paste and Delete work as on every lane. The lane reads in BPM, its
+  range set by the two labels at its right edge, and tempo stays within 20–300 BPM. The
+  grid, playback, metronome, warped audio, freeze, bounce and export follow it; unwarped
+  audio keeps its place in time. While the tempo is automated the transport's BPM field
+  shows the tempo under the playhead and can't be typed into. There is no separate tempo
+  row above the tracks, so the arrangement keeps its full height. Projects saved with the
+  earlier tempo track open with the same timing, their tempo moved onto the master lane.
+- **Master pan and master device automation** (#93, specs/099): the Mixer's master strip
+  has a pan knob — after the master devices, before the master fader, in the project pan law
+  with the centre at 0 dB — and the Master row's lane picks **Pan** or any parameter of a
+  device on the master chain, from the same target menu as a track's. Touching a master
+  device's knob in automation mode shows its lane; removing the device removes its lanes, and
+  undo brings both back. MCP gains `set_master_pan` and `add_plugin_param_automation`, and the
+  automation tools work on the master's pan and device lanes.
+
+### Fixed
+- **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
+  clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
+  acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid
+  give up the keyboard.
+- **Deleting a clip closes its editor** (#647): deleting (or cutting) the MIDI clip open in the
+  piano roll closes the roll instead of leaving the clip's notes on screen, where an edit
+  crashed Nota. An editor on a later clip of the same track follows it to its new place, and
+  undo and redo of the delete take the editors along too.
+- **Resizing a clip while a MIDI tool previews** (#648): changing the length of a clip whose
+  Euclid, Melody step or other tool preview is showing no longer crashes Nota on the next
+  tool change. The preview is dropped and the clip comes back as it was; the next tool change
+  previews over the new length.
+- **Notes that kept sounding** (#649): a clip deleted while one of its notes plays, a note
+  deleted, moved or shortened under the playhead, or an undo that takes one away now stops that
+  note instead of holding it until Stop. Keys held on Nota Volt while a preset (or the Mono
+  switch) turns it mono stop when they come up, and a note auditioned in the piano roll stops
+  when another clip's editor replaces it.
+- **Nota Monolith: repeated notes of one pitch** (#645): back-to-back notes of the same pitch
+  each sound and retrigger, with Legato on or off — only the first one was heard. Legato still
+  glides between overlapping notes while a key is held.
+- **Drum Rack: unmuting a pad mid-playback** (#650): a muted pad (or one silenced by another
+  pad's solo) keeps time, so unmuting it no longer fires a stray hit at full level; it is heard
+  from its next note. The same holds for Instrument Rack chains.
+- **Drum Rack: hits lost in a choke group** (#644): with the kit's Humanize on, hits on the same
+  step now move together, and a pad struck at the very same moment as another pad of its choke
+  group is no longer cut by it — an open hat programmed with a closed hat on every 1/8 sounded
+  on some steps only, different ones every pass.
+- **Drum Rack: sidechain on a chain's Compressor** (#643): a Compressor (or any keyed effect)
+  inside a Drum Rack or Instrument Rack chain now takes a sidechain source from another track or
+  one of its parts, with its gain, mix and Pre / Post tap, like a device on a track. The picker
+  used to fall back to Internal.
+- **Input monitoring clicks** (#563): monitoring a microphone or audio interface
+  no longer clicks several times a second or plays at the wrong pitch when the
+  input device runs at another sample rate than Nota (a MacBook microphone at
+  48 kHz under a 44.1 kHz project). Nota now runs the input device at its own
+  rate where the device allows it, and converts the rate where it doesn't
+  (Bluetooth, fixed-rate microphones), following the two clocks so they can't
+  drift apart. Recording was not affected.
+- **Multi-clip automation across tempo changes** (#535): duplicate, paste and
+  block moves retain every copied point regardless of selection order, clearing
+  all landing spans before inserting their automation.
+- **Tempo-map copies and comp edits** (#535): range duplication clears the copied
+  audio's actual landing span, and block paste clears automation only under its
+  destination span. Section moves, duplication and deletion keep partial takes
+  aligned with their comp clips, so subsequent comp edits select the same source audio.
+- **Tempo-map moves and scrolling** (#535): moving natural-rate audio carries the
+  automation from its whole original span and clears only its landing span. The
+  horizontal scrollbar reaches the last clip across large tempo changes.
+- **Tempo-map rendering** (#535): reversed warped clips keep their musical positions,
+  Consolidate captures the full mapped range, and natural-rate clip releases fade at
+  the mapped ending.
+- **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
+  mapped source boundaries. Loop recording, freeze and range bounce retain audio across
+  tempo changes; saved freezes retain their timing. Bar snapping respects the
+  time-signature denominator, and warped waveforms align with the audible content at
+  every zoom level.
+- Starting or seeking between beats no longer produces an immediate extra metronome click.
+- **Removing a track with its clip open in the piano roll no longer crashes Nota** (#530). The
+  Clip editor closes with the track, and pressing Delete in a roll left behind is harmless.
+- **"To transients" no longer runs the clip editor's playhead ahead of the waveform** (#537).
+  The editor read only the first 128 warp markers, and "To transients" can place up to 258, so
+  it measured the warp by the wrong one. A save now keeps every marker too (it also stopped at
+  128). Undoing a warp redraws the editor, and an editor whose clip was undone away closes.
+- **Duplicate on a section makes room for the copy** (#529): the copy goes right after the
+  section and the sections and music after it move later, as with Duplicate with content.
+- **Resizing one clip of a selection resizes them all** (#604): the selection stays, and each
+  selected clip's edge moves by the same amount.
+- **Notes stay put while a MIDI clip's left edge is dragged** (#565); before, they rode along
+  with the edge and jumped back on release.
+- **Clicking a strip in the Mixer selects its track** (#538), so the Detail panel follows.
+- **Up and Down no longer walk into the File menu** (#548), and a click on a clip takes the
+  keyboard back from the menu bar, so the arrow keys nudge clips again.
+- **The piano roll no longer scrolls away as a selection starts** (#445): pressing on the note
+  grid scrolled it to bring the grid into view, and a drag that merely started near the top or
+  bottom row pulled the view along. Edge scrolling now needs a move toward that edge.
+- **A split or an overwrite keeps the clip as it was** (#467): a deactivated MIDI clip's pieces
+  stay deactivated, MIDI pieces keep their part of the velocity and volume envelopes, and the
+  right-hand piece of an audio clip plays its envelopes from where it begins.
+- **Output, Gain, Makeup and Mix glide on more devices** (#559): Valve (Output, Mix), Vintage
+  (Output), Crush (Output), Ceiling (Gain), Compressor (Makeup, Mix) and Forge (Output and the
+  stage trims) now ramp across each audio block instead of stepping once per block.
+- **Aurora's wavetable stack fits its window on a scaled display** (#573); at 125 % it was drawn
+  magnified and cut off.
+- **The computer keyboard plays while a plug-in's window has the focus** (#221), with the whole
+  note map, the octave and velocity keys and your own bindings, as over the main window, on
+  every platform. Other keys, chords and typing in the plug-in's own fields still go to the
+  plug-in.
+- **A layout mix-up after moving a panel between windows no longer closes Nota** (#164): the
+  layout catches up on the next pass, and the log notes it.
+- **Indexing a very large sample folder no longer slows the whole system down** (#358): linked
+  folders aren't walked into (a link back up the tree made the walk endless), a big index is
+  saved less often, and on Linux the indexer reads the disk only when nothing else wants it.
+- **A plug-in that won't load says why in the log** (#544).
+- **Small buffers under a heavy session make fewer late blocks.** When one thread couldn't keep
+  up, the render threads that join it could pile on until they all ran and their wake-ups made
+  the dropouts worse. They now join as many as the work needs and add more only while blocks
+  keep running over.
+
+## [0.60.1] — 2026-11-13
+
+### Added
+- **Nothing on the transport bar goes out of reach** (#520, specs/097). A **⋯** key now ends
+  the transport bar. When the window is too narrow — or the interface scale too large — for
+  the whole bar, the parts it hides (Tap, Key, Grid, Snap, Follow, Automation, Mixer, MIDI learn,
+  Remote, the time signature, loop and loop-record mode, the master level, the DSP meter)
+  are listed in the ⋯ menu, in bar order, and work from there as they do in the bar: toggles
+  as check items, Grid and the time signature as submenus, Tap stays open for tapping, the
+  master fader drags in place. An accent dot on ⋯ says something is in it; widen the window
+  and the parts go back to the bar. The menu also switches the **interface scale** (75–200 %)
+  at every width, the same setting as Settings → Appearance. When the Grid cell is hidden its
+  separator now goes with it, so the bar no longer shows two rules side by side.
+- **A Mixer button in the toolbar** (#516, specs/092). Next to Automation, the faders key shows
+  or hides the Mixer with one click, docked or in its own window, as View → Mixer and ⌘⇧M do.
+  It reads as on while the Mixer is shown and stays in step however you open or close it: the
+  menu, the shortcut, the panel's or the window's close button. Its tooltip names the shortcut.
+- **Your own keyboard shortcuts** (#61, specs/096). Every key in Nota can now be changed in
+  **Settings → Shortcuts**: click a key, press the new one, **Confirm** — menu commands and
+  the keys that used to be fixed alike: piano-roll and arrangement editing (nudge, transpose,
+  move to track), Session, devices, the Files browser, Modular, the transport, and the
+  computer-keyboard notes (each note, octave and velocity — handy on AZERTY or Cyrillic
+  layouts). An action can have a second key. Before anything is saved the row says which
+  action already answers that key where this one works ("⌘D is used by Duplicate") and offers
+  **Replace** or **Cancel**; a key used only in another view is allowed with a note on which
+  one wins, and keys the system keeps (⌘Q, ⌘H, Alt+F4…) are refused. Changed keys carry an
+  accent dot and their default, **Edited only** lists them, each has a reset, and **Reset all
+  to defaults…** puts everything back. Only changed keys are stored, so new defaults in later
+  versions still arrive. The menu, the context menus, tooltips and the command palette show
+  your keys at once; mouse gestures and the keys of lists and text fields stay as they are,
+  listed for reference. Typing a key in the filter ("⌘T", "cmd t") finds what it does.
+- **Choose the address Nota Remote shows** (#85, specs/095). On a computer with several
+  networks (Wi-Fi and Ethernet, a VPN, a virtual machine's network), Nota could put an address
+  in the QR code that the phone can't reach. Now you can choose it.
+  - **Settings → Remote → Address in the QR**: Automatic (as before: USB, then Wi-Fi, then
+    Ethernet) or one network interface. The choice is kept after a restart, by the
+    interface's name. While that interface is down, Automatic stands in, and the list says so.
+  - **Connect phone**: the other addresses under the main one take a click, which puts that
+    address in the link and QR code; **Automatic** under them goes back.
+  - Next to the address, **Open in the browser** opens the Remote page on this computer, and
+    **Copy the link** copies it.
+- **A Modular tab in the browser** (#592, specs/095). While Modular is the view the browser's
+  rail carries a **Modular** tab (a patch-cable icon, after MIDI effects) listing every node
+  Modular offers — LFO, Envelope Follower, MIDI → CV, ADSR, Macro, Math, Scope — with its
+  category and a description, searchable by name, category or alias ("wobble" finds LFO).
+  Drag a node onto the canvas and it lands there, unconnected; double-click (or Enter) puts
+  it in the middle of the view. The browser remembers its own last tab for Modular (the
+  Modular tab the first time) and goes back to the other one when you leave.
+- **The arrangement's track headers in Modular** (#592, specs/095). Modular's Track view shows
+  the same track column as the arrangement — group trays, every control, the context menu,
+  drag to reorder, meters, both looks — on the side **Track headers on the right** picks, and
+  it moves at once when that changes. Click a header to see that track's graph; drop a CV
+  cable on another track's header to modulate it from here.
+- **Group graphs in Modular** (#592, specs/095). A group's header opens the group's own effect
+  chain (Tracks in → effects → out); modulators patch its effects like any track's.
+- **Show in Modular** (#592, specs/095) in the track menus of the arrangement and the Session
+  view: Modular opens in Track view on that track.
 - **Your own sample folders in the browser** (#268, #346, specs/092). Settings → Library
   lists every folder the Files tab shows: **Add folder…**, drop folders from Finder /
   Explorer, rename the label, set the default, show it, remove it (the files stay on disk).
@@ -598,6 +792,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   MCP: `list_audio_inputs`, `set_track_input`, `get_track_input`.
 
 ### Fixed
+- **Curved automation eases instead of jumping** (#591): bending a segment towards an
+  ease-out made it reach almost all of its change at the very start — a near-vertical drop
+  on screen and an audible step in playback — while the opposite bend looked gentle. Every
+  curved segment (automation lanes, clip envelopes, MIDI controller lanes) now follows a
+  smooth exponential: no jump at either end, and ease-in and ease-out mirror each other.
+  Curves in saved projects keep their bend but play gentler at the extremes. Cutting a
+  curved segment (moving or duplicating a section, drawing over a controller lane,
+  recording controllers, splitting clips) now keeps its shape exactly on both sides, and
+  the curves are drawn smoothly at any zoom.
+- **Plug-in cards show the plug-in's window again**: since the new look, the info section's
+  own surface covered the picture of the plug-in's window on its card. The picture now
+  shows through the section, on S and on L, under the wash that keeps the text readable.
+- **Short clips keep their name on one line** (#590): a clip narrower than its name wrapped
+  the name onto a second line over the waveform. The name now stays on one line and ends in
+  an ellipsis; section names in the arrangement do the same.
 - **Track header meters stay inside the header** (#584): on a Compact or a low Standard row a
   track's level meter ran into the bottom edge of its header, and a folded group's meter ran
   under its name and buttons. Every header meter now fits its row, and a group's meter stands
@@ -698,6 +907,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   while hovered or dragged. Operator's OUT drop zone is the
   bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
   graph tooltips that named colours no longer drawn now describe what is on screen.
+
+### Removed
+- **Modular's + Add menu and its Tracks list** (#592, specs/095): nodes come from the browser's
+  Modular tab and the command palette; the track column is the arrangement's headers.
 
 ## [0.59.2] — 2026-11-08
 

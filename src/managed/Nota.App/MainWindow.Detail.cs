@@ -705,7 +705,9 @@ public partial class MainWindow
         // The editor being replaced lets its pending placement go into its own clips first (it
         // may never have had focus to lose, e.g. after a menu paste).
         _editorRoll?.SettlePlacement();
+        _editorRoll?.StopAudition();   // its note ends on its own track (#649)
         var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar, trackMode);
+        int heardOn = -1;   // the track the roll's sounding note went to
         PianoRollView roll = null!;
         roll = new PianoRollView
         {
@@ -753,8 +755,10 @@ public partial class MainWindow
                 Timeline.Refresh(rebuildHeaders: false);
             },
             // A note sounds on its own clip's track; the keys column on the active clip's.
-            AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
-            AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
+            // The note-off goes where its note-on went: the roll stops its note as it leaves the
+            // screen, after another clip (another track) is already the editor's (#649).
+            AuditionOn = (pitch, vel) => AuditionNoteOn(heardOn = roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
+            AuditionOff = pitch => Engine.TrackNoteOff(heardOn > 0 ? heardOn : roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
             ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : Loc.F("main.detail.track_clip", t),
             Bpm = () => Engine.Bpm,   // the ruler's time display (#275)
             // The ruler moves the transport (#50): editor beat → arrangement beat.
@@ -859,6 +863,8 @@ public partial class MainWindow
     // hide the Clip tab if it's the one on screen, so no further gesture pushes stale ids.
     private void InvalidateClipEditor()
     {
+        bool shown = _clipEditor is not null && ClipEditorShown(_clipEditor);
+        if (shown && DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
         _editorRoll = null;
         _clipEditor = null;
         _editorTrackId = -1;
@@ -914,7 +920,10 @@ public partial class MainWindow
 
         if (_editorRoll is { Clips.TrackMode: true } trackRoll && trackRoll.ActiveClip.TrackId == trackId
             && trackRoll.Clips.IndexOf(trackId, clipIndex) < 0 && ci.IsMidi)
+        {
+            trackRoll.CancelPreview();   // as below (#648)
             SyncTrackClips(trackRoll);
+        }
         else if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
         {
             double len = ci.LengthBeats > 0 ? ci.LengthBeats : 4;
@@ -925,7 +934,15 @@ public partial class MainWindow
             // moved on the editor's axis; a lone clip's pure move leaves its notes untouched.
             bool lengthChanged = Math.Abs(len - before.LengthBeats) > 1e-9;
             bool axisMoved = set.IsMulti && Math.Abs(ci.StartBeat - before.StartBeat) > 1e-9;
-            if (lengthChanged || axisMoved) roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+            if (lengthChanged || axisMoved)
+            {
+                // A clip tool's preview is in the engine with no undo step: re-read now, the
+                // preview would become the clip's notes, and the rail's working set would be
+                // for the old length. It is dropped first, so the clip comes back as it was;
+                // the next tool change previews over the new length (#648).
+                roll.CancelPreview();
+                roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+            }
             if (set.ActiveClip.TrackId == trackId && set.ActiveClip.ClipIndex == clipIndex)
                 _clipEditor?.SetClipBounds(ci.StartBeat, len);
         }
@@ -1041,6 +1058,29 @@ public partial class MainWindow
                 if (shown) ShowPatternPanel();
             }
         }
+    }
+
+    // Drops every clip editor whose clip is gone (its track removed, an import undone, #530 /
+    // #537): the piano roll loses its dead clips (and goes when none is left), the audio
+    // editor and the step grid go with theirs, so nothing keeps drawing — or editing — a clip
+    // that no longer exists.
+    private void DropDeadEditors()
+    {
+        if (_editorRoll is { } roll && _editorTrackId > 0) PruneDeadClips(roll);
+        if (_audioEditor is { } audio && _audioEditorTrackId > 0 && SessionClip.SceneOf(_audioEditorClipIndex) < 0
+            && !(Engine.TryGetClipInfo(_audioEditorTrackId, _audioEditorClipIndex, out var ai) && !ai.IsMidi))
+        {
+            bool shown = ClipEditorShown(audio);
+            _audioEditor = null;
+            _audioEditorTrackId = -1;
+            _audioEditorClipIndex = -1;
+            if (shown && DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
+            else if (shown) DetailPanel.IsVisible = false;
+            SyncClipTab();
+        }
+        if (_patternView is not null && _patternTrackId > 0 && _patternScene < 0
+            && !(Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var pi) && pi.IsMidi))
+            InvalidatePatternView();
     }
 
     // Whether this editor is the one on screen (the docked detail panel, or the floating window's top pane).
@@ -1245,9 +1285,10 @@ public partial class MainWindow
         _detailRow.Height = on ? new GridLength(1, GridUnitType.Star) : new GridLength(_detailWanted > 120 ? _detailWanted : _detailDefault);
         DetailSplitter.IsVisible = !on;
         DetailMaximizeGlyph.Kind = on ? GlyphKind.Shrink : GlyphKind.Expand;
-        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the")));
+        Nota.App.Input.Keys.SetTip(DetailMaximizeBtn, on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the"), "view.maximizeDetail");
         if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
         LayoutBottomPanels();
+        SyncMixerToggle();   // a docked Mixer folds away while the editor fills the window
     }
 
     // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):

@@ -95,6 +95,32 @@ public static class ArrangementMoves
         return map;
     }
 
+    /// <summary>Where each clip of <paramref name="startsBefore"/>'s tracks is after an edit that
+    /// removed or carved clips (a delete, a cut, a range cut or delete, #647): the clips left keep
+    /// their order, and one that kept its start is the next clip after the last match with that
+    /// start; null for a removed clip or one that lost its head. Pieces a range carve adds (the
+    /// right part of a split clip) are passed over. The map an open editor follows, as for a block
+    /// move — and the one an undo or redo of it walks back.</summary>
+    public static Dictionary<(int Track, int Clip), (int Track, int Clip)?> AfterRemoval(
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsBefore,
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsAfter)
+    {
+        var map = new Dictionary<(int, int), (int, int)?>();
+        foreach (var (track, starts) in startsBefore)
+        {
+            var after = startsAfter.TryGetValue(track, out var a) ? a : Array.Empty<double>();
+            int j = 0;
+            for (int c = 0; c < starts.Count; c++)
+            {
+                int k = j;
+                while (k < after.Count && after[k] < starts[c] - 1e-9) k++;
+                if (k < after.Count && Math.Abs(after[k] - starts[c]) < 1e-9) { map[(track, c)] = (track, k); j = k + 1; }
+                else map[(track, c)] = null;
+            }
+        }
+        return map;
+    }
+
     /// <summary>The way back: where each clip is after undoing a move that re-indexed with
     /// <paramref name="map"/>. A clip the move didn't produce on a touched track (a carve's right
     /// piece) has no place before it: null. Clips of other tracks are not in either map.</summary>

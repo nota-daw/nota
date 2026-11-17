@@ -11,6 +11,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/Parameter.h"
 #include "dsp/primitives/TruePeakMeter.h"
 
 #include <algorithm>
@@ -157,6 +158,7 @@ class Ceiling : public Device {
     std::vector<float> laBuf_;
     int laMax_ = 0, laW_ = 0;
     float env_ = 1.0f, grPrev_ = 0.0f;
+    dsp::BlockRamp gainRamp_; // Gain glides across a block (#559)
 
     // K-weighting state (2 stages × 2 channels); true-peak interpolators; side-chain HP.
     // Verbatim float: measurement path drives loudness gates — exactness first.

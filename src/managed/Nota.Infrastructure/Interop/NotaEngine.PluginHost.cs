@@ -88,4 +88,25 @@ public sealed partial class NotaEngine
     /// <summary>The extra scan directory at <paramref name="index"/>, or null.</summary>
     public static string? ScanPath(int index)
         => Marshal.PtrToStringUTF8(NativeMethods.PluginHostScanPath(index));
+
+    /// <summary>Number of OS-standard default scan folders for <paramref name="format"/>
+    /// ("VST3" today; 0 for unknown formats). Read live from the format's own
+    /// standard locations — the same set the scan searches.</summary>
+    public static int DefaultScanPathCount(string format)
+        => NativeMethods.PluginHostDefaultScanPathCount(format);
+
+    /// <summary>Absolute OS-standard default scan folder <paramref name="index"/> for
+    /// <paramref name="format"/>, or null when out of range or format unknown.</summary>
+    public static string? DefaultScanPath(string format, int index)
+        => Marshal.PtrToStringUTF8(NativeMethods.PluginHostDefaultScanPath(format, index));
+
+    /// <summary>Re-adds the missing OS-standard defaults for <paramref name="format"/>;
+    /// keeps everything else untouched. Returns how many were added.</summary>
+    public static int RestoreDefaultScanPaths(string format)
+        => NativeMethods.PluginHostRestoreDefaultScanPaths(format);
+
+    /// <summary>Whether <paramref name="dir"/> was removed by the user (startup backfill
+    /// and the store ensure skip it; an explicit add still brings it back).</summary>
+    public static bool IsScanPathRemoved(string dir)
+        => NativeMethods.PluginHostIsScanPathRemoved(dir) != 0;
 }

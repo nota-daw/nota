@@ -86,6 +86,8 @@ public partial class MainWindow
         }
         if (_modular?.IsVisible == true) _modular.Refresh();
         FollowMoveThroughHistory();                      // undoing a clip move re-indexes clips
+        DropDeadEditors();                               // an undone import / track takes its editor along (#537)
+        _audioEditor?.Reload();                          // an undone warp (To transients…) redraws as it plays (#537)
         ReloadEditorNotes();                             // reflect clip/note edits
         // Volume / pan / master steps (specs/009): the master volume lives on the view model
         // (MST, Master row, Mixer and Remote follow it), the track strips in the Mixer rebuild.
@@ -172,23 +174,33 @@ public partial class MainWindow
     private PianoRollView? ActiveRoll()
         => DetailPanel.IsVisible && DetailBody.Content is ClipEditorView ? _editorRoll : null;
 
+    // The roll Copy / Cut / Delete go to first: only when the detail area was clicked last.
+    // After a click in the Arrangement its clips go first and the roll's notes only when no
+    // clip or range is selected there — a clip just clicked is what Delete means (#646).
+    private PianoRollView? EditFirstRoll()
+        => _detailWasLastFocused || _detailWindow?.IsActive == true ? ActiveRoll() : null;
+    private PianoRollView? EditLastRoll()
+        => _detailWasLastFocused || _detailWindow?.IsActive == true ? null : ActiveRoll();
+
     private void OnMenuCopy(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         if (SessionFocused && _session!.CopySelection()) return;
         if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = Loc.T("main.copied_track_s"); return; }
-        if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = Loc.T("main.menu.copied_notes"); return; }
+        if (EditFirstRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = Loc.T("main.menu.copied_notes"); return; }
         if (Timeline.CopyTimeSelection()) { _vm.StatusText = Loc.T("main.copied_range"); return; }
-        if (Timeline.CopySelectedClip()) _vm.StatusText = Loc.T("main.menu.copied_clip");
+        if (Timeline.CopySelectedClip()) { _vm.StatusText = Loc.T("main.menu.copied_clip"); return; }
+        if (EditLastRoll() is { } late && late.CopySelection()) _vm.StatusText = Loc.T("main.menu.copied_notes");
     }
     private void OnMenuCut(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         if (SessionFocused && _session!.CutSelection()) return;
         if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = Loc.T("main.cut_track_s"); return; }
-        if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = Loc.T("main.menu.cut_notes"); return; }
+        if (EditFirstRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = Loc.T("main.menu.cut_notes"); return; }
         if (Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.cut_range"); return; }
-        if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.cut_clip"); }
+        if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.cut_clip"); return; }
+        if (EditLastRoll() is { } late && late.CutSelection()) _vm.StatusText = Loc.T("main.menu.cut_notes");
     }
     private void OnMenuPaste(object? sender, EventArgs e)
     {
@@ -207,7 +219,7 @@ public partial class MainWindow
         {
             if (!_session.CopySelectionToArrangement()) _vm.StatusText = Loc.T("main.menu.select_a_clip_or_a");
         }
-        else if (Timeline.IsVisible && Timeline.CopySelectionToSession() < 0)
+        else if (ArrangementShown && Timeline.CopySelectionToSession() < 0)
             _vm.StatusText = Loc.T("main.menu.select_clips_to_copy_to");
     }
     private void OnMenuDeleteSel(object? sender, EventArgs e)
@@ -215,8 +227,9 @@ public partial class MainWindow
         if (_vm is null) return;
         if (SessionFocused && _session!.DeleteSelection()) return;
         if (_trackHeadersFocused && Timeline.DeleteSelectedTracks()) { _vm.StatusText = Loc.T("main.deleted_track_s"); return; }
-        if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = Loc.T("main.menu.deleted_notes"); return; }
-        if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.deleted_clip_s"); }
+        if (EditFirstRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = Loc.T("main.menu.deleted_notes"); return; }
+        if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.deleted_clip_s"); return; }
+        if (EditLastRoll() is { } late && late.DeleteSelection()) _vm.StatusText = Loc.T("main.menu.deleted_notes");
     }
     private void OnMenuToggleBrowser(object? sender, EventArgs e)
     {

@@ -41,6 +41,8 @@ public partial class MainWindow
         _paletteSearch = new PaletteSearch(_paletteIndex, _paletteUsage);
         _paletteIndex.Set("modular", new ModularPaletteProvider().Build());
         _paletteIndex.Set("actions", new ActionPaletteProvider(_commands).Build());
+        // A rebound key shows in the palette's hints at once (specs/096).
+        Nota.App.Input.Keys.Bindings.Changed += () => _paletteIndex.Set("actions", new ActionPaletteProvider(_commands).Build());
         RefreshPaletteTracks();
         RefreshPaletteDevices();
         _vm.Browser.DevicesRebuilt += RefreshPaletteDevices;

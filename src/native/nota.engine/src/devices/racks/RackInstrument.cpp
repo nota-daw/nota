@@ -353,6 +353,28 @@ void RackInstrument::programChange(int32_t program) {
         }
 }
 
+void RackInstrument::keyswitchOn(int32_t pitch, float velocity) {
+    RackState* st = live();
+    if (!st) return;
+    for (auto& c : st->chains)
+        if (c.instrument && c.instrument->takesArticulations()) {
+            c.instrument->eventChannel = eventChannel;
+            c.instrument->keyswitchOn(pitch, velocity);
+            c.instrument->eventChannel = 0;
+        }
+}
+
+void RackInstrument::keyswitchOff(int32_t pitch) {
+    RackState* st = live();
+    if (!st) return;
+    for (auto& c : st->chains)
+        if (c.instrument && c.instrument->takesArticulations()) {
+            c.instrument->eventChannel = eventChannel;
+            c.instrument->keyswitchOff(pitch);
+            c.instrument->eventChannel = 0;
+        }
+}
+
 bool RackInstrument::takesArticulations() const {
     RackState* st = live();
     if (!st) return false;
@@ -405,12 +427,26 @@ void RackInstrument::render(float* out, int32_t frames) {
         const bool silent = mute || (anySolo && !solo);
         if (silent && !tap) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
-            // A silent MIDI chain still takes its notes, so a note held across an unmute ends.
+            // A silent chain still takes its notes, so a note held across an unmute ends, and plays
+            // them into nothing at their own samples, as the audible path does: a note it took
+            // while silent isn't held at its start and heard all at once on unmute (#650).
             const int32_t ci = static_cast<int32_t>(&c - st->chains.data());
+            std::memset(scratch_, 0, sizeof(float) * frames * 2);
             if (midiChainAt(ci)) {
+                int32_t cursor = 0;
                 int32_t& k = chainCursor_[ci];
                 const MidiEv* evs = chainEvs_ + ci * kChainEvents;
-                for (; k < chainCount_[ci] && evs[k].off < blockPos_ + frames; ++k) deliver(ci, *c.instrument, evs[k]);
+                for (; k < chainCount_[ci] && evs[k].off < blockPos_ + frames; ++k) {
+                    const int32_t at = std::clamp(evs[k].off - blockPos_, 0, frames);
+                    if (at > cursor) {
+                        c.instrument->render(&scratch_[cursor * 2], at - cursor);
+                        cursor = at;
+                    }
+                    deliver(ci, *c.instrument, evs[k]);
+                }
+                if (cursor < frames) c.instrument->render(&scratch_[cursor * 2], frames - cursor);
+            } else if (!c.instrument->isIdle()) {
+                c.instrument->render(scratch_, frames);
             }
             continue;
         }

@@ -467,7 +467,8 @@ public sealed partial class ArrangementView
     {
         double w = Math.Clamp(wanted, MinHeaderW, MaxHeaderW);
         double room = Bounds.Width - MinLanesW;   // a narrow window squeezes the lanes first, then the headers
-        if (Bounds.Width > 0 && w > room) w = Math.Max(MinHeaderW, room);
+        // Headers only (Modular, specs/095): the view is the column, the canvas beside it has the room.
+        if (!_headersOnly && Bounds.Width > 0 && w > room) w = Math.Max(MinHeaderW, room);
         return Math.Round(w);
     }
 
@@ -489,6 +490,7 @@ public sealed partial class ArrangementView
         foreach (var c in _footerHeaders.Children) c.Width = w;
         PlaceRowSeamGrips();
         PlaceColumnSeam();
+        FitHeadersOnlyWidth();
         if (final)
         {
             RebuildHeaders();
@@ -598,6 +600,7 @@ public sealed partial class ArrangementView
         foreach (var b in _columnDividers) b.BorderThickness = ColumnDivider;
         _columnBackdrop.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         PlaceColumnSeam();
+        FitHeadersOnlyWidth();
         // The cards carry their own divider: rebuild them with it on the new side.
         RebuildHeaders();
         RebuildFooterHeaders();
@@ -640,6 +643,9 @@ public sealed partial class ArrangementView
         [JsonPropertyName("masterHeight")] public double? MasterHeight { get; set; }
         // specs/070: folded groups by track index, shared with the Mixer. Additive — version stays 1.
         [JsonPropertyName("collapsedGroups")] public List<int>? CollapsedGroups { get; set; }
+        // specs/099: the master Tempo lane's shown range (FR-003a). Additive — version stays 1.
+        [JsonPropertyName("tempoLaneMin")] public double? TempoLaneMin { get; set; }
+        [JsonPropertyName("tempoLaneMax")] public double? TempoLaneMax { get; set; }
     }
 
     private sealed class TrackHeightDto
@@ -669,7 +675,9 @@ public sealed partial class ArrangementView
                     if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsGroup && _fold.IsFolded(ti.Id)) folded.Add(i);
                 if (folded.Count > 0) dto.CollapsedGroups = folded;
             }
-            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.CollapsedGroups is null)
+            if (TempoLaneRange is { } tr) (dto.TempoLaneMin, dto.TempoLaneMax) = (tr.Min, tr.Max);
+            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.CollapsedGroups is null
+                && dto.TempoLaneMin is null)
             {
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 return;
@@ -695,6 +703,7 @@ public sealed partial class ArrangementView
                 if (th.Index >= 0 && _engine.TryGetTrackInfo(th.Index, out var ti))
                     StoreRowHeight(ti.Id, th.Height);
             if (dto.MasterHeight is { } mh) _masterHeight = ClampRowHeight(mh);
+            if (dto.TempoLaneMin is { } tmin && dto.TempoLaneMax is { } tmax) TempoLaneRange = (tmin, tmax);
             if (dto.CollapsedGroups is { } groups)   // an index out of range or not a group is skipped
             {
                 var ids = new List<int>();
@@ -713,6 +722,7 @@ public sealed partial class ArrangementView
         _trackHeights.Clear();
         _fold.Clear();
         _masterHeight = DefaultFooterRowHeight;
+        TempoLaneRange = null;
         _clipboardHeights = null;
         _userHeaderW = DefaultHeaderW;
         ApplyHeaderWidth(final: false);

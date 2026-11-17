@@ -395,7 +395,7 @@ public sealed class ClipEditorView : UserControl
         private double XToBeat(double x, double w) => Math.Clamp(_roll.XToBeat(x) - Offset, 0, _clipBeats);
         private static double ValToY(double v, double h) { double pad = 6; return pad + (1 - Math.Clamp(v, 0, 1)) * (h - 2 * pad); }
         private static double YToVal(double y, double h) { double pad = 6; return Math.Clamp((h - pad - y) / Math.Max(1, h - 2 * pad), 0, 1); }
-        private static double Shape(double t, float curve) => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        private static double Shape(double t, float curve) => Nota.Application.Editing.AutomationCurve.Shape(t, curve);
 
         private int HitPoint(double x, double y, double w, double h)
         {
@@ -492,9 +492,8 @@ public sealed class ClipEditorView : UserControl
                 if (k < 0 || k + 1 >= ord.Count) return;
                 double v0 = bl.Val, v1 = ord[k + 1].Val;
                 if (Math.Abs(v1 - v0) < 1e-4) { bl.Curve = 0f; InvalidateVisual(); return; }
-                double frac = Math.Clamp((YToVal(p.Y, Bounds.Height) - v0) / (v1 - v0), 0.02, 0.98);
-                double ee = Math.Log(frac) / Math.Log(0.5);
-                bl.Curve = (float)Math.Clamp(-Math.Log2(ee) / 4.0, -1.0, 1.0);
+                double frac = Math.Clamp((YToVal(p.Y, Bounds.Height) - v0) / (v1 - v0), 0.01, 0.99);
+                bl.Curve = Nota.Application.Editing.AutomationCurve.FromMidpoint(frac);
                 InvalidateVisual();
             }
         }
@@ -526,9 +525,10 @@ public sealed class ClipEditorView : UserControl
                 double ax = BeatToX(a.Beat, w), ay = ValToY(a.Val, h), bx = BeatToX(b.Beat, w), by = ValToY(b.Val, h);
                 if (a.Curve == 0f) { ctx.DrawLine(pen, new Point(ax, ay), new Point(bx, by)); continue; }
                 Point prev = new(ax, ay);
-                for (int s = 1; s <= 16; s++)
+                int steps = Nota.Application.Editing.AutomationCurve.DrawSteps(bx - ax);
+                for (int s = 1; s <= steps; s++)
                 {
-                    double tt = s / 16.0;
+                    double tt = s / (double)steps;
                     double vy = a.Val + (b.Val - a.Val) * Shape(tt, a.Curve);
                     Point cur = new(ax + (bx - ax) * tt, ValToY(vy, h));
                     ctx.DrawLine(pen, prev, cur); prev = cur;

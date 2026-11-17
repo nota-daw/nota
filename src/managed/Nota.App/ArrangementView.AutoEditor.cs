@@ -71,6 +71,10 @@ public sealed partial class ArrangementView
         private TrackVM? _rangeTrack;            // Shift-drag time-range selection in progress (Phase 2)
         private double _rangeAnchor;
         internal bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
+        /// <summary>The point being dragged on <paramref name="t"/>, else the one hovered there.</summary>
+        internal AutoPt? ActivePoint(TrackVM t)
+            => ReferenceEquals(_autoDragTrack, t) && _autoDrag is { } d ? d
+             : ReferenceEquals(_hoverTrack, t) ? _hoverPoint : null;
 
         // Target-selector pill: width fits its label so nothing clips.
         private const double PillH = 16;
@@ -108,7 +112,7 @@ public sealed partial class ArrangementView
             double pillW = PillWidth(t.AutoLabel);
             if (PillRect(i, pillW).Contains(pos)) { _o.ShowAutoTargetMenu(_owner, t); return; }
 
-            double curBeat = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
+            double curBeat = Math.Max(0, _o.SnapMaybe(_o.XToBeat(pos.X), e.KeyModifiers));
 
             // Point under the cursor? (7px grab radius). Detected first so Shift can mean
             // "fine-drag this point" (req 8.2.2) rather than always starting a range select.
@@ -170,7 +174,7 @@ public sealed partial class ArrangementView
                     // nothing while playing. Points come from double-clicking, never a single click.
                     _o.ClearAutoSelection();
                     if (_o._engine is not { IsPlaying: true })
-                        _o.SeekTo(_o._scrollBeats + pos.X / _o._pixelsPerBeat);
+                        _o.SeekTo(_o.XToBeat(pos.X));
                     return;
                 }
             }
@@ -195,7 +199,7 @@ public sealed partial class ArrangementView
         private (AutoPt left, AutoPt right)? HitSegment(TrackVM t, int row, Point pos)
         {
             var ordered = t.AutoPoints.OrderBy(p => p.Beat).ToList();
-            double beat = _o._scrollBeats + pos.X / _o._pixelsPerBeat;
+            double beat = _o.XToBeat(pos.X);
             for (int k = 1; k < ordered.Count; k++)
             {
                 var a = ordered[k - 1]; var b = ordered[k];
@@ -218,10 +222,9 @@ public sealed partial class ArrangementView
             float v0 = _bendLeft.Value, v1 = _bendRight.Value;
             if (Math.Abs(v1 - v0) < 1e-4f) { _bendLeft.Curve = 0f; _owner.InvalidateVisual(); return; }
             double val = YToValue(_bendTrack, i, pos.Y);
-            double frac = Math.Clamp((val - v0) / (v1 - v0), 0.02, 0.98);
-            // Solve Shape(0.5, curve) == frac  ->  0.5^e = frac  ->  e = ln(frac)/ln(0.5).
-            double e = Math.Log(frac) / Math.Log(0.5);
-            _bendLeft.Curve = (float)Math.Clamp(-Math.Log2(e) / 4.0, -1.0, 1.0);
+            double frac = Math.Clamp((val - v0) / (v1 - v0), 0.01, 0.99);
+            // The curve whose midpoint reaches the pointer (#591).
+            _bendLeft.Curve = Nota.Application.Editing.AutomationCurve.FromMidpoint(frac);
             CommitAutoDuringDrag(_bendTrack);   // engine follows the curve bend live
             _owner.InvalidateVisual();
         }
@@ -260,7 +263,7 @@ public sealed partial class ArrangementView
         {
             if (_rangeTrack is not null)
             {
-                double beat = Math.Max(0, _o.Snap(_o._scrollBeats + e.GetPosition(_owner).X / _o._pixelsPerBeat));
+                double beat = Math.Max(0, _o.Snap(_o.XToBeat(e.GetPosition(_owner).X)));
                 _o.SetAutoSelection(_rangeTrack, _rangeAnchor, beat);
                 return;
             }
@@ -270,7 +273,7 @@ public sealed partial class ArrangementView
             if (i < 0) return;
             var pos = e.GetPosition(_owner);
             // Time: snapped (Alt bypasses), clamped between neighbour points — no reordering (8.2.3).
-            double cand = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
+            double cand = Math.Max(0, _o.SnapMaybe(_o.XToBeat(pos.X), e.KeyModifiers));
             _autoDrag.Beat = Math.Clamp(cand, _autoDragLo, _autoDragHi);
             // Value: free, but Shift = fine-mode (quarter sensitivity, anchored at the grab value, 8.2.2).
             float full = YToValue(_autoDragTrack, i, pos.Y);
@@ -285,7 +288,12 @@ public sealed partial class ArrangementView
         // so a whole drag is one undo step while the device follows in real time.
         private void CommitAutoDuringDrag(TrackVM t)
         {
-            if (!_autoLiveStarted) { _o.CommitAuto(t); _autoLiveStarted = true; }
+            if (!_autoLiveStarted)
+            {
+                _o.BeginAutoDrag(t);   // a Tempo drag holds the axis from before its first write
+                _o.CommitAuto(t);
+                _autoLiveStarted = true;
+            }
             else _o.CommitAutoLive(t);
         }
 
@@ -368,15 +376,19 @@ public sealed partial class ArrangementView
                         var segPen = ReferenceEquals(t, _hoverTrack) && ReferenceEquals(a, _hoverSegLeft) ? AutoHoverPen : pen;
                         double ax = _o.BeatToX(a.Beat), ay = ValueToY(t, i, a.Value);
                         double bx = _o.BeatToX(b.Beat), by2 = ValueToY(t, i, b.Value);
-                        if (a.Curve == 0f) { ctx.DrawLine(segPen, new Point(ax, ay), new Point(bx, by2)); continue; }
+                        // A lane moves evenly in beats; on a tempo axis X is seconds, so even a straight
+                        // segment bends on screen (specs/099) — sample it in beats like a curve.
+                        bool timeAxis = _o.TempoAxis;
+                        if (a.Curve == 0f && !timeAxis) { ctx.DrawLine(segPen, new Point(ax, ay), new Point(bx, by2)); continue; }
                         // Curved segment: polyline of shaped sub-samples (M9-D).
-                        const int steps = 16;
+                        int steps = Nota.Application.Editing.AutomationCurve.DrawSteps(bx - ax);
                         var prev = new Point(ax, ay);
                         for (int s = 1; s <= steps; s++)
                         {
                             double tt = s / (double)steps;
                             double vy = a.Value + (b.Value - a.Value) * Shape(tt, a.Curve);
-                            var cur = new Point(ax + (bx - ax) * tt, ValueToY(t, i, (float)vy));
+                            double sx = timeAxis ? _o.BeatToX(a.Beat + (b.Beat - a.Beat) * tt) : ax + (bx - ax) * tt;
+                            var cur = new Point(sx, ValueToY(t, i, (float)vy));
                             ctx.DrawLine(segPen, prev, cur);
                             prev = cur;
                         }

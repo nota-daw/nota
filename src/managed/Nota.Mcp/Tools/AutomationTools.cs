@@ -21,7 +21,7 @@ public sealed class AutomationTools(IAudioEngine engine, IEngineDispatch dispatc
     private static string TargetName(AutomationTarget t) => t switch
     { AutomationTarget.Volume => "volume", AutomationTarget.Pan => "pan", AutomationTarget.DeviceParam => "device_param",
       AutomationTarget.PluginParam => "plugin_param", AutomationTarget.MidiDeviceParam => "midi_param",
-      AutomationTarget.Send => "send", _ => t.ToString() };
+      AutomationTarget.Send => "send", AutomationTarget.Tempo => "tempo", _ => t.ToString() };
 
     [McpServerTool(Name = "list_automation"), Description("List a track's automation lanes (index, target, device/param index, point count).")]
     public Task<Lane[]> ListAutomation(int trackId) => Read(() =>
@@ -44,18 +44,28 @@ public sealed class AutomationTools(IAudioEngine engine, IEngineDispatch dispatc
         "Add an automation lane. target: \"volume\", \"pan\", \"device_param\" (with deviceIndex+paramIndex) or "
         + "\"midi_param\" (a MIDI effect: deviceIndex = its index from list_midi_fx, paramIndex from get_midi_fx_params). "
         + "A send is not an automation target: \"send\" returns -1. "
+        + "\"tempo\" (BPM 20–300) only on the master (get_overview masterTrackId): it is the project tempo — "
+        + "its points (a pair on one beat is a jump, curve shapes a ramp) drive playback, the grid and export. "
+        + "The master (masterTrackId) also takes \"pan\" and \"device_param\" on its own devices; its volume "
+        + "is not a lane here (returns -1) and it has no MIDI effects. "
         + "Returns the lane index.")]
     public Task<int> AddAutomationLane(int trackId, string target, int deviceIndex = -1, int paramIndex = -1) => Mutate(() =>
     {
         if (target.Equals("send", StringComparison.OrdinalIgnoreCase)) return -1;   // specs/069
         var t = target.ToLowerInvariant() switch
         { "pan" => AutomationTarget.Pan, "device_param" => AutomationTarget.DeviceParam, "midi_param" => AutomationTarget.MidiDeviceParam,
-          _ => AutomationTarget.Volume };
+          "tempo" => AutomationTarget.Tempo, _ => AutomationTarget.Volume };
         return E.AddAutomationLane(trackId, t, deviceIndex, paramIndex);
     });
 
     [McpServerTool(Name = "add_instrument_param_automation"), Description("Add an automation lane for a track-instrument parameter (by its stable id from get_instrument_params). Returns the lane index.")]
     public Task<int> AddInstrumentParamAutomation(int trackId, string paramId) => Mutate(() => E.AddPluginAutomationLane(trackId, -1, paramId));
+
+    [McpServerTool(Name = "add_plugin_param_automation"), Description(
+        "Add an automation lane for a parameter of a hosted plug-in effect (deviceIndex in the track's effect chain, "
+        + "paramId = its stable id from get_plugin_params). Works on the master (masterTrackId) too. Returns the lane index, -1 if not found.")]
+    public Task<int> AddPluginParamAutomation(int trackId, int deviceIndex, string paramId)
+        => Mutate(() => deviceIndex < 0 ? -1 : E.AddPluginAutomationLane(trackId, deviceIndex, paramId));
 
     [McpServerTool(Name = "remove_automation_lane"), Description("Remove an automation lane by index.")]
     public Task RemoveAutomationLane(int trackId, int laneIndex) => Mutate(() => E.RemoveAutomationLane(trackId, laneIndex));

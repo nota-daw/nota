@@ -63,6 +63,11 @@ class Instrument {
     // instrument (specs/085, FR-024). A built-in would play a keyswitch as a note, so it says no
     // and the engine sends it nothing; a hosted plug-in, or a rack holding one, says yes.
     virtual bool takesArticulations() const { return false; }
+    // An articulation's keyswitch note (specs/085), at eventOffset on eventChannel. A plain
+    // instrument takes it as a note; a rack hands it straight to the chains that take
+    // articulations, past its zones, mono and chain MIDI effects — a switch is not a note to play.
+    virtual void keyswitchOn(int32_t pitch, float velocity) { noteOn(pitch, velocity); }
+    virtual void keyswitchOff(int32_t pitch) { noteOff(pitch); }
 
     // Note events (applied at segment boundaries by the engine for sample accuracy, or at
     // eventOffset — see takesTimedEvents).

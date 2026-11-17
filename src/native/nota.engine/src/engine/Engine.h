@@ -186,6 +186,8 @@ class Engine {
     // --- parameter automation (M9) ---
     // Device-free: interpolation + block-rate apply write the target atomic.
     bool automationSelfTest();
+    int32_t tempoLaneSelfTest(); // specs/099: master Tempo lane -> tempo map; 0 = pass, else the failed check
+    int32_t masterAutomationSelfTest(); // specs/099: master Pan / device lanes; 0 = pass, else the failed check
     bool automationCurveSelfTest(); // M9-D: per-segment curvature shaping
 
     // --- CV modulation (Phase 3, Modular editor) ---
@@ -256,7 +258,8 @@ class Engine {
     // to the master gain in applyAutomation; persisted in `.nota` v5.
     int32_t masterVolumeAutomationCount() const;
     int32_t getMasterVolumeAutomation(NotaAutomationPoint* out, int32_t cap) const;
-    bool setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count);
+    // live: no undo checkpoint (a drag's later moves — the first write checkpointed).
+    bool setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count, bool live = false);
 
     // Per-clip volume envelope (M9 follow-up): 0..1 curve in clip-local beats that
     // multiplies the audio clip's output. get(out=null) returns the point count.
@@ -317,6 +320,7 @@ class Engine {
         int32_t* destSlot, int32_t* param, float* depth) const;
     bool rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t dev, int32_t destChain,
         int32_t destSlot, int32_t param, float depth);
+    bool rackChainAcceptsSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot) const; // #643
     bool rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src, int32_t* tapPre,
         float* gainDb, float* mix) const;
     int32_t rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
@@ -372,7 +376,8 @@ class Engine {
     // backToArrangement stops every session clip and hands all tracks back to the timeline.
     bool arrangementActive() const { return arrangementActive_.load(std::memory_order_relaxed); }
     void backToArrangement();
-    void setBpm(double bpm);
+    // False (nothing changes) while the master Tempo lane drives the tempo (specs/099).
+    bool setBpm(double bpm);
     double bpm() const;
     void setTimeSignature(int num, int denom);
     void setLoop(bool enabled, double startBeat, double endBeat);
@@ -389,6 +394,9 @@ class Engine {
 
     // --- mixer ---
     void setMasterVolume(float v) { masterVolume_.store(v, std::memory_order_relaxed); }
+    // Master pan (specs/099), -1..1: the master track's pan, applied after the master chain.
+    void setMasterPan(float p) { setTrackPan(kMasterTrackId, std::clamp(p, -1.0f, 1.0f)); }
+    float masterPan() const;
     // Reserved id for the master effect chain (not a real track in the graph list). The
     // device/name/colour ops accept it via findTrackAuthoring, so the UI drives the master
     // chain through the same path as any track. Large so it never collides with real ids.
@@ -448,7 +456,7 @@ class Engine {
     // have the backend stopped and then pump renderOffline() for the returned frame
     // count (the capture is filled inside mixGraph). endFreeze publishes the frozen
     // track; cancelFreeze aborts without freezing. Not undoable (a view toggle).
-    int64_t beginFreeze(int32_t trackId, double lengthBeats, double tailSec = 2.0); // capture frames, or 0 on failure
+    int64_t beginFreeze(int32_t trackId, double lengthBeats, double tailSec = 2.0, double startBeat = 0.0); // capture frames, or 0 on failure
     void endFreeze(int32_t trackId);
     void cancelFreeze();
     // Paste Bounced Audio (⌘⇧V): copies the armed capture's rendered frames into out (up to
@@ -1359,6 +1367,7 @@ class Engine {
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
     void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
+    void setMonitorInputForTest(double sampleRate, int32_t blockFrames); // the pushed frames' rate + callback size, #563
     // Device-free: under a shared input clock (ASIO) one driver block rendered in two segments
     // (a loop boundary) reaches monitoring whole — the rest of the block isn't trimmed as stale.
     bool monitorSharedClockSelfTest();
@@ -1513,6 +1522,17 @@ class Engine {
     // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
     // one undo step (an identical list makes none); false = baseline (project load).
     void setSections(std::vector<Section> sections, bool checkpoint);
+    // Tempo map from the master Tempo lane (specs/099). Run on every publish of a new edit
+    // (not undo/redo: a restored snapshot already holds its matching map): rebuilds
+    // `g.tempoMap` when the lane differs from what the map was compiled from, and keeps the
+    // unwarped clips and takes of tracks this edit did not touch at their physical time.
+    void deriveTempoMap(Graph& g) const;
+    // The master Tempo lane, or nullptr.
+    static const TrackLane* masterTempoLane(const Graph& g);
+    bool tempoAutomated() const;
+    const TempoMap* tempoMap() const { return authoring_ ? authoring_->tempoMap.get() : nullptr; }
+    double beatToSeconds(double beat) const { return tempoMap() ? tempoMap()->secondsAt(beat) : beat * 60.0 / authoringBpm_; }
+    double secondsToBeat(double seconds) const { return tempoMap() ? tempoMap()->beatAt(seconds) : seconds * authoringBpm_ / 60.0; }
     // Section edits that carry the arrangement with them (specs/073). `index` is into the
     // start-sorted list. Each is one undo step over clips (cut at the edges), automation (every
     // track, the master track, master volume), take lanes and the sections; the playhead stays.
@@ -1546,7 +1566,8 @@ class Engine {
     // Mixes the graph for one contiguous musical segment (no loop wrap inside):
     // automation + solo + send buses + track pass + return pass. processBlock
     // splits a block at loop boundaries and calls this per segment.
-    void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, bool playing, double spb);
+    void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, double elapsedStartSamples,
+        bool playing, double spb);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames); // live input monitoring
     void drainCommands();
     void drainLiveMidi(double blockStartBeat, bool playing);
@@ -1582,6 +1603,8 @@ class Engine {
     void renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, double spb); // M5-4
     void renderAudioClipsRaw(
         const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb);
+    void renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
+        const Transport& clock);
     // Consolidate (audio): bounce the clips covering [start,end) into one new clip.
     AudioClip consolidateAudioClips(const std::vector<AudioClip>& clips, double start, double end);
     // Freeze playback (M7): fill dst with the track's frozen buffer for this segment,
@@ -1597,6 +1620,11 @@ class Engine {
     void finishCue(float* cue, int32_t numFrames);    // Cue level, safety net, meter (specs/089)
     void renderTone(float* out, int32_t numFrames);
     void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
+    void applyMasterLanes(Track& master, double beat); // specs/099: the master's lanes, per master chunk
+    static const TrackLane* masterPanLane(const Track& master); // the playing master Pan lane, or null
+    void masterPanStage(float* out, int32_t frames, float pan, PanLaw law); // specs/099, audio thread
+    void masterPanSnap(float pan, PanLaw law); // the stage's gains jump to `pan` (no ramp)
+    void processMasterChain(Graph& g, float* out, int32_t numFrames, double spb, int32_t nAnchors); // specs/099
 
     // CV modulation (Phase 3): swing modulated device params around their base for
     // this block, then restore the base afterwards (RT; called inside mixGraph).
@@ -1634,6 +1662,9 @@ class Engine {
     // message thread
     void installRackPluginFactory(); // wire RackCore::pluginFactory to the plugin host bridge
     std::shared_ptr<Track> findTrackAuthoring(int32_t id) const;
+    double renderSampleAtBeat(double beat, double blockStart, double spb) const {
+        return transport_.hasTempoMap() ? blockStart + transport_.samplesAtBeat(beat) - transport_.playheadSamples() : beat * spb;
+    }
     std::shared_ptr<Track> cloneTrack(const Track& t) const;
     // Articulation timelines (specs/085), kept current by publishRaw.
     static bool articulationsCurrent(const Track& t);
@@ -1645,7 +1676,10 @@ class Engine {
     // before (undo, redo, a take retry) that a render may still be reading, so a track whose
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
+    // Releases the clip notes an edit took away while they sounded (#649); see Engine.cpp.
+    void releaseVanishedClipNotes(const Graph& before, const Graph& after);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
+    void configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR, bool force = false);
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
     void reconfigureAllWarpStreams();                         // rebuild warp caches for the current tempo + device SR
     void reconfigureAllWarpStreams(double spb, double devSR); // …for an explicit tempo (tempo-change path)
@@ -1818,9 +1852,11 @@ class Engine {
     // applyClipAutomation re-lands them at placedStart (clearing that span first on each
     // matching lane); non-Volume/Pan lanes are applied only on the source track (sameTrack)
     // since device/param indices are positional. removeAutomationInRange clears a span.
+    // Blocks clear all landing spans first, then insert; ordinary callers replace in one pass.
+    enum class ClipAutomationPass { Replace, Clear, Insert };
     std::vector<TrackLane> captureClipAutomation(const Track& t, double start, double end) const;
     void applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips, double placedStart,
-        double len, bool sameTrack) const;
+        double len, bool sameTrack, ClipAutomationPass pass = ClipAutomationPass::Replace) const;
     static void removeAutomationInRange(Track& t, double start, double end);
     // Two tracks have an identical device layout (same instrument kind + same device kinds in
     // order), so device/plugin automation can safely follow a clip between them (req 8.3.4).
@@ -2070,9 +2106,12 @@ class Engine {
     void syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
     // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
     // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
+    // Mapped = on the tempo map's clock (blockStart is the elapsed-sample clock). The
+    // unmapped instantiation is the plain fixed-tempo path, with no tempo-map test in it.
+    template <bool Mapped = false>
     void mixAudioClip(
-        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
-
+        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
+        const Transport& clock);
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
     std::atomic<int32_t> recordTrackRt_{-1}; // recordTrackId_ for the audio thread
@@ -2356,7 +2395,10 @@ class Engine {
     void trackRoutedDown(int32_t ownerId, const MidiEv* evs, int n, double blockStart, double spb, bool timed);
     // Capture clock: during a count-in the transport holds still, so notes are timed back
     // from the take start (negative offsets — before 1.1 when the take starts there).
-    double countInClockOffset() const { return countInActive_ ? -(countInTotal_ - countInPos_) : 0.0; }
+    double countInClockOffset() const {
+        const double denom = static_cast<double>(std::max(1, transport_.timeSigDenom()));
+        return countInActive_ ? -(countInTotal_ - countInPos_) * 4.0 / denom : 0.0;
+    }
     // Held-note snapshot for the live-recording preview: written once per block by the
     // audio thread behind a sequence counter (odd while writing), read by the UI.
     static constexpr int kMaxHeldSnap = 256; // 128 pitches × live + routed
@@ -2379,7 +2421,8 @@ class Engine {
     // clip's start or at a jump into it (chase), every point inside the block, and a value every
     // 64 samples while a curve moves. Times are in samples on the block's clock.
     static void clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
-        int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap);
+        int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap,
+        const TempoMap* map = nullptr, double sr = 0, double sampleStart = 0);
     // At a clip's end, the pedals it holds down and a bent wheel go back to rest — no note stays
     // held by a clip that is over.
     static void clipCtlEndResets(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
@@ -2388,7 +2431,8 @@ class Engine {
     // [onS, offS) in samples relative to the block start; one value per dim at the note's
     // start (or the block's) and then every kExprStep samples while its curve moves.
     static void noteExprEvents(
-        const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap);
+        const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap,
+        const TempoMap* map = nullptr, double sr = 0, double sampleStart = 0, double startBeat = 0, double shift = 0);
 
     // Capture layout (specs/086): the device channels some track uses — armed or monitoring
     // on the hardware input, or the take in progress — published to the input and audio
@@ -2436,6 +2480,36 @@ class Engine {
     void releaseAudioInputIfIdle();            // close it when nothing records/monitors
     void updateMonitorInput();                 // (re)evaluate hw monitoring after edits
     void pullMonitorInput(int32_t frames);     // audio thread: ring -> monitorHwBuf_
+    // Live monitoring of a capture device at another rate than the engine's (#563): a device
+    // that can't run at the engine's rate (Bluetooth, a fixed-rate USB mic) would otherwise
+    // play at the wrong speed, and the cushion logic would drop or re-prime several times a
+    // second. Its frames go through a windowed-sinc resampler (cut at the lower of the two
+    // Nyquists, so a faster input is low-passed before it is decimated and can't alias) whose
+    // step is the rate ratio, nudged by the ring's average fill so the two device clocks can't
+    // drift apart. Audio thread only; sized in the constructor.
+    std::atomic<double> monitorInRate_{0.0};   // the capture device's rate (0: the engine's)
+    static constexpr int32_t kSincZeros = 20;  // kernel half-length in zero crossings
+    static constexpr int32_t kSincTable = 256; // kernel table points per zero crossing
+    static constexpr int32_t kMonitorSrcHalfMax = 160; // taps each side at most (a ratio up to 8)
+    static constexpr int32_t kMonitorSrcFrames = 4096 + 2 * kMonitorSrcHalfMax + 8; // input window, frames
+    // Kaiser-windowed sinc over [0, kSincZeros]: built once per process, when an input first
+    // opens (control thread), so an engine that never monitors one doesn't pay for it. Null
+    // until then; the audio thread converts only once it is set.
+    std::atomic<const float*> monitorSinc_{nullptr};
+    static const float* monitorSincTable();
+    std::vector<float> monitorSrc_;            // input frames in layoutAudio_ columns; history first (sized with the kernel)
+    void prepareMonitorResampler();            // control thread: window + kernel, once, before the audio thread may convert
+    int32_t monitorSrcFrames_ = 0;             // frames held in monitorSrc_
+    double monitorSrcPos_ = 0.0;               // read position in monitorSrc_ (>= the half-length)
+    double monitorSrcRatio_ = 0.0;             // the ratio the kernel below was sized for
+    int32_t monitorSrcHalf_ = 0;               // taps each side of the read position
+    double monitorSrcCut_ = 1.0;               // cutoff, as a fraction of the input's Nyquist
+    double monitorFillAvg_ = 0.0;              // smoothed input frames queued, for the drift control
+    uint32_t monitorSrcGen_ = 0;               // layout the held frames follow
+    bool monitorConverting_ = false;           // the last segment went through the resampler
+    size_t readMonitorRing(float* dst, size_t want, bool& adopted, bool& layoutBreak); // audio thread
+    void resampleMonitorInput(int32_t frames, double ratio); // audio thread: ring -> monitorHwBuf_
+    void resetMonitorResampler(double ratio);  // audio thread
     void skipMonitorFrames(size_t frames);     // audio thread: drop a backlog across blocks
     void onInputBlock(const float* s, int32_t n, int32_t channels); // input thread
 
@@ -2455,6 +2529,7 @@ class Engine {
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
     double captureLoopStartBeat_ = 0.0;
+    std::shared_ptr<const TempoMap> captureTempoMap_; // authoring-side immutable clock of this take
     // Take lanes (specs/067): each finished loop pass, copied out of the loop buffer when the
     // cursor wraps (message thread), in a zeroed loop-length buffer holding [from, to).
     struct LoopPass {
@@ -2657,6 +2732,12 @@ class Engine {
     // kRtMaxHoldSeconds), so a wrong guess costs one late block, rarely.
     int64_t leafWorkNs_ = 0;
     int64_t parWorkNs_ = 0;
+    int64_t sizeWorkNs_ = 0; // the work the pool is sized for: single-thread cost, grown on sustained overruns
+    double overrunShare_ = 0.0; // smoothed share of parallel phases that overran their time
+    static constexpr double kOverrunShare = 0.05; // ~2 late callbacks within 32 blocks
+    double phaseNs_ = 0.0;      // this callback's parallel phase (audio thread)
+    double serialNs_ = 0.0;     // the callback's work outside it, smoothed (audio thread)
+    void adjustPoolSizing(double totalNs, double periodNs); // audio thread, after a callback the pool ran in
     int64_t leafPeakNs_ = 0; // largest indivisible task: total work alone can under-size helpers
     bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
     bool rtParallel_ = false;
@@ -2699,6 +2780,7 @@ class Engine {
     int64_t freezeCapFrames_ = 0;         // capacity in frames
     int64_t freezeCursor_ = 0;            // frames written so far
     double freezeCaptureSpb_ = 0.0;       // samples-per-beat at capture
+    std::shared_ptr<const Track::FrozenTiming> freezeCaptureTiming_;
     // Sample rate every node was last prepared at (propagateSampleRate). The offline render
     // re-prepares only when it changes, so a chunked export doesn't reset DSP state per block.
     double preparedSR_ = 0.0;
@@ -2715,6 +2797,10 @@ class Engine {
         int32_t clipIndex = -1;
         std::shared_ptr<WarpCache> cache;
         std::unique_ptr<ClipWarpStream> stream;
+        WarpInputs renderInputs;
+        std::shared_ptr<const TempoMap> tempoMap;
+        double tempoStartBeat = -1.0;
+        bool reverseSource = false;
         int64_t offset = 0;
     } wb_;
     // The ONE clip being stretched on a worker thread (warpBuildPoll). The worker only reads
@@ -2725,6 +2811,10 @@ class Engine {
         int32_t clipIndex = -1;
         std::shared_ptr<SampleBuffer> sample;
         std::shared_ptr<WarpCache> cache;
+        WarpInputs renderInputs;
+        std::shared_ptr<const TempoMap> tempoMap;
+        double tempoStartBeat = -1.0;
+        bool reverseSource = false;
         std::atomic<int64_t> done{0};
         std::atomic<bool> cancel{false};
         std::atomic<bool> finished{false};
@@ -2733,7 +2823,9 @@ class Engine {
     std::unique_ptr<WarpJob> wj_;
     void cancelWarpJob();
     // Warped clip whose cache is missing or built from other inputs (needs a (re)build).
-    bool warpNeedsBuild(const AudioClip& c) const;
+    // `arrangement` = an arrangement clip, which follows the tempo map; Session slots loop on
+    // their own clock and always use the ordinary cache (warpCache).
+    bool warpNeedsBuild(const AudioClip& c, bool arrangement = true) const;
     // The next clip needing a build (arrangement clips, then session slots), or null.
     const AudioClip* nextWarpBuildTarget(int32_t& trackId, int32_t& clipIndex) const;
     // Per-clip scratch for a warped clip carrying a volume envelope (render there,
@@ -2819,6 +2911,17 @@ class Engine {
     // Built-in instruments' default param values, one fresh instance per kind
     // (instrumentParamDefault). Message thread only.
     mutable std::unordered_map<int32_t, std::vector<float>> instrumentDefaults_;
+
+    // specs/099 audio-thread state, kept last so the members above keep their offsets (and
+    // their buffers' alignment) as before the master pan stage.
+    // Master pan stage gains: the last block's ll, lr, rl, rr, so a pan change ramps across
+    // the next block instead of stepping.
+    float masterPanG_[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+    // Where each segment of the current block starts on the timeline (processBlock): the
+    // master section reads its beats from these.
+    struct SegAnchor { int32_t off; double samples; bool rolling, jump; };
+    static constexpr int32_t kMaxSegAnchors = 32;
+    SegAnchor segAnchors_[kMaxSegAnchors] = {};
 };
 
 } // namespace nota

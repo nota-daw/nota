@@ -30,6 +30,25 @@ static float MonoRms(float[] buf)
 }
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
+if (args.Contains("--tempo"))
+{
+    using (var tempoLane = new NotaEngine())
+    {
+        int failed = tempoLane.TempoLaneSelfTest();
+        Check(failed == 0, $"tempo lane: the master Tempo lane drives the tempo map (engine self-test, failed check {failed})");
+    }
+    foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMigrationTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MasterTempoLaneTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MasterAutomationTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoMapCopyTakeTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoBlockAutomationTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 
 if (args.Length >= 2 && args[0] == "--profile-project")
 {
@@ -182,6 +201,36 @@ if (args.Length >= 2 && args[0] == "--splash-sheet")
     return sheetError is null ? 0 : 1;
 }
 // Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
+// Manual index for the Assistant (specs/098): `--manual-index-build <nota-docs dir> <out.json.gz>`.
+// Tooling, run by scripts/build-manual-index.sh; not part of the full run.
+if (args.Length >= 3 && args[0] == "--manual-index-build")
+{
+    var built = ManualIndexBuilder.Build(args[1], ManualIndexBuilder.AppVersion());
+    Console.WriteLine(built.Summary);
+    foreach (var w in built.Warnings) Console.WriteLine("  warning: " + w);
+    foreach (var e in built.Errors) Console.WriteLine("  error: " + e);
+    if (built.Errors.Count > 0) { Console.WriteLine($"MANUAL INDEX FAILED ({built.Errors.Count})"); return 1; }
+    ManualIndexBuilder.WriteGz(built.Json, args[2]);
+    Console.WriteLine("MANUAL INDEX WRITTEN " + args[2]);
+    return 0;
+}
+// SC-001 question set: `--assistant-eval [<model dir>]` (specs/098).
+if (args.Length >= 1 && args[0] == "--assistant-eval")
+    return AssistantEval.Run(args.Length >= 2 ? args[1] : null);
+// Ask the manual from the command line: `--assistant-ask [--ui ru] <question>` prints the hits.
+if (args.Length >= 2 && args[0] == "--assistant-ask")
+{
+    AssistantTests.Ask(args[1..]);
+    return 0;
+}
+// Assistant alone (fast iteration): `--assistant`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--assistant")
+{
+    Console.WriteLine("-- assistant --");
+    foreach (var (ok, label) in AssistantTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "ASSISTANT PASSED" : $"ASSISTANT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
 if (args.Length >= 1 && args[0] == "--palette")
 {
@@ -198,11 +247,28 @@ if (args.Length >= 1 && args[0] == "--menu-mirror")
     Console.WriteLine(failures == 0 ? "MENU MIRROR PASSED" : $"MENU MIRROR FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Shortcuts page as JSON for the user manual (nota-docs `npm run shortcuts`, specs/096):
+// `--shortcuts-dump <file> [language.json]` — groups, rows, the default keys in macOS glyphs,
+// editable or fixed; with a language file, its texts (English where it lacks one).
+if (args.Length >= 2 && args[0] == "--shortcuts-dump")
+{
+    if (args.Length >= 3)
+    {
+        var table = Nota.Application.Localization.TranslationTable.Parse(File.ReadAllText(args[2]), out var langError);
+        if (table is null) { Console.Error.WriteLine($"{args[2]}: {langError}"); return 1; }
+        Nota.Application.Localization.Loc.Install(table, table.Code);
+    }
+    File.WriteAllText(args[1], KeyBindingTests.Dump());
+    Console.WriteLine($"wrote {args[1]}");
+    return 0;
+}
 // Shortcut builder alone: `--shortcuts`.
 if (args.Length >= 1 && args[0] == "--shortcuts")
 {
     Console.WriteLine("-- shortcut builder --");
     foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+    Console.WriteLine("-- custom shortcuts --");
+    foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -295,6 +361,31 @@ if (args.Length >= 2 && args[0] == "--scan-scale")
     foreach (var (ok, label) in PluginStoreTests.RunScanScale(args[1])) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SCAN SCALE PASSED" : $"SCAN SCALE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 1 && args[0] == "--default-scan-paths")
+{
+    Console.WriteLine("-- plugin scan paths: OS defaults (fresh profile) --");
+    foreach (var (ok, label) in DefaultScanPathsTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEFAULT SCAN PATHS PASSED" : $"DEFAULT SCAN PATHS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 1 && args[0] == "--default-scan-paths-upgrade")
+{
+    Console.WriteLine("-- plugin scan paths: pre-feature upgrade + removal persistence --");
+    foreach (var (ok, label) in DefaultScanPathsTests.RunUpgrade()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEFAULT SCAN PATHS UPGRADE PASSED" : $"DEFAULT SCAN PATHS UPGRADE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 2 && args[0] == "--default-scan-paths-identity")
+{
+    Console.WriteLine("-- plugin scan paths: scan identity across list changes --");
+    foreach (var (ok, label) in DefaultScanPathsTests.RunIdentity(args[1])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEFAULT SCAN PATHS IDENTITY PASSED" : $"DEFAULT SCAN PATHS IDENTITY FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 3 && args[0] == "--default-scan-paths-scan")
+{
+    return DefaultScanPathsTests.RunChildScan(args[1], args[2]);
 }
 if (args.Length >= 3 && args[0] == "--store-live")
 {
@@ -456,6 +547,14 @@ if (args.Length >= 1 && args[0] == "--multiclip")
     Console.WriteLine("-- multi-clip editing --");
     foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "MULTICLIP PASSED" : $"MULTICLIP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The milestone 0.60.2 fixes alone: `--m0602`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--m0602")
+{
+    Console.WriteLine("-- milestone 0.60.2 fixes --");
+    foreach (var (ok, label) in Milestone0602Tests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "M0602 PASSED" : $"M0602 FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Default project template alone: `--template`. Also part of the full run.
@@ -652,6 +751,14 @@ if (args.Length >= 1 && args[0] == "--track-monitor")
     Console.WriteLine("-- monitoring a track --");
     foreach (var (ok, label) in TrackMonitorTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TRACK MONITOR PASSED" : $"TRACK MONITOR FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Monitoring a capture device at another rate (#563) alone: `--monitor-input-rate`. Also in the full run.
+if (args.Length >= 1 && args[0] == "--monitor-input-rate")
+{
+    Console.WriteLine("-- monitoring an input at another rate --");
+    foreach (var (ok, label) in MonitorInputRateTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MONITOR INPUT RATE PASSED" : $"MONITOR INPUT RATE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
@@ -856,6 +963,22 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine("-- nota vocoder --");
     foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Modular browser tab alone (fast iteration): `--modular-browser`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--modular-browser")
+{
+    Console.WriteLine("-- modular browser tab --");
+    foreach (var (ok, label) in ModularBrowserTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MODULAR BROWSER PASSED" : $"MODULAR BROWSER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Toolbar overflow alone (fast iteration): `--toolbar-overflow`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--toolbar-overflow")
+{
+    Console.WriteLine("-- toolbar overflow --");
+    foreach (var (ok, label) in ToolbarOverflowTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TOOLBAR OVERFLOW PASSED" : $"TOOLBAR OVERFLOW FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Arrangement group trays alone (fast iteration): `--group-trays`. Also part of the full run.
@@ -4326,6 +4449,9 @@ Console.WriteLine("-- Sampler --");
             ne.SetClipNotes(st, 0, notes);
             var b = new float[frames * 2];
             ne.Seek(0); ne.Play(); ne.RenderOffline(b, frames); ne.StopTransport();
+            // Let the stop land (it silences the voices) before the next render's Play: each
+            // render starts from silence, not from the last one's notes still ringing.
+            ne.RenderOffline(new float[256], 128);
             return b;
         }
         static double Diff(float[] a, float[] b) { double d = 0; for (int i = 0; i < a.Length; i++) { double x = a[i] - b[i]; d += x * x; } return Math.Sqrt(d / a.Length); }
@@ -4844,11 +4970,17 @@ Console.WriteLine("-- Nota Delay --");
     // Telemetry + the MCP status line.
     var sc = new float[11];
     de.DeviceSetParam(dt, dd, Sync, 1f); de.DeviceSetParam(dt, dd, DivL, 2f / 7f);
+    // The level history is kept only while a card reads it: everything rendered so far went
+    // unread, so there is none; this read opens it, as an open card's refresh does.
+    var dh = new float[11 + 2 * 1536 + 2048];
+    de.DeviceScope(dt, dd, dh, dh.Length);
+    float dUnread = -999;
+    for (int i = 0; i < 2 * 1536; i++) dUnread = Math.Max(dUnread, dh[11 + i]);
+    Check(dUnread <= -119, $"Delay keeps no level history while no card reads it ({dUnread:0} dB)");
     Render(20000);
     int scn = de.DeviceScope(dt, dd, sc, sc.Length);
     Check(scn == 11 && sc[4] > 1000 && sc[5] > 1, $"Delay scope reports sample rate + tempo ({sc[4]:0} Hz, {sc[5]:0.0} BPM)");
     // The live graph's level history follows the telemetry: input dB, echoes dB, echo samples.
-    var dh = new float[11 + 2 * 1536 + 2048];
     int dhn = de.DeviceScope(dt, dd, dh, dh.Length);
     float dIn = -999, dWet = -999;
     for (int i = 0; i < 1536; i++) { dIn = Math.Max(dIn, dh[11 + i]); dWet = Math.Max(dWet, dh[11 + 1536 + i]); }
@@ -5151,6 +5283,8 @@ Console.WriteLine("-- Nota Reverb --");
     re.DeviceSetParam(rt, rd, DryWet, 1f);
     re.DeviceSetParam(rt, rd, PreDelay, 0.25f);    // 50 ms, room to absorb the ~7 ms diffuser
     re.DeviceSetParam(rt, rd, LatencyComp, 1f);
+    var rh = new float[11 + 2 * 1536 + 2048];
+    re.DeviceScope(rt, rd, rh, rh.Length); // the card opens: the level history is kept from here on
     var comped = Render(20000);
     re.DeviceSetParam(rt, rd, LatencyComp, 0f);
     var raw = Render(20000);
@@ -5164,7 +5298,6 @@ Console.WriteLine("-- Nota Reverb --");
     Check(scn == 11 && sc[4] > 1000 && sc[8] > 100 && Math.Abs(sc[6] - 1.9) < 0.1,
           $"Reverb scope reports sample rate, diffuser delay and RT60 ({sc[4]:0} Hz, {sc[8]:0} smp, {sc[6]:0.00} s)");
     // The live graph's level history follows the telemetry: input dB, tail dB, tail samples.
-    var rh = new float[11 + 2 * 1536 + 2048];
     int rhn = re.DeviceScope(rt, rd, rh, rh.Length);
     float rIn = -999, rWet = -999;
     for (int i = 0; i < 1536; i++) { rIn = Math.Max(rIn, rh[11 + i]); rWet = Math.Max(rWet, rh[11 + 1536 + i]); }
@@ -11148,14 +11281,14 @@ Console.WriteLine("-- Nota Valve (effect kind 6) --");
     // Auto Comp pulls a hot / quiet amp toward the input level; Mix 0 = the dry signal.
     aveng.SetDeviceBypassed(avt, avd, true); ARender(); float aDry = Rms(abuf, 4096); aveng.SetDeviceBypassed(avt, avd, false);
     aveng.DeviceSetParam(avt, avd, AOutput, 10f);
-    ARender(); float aHot = Rms(abuf, 4096);
+    ARender(8192); float aHot = Rms(abuf, 4096);   // Output glides in over the first block (#559)
     aveng.DeviceSetParam(avt, avd, AOutput, 5f); aveng.DeviceSetParam(avt, avd, AComp, 1f);
     ARender(16384); float aComped = Rms(abuf, 4096);
     Check(Math.Abs(20 * Math.Log10(aComped / aDry)) < 2.5 && Math.Abs(20 * Math.Log10(aHot / aDry)) > 3,
           $"Auto Comp matches the dry level ({20 * Math.Log10(aHot / aDry):+0.0;-0.0;0.0} dB at +12 → {20 * Math.Log10(aComped / aDry):+0.0;-0.0;0.0} dB)");
     aveng.DeviceSetParam(avt, avd, AComp, 0f);
     aveng.DeviceSetParam(avt, avd, AMix, 0f);
-    ARender(); float aMix0 = Rms(abuf, 4096);
+    ARender(8192); float aMix0 = Rms(abuf, 4096);   // so does Mix (#559)
     Check(Math.Abs(aMix0 - aDry) < aDry * 0.02f, $"Mix 0 passes the dry signal ({aMix0:0.000} vs {aDry:0.000})");
     aveng.DeviceSetParam(avt, avd, AMix, 1f);
 
@@ -13370,6 +13503,40 @@ Console.WriteLine("-- insert time --");
         Check(Math.Abs(At(3.0) - 0.5f) < 1e-4 && Math.Abs(At(5.0) - 0.5f) < 1e-4 && Math.Abs(At(7.0) - 1.0f) < 1e-4,
               "duplicate: automation ramp copied into the gap, the rest holds");
         Check(!e.InsertTime(1.0, 2.0, duplicate: true), "duplicate with a range before 0 is rejected");
+    }
+
+    // A curved segment cut by Insert Silence / Duplicate Time keeps its shape on both sides
+    // (#591): before the cut, and after the gap where the tail resumes.
+    foreach (bool dup in new[] { false, true })
+    {
+        using var e = new NotaEngine();
+        int a = e.AddInstrumentTrack();
+        e.AddMidiClip(a, 0.0, 12.0);
+        int lane = e.AddAutomationLane(a, AutomationTarget.Volume, -1, -1);
+        var orig = new[] { new Nota.Application.AutomationPoint(0, 0.0f, -1f), new Nota.Application.AutomationPoint(8, 1.0f, 0f) };
+        e.SetAutomationPoints(a, lane, orig);
+        e.InsertTime(4.0, 2.0, duplicate: dup);
+        var pts = e.GetAutomationPoints(a, lane);
+        static float Read(Nota.Application.AutomationPoint[] p, double beat)
+        {
+            if (beat <= p[0].Beat) return p[0].Value;
+            for (int i = 1; i < p.Length; i++)
+                if (beat < p[i].Beat)
+                {
+                    double span = p[i].Beat - p[i - 1].Beat;
+                    if (span <= 0) return p[i].Value;
+                    return (float)(p[i - 1].Value + (p[i].Value - p[i - 1].Value)
+                        * Nota.Application.Editing.AutomationCurve.Shape((beat - p[i - 1].Beat) / span, p[i - 1].Curve));
+                }
+            return p[^1].Value;
+        }
+        float worst = 0;
+        foreach (double b in new[] { 1.0, 2.5, 3.9, 6.1, 7.0, 8.5, 9.9 })
+        {
+            double was = b < 4 ? b : b - 2;
+            worst = Math.Max(worst, Math.Abs(Read(pts, b) - Read(orig, was)));
+        }
+        Check(worst < 1e-4f, $"{(dup ? "duplicate time" : "insert silence")}: a curved segment keeps its shape on both sides of the gap (off by {worst:0.0000})");
     }
 }
 
@@ -15696,6 +15863,15 @@ foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
 Console.WriteLine("-- arrangement group trays --");
 foreach (var (ok, label) in GroupTrayTests.Run()) Check(ok, label);
 
+// --- Toolbar overflow (specs/097): the shed parts the ⋯ menu lists ---
+Console.WriteLine("-- toolbar overflow --");
+foreach (var (ok, label) in ToolbarOverflowTests.Run()) Check(ok, label);
+foreach (var (ok, label) in AssistantTests.Run()) Check(ok, label);
+
+// --- Modular browser tab (specs/095): catalogue rows, search, per-view tab memory ---
+Console.WriteLine("-- modular browser tab --");
+foreach (var (ok, label) in ModularBrowserTests.Run()) Check(ok, label);
+
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
@@ -15764,6 +15940,20 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+using (var tempoLane = new NotaEngine())
+{
+    int failed = tempoLane.TempoLaneSelfTest();
+    Check(failed == 0, $"tempo lane: the master Tempo lane drives the tempo map (engine self-test, failed check {failed})");
+}
+foreach (var (ok, label) in TempoMapTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMigrationTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MasterTempoLaneTests.Run()) Check(ok, label);
+foreach (var (ok, label) in MasterAutomationTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapCorrectnessTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapRenderingTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapMoveTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoMapCopyTakeTests.Run()) Check(ok, label);
+foreach (var (ok, label) in TempoBlockAutomationTests.Run()) Check(ok, label);
 Console.WriteLine("-- meter --");
 foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
@@ -15821,6 +16011,9 @@ foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- multi-clip editing --");
 foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- milestone 0.60.2 fixes --");
+foreach (var (ok, label) in Milestone0602Tests.Run()) Check(ok, label);
 
 Console.WriteLine("-- default project template --");
 foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
@@ -15910,6 +16103,8 @@ Console.WriteLine("-- audio-track tails after Stop --");
 foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- monitoring a track --");
 foreach (var (ok, label) in TrackMonitorTests.Run()) Check(ok, label);
+Console.WriteLine("-- monitoring an input at another rate --");
+foreach (var (ok, label) in MonitorInputRateTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
@@ -15937,6 +16132,10 @@ foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
 // --- shortcut builder: canonical ordering, platform strings, key caps, gestures ---
 Console.WriteLine("-- shortcut builder --");
 foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
+
+// --- custom keyboard shortcuts: catalog, conflicts, overrides, reset (specs/096) ---
+Console.WriteLine("-- custom shortcuts --");
+foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

@@ -41,12 +41,15 @@ internal static class OnnxRuntimeLoader
 
     /// <summary>A CPU session for the model at <paramref name="modelPath"/>. ORT's own thread
     /// count (one per performance core) beats every core: efficiency cores slow the whole step.</summary>
-    public static InferenceSession Session(string modelPath)
+    public static InferenceSession Session(string modelPath, int intraOpThreads = 0)
     {
         var opts = new SessionOptions
         {
             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
             InterOpNumThreads = 1,
+            // 0 = ORT's choice; a background model (the Assistant's search) asks for fewer so the
+            // audio engine keeps its cores.
+            IntraOpNumThreads = intraOpThreads,
         };
         try { return new InferenceSession(modelPath, opts); }
         catch (OnnxRuntimeException e)

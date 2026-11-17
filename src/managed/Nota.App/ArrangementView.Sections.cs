@@ -257,6 +257,36 @@ public sealed partial class ArrangementView
     private bool DuplicateSectionWithContent(ArrangementSection s)
         => Live(s) is { } live && SectionContentEdit(eng => eng.DuplicateSectionWithContent(SectionIndex(live)));
 
+    // Duplicate (without content): an empty copy of the section right after it, the rest of
+    // the song — later sections, clips, automation — pushed later by its length, as Duplicate
+    // with content places it (#529). One undo step. A section that overlaps another can't open
+    // a gap of its own, so it only gets the copy marker, as before.
+    private bool DuplicateSection(ArrangementSection s)
+    {
+        if (Live(s) is not { } live) return false;
+        double end = live.StartBeat + live.LengthBeats, len = live.LengthBeats;
+        if (SectionOverlapsAt(SectionIndex(live)))
+        {
+            var copy = AddSection(end, len);
+            copy.Name = live.Name;
+            SectionsEdited();   // one step: the copy arrives already named
+            return true;
+        }
+        var next = _sections.Select(x => new SectionInfo(x.StartBeat >= end - 1e-6 ? x.StartBeat + len : x.StartBeat, x.LengthBeats, x.Name))
+                            .Append(new SectionInfo(end, len, live.Name)).ToList();
+        return SectionContentEdit(eng =>
+        {
+            eng.BeginUndoGroup();
+            try
+            {
+                eng.InsertTime(end, len, duplicate: false);   // false when nothing lies later: still a copy
+                eng.SetSections(next);
+                return true;
+            }
+            finally { eng.EndUndoGroup(); }
+        });
+    }
+
     private bool DeleteSectionWithContent(ArrangementSection s)
         => Live(s) is { } live && SectionContentEdit(eng => eng.DeleteSectionWithContent(SectionIndex(live)));
 
@@ -346,7 +376,7 @@ public sealed partial class ArrangementView
             Cursor = HandCursor;
         }
 
-        private double BeatAt(double x) => _o._scrollBeats + x / _o._pixelsPerBeat;
+        private double BeatAt(double x) => _o.XToBeat(x);
 
         private ArrangementSection? HitTest(double x, out bool onLeft, out bool onRight)
         {
@@ -568,13 +598,7 @@ public sealed partial class ArrangementView
             if (s is not null)
             {
                 int bars = (int)Math.Round(s.LengthBeats / Math.Max(1, _o._beatsPerBar));
-                var dup = MenuKit.Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, () =>
-                {
-                    if (_o.Live(s) is null) return;
-                    var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
-                    copy.Name = s.Name;
-                    _o.SectionsEdited();   // one step: the copy arrives already named
-                });
+                var dup = MenuKit.Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, () => _o.DuplicateSection(s));
                 int idx = _o.SectionIndex(s), n = _o._sections.Count;
                 bool free = !_o.SectionOverlapsAt(idx);   // overlapping spans keep their content where it is
                 var earlier = MenuKit.Item(Loc.T("arrangement.sections.move_earlier"), GlyphKind.ChevronLeft,
@@ -626,7 +650,7 @@ public sealed partial class ArrangementView
             if (r.Width <= 22) return;
             var ft = new NotaFormattedText(_o.SectionDisplayName(s), CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, Typeface.Default, 9, warm ? WarmInk : ColdInk)
-            { MaxTextWidth = Math.Max(8, r.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+            { MaxTextWidth = Math.Max(8, r.Width - 10), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(ft, new Point(r.X + 7, r.Y + (r.Height - ft.Height) / 2));
         }
 
@@ -674,7 +698,7 @@ public sealed partial class ArrangementView
                 {
                     var me = list[_from];
                     double gx = _o.BeatToX(_dragBeat - _grabOffset);
-                    var g = new Rect(gx, 2, Math.Max(2, me.LengthBeats * _o._pixelsPerBeat), h - 4);
+                    var g = new Rect(gx, 2, Math.Max(2, _o.BeatToX(me.StartBeat + me.LengthBeats) - _o.BeatToX(me.StartBeat)), h - 4);
                     using (ctx.PushOpacity(0.8))
                     {
                         DrawSpan(ctx, me, g, true);

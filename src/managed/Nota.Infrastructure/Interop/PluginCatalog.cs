@@ -18,4 +18,8 @@ public sealed class PluginCatalog : IPluginCatalog
     public void RemoveScanPath(int index) => NotaEngine.RemoveScanPath(index);
     public int ScanPathCount => NotaEngine.ScanPathCount;
     public string? ScanPath(int index) => NotaEngine.ScanPath(index);
+    public int DefaultScanPathCount(string format) => NotaEngine.DefaultScanPathCount(format);
+    public string? DefaultScanPath(string format, int index) => NotaEngine.DefaultScanPath(format, index);
+    public int RestoreDefaultScanPaths(string format) => NotaEngine.RestoreDefaultScanPaths(format);
+    public bool IsScanPathRemoved(string dir) => NotaEngine.IsScanPathRemoved(dir);
 }

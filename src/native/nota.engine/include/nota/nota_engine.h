@@ -358,7 +358,10 @@ NOTA_API int32_t nota_engine_graph_retire_selftest(NotaEngine* engine);
  * Lanes are structural data on the track (snapshot + undo/redo, M6-6). A lane
  * targets track volume (target 0), pan (1), a built-in device param (2, with
  * device_index/param_index) or a send level (5, specs/072: device_index = the return bus
- * 0..3, values 0..1; deleting a return drops its bus's lanes and renumbers later buses);
+ * 0..3, values 0..1; deleting a return drops its bus's lanes and renumbers later buses).
+ * Tempo (6, specs/099) is valid only on nota_engine_master_track_id(): values are BPM, clamped
+ * to 20..300 on set; it is not a parameter but the project's tempo map, rebuilt from the lane
+ * on every edit (set, live set, section/time edits) and restored with it by undo/redo;
  * add/set/remove checkpoint undo. add returns the
  * lane index (an existing lane on the same target is reused, not duplicated).
  * get_points with out=NULL returns the point count. */
@@ -471,6 +474,8 @@ NOTA_API int32_t nota_track_param_modulated(const NotaEngine* engine, int32_t ta
 NOTA_API int32_t nota_engine_master_volume_automation_count(const NotaEngine* engine);
 NOTA_API int32_t nota_engine_master_volume_automation_get(const NotaEngine* engine, NotaAutomationPoint* out, int32_t cap);
 NOTA_API NotaResult nota_engine_master_volume_automation_set(NotaEngine* engine, const NotaAutomationPoint* pts, int32_t count);
+/* As _set, without an undo checkpoint: the later moves of a drag whose first write used _set. */
+NOTA_API NotaResult nota_engine_master_volume_automation_set_live(NotaEngine* engine, const NotaAutomationPoint* pts, int32_t count);
 
 /* ---- hosted-plugin parameters (M9-B) ------------------------------------
  * device_index < 0 = the track's instrument; otherwise the effect at that chain
@@ -553,6 +558,17 @@ NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_loop_record_mode(NotaEngine* engine, int32_t mode);
 NOTA_API int32_t    nota_transport_loop_record_mode(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
+/* Tempo (specs/099) comes from the master track's Tempo automation lane (target 6, BPM
+ * 20..300). While that lane has points the conversions below follow it and
+ * nota_transport_set_bpm is refused (NOTA_ERR_INVALID_ARG, tempo unchanged). */
+NOTA_API int32_t nota_engine_tempo_automated(const NotaEngine* engine);
+/* Device-free self-test of lane -> tempo map derivation (curve, jumps, first point after 0,
+ * clamping, live edits, undo/redo, unwarped clip reprojection, lane removal).
+ * 0 = pass, else the number of the failed check. */
+NOTA_API int32_t nota_engine_tempo_lane_selftest(NotaEngine* engine);
+NOTA_API double nota_tempo_beat_to_seconds(const NotaEngine* engine, double beat);
+NOTA_API double nota_tempo_seconds_to_beat(const NotaEngine* engine, double seconds);
+NOTA_API double nota_tempo_bpm_at(const NotaEngine* engine, double beat);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);
 NOTA_API NotaResult nota_transport_set_loop(NotaEngine* engine, int32_t enabled,
@@ -590,6 +606,15 @@ NOTA_API double     nota_transport_loop_end(const NotaEngine* engine);
 
 /* ---- Mixer / master ------------------------------------------------------ */
 NOTA_API NotaResult nota_engine_set_master_volume(NotaEngine* engine, float volume);
+/* Master pan (specs/099), -1..1 (clamped): a stage after the master devices and before the
+ * master fader, in the project pan law with centre at unity. Like the master volume it is a
+ * plain set — undo goes through a mix gesture (kind pan on nota_engine_master_track_id()).
+ * A master Pan automation lane (target 1 on the master id) drives it during playback. */
+NOTA_API NotaResult nota_engine_set_master_pan(NotaEngine* engine, float pan);
+NOTA_API float      nota_engine_master_pan(const NotaEngine* engine);
+/* Device-free self-test of master Pan / device-parameter lanes (specs/099).
+ * 0 = pass, else the number of the failed check. */
+NOTA_API int32_t    nota_engine_master_automation_selftest(NotaEngine* engine);
 
 /* ---- Tracks & clips (message thread) ------------------------------------- */
 /* Returns the new track id (>0), or 0 on failure. */
@@ -1752,6 +1777,10 @@ NOTA_API int32_t    nota_audio_scatter_test(const NotaEngine* engine, const floa
 NOTA_API NotaResult nota_track_set_monitor(NotaEngine* engine, int32_t track_id, int32_t on);
 NOTA_API int32_t    nota_track_get_monitor(NotaEngine* engine, int32_t track_id);
 NOTA_API void       nota_engine_push_monitor_frames(NotaEngine* engine, const float* interleaved_stereo, int32_t frames);
+/* Tests only: the rate the pushed monitor frames were "captured" at (0 = the engine's), as a
+ * capture device that can't run at the engine's rate reports it, and its callback size in
+ * frames (0 = leave it) — what sizes the monitoring cushion (#563). */
+NOTA_API void       nota_engine_set_monitor_input_test(NotaEngine* engine, double sample_rate, int32_t block_frames);
 
 /* MIDI routing: forward an instrument track's MIDI to another instrument track
  * (source_track_id = -1 turns it off). */
@@ -1816,6 +1845,8 @@ NOTA_API void       nota_track_unfreeze(NotaEngine* engine, int32_t track_id);
  * an audio track at at_beat as a new clip, overwriting what it covers (one undo step);
  * returns the clip index or -1. name_utf8 may be NULL. */
 NOTA_API int64_t    nota_track_bounce_begin(NotaEngine* engine, int32_t track_id, double length_beats);
+/* Range-aware bounce: capture precisely [start_beat, end_beat), including tempo changes. */
+NOTA_API int64_t    nota_track_bounce_range_begin(NotaEngine* engine, int32_t track_id, double start_beat, double end_beat);
 NOTA_API int64_t    nota_track_freeze_take(NotaEngine* engine, float* out, int64_t cap_frames);
 NOTA_API int32_t    nota_track_paste_audio_frames(NotaEngine* engine, int32_t track_id, const float* interleaved,
                                                   int64_t frames, double at_beat, const char* name_utf8);
@@ -2000,6 +2031,10 @@ NOTA_API int32_t     nota_rack_chain_sidechain(const NotaEngine* engine, int32_t
 NOTA_API int32_t     nota_rack_chain_set_sidechain(NotaEngine* engine, int32_t track_id, int32_t device_index,
                                                    int32_t chain, int32_t slot, int32_t source_track, int32_t tap_pre,
                                                    float gain_db, float mix);
+/* Whether a rack chain's device (slot >= 0) can be keyed from a sidechain source, as
+ * nota_device_accepts_sidechain for a track's device (#643). 1 = yes, 0 = no or bad address. */
+NOTA_API int32_t     nota_rack_chain_accepts_sidechain(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                       int32_t chain, int32_t slot);
 NOTA_API float       nota_midi_effect_cc_depth(const NotaEngine* engine, int32_t track_id, int32_t index);
 
 /* ---- Built-in devices + generic params (M4-4/5) -------------------------- */
@@ -2531,6 +2566,17 @@ NOTA_API NotaResult nota_plugin_close_editor(NotaEngine* engine, int32_t track_i
 /* 1 while the plugin's editor window is on screen, else 0 (never opened, hidden by its close
  * button, failed to open, or not a hosted plugin). Call from the UI/main thread. */
 NOTA_API int32_t    nota_plugin_editor_is_open(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* The computer keyboard over plug-in editor windows (#221). The app names the keys it plays
+ * with (note map, octave, velocity) by key code: a character key's character ('A'-'Z',
+ * '0'-'9', punctuation), a named key's AppKit code (F1 = 0xF704 ... F24, arrows 0xF700-0xF703,
+ * Home 0xF729, End 0xF72B, Page Up / Down 0xF72C / 0xF72D, forward delete 0xF728, backspace
+ * 0x7F, Return '\r', Tab '\t', Esc 0x1B, Space ' '). An editor window hands those keys to the
+ * app instead of the plug-in. drain moves up to `max` queued presses (down = 1) and releases
+ * (down = 0), oldest first, into the arrays and returns how many; push queues one as an
+ * editor window would (tests). UI/main thread. */
+NOTA_API void       nota_editor_keys_set_claimed(const int32_t* codes, int32_t count);
+NOTA_API int32_t    nota_editor_keys_drain(int32_t* out_codes, uint8_t* out_down, int32_t max);
+NOTA_API void       nota_editor_keys_push(int32_t code, int32_t down);
 
 /* Opaque plugin state (M3-5, FR-36), for project save/restore. get writes up to
  * `capacity` bytes into `out` (pass out=NULL to query the size) and returns the
@@ -2742,6 +2788,27 @@ NOTA_API NotaResult  nota_pluginhost_remove_scan_path(int32_t index);
 NOTA_API int32_t     nota_pluginhost_scan_path_count(void);
 /* Directory at `index`, UTF-8, owned by the engine, valid until the next call. */
 NOTA_API const char* nota_pluginhost_scan_path(int32_t index);
+
+/* OS-standard default scan folders for a plugin format ("VST3" today;
+ * unknown formats, e.g. "CLAP" for now, report none). Read live from the
+ * format's own standard locations — the same set the scan searches — so
+ * the listing can never drift from it. A new format only needs its own
+ * defaults entry (issue #622); the shape below stays format-agnostic. */
+/* Number of OS defaults for `format` (0 for unknown/NULL format, never negative). */
+NOTA_API int32_t     nota_pluginhost_default_scan_path_count(const char* format);
+/* Absolute default folder `index` for `format`, UTF-8, owned by the engine,
+ * valid until the next call; NULL when out of range or format unknown. */
+NOTA_API const char* nota_pluginhost_default_scan_path(const char* format, int32_t index);
+/* Re-adds the missing OS defaults for `format`, keeps everything else
+ * (defaults and user-added) untouched and ordered, and clears the restored
+ * paths from the removed-set so they stay. Returns how many were added,
+ * 0 when complete or format unknown. */
+NOTA_API int32_t     nota_pluginhost_restore_default_scan_paths(const char* format);
+/* 1 when `dir` is in the user-removed set (backfill skips it), else 0.
+ * Lets the app tell an explicit removal apart from "never had it": the
+ * startup ensure skips removed folders, while "Restore defaults" (an
+ * explicit add) still brings them back. */
+NOTA_API int32_t     nota_pluginhost_is_scan_path_removed(const char* dir);
 
 /* --- audio device settings (M7-1) -----------------------------------------
  * The chosen output/input device (by stable UID), sample rate and buffer size

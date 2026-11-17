@@ -4,6 +4,7 @@
 // Engine — parameter automation (M9): read/apply, lane CRUD, hosted-plugin parameter surface, contextual write recording, self-tests.
 
 #include "Engine.h"
+#include "TempoMap.h"
 #include "ParamResolve.h"
 #include "bridge/PluginHostBridge.h"
 #include "devices/instruments/Synth.h"
@@ -16,47 +17,66 @@
 namespace nota {
 
 // --- parameter automation (M9) ---------------------------------------------
-void Engine::applyAutomation(Graph* g, double beat) {
-    for (auto& tptr : g->tracks) {
-        Track& t = *tptr;
-        for (const TrackLane& lane : t.automation) {
-            if (lane.points.empty() || lane.suppressRead) continue; // M9-C: control leads while writing
-            const float v = lane.valueAt(beat);
-            if (lane.nested()) { // a device grouped into a rack (specs/044)
-                const ParamOwner o = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot);
-                if (lane.target == AutomationTarget::PluginParam) {
-                    if (lane.paramIndex < 0) continue;
-                    if (o.instrument) o.instrument->pluginParamSet(lane.paramIndex, v);
-                    else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
-                } else if (o.device) o.device->setParam(lane.paramIndex, v);
-                else if (o.midi) o.midi->setParam(lane.paramIndex, v);
-                continue;
+// One track's lanes at `beat` (block rate, audio thread, allocation-free). Shared by the
+// tracks and the master (specs/099): master Pan writes the master pan stage's value, master
+// device / plug-in lanes drive the master chain; Tempo plays through the tempo map instead.
+static void applyTrackLanes(Track& t, double beat) {
+    for (const TrackLane& lane : t.automation) {
+        if (lane.points.empty() || lane.suppressRead) continue; // M9-C: control leads while writing
+        if (lane.target == AutomationTarget::Tempo) continue; // specs/099: plays through the tempo map
+        const float v = lane.valueAt(beat);
+        if (lane.nested()) { // a device grouped into a rack (specs/044)
+            const ParamOwner o = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot);
+            if (lane.target == AutomationTarget::PluginParam) {
+                if (lane.paramIndex < 0) continue;
+                if (o.instrument) o.instrument->pluginParamSet(lane.paramIndex, v);
+                else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
+            } else if (o.device) o.device->setParam(lane.paramIndex, v);
+            else if (o.midi) o.midi->setParam(lane.paramIndex, v);
+            continue;
+        }
+        switch (lane.target) {
+        case AutomationTarget::Tempo: break;
+        case AutomationTarget::Volume: t.setVolume(v); break;
+        case AutomationTarget::Pan: t.setPan(v); break;
+        case AutomationTarget::Send: break; // specs/069: a send lane does not move the level
+        case AutomationTarget::DeviceParam:
+            if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.devices.size()))
+                if (auto* d = t.devices[lane.deviceIndex].get()) d->setParam(lane.paramIndex, v);
+            break;
+        case AutomationTarget::MidiDeviceParam: // deviceIndex = MIDI-FX chain index
+            if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.midiEffects.size()))
+                if (auto* m = t.midiEffects[lane.deviceIndex].get()) m->setParam(lane.paramIndex, v);
+            break;
+        case AutomationTarget::PluginParam:
+            // Normalized 0..1 into a hosted plugin (M9-B). deviceIndex < 0
+            // targets the instrument; paramIndex is pre-resolved from paramId.
+            if (lane.paramIndex < 0) break;
+            if (lane.deviceIndex < 0) {
+                if (t.instrument) t.instrument->pluginParamSet(lane.paramIndex, v);
+            } else if (lane.deviceIndex < static_cast<int32_t>(t.devices.size())) {
+                if (auto* d = t.devices[lane.deviceIndex].get()) d->pluginParamSet(lane.paramIndex, v);
             }
-            switch (lane.target) {
-            case AutomationTarget::Volume: t.setVolume(v); break;
-            case AutomationTarget::Pan: t.setPan(v); break;
-            case AutomationTarget::Send: break; // specs/069: a send lane does not move the level
-            case AutomationTarget::DeviceParam:
-                if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.devices.size()))
-                    if (auto* d = t.devices[lane.deviceIndex].get()) d->setParam(lane.paramIndex, v);
-                break;
-            case AutomationTarget::MidiDeviceParam: // deviceIndex = MIDI-FX chain index
-                if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.midiEffects.size()))
-                    if (auto* m = t.midiEffects[lane.deviceIndex].get()) m->setParam(lane.paramIndex, v);
-                break;
-            case AutomationTarget::PluginParam:
-                // Normalized 0..1 into a hosted plugin (M9-B). deviceIndex < 0
-                // targets the instrument; paramIndex is pre-resolved from paramId.
-                if (lane.paramIndex < 0) break;
-                if (lane.deviceIndex < 0) {
-                    if (t.instrument) t.instrument->pluginParamSet(lane.paramIndex, v);
-                } else if (lane.deviceIndex < static_cast<int32_t>(t.devices.size())) {
-                    if (auto* d = t.devices[lane.deviceIndex].get()) d->pluginParamSet(lane.paramIndex, v);
-                }
-                break;
-            }
+            break;
         }
     }
+}
+
+void Engine::applyMasterLanes(Track& master, double beat) { applyTrackLanes(master, beat); }
+
+const TrackLane* Engine::masterPanLane(const Track& master) {
+    for (const TrackLane& l : master.automation)
+        if (l.target == AutomationTarget::Pan && !l.nested() && !l.points.empty() && !l.suppressRead) return &l;
+    return nullptr;
+}
+
+void Engine::applyAutomation(Graph* g, double beat) {
+    // Most tracks carry no lanes: skip them before the (out-of-line) per-lane body.
+    for (auto& tptr : g->tracks)
+        if (!tptr->automation.empty()) applyTrackLanes(*tptr, beat);
+    // Master lanes (specs/099): Pan and the master chain's device / plug-in parameters.
+    // A master Volume lane is not added there — master volume stays the graph-level lane.
+    if (g->masterTrack && !g->masterTrack->automation.empty()) applyTrackLanes(*g->masterTrack, beat);
     // Master-volume lane (graph-level, M9 follow-up): write the master gain atomic.
     if (!g->masterVolume.points.empty() && !g->masterVolume.suppressRead)
         masterVolume_.store(std::clamp(g->masterVolume.valueAt(beat), 0.0f, 2.0f), std::memory_order_relaxed);
@@ -91,8 +111,21 @@ bool Engine::automationCurveSelfTest() {
     if (std::fabs(lane.valueAt(2.0) - 0.5f) > 1e-4f) return false; // linear baseline
     lane.points[0].curve = 1.0f;                                   // ease-out
     if (lane.valueAt(2.0) < 0.6f) return false;
+    // No jump at the start (#591): the old power curve was ~75 % there by 1 % of the span.
+    if (lane.valueAt(0.04) > 0.1f) return false;
+    const float easeOutMid = lane.valueAt(2.0);
     lane.points[0].curve = -1.0f; // ease-in
     if (lane.valueAt(2.0) > 0.4f) return false;
+    // Ease-in and ease-out mirror each other.
+    if (std::fabs(lane.valueAt(2.0) - (1.0f - easeOutMid)) > 1e-4f) return false;
+    // A piece of a shaped segment, with subCurve, reads the same values (shift-invariance).
+    {
+        TrackLane cut;
+        cut.target = AutomationTarget::Volume;
+        cut.points = {{1.0, lane.valueAt(1.0), AutomationLane::subCurve(-1.0f, 0.5)}, {3.0, lane.valueAt(3.0), 0.0f}};
+        for (double b = 1.0; b <= 3.0; b += 0.25)
+            if (std::fabs(cut.valueAt(b) - lane.valueAt(b)) > 1e-4f) return false;
+    }
     // Endpoints unaffected by curvature.
     if (std::fabs(lane.valueAt(0.0) - 0.0f) > 1e-4f) return false;
     if (std::fabs(lane.valueAt(4.0) - 1.0f) > 1e-4f) return false;
@@ -575,7 +608,12 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     auto old = findTrackAuthoring(trackId);
     if (!old) return -1;
     const auto tgt = static_cast<AutomationTarget>(target);
+    if (target < 0 || target > static_cast<int32_t>(AutomationTarget::Tempo)) return -1;
     if (tgt == AutomationTarget::Send) return -1; // specs/069: sends are not an automation target
+    if (tgt == AutomationTarget::Tempo && trackId != kMasterTrackId) return -1; // specs/099: master only
+    // specs/099: the master's Volume is the graph-level masterVolume lane; it has no MIDI chain.
+    if (trackId == kMasterTrackId && (tgt == AutomationTarget::Volume || tgt == AutomationTarget::MidiDeviceParam))
+        return -1;
     const bool usesDev = tgt == AutomationTarget::DeviceParam || tgt == AutomationTarget::MidiDeviceParam;
     // Reuse an existing lane on the same target (no snapshot) — one lane per target.
     for (size_t i = 0; i < old->automation.size(); ++i) {
@@ -759,12 +797,32 @@ bool Engine::setAutomationPointsImpl(
     int32_t trackId, int32_t laneIndex, const NotaAutomationPoint* pts, int32_t count, bool undoCheckpoint) {
     auto old = findTrackAuthoring(trackId);
     if (!old || laneIndex < 0 || laneIndex >= static_cast<int32_t>(old->automation.size())) return false;
+    const bool tempo = old->automation[laneIndex].target == AutomationTarget::Tempo;
+    // The limit is on the compiled map, not the lane: a jump is two lane points on one beat,
+    // so a migrated #568 map of kMaxPoints steps becomes about twice as many lane points.
+    if (tempo && count > 2 * static_cast<int32_t>(TempoMap::kMaxPoints)) return false;
+    for (int32_t i = 0; tempo && i < count; ++i)
+        if (!std::isfinite(pts[i].beat) || !std::isfinite(pts[i].value)) return false;
+    if (tempo && count > static_cast<int32_t>(TempoMap::kMaxPoints) - 1) {
+        std::vector<double> beats(static_cast<size_t>(count));
+        for (int32_t i = 0; i < count; ++i) beats[i] = std::max(0.0, pts[i].beat);
+        std::sort(beats.begin(), beats.end());
+        size_t distinct = beats.front() > 0.0 ? 1 : 0; // a first point after 0 holds back to 0
+        for (size_t i = 0; i < beats.size(); ++i)
+            if (i == 0 || beats[i] - beats[i - 1] >= 1e-6) ++distinct;
+        if (distinct > TempoMap::kMaxPoints) return false;
+    }
     auto nt = cloneTrack(*old);
     auto& lane = nt->automation[laneIndex];
     lane.points.clear();
     lane.points.reserve(count);
-    for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
-    std::sort(lane.points.begin(), lane.points.end(),
+    for (int32_t i = 0; i < count; ++i) {
+        // specs/099: tempo is 20..300 BPM everywhere; a lane never holds a value the map can't play.
+        const float v = tempo ? static_cast<float>(TempoMap::clampBpm(pts[i].value)) : pts[i].value;
+        lane.points.push_back({tempo ? std::max(0.0, pts[i].beat) : pts[i].beat, v, pts[i].curve});
+    }
+    // Stable: two points on one beat are a jump, and their order is its direction.
+    std::stable_sort(lane.points.begin(), lane.points.end(),
         [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
     if (undoCheckpoint) republishWithTrack(trackId, nt);
     else
@@ -779,6 +837,98 @@ bool Engine::removeAutomationLane(int32_t trackId, int32_t laneIndex) {
     nt->automation.erase(nt->automation.begin() + laneIndex);
     republishWithTrack(trackId, nt);
     return true;
+}
+
+// --- master Tempo lane -> tempo map (specs/099) -----------------------------
+
+int32_t Engine::tempoLaneSelfTest() {
+    auto storage = std::make_unique<Engine>();
+    Engine& e = *storage;
+    e.transport_.setSampleRate(48000);
+    e.transport_.setBpm(120);
+    e.authoringBpm_ = 120;
+    const int32_t master = kMasterTrackId;
+    const int32_t tempoTarget = static_cast<int32_t>(AutomationTarget::Tempo);
+    auto lanePoints = [&]() -> std::vector<AutomationPoint> {
+        const TrackLane* l = masterTempoLane(*e.authoring_);
+        return l ? l->points : std::vector<AutomationPoint>{};
+    };
+    auto inSync = [&]() {
+        const auto pts = lanePoints();
+        const TempoMap* m = e.tempoMap();
+        if (pts.empty()) return m == nullptr;
+        if (!m || m->source.size() != pts.size()) return false;
+        for (size_t i = 0; i < pts.size(); ++i)
+            if (m->source[i].beat != pts[i].beat || m->source[i].value != pts[i].value || m->source[i].curve != pts[i].curve) return false;
+        return true;
+    };
+    auto set = [&](int32_t lane, std::initializer_list<NotaAutomationPoint> pts, bool live = false) {
+        std::vector<NotaAutomationPoint> v(pts);
+        return live ? e.setAutomationPointsLive(master, lane, v.data(), static_cast<int32_t>(v.size()))
+                    : e.setAutomationPoints(master, lane, v.data(), static_cast<int32_t>(v.size()));
+    };
+
+    // 0: Tempo is master-only.
+    const int32_t audio = e.addAudioTrack();
+    if (e.addAutomationLane(audio, tempoTarget, -1, -1) != -1) return 1;
+    const int32_t lane = e.addAutomationLane(master, tempoTarget, -1, -1);
+    if (lane < 0 || e.tempoAutomated()) return 2; // an empty lane is no map
+
+    // 1: the map follows the lane's own curve exactly.
+    if (!set(lane, {{0, 120, 0.5f}, {16, 90, 0}})) return 3;
+    TrackLane ref; ref.target = AutomationTarget::Tempo; ref.points = lanePoints();
+    for (int i = 0; i <= 64; ++i) {
+        const double b = 16.0 * i / 64;
+        if (std::fabs(e.tempoMap()->bpmAt(b) - ref.valueAt(b)) > 1e-3) return 4;
+    }
+    if (!e.tempoAutomated() || !inSync()) return 5;
+    if (e.setBpm(100)) return 6; // the transport tempo is refused while automated
+
+    // 2: a same-beat pair is a jump; 3: a first point after 0 holds back to 0.
+    if (!set(lane, {{8, 100, 0}, {8, 140, 0}})) return 7;
+    const TempoMap* m = e.tempoMap();
+    if (!m || std::fabs(m->bpmAt(0) - 100) > 1e-9 || std::fabs(m->bpmAt(7.999) - 100) > 1e-9 ||
+        std::fabs(m->bpmAt(8.001) - 140) > 1e-9) return 8;
+    if (std::fabs(e.beatToSeconds(8) - 4.8) > 1e-9 || std::fabs(e.beatToSeconds(12) - (4.8 + 4 * 60.0 / 140)) > 1e-9) return 9;
+
+    // 4: values clamp to 20..300 on set.
+    if (!set(lane, {{0, 10, 0}, {4, 400, 0}})) return 10;
+    const auto clamped = lanePoints();
+    if (clamped.size() != 2 || clamped[0].value != 20.0f || clamped[1].value != 300.0f) return 11;
+
+    // 5: a drag as the editor does it — one checkpointed set, then live sets with no undo
+    // step — re-derives on every set; undo/redo restore lane + map together.
+    if (!set(lane, {{0, 120, 0}, {8, 60, 0}})) return 12;
+    const double before = e.beatToSeconds(8);
+    if (!set(lane, {{0, 120, 0}, {8, 180, 0}})) return 13;
+    if (!set(lane, {{0, 120, 0}, {8, 200, 0}}, true) || !inSync() || std::fabs(e.beatToSeconds(8) - 6.0 * std::log(200.0 / 120.0)) > 1e-7) return 14; // linear BPM: 60·8/80·ln(200/120)
+    const double after = e.beatToSeconds(8);
+    if (!e.undo() || !inSync() || std::fabs(e.beatToSeconds(8) - before) > 1e-12) return 15;
+    if (!e.redo() || !inSync() || std::fabs(e.beatToSeconds(8) - after) > 1e-12) return 16;
+
+    // 6: an unwarped clip keeps its physical time when only the tempo changes.
+    {
+        auto t = e.findTrackAuthoring(audio);
+        auto nt = e.cloneTrack(*t);
+        AudioClip c; c.startBeat = 16; c.warpEnabled = false;
+        nt->clips.push_back(c);
+        e.republishWithTrack(audio, nt);
+    }
+    const double clipSeconds = e.beatToSeconds(16);
+    if (!set(lane, {{0, 120, 0}, {8, 90, -0.4f}})) return 17;
+    const auto placed = e.findTrackAuthoring(audio)->clips.back().startBeat;
+    if (std::fabs(e.beatToSeconds(placed) - clipSeconds) > 1e-9) return 18;
+
+    // 7: a section move leaves the Tempo lane (the ruler) where it is, and the map with it.
+    e.setSections({{0, 8, "A"}, {8, 8, "B"}}, false);
+    const auto lanePointsBefore = lanePoints();
+    const TempoMap* mapBefore = e.tempoMap();
+    if (!e.moveSection(1, 0) || !inSync() || e.tempoMap() != mapBefore || lanePoints().size() != lanePointsBefore.size()) return 19;
+
+    // 8: removing the lane (or clearing it) removes the map; the transport tempo leads again.
+    if (!e.removeAutomationLane(master, lane) || e.tempoMap() || e.tempoAutomated()) return 20;
+    if (!e.setBpm(100)) return 21;
+    return 0;
 }
 
 // --- master-volume automation (graph-level, M9 follow-up) ------------------
@@ -800,7 +950,7 @@ int32_t Engine::getMasterVolumeAutomation(NotaAutomationPoint* out, int32_t cap)
     return n;
 }
 
-bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count) {
+bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count, bool live) {
     if (!authoring_) return false;
     auto g = std::make_shared<Graph>(*authoring_); // copy tracks (shared) + sceneCount + masterVolume
     auto& lane = g->masterVolume;
@@ -809,7 +959,8 @@ bool Engine::setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t c
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
     std::sort(lane.points.begin(), lane.points.end(),
         [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
-    publish(std::move(g)); // structural edit → undo checkpoint
+    if (live) publishRaw(std::move(g)); // a drag's later moves: heard at once, no undo step
+    else publish(std::move(g));         // structural edit → undo checkpoint
     return true;
 }
 
@@ -1070,6 +1221,38 @@ int32_t Engine::midiCtlSelfTest() {
                 !near(w->valueAt(7.0), 0.2f))
                 fail = 8;
         }
+        // 9: the same take over a curved segment (#591): the old curve keeps its shape before
+        // the take and from the hand-back at beat 4 on, not a straight line.
+        if (!fail) {
+            for (auto& f : ctlFold_) f = CtlFold{};
+            ControllerCurve was;
+            was.ctl = kCtlModWheel;
+            was.points = {{0.0, 0.0f, -0.8f}, {8.0, 1.0f, 0.0f}};
+            MidiClip e;
+            e.lengthBeats = 8.0;
+            e.setController(kCtlModWheel, was.points);
+            ctlBatch_ = {{kCtlModWheel, 2.0, 0.8f, 0}, {kCtlModWheel, 3.0, 0.8f, 0}};
+            ctlStopPending_ = true;
+            ctlStopAt_ = 4.0;
+            foldRecordedCtl(e, 0.0);
+            const ControllerCurve* w = e.controller(kCtlModWheel);
+            if (!w) fail = 9;
+            else
+                for (double b : {0.5, 1.0, 1.9, 4.5, 5.0, 6.0, 7.0, 7.9})
+                    if (!near(w->valueAt(b), was.valueAt(b))) fail = 9;
+        }
+        // 10: a slice of a curved segment keeps its shape at both edges.
+        if (!fail) {
+            ControllerCurve c;
+            c.ctl = kCtlModWheel;
+            c.points = {{0.0, 0.0f, 0.7f}, {4.0, 1.0f, -0.5f}, {8.0, 0.2f, 0.0f}};
+            const double from = 1.0, to = 6.0;
+            ControllerCurve s;
+            s.ctl = kCtlModWheel;
+            s.points = sliceCtlPoints(c, from, to);
+            for (double b = from; b <= to; b += 0.25)
+                if (!near(s.valueAt(b - from), c.valueAt(b))) fail = 10;
+        }
     }
     ctlFold_ = savedFold;
     ctlBatch_ = savedBatch;
@@ -1077,6 +1260,57 @@ int32_t Engine::midiCtlSelfTest() {
     ctlStopPending_ = savedStop;
     ctlStopAt_ = savedStopAt;
     return fail;
+}
+
+float Engine::masterPan() const {
+    auto m = findTrackAuthoring(kMasterTrackId);
+    return m ? m->pan() : 0.0f;
+}
+
+// specs/099 PR 2: master Pan and master device lanes play back; the master's Volume stays
+// the graph-level lane; removing a master device drops its lanes and undo brings both back.
+int32_t Engine::masterAutomationSelfTest() {
+    auto storage = std::make_unique<Engine>();
+    Engine& e = *storage;
+    const int32_t m = kMasterTrackId;
+    const int32_t panT = static_cast<int32_t>(AutomationTarget::Pan);
+    const int32_t devT = static_cast<int32_t>(AutomationTarget::DeviceParam);
+    auto set = [&](int32_t lane, float a, float b) {
+        NotaAutomationPoint pts[2] = {{0.0, a, 0.0f}, {4.0, b, 0.0f}};
+        return e.setAutomationPoints(m, lane, pts, 2);
+    };
+    auto near = [](float a, float b) { return std::fabs(a - b) <= 1e-4f; };
+
+    // 1: the master has no Volume / MIDI-effect lane (Volume is the graph-level lane).
+    if (e.addAutomationLane(m, static_cast<int32_t>(AutomationTarget::Volume), -1, -1) != -1) return 1;
+    if (e.addAutomationLane(m, static_cast<int32_t>(AutomationTarget::MidiDeviceParam), 0, 0) != -1) return 1;
+    // 2: setter / getter clamp to -1..1.
+    e.setMasterPan(-3.0f);
+    if (!near(e.masterPan(), -1.0f)) return 2;
+    e.setMasterPan(0.25f);
+    if (!near(e.masterPan(), 0.25f)) return 2;
+    // 3: a master Pan lane drives the master pan.
+    const int32_t pan = e.addAutomationLane(m, panT, -1, -1);
+    if (pan < 0 || !set(pan, -1.0f, 1.0f)) return 3;
+    e.applyAutomation(e.authoring_.get(), 2.0);
+    if (!near(e.masterPan(), 0.0f)) return 3;
+    e.applyAutomation(e.authoring_.get(), 0.0);
+    if (!near(e.masterPan(), -1.0f)) return 3;
+    // 4: a master device parameter lane drives the master device.
+    const int32_t dev = e.addTrackBuiltinDevice(m, 0); // EQ
+    if (dev < 0) return 4;
+    const int32_t dl = e.addAutomationLane(m, devT, dev, 1);
+    if (dl < 0 || !set(dl, 0.1f, 0.9f)) return 4;
+    e.applyAutomation(e.authoring_.get(), 0.0);
+    const float p0 = e.deviceGetParam(m, dev, 1);
+    e.applyAutomation(e.authoring_.get(), 4.0);
+    const float p4 = e.deviceGetParam(m, dev, 1);
+    if (p0 == p4) return 4;
+    // 5: removing the master device drops its lane; undo restores device and lane.
+    if (e.automationLaneCount(m) != 2) return 5;
+    if (!e.removeDevice(m, dev) || e.automationLaneCount(m) != 1 || e.trackDeviceCount(m) != 0) return 5;
+    if (!e.undo() || e.automationLaneCount(m) != 2 || e.trackDeviceCount(m) != 1) return 6;
+    return 0;
 }
 
 } // namespace nota

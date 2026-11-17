@@ -9,7 +9,7 @@
 //     knob grid (search + pages), and, for a plug-in with a sidechain bus, its source.
 // The size is editor state kept by the chain view (a hosted plug-in has no "view" param).
 // Once the plug-in's window has been open, the info column stands on a picture of it
-// (PluginPreviewBackdrop, specs/046): the whole S body, the info column on L.
+// (PluginPreviewBackdrop, specs/046): the info section, on S and on L.
 
 using System;
 using System.Collections.Generic;
@@ -59,12 +59,14 @@ internal static class PluginCard
 
     public static Control Build(DeviceCardContext ctx, int di, PluginInfo info, ViewState state)
     {
-        if (state.Mini) return Section(InfoColumn(ctx, di, info, mini: true));
+        if (state.Mini) return new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: true), filled: false) } };
 
         var e = ctx.Engine; int t = ctx.TrackId;
         bool sidechain = di >= 0 && e.DeviceAcceptsSidechain(t, di);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(sidechain ? $"{InfoW},*,{ScW}" : $"{InfoW},*"), ColumnSpacing = 5 };
-        grid.Children.Add(new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: false)) } });
+        // The section draws only its edge here: the backdrop paints the section's surface,
+        // then the window picture and the wash, so the fill doesn't cover the picture.
+        grid.Children.Add(new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: false), filled: false) } });
         var pars = Section(Params(ctx, di, state)); Grid.SetColumn(pars, 1); grid.Children.Add(pars);
         if (sidechain)
         {
@@ -345,9 +347,9 @@ internal static class PluginCard
     }
 
     // A device section: card ground, hairline, radius 6.
-    private static Decorator Section(Control child, double pad = 8)
+    private static Decorator Section(Control child, double pad = 8, bool filled = true)
     {
-        var d = DeviceCardKit.Section(child);
+        var d = filled ? DeviceCardKit.Section(child) : new RuleSection { Filled = false, Child = child };
         d.Padding = new Thickness(pad, 6, pad, pad);
         return d;
     }

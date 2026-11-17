@@ -83,7 +83,7 @@ public sealed class TrackFreezer
         engine.SetMetronome(false);
         engine.StopTransport();
 
-        long total = engine.BeginBounce(trackId, endBeat - startBeat);
+        long total = engine.BeginBounceRange(trackId, startBeat, endBeat);
         if (total <= 0) { Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning); return null; }
 
         float[] pcm;

@@ -82,6 +82,41 @@ internal static class ArrangementMovesTests
         yield return (cross[(1, 0)] == (2, 1) && cross[(1, 1)] == (1, 0) && cross[(2, 0)] == (2, 0),
             "moves: a clip moved to another track is where it landed, and the ones left behind close up");
 
+        // #647: deleting a clip shifts the later ones down; an editor on the deleted one closes
+        // and one on a later clip follows it, through undo and redo too.
+        {
+            using var de = new NotaEngine();
+            int t = de.AddInstrumentTrack();
+            foreach (double at in new[] { 0.0, 4.0, 8.0, 12.0 }) de.AddMidiClip(t, at, 4.0);
+            IReadOnlyList<double> Starts()
+            {
+                var s = new List<double>();
+                while (de.TryGetClipInfo(t, s.Count, out var ci)) s.Add(ci.StartBeat);
+                return s;
+            }
+            var before = new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() };
+            bool ok = de.TryDeleteClip(t, 1);
+            var after = new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() };
+            var map = ArrangementMoves.AfterRemoval(before, after);
+            yield return (ok && map[(t, 0)] == (t, 0) && map[(t, 1)] is null && map[(t, 2)] == (t, 1) && map[(t, 3)] == (t, 2),
+                $"moves: after a clip delete, the deleted clip is gone and the later ones follow ({string.Join(", ", map.Select(kv => $"{kv.Key.Clip}→{kv.Value?.Clip.ToString() ?? "gone"}"))})");
+            var inverse = ArrangementMoves.Invert(map, after);
+            bool undone = de.Undo();
+            yield return (undone && ArrangementMoves.SameStarts(new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() }, before)
+                          && inverse[(t, 1)] == (t, 2) && inverse[(t, 2)] == (t, 3),
+                "moves: undoing the delete is recognised, and the later clips go back to their indices");
+        }
+
+        // A range cut that removes clip 0 whole and carves clip 1's tail into two: clip 2 keeps
+        // its place by its start, the carved right piece is passed over, a cut head is gone.
+        {
+            var before = new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 0.0, 4.0, 8.0, 12.0 } };
+            var after = new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 4.0, 6.5, 8.0, 12.0 } };
+            var map = ArrangementMoves.AfterRemoval(before, after);
+            yield return (map[(1, 0)] is null && map[(1, 1)] == (1, 0) && map[(1, 2)] == (1, 2) && map[(1, 3)] == (1, 3),
+                $"moves: after a range cut, clips are found past the pieces it carved ({string.Join(", ", map.Select(kv => $"{kv.Key.Clip}→{kv.Value?.Clip.ToString() ?? "gone"}"))})");
+        }
+
         // A track like the source.
         using var eng = new NotaEngine();
         int inst = eng.AddInstrumentTrack();

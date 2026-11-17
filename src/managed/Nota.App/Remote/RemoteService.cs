@@ -81,9 +81,22 @@ public sealed class RemoteService
         }
     }
 
-    /// <summary>The address a phone opens: the USB one when a cable link is up (millisecond
-    /// latency, no radio), else Wi-Fi/Ethernet. Null without a network.</summary>
-    public string? Url => Links.Count > 0 ? $"http://{Links[0].Address}:{_server.Port}" : null;
+    /// <summary>The link a phone opens: the interface chosen in Settings → Remote or the
+    /// Connect phone popup while it is up (#85), else the USB one when a cable link is up
+    /// (millisecond latency, no radio), else Wi-Fi/Ethernet. Null without a network.</summary>
+    public RemoteLink? Link => RemoteLinks.Pick(Links, _settings.Current.RemoteInterface);
+
+    /// <summary>The address a phone opens (<see cref="Link"/>). Null without a network.</summary>
+    public string? Url => Link is { } l ? $"http://{l.Address}:{_server.Port}" : null;
+
+    /// <summary>Show <paramref name="iface"/>'s address in the link and the QR (null =
+    /// Automatic). Remembered across restarts.</summary>
+    public void ChooseInterface(string? iface)
+    {
+        _settings.Current.RemoteInterface = string.IsNullOrEmpty(iface) ? null : iface;
+        _settings.Save();
+        RaiseChanged();
+    }
 
     /// <summary>What the QR holds: the address with the current code in the fragment, so the
     /// phone pairs the moment the page opens (a fragment never leaves the phone).</summary>

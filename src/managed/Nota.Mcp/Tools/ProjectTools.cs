@@ -19,11 +19,14 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
     public sealed record MidiFxInfo(int Index, int Kind, string Name, bool Bypassed);
     public sealed record TrackInfo(int Id, string Name, string Type, int ColorIndex, bool Muted, bool Soloed,
         float Volume, float Pan, int InstrumentKind, bool InstrumentOff, int GroupId, ClipInfo[] Clips, MidiFxInfo[] MidiFx, DeviceInfo[] Devices);
-    public sealed record Overview(double Bpm, bool Playing, double PositionBeats, TrackInfo[] Tracks);
+    // MasterTrackId addresses the master in the automation tools (its Tempo lane, specs/099);
+    // TempoAutomated says the tempo follows that lane (Bpm is then the tempo under the playhead).
+    public sealed record Overview(double Bpm, bool Playing, double PositionBeats, TrackInfo[] Tracks, int MasterTrackId, bool TempoAutomated);
 
     [McpServerTool(Name = "get_overview"), Description(
         "Full snapshot of the open project: tempo, transport, and every track with its type, mixer state, "
-        + "instrument kind (and whether its on/off switch is off), clips (index/start/length/midi), MIDI effects and audio devices. Call this first to see state.")]
+        + "instrument kind (and whether its on/off switch is off), clips (index/start/length/midi), MIDI effects and audio devices, "
+        + "plus masterTrackId (for the master's automation, e.g. its Tempo lane) and whether the tempo is automated. Call this first to see state.")]
     public Task<Overview> GetOverview() => Read(() =>
     {
         int n = E.TrackCount;
@@ -45,7 +48,7 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
                 ti.Muted != 0, ti.Soloed != 0, ti.Volume, ti.Pan, ti.IsInstrument ? E.TrackInstrumentKind(ti.Id) : -1,
                 ti.IsInstrument && E.DeviceBypassed(ti.Id, -1), ti.GroupId, clips.ToArray(), mfx.ToArray(), devs.ToArray()));
         }
-        return new Overview(E.Bpm, E.IsPlaying, E.PositionBeats, tracks.ToArray());
+        return new Overview(E.Bpm, E.IsPlaying, E.PositionBeats, tracks.ToArray(), E.MasterTrackId, E.IsTempoAutomated);
     });
 
     [McpServerTool(Name = "undo"), Description("Undo the last edit. Returns whether anything was undone.")]
