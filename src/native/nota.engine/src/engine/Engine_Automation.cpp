@@ -499,7 +499,9 @@ void Engine::beginAutomationWrite(
     if (activeWrites_.empty()) pushUndo();
     setLaneSuppressRead(trackId, laneIndex, true);
     const double beat = transport_.uiPositionBeats();
-    activeWrites_.push_back({trackId, target, deviceIndex, resolvedParam, id, laneIndex, beat, latch});
+    ActiveWrite aw{trackId, target, deviceIndex, resolvedParam, id, laneIndex, beat, latch};
+    if (auto tw = findTrackAuthoring(trackId)) aw.before = currentTargetValue(*tw, target, deviceIndex, resolvedParam);
+    activeWrites_.push_back(std::move(aw));
 }
 
 void Engine::endAutomationWrite(
@@ -513,6 +515,10 @@ void Engine::endAutomationWrite(
         if (aw.trackId == trackId &&
             sameTarget(aw.target, aw.deviceIndex, aw.paramIndex, aw.paramId, target, deviceIndex, paramIndex, id)) {
             if (aw.latch) return;
+            // A discrete edit (a click: a bank button, a mode chip) begins and ends its write before
+            // poll() samples it, so it would leave the lane as it was. Record it at the playhead.
+            if (!aw.sampled && autoRecord_.load(std::memory_order_relaxed) && transport_.uiIsPlaying())
+                recordAutomationClick(aw, transport_.uiPositionBeats());
             setLaneSuppressRead(aw.trackId, aw.laneIndex, false);
             activeWrites_.erase(activeWrites_.begin() + i);
             return;
@@ -548,7 +554,26 @@ void Engine::sampleAutomationWritesAt(double beat) {
             pts.begin(), pts.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
         republishWithTrackRaw(aw.trackId, nt); // grow the take, not an undo step
         aw.lastBeat = beat;
+        aw.sampled = true;
     }
+}
+
+// A click while recording (specs/100): the lane's value just before the playhead, then the new
+// value, both at the playhead — a step, so a stepped target (a Rhythm bank) switches right there
+// instead of ramping in from the point before. Part of the write's undo step (begin pushed it).
+void Engine::recordAutomationClick(const ActiveWrite& aw, double beat) {
+    auto old = findTrackAuthoring(aw.trackId);
+    if (!old || aw.laneIndex < 0 || aw.laneIndex >= static_cast<int32_t>(old->automation.size())) return;
+    const float v = currentTargetValue(*old, aw.target, aw.deviceIndex, aw.paramIndex);
+    const auto& was = old->automation[aw.laneIndex].points;
+    auto nt = cloneTrack(*old);
+    auto& pts = nt->automation[aw.laneIndex].points;
+    // The step starts from what the lane plays there, or — a fresh lane — what the target was.
+    pts.push_back({beat, was.empty() ? aw.before : old->automation[aw.laneIndex].valueAt(beat)});
+    pts.push_back({beat, v});
+    std::stable_sort(
+        pts.begin(), pts.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
+    republishWithTrackRaw(aw.trackId, nt);
 }
 
 bool Engine::automationWriteSelfTest() {

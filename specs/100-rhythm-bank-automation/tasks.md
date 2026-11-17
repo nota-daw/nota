@@ -54,6 +54,7 @@ description: "Tasks for specs/100 — automate the Nota Rhythm pattern bank (#60
 - [X] T024 Review: stepped params reach the lane editor — `nota_plugin_param_steps` / `nota_plugin_param_step_text`, `Instrument::pluginParamSteps` / `pluginParamStepText` (Rhythm Bank A–D, Bank Switch, Twin's stepped params); the lane draws named levels, snaps points to them and draws segments as the stairs they play
 - [X] T025 Review round 2: a transport jump (seek, loop wrap) is detected in `RhythmMachine::setTransport` and makes the next step take the destination's bank in Pattern mode; a replacement copy never reads as a jump (smoke: forward seek inside the cycle)
 - [X] T026 Review round 2: the lane editor bends with the unsnapped pointer height (points still snap when placed or moved), hit-tests the stairs it draws, and draws them from the level crossings (`AutomationCurve.InverseShape`) instead of per-pixel sampling
+- [X] T027 Review round 3: a click while automation records (a write that ends before poll() samples it) records a step at the playhead — the value before, then the new one — in `Engine::endAutomationWrite` (every discrete control gains it); smoke: a bank click while recording writes and plays back
 - [ ] T020 RU strings for `device.rhythm.switch_at_*` and the updated bank tooltip in nota-translations (`languages/ru.json`) — follow-up, as for earlier features
 
 ## Dependencies

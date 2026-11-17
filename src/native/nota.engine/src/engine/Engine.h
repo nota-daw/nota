@@ -2273,6 +2273,8 @@ class Engine {
         int32_t laneIndex;
         double lastBeat;
         bool latch;
+        bool sampled = false; // poll() has written a point for it (a click ends before it does)
+        float before = 0.0f;  // the target's value when the write began (a click's step starts there)
     };
     // A lane the user took over by hand while NOT recording: it stops reading until
     // reenableAutomation() (Live's "Re-Enable Automation").
@@ -2281,6 +2283,7 @@ class Engine {
         int32_t laneIndex;
     };
     std::vector<ActiveWrite> activeWrites_;
+    void recordAutomationClick(const ActiveWrite& aw, double beat); // a discrete edit's step (specs/100)
     // Value gestures opened by unlatched parameter touches (specs/016), closed by the
     // matching endAutomationWrite. One per touch identity.
     struct TouchGesture {

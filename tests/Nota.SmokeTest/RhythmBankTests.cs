@@ -218,6 +218,41 @@ internal static class RhythmBankTests
             }
         }
 
+        // A bank click while automation records (a Begin/Set/End write with no poll in between)
+        // writes a step at the playhead — the bank before, then the new one — and plays back.
+        {
+            var (e, t) = Rig();
+            using (e)
+            {
+                int bi = Idx(e, t, RhythmModel.BankId);
+                var tmp = new float[512 * 2];
+                e.SetAutomationRecord(true);
+                e.Seek(0); e.Play();
+                for (int i = 0; i < 47; i++) e.RenderOffline(tmp, 512, Sr);   // ≈ beat 1
+                e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, RhythmModel.BankId);
+                e.PluginParamSet(t, -1, bi, RhythmModel.BankNorm(1));
+                e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, RhythmModel.BankId);
+                e.SetAutomationRecord(false);
+                e.StopTransport();
+                int lane = -1;
+                for (int i = 0; i < e.AutomationLaneCount(t); i++) if (e.AutomationLaneParamId(t, i) == RhythmModel.BankId) lane = i;
+                var pts = lane >= 0 ? e.GetAutomationPoints(t, lane) : Array.Empty<AutomationPoint>();
+                bool step = pts.Length == 2 && Math.Abs(pts[0].Beat - pts[1].Beat) < 1e-9 && pts[0].Beat > 0.5 && pts[0].Beat < 1.5
+                            && RhythmModel.BankOf(pts[0].Value) == 0 && RhythmModel.BankOf(pts[1].Value) == 1;
+                // Played back: A before the click, B after it.
+                e.PluginParamSet(t, -1, bi, 0f);
+                var sc = new float[RhythmModel.ScopeLength];
+                e.Seek(0); e.Play();
+                for (int i = 0; i < 20; i++) e.RenderOffline(tmp, 512, Sr);   // ≈ beat 0.4
+                e.InstrumentScope(t, sc); int early = (int)sc[RhythmModel.S_Bank];
+                for (int i = 0; i < 60; i++) e.RenderOffline(tmp, 512, Sr);   // ≈ beat 1.7
+                e.InstrumentScope(t, sc); int late = (int)sc[RhythmModel.S_Bank];
+                e.StopTransport();
+                yield return (step && early == 0 && late == 1,
+                    $"a bank click while recording writes a step at the playhead and plays it back ({pts.Length} points{(pts.Length > 0 ? $" at beat {pts[0].Beat:0.##}" : "")}; bank {early} → {late})");
+            }
+        }
+
         // An RTH3 blob (before the bank params) opens on its saved bank with Bank Switch Step.
         {
             using var e = new NotaEngine();
