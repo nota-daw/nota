@@ -549,7 +549,6 @@ public sealed partial class ArrangementView : UserControl
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(_sectionsRow);   // …then the named song sections
         root.Children.Add(top);
-        root.Children.Add(BuildTempoRow());
         root.Children.Add(bottom);
         root.Children.Add(_footerScroller);
         root.Children.Add(footerSeam);     // docked after the footer → sits on top of it
@@ -772,7 +771,6 @@ public sealed partial class ArrangementView : UserControl
 
     public void SetPlayhead(double beats, bool preserveDisplay = false)
     {
-        _tempoLane?.InvalidateVisual();
         _playheadBeats = beats;
         bool playing = _engine is { IsPlaying: true };
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
@@ -794,7 +792,6 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Frame-rate display update; does no meter, automation or loop polling.</summary>
     public void SetPlayheadFrame(double positionBeats, double displayBeats, bool playing)
     {
-        _tempoLane?.InvalidateVisual();
         _playheadBeats = positionBeats;
         UpdatePlayheadDisplay(displayBeats, playing, false);
     }
@@ -806,7 +803,7 @@ public sealed partial class ArrangementView : UserControl
         if (playing && !_wasPlaying) SetFollowSuspended(false);
         _wasPlaying = playing;
         // Follow must repaint the content as well as the moving overlay.
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && !_tempoLane.IsDragging && CenterOnPlayhead();
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
         if (scrolled) _lanes.InvalidateVisual();
         // Stopped with nothing moving: the playhead chrome is already right — repainting it
         // every tick kept the whole window redrawing ~30×/s while idle (#55).
@@ -1086,7 +1083,6 @@ public sealed partial class ArrangementView : UserControl
 
     private void Redraw()
     {
-        _tempoLane?.InvalidateVisual();
         _ruler.InvalidateVisual();
         _sectionsLane.InvalidateVisual();   // spans follow scroll + zoom
         _lanes.InvalidateVisual();
@@ -1501,7 +1497,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return false;
         var sel = SelectionBlock();
-        if (sel.Length == 0 || !_engine.CutClipBlock(sel)) return false;
+        bool cut = false;
+        if (sel.Length > 0) RemovingClips(sel.Select(c => c.trackId), () => cut = _engine.CutClipBlock(sel));
+        if (!cut) return false;
         ClipTransfer.TookFromArrangement();
         FocusTopTrackOf(sel);
         Select(-1, -1);
@@ -1992,7 +1990,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || !HasTimeSelection) return false;
         var ids = TimeSelectionTrackIds();
-        if (ids.Length > 0) _engine.DeleteClipsInRange(ids, _timeSelStart, _timeSelEnd);
+        if (ids.Length > 0) RemovingClips(ids, () => _engine.DeleteClipsInRange(ids, _timeSelStart, _timeSelEnd));
         Refresh();
         return true;
     }
@@ -2058,7 +2056,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || !HasTimeSelection) return false;
         var ids = TimeSelectionTrackIds();
-        if (ids.Length == 0 || !_engine.CutRange(ids, _timeSelStart, _timeSelEnd)) return false;
+        bool cut = false;
+        if (ids.Length > 0) RemovingClips(ids, () => cut = _engine.CutRange(ids, _timeSelStart, _timeSelEnd));   // editors follow (#647)
+        if (!cut) return false;
         ClipTransfer.TookFromArrangement();
         FocusTrackId = ids[0];
         Refresh();
@@ -2261,6 +2261,27 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Runs <paramref name="edit"/>, which removes clips, and tells the open editors
+    /// where the rest went: a removal shifts the later clips of a track down an index, and an
+    /// editor still on the old index would show — and edit — a clip that is gone or another one
+    /// (#647). The removal is passed on as a block move, so an undo or redo of it takes the
+    /// editors along too.</summary>
+    /// <summary>Clips are about to be removed: a clip tool's preview is dropped first, while the
+    /// indices it would put the clip's own notes back under still name its clips.</summary>
+    public event Action? ClipsRemoving;
+
+    internal void RemovingClips(IEnumerable<int> touched, Action edit)
+    {
+        // The rows, and the touched tracks besides (a folded group's children have no row).
+        ClipsRemoving?.Invoke();
+        var tracks = _tracks.Select(t => t.Id).Concat(touched).Where(id => id > 0).Distinct().ToList();
+        var before = ClipStartsOf(tracks);
+        edit();
+        var after = ClipStartsOf(tracks);
+        if (ArrangementMoves.SameStarts(before, after)) return;
+        ClipsMoved?.Invoke(new ClipBlockMove(ArrangementMoves.AfterRemoval(before, after), before, after));
+    }
+
     public bool DeleteSelectedClips()
     {
         if (_engine is null || _sel.Count == 0) return false;
@@ -2269,11 +2290,11 @@ public sealed partial class ArrangementView : UserControl
         // (it survives edits and isn't cleared in automation mode), so tolerate an index
         // the engine rejects rather than throwing out of the keystroke handler.
         bool any = false;
-        OneUndoStep(() =>   // a linked delete is one step (specs/076)
+        RemovingClips(_sel.Select(c => c.track), () => OneUndoStep(() =>   // a linked delete is one step (specs/076)
         {
             foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip))
                 any |= _engine.TryDeleteClip(track, clip);
-        });
+        }));
         _sel.Clear();
         ClearLinkState();
         SelTrackId = -1; SelClipIndex = -1;

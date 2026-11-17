@@ -32,7 +32,7 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         string Engine = "", int MidiNote = 0, string SampleName = "", string Pattern = "", VoiceSound? Sound = null);
     public sealed record RhythmSnapshot(int CurrentBank, int SelectedVoice, int Bank, VoiceInfo[] Voices,
         string Summary = "", string Guide = "", float Swing = 0, float Humanize = 0, float Accent = 0, float Glue = 0, float Volume = 0,
-        int PlayingStep = -1, int SoundingVoices = 0);
+        int PlayingStep = -1, int SoundingVoices = 0, int PlayingBank = 0, string BankSwitch = "step");
 
     private RM.Pattern ReadPattern(int trackId) => RM.Parse(E.GetPluginState(trackId, -1), E.PluginParamCount(trackId, -1));
 
@@ -62,7 +62,9 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
     }
 
     [McpServerTool(Name = "get_rhythm"), Description(
-        "Snapshot of a Nota Rhythm track: current bank + selected voice; for a bank (default = current) each voice's name, "
+        "Snapshot of a Nota Rhythm track: current bank (the Bank param — the one edits land in and that plays next), the "
+        + "bank playing now (differs while a Pattern-mode switch waits for the pattern start), the bank switch mode "
+        + "(step|pattern) + selected voice; for a bank (default = current) each voice's name, "
         + "engine, MIDI note, source (synth|sample), loaded sample name, its ON steps (index, velocity 0..1, accent), the row "
         + "as text (x on · X accent · o quiet · . off, 16 chars) and its sound (normalized params + tune/decay in units); "
         + "the groove (swing, humanize, accent, glue, volume, all 0..1), the step playing now (-1 stopped), a one-line "
@@ -94,10 +96,13 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         return new RhythmSnapshot(p.CurrentBank, sel, b, voices,
             RM.Summary(g, p, sel, selSample, voices[sel].SampleName), RM.Guide,
             g("swing"), g("humanize"), g("accent"), g("glue"), g("volume"),
-            n > RM.S_Step ? (int)Math.Round(sc[RM.S_Step]) : -1, Math.Max(0, E.InstrumentVoiceCount(trackId)));
+            n > RM.S_Step ? (int)Math.Round(sc[RM.S_Step]) : -1, Math.Max(0, E.InstrumentVoiceCount(trackId)),
+            n > RM.S_Bank ? (int)Math.Round(sc[RM.S_Bank]) : p.CurrentBank, RM.SwitchesAtPattern(g(RM.BankSwitchId)) ? "pattern" : "step");
     });
 
-    [McpServerTool(Name = "select_rhythm_bank"), Description("Select the active Rhythm pattern bank (0..3 = A–D). Step edits and playback use this bank.")]
+    [McpServerTool(Name = "select_rhythm_bank"), Description("Select the Rhythm pattern bank (0..3 = A–D): sets the automatable Bank param (plugin param id 'bank'). "
+        + "Step edits use this bank; playback switches to it at the next step, or at the pattern's first step when "
+        + "bank_switch is Pattern. To change banks during a song, automate 'bank' instead.")]
     public Task SelectRhythmBank(int trackId, int bank) => Mutate(() => E.InstrumentAction(trackId, RM.A_SelectBank, Math.Clamp(bank, 0, Banks - 1), 0f));
 
     [McpServerTool(Name = "select_rhythm_voice"), Description("Select the voice (0..7) the Rhythm editor shows and edits.")]
@@ -270,16 +275,24 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "set_rhythm_perform"), Description(
         "Set the Rhythm groove and bus; every argument optional, all 0..1: swing (delays every second 16th, 1 = half a step), "
         + "humanize (velocity jitter), accent (how much louder accented steps play), glue (bus compressor, 0 = off), "
-        + "volume (master). Returns the new values.")]
+        + "volume (master); bankSwitch (step | pattern: a new bank plays from the next step, or waits for the pattern's "
+        + "first step). Returns the new values.")]
     public Task<string> SetRhythmPerform(int trackId, float? swing = null, float? humanize = null, float? accent = null,
-        float? glue = null, float? volume = null) => Mutate(() =>
+        float? glue = null, float? volume = null, [Description("step | pattern")] string? bankSwitch = null) => Mutate(() =>
     {
         if (E.TrackInstrumentKind(trackId) != RM.Kind) return $"error: track {trackId} is not a Nota Rhythm";
         var ids = Ids(trackId);
         void Set(string id, float? val) { if (val is { } x && ids.TryGetValue(id, out var i)) PlugParam(trackId, -1, i, Math.Clamp(x, 0f, 1f)); }
         Set("swing", swing); Set("humanize", humanize); Set("accent", accent); Set("glue", glue); Set("volume", volume);
+        if (bankSwitch is { } bs)
+        {
+            if (!bs.Equals("step", StringComparison.OrdinalIgnoreCase) && !bs.Equals("pattern", StringComparison.OrdinalIgnoreCase))
+                return $"error: bankSwitch '{bs}' (step | pattern)";
+            Set(RM.BankSwitchId, bs.Equals("pattern", StringComparison.OrdinalIgnoreCase) ? 1f : 0f);
+        }
         var g = Getter(trackId);
-        return $"swing {RM.Pct(g("swing"))} · humanize {RM.Pct(g("humanize"))} · accent {RM.Pct(g("accent"))} · glue {RM.Pct(g("glue"))} · volume {RM.Pct(g("volume"))}";
+        return $"swing {RM.Pct(g("swing"))} · humanize {RM.Pct(g("humanize"))} · accent {RM.Pct(g("accent"))} · glue {RM.Pct(g("glue"))} · volume {RM.Pct(g("volume"))}"
+            + $" · bank switch {(RM.SwitchesAtPattern(g(RM.BankSwitchId)) ? "pattern" : "step")}";
     });
 
     [McpServerTool(Name = "audition_rhythm_voice"), Description("Play one Rhythm voice (0..7 or its name) once now, at velocity 0..1 — to hear a sound while shaping it.")]

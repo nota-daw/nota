@@ -55,6 +55,7 @@ public partial class MainWindow
             settings.Save();
         };
         Timeline.TrackSelected += id => _mixer?.FollowSelection(id);
+        _mixer.TrackPicked += id => Timeline.SelectTrackFromOutside(id);   // a strip click selects its track (#538)
         Timeline.SelectionCleared += () => _mixer?.FollowSelection(-1);
         if (_modular is not null) _modular.TrackActivated += id => _mixer?.FollowSelection(id);
     }

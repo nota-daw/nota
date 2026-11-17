@@ -297,6 +297,7 @@ public partial class MainWindow
             _vm.StatusText = warnings.Count == 0
                 ? Loc.F("main.files.opened", System.IO.Path.GetFileName(dir))
                 : Loc.F("main.files.opened_item_s_downgraded", System.IO.Path.GetFileName(dir), warnings.Count, warnings[0]);
+            if (result.TempoClamped) _vm.StatusText = Loc.T("project.tempo_clamped");   // specs/099, once: saving drops it
             _ = BuildWarpCachesAsync();   // fill the deferred warp caches in the background
             _ = OfferMissingPluginsAsync(dir, result.MissingPlugins);
         }

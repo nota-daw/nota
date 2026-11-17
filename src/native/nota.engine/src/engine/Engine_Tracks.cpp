@@ -1550,6 +1550,35 @@ AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, d
     }
     return right;
 }
+// What a carve leaves out, for a piece cut from `src` over clip-local [a,b]: the clip's
+// deactivation and its own part of every envelope (#467). The carves stay lean (a split is a
+// hot edit, perf-gate edit-warp-split), so the callers that cut a clip into pieces that stay
+// — a split, an overwrite's remainders — add this, and only when the clip has something to
+// carry: an active clip without envelopes costs a few compares.
+void carryMidiPiece(MidiClip& piece, const MidiClip& src, double a, double b) {
+    piece.active = src.active;
+    if (!src.velocityEnvelope.points.empty()) {
+        piece.velocityEnvelope = src.velocityEnvelope;
+        piece.velocityEnvelope.points = laneSliceExact(src.velocityEnvelope, a, b);
+    }
+    if (!src.volumeEnvelope.points.empty()) {
+        piece.volumeEnvelope = src.volumeEnvelope;
+        piece.volumeEnvelope.points = laneSliceExact(src.volumeEnvelope, a, b);
+    }
+}
+// An audio piece already holds the whole clip's envelopes (a carve copies the clip); re-base
+// them onto the piece, so the right-hand one plays the envelope from where it begins.
+void carryAudioPiece(AudioClip& piece, const AudioClip& src, double a, double b) {
+    if (!src.volumeEnvelope.points.empty()) piece.volumeEnvelope.points = laneSliceExact(src.volumeEnvelope, a, b);
+    if (!src.panEnvelope.points.empty()) piece.panEnvelope.points = laneSliceExact(src.panEnvelope, a, b);
+}
+bool midiCarriesState(const MidiClip& c) {
+    return !c.active || !c.velocityEnvelope.points.empty() || !c.volumeEnvelope.points.empty();
+}
+bool audioCarriesState(const AudioClip& c) {
+    return !c.volumeEnvelope.points.empty() || !c.panEnvelope.points.empty();
+}
+
 void midiOverwriteRange(std::vector<MidiClip>& clips, double ns, double ne) {
     std::vector<MidiClip> out;
     out.reserve(clips.size() + 2);
@@ -1560,8 +1589,15 @@ void midiOverwriteRange(std::vector<MidiClip>& clips, double ns, double ne) {
             out.push_back(c);
             continue;
         } // no overlap
-        if (ns > cs + eps) out.push_back(midiCarveLeft(c, ns - cs));  // left remainder
-        if (ne < ce - eps) out.push_back(midiCarveRight(c, ne - cs)); // right remainder
+        const bool carry = midiCarriesState(c);
+        if (ns > cs + eps) { // left remainder
+            out.push_back(midiCarveLeft(c, ns - cs));
+            if (carry) carryMidiPiece(out.back(), c, 0.0, ns - cs);
+        }
+        if (ne < ce - eps) { // right remainder
+            out.push_back(midiCarveRight(c, ne - cs));
+            if (carry) carryMidiPiece(out.back(), c, ne - cs, c.lengthBeats);
+        }
     }
     clips.swap(out);
 }
@@ -1575,8 +1611,15 @@ void audioOverwriteRange(std::vector<AudioClip>& clips, double ns, double ne, do
             out.push_back(c);
             continue;
         }
-        if (ns > cs + eps) out.push_back(audioCarveLeft(c, ns - cs, spb, devSR, map));
-        if (ne < ce - eps) out.push_back(audioCarveRight(c, ne - cs, spb, devSR, map));
+        const bool carry = audioCarriesState(c);
+        if (ns > cs + eps) {
+            out.push_back(audioCarveLeft(c, ns - cs, spb, devSR, map));
+            if (carry) carryAudioPiece(out.back(), c, 0.0, ns - cs);
+        }
+        if (ne < ce - eps) {
+            out.push_back(audioCarveRight(c, ne - cs, spb, devSR, map));
+            if (carry) carryAudioPiece(out.back(), c, ne - cs, ce - cs);
+        }
     }
     clips.swap(out);
 }
@@ -1585,8 +1628,9 @@ void audioOverwriteRange(std::vector<AudioClip>& clips, double ns, double ne, do
 // The carves keep a MIDI piece's notes and controllers only, and leave an audio piece's
 // envelopes where the whole clip had them. A slice is a piece that moves on its own (range
 // duplicate, insert time, section edits — specs/073), so it also keeps the clip's
-// deactivation and its own share of the envelopes. (The carves themselves stay lean: a split
-// is a hot edit, perf-gate edit-warp-split.)
+// deactivation and its own share of the envelopes, as a split's and an overwrite's pieces do
+// (carryMidiPiece / carryAudioPiece, #467). (The carves themselves stay lean: a split is a
+// hot edit, perf-gate edit-warp-split.)
 MidiClip midiSlice(const MidiClip& c, double ns, double ne) {
     const double cs = c.startBeat, ce = cs + c.lengthBeats;
     const double a = std::max(cs, ns), b = std::min(ce, ne);
@@ -2360,7 +2404,9 @@ bool Engine::insertTimeInto(Graph& g, double at, double len, bool duplicate) {
             for (auto& c : copies) out.push_back(std::move(c));
             nt->clips.swap(out);
         }
-        for (auto& lane : nt->automation) changed |= shiftLane(lane);
+        // The master Tempo lane (specs/099) is the ruler itself, not content on it: time and
+        // section edits leave it where it is, as they left the tempo map before it was a lane.
+        for (auto& lane : nt->automation) if (lane.target != AutomationTarget::Tempo) changed |= shiftLane(lane);
         return changed ? nt : nullptr;
     };
 
@@ -2551,7 +2597,8 @@ void Engine::remapTimeline(double lo, double hi, const std::vector<TimeRegion>& 
             changed |= remapClips(
                 nt->clips, lo, hi, rs, [&](const AudioClip& c) { return audioDisplayLenBeats(c, spb, devSR, tempoMap()); },
                 [&](const AudioClip& c, double a, double b) { return audioSlice(c, a, b, spb, devSR, tempoMap()); });
-        for (auto& lane : nt->automation) changed |= laneRemap(lane, lo, hi, rs);
+        for (auto& lane : nt->automation)   // not the master Tempo lane: the ruler stays (specs/099)
+            if (lane.target != AutomationTarget::Tempo) changed |= laneRemap(lane, lo, hi, rs);
         // A take travels with the region its first played frame is in, so the comp sections
         // still where it put them stay on it (specs/067).
         for (auto& k : nt->takes)
@@ -2692,7 +2739,7 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
         auto nt = cloneTrack(*t);
         for (size_t j = 0; j < nt->automation.size() && j < orig.automation.size(); ++j) {
             nt->automation[j].points = orig.automation[j].points;
-            laneDuplicate(nt->automation[j], a, b);
+            if (nt->automation[j].target != AutomationTarget::Tempo) laneDuplicate(nt->automation[j], a, b); // specs/099
         }
         t = nt;
     };
@@ -3121,26 +3168,19 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
     auto nt = cloneTrack(*old);
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return -1;
-        MidiClip src = nt->midiClips[clipIndex];
+        const MidiClip& src = nt->midiClips[clipIndex];
         const double local = atBeat - src.startBeat;
         if (local <= 0 || local >= src.lengthBeats) return -1;
-        MidiClip left, right;
-        left.startBeat = src.startBeat;
-        left.lengthBeats = local;
-        right.startBeat = atBeat;
-        right.lengthBeats = src.lengthBeats - local;
-        for (const auto& n : src.notes) {
-            if (n.startBeat < local) left.notes.push_back(n);
-            else {
-                Note m = n;
-                m.startBeat -= local;
-                right.notes.push_back(m);
-            }
+        // The overwrite's carves, so the halves keep the clip's name, and its deactivation
+        // and envelopes come along (#467).
+        MidiClip left = midiCarveLeft(src, local);
+        MidiClip right = midiCarveRight(src, local);
+        if (midiCarriesState(src)) {
+            carryMidiPiece(left, src, 0.0, local);
+            carryMidiPiece(right, src, local, src.lengthBeats);
         }
-        left.sliceControllersFrom(src, 0.0, local);
-        right.sliceControllersFrom(src, local, right.lengthBeats);
-        nt->midiClips[clipIndex] = left;
-        nt->midiClips.insert(nt->midiClips.begin() + clipIndex + 1, right);
+        nt->midiClips[clipIndex] = std::move(left);
+        nt->midiClips.insert(nt->midiClips.begin() + clipIndex + 1, std::move(right));
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return -1;
         const double spb = transport_.samplesPerBeat();
@@ -3157,6 +3197,10 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
         const double display = audioDisplayLenBeats(src, spb, devSR, tempoMap());
         AudioClip left = audioCarveLeft(src, local, spb, devSR, tempoMap());
         AudioClip right = audioCarveRight(src, local, spb, devSR, tempoMap());
+        if (audioCarriesState(src)) { // each half plays its own part of the envelopes (#467)
+            carryAudioPiece(left, src, 0.0, local);
+            carryAudioPiece(right, src, local, display);
+        }
         if (splitFades_) {
             const double fade = splitFadeBeats();
             raiseSplitEdge(left, false, true, fade, local);
@@ -4471,9 +4515,14 @@ int32_t Engine::clipNoteCount(int32_t trackId, int32_t clipIndex) const {
 // bumps the whole project format).
 namespace {
 constexpr int kFreezeHeaderBytes = static_cast<int>(sizeof(double) + sizeof(int64_t));
-constexpr uint32_t kFreezeMapMagic = 0x314d5446; // FTM1; negative spb distinguishes this from legacy PCM
+// Negative spb distinguishes a mapped freeze from legacy PCM. FTM2 (specs/099) stores
+// {beat, bpm, incomingBpm, curve}; FTM1 (#568 builds) stored the old step/linear/Bezier
+// points and is read back approximately (Bezier segments as linear).
+constexpr uint32_t kFreezeMapMagicV1 = 0x314d5446; // FTM1
+constexpr uint32_t kFreezeMapMagic = 0x324d5446;   // FTM2
 constexpr int kFreezeMapHeaderBytes = 2 * sizeof(uint32_t) + 2 * sizeof(double);
-constexpr int kFreezePointBytes = 8 * sizeof(double); // explicit fields, never native struct padding
+constexpr int kFreezePointBytesV1 = 8 * sizeof(double);
+constexpr int kFreezePointBytes = 4 * sizeof(double); // explicit fields, never native struct padding
 }
 
 int64_t Engine::beginFreeze(int32_t trackId, double lengthBeats, double tailSec, double startBeat) {
@@ -4571,7 +4620,7 @@ int32_t Engine::freezeGetState(int32_t trackId, uint8_t* out, int32_t cap) const
             auto write = [&](const auto& value) { std::memcpy(cursor, &value, sizeof(value)); cursor += sizeof(value); };
             write(kFreezeMapMagic); write(count); write(timing->sampleRate); write(timing->startBeat);
             if (timing->map) for (const auto& p : timing->map->points) {
-                const double values[] = {p.beat, p.bpm, static_cast<double>(p.shape), p.x1, p.y1, p.x2, p.y2, p.incoming_bpm};
+                const double values[] = {p.beat, p.bpm, p.incomingBpm, static_cast<double>(p.curve)};
                 std::memcpy(cursor, values, sizeof(values)); cursor += sizeof(values);
             }
         }
@@ -4598,18 +4647,29 @@ void Engine::freezeSetState(int32_t trackId, const uint8_t* data, int32_t size) 
         uint32_t magic = 0, count = 0;
         double sr = 0, start = 0;
         read(magic); read(count); read(sr); read(start);
-        if (magic != kFreezeMapMagic || count > 4096 || !std::isfinite(sr) || sr <= 0 ||
+        const bool v1 = magic == kFreezeMapMagicV1;
+        if ((magic != kFreezeMapMagic && !v1) || count > TempoMap::kMaxPoints || !std::isfinite(sr) || sr <= 0 ||
             !std::isfinite(start) || start < 0) return;
-        header += kFreezeMapHeaderBytes + static_cast<int64_t>(count) * kFreezePointBytes;
+        header += kFreezeMapHeaderBytes + static_cast<int64_t>(count) * (v1 ? kFreezePointBytesV1 : kFreezePointBytes);
         if (header > size || frames > (size - header) / (2 * static_cast<int64_t>(sizeof(float)))) return;
-        std::vector<NotaTempoPoint> points;
+        std::vector<TempoMap::Point> points;
         points.reserve(count);
+        double prevBpm = 0; int prevShape = 1;
         for (uint32_t i = 0; i < count; ++i) {
-            double v[8]; std::memcpy(v, cursor, sizeof(v)); cursor += sizeof(v);
-            if (!std::isfinite(v[2]) || v[2] < 0 || v[2] > 2 || std::floor(v[2]) != v[2]) return;
-            points.push_back({v[0], v[1], static_cast<int32_t>(v[2]), v[3], v[4], v[5], v[6], v[7]});
+            if (v1) { // beat, bpm, shape, x1, y1, x2, y2, incoming_bpm
+                double v[8]; std::memcpy(v, cursor, sizeof(v)); cursor += sizeof(v);
+                if (!std::isfinite(v[2]) || v[2] < 0 || v[2] > 2) return;
+                const double bpm = TempoMap::clampBpm(v[1]);
+                const double incoming = i == 0 ? bpm : prevShape == 0 ? prevBpm
+                    : TempoMap::clampBpm(v[7] > 0 ? v[7] : v[1]);
+                points.push_back({v[0], bpm, incoming, 0.0f});
+                prevBpm = bpm; prevShape = static_cast<int>(v[2]);
+            } else {
+                double v[4]; std::memcpy(v, cursor, sizeof(v)); cursor += sizeof(v);
+                points.push_back({v[0], v[1], v[2], static_cast<float>(v[3])});
+            }
         }
-        if (!TempoMap::valid(points)) return;
+        if (!points.empty() && !TempoMap::valid(points)) return;
         auto map = points.empty() ? nullptr : std::make_shared<const TempoMap>(std::move(points));
         timing = std::make_shared<const Track::FrozenTiming>(Track::FrozenTiming{std::move(map), sr, start});
         spb = -spb;

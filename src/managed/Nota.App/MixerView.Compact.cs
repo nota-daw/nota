@@ -6,7 +6,8 @@
 // a wide meter that is also the fader (MeterFader); the dB number; M, S and Arm full width.
 // Every control rides the same engine calls, undo gestures, automation writes, MIDI-learn
 // targets and StripSync as the regular strip, so the two layouts behave the same. Returns and
-// the master keep empty send / pan slots so every meter starts at the same height.
+// the master keep empty send slots (the master its pan — specs/099) so every meter starts at
+// the same height.
 
 using System;
 using Avalonia;
@@ -74,7 +75,7 @@ public sealed partial class MixerView
         sends.IsVisible = SendsShown;
         _sendSections.Add(sends);
         col.Children.Add(sends);
-        col.Children.Add(EmptySlot(PanH, top: false));
+        col.Children.Add(CompactPanRow(_engine.MasterTrackId, _engine.MasterPan, false, master: true));
         col.Children.Add(CompactLevel(-1, GetMasterVolume?.Invoke() ?? 1f, out var db));
         col.Children.Add(db);
         col.Children.Add(EmptySlot(ButtonsH, top: true));   // the master has no M / S / Arm
@@ -127,10 +128,11 @@ public sealed partial class MixerView
     }
 
     // The arrangement's PanBar, full width; a group keeps its BAL tag beside it (specs/006).
-    private Border CompactPanRow(int id, float pan, bool isGroup)
+    private Border CompactPanRow(int id, float pan, bool isGroup, bool master = false)
     {
         var bar = new PanBar(pan) { VerticalAlignment = VerticalAlignment.Center };
-        if (id > 0) SyncOf(id).PanBar = bar;
+        if (master) _masterPanBar = bar;
+        else if (id > 0) SyncOf(id).PanBar = bar;
         var undo = new MixGesture(_engine, MixTarget.Pan(id));
         bar.GestureBegin += undo.Begin;
         Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
@@ -139,7 +141,7 @@ public sealed partial class MixerView
         {
             bar.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
             bar.GestureEnd   += () => _engine.EndAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
-            MidiLearn.Bind(bar, MidiTarget.TrackPan(id), "Track Pan");
+            if (!master) MidiLearn.Bind(bar, MidiTarget.TrackPan(id), "Track Pan");
         }
         bar.GestureEnd += undo.End;
         ValueEntry.Attach(bar, bar.EntryField(Loc.T("common.pan")));

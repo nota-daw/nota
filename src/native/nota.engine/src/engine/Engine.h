@@ -186,6 +186,8 @@ class Engine {
     // --- parameter automation (M9) ---
     // Device-free: interpolation + block-rate apply write the target atomic.
     bool automationSelfTest();
+    int32_t tempoLaneSelfTest(); // specs/099: master Tempo lane -> tempo map; 0 = pass, else the failed check
+    int32_t masterAutomationSelfTest(); // specs/099: master Pan / device lanes; 0 = pass, else the failed check
     bool automationCurveSelfTest(); // M9-D: per-segment curvature shaping
 
     // --- CV modulation (Phase 3, Modular editor) ---
@@ -256,7 +258,8 @@ class Engine {
     // to the master gain in applyAutomation; persisted in `.nota` v5.
     int32_t masterVolumeAutomationCount() const;
     int32_t getMasterVolumeAutomation(NotaAutomationPoint* out, int32_t cap) const;
-    bool setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count);
+    // live: no undo checkpoint (a drag's later moves — the first write checkpointed).
+    bool setMasterVolumeAutomation(const NotaAutomationPoint* pts, int32_t count, bool live = false);
 
     // Per-clip volume envelope (M9 follow-up): 0..1 curve in clip-local beats that
     // multiplies the audio clip's output. get(out=null) returns the point count.
@@ -288,6 +291,8 @@ class Engine {
     std::string pluginParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     std::string pluginParamText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+    int32_t pluginParamSteps(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;       // specs/100
+    std::string pluginParamStepText(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, int32_t step) const;
     float pluginParamGet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     void pluginParamSet(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float normalized);
     int32_t pluginParamIndexOfId(int32_t trackId, int32_t deviceIndex, const std::string& id) const;
@@ -317,6 +322,7 @@ class Engine {
         int32_t* destSlot, int32_t* param, float* depth) const;
     bool rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t dev, int32_t destChain,
         int32_t destSlot, int32_t param, float depth);
+    bool rackChainAcceptsSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot) const; // #643
     bool rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src, int32_t* tapPre,
         float* gainDb, float* mix) const;
     int32_t rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
@@ -372,7 +378,8 @@ class Engine {
     // backToArrangement stops every session clip and hands all tracks back to the timeline.
     bool arrangementActive() const { return arrangementActive_.load(std::memory_order_relaxed); }
     void backToArrangement();
-    void setBpm(double bpm);
+    // False (nothing changes) while the master Tempo lane drives the tempo (specs/099).
+    bool setBpm(double bpm);
     double bpm() const;
     void setTimeSignature(int num, int denom);
     void setLoop(bool enabled, double startBeat, double endBeat);
@@ -389,6 +396,9 @@ class Engine {
 
     // --- mixer ---
     void setMasterVolume(float v) { masterVolume_.store(v, std::memory_order_relaxed); }
+    // Master pan (specs/099), -1..1: the master track's pan, applied after the master chain.
+    void setMasterPan(float p) { setTrackPan(kMasterTrackId, std::clamp(p, -1.0f, 1.0f)); }
+    float masterPan() const;
     // Reserved id for the master effect chain (not a real track in the graph list). The
     // device/name/colour ops accept it via findTrackAuthoring, so the UI drives the master
     // chain through the same path as any track. Large so it never collides with real ids.
@@ -1514,7 +1524,14 @@ class Engine {
     // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
     // one undo step (an identical list makes none); false = baseline (project load).
     void setSections(std::vector<Section> sections, bool checkpoint);
-    bool setTempoPoints(std::vector<NotaTempoPoint> points, bool checkpoint);
+    // Tempo map from the master Tempo lane (specs/099). Run on every publish of a new edit
+    // (not undo/redo: a restored snapshot already holds its matching map): rebuilds
+    // `g.tempoMap` when the lane differs from what the map was compiled from, and keeps the
+    // unwarped clips and takes of tracks this edit did not touch at their physical time.
+    void deriveTempoMap(Graph& g) const;
+    // The master Tempo lane, or nullptr.
+    static const TrackLane* masterTempoLane(const Graph& g);
+    bool tempoAutomated() const;
     const TempoMap* tempoMap() const { return authoring_ ? authoring_->tempoMap.get() : nullptr; }
     double beatToSeconds(double beat) const { return tempoMap() ? tempoMap()->secondsAt(beat) : beat * 60.0 / authoringBpm_; }
     double secondsToBeat(double seconds) const { return tempoMap() ? tempoMap()->beatAt(seconds) : seconds * authoringBpm_ / 60.0; }
@@ -1604,7 +1621,14 @@ class Engine {
         float gain);                                  // one sample of the click voice, Main and/or Cue
     void finishCue(float* cue, int32_t numFrames);    // Cue level, safety net, meter (specs/089)
     void renderTone(float* out, int32_t numFrames);
-    void applyAutomation(Graph* g, double beat); // M9: eval lanes -> target atomics
+    // M9: eval lanes -> target atomics. beatEnd (< beat = beat) is the block's end, for the
+    // instruments that read a lane at their own steps (pluginParamLane, specs/100).
+    void applyAutomation(Graph* g, double beat, double beatEnd = -1.0);
+    void applyMasterLanes(Track& master, double beat); // specs/099: the master's lanes, per master chunk
+    static const TrackLane* masterPanLane(const Track& master); // the playing master Pan lane, or null
+    void masterPanStage(float* out, int32_t frames, float pan, PanLaw law); // specs/099, audio thread
+    void masterPanSnap(float pan, PanLaw law); // the stage's gains jump to `pan` (no ramp)
+    void processMasterChain(Graph& g, float* out, int32_t numFrames, double spb, int32_t nAnchors); // specs/099
 
     // CV modulation (Phase 3): swing modulated device params around their base for
     // this block, then restore the base afterwards (RT; called inside mixGraph).
@@ -1656,6 +1680,8 @@ class Engine {
     // before (undo, redo, a take retry) that a render may still be reading, so a track whose
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
+    // Releases the clip notes an edit took away while they sounded (#649); see Engine.cpp.
+    void releaseVanishedClipNotes(const Graph& before, const Graph& after);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
     void configureTempoWarp(AudioClip& c, const std::shared_ptr<const TempoMap>& map, double devSR, bool force = false);
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
@@ -2247,6 +2273,8 @@ class Engine {
         int32_t laneIndex;
         double lastBeat;
         bool latch;
+        bool sampled = false; // poll() has written a point for it (a click ends before it does)
+        float before = 0.0f;  // the target's value when the write began (a click's step starts there)
     };
     // A lane the user took over by hand while NOT recording: it stops reading until
     // reenableAutomation() (Live's "Re-Enable Automation").
@@ -2255,6 +2283,7 @@ class Engine {
         int32_t laneIndex;
     };
     std::vector<ActiveWrite> activeWrites_;
+    void recordAutomationClick(const ActiveWrite& aw, double beat); // a discrete edit's step (specs/100)
     // Value gestures opened by unlatched parameter touches (specs/016), closed by the
     // matching endAutomationWrite. One per touch identity.
     struct TouchGesture {
@@ -2707,6 +2736,12 @@ class Engine {
     // kRtMaxHoldSeconds), so a wrong guess costs one late block, rarely.
     int64_t leafWorkNs_ = 0;
     int64_t parWorkNs_ = 0;
+    int64_t sizeWorkNs_ = 0; // the work the pool is sized for: single-thread cost, grown on sustained overruns
+    double overrunShare_ = 0.0; // smoothed share of parallel phases that overran their time
+    static constexpr double kOverrunShare = 0.05; // ~2 late callbacks within 32 blocks
+    double phaseNs_ = 0.0;      // this callback's parallel phase (audio thread)
+    double serialNs_ = 0.0;     // the callback's work outside it, smoothed (audio thread)
+    void adjustPoolSizing(double totalNs, double periodNs); // audio thread, after a callback the pool ran in
     int64_t leafPeakNs_ = 0; // largest indivisible task: total work alone can under-size helpers
     bool deviceBlock_ = false; // render() (a device callback) vs renderOffline()
     bool rtParallel_ = false;
@@ -2880,6 +2915,17 @@ class Engine {
     // Built-in instruments' default param values, one fresh instance per kind
     // (instrumentParamDefault). Message thread only.
     mutable std::unordered_map<int32_t, std::vector<float>> instrumentDefaults_;
+
+    // specs/099 audio-thread state, kept last so the members above keep their offsets (and
+    // their buffers' alignment) as before the master pan stage.
+    // Master pan stage gains: the last block's ll, lr, rl, rr, so a pan change ramps across
+    // the next block instead of stepping.
+    float masterPanG_[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+    // Where each segment of the current block starts on the timeline (processBlock): the
+    // master section reads its beats from these.
+    struct SegAnchor { int32_t off; double samples; bool rolling, jump; };
+    static constexpr int32_t kMaxSegAnchors = 32;
+    SegAnchor segAnchors_[kMaxSegAnchors] = {};
 };
 
 } // namespace nota

@@ -16,6 +16,13 @@
 //   Sequencer: setTransport() feeds the beat clock; a 1/16 step = 0.25 beat, 16 steps = 1 bar.
 //   Swing delays odd 16ths; Humanize jitters velocity. Four pattern banks (A–D).
 //
+//   Bank (specs/100): which bank plays is the stepped param "bank" (Perform › Bank), so a lane,
+//   a learned controller or a rack macro chooses it. "bank_switch" says when a new bank takes
+//   over: Step (the next step) or Pattern (the pattern's first step). A bank lane is read at the
+//   step's own grid beat (pluginParamLane → ParamLaneSteps), never at the block start, so a
+//   switch drawn on a bar line plays on the downbeat at any block size. The param is the bank
+//   the card edits; the playing bank (scope S_Bank) trails it while a Pattern switch waits.
+//
 //   Bus: the voices sum through Glue (a gentle compressor) into Volume.
 //
 //   Voice FX: every voice has its own insert chain of built-in effects (the same devices a
@@ -56,6 +63,7 @@
 #include "devices/BuiltinDevices.h"
 #include "engine/SnapshotHistory.h"
 #include "RhythmVoiceDsp.h"
+#include "devices/ParamLaneSteps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -79,11 +87,13 @@ class RhythmMachine final : public Instrument {
     static constexpr int kExtra = kLegacyParams;                    // first appended per-voice param
     static constexpr int kNumParamsV2 = kExtra + kVoices * kPX + 1; // + Glue (RTH2 blobs)
     static constexpr int kMacros = 8;
-    static constexpr int kNumParams = kNumParamsV2 + kMacros; // + Macro 1..8 (RTH3)
+    static constexpr int kNumParamsV3 = kNumParamsV2 + kMacros; // + Macro 1..8 (RTH3)
+    static constexpr int kNumParams = kNumParamsV3 + 2;         // + Bank, Bank Switch (RTH4)
 
     enum VP { Tune = 0, Decay, Punch, Tone, Drive, Level, Pan };
     enum XP { Start = 0, Length, Reverse };
-    enum GP { Swing = kVoices * kPV, Humanize, Accent, Volume, Glue = kExtra + kVoices * kPX, Macro0 = kNumParamsV2 };
+    enum GP { Swing = kVoices * kPV, Humanize, Accent, Volume, Glue = kExtra + kVoices * kPX, Macro0 = kNumParamsV2,
+        Bank = kNumParamsV3, BankSwitch };
 
     // A macro mapping. device -1: param is one of the machine's own params (voice = the voice it
     // belongs to, -1 for a global); device ≥ 0: param of that device on the voice's FX chain.
@@ -92,7 +102,7 @@ class RhythmMachine final : public Instrument {
         float lo = 0.0f, hi = 1.0f;
         int32_t curve = 0; // 0 Linear, 1 Exp, 2 Log, 3 S-curve (the rack's curves)
     };
-    // scopeRead layout: the playing step (-1 stopped), the current bank, an edit revision that
+    // scopeRead layout: the playing step (-1 stopped), the playing bank, an edit revision that
     // bumps on every pattern change (so an editor re-reads the blob after an MCP edit), the
     // sounding-voice count, the glue gain reduction (dB, ≥ 0), then per voice a trigger flash
     // (1 on a hit, decaying) and the sample play position (0..1 of the file, -1 idle).
@@ -142,7 +152,17 @@ class RhythmMachine final : public Instrument {
         return (i >= 0 && i < kNumParams) ? pn_[i].load(std::memory_order_relaxed) : 0.0f;
     }
     void pluginParamSet(int32_t i, float v) override;
+    std::string pluginParamText(int32_t i) const override;
+    int32_t pluginParamSteps(int32_t i) const override { return i == Bank ? kBanks : i == BankSwitch ? 2 : 0; }
+    std::string pluginParamStepText(int32_t i, int32_t step) const override;
     int32_t pluginParamIndexOfId(const std::string& id) const override;
+    void pluginParamLane(int32_t i, const AutomationLane& lane, double beatFrom, double beatTo) override;
+
+    // The bank a normalized Bank value names (A = 0 … D = 1), and back.
+    static int bankOf(float v) { return std::clamp(static_cast<int>(std::lround(v * (kBanks - 1))), 0, kBanks - 1); }
+    static float bankNorm(int b) { return static_cast<float>(b) / static_cast<float>(kBanks - 1); }
+    // The bank the param holds — the one the card edits and the one that will play.
+    int editBank() const { return bankOf(get(Bank)); }
 
     // ---- UI editing channel ----------------------------------------------
     void action(int32_t id, int32_t iarg, float farg) override;
@@ -229,7 +249,8 @@ class RhythmMachine final : public Instrument {
   private:
     static constexpr uint32_t kMagicV1 = 0x31485452;  // "RTH1" — 60 params
     static constexpr uint32_t kMagicV2 = 0x32485452;  // "RTH2" — + sample region, Glue
-    static constexpr uint32_t kMagic = 0x33485452;    // "RTH3" — + Macro 1..8
+    static constexpr uint32_t kMagicV3 = 0x33485452;  // "RTH3" — + Macro 1..8
+    static constexpr uint32_t kMagic = 0x34485452;    // "RTH4" — + Bank, Bank Switch
     static constexpr uint32_t kFxMagic = 0x31584652;  // "RFX1" — voice FX chains + kit label, after the pattern
     static constexpr uint32_t kMacMagic = 0x31434D52; // "RMC1" — macro mappings + names, after the kit label
     static constexpr int kChunk = 256;                // render chunk = the voice FX's max block
@@ -278,6 +299,17 @@ class RhythmMachine final : public Instrument {
     float get(int i) const { return pn_[i].load(std::memory_order_relaxed); }
     float get2(int v, int p) const { return pn_[v * kPV + p].load(std::memory_order_relaxed); }
     static bool valid(int v, int s) { return v >= 0 && v < kVoices && s >= 0 && s < kSteps; }
+    // The bank step absStep plays (audio thread): the Bank lane at the step's grid beat, else the
+    // param; Pattern mode takes it only in a new pattern cycle, after a jump back, or at a start.
+    int stepBank(long absStep, int barStep);
+    // A render piece is done: the clock moves past it — the engine renders a block in pieces
+    // between note events and sets the transport once per block, so the next piece starts here,
+    // not back at the block start (which re-fired the block's first steps) — and this block's
+    // lane samples go once the block is over.
+    void advanceClock(int32_t frames) {
+        if (playing_ && spb_ > 0.0) beatStart_ += static_cast<double>(frames) / spb_;
+        bankLane_.rendered(beatStart_, playing_);
+    }
     void clearAll() {
         std::memset(on_, 0, sizeof(on_));
         std::memset(vel_, 0, sizeof(vel_));
@@ -295,7 +327,13 @@ class RhythmMachine final : public Instrument {
     uint8_t on_[kBanks][kVoices][kSteps];
     uint8_t vel_[kBanks][kVoices][kSteps];
     uint8_t acc_[kBanks][kVoices][kSteps];
-    uint8_t bank_ = 0, selVoice_ = 0;
+    uint8_t selVoice_ = 0;
+    // Bank switching (written by the audio thread; atomics because clone() reads them on the
+    // message thread to carry a running switch — a queued Pattern-mode bank — into the copy).
+    static constexpr long kNoStep = -999999;
+    std::atomic<int> playBank_{0};          // the bank the steps play (trails Bank in Pattern mode)
+    std::atomic<long> lastTrigStep_{kNoStep}; // the step that last fired; kNoStep after a stop
+    ParamLaneSteps bankLane_;    // audio thread: this block's Bank lane at each step (specs/100)
     std::shared_ptr<SampleBuffer> smp_[kVoices]; // per-voice sample (Phase 2); null = synth
     uint8_t src_[kVoices] = {0};                 // per-voice source: 0 Synth, 1 Sample
 
