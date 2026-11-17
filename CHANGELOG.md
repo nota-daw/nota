@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Device cards in Modular** (#656, #605, specs/101): a Modular node for a MIDI effect, the
+  instrument, an audio effect or a plug-in now shows the device's real card — the same one
+  Detail draws, playable right there — under the node's header and ports. A size chip in
+  the header switches it between **XS** (the compact parameter list Modular had before),
+  **S** and **L**; a device whose card comes in S starts at S, any other at L. The size is
+  the node's own (Detail's card size doesn't change) and is saved with the project's
+  Modular layout. Nodes you placed stay put when a card grows; the rest of the chain
+  moves aside. A CV cable dropped right on a knob (or on an XS parameter row) links that
+  parameter at once, with the knob outlined while you aim.
 - **Nota Remote: slide a held pad to change Repeat's rate and pitch** (#558, specs/100). With
   Repeat on, a finger holding a pad now plays rolls and fills the way a hardware pad controller
   does.
@@ -84,6 +93,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   device's knob in automation mode shows its lane; removing the device removes its lanes, and
   undo brings both back. MCP gains `set_master_pan` and `add_plugin_param_automation`, and the
   automation tools work on the master's pan and device lanes.
+
+### Changed
+- **Picking a parameter for a CV cable is a searchable panel** (#656, specs/101): a cable
+  dropped on a Modular node or on another track's header, and the **Modulate from a
+  parameter… / Modulate from another track…** items, open a compact panel (at most
+  320 × 420) instead of a menu that could grow past the screen. The search field has focus
+  at once — type to filter, ↑ ↓ to move, Enter to pick, Esc to close — and the list only
+  builds the rows it shows, so a plug-in with thousands of parameters opens instantly.
+  Another track's parameters are grouped by device, and the search covers them all.
 
 ### Fixed
 - **Nota Twin's Pattern automation lands on the bar** (#609, specs/100): a Sequencer Pattern lane

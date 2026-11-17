@@ -2115,8 +2115,8 @@ Nota.App/MixerView.cs	Mute	# data: name a MIDI mapping is saved under, in Englis
 Nota.App/MixerView.cs	Solo	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.cs	Track Pan	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.cs	Track Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
-Nota.App/ModularView.cs	Env	# data: Modular node name (FR-004)
-Nota.App/ModularView.cs	plural by hand: == 1 ? "Env" : "LFO"	# data: a device readout or label that spells parameter words (FR-004)
+Nota.App/ModularView.Picker.cs	Env	# data: Modular node name (FR-004)
+Nota.App/ModularView.Picker.cs	plural by hand: == 1 ? "Env" : "LFO"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.App/PreferencesWindow.Store.cs	$"{(pr.Fraction * size / 1048576.0).ToString("	# data: numbers and units, or a plug-in name and its architectures
 Nota.App/PreferencesWindow.Store.cs	$"{name} · {string.Join("	# data: numbers and units, or a plug-in name and its architectures
 Nota.App/PreferencesWindow.cs	Appearance	# data: stable page id (Page.Id); the shown title is translated
