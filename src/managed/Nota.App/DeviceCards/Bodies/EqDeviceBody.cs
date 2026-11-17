@@ -81,8 +81,9 @@ internal sealed class EqDeviceBody : IDeviceBody
         bool Cut(int b) => Eq8.IsCut(TypeOf(b));
         bool AutoOn() => P(Eq8.AutoGainP) >= 0.5f;
         // Band labels and notes (specs/049): text on the device, each edit one undo step. A rack
-        // chain's EQ-8 (hosted through a proxy engine) keeps params only, so it has none.
-        bool textOk = engine is not System.Reflection.DispatchProxy;
+        // chain's EQ-8 (hosted through a proxy engine) keeps params only, so it has none; the
+        // card-size proxy of a Modular node (specs/101) passes the text calls through, so it keeps them.
+        bool textOk = engine is not System.Reflection.DispatchProxy || engine is CardSizeEngineProxy;
         string LabelOf(int b) => engine.EqBandText(track, di, b, 0);
         string NoteOf(int b) => engine.EqBandText(track, di, b, 1);
         void SetText(int b, string label, string note)

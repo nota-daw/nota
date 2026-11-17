@@ -28,12 +28,26 @@ internal static class PluginScan
         }
     }
 
-    /// <summary>Makes the Get Plug-ins folder a scan path (once; persisted by the catalog).</summary>
+    /// <summary>Makes the Get Plug-ins folder a scan path (once; persisted by the catalog).
+    /// Skips it when the user removed it — only "Restore defaults" brings it back.</summary>
     public static void EnsureStoreScanPath(IPluginCatalog catalog, IPluginStore store)
     {
+        if (catalog.IsScanPathRemoved(store.PluginsDir)) return;
         for (int i = 0; i < catalog.ScanPathCount; i++)
             if (string.Equals(catalog.ScanPath(i), store.PluginsDir, StringComparison.Ordinal)) return;
         catalog.AddScanPath(store.PluginsDir);
+    }
+
+    /// <summary>Re-adds the missing default scan paths: the OS-standard VST3 locations
+    /// (native restore) plus the Get Plug-ins folder (an explicit add, so it also
+    /// clears a remembered removal). User-added folders are untouched.
+    /// Returns how many were added.</summary>
+    public static int RestoreDefaultScanPaths(IPluginCatalog catalog, IPluginStore store)
+    {
+        int added = catalog.RestoreDefaultScanPaths("VST3");
+        int before = catalog.ScanPathCount;
+        catalog.AddScanPath(store.PluginsDir);
+        return added + (catalog.ScanPathCount - before);
     }
 
     /// <summary>Rescans off the UI thread, then rebuilds the browser lists. Returns the number

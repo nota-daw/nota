@@ -709,6 +709,12 @@ bool Engine::rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int3
     republishCcRoutes(t);
     return true;
 }
+bool Engine::rackChainAcceptsSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot) const {
+    auto* r = rackCoreAt(t, host);
+    if (!r || isNestedRack(host) || slot < 0) return false;
+    Device* d = r->chainDeviceAt(chain, slot);
+    return d && d->acceptsSidechain();
+}
 bool Engine::rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src,
     int32_t* tapPre, float* gainDb, float* mix) const {
     auto* r = rackCoreAt(t, host);

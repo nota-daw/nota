@@ -32,6 +32,7 @@ public partial class MainWindow
         // Windows / Linux (#10).
         Keys.SetTip(AutomationToggle, Loc.T("main.menu_keys.show_parameter_automation_lanes_a"), "view.automation");
         Keys.SetTip(MixerToggle, Loc.T("main.menu_keys.show_or_hide_the_mixer"), "view.mixer");
+        Keys.SetTip(AssistantToggle, Loc.T("assistant.toggle_tip"), "view.assistant");
         foreach (var (c, id) in new (Control, string)[]
                  {
                      (RecordBtn, "transport.record"), (LoopRecordCell, "transport.loopRecordMode"), (MetronomeBtn, "transport.metronome"),

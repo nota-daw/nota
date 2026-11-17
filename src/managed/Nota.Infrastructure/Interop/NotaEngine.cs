@@ -93,7 +93,9 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetLoopRecordMode(bool replace) { ThrowIfDisposed(); Check(NativeMethods.SetLoopRecordMode(_handle, replace ? 1 : 0)); }
     public bool LoopRecordReplace { get { ThrowIfDisposed(); return NativeMethods.LoopRecordMode(_handle) == 1; } }
     public void StopTransport() { ThrowIfDisposed(); Check(NativeMethods.TransportStop(_handle)); }
-    public void SetBpm(double bpm) { ThrowIfDisposed(); Check(NativeMethods.SetBpm(_handle, bpm)); }
+    // While the master Tempo lane drives the tempo (specs/099) the engine refuses a transport
+    // tempo: a no-op here, so a scene launch or a stale field echo never throws.
+    public void SetBpm(double bpm) { ThrowIfDisposed(); if (IsTempoAutomated) return; Check(NativeMethods.SetBpm(_handle, bpm)); }
     public double Bpm { get { ThrowIfDisposed(); return NativeMethods.TransportBpm(_handle); } }
     public void SetTimeSignature(int num, int denom) { ThrowIfDisposed(); Check(NativeMethods.SetTimeSignature(_handle, num, denom)); }
     public void SetLoop(bool enabled, double startBeat, double endBeat) { ThrowIfDisposed(); Check(NativeMethods.SetLoop(_handle, enabled ? 1 : 0, startBeat, endBeat)); }

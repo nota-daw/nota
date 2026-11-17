@@ -34,6 +34,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/Parameter.h"
 #include "dsp/primitives/Oversampler.h"
 
 #include <algorithm>
@@ -272,6 +273,10 @@ class Forge : public Device {
     float lpTone_[2] = {};              // master tilt one-pole
     float mbLo_[2] = {}, mbHi_[2] = {}; // multiband crossover one-poles
     float env_ = 0;
+    // Output and the stage trims glide across a block (#559): the trims a block ended on.
+    dsp::BlockRamp outRamp_;
+    float trimFrom_[kStages] = {};
+    bool trimPrimed_ = false;
     double lfoPhase_ = 0;
     double beatStart_ = 0, spb_ = 0;
     bool playing_ = false;

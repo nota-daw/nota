@@ -23,6 +23,10 @@ struct PluginCatalog::Impl {
     // (getTypes()), so reads index this instead; sync() after every mutation.
     std::vector<juce::PluginDescription> types;
     std::vector<std::string> scanPaths;
+    // Paths the user removed: backfill skips them (a removal must survive a
+    // restart — loadScanPathsOnce runs once per process), an explicit add or
+    // a restore clears them.
+    std::vector<std::string> removedScanPaths;
     std::map<std::string, int64_t> failed; // id -> file stamp when it failed
     void sync() {
         const auto all = list.getTypes();
@@ -60,6 +64,9 @@ juce::File catalogFile() {
 juce::File scanPathsFile() {
     return supportDir().getChildFile("scanpaths.txt");
 }
+juce::File removedScanPathsFile() {
+    return supportDir().getChildFile("scanpaths-removed.txt");
+}
 juce::File failedFile() {
     return supportDir().getChildFile("scan-failed.txt");
 }
@@ -71,6 +78,12 @@ int64_t fileStamp(const std::string& id) {
     const juce::File f{path};
     return f.exists() ? f.getLastModificationTime().toMilliseconds() : 0;
 }
+
+// Formats with OS-standard default scan folders, keyed by the JUCE format
+// name the scan loop uses ("VST3" today; see abi_pluginscanner.cpp). A new
+// format (CLAP, LV2) adds one entry here — backfill, restore and the ABI
+// below stay format-agnostic (issue #622).
+const char* const kFormatsWithDefaults[] = {"VST3"};
 
 } // namespace
 
@@ -159,23 +172,70 @@ std::vector<std::string> PluginCatalog::scanPaths() const {
 
 void PluginCatalog::addScanPath(const std::string& dir) {
     if (dir.empty()) return;
+    bool unblocked = false;
+    bool appended = false;
     {
         std::unique_lock lock(mutex_);
+        // An explicit add wins over a remembered removal (Add folder…,
+        // "Restore defaults", the store install): the user asked for it back.
+        for (auto it = impl_->removedScanPaths.begin(); it != impl_->removedScanPaths.end(); ++it)
+            if (*it == dir) {
+                impl_->removedScanPaths.erase(it);
+                unblocked = true;
+                break;
+            }
+        bool known = false;
         for (const auto& p : impl_->scanPaths)
-            if (p == dir) return;
-        impl_->scanPaths.push_back(dir);
+            if (p == dir) {
+                known = true;
+                break;
+            }
+        if (!known) {
+            impl_->scanPaths.push_back(dir);
+            appended = true;
+        }
     }
-    saveScanPaths();
+    if (unblocked) saveRemoved();
+    if (appended) saveScanPaths();
 }
 
 bool PluginCatalog::removeScanPath(int32_t index) {
+    std::string gone;
     {
         std::unique_lock lock(mutex_);
         if (index < 0 || index >= static_cast<int32_t>(impl_->scanPaths.size())) return false;
+        gone = impl_->scanPaths[static_cast<size_t>(index)];
         impl_->scanPaths.erase(impl_->scanPaths.begin() + index);
     }
     saveScanPaths();
+    // Remember the removal so backfill doesn't undo it on the next launch.
+    // Any path qualifies — the set is only ever consulted for defaults.
+    if (!gone.empty()) {
+        bool fresh = false;
+        {
+            std::unique_lock lock(mutex_);
+            bool known = false;
+            for (const auto& p : impl_->removedScanPaths)
+                if (p == gone) {
+                    known = true;
+                    break;
+                }
+            if (!known) {
+                impl_->removedScanPaths.push_back(gone);
+                fresh = true;
+            }
+        }
+        if (fresh) saveRemoved();
+    }
     return true;
+}
+
+bool PluginCatalog::isScanPathRemoved(const std::string& dir) const {
+    if (dir.empty()) return false;
+    std::shared_lock lock(mutex_);
+    for (const auto& p : impl_->removedScanPaths)
+        if (p == dir) return true;
+    return false;
 }
 
 int32_t PluginCatalog::scanPathCount() const {
@@ -187,6 +247,62 @@ std::string PluginCatalog::scanPathAt(int32_t index) const {
     std::shared_lock lock(mutex_);
     if (index < 0 || index >= static_cast<int32_t>(impl_->scanPaths.size())) return {};
     return impl_->scanPaths[static_cast<size_t>(index)];
+}
+
+std::vector<std::string> PluginCatalog::defaultScanPathsFor(const char* format) {
+    std::vector<std::string> out;
+    if (format == nullptr) return out;
+    // Same source the scan loop searches (abi_pluginscanner.cpp): the
+    // format's own standard locations, with "~" already expanded to
+    // absolute paths by juce::File. Unknown formats (CLAP today) → empty.
+    const juce::String name{juce::CharPointer_UTF8(format)};
+    for (auto* f : sharedFormatManager().getFormats()) {
+        if (f == nullptr || f->getName() != name) continue;
+        const auto search = f->getDefaultLocationsToSearch();
+        for (int i = 0; i < search.getNumPaths(); ++i) {
+            const auto path = search[i].getFullPathName().toStdString();
+            if (path.empty()) continue;
+            bool known = false;
+            for (const auto& q : out)
+                if (q == path) {
+                    known = true;
+                    break;
+                }
+            if (!known) out.push_back(path);
+        }
+    }
+    return out;
+}
+
+int32_t PluginCatalog::restoreDefaultScanPaths(const char* format) {
+    const auto defaults = defaultScanPathsFor(format);
+    if (defaults.empty()) return 0;
+    int32_t added = 0;
+    bool unblocked = false;
+    {
+        std::unique_lock lock(mutex_);
+        for (const auto& p : defaults) {
+            for (auto it = impl_->removedScanPaths.begin(); it != impl_->removedScanPaths.end(); ++it)
+                if (*it == p) {
+                    impl_->removedScanPaths.erase(it);
+                    unblocked = true;
+                    break;
+                }
+            bool known = false;
+            for (const auto& q : impl_->scanPaths)
+                if (q == p) {
+                    known = true;
+                    break;
+                }
+            if (!known) {
+                impl_->scanPaths.push_back(p);
+                ++added;
+            }
+        }
+    }
+    if (unblocked) saveRemoved();
+    if (added > 0) saveScanPaths();
+    return added;
 }
 
 void PluginCatalog::addType(const juce::PluginDescription& desc) {
@@ -302,15 +418,54 @@ std::string PluginCatalog::scanLogPath() {
 }
 
 void PluginCatalog::loadScanPathsOnce() {
-    std::unique_lock lock(mutex_);
-    if (scanPathsLoaded_) return;
-    scanPathsLoaded_ = true;
-    const auto f = scanPathsFile();
-    if (!f.existsAsFile()) return;
-    juce::StringArray lines;
-    lines.addLines(f.loadFileAsString());
-    lines.removeEmptyStrings();
-    for (const auto& l : lines) impl_->scanPaths.push_back(l.toStdString());
+    bool changed = false;
+    {
+        std::unique_lock lock(mutex_);
+        if (scanPathsLoaded_) return;
+        scanPathsLoaded_ = true;
+        const auto f = scanPathsFile();
+        if (f.existsAsFile()) {
+            juce::StringArray lines;
+            lines.addLines(f.loadFileAsString());
+            lines.removeEmptyStrings();
+            for (const auto& l : lines) impl_->scanPaths.push_back(l.toStdString());
+        }
+        if (!removedLoaded_) {
+            removedLoaded_ = true;
+            const auto removed = removedScanPathsFile();
+            if (removed.existsAsFile()) {
+                juce::StringArray lines;
+                lines.addLines(removed.loadFileAsString());
+                lines.removeEmptyStrings();
+                for (const auto& l : lines) impl_->removedScanPaths.push_back(l.toStdString());
+            }
+        }
+        // Backfill (issue #622): OS defaults for known formats, appended
+        // once, no dupes, existing order kept — unless the user removed them
+        // (the removed-set survives restarts; only restore brings them back).
+        // Fresh profiles (no file) are seeded the same way.
+        for (const char* format : kFormatsWithDefaults)
+            for (const auto& p : defaultScanPathsFor(format)) {
+                bool skipped = false;
+                for (const auto& r : impl_->removedScanPaths)
+                    if (r == p) {
+                        skipped = true;
+                        break;
+                    }
+                if (skipped) continue;
+                bool known = false;
+                for (const auto& q : impl_->scanPaths)
+                    if (q == p) {
+                        known = true;
+                        break;
+                    }
+                if (!known) {
+                    impl_->scanPaths.push_back(p);
+                    changed = true;
+                }
+            }
+    }
+    if (changed) saveScanPaths();
 }
 
 void PluginCatalog::saveScanPaths() const {
@@ -322,6 +477,17 @@ void PluginCatalog::saveScanPaths() const {
     juce::StringArray lines;
     for (const auto& p : copy) lines.add(juce::String::fromUTF8(p.c_str()));
     scanPathsFile().replaceWithText(lines.joinIntoString("\n"));
+}
+
+void PluginCatalog::saveRemoved() const {
+    std::vector<std::string> copy;
+    {
+        std::shared_lock lock(mutex_);
+        copy = impl_->removedScanPaths;
+    }
+    juce::StringArray lines;
+    for (const auto& p : copy) lines.add(juce::String::fromUTF8(p.c_str()));
+    removedScanPathsFile().replaceWithText(lines.joinIntoString("\n"));
 }
 
 } // namespace scanner

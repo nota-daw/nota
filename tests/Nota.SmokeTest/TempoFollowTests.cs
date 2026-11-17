@@ -55,6 +55,23 @@ internal static class TempoFollowTests
         // After the field's change has landed, an outside change is followed again.
         e.SetBpm(100); Apply(e); vm.Tick();
         yield return (vm.Bpm == 100m, "outside changes are followed again after the field's own lands");
+
+        // Project loading restores the persisted transport readout after the authoritative
+        // tempo map.  It must not send a fresh SetBpm at the current playhead and mutate that map.
+        var map = new[] { new TempoPoint(0, 80), new TempoPoint(8, 140) };
+        e.SetTempoPoints(map); e.Seek(8); Apply(e);
+        vm.RestoreBpm(80); Apply(e);
+        yield return (vm.Bpm == 80m && TempoLane.Holds(e, map),
+            "restoring the project BPM readout does not edit the loaded tempo map");
+
+        // specs/099: while the master Tempo lane drives the tempo the field only shows it.
+        vm.Tick();
+        yield return (!vm.BpmEditable && vm.Bpm == 140m, "an automated tempo makes the field read-only, showing the tempo under the playhead");
+        vm.Bpm = 150; Apply(e); vm.Tick();
+        yield return (TempoLane.Holds(e, map) && vm.Bpm == 140m, "…and a value typed into it changes nothing");
+        e.SetTempoPoints(Array.Empty<TempoPoint>()); Apply(e); vm.Tick();
+        vm.Bpm = 150; Apply(e); vm.Tick();
+        yield return (vm.BpmEditable && Math.Abs(e.Bpm - 150) < 1e-9, "removing every tempo point makes the field editable again");
     }
 
     // Stand-in for the audio thread: one render drains the queued commands.

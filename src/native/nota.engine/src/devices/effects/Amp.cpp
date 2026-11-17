@@ -123,7 +123,7 @@ void Amp::process(float* buf, int32_t frames) {
     });
 
     // Base-rate post: DC block, tone stack, deep, cabinet, cuts, makeup / auto-comp, output, gate, dry/wet.
-    for (int32_t i = 0; i < frames; ++i) {
+    const auto sample = [&](int32_t i, float og, float mx) NOTA_FORCE_INLINE_LAMBDA {
         float y[2];
         for (int c = 0; c < 2; ++c) {
             float x = buf[i * 2 + c];
@@ -165,7 +165,7 @@ void Amp::process(float* buf, int32_t frames) {
             inMs_ = wetMs_ = 0.0;
         }
         for (int c = 0; c < 2; ++c) {
-            float wet = y[c] * outGain;
+            float wet = y[c] * og;
             const float in = dry_[i * 2 + c];
             if (gateThr > 0.0f) { // noise gate keyed on the input level
                 const float lvl = std::fabs(in);
@@ -176,12 +176,21 @@ void Amp::process(float* buf, int32_t frames) {
             } else {
                 gateGain_[c] = 1.0f;
             }
-            const float o = in * (1.0f - mix) + wet * mix;
+            const float o = in * (1.0f - mx) + wet * mx;
             buf[i * 2 + c] = o;
             outPk = std::max(outPk, std::fabs(o));
         }
         gateSum += 0.5f * (gateGain_[0] + gateGain_[1]);
+    };
+    // Output / Mix glide (#559): the ramps run only over the frames right after a move;
+    // a settled block is the plain fixed-output, fixed-mix loop.
+    const int32_t glide = std::max(outRamp_.begin(outGain, frames), mixRamp_.begin(mix, frames));
+    int32_t from = 0;
+    if (glide > 0) {
+        for (int32_t i = 0; i < glide; ++i) sample(i, outRamp_.next(), mixRamp_.next());
+        from = glide;
     }
+    for (int32_t i = from; i < frames; ++i) sample(i, outGain, mix);
 
     // Wet peak (decays slowly so a ringing filter blocks accrual); sleep
     // additionally waits out the oversampler transient + filter ring, though the

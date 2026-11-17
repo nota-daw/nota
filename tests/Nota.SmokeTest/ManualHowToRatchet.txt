@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Manual how-to sections that have no Show me anchors yet (specs/098 FR-020).
+# Ratchet: may only shrink. Anchor a section in nota-docs, rebuild the index, delete its line.

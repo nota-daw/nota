@@ -25,6 +25,16 @@ public static class AutomationCurve
         return double.ExpM1(k * t) / double.ExpM1(k);
     }
 
+    /// <summary>Where a segment reaches the shaped fraction <paramref name="y"/> (0..1): the
+    /// inverse of <see cref="Shape"/>, t = ln(1 + y·(e^k − 1)) / k.</summary>
+    public static double InverseShape(double y, float curve)
+    {
+        y = Math.Clamp(y, 0.0, 1.0);
+        double k = -curve * Steepness;
+        if (Math.Abs(k) < 1e-6) return y;
+        return Math.Clamp(double.LogP1(y * double.ExpM1(k)) / k, 0.0, 1.0);
+    }
+
     /// <summary>The value at <paramref name="t"/> (0..1) between <paramref name="v0"/> and <paramref name="v1"/>.</summary>
     public static double Lerp(double v0, double v1, double t, float curve) => v0 + (v1 - v0) * Shape(t, curve);
 

@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -89,6 +90,15 @@ struct AudioClip {
     // shared across snapshots; rebuilt on tempo/pitch/mode/marker/window/SR change.
     // Null when warp is off (or while a rebuild is pending).
     std::shared_ptr<const WarpCache> warpCache;
+    // Tempo-map stretch (specs/086): one pointer so an unmapped clip stays small to copy.
+    struct TempoWarp {
+        std::shared_ptr<const WarpCache> cache;
+        std::shared_ptr<const class TempoMap> map; // the map it was built for (identity)
+        double startBeat = -1.0;                   // the clip start it was built for
+        bool reversed = false;                    // direction was baked before mapped stretching
+    };
+    std::shared_ptr<const TempoWarp> tempoWarp;
+    const WarpCache* tempoWarpCache() const { return tempoWarp ? tempoWarp->cache.get() : nullptr; }
     // Clip volume envelope (M9 follow-up): breakpoints in clip-local beats, value
     // 0..1, multiplying the per-sample output. Empty = no envelope (fast path).
     AutomationLane volumeEnvelope;
@@ -148,6 +158,9 @@ struct AudioTake {
     // Beats per frame of `sample` that the take and its comp sections are laid out with: the
     // tempo's mapping when they were placed. A tempo change re-places both (placeTakesForTempo).
     double beatsPerFrame = 0.0;
+    std::shared_ptr<const class TempoMap> tempoMap;
+    double beatAtFrame(double frame) const;
+    double frameAtBeat(double beat) const;
 };
 
 // A Session-view clip slot (M5). One per scene on each track. Holds a MIDI clip
@@ -200,10 +213,14 @@ inline constexpr int kMaxReturns = 4;
 
 class Track {
   public:
+    struct LiveHeld; // below
     explicit Track(int32_t id, TrackType type = TrackType::Audio)
         : Track(id, type, std::make_shared<SessionPlayer>()) {}
     Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player)
         : sessionPlayer(player), id_(id), type_(type) {}
+    // A graph clone: the existing player and live-note state, so an edit allocates neither.
+    Track(int32_t id, TrackType type, const std::shared_ptr<SessionPlayer>& player, std::shared_ptr<LiveHeld> held)
+        : liveHeld(std::move(held)), sessionPlayer(player), id_(id), type_(type) {}
 
     int32_t id() const { return id_; }
     TrackType type() const { return type_; }
@@ -253,6 +270,13 @@ class Track {
         int8_t source[128] = {}, channel[128] = {}; // where each held note came from (its off must too)
         bool release = false;
         int64_t tailQuiet = -1; // see tailQuiet() above
+        // The notes MIDI In (the track it takes MIDI from, routedFrom) started on this track's
+        // instrument and hasn't ended yet (#504). When MIDI In changes or its track is gone,
+        // the note-offs would never arrive, so the render ends these notes itself.
+        uint64_t routedBits[2] = {0, 0};
+        int32_t routedFrom = -1;
+        uint64_t routedInstUid = 0; // the instrument those notes sound on (Instrument::uid)
+        void forgetRouted() { routedBits[0] = routedBits[1] = 0; } // the voices were ended elsewhere
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 
@@ -435,6 +459,12 @@ class Track {
     // (un)freeze structural edit, so the audio thread reads it lock-free like `instrument`.
     std::shared_ptr<const std::vector<float>> frozenBuf;
     double frozenSpb = 0.0;
+    struct FrozenTiming {
+        std::shared_ptr<const class TempoMap> map;
+        double sampleRate = 0.0;
+        double startBeat = 0.0;
+    };
+    std::shared_ptr<const FrozenTiming> frozenTiming; // immutable capture clock, not the current project map
 
   private:
     int32_t id_;

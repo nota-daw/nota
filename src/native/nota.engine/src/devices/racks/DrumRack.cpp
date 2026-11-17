@@ -18,11 +18,16 @@ void DrumRack::noteOn(int32_t pitch, float velocity) {
         if (!c.instrument || c.ctl->triggerNote.load(std::memory_order_relaxed) != pitch) continue;
         const int32_t grp = c.ctl->chokeGroup.load(std::memory_order_relaxed);
         if (grp > 0) {
+            // A pad of the group struck at this same sample (an open and a closed hat on one
+            // step) is not cut: both are heard, and the group's next hit chokes them. Before,
+            // which of them survived came down to the order of two simultaneous events —
+            // with the kit's humanize, a different one every pass (#644).
             for (auto& o : st->chains) {
-                if (&o == &c || !o.instrument) continue;
+                if (&o == &c || !o.instrument || o.ctl->hitSerial == renderSerial_) continue;
                 if (o.ctl->chokeGroup.load(std::memory_order_relaxed) == grp) o.instrument->allNotesOff();
             }
         }
+        c.ctl->hitSerial = renderSerial_;
         c.ctl->retrig = true; // kick the pad decay VCA (audio thread)
         c.instrument->noteOn(tunedNote(*c.ctl, pitch), velocity);
     }
@@ -47,27 +52,54 @@ void DrumRack::allNotesOff() {
         if (c.instrument) c.instrument->allNotesOff();
 }
 
+// Before a render: the hits noteOn takes from here on are at a later sample (renderSerial_,
+// #644), and a silent pad keeps time — its instrument plays the hits it gets into nothing and
+// its decay runs on, so unmuting is heard from the pad's next hit. Before, the hit it took
+// while silent waited, frozen at its start, and fired at full level on unmute (#650). Out of
+// line, so the loop every audible pad runs in render() compiles exactly as before (perf gate).
+void DrumRack::beginRender(RackState& st, int32_t frames) {
+    ++renderSerial_;
+    bool anySolo = false;
+    for (auto& c : st.chains) anySolo |= c.ctl->solo.load(std::memory_order_relaxed);
+    for (auto& c : st.chains) {
+        if (!c.instrument) continue;
+        // Mute and solo are read once per render, here: render() uses this, so a toggle from the
+        // UI between the two passes can't render a pad twice or not at all.
+        const bool silent = c.ctl->mute.load(std::memory_order_relaxed) ||
+                            (anySolo && !c.ctl->solo.load(std::memory_order_relaxed));
+        c.ctl->silentNow = silent;
+        if (!silent || (taps_.any() && taps_.find(c.uid))) continue; // heard, or a ghost key's pad
+        if (!c.instrument->isIdle()) {
+            std::memset(scratch_, 0, sizeof(float) * frames * 2);
+            c.instrument->render(scratch_, frames);
+        }
+        if (c.ctl->retrig) {
+            c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
+            c.ctl->retrig = false;
+        }
+        const float dec = c.ctl->decay.load(std::memory_order_relaxed);
+        if (dec < 0.999f) {
+            const double tauMs = 20.0 * std::pow(100.0, (double)dec);
+            const double fall = std::exp(-(double)frames / (tauMs * 0.001 * sampleRate_));
+            c.ctl->ampEnv.store(c.ctl->ampEnv.load(std::memory_order_relaxed) * (float)fall, std::memory_order_relaxed);
+        }
+    }
+}
+
 void DrumRack::render(float* out, int32_t frames) {
     const auto done = renderScope();
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
-    bool anySolo = false;
-    for (auto& c : st->chains)
-        if (c.ctl->solo.load(std::memory_order_relaxed)) {
-            anySolo = true;
-            break;
-        }
+    beginRender(*st, frames);
     const float rv = rackVolume_.load(std::memory_order_relaxed);
     for (auto& c : st->chains) {
         if (!c.instrument) continue;
-        const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
-        const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
         // A pad a sidechain key listens to (specs/050) renders even when muted or solo-gated:
         // the "ghost kick" drives the key without being heard.
         const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
-        const bool silent = mute || (anySolo && !solo);
-        if (silent && !tap) {
+        const bool silent = c.ctl->silentNow; // as beginRender read it
+        if (silent && !tap) { // kept in time by beginRender
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
             c.ctl->retrig = false;
             continue;

@@ -72,6 +72,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         return RM.VoiceNames[v];
     }
 
+    // A bank chosen but not yet playing (Bank Switch: Pattern): a tint of the playing bank's teal.
+    private static readonly IBrush QueuedBank = Teal is SolidColorBrush t ? NotaPalette.Wash(t, 0x59) : Teal;
+
     // Kit-voice identity hues — one per voice, painted only through NotaPalette.Ink.
     private static readonly string[] Dots = { "#C77F55", "#D8A03D", "#3E8E8E", "#7A6FB0", "#9AA64A", "#58B368", "#5AA0B8", "#B57286" };
 
@@ -93,7 +96,10 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         // ---- state ----------------------------------------------------------------------
         var pat = RM.Parse(engine.GetPluginState(track, -1), pc);
         int sel = pat.SelectedVoice;
-        int bank = pat.CurrentBank;
+        // The Bank param (specs/100) is the bank the strip edits and the one that plays next; the
+        // playing bank (scope) trails it while a Pattern-mode switch waits for the pattern start.
+        int bank = RM.BankOf(G(RM.BankId));
+        int playing = bank;
         var isSample = new bool[RM.Voices];
         for (int v = 0; v < RM.Voices; v++) isSample[v] = engine.RhythmVoiceSource(track, v) == 1;
         long sid = engine.TryGetRhythmVoiceInfo(track, sel, out var vinfo) ? vinfo.SampleId : 0;
@@ -592,7 +598,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             fly.ShowAt(strip);
         };
 
-        // Banks A–D: the playing bank in teal (it is the performance, not a parameter).
+        // Banks A–D: the playing bank filled teal, a chosen bank still waiting (Pattern switch) a
+        // teal tint. A click writes the Bank param like any discrete control, so it is undoable,
+        // records while automation write is armed and gives way to a Bank lane on playback.
         var bankRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
         for (int b = 0; b < RM.Banks; b++)
         {
@@ -606,7 +614,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 e.Handled = true;
                 if (pt.Properties.IsRightButtonPressed) { BankMenu(bb, cell); return; }
                 if (!pt.Properties.IsLeftButtonPressed || bb == bank) return;
-                Act(RM.A_SelectBank, bb); ctx.NotifyChanged(); ReloadPattern();
+                Write(RM.BankId, RM.BankNorm(bb)); ReloadPattern();
             };
             bankCells[b] = cell; bankTexts[b] = tb; bankRow.Children.Add(cell);
         }
@@ -614,10 +622,10 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             for (int b = 0; b < RM.Banks; b++)
             {
-                bool on = b == bank;
-                bankCells[b].Background = on ? Teal : Brushes.Transparent;
-                bankTexts[b].Foreground = on ? OnAccent : TextTertiary;
-                bankTexts[b].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                bool on = b == playing, queued = b == bank && bank != playing;
+                bankCells[b].Background = on ? Teal : queued ? QueuedBank : Brushes.Transparent;
+                bankTexts[b].Foreground = on ? OnAccent : queued ? TextPrimary : TextTertiary;
+                bankTexts[b].FontWeight = on || queued ? FontWeight.SemiBold : FontWeight.Normal;
             }
         }
         void BankMenu(int b, Control anchor)
@@ -633,6 +641,15 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 copy.Items.Add(mi);
             }
             fly.Items.Add(copy);
+            fly.Items.Add(new Separator());
+            // When a new bank takes over (the Bank Switch param, specs/100).
+            bool atPattern = RM.SwitchesAtPattern(G(RM.BankSwitchId));
+            foreach (var (label, pattern) in new[] { (Loc.T("device.rhythm.switch_at_next_step"), false), (Loc.T("device.rhythm.switch_at_pattern_start"), true) })
+            {
+                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = atPattern == pattern };
+                mi.Click += (_, _) => { if (atPattern != pattern) { Write(RM.BankSwitchId, pattern ? 1f : 0f); PaintBanks(); } };
+                fly.Items.Add(mi);
+            }
             fly.Items.Add(new Separator());
             fly.Items.Add(MenuKit.Danger(Loc.F("device.rhythm.clear_bank", RM.BankNames[b]), GlyphKind.Trash,
                 () => { Act(RM.A_ClearBank, b); ctx.NotifyChanged(); ReloadPattern(); }));
@@ -663,7 +680,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             pat = RM.Parse(engine.GetPluginState(track, -1), pc);
             if (pat.SelectedVoice != sel) { ctx.RequestRebuild(); return; }
-            bank = pat.CurrentBank;
+            bank = RM.BankOf(G(RM.BankId));
             LoadStrip(); PaintBanks(); Refresh();
         }
 
@@ -674,8 +691,11 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             if (n >= RM.ScopeLength)
             {
                 int rev = (int)scope[RM.S_Rev];
-                if (lastRev >= 0 && rev != lastRev) ReloadPattern();
+                // The Bank param moves on its own under a lane, a learned controller or a macro.
+                if ((lastRev >= 0 && rev != lastRev) || RM.BankOf(G(RM.BankId)) != bank) ReloadPattern();
                 lastRev = rev;
+                int pb = Math.Clamp((int)Math.Round(scope[RM.S_Bank]), 0, RM.Banks - 1);
+                if (pb != playing) { playing = pb; PaintBanks(); }
                 int head = (int)Math.Round(scope[RM.S_Step]);
                 strip.SetHead(head);
                 for (int v = 0; v < RM.Voices; v++)

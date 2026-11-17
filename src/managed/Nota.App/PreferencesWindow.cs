@@ -866,10 +866,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         };
         var addBtn = Btn(Loc.T("preferences.add_folder"));
         var removeBtn = Btn(Loc.T("preferences.remove"));
+        var restoreBtn = Btn(Loc.T("preferences.restore_defaults"));
 
-        // Nota's own install folder (Downloads) is always searched — it is re-added at startup,
-        // so it is tagged and can't be removed.
-        bool IsDefault(string? path) => string.Equals(path, _store.PluginsDir, StringComparison.Ordinal);
+        // Nota's own install folder (Downloads) and the OS-standard VST3 locations
+        // are always searched — re-added at startup, so they are tagged.
+        bool IsDefault(string? path)
+        {
+            if (string.Equals(path, _store.PluginsDir, StringComparison.Ordinal)) return true;
+            for (int i = 0, n = _catalog.DefaultScanPathCount("VST3"); i < n; i++)
+                if (string.Equals(path, _catalog.DefaultScanPath("VST3", i), StringComparison.Ordinal)) return true;
+            return false;
+        }
 
         void RenderFolders()
         {
@@ -898,7 +905,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 row.PointerPressed += (_, _) => { _selFolder = idx; RenderFolders(); };
                 list.Children.Add(row);
             }
-            removeBtn.IsEnabled = _selFolder >= 0 && _selFolder < n && !IsDefault(_catalog.ScanPath(_selFolder));
+            removeBtn.IsEnabled = _selFolder >= 0 && _selFolder < n;
         }
         RenderFolders();
 
@@ -918,6 +925,12 @@ public sealed partial class PreferencesWindow : NotaWindow
             if (_selFolder < 0 || _selFolder >= _catalog.ScanPathCount) return;
             _catalog.RemoveScanPath(_selFolder);
             _selFolder = Math.Max(0, _selFolder - 1);
+            RenderFolders();
+        };
+        restoreBtn.Click += (_, _) =>
+        {
+            PluginScan.RestoreDefaultScanPaths(_catalog, _store);
+            _selFolder = _catalog.ScanPathCount - 1;
             RenderFolders();
         };
 
@@ -955,8 +968,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 Caption(Loc.T("preferences.adding_a_plug_in_from"))),
             Section(Loc.T("preferences.plugin_scan_folders"), 10,
                 well,
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { addBtn, removeBtn } },
-                Caption(Loc.T("preferences.extra_folders_are_searched_for"))),
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { addBtn, removeBtn, restoreBtn } },
+                Caption(Loc.T("preferences.folders_are_searched_for"))),
             Section(Loc.T("preferences.scan"), 10,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, Children = { rescan, rescanStatus } }));
     }

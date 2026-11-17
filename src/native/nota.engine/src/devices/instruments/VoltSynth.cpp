@@ -260,6 +260,13 @@ void VoltSynth::noteOff(int32_t pitch) {
     wake();
     const bool wasHeld = popHeld(pitch);
     if (get(MonoMode) > 0.5f && wasHeld) {
+        // Voices a poly patch left sounding when a preset (or the Mono switch) turned mono with
+        // keys down are released by their own key; mono itself only ever plays voice 0 (#649).
+        for (auto& o : voices_)
+            if (&o != &voices_[0] && o.active && o.pitch == pitch && o.aStage != Stage::Release) {
+                o.aStage = Stage::Release;
+                o.fStage = Stage::Release;
+            }
         Voice& v = voices_[0];
         if (heldCount_ == 0) {
             if (v.active && v.aStage != Stage::Release) {

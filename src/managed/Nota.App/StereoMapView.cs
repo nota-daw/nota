@@ -185,7 +185,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         var master = new Item
         {
             Id = masterId, Name = _engine.GetTrackName(masterId) is { Length: > 0 } mn ? mn : Loc.T("common.master"),
-            Color = NotaPalette.Accent, Pan = 0, Volume = _engine.MasterVolume, Master = true,
+            Color = NotaPalette.Accent, Pan = _engine.MasterPan, Volume = _engine.MasterVolume, Master = true,
         };
         if (_measureAt.TryGetValue(masterId, out int mm)) { master.M = _measures[mm]; master.Has = true; }
         _items.Add(master);

@@ -31,7 +31,7 @@ internal static partial class DesignTokenCheck
     // and panels, the product and its themes, plug-in formats, keys.
     private static readonly HashSet<string> ProperNouns = new(StringComparer.Ordinal)
     {
-        "Arrangement", "Session", "Modular", "Mixer", "Finder", "Nota", "Studio", "Ember",
+        "Arrangement", "Session", "Modular", "Mixer", "Assistant", "Finder", "Nota", "Studio", "Ember",
         "Graphite", "Paper", "MIDI", "VST3", "AU", "CLAP",
         // Keys, named as the keyboard and Settings → Shortcuts spell them: "Play (Space)".
         "Space", "Return", "Enter", "Esc", "Tab", "Delete", "Shift", "Ctrl", "Alt",

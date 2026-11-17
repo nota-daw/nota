@@ -249,6 +249,14 @@ public partial class MainWindow : Window
         var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: NotaType.Readout, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
+        // specs/099: while the master Tempo lane drives the tempo the field only shows it.
+        void ApplyBpmEditable()
+        {
+            bpmField.IsEnabled = vm.Transport.BpmEditable;
+            ToolTip.SetTip(bpmField, vm.Transport.BpmEditable ? null : Loc.T("transport.tempo_automated"));
+            ToolTip.SetShowOnDisabled(bpmField, true);
+        }
+        ApplyBpmEditable();
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
         var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
@@ -265,7 +273,8 @@ public partial class MainWindow : Window
 
         vm.Transport.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(vm.Transport.Bpm))
+            if (e.PropertyName == nameof(vm.Transport.BpmEditable)) ApplyBpmEditable();
+            else if (e.PropertyName == nameof(vm.Transport.Bpm))
             {
                 bpmField.Value = (double)vm.Transport.Bpm;
                 RequestTempoRefresh();   // un-warped audio clips change beat length with the tempo
@@ -280,13 +289,15 @@ public partial class MainWindow : Window
                 tsNum.Value = vm.Transport.TimeSigNumerator;
                 ApplyMeter(vm.Transport.TimeSigNumerator);   // bar lines and bar numbers follow (#405)
             }
-            else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
+            else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator))
+            { tsDen.Value = vm.Transport.TimeSigDenominator; Timeline.TimeSignatureDenominator = vm.Transport.TimeSigDenominator; Timeline.Refresh(); }
             else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
             // Every ruler reads in the read-out's unit, bars or time (#275).
             else if (e.PropertyName == nameof(vm.Transport.ShowTimeDisplay)) RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         };
         RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         ApplyMeter(vm.Transport.TimeSigNumerator);
+        Timeline.TimeSignatureDenominator = vm.Transport.TimeSigDenominator;
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
@@ -471,6 +482,7 @@ public partial class MainWindow : Window
         Timeline.TrackDevicesRequested += id => ShowDevices(id);   // header double-click (#308)
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.ClipsSplit += SyncTrackModeClips;   // a split re-indexes the track's later clips
+        Timeline.ClipsRemoving += () => _editorRoll?.CancelPreview();   // before the indices shift (#647)
         Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
@@ -497,7 +509,7 @@ public partial class MainWindow : Window
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         _session.SlotSelected += OnSessionSlotSelected;
         InitLocate();   // clip menus' Locate ▸ and the Files highlight (spec 092)
-        Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
+        Timeline.SessionChanged += () => { _session?.Refresh(); DropDeadEditors(); };   // M5-6; a removed track takes its editors (#530)
         MainContent.Children.Add(_session);
 
         // The Mixer is created here once and hosted docked under the main view or in its own
@@ -521,7 +533,7 @@ public partial class MainWindow : Window
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
         // Docked like the arrangement it replaces in MainContent: no margin, it meets the browser on the seam.
-        _modular = new ModularView(vm.Engine) { IsVisible = false };
+        _modular = new ModularView(vm.Engine) { IsVisible = false, Factory = _factory };
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
@@ -539,6 +551,7 @@ public partial class MainWindow : Window
         vm.AutosaveRequested += OnAutosaveTick;
         vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
         InitGamepad();   // poll pad buttons on each UI tick (live note source)
+        InitEditorKeys();   // the note keys over a plug-in's editor window (#221), on the same tick
         InitRemote();    // Nota Remote: phones as controllers (ticked on the same clock)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)
@@ -559,6 +572,7 @@ public partial class MainWindow : Window
         Opened += (_, _) => Activate();
         // Bring the Mixer back docked / in its window / hidden as the user left it (specs/054).
         Opened += (_, _) => RestoreMixer();
+        Opened += (_, _) => RestoreAssistant();
 
         // Remember the detail panel's height once the user drags the splitter — but only
         // on the Clip tab. The Devices tab keeps its natural card-fitting height, so its
@@ -578,9 +592,18 @@ public partial class MainWindow : Window
         // sees every press regardless of what consumes it.
         AddHandler(PointerPressedEvent, (_, e) =>
         {
-            if (e.Source is Visual v)
+            // The in-window menu bar is how Edit → Delete is reached on Windows / Linux: a press
+            // there must not move "last used" off the area the command is meant for (#646).
+            if (e.Source is Visual v && v.FindAncestorOfType<Menu>(includeSelf: true) is null)
             {
                 _detailWasLastFocused = DetailPanel.IsVisible && v.GetSelfAndVisualAncestors().Contains(DetailPanel);
+                // The roll's grid keeps the keyboard after a click elsewhere (the arrangement and
+                // the other custom-drawn views take no focus), so Delete / ⌘C / ⌘X still reached
+                // its selected notes after a clip was clicked. A press outside the detail area
+                // lets it go; a focusable control pressed there still takes focus as usual (#646).
+                if (!_detailWasLastFocused && _editorRoll is { GridFocused: true } roll
+                    && TopLevel.GetTopLevel(roll) == this)
+                    FocusManager?.Focus(null);
                 // Likewise the docked Mixer, so the palette opens with its context (specs/054).
                 _mixerWasLastFocused = _mixerDocked && v.GetSelfAndVisualAncestors().Contains(MixerPanel);
             }

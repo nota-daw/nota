@@ -20,6 +20,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/Parameter.h"
 
 #include <signalsmith-linear/fft.h>
 
@@ -178,6 +179,7 @@ class Crush : public Device {
     float dcX_[2] = {}, dcY_[2] = {};
     double msIn_ = 0.0, msOut_ = 0.0;
     float autoG_ = 1.0f;
+    dsp::BlockRamp outRamp_; // Output glides across a block (#559)
     uint32_t rng_ = 0xDEADBEEFu;
 
     // Meters (audio thread) and their published copies.

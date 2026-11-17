@@ -142,6 +142,15 @@ std::shared_ptr<Instrument> Monolith::clone() const {
 
 void Monolith::noteOn(int32_t pitch, float velocity) {
     wake();
+    // No key down: a new note, whatever Legato says — the envelopes may be in Release on the
+    // same pitch (back-to-back notes: the engine sends the note-off first at a tie), and that
+    // note must still be heard (#645). A key struck again while still held (overlapping notes
+    // of one pitch) is a new note too, unless Legato is on. Its note-off is not counted: the
+    // first note-off of that pitch releases it, as before — counting strikes would leave a note
+    // stuck where the engine's sustain pedal folds two note-offs of a pitch into one.
+    const bool fresh = (heldN_ == 0);
+    bool repeat = false;
+    for (int i = 0; i < heldN_; ++i) repeat |= (held_[i] == pitch);
     pushHeld(pitch);
     const bool glideOn = get(GlideOn) > 0.5f;
     const bool legato = get(Legato) > 0.5f;
@@ -155,9 +164,14 @@ void Monolith::noteOn(int32_t pitch, float velocity) {
     if (wasSilent) {
         freqCur_ = (glideOn && lastFreq_ > 0.0) ? lastFreq_ : freqTarget_;
         retrigger();
+    } else if (fresh) {
+        if (!glideOn) freqCur_ = freqTarget_;
+        retrigger();
     } else if (changed) {
         if (!glideOn) freqCur_ = freqTarget_;
         if (!legato) retrigger();
+    } else if (repeat && sel == pitch && !legato) {
+        retrigger();
     }
     lastFreq_ = freqTarget_;
 }

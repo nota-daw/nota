@@ -100,4 +100,7 @@ public sealed partial class NotaEngine
 
     public void SetMasterVolumeAutomation(AutomationPoint[] points)
     { ThrowIfDisposed(); Check(NativeMethods.MasterVolumeAutomationSet(_handle, points, points.Length)); }
+
+    public void SetMasterVolumeAutomationLive(AutomationPoint[] points)
+    { ThrowIfDisposed(); Check(NativeMethods.MasterVolumeAutomationSetLive(_handle, points, points.Length)); }
 }

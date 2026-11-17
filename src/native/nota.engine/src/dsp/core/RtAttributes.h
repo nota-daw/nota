@@ -34,12 +34,29 @@
 #if defined(__GNUC__) || defined(__clang__)
 #define NOTA_HOT [[gnu::hot]]
 #define NOTA_ALWAYS_INLINE [[gnu::always_inline]] inline
+#define NOTA_NOINLINE [[gnu::noinline]]
 #elif defined(_MSC_VER)
 #define NOTA_HOT
 #define NOTA_ALWAYS_INLINE __forceinline
+#define NOTA_NOINLINE __declspec(noinline)
 #else
 #define NOTA_HOT
 #define NOTA_ALWAYS_INLINE inline
+#define NOTA_NOINLINE
+#endif
+// NOTA_NOINLINE keeps a rare path (a muted Drum Rack pad, #650) out of a hot loop, so the
+// loop's code — and the instruction gate's count for it — stays as it was.
+
+// NOTA_FORCE_INLINE_LAMBDA: a lambda body that must inline into every call site — the
+// shared per-sample DSP bodies split into a glide head and a settled loop (#559), where
+// the instruction gate of specs/034 budgets the settled loop. Placed after the parameter
+// list it needs the GNU spelling ([[gnu::always_inline]] there appertains to the closure
+// type and is ignored). MSVC has no force-inline for lambdas; its inliner is trusted
+// there (the instruction gate runs on Linux only).
+#if defined(__GNUC__) || defined(__clang__)
+#define NOTA_FORCE_INLINE_LAMBDA __attribute__((always_inline))
+#else
+#define NOTA_FORCE_INLINE_LAMBDA
 #endif
 
 namespace nota {
