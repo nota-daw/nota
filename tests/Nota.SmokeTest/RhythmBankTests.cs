@@ -61,6 +61,21 @@ internal static class RhythmBankTests
         return o;
     }
 
+    // AutomationLane::valueAt, from the points the engine returns.
+    private static float Eval(AutomationPoint[] p, double beat)
+    {
+        if (beat <= p[0].Beat) return p[0].Value;
+        if (beat >= p[^1].Beat) return p[^1].Value;
+        for (int i = 1; i < p.Length; i++)
+            if (beat <= p[i].Beat)
+            {
+                double span = p[i].Beat - p[i - 1].Beat;
+                if (span <= 0) return p[i].Value;
+                return (float)Nota.Application.Editing.AutomationCurve.Lerp(p[i - 1].Value, p[i].Value, (beat - p[i - 1].Beat) / span, p[i - 1].Curve);
+            }
+        return p[^1].Value;
+    }
+
     private static float Peak(float[] st, double fromBeat, double toBeat)
     {
         int a = (int)(fromBeat * Spb), b = Math.Min(st.Length / 2, (int)(toBeat * Spb));
@@ -250,6 +265,34 @@ internal static class RhythmBankTests
                 e.StopTransport();
                 yield return (step && early == 0 && late == 1,
                     $"a bank click while recording writes a step at the playhead and plays it back ({pts.Length} points{(pts.Length > 0 ? $" at beat {pts[0].Beat:0.##}" : "")}; bank {early} → {late})");
+            }
+        }
+
+        // A click recorded inside a curved segment leaves the lane before it as it was: the piece up
+        // to the click keeps its shape (its curve is cut to the piece), only the step is new.
+        {
+            var (e, t) = Rig();
+            using (e)
+            {
+                int bi = Idx(e, t, RhythmModel.BankId);
+                int lane = e.AddPluginAutomationLane(t, -1, RhythmModel.BankId);
+                var orig = new[] { new AutomationPoint(0, 0f, 0.8f), new AutomationPoint(8, 1f) };
+                e.SetAutomationPoints(t, lane, orig);
+                var tmp = new float[512 * 2];
+                e.SetAutomationRecord(true);
+                e.Seek(0); e.Play();
+                for (int i = 0; i < 70; i++) e.RenderOffline(tmp, 512, Sr);   // ≈ beat 1.5
+                e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, RhythmModel.BankId);
+                e.PluginParamSet(t, -1, bi, RhythmModel.BankNorm(3));
+                e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, RhythmModel.BankId);
+                e.SetAutomationRecord(false);
+                e.StopTransport();
+                var pts = e.GetAutomationPoints(t, lane);
+                double click = pts.Length == 4 ? pts[1].Beat : -1;
+                float worst = 0;
+                for (double b = 0; b < click - 1e-6; b += 0.01) worst = Math.Max(worst, Math.Abs(Eval(pts, b) - Eval(orig, b)));
+                yield return (pts.Length == 4 && click > 1 && worst < 1e-4f && RhythmModel.BankOf(pts[2].Value) == 3,
+                    $"a click recorded inside a curved lane leaves the lane before it unchanged ({pts.Length} points, click at beat {click:0.##}, max change {worst:E1})");
             }
         }
 

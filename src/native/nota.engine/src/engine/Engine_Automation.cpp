@@ -569,8 +569,21 @@ void Engine::recordAutomationClick(const ActiveWrite& aw, double beat) {
     auto nt = cloneTrack(*old);
     auto& pts = nt->automation[aw.laneIndex].points;
     // The step starts from what the lane plays there, or — a fresh lane — what the target was.
-    pts.push_back({beat, was.empty() ? aw.before : old->automation[aw.laneIndex].valueAt(beat)});
-    pts.push_back({beat, v});
+    // The segment the click cuts keeps its shape on both sides: the piece before it ends at the
+    // step with the curve of that piece (AutomationLane::pieceCurve), so nothing before the
+    // click plays differently, and the step runs on to the next point with the rest of it.
+    float after = 0.0f;
+    if (!was.empty()) {
+        const auto next = std::upper_bound(was.begin(), was.end(), beat,
+            [](double b, const AutomationPoint& q) { return b < q.beat; });
+        if (next != was.begin() && next != was.end()) {
+            const size_t prev = static_cast<size_t>(next - was.begin()) - 1;
+            pts[prev].curve = AutomationLane::pieceCurve(was, was[prev].beat, beat);
+            after = AutomationLane::pieceCurve(was, beat, next->beat);
+        }
+    }
+    pts.push_back({beat, was.empty() ? aw.before : old->automation[aw.laneIndex].valueAt(beat), 0.0f});
+    pts.push_back({beat, v, after});
     std::stable_sort(
         pts.begin(), pts.end(), [](const AutomationPoint& a, const AutomationPoint& b) { return a.beat < b.beat; });
     republishWithTrackRaw(aw.trackId, nt);
