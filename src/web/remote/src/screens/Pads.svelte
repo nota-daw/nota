@@ -11,6 +11,7 @@
   import type { Form } from '../lib/device.svelte';
   import { num, unit } from '../lib/fmt';
   import { noteName, slideBend } from '../lib/music';
+  import { Rolls } from '../lib/roll';
   import { look } from '../lib/theme.svelte';
 
   let { form }: { form: Form } = $props();
@@ -25,10 +26,6 @@
   let down = $state<Record<number, boolean>>({});
   const pointers = new Map<number, number>();   // pointer → note
 
-  // A repeating note: one chain per note, however many fingers hold it. `last` is when the
-  // latest hit was due, so the next lands one step of the current rate after it.
-  interface Roll { vel: number; rate: number; bend: number; last: number; next: number; timer: number }
-  const rolls = new Map<number, Roll>();
   // What a held pad shows under the finger while it repeats.
   let shown = $state<Record<number, { rate: string; bend: number }>>({});
   // A finger on a repeating pad: where it landed and how far one step is, either way.
@@ -55,34 +52,17 @@
   const banks = $derived(Array.from({ length: 4 }, (_, i) => ({ i, name: noteName(36 + i * 12) })));
 
   const stepMs = (r: number) => 60000 / Math.max(20, app.tp.bpm) / RATES[r].div;
+  // The repeating notes: one roll per note, however many fingers hold it.
+  const rolls = new Rolls(stepMs, (note, r) => {
+    app.noteOff(note);
+    strike(note, r.vel);
+  });
 
   // Sound the note again, its bend with it: a note-on resets the note's expression.
   function strike(note: number, vel: number) {
     app.noteOn(note, vel);
     const r = rolls.get(note);
     if (r && r.bend !== 0) app.noteExpr(note, 0, r.bend, true);
-  }
-
-  // (Re)arm the next hit one step after the last. A rate changed mid-hold re-arms from the
-  // last hit, so the new rate takes over without a gap; if that moment has passed, the hit
-  // goes now — once.
-  function arm(note: number) {
-    const r = rolls.get(note);
-    if (!r) return;
-    clearTimeout(r.timer);
-    r.next = r.last + stepMs(r.rate);
-    r.timer = window.setTimeout(() => hit(note), Math.max(0, r.next - performance.now()));
-  }
-  function hit(note: number) {
-    const r = rolls.get(note);
-    if (!r) return;
-    app.noteOff(note);
-    strike(note, r.vel);
-    // Keep to the grid of due times; a timer the browser held back far (a background tab)
-    // starts afresh from now rather than catching up with a burst.
-    const now = performance.now();
-    r.last = now - r.next < stepMs(r.rate) / 2 ? r.next : now;
-    arm(note);
   }
 
   function press(e: PointerEvent, note: number) {
@@ -101,15 +81,12 @@
     try { el.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
     // One repeat chain per note: a second finger must not stack a second timer, or the
     // release clears only the last one and the first keeps the note repeating forever.
-    if (!rolls.has(note)) {
-      rolls.set(note, { vel, rate, bend: 0, last: performance.now(), next: 0, timer: 0 });
-      shown[note] = { rate: RATES[rate].n, bend: 0 };
-      arm(note);
-    }
+    if (!rolls.has(note)) shown[note] = { rate: RATES[rate].n, bend: 0 };
+    const roll = rolls.start(note, vel, rate);
     // A slide steps from the rate the note repeats at now: half a pad's height per step (a
     // phone's pad takes two), a pad's width per semitone.
     slides.set(e.pointerId, {
-      note, x0: e.clientX, y0: e.clientY, w: Math.max(8, r.width), h: Math.max(12, r.height / 2), from: rolls.get(note)!.rate,
+      note, x0: e.clientX, y0: e.clientY, w: Math.max(8, r.width), h: Math.max(12, r.height / 2), from: roll.rate,
     });
   }
 
@@ -122,10 +99,7 @@
     const next = Math.max(0, Math.min(RATES.length - 1, f.from + steps));
     const b = bends ? slideBend(e.clientX - f.x0, f.w, 1) : 0;
     if (next === r.rate && b === r.bend) return;
-    if (next !== r.rate) {
-      r.rate = next;
-      arm(f.note);
-    }
+    rolls.setRate(f.note, next);
     if (b !== r.bend) {
       r.bend = b;
       app.noteExpr(f.note, 0, b);
@@ -139,8 +113,7 @@
     if (note === undefined) return;
     pointers.delete(e.pointerId);
     if ([...pointers.values()].includes(note)) return;   // another finger still holds it
-    clearTimeout(rolls.get(note)?.timer);
-    rolls.delete(note);
+    rolls.stop(note);
     delete shown[note];
     down[note] = false;
     app.noteOff(note);
@@ -161,7 +134,6 @@
   $effect(() => {
     void base;
     return () => {
-      for (const r of rolls.values()) clearTimeout(r.timer);
       rolls.clear();
       slides.clear();
       shown = {};

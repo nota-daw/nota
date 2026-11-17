@@ -17,7 +17,8 @@ sideways slide sets its bend, re-sent after each repeated note-on.
 
 **Audio-Thread Impact**: none.
 
-**Testing**: `npm run check`; the built page against `mock/nota-mock.mjs` (logging `on` / `off` /
+**Testing**: `npm run check`; `npm test` — the roll timing (`src/lib/roll.ts`) under a hand-moved
+clock in `test/roll.test.ts` (rate changes, an overdue hit, a held-back timer, release); the built page against `mock/nota-mock.mjs` (logging `on` / `off` /
 `x`), driven by headless Chrome over CDP with emulated touch: a held pad sliding up, sideways and
 down on an MPE track; two fingers on two pads of a drum track; Repeat off sliding off a pad.
 
