@@ -352,6 +352,23 @@ void VoltSynth::render(float* out, int32_t frames) {
     // A macro on an LFO's rate scales its increment, so it works synced as well as free.
     const double lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync) * fast_math::exp2f((float)(macroBlk[4] * 2.0));
     const double lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync) * fast_math::exp2f((float)(macroBlk[5] * 2.0));
+    // A synced LFO follows the song position while the transport plays (#676), as the
+    // effects' LFOs do: its phase is set from the block's start beat, then runs at the synced
+    // rate through the block. A free-running phase carried over from earlier plays, so the
+    // pulse landed somewhere else in the beat on every play and in every export. Free-rate
+    // LFOs, synced ones with the transport stopped, and a synced LFO whose rate a macro moves
+    // (the song position has no phase for a scaled division) run on.
+    if (playing_ && samplesPerBeat_ > 0.0) {
+        auto lock = [&](double& ph, float& sh, double cycleBeats, double macro) {
+            if (cycleBeats <= 0.0 || macro != 0.0) return;
+            const double c = beat_ / cycleBeats;
+            const double p = c - std::floor(c);
+            if (p + 0.5 < ph) sh = noise() * 2.0f - 1.0f; // crossed a cycle start: new S&H step
+            ph = p;
+        };
+        lock(lfoPhase1_, lfoSh1_, syncBeats(Lfo1Sync), macroBlk[4]);
+        lock(lfoPhase2_, lfoSh2_, syncBeats(Lfo2Sync), macroBlk[5]);
+    }
     const float lfo1Depth = get(Lfo1Depth), lfo2Depth = get(Lfo2Depth);
     const float fade1Inc = fadeInc(Lfo1Fade), fade2Inc = fadeInc(Lfo2Fade);
 
@@ -678,12 +695,14 @@ double VoltSynth::lfoValue(int shape, double ph, float shHold) {
     }
 }
 
+double VoltSynth::syncBeats(Param sync) const {
+    static const double beats[8] = {0, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625};
+    return beats[std::clamp((int)std::lround(get(sync) * 7.0f), 0, 7)]; // 0 = free
+}
+
 double VoltSynth::lfoInc(Param rate, Param sync) const {
-    int div = std::clamp((int)std::lround(get(sync) * 7.0f), 0, 7); // 0 = free
-    if (div > 0 && samplesPerBeat_ > 0.0) {
-        static const double beats[8] = {0, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625};
-        return 1.0 / (beats[div] * samplesPerBeat_);
-    }
+    const double b = syncBeats(sync);
+    if (b > 0.0 && samplesPerBeat_ > 0.0) return 1.0 / (b * samplesPerBeat_);
     return expMap(get(rate), 0.05, 20.0) / sampleRate_;
 }
 

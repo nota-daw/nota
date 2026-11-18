@@ -1077,6 +1077,14 @@ if (args.Length >= 1 && args[0] == "--midi-ctl")
     Console.WriteLine(failures == 0 ? "MIDI CTL PASSED" : $"MIDI CTL FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Tempo-synced synth LFOs follow the song position (#676) alone: `--synth-lfo-sync`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--synth-lfo-sync")
+{
+    Console.WriteLine("-- synth lfo sync --");
+    foreach (var (ok, label) in SynthLfoSyncTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SYNTH LFO SYNC PASSED" : $"SYNTH LFO SYNC FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // The instrument's on/off switch alone (fast iteration): `--instrument-off`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--instrument-off")
 {
@@ -15967,6 +15975,8 @@ Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
+Console.WriteLine("-- synth lfo sync --");
+foreach (var (ok, label) in SynthLfoSyncTests.Run()) Check(ok, label);
 Console.WriteLine("-- preset init --");
 foreach (var (ok, label) in PresetInitTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");

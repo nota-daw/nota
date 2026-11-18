@@ -351,12 +351,14 @@ class WavetableSynth final : public Instrument {
     static const float* sharedTables();
 
     static double lfoValue(int shape, double ph, float sh);
+    // The synced division's cycle in beats (0 = free rate).
+    double syncBeats(int sync) const {
+        static const double beats[8] = {0, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625};
+        return beats[std::clamp((int)std::lround(get(sync) * 7.0f), 0, 7)];
+    }
     double lfoInc(int rate, int sync) const {
-        int d = std::clamp((int)std::lround(get(sync) * 7.0f), 0, 7);
-        if (d > 0 && spb_ > 0.0) {
-            static const double beats[8] = {0, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625};
-            return 1.0 / (beats[d] * spb_);
-        }
+        const double b = syncBeats(sync);
+        if (b > 0.0 && spb_ > 0.0) return 1.0 / (b * spb_);
         return expMap(get(rate), 0.05, 20.0) / sampleRate_;
     }
 
@@ -400,6 +402,10 @@ class WavetableSynth final : public Instrument {
 
     Voice voices_[kVoices];
     double sampleRate_ = 44100.0, spb_ = 0.0;
+    // The block's start beat and whether the transport plays (setTransport): a synced LFO
+    // takes its phase from the song position while it plays (#676).
+    double beat_ = 0.0;
+    bool playing_ = false;
     float exprCoef_ = exprSmoothCoef(44100.0);
     GlobalExpr gexpr_; // pitch wheel / channel pressure (pitch −1)
     double lfoPhase1_ = 0, lfoPhase2_ = 0, chorusPh_ = 0;
