@@ -617,6 +617,7 @@ public sealed class SessionSlotDto
     public int ChanceB { get; set; }
     public double FollowBeats { get; set; }
     public int JumpScene { get; set; }
+    public bool FollowBypass { get; set; }   // v35 (specs/103): follow actions held, settings kept
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

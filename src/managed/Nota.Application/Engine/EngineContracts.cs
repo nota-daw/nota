@@ -293,7 +293,8 @@ public enum SessionFollowAction { None = 0, Stop, Again, Previous, Next, First, 
 
 /// <summary>Session clip (slot) properties. Matches native NotaSessionClipProps (Session P0).
 /// Color is a track-palette index (-1 = the track's colour); QuantBeats &lt; 0 = global;
-/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass.</summary>
+/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass. FollowBypass 1 holds
+/// the clip's follow actions without changing them (#499).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionClipProps
 {
@@ -309,6 +310,7 @@ public struct NotaSessionClipProps
     public int ChanceB;
     public double FollowBeats;
     public int JumpScene;
+    public int FollowBypass;
 }
 
 /// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a

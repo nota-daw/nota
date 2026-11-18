@@ -340,6 +340,7 @@ public sealed partial class SessionView
         private readonly double _lenBeats;
         private readonly SolidColorBrush _brush;
         private readonly bool _stopButton;
+        private readonly bool _followHeld;   // follow actions configured but bypassed (#499)
         private readonly List<(double Start, double Len, int Pitch)> _notes = new();
         private int _minPitch, _maxPitch;
         private readonly float[]? _peaks;
@@ -361,6 +362,8 @@ public sealed partial class SessionView
                 _name = o.ClipName(c, scene);
                 _lenBeats = eng.SessionSlotLength(c.TrackId, scene);
                 _len = FormatLength(_lenBeats);
+                _followHeld = eng.TryGetSessionClipProps(c.TrackId, scene, out var cp) && cp.FollowBypass != 0
+                    && (cp.FollowA != (int)SessionFollowAction.None || cp.FollowB != (int)SessionFollowAction.None);
                 if (c.IsInstrument)
                 {
                     foreach (var n in eng.GetSessionNotes(c.TrackId, scene))
@@ -541,6 +544,13 @@ public sealed partial class SessionView
             var lenFt = Ft(_len, NotaFonts.Measure, 10, playing ? NotaPalette.TextStrong : NotaPalette.TextTertiary);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
+            if (_followHeld)
+            {
+                // Its follow actions are bypassed: the Bypass ring left of the length.
+                lenX -= 13;
+                Glyph.Draw(ctx, GlyphKind.Bypass, new Rect(lenX, (TopRowH - 10) / 2, 10, 10), playing ? NotaPalette.TextStrong : NotaPalette.TextSecondary);
+                lenX -= 2;
+            }
             var nameFt = Ft(_name, NotaFonts.SansSemiBold, NotaType.ClipName, _brush, lenX - 27 - 4);
             ctx.DrawText(nameFt, new Point(27, (TopRowH - nameFt.Height) / 2));
 
@@ -890,6 +900,20 @@ public sealed partial class SessionView
             ? new Control[] { LocateMenu.Build(hooks, sa.SampleId) }
             : Array.Empty<Control>();
 
+    // Bypass / restore a clip's follow actions without changing them (#499).
+    private Control FollowBypassItem(int trackId, int scene)
+    {
+        bool held = _engine.TryGetSessionClipProps(trackId, scene, out var p) && p.FollowBypass != 0;
+        return MenuKit.Item(held ? Loc.T("session.grid.restore_follow_actions") : Loc.T("session.grid.bypass_follow_actions"), GlyphKind.Follow, () =>
+        {
+            if (!_engine.TryGetSessionClipProps(trackId, scene, out var cur)) return;
+            cur.FollowBypass = cur.FollowBypass != 0 ? 0 : 1;
+            _engine.SetSessionClipProps(trackId, scene, cur);
+            RefreshSlot(trackId, scene);   // also rebuilds the inspector
+            Say(cur.FollowBypass != 0 ? Loc.T("session.follow_bypassed") : Loc.T("session.follow_restored"));
+        });
+    }
+
     private void ShowSlotMenu(Control anchor, Column c, int scene)
     {
         bool filled = SlotFilled(c.TrackId, scene);
@@ -905,6 +929,7 @@ public sealed partial class SessionView
                     MenuKit.Item(Loc.T("common.edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
                     MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
                 },
+                new Control[] { FollowBypassItem(c.TrackId, scene) },
                 LocateItems(c.TrackId, scene),
                 new Control[] { MenuKit.Item(Loc.T("session.grid.copy_to_arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
                 new Control[] { AddTrackSubmenu(c.TrackId) },
