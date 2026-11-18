@@ -12,25 +12,12 @@ void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float
     request.store(pack(slot, gen));
 }
 
-bool SessionPlayer::cancelSlot(int32_t slot) {
+bool SessionPlayer::withdrawTicket(uint32_t ticket, bool keep) {
     uint64_t r = request.load();
-    if (slot < 0 || slotOf(r) != slot) return false;
+    if (ticket == 0 || ticketOf(r) != ticket) return false;
+    if (keep) return request.compare_exchange_strong(r, withTicket(r, 0));
     if (!request.compare_exchange_strong(r, kIdle)) return false;
-    int32_t rep = slot;
-    repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
-    return true;
-}
-
-bool SessionPlayer::cancelGen(int32_t scene, int32_t gen) {
-    uint64_t r = request.load();
-    const int32_t p = slotOf(r);
-    if (p == kNone || p == kStopNow) return false;
-    // Its own scene launch's requests, or a direct launch of the row's slot. A request another
-    // scene launch queued for this row (one that has started) is not this cancel's to withdraw.
-    const int32_t rg = genOf(r);
-    if (!(gen > 0 && rg == gen) && !(p == scene && rg == 0)) return false;
-    if (!request.compare_exchange_strong(r, kIdle)) return false;
-    if (p >= 0) {
+    if (const int32_t p = slotOf(r); p >= 0) {
         int32_t rep = p;
         repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
     }
@@ -67,7 +54,7 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     // generation is the consumed request's own, recorded inside the seqlock (viewGen).
     applySeq.fetch_add(1);
     const bool consumed = request.compare_exchange_strong(r, kIdle);
-    if (consumed) appliedGen.store(genOf(r));
+    if (consumed && genOf(r) != 0) appliedGen.store(genOf(r)); // only scene requests: see appliedGen
     applySeq.fetch_add(1);
     if (!consumed) return false;
     // The caller flushes instrument voices when a launch/stop applies. Discard releases from

@@ -29,14 +29,22 @@ class SessionPlayer {
     // Audio thread reads; message thread writes.
     std::atomic<int32_t> playing{-1};    // playing slot, or -1
     // The queued request: what happens at the next boundary (kNone / kStop / kStopNow / a slot
-    // index) packed with the generation of the scene launch that queued it (0 = a direct launch, a
-    // stop, a follow action or a repeat; #480). One atomic, so a request and its generation are
-    // always read, replaced and consumed together.
+    // index, bits 0-31), the generation of the scene launch that queued it (bits 32-55; 0 = a direct
+    // launch, a stop, a follow action or a repeat) and the ticket of a cancel aimed at it (bits
+    // 56-63; 0 = none) (#480). One atomic, so a request, its generation and its cancel mark are
+    // always read, replaced and consumed together: a newer request replaces the whole word, so a
+    // cancel meant for the older one can never withdraw it.
+    static constexpr uint32_t kGenMask = 0xFFFFFFu; // generations wrap at 24 bits, skipping 0
+    static constexpr uint64_t kTicketMask = 0xFFull << 56;
     static constexpr uint64_t pack(int32_t slot, int32_t gen) {
-        return (static_cast<uint64_t>(static_cast<uint32_t>(gen)) << 32) | static_cast<uint32_t>(slot);
+        return (static_cast<uint64_t>(static_cast<uint32_t>(gen) & kGenMask) << 32) | static_cast<uint32_t>(slot);
     }
     static constexpr int32_t slotOf(uint64_t r) { return static_cast<int32_t>(static_cast<uint32_t>(r)); }
-    static constexpr int32_t genOf(uint64_t r) { return static_cast<int32_t>(r >> 32); }
+    static constexpr int32_t genOf(uint64_t r) { return static_cast<int32_t>((r >> 32) & kGenMask); }
+    static constexpr uint32_t ticketOf(uint64_t r) { return static_cast<uint32_t>(r >> 56); }
+    static constexpr uint64_t withTicket(uint64_t r, uint32_t t) {
+        return (r & ~kTicketMask) | (static_cast<uint64_t>(t & 0xFFu) << 56);
+    }
     static constexpr uint64_t kIdle = static_cast<uint32_t>(kNone); // pack(kNone, 0)
     std::atomic<uint64_t> request{kIdle};
     int32_t pendingSlot() const { return slotOf(request.load(std::memory_order_relaxed)); }
@@ -45,9 +53,11 @@ class SessionPlayer {
     std::atomic<bool> pendingLegato{false}; // keep the loop position across the switch
     std::atomic<float> pendingGain{1.0f};   // launch-velocity gain for the incoming slot
     std::atomic<int32_t> repeatSlot{-1};    // Repeat mode: retrigger this slot every quantum while held
-    // #480: the generation of the request that last applied, so the engine can tell a scene launch
-    // that started from one that was cancelled or replaced. applySeq is odd while maybeApply consumes
-    // a request and records its generation: a reader that sees it change re-reads later (seqlock).
+    // #480: the generation of the last scene-launch request that applied, so the engine can tell a
+    // scene launch that started from one that was cancelled or replaced. Only scene requests write
+    // it: a clip follow or a direct launch applying afterwards must not erase that proof before the
+    // UI has seen it. applySeq is odd while maybeApply consumes a request and records its
+    // generation: a reader that sees it change re-reads later (seqlock).
     std::atomic<int32_t> appliedGen{0};
     std::atomic<uint32_t> applySeq{0};
     // Audio thread writes, UI reads: the playing slot's loop position (progress) and beats
@@ -89,13 +99,17 @@ class SessionPlayer {
     struct GenView { bool applied, queued, busy; };
     GenView viewGen(int32_t gen) const;
 
-    // Audio thread, before maybeApply (#480): withdraw a queued request so the track carries on
-    // as if it had never been made. cancelSlot: the queued launch of `slot` (and its Repeat).
-    // cancelGen: any request scene launch `gen` queued (launches and stops), or a direct launch of
-    // row `scene`'s slot.
-    // A request replaced in the meantime no longer matches and stays. Never a kStopNow.
-    bool cancelSlot(int32_t slot);
-    bool cancelGen(int32_t scene, int32_t gen);
+    // Cancelling a queued request (#480), in two steps. Message thread: mark the request it sees now
+    // with `ticket`, if `match` says it is a target (never a kStopNow). Audio thread, as it drains the
+    // cancel: withdraw the requests still carrying that ticket — or, `keep`, just clear the mark (the
+    // scene launch had started). A request replaced in between lost the mark, so it stays.
+    template <typename Match> bool markCancel(uint32_t ticket, Match match) {
+        uint64_t r = request.load();
+        while (slotOf(r) != kNone && slotOf(r) != kStopNow && match(r))
+            if (request.compare_exchange_weak(r, withTicket(r, ticket))) return true;
+        return false;
+    }
+    bool withdrawTicket(uint32_t ticket, bool keep);
 
     // Audio thread: if a pending request exists and a quantize boundary falls in
     // this block (or quant<=0), apply it. `loopSeam`: the block starts where the transport

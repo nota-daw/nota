@@ -56,6 +56,12 @@ export const tap: Action<HTMLElement, TapParam> = (node, param) => {
     clearTimer(e.pointerId);
     if (presses.cancel(e.pointerId)) lifted = performance.now();
   };
+  // A pointer that leaves the button abandons its press: no hold fires after the user let go out
+  // there (a mouse release outside never reaches this node), and the press is no tap either.
+  const onLeave = (e: PointerEvent) => {
+    clearTimer(e.pointerId);
+    presses.cancel(e.pointerId);
+  };
   const onClick = (e: MouseEvent) => {
     // A keyboard click (Enter / Space) has detail 0 and is never a pointer tap's echo.
     if (e.detail > 0 && performance.now() - lifted <= SAME_TAP_MS) return;
@@ -66,6 +72,7 @@ export const tap: Action<HTMLElement, TapParam> = (node, param) => {
   node.addEventListener('pointermove', onMove);
   node.addEventListener('pointerup', onUp);
   node.addEventListener('pointercancel', onCancel);
+  node.addEventListener('pointerleave', onLeave);
   node.addEventListener('click', onClick);
   return {
     update(p) { set(p); },
@@ -75,6 +82,7 @@ export const tap: Action<HTMLElement, TapParam> = (node, param) => {
       node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);
       node.removeEventListener('pointercancel', onCancel);
+      node.removeEventListener('pointerleave', onLeave);
       node.removeEventListener('click', onClick);
     },
   };

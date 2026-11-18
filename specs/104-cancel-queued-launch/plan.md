@@ -77,20 +77,22 @@ beyond the drained table, written and read by the audio thread only.
 
 ### Engine (`src/native/nota.engine`)
 
-- **`SessionPlayer`**: `std::atomic<int32_t> pendingGen{0}` — the scene-launch generation that owns
-  the queued request (0 = a direct launch, stop, follow action or repeat); `std::atomic<int32_t>
-  appliedGen{0}` — set by `maybeApply` to the applied request's generation. `requestLaunch` gains a
-  `gen` argument (default 0); `requestStop` / `requestStopNow` reset `pendingGen` to 0.
-  New audio-thread helpers: `cancelSlot(int32_t slot)` — CAS `pending: slot → kNone` and clear
-  `repeatSlot` if it is that slot; `cancelGen(int32_t scene, int32_t gen)` — withdraw the request
-  if `pending == scene` (a launch of that row) or `pendingGen == gen` (a stop the scene queued).
-  `kStopNow` is never withdrawn.
-- **Commands**: `CancelSessionSlot` (i0 = track or group id, i1 = scene) and `CancelSessionScene`
-  (i0 = scene, i1 = generation), applied by `applyLaunchCancel` as `drainCommands(g)` pops them —
-  no table, no per-block limit, before any track reaches its boundary in that block. A scene launch
-  that has started on any track (clips with their own quanta) is not withdrawn at all.
-- **One request word** (review of #677): `SessionPlayer::request` packs the queued slot and its
-  scene-launch generation in one 64-bit atomic, so they are replaced and consumed together;
+- **`SessionPlayer`**: the queued request is one word `request` (slot, scene-launch generation —
+  0 for a direct launch, stop, follow action or repeat — and cancel ticket); `appliedGen` is set by
+  `maybeApply` to an applied scene request's generation. `requestLaunch` / `requestStop` take the
+  generation (default 0). Helpers: `markCancel(ticket, match)` (message thread),
+  `withdrawTicket(ticket, keep)` (audio thread), `queueIfIdle` (follow / Repeat), `viewGen`
+  (seqlocked read for the UI). `kStopNow` is never marked.
+- **Cancel = mark + command**: the message thread marks the requests it sees now with a cancel
+  ticket (in the request word, by compare-exchange) and pushes `CancelSessionLaunch` (i0 = ticket,
+  i1 = scene-launch generation). `applyLaunchCancel` withdraws what still carries the ticket as
+  `drainCommands(g)` pops it — no table, no per-block limit, before any track reaches its boundary.
+  A launch made after the cancel replaces the word and loses the mark, so it stays. A scene launch
+  that has started on any track (clips with their own quanta) keeps its requests; the marks go.
+- **One request word** (review of #677): `SessionPlayer::request` packs the queued slot (32 bits),
+  its scene-launch generation (24 bits) and a cancel ticket (8 bits) in one 64-bit atomic; only
+  scene requests record `appliedGen`, so a clip follow applying later can't erase that a scene
+  started, so they are replaced and consumed together;
   `maybeApply` records `appliedGen` inside an `applySeq` seqlock that `viewGen` reads, so `poll()`
   never takes a started scene for a cancelled one.
 - **Scene launch record** (message thread, `Engine`; `launchScene` first resolves the launch before
@@ -100,7 +102,7 @@ beyond the drained table, written and read by the audio thread only.
   confirmed at once (today's behaviour). Otherwise `waitSceneGen_ = gen` and, unless an earlier
   scene launch is still waiting, the previous `sceneFollowScene_ / sceneFollowStart_` are saved.
   `serviceSessionFollow` resolves a waiting launch first: confirmed when any track's `appliedGen`
-  equals it; withdrawn when no track still has `pendingGen == gen` with a request queued. While it
+  equals it; withdrawn when no track still has `the request's generation == gen` with a request queued. While it
   waits, neither the scene tempo nor scene follow is serviced. Confirmed → as today. Withdrawn →
   tempo change dropped, the saved follow restored unless its due time had already come (the
   cancelled launch was that follow's own: follow ends).
@@ -110,7 +112,7 @@ beyond the drained table, written and read by the audio thread only.
   the slot is queued. Both return whether something was queued to cancel.
 - **Stop All**: also drops a waiting scene launch's tempo change (`sceneTempoPending_ = false`,
   `waitSceneGen_ = 0`).
-- `remapPlayers` (scene insert / remove) already remaps `pending`; `pendingGen` needs no remap.
+- `remapPlayers` (scene insert / remove) already remaps `pending`; `the request's generation` needs no remap.
 
 ### C ABI (`nota_engine.h`, `abi/nota_engine_session.cpp`)
 
@@ -167,7 +169,7 @@ src/native/nota.engine/
 └── src/
     ├── abi/nota_engine_session.cpp            # wrappers
     └── engine/
-        ├── SessionPlayer.h / .cpp             # pendingGen, appliedGen, cancelSlot, cancelGen
+        ├── SessionPlayer.h / .cpp             # the request's generation, appliedGen, cancelSlot, cancelGen
         ├── CommandQueue.h                     # CancelSessionSlot, CancelSessionScene
         ├── Engine.h                           # cancel table, scene launch record
         ├── Engine_Session.cpp                 # launchScene gen, cancel*, serviceSessionFollow, stopAll

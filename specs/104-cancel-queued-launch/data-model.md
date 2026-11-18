@@ -6,14 +6,14 @@ Runtime state only — nothing is saved in the project.
 
 | Field | Writer | Meaning |
 |-------|--------|---------|
-| `pending` | message thread (launch / stop), audio thread (follow / repeat, apply, cancel) | `kNone`, `kStop`, `kStopNow` or a slot index |
-| `pendingGen` *(new)* | whoever writes `pending` | scene-launch generation owning the request; 0 = not a scene launch |
-| `appliedGen` *(new)* | audio thread in `maybeApply` | generation of the request that last applied |
+| `request` *(replaces `pending`)* | message thread (launch / stop / cancel mark), audio thread (follow / repeat, apply, withdraw) | one 64-bit word: slot (`kNone`, `kStop`, `kStopNow` or a slot index), scene-launch generation (24 bits; 0 = not a scene launch), cancel ticket (8 bits; 0 = none) |
+| `appliedGen` *(new)* | audio thread in `maybeApply`, scene requests only | generation of the last scene request that applied |
+| `applySeq` *(new)* | audio thread in `maybeApply` | seqlock around consuming a request, read by `viewGen` |
 | `repeatSlot` | message thread; cleared by a cancel of that slot | Repeat-mode retrigger |
 
-Transitions added: `slot → kNone` (slot cancel, when `pending == slot`);
-`slot | kStop → kNone` (scene cancel, when `pending == scene` or `pendingGen == gen`).
-`kStopNow` is never withdrawn.
+Transitions added: a request seen by a cancel gets its ticket; at the drain, a request still
+carrying the ticket → `kNone` (or the ticket is cleared, the scene launch having started).
+`kStopNow` is never marked.
 
 ## Scene launch record (`Engine`, message thread)
 
@@ -25,12 +25,11 @@ Transitions added: `slot → kNone` (slot cancel, when `pending == slot`);
 | `sceneFollowScene_`, `sceneFollowStart_`, `sceneTempoPending_` … | as today, acted on only once the launch is confirmed |
 
 States: **waiting** → **confirmed** (a track applied a request of this generation) or
-**withdrawn** (no track holds one any more). Withdrawn restores the previous follow unless it was
-already due, and drops the tempo change.
+**withdrawn** (no track holds one any more). Withdrawn drops the tempo change and restores the
+previous follow — even if its time came meanwhile — unless a scene follow made the launch
+(`waitFromFollow_`), which ends follow.
 
-## Cancel table (`Engine`, audio thread)
+## Cancel tickets (`Engine`, message thread)
 
-`cancelSlots_[8]` (track id, scene), `cancelSlotCount_`, `cancelScene_` (scene, gen) — filled by
-`drainCommands`, read in the per-track Session step, cleared after the track loop. Overflow beyond
-8 slot cancels in one block drops the extra ones (a performer cannot click that fast; the queue
-already drops on overflow).
+`cancelTicket_` cycles 1…255; each cancel marks its targets with a fresh ticket and pushes one
+`CancelSessionLaunch` command carrying it. No audio-thread table.

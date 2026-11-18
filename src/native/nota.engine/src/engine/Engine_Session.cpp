@@ -228,7 +228,7 @@ void Engine::launchScene(int32_t scene, bool fromFollow) {
     }
     // This launch's generation travels with every request it queues, so it can be withdrawn whole
     // and its follow / tempo wait until one of them really starts.
-    if (++sceneLaunchGen_ <= 0) sceneLaunchGen_ = 1;
+    if (++sceneLaunchGen_ <= 0 || sceneLaunchGen_ > static_cast<int32_t>(SessionPlayer::kGenMask)) sceneLaunchGen_ = 1;
     const int32_t gen = sceneLaunchGen_;
     bool queued = false;
     for (auto& t : authoring_->tracks)
@@ -322,30 +322,49 @@ bool Engine::sessionSceneQueued(int32_t scene) const {
     return (waiting && !started) || (rowLaunch && !started);
 }
 
-bool Engine::cancelSlotLaunch(int32_t trackId, int32_t scene) {
-    // trackId may be a group: its slot cancels the launches of every track below it (#480).
-    bool queued = false;
-    for (auto& t : authoring_->tracks)
-        if (t->sessionPlayer && t->sessionPlayer->pendingSlot() == scene && scene >= 0 &&
-            (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)))
-            queued = true;
-    if (!queued) return false;
-    // Withdrawn on the audio thread while it drains commands, before any track applies its request;
-    // the scene launch it belonged to, if any, resolves in poll() once nothing of it is left queued.
+uint32_t Engine::nextCancelTicket() {
+    cancelTicket_ = cancelTicket_ % 255u + 1u; // 1..255; 0 means "no cancel"
+    return cancelTicket_;
+}
+
+void Engine::pushLaunchCancel(uint32_t ticket, int32_t gen) {
+    // The audio thread withdraws what carries this ticket as it drains the command — before any
+    // track reaches its boundary in that block (or, the scene launch having started, keeps it).
     Command c;
-    c.type = CommandType::CancelSessionSlot;
-    c.i0 = trackId;
-    c.i1 = scene;
-    return commands_.push(c);
+    c.type = CommandType::CancelSessionLaunch;
+    c.i0 = static_cast<int32_t>(ticket);
+    c.i1 = gen;
+    commands_.push(c);
+}
+
+bool Engine::cancelSlotLaunch(int32_t trackId, int32_t scene) {
+    // trackId may be a group: its slot cancels the launches of every track below it. The requests
+    // seen now are marked; a launch made after this call replaces the mark and stays (#480).
+    if (scene < 0) return false;
+    const uint32_t ticket = nextCancelTicket();
+    bool marked = false;
+    for (auto& t : authoring_->tracks)
+        if (t->sessionPlayer && (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)))
+            marked |= t->sessionPlayer->markCancel(ticket, [scene](uint64_t r) { return SessionPlayer::slotOf(r) == scene; });
+    if (marked) pushLaunchCancel(ticket, 0);
+    return marked;
 }
 
 bool Engine::cancelSceneLaunch(int32_t scene) {
     if (!sessionSceneQueued(scene)) return false;
-    Command c;
-    c.type = CommandType::CancelSessionScene;
-    c.i0 = scene;
-    c.i1 = (waitSceneGen_ != 0 && waitScene_ == scene) ? waitSceneGen_ : 0;
-    return commands_.push(c);
+    // Its waiting scene launch's requests (launches and stops), and direct launches of the row's
+    // slots — not what another scene launch queued for this row.
+    const int32_t gen = (waitSceneGen_ != 0 && waitScene_ == scene) ? waitSceneGen_ : 0;
+    const uint32_t ticket = nextCancelTicket();
+    bool marked = false;
+    for (auto& t : authoring_->tracks)
+        if (t->sessionPlayer)
+            marked |= t->sessionPlayer->markCancel(ticket, [scene, gen](uint64_t r) {
+                const int32_t rg = SessionPlayer::genOf(r);
+                return (gen > 0 && rg == gen) || (SessionPlayer::slotOf(r) == scene && rg == 0);
+            });
+    if (marked) pushLaunchCancel(ticket, gen);
+    return marked;
 }
 
 bool Engine::sceneLaunchWaiting() {
@@ -1149,7 +1168,7 @@ void Engine::remapPlayers(const std::function<int32_t(int32_t)>& map) {
         if (const int32_t q = SessionPlayer::slotOf(req); q >= 0) {
             const int32_t n = map(q);
             sp.request.compare_exchange_strong(
-                req, n < 0 ? SessionPlayer::kIdle : SessionPlayer::pack(n, SessionPlayer::genOf(req)),
+                req, n < 0 ? SessionPlayer::kIdle : (req & ~0xFFFFFFFFull) | static_cast<uint32_t>(n), // keep gen + ticket
                 std::memory_order_relaxed);
         }
         int32_t r = sp.repeatSlot.load(std::memory_order_relaxed);

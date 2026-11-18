@@ -37,6 +37,8 @@ internal static class CancelLaunchTests
         foreach (var r in DueFollowComesBack()) yield return r;
         foreach (var r in StartedBeforePollKeepsItsFollow()) yield return r;
         foreach (var r in StopsOnlyRowAndRestart()) yield return r;
+        foreach (var r in RelaunchAfterCancelSurvives()) yield return r;
+        foreach (var r in ClipFollowKeepsSceneStarted()) yield return r;
     }
 
     // Two tracks: drum plays 4-beat loops in rows 0 and 2; bass has clips in rows 1, 2 and 3.
@@ -383,6 +385,53 @@ internal static class CancelLaunchTests
         r.To(12.5);
         double pos = e.SessionSlotPosition(r.Drum);
         yield return (e.SessionPlayingSlot(r.Drum) == 0 && Math.Abs(pos - 0.5) < 0.05, $"restart: the clip plays on, not restarted ({pos:F2})");
+    }
+
+    // A cancel withdraws the request it saw, not one made after it: cancel, then launch the same slot
+    // (or the same scene) again before the audio thread drains the cancel — the new launch stays.
+    private static IEnumerable<(bool, string)> RelaunchAfterCancelSurvives()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.LaunchSlot(r.Drum, 0);
+        r.To(5.0);
+        e.LaunchSlot(r.Drum, 2);
+        e.CancelSlotLaunch(r.Drum, 2);
+        e.LaunchSlot(r.Drum, 2); // changed my mind back, same UI tick
+        r.Block();
+        yield return (e.SessionSlotLaunchQueued(r.Drum, 2), "relaunch after cancel: the newer slot launch is still queued");
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2, $"relaunch after cancel: it starts ({e.SessionPlayingSlot(r.Drum)})");
+        e.LaunchScene(1);
+        e.CancelSceneLaunch(1);
+        e.LaunchScene(1);
+        r.Block();
+        yield return (e.SessionSlotLaunchQueued(r.Bass, 1) && e.SessionSlotLaunchQueued(r.Drum, 1) == false && e.SessionSceneQueued(1),
+            "relaunch after cancel: the newer scene launch is whole (bass queued, drum stop queued)");
+        r.To(12.5);
+        yield return (e.SessionPlayingSlot(r.Bass) == 1 && e.SessionPlayingSlot(r.Drum) == -1,
+            $"relaunch after cancel: the scene starts on every track (bass {e.SessionPlayingSlot(r.Bass)}, drum {e.SessionPlayingSlot(r.Drum)})");
+    }
+
+    // A scene whose clip follows on before the UI polls: the follow's request applying afterwards must
+    // not erase the proof that the scene started — its tempo change still applies.
+    private static IEnumerable<(bool, string)> ClipFollowKeepsSceneStarted()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        var p = Props(e, r.Bass, 1);
+        p.FollowA = (int)SessionFollowAction.Next; p.ChanceA = 100; p.ChanceB = 0; p.FollowBeats = 0.5;
+        e.SetSessionClipProps(r.Bass, 1, p);
+        e.SetSessionSlotStopButton(r.Drum, 1, false); // a one-track scene
+        e.SetSceneProps(1, new NotaSceneProps { Color = -1, Tempo = 140 });
+        e.LaunchSlot(r.Bass, 3);
+        r.To(5.0);
+        e.LaunchScene(1);
+        for (int g = 0; g < 200000 && e.PositionBeats < 8.8; g++) r.BlockNoPoll(); // starts at 8, follows at 8.5
+        int bass = e.SessionPlayingSlot(r.Bass);
+        r.Block(); r.Block();
+        yield return (bass == 2 && Math.Abs(e.Bpm - 140) < 1e-6,
+            $"clip follow before poll: the scene counts as started, its tempo applies (bass {bass}, {e.Bpm} BPM)");
     }
 
     private static NotaSessionClipProps Props(NotaEngine e, int track, int scene)

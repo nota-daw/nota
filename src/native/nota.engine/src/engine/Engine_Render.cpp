@@ -1097,19 +1097,14 @@ void Engine::launchCountInSlot() {
 
 void Engine::applyLaunchCancel(Graph* g, const Command& c) {
     if (!g) return;
-    if (c.type == CommandType::CancelSessionSlot) {
-        // A track's queued launch of row i1 — or, for a group id, those of every track below it.
-        for (auto& t : g->tracks)
-            if (t->sessionPlayer && (t->id() == c.i0 || isUnderGroup(*g, *t, c.i0))) t->sessionPlayer->cancelSlot(c.i1);
-        return;
-    }
     // A scene launch that has started on any track (clips may have their own quanta) is started:
-    // nothing of it is withdrawn, so a scene never ends up half launched.
+    // nothing of it is withdrawn, so a scene never ends up half launched — the marks just go.
+    bool started = false;
     if (c.i1 > 0)
         for (auto& t : g->tracks)
-            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == c.i1) return;
+            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == c.i1) started = true;
     for (auto& t : g->tracks)
-        if (t->sessionPlayer) t->sessionPlayer->cancelGen(c.i0, c.i1);
+        if (t->sessionPlayer) t->sessionPlayer->withdrawTicket(static_cast<uint32_t>(c.i0), started);
 }
 
 bool Engine::isUnderGroup(const Graph& g, const Track& t, int32_t groupId) {
@@ -1175,8 +1170,7 @@ void Engine::drainCommands(Graph* g) {
         case CommandType::TrackNotesOff:
             if (notesOffCount_ < 8) notesOffTracks_[notesOffCount_++] = c.i0;
             break;
-        case CommandType::CancelSessionSlot:
-        case CommandType::CancelSessionScene: applyLaunchCancel(g, c); break;
+        case CommandType::CancelSessionLaunch: applyLaunchCancel(g, c); break;
         case CommandType::Seek:
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
