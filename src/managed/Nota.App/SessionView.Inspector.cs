@@ -268,13 +268,30 @@ public sealed partial class SessionView
         launch.Children.Add(Row(Loc.T("session.inspector.velocity"), new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
-        // Follow actions.
+        // Follow actions. The head's switch bypasses this clip's follow actions without changing
+        // them (#499); it stays out of the greyed body so "Bypassed" / "Off globally" stay legible.
         bool follow = _engine.SessionFollow;
+        bool bypassed = p.FollowBypass != 0;
+        var faBox = new StackPanel { Spacing = 10 };
         var fa = new StackPanel { Spacing = 10 };
-        var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        faHead.Children.Add(SectionHead(Loc.T("session.inspector.follow_action")));
-        if (!follow) { var off = Mono(Loc.T("session.inspector.off_globally"), 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
-        fa.Children.Add(faHead);
+        var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 8 };
+        var faTitle = SectionHead(Loc.T("session.inspector.follow_action"));
+        faTitle.VerticalAlignment = VerticalAlignment.Center;
+        faHead.Children.Add(faTitle);
+        string? faState = bypassed ? Loc.T("session.inspector.bypassed") : !follow ? Loc.T("session.inspector.off_globally") : null;
+        if (faState is not null)
+        {
+            var st = Mono(faState, 9, bypassed ? NotaPalette.TextSecondary : NotaPalette.TextTertiary);
+            st.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(st, 1); faHead.Children.Add(st);
+        }
+        var faSwitch = new SwitchTrack { IsOn = !bypassed, IsDim = !follow };
+        var faToggle = new Button { Padding = new Thickness(0), MinHeight = 0, Height = 14, Background = Brushes.Transparent, MinWidth = 0, Content = faSwitch, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(faToggle, Loc.T("session.inspector.follow_switch_tip"));
+        faToggle.Click += (_, _) => { Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; }); RebuildInspector(); };
+        Grid.SetColumn(faToggle, 2); faHead.Children.Add(faToggle);
+        faBox.Children.Add(faHead);
+        faBox.Children.Add(fa);
         string ActionLabel(int a) => Array.Find(FollowActions, x => (int)x.Action == a).Label ?? Loc.T("common.none");
         Control ActionRow(string slot, int action, Action<int> setAction, Control chance)
         {
@@ -322,8 +339,8 @@ public sealed partial class SessionView
         double after = p.FollowBeats > 0 ? p.FollowBeats : len;
         fa.Children.Add(Row(Loc.T("session.inspector.after"), Chip(FormatDuration(after), false, a => Pick(a, FollowTimes, b => Math.Abs(b - p.FollowBeats) < 1e-6,
             b => Set(x => { x.FollowBeats = b; return x; })))));
-        s.Children.Add(fa);
-        if (!follow) Inactive.Set(fa, true, interactive: true);
+        s.Children.Add(faBox);
+        if (!follow || bypassed) Inactive.Set(fa, true, interactive: true);
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(

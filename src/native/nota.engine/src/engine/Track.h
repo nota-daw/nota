@@ -192,6 +192,7 @@ struct SessionSlot {
     int32_t chanceA = 100, chanceB = 0; // relative weights, 0..100
     double followBeats = 0.0;           // 0 = after one pass (lengthBeats)
     int32_t jumpScene = 0;              // FollowAction::Jump target
+    bool followBypass = false;          // hold the Follow actions without changing them (#499)
     bool stopButton = true;             // an EMPTY slot stops its track on scene launch
 };
 
