@@ -296,7 +296,8 @@ bool Engine::sessionSlotLaunchQueued(int32_t trackId, int32_t scene) const {
     if (scene < 0) return false;
     for (auto& t : authoring_->tracks)
         if (t->sessionPlayer && t->sessionPlayer->pendingSlot() == scene &&
-            (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)))
+            (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)) &&
+            !sceneGenStarted(SessionPlayer::genOf(t->sessionPlayer->request.load())))
             return true;
     return false;
 }
@@ -322,32 +323,43 @@ bool Engine::sessionSceneQueued(int32_t scene) const {
     return (waiting && !started) || (rowLaunch && !started);
 }
 
-uint32_t Engine::nextCancelTicket() {
-    cancelTicket_ = cancelTicket_ % 255u + 1u; // 1..255; 0 means "no cancel"
-    return cancelTicket_;
+bool Engine::sceneGenStarted(int32_t gen) const {
+    if (gen <= 0) return false;
+    for (auto& t : authoring_->tracks)
+        if (t->sessionPlayer && t->sessionPlayer->viewGen(gen).applied) return true;
+    return false;
 }
 
-void Engine::pushLaunchCancel(uint32_t ticket, int32_t gen) {
-    // The audio thread withdraws what carries this ticket as it drains the command — before any
-    // track reaches its boundary in that block (or, the scene launch having started, keeps it).
-    Command c;
-    c.type = CommandType::CancelSessionLaunch;
-    c.i0 = static_cast<int32_t>(ticket);
-    c.i1 = gen;
-    commands_.push(c);
+// Aim a cancel at what each matching track has queued now (#480): one command per target, the
+// exact request word seen here, pushed as one batch. The live request is never written here, so a
+// launch being applied at that moment is never disturbed; the audio thread withdraws a target only
+// if it is still that very request. If the batch doesn't fit the queue nothing is sent and the
+// cancel reports false.
+template <typename Match> bool Engine::aimLaunchCancel(Match match) {
+    std::vector<Command> batch;
+    for (auto& t : authoring_->tracks)
+        if (auto& sp = t->sessionPlayer) {
+            const uint64_t r = sp->request.load();
+            const int32_t p = SessionPlayer::slotOf(r);
+            if (p == SessionPlayer::kNone || p == SessionPlayer::kStopNow || !match(*t, r)) continue;
+            Command c;
+            c.type = CommandType::CancelSessionLaunch;
+            c.i0 = static_cast<int32_t>(static_cast<uint32_t>(r));
+            c.i1 = static_cast<int32_t>(static_cast<uint32_t>(r >> 32));
+            c.d0 = t->id();
+            batch.push_back(c);
+        }
+    return !batch.empty() && commands_.pushBatch(batch.data(), batch.size());
 }
 
 bool Engine::cancelSlotLaunch(int32_t trackId, int32_t scene) {
-    // trackId may be a group: its slot cancels the launches of every track below it. The requests
-    // seen now are marked; a launch made after this call replaces the mark and stays (#480).
+    // trackId may be a group: its slot cancels the launches of every track below it. The rest of a
+    // scene launch that has started (a clip with a longer quantum) is that scene's: not withdrawn.
     if (scene < 0) return false;
-    const uint32_t ticket = nextCancelTicket();
-    bool marked = false;
-    for (auto& t : authoring_->tracks)
-        if (t->sessionPlayer && (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)))
-            marked |= t->sessionPlayer->markCancel(ticket, [scene](uint64_t r) { return SessionPlayer::slotOf(r) == scene; });
-    if (marked) pushLaunchCancel(ticket, 0);
-    return marked;
+    return aimLaunchCancel([&](const Track& t, uint64_t r) {
+        return SessionPlayer::slotOf(r) == scene && (t.id() == trackId || isUnderGroup(*authoring_, t, trackId)) &&
+               !sceneGenStarted(SessionPlayer::genOf(r));
+    });
 }
 
 bool Engine::cancelSceneLaunch(int32_t scene) {
@@ -355,16 +367,10 @@ bool Engine::cancelSceneLaunch(int32_t scene) {
     // Its waiting scene launch's requests (launches and stops), and direct launches of the row's
     // slots — not what another scene launch queued for this row.
     const int32_t gen = (waitSceneGen_ != 0 && waitScene_ == scene) ? waitSceneGen_ : 0;
-    const uint32_t ticket = nextCancelTicket();
-    bool marked = false;
-    for (auto& t : authoring_->tracks)
-        if (t->sessionPlayer)
-            marked |= t->sessionPlayer->markCancel(ticket, [scene, gen](uint64_t r) {
-                const int32_t rg = SessionPlayer::genOf(r);
-                return (gen > 0 && rg == gen) || (SessionPlayer::slotOf(r) == scene && rg == 0);
-            });
-    if (marked) pushLaunchCancel(ticket, gen);
-    return marked;
+    return aimLaunchCancel([&](const Track&, uint64_t r) {
+        const int32_t rg = SessionPlayer::genOf(r);
+        return (gen > 0 && rg == gen) || (SessionPlayer::slotOf(r) == scene && rg == 0);
+    });
 }
 
 bool Engine::sceneLaunchWaiting() {

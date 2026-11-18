@@ -1580,8 +1580,8 @@ class Engine {
         bool playing, double spb);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames); // live input monitoring
     void drainCommands(Graph* g);
-    // #480: withdraw the queued Session launches marked with a cancel ticket (CancelSessionLaunch),
-    // on the audio thread while it drains commands — before any track reaches its boundary.
+    // #480: withdraw the queued Session launches cancels aimed at (CancelSessionLaunch), on the
+    // audio thread while it drains commands — before any track reaches its boundary.
     void applyLaunchCancel(Graph* g, const Command& c);
     // Is `t` inside group `groupId` (at any depth)? Walks the parent ids; no allocation.
     static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
@@ -2117,9 +2117,8 @@ class Engine {
     int32_t prevFollowScene_ = -1;              // the scene follow running before it
     double prevFollowStart_ = 0.0;
     bool waitFromFollow_ = false;               // a scene follow action made the waiting launch
-    uint32_t cancelTicket_ = 0;                 // last cancel ticket handed out (message thread)
-    uint32_t nextCancelTicket();
-    void pushLaunchCancel(uint32_t ticket, int32_t gen);
+    bool sceneGenStarted(int32_t gen) const;    // has scene launch `gen` started on any track?
+    template <typename Match> bool aimLaunchCancel(Match match);
     bool sceneLaunchWaiting(); // resolve the waiting launch (poll, and before a new one); true while it waits
     // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
     bool sceneTempoPending_ = false;

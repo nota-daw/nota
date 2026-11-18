@@ -78,19 +78,20 @@ beyond the drained table, written and read by the audio thread only.
 ### Engine (`src/native/nota.engine`)
 
 - **`SessionPlayer`**: the queued request is one word `request` (slot, scene-launch generation —
-  0 for a direct launch, stop, follow action or repeat — and cancel ticket); `appliedGen` is set by
+  0 for a direct launch, stop, follow action or repeat — and a per-track serial); `appliedGen` is set by
   `maybeApply` to an applied scene request's generation. `requestLaunch` / `requestStop` take the
-  generation (default 0). Helpers: `markCancel(ticket, match)` (message thread),
-  `withdrawTicket(ticket, keep)` (audio thread), `queueIfIdle` (follow / Repeat), `viewGen`
-  (seqlocked read for the UI). `kStopNow` is never marked.
-- **Cancel = mark + command**: the message thread marks the requests it sees now with a cancel
-  ticket (in the request word, by compare-exchange) and pushes `CancelSessionLaunch` (i0 = ticket,
-  i1 = scene-launch generation). `applyLaunchCancel` withdraws what still carries the ticket as
-  `drainCommands(g)` pops it — no table, no per-block limit, before any track reaches its boundary.
-  A launch made after the cancel replaces the word and loses the mark, so it stays. A scene launch
-  that has started on any track (clips with their own quanta) keeps its requests; the marks go.
+  generation (default 0). Helpers: `withdraw(word)` (audio thread), `queueIfIdle` (follow /
+  Repeat), `viewGen` (seqlocked read for the UI). `kStopNow` is never a cancel target.
+- **Cancel = a batch of exact targets**: the message thread reads each matching track's request
+  word and pushes one `CancelSessionLaunch` per target (track id + that word) as a single batch
+  (`CommandQueue::pushBatch`: all or none visible to the consumer; false when it doesn't fit, and
+  the cancel reports false). `applyLaunchCancel` withdraws a target, as `drainCommands(g)` pops it,
+  only if the request is still that very word — no table, no per-block limit, before any track
+  reaches its boundary. The live request is never written by a cancel, so a launch being applied
+  is never disturbed. A launch made after the cancel is a new word (a per-track serial) and stays.
+  A scene launch that has started on any track (clips with their own quanta) keeps its requests.
 - **One request word** (review of #677): `SessionPlayer::request` packs the queued slot (32 bits),
-  its scene-launch generation (24 bits) and a cancel ticket (8 bits) in one 64-bit atomic; only
+  its scene-launch generation (24 bits) and a per-track serial (8 bits) in one 64-bit atomic; only
   scene requests record `appliedGen`, so a clip follow applying later can't erase that a scene
   started, so they are replaced and consumed together;
   `maybeApply` records `appliedGen` inside an `applySeq` seqlock that `viewGen` reads, so `poll()`

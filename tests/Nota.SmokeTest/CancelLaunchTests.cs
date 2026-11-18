@@ -8,6 +8,8 @@
 // that ran before it carries on. A cancel and a boundary in the same block never split a scene. A
 // second launch keeps a launch queued; Stop and Stop All still stop.
 
+using System.Threading;
+using System.Threading.Tasks;
 using Nota.Application;
 using Nota.Infrastructure;
 
@@ -39,6 +41,7 @@ internal static class CancelLaunchTests
         foreach (var r in StopsOnlyRowAndRestart()) yield return r;
         foreach (var r in RelaunchAfterCancelSurvives()) yield return r;
         foreach (var r in ClipFollowKeepsSceneStarted()) yield return r;
+        foreach (var r in CancelRacesTheBoundary()) yield return r;
     }
 
     // Two tracks: drum plays 4-beat loops in rows 0 and 2; bass has clips in rows 1, 2 and 3.
@@ -432,6 +435,41 @@ internal static class CancelLaunchTests
         r.Block(); r.Block();
         yield return (bass == 2 && Math.Abs(e.Bpm - 140) < 1e-6,
             $"clip follow before poll: the scene counts as started, its tempo applies (bass {bass}, {e.Bpm} BPM)");
+    }
+
+    // A cancel made on another thread while the audio thread renders the boundary block (#677
+    // review): whatever the timing, the scene starts on every track or is withdrawn on every track —
+    // never a mix, and never a track that misses the boundary and starts a quantum late.
+    private static IEnumerable<(bool, string)> CancelRacesTheBoundary()
+    {
+        var rng = new Random(480);
+        int started = 0, withdrawn = 0, mixed = 0, late = 0;
+        for (int k = 0; k < 150; k++)
+        {
+            using var r = new Rig();
+            var e = r.E;
+            e.LaunchScene(0);
+            r.To(5.0);
+            e.LaunchScene(1); // bass starts, drum stops at beat 8
+            r.JustBefore(8.0);
+            int spinCancel = rng.Next(0, 20000), spinRender = rng.Next(0, 20000);
+            using var ready = new CountdownEvent(2);
+            var canceller = new Thread(() => { ready.Signal(); ready.Wait(); Thread.SpinWait(spinCancel); e.CancelSceneLaunch(1); });
+            canceller.Start();
+            ready.Signal(); ready.Wait();
+            Thread.SpinWait(spinRender);
+            for (int b = 0; b < 3; b++) r.BlockNoPoll(); // the boundary block, then two more
+            canceller.Join();
+            r.BlockNoPoll();
+            int drum = e.SessionPlayingSlot(r.Drum), bass = e.SessionPlayingSlot(r.Bass);
+            if (drum == -1 && bass == 1) started++;
+            else if (drum == 0 && bass == -1) withdrawn++;
+            else mixed++;
+            r.To(12.5); // a quantum later nothing else may change
+            if (e.SessionPlayingSlot(r.Drum) != drum || e.SessionPlayingSlot(r.Bass) != bass) late++;
+        }
+        yield return (mixed == 0 && late == 0 && started > 0 && withdrawn > 0,
+            $"cancel racing the boundary: all or nothing every time ({started} started, {withdrawn} withdrawn, {mixed} mixed, {late} late)");
     }
 
     private static NotaSessionClipProps Props(NotaEngine e, int track, int scene)

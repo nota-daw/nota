@@ -9,19 +9,7 @@ void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float
     pendingQuant.store(quant, std::memory_order_relaxed);
     pendingLegato.store(legato, std::memory_order_relaxed);
     pendingGain.store(g, std::memory_order_relaxed);
-    request.store(pack(slot, gen));
-}
-
-bool SessionPlayer::withdrawTicket(uint32_t ticket, bool keep) {
-    uint64_t r = request.load();
-    if (ticket == 0 || ticketOf(r) != ticket) return false;
-    if (keep) return request.compare_exchange_strong(r, withTicket(r, 0));
-    if (!request.compare_exchange_strong(r, kIdle)) return false;
-    if (const int32_t p = slotOf(r); p >= 0) {
-        int32_t rep = p;
-        repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
-    }
-    return true;
+    request.store(fresh(slot, gen));
 }
 
 SessionPlayer::GenView SessionPlayer::viewGen(int32_t gen) const {

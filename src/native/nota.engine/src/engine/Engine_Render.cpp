@@ -1097,14 +1097,20 @@ void Engine::launchCountInSlot() {
 
 void Engine::applyLaunchCancel(Graph* g, const Command& c) {
     if (!g) return;
+    const uint64_t target = static_cast<uint64_t>(static_cast<uint32_t>(c.i0)) |
+                            (static_cast<uint64_t>(static_cast<uint32_t>(c.i1)) << 32);
     // A scene launch that has started on any track (clips may have their own quanta) is started:
-    // nothing of it is withdrawn, so a scene never ends up half launched — the marks just go.
-    bool started = false;
-    if (c.i1 > 0)
+    // none of its requests is withdrawn, so a scene never ends up half launched. The whole batch is
+    // drained before any track applies its request, so every target sees the same answer.
+    if (const int32_t gen = SessionPlayer::genOf(target); gen > 0)
         for (auto& t : g->tracks)
-            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == c.i1) started = true;
+            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == gen) return;
+    const int32_t trackId = static_cast<int32_t>(c.d0);
     for (auto& t : g->tracks)
-        if (t->sessionPlayer) t->sessionPlayer->withdrawTicket(static_cast<uint32_t>(c.i0), started);
+        if (t->id() == trackId) {
+            if (t->sessionPlayer) t->sessionPlayer->withdraw(target);
+            return;
+        }
 }
 
 bool Engine::isUnderGroup(const Graph& g, const Track& t, int32_t groupId) {
