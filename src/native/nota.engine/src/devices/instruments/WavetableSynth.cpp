@@ -149,8 +149,11 @@ void WavetableSynth::noteExpression(int32_t pitch, int32_t dim, float value) {
             v.ex.set(dim, value, add);
 }
 
-void WavetableSynth::setTransport(double, double samplesPerBeat, bool) {
+void WavetableSynth::setTransport(double beatStart, double samplesPerBeat, bool playing) {
     if (samplesPerBeat > 0.0) spb_ = samplesPerBeat;
+    beat_ = std::isfinite(beatStart) ? beatStart : 0.0;
+    playing_ = playing;
+    sinceBlock_ = 0;
 }
 
 void WavetableSynth::wake() {
@@ -618,6 +621,25 @@ void WavetableSynth::render(float* out, int32_t frames) {
 
     const int ls1 = shapeOf(Lfo1Shape), ls2 = shapeOf(Lfo2Shape);
     const double lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync), lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync);
+    // A synced LFO follows the song position while the transport plays (#676), as the
+    // effects' LFOs do: its phase is set from the slice's start beat, then runs at the synced
+    // rate through the slice. A free-running phase carried over from earlier plays and from
+    // the sleeps between notes, so the pulse landed somewhere else in the beat on every play
+    // and in every export. Free-rate LFOs, and synced ones with the transport stopped, run on.
+    // This slice starts where the block's earlier slices ended.
+    const double sliceBeat = spb_ > 0.0 ? beat_ + (double)sinceBlock_ / spb_ : beat_;
+    sinceBlock_ += frames;
+    if (playing_ && spb_ > 0.0) {
+        auto lock = [&](double& ph, float& sh, double cycleBeats) {
+            if (cycleBeats <= 0.0) return;
+            const double c = sliceBeat / cycleBeats;
+            const double p = c - std::floor(c);
+            if (p + 0.5 < ph) sh = frand() * 2.0f - 1.0f; // crossed a cycle start: new S&H step
+            ph = p;
+        };
+        lock(lfoPhase1_, lfoSh1_, syncBeats(Lfo1Sync));
+        lock(lfoPhase2_, lfoSh2_, syncBeats(Lfo2Sync));
+    }
     const float lfo1Depth = get(Lfo1Depth), lfo2Depth = get(Lfo2Depth);
     const float gain = get(Gain), modWheel = get(ModWheel);
 
