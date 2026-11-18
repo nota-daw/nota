@@ -406,6 +406,9 @@ class WavetableSynth final : public Instrument {
     // takes its phase from the song position while it plays (#676).
     double beat_ = 0.0;
     bool playing_ = false;
+    // Frames rendered since setTransport: the engine renders a block in slices, up to each
+    // note or expression event, with one setTransport for the whole block.
+    int64_t sinceBlock_ = 0;
     float exprCoef_ = exprSmoothCoef(44100.0);
     GlobalExpr gexpr_; // pitch wheel / channel pressure (pitch −1)
     double lfoPhase1_ = 0, lfoPhase2_ = 0, chorusPh_ = 0;

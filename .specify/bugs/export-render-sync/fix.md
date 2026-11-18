@@ -60,3 +60,8 @@ The phase is set once per block and then advances at the synced rate (exact at a
 
 - #667 (plugin delay compensation through groups) was confirmed in passing: a grouped track lands one look-ahead late. Same live and in the export; stays in #667.
 - Ask the user of #676 for the project file to confirm their Aurora patches use a synced LFO.
+
+## Review follow-up (PR #680)
+
+- **Events inside a block rewound the LFO.** The engine renders an instrument that doesn't take timed events in slices, up to each note or expression event (`playEvents`), with one `setTransport` per block, so every slice re-locked to the block's start beat. Both synths now count the frames rendered since `setTransport` and lock each slice to `beat + framesSoFar / samplesPerBeat`.
+- **The test now fails on silence and on a wrong phase.** Each play and export must sound and dip (quietest / loudest 1/64 beat ≤ 0.25), and the dip must land where it belongs (Aurora 0.25 of the beat, Volt 0.75), not just where the first render put it. A new case puts pitch-bend expression points every 0.37 beat on the held note, so blocks split mid-way. On the c678a13 engine that case fails in the export (Aurora 0.41–0.44, Volt 0.92); with the follow-up all 14 checks pass.

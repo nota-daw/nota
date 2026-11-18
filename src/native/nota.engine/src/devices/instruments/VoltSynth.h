@@ -198,6 +198,7 @@ class VoltSynth final : public Instrument {
         if (samplesPerBeat > 0.0) samplesPerBeat_ = samplesPerBeat;
         beat_ = std::isfinite(beatStart) ? beatStart : 0.0;
         playing_ = playing;
+        sinceBlock_ = 0;
     }
     // Active (sounding) voice count, for the editor's voice meter. Message thread read
     // of an audio-thread-updated snapshot; approximate is fine.
@@ -353,6 +354,9 @@ class VoltSynth final : public Instrument {
     // takes its phase from the song position while it plays (#676).
     double beat_ = 0.0;
     bool playing_ = false;
+    // Frames rendered since setTransport: the engine renders a block in slices, up to each
+    // note or expression event, with one setTransport for the whole block.
+    int64_t sinceBlock_ = 0;
     double lfoPhase1_ = 0.0, lfoPhase2_ = 0.0, vibPhase_ = 0.0;
     float lfoSh1_ = 0.0f, lfoSh2_ = 0.0f; // sample & hold values
     double lastFreq_ = 0.0;               // portamento reference
