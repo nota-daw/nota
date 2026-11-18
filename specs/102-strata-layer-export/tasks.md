@@ -75,4 +75,4 @@ remaining work.
 ## Review follow-up (PR #663, 2026-11-18)
 
 - [x] T014 `Strata::setState` restores a layer saved mid-recording as finished (`LS_Rec` → `LS_Play`; recording is already stopped on load), so it exports after reopen; smoke check
-- [x] T015 Take identity across the save dialog: the card snapshots the state when the command is chosen and `StrataLayerExport.SameTake` compares the slot's samples afterwards; a re-recorded slot reports the layer gone; smoke check
+- [x] T015 Take identity across the save dialog: the card keeps a small fingerprint of the chosen take (the layer's peak envelope via `DeviceLayerWave`, one layer only — no copy of the device state before the dialog) and compares it after the dialog; a re-recorded slot reports the layer gone; smoke check

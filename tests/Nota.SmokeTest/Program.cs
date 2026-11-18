@@ -6139,16 +6139,19 @@ Console.WriteLine("-- Nota Strata layer export --");
     Check(StrataLayerExport.Check(le.DeviceGetState(sl_mt, sl_md), 1) == StrataLayerExportResult.Written, "…and its last pass exports");
 
     // The same slot, another take (review of #663): undo layer 2 and record it again while a save
-    // dialog would be open — the take chosen before is gone.
-    Check(StrataLayerExport.SameTake(sl_before, le.DeviceGetState(lt, ld), 1), "an untouched layer is the same take");
+    // dialog would be open — the card's take fingerprint (the layer's peak envelope) must tell them apart.
+    float[] SlPrint() { var w = new float[512]; int n = le.DeviceLayerWave(lt, ld, 1, w, w.Length); return w[..Math.Max(0, n)]; }
+    var sl_print = SlPrint();
+    le.RenderOffline(sl_lb, Blk);
+    Check(sl_print.Length > 0 && SlPrint().AsSpan().SequenceEqual(sl_print), "an untouched layer keeps its take fingerprint");
     le.Seek(0); le.Play();
     le.DeviceAction(lt, ld, 4, 0, 0); le.RenderOffline(sl_lb, Blk);               // C_Undo: layer 2 dropped
     le.DeviceAction(lt, ld, 1, 0, 0);                                             // C_Overdub: a new layer 2
     for (int b = 0; b <= Blocks + 1; b++) le.RenderOffline(sl_lb, Blk);
     le.StopTransport();
     var sl_retake = le.DeviceGetState(lt, ld);
-    Check(StrataLayerExport.Check(sl_retake, 1) == StrataLayerExportResult.Written && !StrataLayerExport.SameTake(sl_before, sl_retake, 1),
-        "a slot undone and recorded again is another take (the export reports the chosen one gone)");
+    Check(StrataLayerExport.Check(sl_retake, 1) == StrataLayerExportResult.Written && !SlPrint().AsSpan().SequenceEqual(sl_print),
+        "a slot undone and recorded again has another take fingerprint (the export reports the chosen one gone)");
 
     // Nothing there: no fallback to the mix.
     string sl_pNo = Path.Combine(sl_dir, "none.wav");

@@ -51,16 +51,6 @@ public static class StrataLayerExport
         return r;
     }
 
-    /// <summary>Whether <paramref name="layer"/> holds the same take in both blobs: same rate, same loop
-    /// length, same samples. A finished layer is never rewritten, so a slot that was undone and recorded
-    /// again while a save dialog was open shows up here as a different take.</summary>
-    public static bool SameTake(byte[] then, byte[] now, int layer)
-    {
-        if (Locate(then, layer, out int sr0, out int n0, out int at0) != StrataLayerExportResult.Written) return false;
-        if (Locate(now, layer, out int sr1, out int n1, out int at1) != StrataLayerExportResult.Written) return false;
-        return sr0 == sr1 && n0 == n1 && then.AsSpan(at0, n0 * 8).SequenceEqual(now.AsSpan(at1, n1 * 8));
-    }
-
     private static StrataLayerExportResult Locate(byte[] blob, int layer, out int sampleRate, out int frames, out int pcmOffset)
     {
         sampleRate = 0; frames = 0; pcmOffset = 0;
