@@ -42,7 +42,8 @@ class SessionPlayer {
     static constexpr int32_t slotOf(uint64_t r) { return static_cast<int32_t>(static_cast<uint32_t>(r)); }
     static constexpr int32_t genOf(uint64_t r) { return static_cast<int32_t>((r >> 32) & kGenMask); }
     std::atomic<uint32_t> serial{0};
-    uint64_t fresh(int32_t slot, int32_t gen) { return pack(slot, gen, serial.fetch_add(1, std::memory_order_relaxed) + 1); }
+    // Serials run 1..255 (0 is kIdle's), so no real request ever matches an idle word.
+    uint64_t fresh(int32_t slot, int32_t gen) { return pack(slot, gen, 1u + serial.fetch_add(1, std::memory_order_relaxed) % 255u); }
 
     static constexpr uint64_t kIdle = static_cast<uint32_t>(kNone); // pack(kNone, 0)
     std::atomic<uint64_t> request{kIdle};
@@ -98,15 +99,22 @@ class SessionPlayer {
     struct GenView { bool applied, queued, busy; };
     GenView viewGen(int32_t gen) const;
 
-    // Audio thread, draining a cancel (#480): withdraw `target` if it is still the queued request
-    // (a newer one is a different word and stays), and its Repeat.
+    // Audio thread, draining a cancel (#480): withdraw `target` if it is still the queued request,
+    // and its Repeat. Identity is the generation + serial: a newer request has a new serial and
+    // stays, while a row insert / move that renumbered the request's slot (remapPlayers) does not
+    // make it a different request.
     bool withdraw(uint64_t target) {
-        if (!request.compare_exchange_strong(target, kIdle)) return false;
-        if (const int32_t p = slotOf(target); p >= 0) {
-            int32_t rep = p;
-            repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
-        }
-        return true;
+        constexpr uint64_t kId = ~0xFFFFFFFFull;
+        uint64_t r = request.load();
+        while ((r & kId) == (target & kId) && slotOf(r) != kNone)
+            if (request.compare_exchange_weak(r, kIdle)) {
+                if (const int32_t p = slotOf(r); p >= 0) {
+                    int32_t rep = p;
+                    repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
+                }
+                return true;
+            }
+        return false;
     }
 
     // Audio thread: if a pending request exists and a quantize boundary falls in

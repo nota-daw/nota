@@ -1099,10 +1099,11 @@ void Engine::applyLaunchCancel(Graph* g, const Command& c) {
     if (!g) return;
     const uint64_t target = static_cast<uint64_t>(static_cast<uint32_t>(c.i0)) |
                             (static_cast<uint64_t>(static_cast<uint32_t>(c.i1)) << 32);
-    // A scene launch that has started on any track (clips may have their own quanta) is started:
-    // none of its requests is withdrawn, so a scene never ends up half launched. The whole batch is
-    // drained before any track applies its request, so every target sees the same answer.
-    if (const int32_t gen = SessionPlayer::genOf(target); gen > 0)
+    // A whole-scene cancel spares a scene launch that has started on any track (clips may have their
+    // own quanta), so a scene never ends up half launched; the whole batch is drained before any
+    // track applies its request, so every target sees the same answer. A slot cancel (d1 = 0) is the
+    // performer's choice for that slot and withdraws it either way.
+    if (const int32_t gen = SessionPlayer::genOf(target); gen > 0 && c.d1 != 0.0)
         for (auto& t : g->tracks)
             if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == gen) return;
     const int32_t trackId = static_cast<int32_t>(c.d0);

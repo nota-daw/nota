@@ -2117,8 +2117,7 @@ class Engine {
     int32_t prevFollowScene_ = -1;              // the scene follow running before it
     double prevFollowStart_ = 0.0;
     bool waitFromFollow_ = false;               // a scene follow action made the waiting launch
-    bool sceneGenStarted(int32_t gen) const;    // has scene launch `gen` started on any track?
-    template <typename Match> bool aimLaunchCancel(Match match);
+    template <typename Match> bool aimLaunchCancel(bool wholeScene, Match match);
     bool sceneLaunchWaiting(); // resolve the waiting launch (poll, and before a new one); true while it waits
     // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
     bool sceneTempoPending_ = false;

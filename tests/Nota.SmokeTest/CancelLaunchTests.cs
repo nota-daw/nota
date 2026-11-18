@@ -42,6 +42,8 @@ internal static class CancelLaunchTests
         foreach (var r in RelaunchAfterCancelSurvives()) yield return r;
         foreach (var r in ClipFollowKeepsSceneStarted()) yield return r;
         foreach (var r in CancelRacesTheBoundary()) yield return r;
+        foreach (var r in WaitingClipOfStartedSceneCancels()) yield return r;
+        foreach (var r in RowInsertKeepsTheCancel()) yield return r;
     }
 
     // Two tracks: drum plays 4-beat loops in rows 0 and 2; bass has clips in rows 1, 2 and 3.
@@ -468,8 +470,44 @@ internal static class CancelLaunchTests
             r.To(12.5); // a quantum later nothing else may change
             if (e.SessionPlayingSlot(r.Drum) != drum || e.SessionPlayingSlot(r.Bass) != bass) late++;
         }
-        yield return (mixed == 0 && late == 0 && started > 0 && withdrawn > 0,
+        // Either order is valid; which one the scheduler produces is not up to the test (BoundaryRace
+        // forces each one). What must never happen is a mix or a late start.
+        yield return (mixed == 0 && late == 0,
             $"cancel racing the boundary: all or nothing every time ({started} started, {withdrawn} withdrawn, {mixed} mixed, {late} late)");
+    }
+
+    // A clip still waiting in a scene whose other clip started (its own longer quantum) can be
+    // cancelled on its own slot; the scene as a whole can't be.
+    private static IEnumerable<(bool, string)> WaitingClipOfStartedSceneCancels()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        var p = Props(e, r.Drum, 2); p.QuantBeats = 1.0; e.SetSessionClipProps(r.Drum, 2, p);
+        e.LaunchSlot(r.Drum, 0);
+        r.To(5.2);
+        e.LaunchScene(2); // drum Fill at beat 6, bass Walk at beat 8
+        r.To(6.5);
+        yield return (e.SessionSlotLaunchQueued(r.Bass, 2) && e.CancelSlotLaunch(r.Bass, 2),
+            "started scene: its still-waiting clip is cancelled on its own slot");
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2 && e.SessionPlayingSlot(r.Bass) == -1,
+            $"started scene: that clip never starts, the rest plays on (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+    }
+
+    // A row inserted between a scene cancel and the next audio block renumbers the queued requests;
+    // they are the same requests, so the cancel still withdraws all of them.
+    private static IEnumerable<(bool, string)> RowInsertKeepsTheCancel()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(1); // bass row 1, drum stop
+        yield return (e.CancelSceneLaunch(1), "row insert: the scene is cancelled");
+        e.InsertScene(0); // before the audio thread drains the cancel: row 1 becomes row 2
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 1 && e.SessionPlayingSlot(r.Bass) == -1,
+            $"row insert: the whole scene is still withdrawn (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
     }
 
     private static NotaSessionClipProps Props(NotaEngine e, int track, int scene)

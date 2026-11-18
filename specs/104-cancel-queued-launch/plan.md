@@ -86,10 +86,12 @@ beyond the drained table, written and read by the audio thread only.
   word and pushes one `CancelSessionLaunch` per target (track id + that word) as a single batch
   (`CommandQueue::pushBatch`: all or none visible to the consumer; false when it doesn't fit, and
   the cancel reports false). `applyLaunchCancel` withdraws a target, as `drainCommands(g)` pops it,
-  only if the request is still that very word — no table, no per-block limit, before any track
+  only if the request is still that very request — same generation and serial (a row insert /
+  move that renumbered its slot doesn't change that) — no table, no per-block limit, before any track
   reaches its boundary. The live request is never written by a cancel, so a launch being applied
   is never disturbed. A launch made after the cancel is a new word (a per-track serial) and stays.
-  A scene launch that has started on any track (clips with their own quanta) keeps its requests.
+  A whole-scene cancel spares a scene launch that has started on any track (clips with their own
+  quanta); a slot cancel may still withdraw that scene's clip that is waiting on its own slot.
 - **One request word** (review of #677): `SessionPlayer::request` packs the queued slot (32 bits),
   its scene-launch generation (24 bits) and a per-track serial (8 bits) in one 64-bit atomic; only
   scene requests record `appliedGen`, so a clip follow applying later can't erase that a scene
