@@ -48,6 +48,16 @@ class SessionPlayer {
     double localBeats = 0.0; // absolute position within the loop clock
     ArticulationReleaseState articulationReleases; // pending latching keys, timed by rendered frames
     float gain = 1.0f;       // launch-velocity gain of the playing slot
+    // Follow bypass (#499): the follow check counts playedBeats - followBase. followHeld is set
+    // while the playing slot's follow is bypassed; when the bypass ends, followBase moves to the
+    // last multiple of the follow time already played, so nothing fires as a catch-up.
+    bool followHeld = false;
+    double followBase = 0.0;
+    void resetFollowCount() {
+        playedBeats.store(0.0, std::memory_order_relaxed);
+        followBase = 0.0;
+        followHeld = false;
+    }
 
     void requestLaunch(int32_t slot, double quant = -1.0, bool legato = false, float g = 1.0f, int32_t gen = 0);
     void requestStop(int32_t gen = 0) {

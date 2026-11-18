@@ -865,6 +865,7 @@ bool Engine::sessionClipProps(int32_t trackId, int32_t scene, NotaSessionClipPro
     out->chance_b = s->chanceB;
     out->follow_beats = s->followBeats;
     out->jump_scene = s->jumpScene;
+    out->follow_bypass = s->followBypass ? 1 : 0;
     return true;
 }
 
@@ -886,6 +887,7 @@ bool Engine::setSessionClipProps(int32_t trackId, int32_t scene, const NotaSessi
     s.chanceB = std::clamp(p.chance_b, 0, 100);
     s.followBeats = p.follow_beats > 0.0 ? p.follow_beats : 0.0;
     s.jumpScene = std::max(0, p.jump_scene);
+    s.followBypass = p.follow_bypass != 0;
     republishWithTrack(trackId, nt);
     // A slot leaving Repeat mode must not keep retriggering.
     if (s.launchMode != LaunchMode::Repeat && old->sessionPlayer &&
@@ -1362,8 +1364,23 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
     auto& sp = *t.sessionPlayer;
     const int32_t cur = sp.playing.load(std::memory_order_relaxed);
     if (cur < 0 || cur >= static_cast<int32_t>(t.sessionSlots.size())) return;
-    if (sp.pending.load(std::memory_order_relaxed) != SessionPlayer::kNone) return;
     const SessionSlot& s = t.sessionSlots[cur];
+
+    // Follow bypass (#499): a bypassed slot holds. When the bypass ends, count on from the last
+    // multiple of the follow time already played: the action lands where it would have without
+    // the bypass, and a deadline that passed meanwhile never fires as a catch-up. Tracked before
+    // the queued-launch guard, so a launch queued (and later cancelled) while the bypass changed
+    // still leaves the right base; and before the global switch, so the base is taken when the
+    // bypass ends even while follow is off globally.
+    const double due = s.followBeats > 0.0 ? s.followBeats : (s.lengthBeats > 0.0 ? s.lengthBeats : 4.0);
+    const double played = sp.playedBeats.load(std::memory_order_relaxed);
+    if (s.followBypass) {
+        sp.followHeld = true;
+    } else if (sp.followHeld) {
+        sp.followHeld = false;
+        sp.followBase = std::floor(played / due) * due;
+    }
+    if (sp.pending.load(std::memory_order_relaxed) != SessionPlayer::kNone) return;
 
     // Repeat: while held, queue a relaunch of the same slot at every quantum.
     if (sp.repeatSlot.load(std::memory_order_relaxed) == cur) {
@@ -1379,10 +1396,10 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
     }
 
     // Follow action: once the slot has played its follow time, pick A or B by weight.
+    if (s.followBypass) return;
     if (!sessionFollow_.load(std::memory_order_relaxed)) return;
     if (s.followA == FollowAction::None && s.followB == FollowAction::None) return;
-    const double due = s.followBeats > 0.0 ? s.followBeats : (s.lengthBeats > 0.0 ? s.lengthBeats : 4.0);
-    if (sp.playedBeats.load(std::memory_order_relaxed) + blockBeats * 0.5 < due) return;
+    if (played - sp.followBase + blockBeats * 0.5 < due) return;
     const int32_t total = s.chanceA + s.chanceB;
     uint32_t x = followRng_;
     x ^= x << 13;
@@ -1392,7 +1409,7 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
     const FollowAction a =
         (total <= 0 || static_cast<int32_t>(x % 100u) * total < s.chanceA * 100) ? s.followA : s.followB;
     if (a == FollowAction::None) {
-        sp.playedBeats.store(0.0, std::memory_order_relaxed);
+        sp.resetFollowCount();
         return;
     }
     const int32_t target = followTarget(t, cur, a);

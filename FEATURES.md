@@ -232,7 +232,9 @@ own window — see
   previews and a progress pie on the clip's own clock; selection apart from launching,
   keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag between slots;
   launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato, one-shot,
-  velocity amount and follow actions with a global switch; scenes with names, colours,
+  velocity amount and follow actions with a global switch and a per-clip bypass that holds one
+  clip without changing its settings (and resumes on the next multiple of its time, never as a
+  catch-up); scenes with names, colours,
   tempo / signature and scene follow, inserted, duplicated, captured and reordered without
   stopping playback; a queued clip or scene cancelled before its launch point (**⌥-click** its
   launch button, or **Cancel launch**) — nothing of it starts, its tempo change and follow are

@@ -134,6 +134,8 @@ public static class ProjectMigrations
         // tempo points become that lane (same timing; values limited to 20–300 BPM, flagged
         // so the app can say so once); `master.automation` and `master.pan` are new.
         new Migration(33, MigrateTempoPoints),
+        // v34 -> v35 (specs/103): Session slots gain FollowBypass. Absent = follow active — no-op.
+        new Migration(34, _ => { }),
     };
 
     private static void MigrateTempoPoints(JsonObject root)

@@ -34,6 +34,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   slot or scene to cancel it. Clicking a queued clip or scene again still leaves it queued, Stop
   still stops the track at the launch point, and Stop All now also drops a queued scene's tempo
   change. AI assistants get `cancel_slot_launch` and `cancel_scene_launch`.
+- **Session: bypass one clip's follow actions** (#499, specs/103). The switch in the clip
+  inspector's **Follow action** head — or **Bypass follow actions** in the clip's right-click
+  menu — holds that clip: it keeps looping and can still be launched by hand, while every other
+  clip's follow actions and the global **Follow** switch carry on. Its A/B actions, chances,
+  Jump target and time stay as they were (and stay editable, greyed, under **Bypassed**); the
+  slot shows a bypass ring next to its length. Switch it back on and the action fires at the
+  next multiple of its time since the clip launched — the point where it would have fired
+  anyway — never at once as a catch-up. Saved with the project; undoable; copies of the clip
+  keep it; the MCP `get_session` / `set_session_clip` tools read and set it.
 - **Nota Strata: export one layer on its own** (#482, specs/102). Right-click a layer in
   Strata's layer list and choose **Export layer N as WAV…** to get just that pass — say, the
   vocal overdub without the cello under it — for editing elsewhere. The file is the layer as

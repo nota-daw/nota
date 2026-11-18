@@ -9249,6 +9249,75 @@ engine.StopTransport();
     Check(e.SessionPlayingSlot(t) == 1, $"follow action Next moved to slot 1 (playing {e.SessionPlayingSlot(t)})");
     e.StopAllSession(); Run(0.1);
 
+    // Follow bypass (specs/103, #499): one clip holds while its settings stay; others follow;
+    // when the bypass ends the action lands on the next multiple of the follow time since launch.
+    trig.FollowBeats = 2.0; trig.FollowBypass = 1;
+    e.SetSessionClipProps(t, 0, trig);
+    Check(e.TryGetSessionClipProps(t, 0, out var byp) && byp.FollowBypass == 1 && byp.FollowA == (int)SessionFollowAction.Next
+        && byp.ChanceA == 100 && Math.Abs(byp.FollowBeats - 2.0) < 1e-9, "follow bypass round-trips and keeps the follow settings");
+    e.Undo();
+    Check(e.TryGetSessionClipProps(t, 0, out var byu) && byu.FollowBypass == 0 && Math.Abs(byu.FollowBeats - 1.0) < 1e-9,
+        "undo restores the clip's follow props in one step");
+    e.SetSessionClipProps(t, 0, trig);
+    Check(e.CopySessionSlot(t, 0, t, 4) && e.TryGetSessionClipProps(t, 4, out var byc) && byc.FollowBypass == 1,
+        "a copied slot carries its follow bypass");
+    e.ClearSessionSlot(t, 4);
+    int tf = e.AddInstrumentTrack();
+    e.AddSessionMidiClip(tf, 0, 4.0); e.AddSessionMidiClip(tf, 1, 4.0);
+    e.SetSessionNotes(tf, 0, new[] { new NotaNote(67, 0.0, 1.0, 0.9f) });
+    e.SetSessionNotes(tf, 1, new[] { new NotaNote(69, 0.0, 1.0, 0.9f) });
+    var other = trig; other.FollowBypass = 0;
+    e.SetSessionClipProps(tf, 0, other);
+    Start(); e.LaunchSlot(t, 0); e.LaunchSlot(tf, 0); Run(9.0);
+    Check(e.SessionPlayingSlot(t) == 0, $"bypassed clip keeps looping past 4x its follow time (playing {e.SessionPlayingSlot(t)})");
+    Check(e.SessionPlayingSlot(tf) == 1, $"another track's clip still follows (playing {e.SessionPlayingSlot(tf)})");
+    Check(e.SessionFollow, "the global follow switch is untouched by a clip's bypass");
+    e.LaunchSlot(t, 1); Run(0.5);
+    Check(e.SessionPlayingSlot(t) == 1, "a bypassed clip's track still launches by hand");
+    e.StopAllSession(); Run(0.1);
+
+    // Bypass ends past the deadline: no catch-up at once; fires at the next multiple (beat 6).
+    Start(); e.LaunchSlot(t, 0); Run(5.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.6);
+    Check(e.SessionPlayingSlot(t) == 0, $"ending the bypass after the deadline fires no catch-up (at {e.SessionSlotPosition(t):F2}, playing {e.SessionPlayingSlot(t)})");
+    Run(0.8);
+    Check(e.SessionPlayingSlot(t) == 1, $"the follow action lands on the next multiple of the follow time (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+
+    // Bypass ends before the deadline: the action fires on time, as if never bypassed.
+    trig.FollowBypass = 1; e.SetSessionClipProps(t, 0, trig);
+    Start(); e.LaunchSlot(t, 0); Run(1.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.6);
+    Check(e.SessionPlayingSlot(t) == 0, "ending the bypass before the deadline waits for it");
+    Run(0.7);
+    Check(e.SessionPlayingSlot(t) == 1, $"then fires at the normal follow time (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+
+    // A launch queued while the bypass came and went, then cancelled (its row removed): the
+    // bypass still re-bases the follow count, so nothing fires as a catch-up (beat 6, not at once).
+    int qs = e.InsertScene(2);
+    e.AddSessionMidiClip(t, qs, 4.0);
+    e.SetSessionNotes(t, qs, new[] { new NotaNote(62, 0.0, 1.0, 0.9f) });
+    Check(e.TryGetSessionClipProps(t, qs, out var qp), "queued-slot props");
+    qp.QuantBeats = 16.0; e.SetSessionClipProps(t, qs, qp);
+    Start(); e.LaunchSlot(t, 0); Run(0.5);
+    e.LaunchSlot(t, qs); Run(0.5);
+    trig.FollowBypass = 1; e.SetSessionClipProps(t, 0, trig);
+    Run(4.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.1);
+    Check(e.SessionPlayingSlot(t) == 0 && e.SessionSlotState(t, qs) == 2, $"the launch is still queued while the bypass ends (state {e.SessionSlotState(t, qs)})");
+    e.RemoveScene(qs);
+    Run(0.4);
+    Check(e.SessionPlayingSlot(t) == 0, $"cancelling a queued launch after a bypass fires no catch-up (playing {e.SessionPlayingSlot(t)})");
+    Run(0.8);
+    Check(e.SessionPlayingSlot(t) == 1, $"the follow action lands on the next multiple after the cancelled launch (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+    e.RemoveTrack(tf);
+    trig.FollowBeats = 1.0; e.SetSessionClipProps(t, 0, trig);
+
     // Empty slot without a stop button: launching its scene leaves the track playing.
     int t2 = e.AddInstrumentTrack();
     e.AddSessionMidiClip(t2, 0, 4.0);
@@ -9303,6 +9372,8 @@ engine.StopTransport();
     e.StopAllSession(); Run(0.1); e.StopTransport();
 
     // Persistence: names, props, stop buttons and scenes survive save/load.
+    Check(e.TryGetSessionClipProps(t2, 0, out var held), "track 2 clip props");
+    held.FollowA = (int)SessionFollowAction.Stop; held.FollowBypass = 1; e.SetSessionClipProps(t2, 0, held);
     var w = new System.Collections.Generic.List<string>();
     var doc = ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), w);
     string bundle = Path.Combine(Path.GetTempPath(), "nota-session-" + System.Guid.NewGuid().ToString("N") + ".nota");
@@ -9315,6 +9386,8 @@ engine.StopTransport();
     Check(t1b > 0 && e2.TryGetSessionClipProps(t1b, 0, out var lp) && lp.FollowA == (int)SessionFollowAction.Next && lp.Loop == 1,
         "clip props survive save/load");
     Check(t2b > 0 && !e2.GetSessionSlotStopButton(t2b, 3), "removed stop button survives save/load");
+    Check(t1b > 0 && t2b > 0 && e2.TryGetSessionClipProps(t2b, 0, out var lh) && lh.FollowBypass == 1 && lh.FollowA == (int)SessionFollowAction.Stop
+        && e2.TryGetSessionClipProps(t1b, 0, out var lu) && lu.FollowBypass == 0, "follow bypass survives save/load, per clip");
     Check(e2.TryGetSceneProps(2, out var lsp) && Math.Abs(lsp.Tempo - 140) < 1e-9, "scene props survive save/load");
 }
 

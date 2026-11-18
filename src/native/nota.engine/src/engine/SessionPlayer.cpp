@@ -65,7 +65,7 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
         playing.store(p, std::memory_order_relaxed);
         if (!legato) localBeats = 0.0;
         gain = pendingGain.load(std::memory_order_relaxed);
-        playedBeats.store(0.0, std::memory_order_relaxed);
+        resetFollowCount();
     }
     return true;
 }
