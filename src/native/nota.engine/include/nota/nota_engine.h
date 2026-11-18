@@ -1424,6 +1424,13 @@ NOTA_API NotaResult nota_session_stop_all(NotaEngine* engine);
  * already started or was never queued: use the normal stop). */
 NOTA_API NotaResult nota_session_cancel_slot_launch(NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_cancel_scene_launch(NotaEngine* engine, int32_t scene);
+/* Whether a launch waits for its launch point (#480), i.e. there is something to cancel. Slot:
+ * the track's launch of `scene` — also a queued restart of the slot already playing, which
+ * nota_session_slot_state reports as playing (3). A group id: any track below it. Scene: a queued
+ * launch of one of the row's slots, or the row's scene launch while nothing of it has started (a
+ * row that queued only stops counts too). 1 = queued, 0 = not. */
+NOTA_API int32_t nota_session_slot_launch_queued(const NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API int32_t nota_session_scene_queued(const NotaEngine* engine, int32_t scene);
 /* Session vs Arrangement (M5): launching a session clip starts the clock but leaves the
  * Arrangement inactive (non-session tracks stay silent — a session-only jam). back_to_arrangement
  * stops every session clip and re-activates the timeline; arrangement_active returns 1 when the

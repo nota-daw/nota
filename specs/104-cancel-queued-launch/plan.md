@@ -85,13 +85,17 @@ beyond the drained table, written and read by the audio thread only.
   `repeatSlot` if it is that slot; `cancelGen(int32_t scene, int32_t gen)` — withdraw the request
   if `pending == scene` (a launch of that row) or `pendingGen == gen` (a stop the scene queued).
   `kStopNow` is never withdrawn.
-- **Commands**: `CancelSessionSlot` (i0 = track id, i1 = scene) and `CancelSessionScene`
-  (i0 = scene, i1 = generation). `drainCommands` copies them into `cancelSlots_[8]` /
-  `cancelScene_`; the Session step of the render loop applies the entries for each track **before**
-  `sessionPreApply` and `maybeApply`, and the table is cleared after the track loop. Because the
-  drain happens before any track renders, every track sees the cancel in the same block —
-  withdrawn on all, or (if the boundary was in an earlier block) already applied on all.
-- **Scene launch record** (message thread, `Engine`): `sceneLaunchGen_` counter; `launchScene`
+- **Commands**: `CancelSessionSlot` (i0 = track or group id, i1 = scene) and `CancelSessionScene`
+  (i0 = scene, i1 = generation), applied by `applyLaunchCancel` as `drainCommands(g)` pops them —
+  no table, no per-block limit, before any track reaches its boundary in that block. A scene launch
+  that has started on any track (clips with their own quanta) is not withdrawn at all.
+- **One request word** (review of #677): `SessionPlayer::request` packs the queued slot and its
+  scene-launch generation in one 64-bit atomic, so they are replaced and consumed together;
+  `maybeApply` records `appliedGen` inside an `applySeq` seqlock that `viewGen` reads, so `poll()`
+  never takes a started scene for a cancelled one.
+- **Scene launch record** (message thread, `Engine`; `launchScene` first resolves the launch before
+  it, and remembers whether a scene follow made it — a cancelled follow-made launch ends follow, any
+  other brings the previous follow back, due or not): `sceneLaunchGen_` counter; `launchScene`
   passes `++sceneLaunchGen_` to each track's request; if it queued no request at all it is
   confirmed at once (today's behaviour). Otherwise `waitSceneGen_ = gen` and, unless an earlier
   scene launch is still waiting, the previous `sceneFollowScene_ / sceneFollowStart_` are saved.

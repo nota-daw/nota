@@ -116,11 +116,15 @@ export interface SessionTrack {
   /** A group: its members' ids (every clip-holding track below it); it has no slots of its own. */
   k?: number[];
   c: [number, number, number][];
+  /** The slot whose launch waits for its launch point — also a restart of the slot playing (issue 480). */
+  w?: number;
 }
 
 export interface Session {
   n: number;
   tr: SessionTrack[];
+  /** Rows with a launch waiting, including rows that queued only stops (issue 480). Older Nota: absent. */
+  q?: number[];
 }
 
 export interface Learn {

@@ -91,7 +91,7 @@ bool Engine::clearSessionSlot(int32_t trackId, int32_t scene) {
     // Stop it first if this slot is the one playing/queued (else it keeps looping empty).
     if (old->sessionPlayer) {
         const int32_t p = old->sessionPlayer->playing.load(std::memory_order_relaxed);
-        const int32_t q = old->sessionPlayer->pending.load(std::memory_order_relaxed);
+        const int32_t q = old->sessionPlayer->pendingSlot();
         if (p == scene || q == scene) old->sessionPlayer->requestStop();
     }
     auto nt = cloneTrack(*old);
@@ -192,7 +192,7 @@ void Engine::launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromSc
     const SessionSlot& s = t.sessionSlots[scene];
     if (!fromScene && !forceSlotLaunch_ && s.launchMode == LaunchMode::Toggle &&
         sp.playing.load(std::memory_order_relaxed) == scene &&
-        sp.pending.load(std::memory_order_relaxed) == SessionPlayer::kNone) {
+        sp.pendingSlot() == SessionPlayer::kNone) {
         sp.requestStop();
         return;
     }
@@ -208,29 +208,34 @@ void Engine::releaseSlot(int32_t trackId, int32_t scene) {
     const SessionSlot& s = t->sessionSlots[scene];
     if (!s.hasClip || (s.launchMode != LaunchMode::Gate && s.launchMode != LaunchMode::Repeat)) return;
     auto& sp = *t->sessionPlayer;
-    if (sp.playing.load(std::memory_order_relaxed) == scene || sp.pending.load(std::memory_order_relaxed) == scene)
+    if (sp.playing.load(std::memory_order_relaxed) == scene || sp.pendingSlot() == scene)
         sp.requestStop();
 }
 
-void Engine::launchScene(int32_t scene) {
+void Engine::launchScene(int32_t scene, bool fromFollow) {
     // Launch the whole row at once: every track's slot in this scene fires on the
     // next quantize boundary; tracks with an empty slot here are stopped (scene-launch
     // semantics) unless that slot's stop button was removed.
-    // #480: this launch's generation travels with every request it queues, so it can be withdrawn
-    // whole and its follow / tempo wait until one of them really starts.
-    if (++sceneLaunchGen_ <= 0) sceneLaunchGen_ = 1;
-    const int32_t gen = sceneLaunchGen_;
-    for (auto& t : authoring_->tracks)
-        if (t->sessionPlayer) launchSlotImpl(*t, scene, 1.0f, true, gen);
-    bool queued = false;
-    for (auto& t : authoring_->tracks)
-        if (auto& sp = t->sessionPlayer; sp && sp->pendingGen.load() == gen &&
-                                         sp->pending.load() != SessionPlayer::kNone)
-            queued = true;
-    if (waitSceneGen_ == 0) { // a launch replacing one still waiting keeps the follow from before both
+    // #480: settle the launch before this one first (did it start?), so the follow saved below is
+    // the one really running. A launch still waiting is replaced: the follow from before both stays.
+    const bool replacing = sceneLaunchWaiting();
+    if (!replacing) {
         prevFollowScene_ = sceneFollowScene_;
         prevFollowStart_ = sceneFollowStart_;
+        waitFromFollow_ = fromFollow;
+    } else if (!fromFollow) {
+        waitFromFollow_ = false; // the performer chose this one; the follow before it did not
     }
+    // This launch's generation travels with every request it queues, so it can be withdrawn whole
+    // and its follow / tempo wait until one of them really starts.
+    if (++sceneLaunchGen_ <= 0) sceneLaunchGen_ = 1;
+    const int32_t gen = sceneLaunchGen_;
+    bool queued = false;
+    for (auto& t : authoring_->tracks)
+        if (auto& sp = t->sessionPlayer) {
+            launchSlotImpl(*t, scene, 1.0f, true, gen);
+            queued |= SessionPlayer::genOf(sp->request.load()) == gen;
+        }
     waitSceneGen_ = queued ? gen : 0; // nothing queued (an empty row): nothing to wait for or cancel
     waitScene_ = queued ? scene : -1;
 
@@ -271,7 +276,7 @@ void Engine::stopScene(int32_t scene) {
     for (auto& t : authoring_->tracks) {
         if (!t->sessionPlayer) continue;
         const int32_t playing = t->sessionPlayer->playing.load(std::memory_order_relaxed);
-        const int32_t pending = t->sessionPlayer->pending.load(std::memory_order_relaxed);
+        const int32_t pending = t->sessionPlayer->pendingSlot();
         if (playing == scene || pending == scene) t->sessionPlayer->requestStop();
     }
 }
@@ -287,11 +292,46 @@ void Engine::stopAllSession() {
     stopSessionRecord();
 }
 
+bool Engine::sessionSlotLaunchQueued(int32_t trackId, int32_t scene) const {
+    if (scene < 0) return false;
+    for (auto& t : authoring_->tracks)
+        if (t->sessionPlayer && t->sessionPlayer->pendingSlot() == scene &&
+            (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)))
+            return true;
+    return false;
+}
+
+// A row is queued while a launch of one of its slots waits (a direct one, or a restart of a slot
+// already playing), or while its scene launch waits with nothing of it started yet — a row that
+// queued only stops counts too. One started track makes the scene launch started (#480).
+bool Engine::sessionSceneQueued(int32_t scene) const {
+    if (scene < 0) return false;
+    bool waiting = false, started = false, rowLaunch = false;
+    for (auto& t : authoring_->tracks)
+        if (auto& sp = t->sessionPlayer) {
+            // A direct launch of one of the row's slots. The rest of a scene launch that has started
+            // (a clip with a longer quantum still waiting) belongs to a started scene: not queued.
+            const uint64_t r = sp->request.load();
+            if (SessionPlayer::slotOf(r) == scene && SessionPlayer::genOf(r) == 0) rowLaunch = true;
+            if (waitSceneGen_ != 0 && waitScene_ == scene) {
+                const auto v = sp->viewGen(waitSceneGen_);
+                started |= v.applied;
+                waiting |= v.queued;
+            }
+        }
+    return (waiting && !started) || (rowLaunch && !started);
+}
+
 bool Engine::cancelSlotLaunch(int32_t trackId, int32_t scene) {
-    auto t = findTrackAuthoring(trackId);
-    if (!t || !t->sessionPlayer || scene < 0 || t->sessionPlayer->pending.load() != scene) return false;
-    // Withdrawn on the audio thread before any track applies its request (CancelSessionSlot); the
-    // scene launch it belonged to, if any, resolves in poll() once nothing of it is left queued.
+    // trackId may be a group: its slot cancels the launches of every track below it (#480).
+    bool queued = false;
+    for (auto& t : authoring_->tracks)
+        if (t->sessionPlayer && t->sessionPlayer->pendingSlot() == scene && scene >= 0 &&
+            (t->id() == trackId || isUnderGroup(*authoring_, *t, trackId)))
+            queued = true;
+    if (!queued) return false;
+    // Withdrawn on the audio thread while it drains commands, before any track applies its request;
+    // the scene launch it belonged to, if any, resolves in poll() once nothing of it is left queued.
     Command c;
     c.type = CommandType::CancelSessionSlot;
     c.i0 = trackId;
@@ -300,53 +340,35 @@ bool Engine::cancelSlotLaunch(int32_t trackId, int32_t scene) {
 }
 
 bool Engine::cancelSceneLaunch(int32_t scene) {
-    if (scene < 0) return false;
-    const int32_t gen = (waitSceneGen_ != 0 && waitScene_ == scene) ? waitSceneGen_ : 0;
-    bool queued = false;
-    for (auto& t : authoring_->tracks)
-        if (auto& sp = t->sessionPlayer) {
-            const int32_t p = sp->pending.load();
-            if (p == scene || (gen != 0 && p != SessionPlayer::kNone && p != SessionPlayer::kStopNow &&
-                                  sp->pendingGen.load() == gen))
-                queued = true;
-        }
-    if (!queued) return false;
+    if (!sessionSceneQueued(scene)) return false;
     Command c;
     c.type = CommandType::CancelSessionScene;
     c.i0 = scene;
-    c.i1 = gen;
+    c.i1 = (waitSceneGen_ != 0 && waitScene_ == scene) ? waitSceneGen_ : 0;
     return commands_.push(c);
 }
 
 bool Engine::sceneLaunchWaiting() {
     if (waitSceneGen_ == 0) return false;
-    bool applied = false, queued = false;
+    bool applied = false, queued = false, busy = false;
     for (auto& t : authoring_->tracks)
         if (auto& sp = t->sessionPlayer) {
-            if (sp->appliedGen.load(std::memory_order_acquire) == waitSceneGen_) applied = true;
-            else if (sp->pendingGen.load() == waitSceneGen_ && sp->pending.load() != SessionPlayer::kNone)
-                queued = true;
+            const auto v = sp->viewGen(waitSceneGen_);
+            applied |= v.applied;
+            queued |= v.queued;
+            busy |= v.busy;
         }
-    if (!applied && queued) return true;
+    if (busy || (!applied && queued)) return true; // a request mid-consume: decide on the next poll
     waitSceneGen_ = 0;
     waitScene_ = -1;
     if (applied) return false; // it started: its follow and tempo go ahead as launched
     // Cancelled or replaced before its boundary (#480): nothing of it starts. Drop its tempo change
-    // and bring back the scene follow that ran before it — unless that follow is already due (it
-    // chose this launch itself), so it would only fire again: then scene follow ends.
+    // and bring back the scene follow that ran before it — it carries on, and fires if its time came
+    // while this launch waited. Only when that follow launched this scene itself does follow end
+    // there (it would just choose the same again).
     sceneTempoPending_ = false;
-    sceneFollowScene_ = prevFollowScene_;
+    sceneFollowScene_ = waitFromFollow_ ? -1 : prevFollowScene_;
     sceneFollowStart_ = prevFollowStart_;
-    const int32_t sc = prevFollowScene_;
-    if (sc >= 0 && sc < authoring_->sceneCount) {
-        const SceneInfo si = sceneOr(*authoring_, sc);
-        if (si.follow && si.followBeats > 0.0) {
-            const double q = launchQuant_.load(std::memory_order_relaxed);
-            const double lead = q > 0.0 ? std::min(q, si.followBeats) : 0.0;
-            if (transport_.uiPositionBeats() + lead + 1e-6 >= prevFollowStart_ + si.followBeats)
-                sceneFollowScene_ = -1;
-        }
-    }
     return false;
 }
 
@@ -390,7 +412,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         if (addSessionAudioLane(trackId, scene)) {
             if (auto& sp = t->sessionPlayer) // the take replaces what this track was playing (#337)
                 if (sp->playing.load(std::memory_order_relaxed) >= 0 ||
-                    sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone)
+                    sp->pendingSlot() != SessionPlayer::kNone)
                     sp->requestStopNow();
         }
         return;
@@ -431,7 +453,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
             // players are left alone (a stray stop request would flush their MIDI state).
             if (auto& sp = t->sessionPlayer)
                 if (sp->playing.load(std::memory_order_relaxed) >= 0 ||
-                    sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone)
+                    sp->pendingSlot() != SessionPlayer::kNone)
                     sp->requestStopNow();
             if (countIn) {
                 sessionCountIn_ = true;
@@ -484,7 +506,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         // The slot waits for the count-in: the audio thread launches it the moment the
         // clicks run out (Engine_Render). Session-only, like any launch from stop.
         sessionCountIn_ = true;
-        if (t->sessionPlayer->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone)
+        if (t->sessionPlayer->pendingSlot() != SessionPlayer::kNone)
             t->sessionPlayer->requestStopNow(); // no earlier request may start it before then
         countInLaunchScene_.store(scene, std::memory_order_release);
         arrangementActive_.store(false, std::memory_order_relaxed);
@@ -774,14 +796,14 @@ int32_t Engine::sessionSlotState(int32_t trackId, int32_t scene) const {
         if (!std::isnan(retryStartBeat_) && transport_.uiPositionBeats() < retryStartBeat_) return 5;
         if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire);
             !recordSessionAudio_ && launchQuant() > 0.0 && sp && sp->playing.load(std::memory_order_relaxed) != scene &&
-                   sp->pending.load(std::memory_order_relaxed) == scene) {
+                   sp->pendingSlot() == scene) {
             return 5;
         }
         return 4; // recording
     }
     if (auto& sp = t->sessionPlayer) {
         if (sp->playing.load(std::memory_order_relaxed) == scene) return 3; // playing
-        if (sp->pending.load(std::memory_order_relaxed) == scene) return 2; // queued
+        if (sp->pendingSlot() == scene) return 2; // queued
     }
     return t->sessionSlots[scene].hasClip ? 1 : 0;
 }
@@ -1123,10 +1145,12 @@ void Engine::remapPlayers(const std::function<int32_t(int32_t)>& map) {
             const int32_t n = map(p);
             sp.playing.compare_exchange_strong(p, n < 0 ? -1 : n, std::memory_order_relaxed);
         }
-        int32_t q = sp.pending.load(std::memory_order_relaxed);
-        if (q >= 0) {
+        uint64_t req = sp.request.load(std::memory_order_relaxed);
+        if (const int32_t q = SessionPlayer::slotOf(req); q >= 0) {
             const int32_t n = map(q);
-            sp.pending.compare_exchange_strong(q, n < 0 ? SessionPlayer::kNone : n, std::memory_order_relaxed);
+            sp.request.compare_exchange_strong(
+                req, n < 0 ? SessionPlayer::kIdle : SessionPlayer::pack(n, SessionPlayer::genOf(req)),
+                std::memory_order_relaxed);
         }
         int32_t r = sp.repeatSlot.load(std::memory_order_relaxed);
         if (r >= 0) sp.repeatSlot.compare_exchange_strong(r, map(r), std::memory_order_relaxed);
@@ -1303,7 +1327,7 @@ void Engine::serviceSessionFollow() {
     const double lead = q > 0.0 ? std::min(q, si.followBeats) : 0.0;
     const double due = sceneFollowStart_ + si.followBeats;
     if (transport_.uiPositionBeats() + lead + 1e-6 < due) return;
-    launchScene((sc + 1) % authoring_->sceneCount);
+    launchScene((sc + 1) % authoring_->sceneCount, true);
     sceneFollowStart_ = due; // exactly where the outgoing scene's time ran out
 }
 
@@ -1380,7 +1404,7 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
         sp.followHeld = false;
         sp.followBase = std::floor(played / due) * due;
     }
-    if (sp.pending.load(std::memory_order_relaxed) != SessionPlayer::kNone) return;
+    if (sp.pendingSlot() != SessionPlayer::kNone) return;
 
     // Repeat: while held, queue a relaunch of the same slot at every quantum.
     if (sp.repeatSlot.load(std::memory_order_relaxed) == cur) {
@@ -1389,9 +1413,7 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
         sp.pendingQuant.store(q, std::memory_order_relaxed);
         sp.pendingLegato.store(false, std::memory_order_relaxed);
         sp.pendingGain.store(sp.gain, std::memory_order_relaxed);
-        int32_t expect = SessionPlayer::kNone;
-        if (sp.pending.compare_exchange_strong(expect, cur, std::memory_order_relaxed))
-            sp.pendingGen.store(0, std::memory_order_relaxed); // not a scene launch's (#480)
+        sp.queueIfIdle(cur);
         return;
     }
 
@@ -1413,17 +1435,14 @@ void Engine::sessionPreApply(Track& t, double blockBeats) {
         return;
     }
     const int32_t target = followTarget(t, cur, a);
-    int32_t expect = SessionPlayer::kNone;
     if (target < 0) {
-        if (sp.pending.compare_exchange_strong(expect, SessionPlayer::kStopNow, std::memory_order_relaxed))
-            sp.pendingGen.store(0, std::memory_order_relaxed);
+        sp.queueIfIdle(SessionPlayer::kStopNow);
         return;
     }
     sp.pendingQuant.store(0.0, std::memory_order_relaxed); // follow time is exact, not quantized
     sp.pendingLegato.store(false, std::memory_order_relaxed);
     sp.pendingGain.store(sp.gain, std::memory_order_relaxed);
-    if (sp.pending.compare_exchange_strong(expect, target, std::memory_order_relaxed))
-        sp.pendingGen.store(0, std::memory_order_relaxed); // a clip follow action, not a scene launch
+    sp.queueIfIdle(target);
 }
 
 void Engine::sessionPostRender(Track& t, double blockBeats) {

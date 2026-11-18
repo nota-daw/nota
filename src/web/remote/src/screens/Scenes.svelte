@@ -54,8 +54,12 @@
   // Issue 480: a queued clip, group slot or scene is cancelled by pressing and holding it. A tap keeps
   // launching (a queued one stays queued); the hold is the deliberate gesture, and only acts while
   // something waits for its launch point.
-  const queued = (id: number, i: number) => s?.tr.find((r) => r.id === id)?.c[i]?.[0] === 2;
-  const sceneQueued = (i: number) => !!s?.tr.some((r) => r.c[i]?.[0] === 2);
+  // Nota says what waits (q, w); an older Nota that doesn't falls back to slot state 2.
+  const queued = (id: number, i: number) => {
+    const r = s?.tr.find((x) => x.id === id);
+    return r?.w === i || r?.c[i]?.[0] === 2;
+  };
+  const sceneQueued = (i: number) => (s?.q ? s.q.includes(i) : !!s?.tr.some((r) => r.c[i]?.[0] === 2));
   const holdCancel = (id: number, i: number, members?: number[]) => () => {
     if (!(members ?? [id]).some((m) => queued(m, i)) || !guard()) return false;
     app.send({ t: 'cancel', id, i });

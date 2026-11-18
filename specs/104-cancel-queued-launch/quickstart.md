@@ -4,7 +4,7 @@
 
 ```bash
 scripts/build.sh                              # full gate, includes the new tests
-dotnet run --project tests/Nota.SmokeTest -c Release -- --session-input   # fast Session subset
+dotnet run --project tests/Nota.SmokeTest -c Release -- --cancel-launch   # this feature's engine tests alone
 (cd src/web/remote && npm test)               # hold logic of use:tap
 ```
 

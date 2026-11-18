@@ -521,14 +521,18 @@ class Engine {
     // --- Session view (M5) ---
     void setLaunchQuant(double beats);
     void launchSlot(int32_t trackId, int32_t scene); // quantized; empty slot = stop track
-    void launchScene(int32_t scene);                 // launch every track's slot in this row (empty = stop that track)
+    void launchScene(int32_t scene, bool fromFollow = false); // launch every track's slot in this row (empty = stop that track)
     void stopSlot(int32_t trackId);
     void stopScene(int32_t scene); // stop tracks whose playing/queued slot is this row
     void stopAllSession();
     // Withdraw a queued launch before its boundary (#480): the track (or the row) carries on as if
     // it had never been asked. False when nothing of it is queued — it started or never was.
-    bool cancelSlotLaunch(int32_t trackId, int32_t scene);
+    bool cancelSlotLaunch(int32_t trackId, int32_t scene); // trackId may be a group
     bool cancelSceneLaunch(int32_t scene);
+    // Whether a launch waits (#480): a track's launch of `scene` (also a queued restart), or a row
+    // — a queued slot launch in it, or its scene launch with nothing of it started yet.
+    bool sessionSlotLaunchQueued(int32_t trackId, int32_t scene) const;
+    bool sessionSceneQueued(int32_t scene) const;
     void recordSessionSlot(int32_t trackId, int32_t scene); // M5-4: launch + overdub-record MIDI into the slot
     // Stop one recording slot (specs/086): with other slots still recording only its lane lands
     // and loops back; the last one ends the take as stopSessionRecord() does.
@@ -1575,7 +1579,12 @@ class Engine {
     void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, double elapsedStartSamples,
         bool playing, double spb);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames); // live input monitoring
-    void drainCommands();
+    void drainCommands(Graph* g);
+    // #480: withdraw queued Session launches (CancelSessionSlot / CancelSessionScene), on the audio
+    // thread while it drains commands — before any track reaches its boundary in that block.
+    void applyLaunchCancel(Graph* g, const Command& c);
+    // Is `t` inside group `groupId` (at any depth)? Walks the parent ids; no allocation.
+    static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
     void drainLiveMidi(double blockStartBeat, bool playing);
     void renderInstrumentRaw(
         Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing);
@@ -2107,7 +2116,8 @@ class Engine {
     int32_t waitSceneGen_ = 0, waitScene_ = -1; // the waiting launch (gen 0 = none)
     int32_t prevFollowScene_ = -1;              // the scene follow running before it
     double prevFollowStart_ = 0.0;
-    bool sceneLaunchWaiting(); // poll(): resolve the waiting launch; true while it still waits
+    bool waitFromFollow_ = false;               // a scene follow action made the waiting launch
+    bool sceneLaunchWaiting(); // resolve the waiting launch (poll, and before a new one); true while it waits
     // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
     bool sceneTempoPending_ = false;
     double sceneTempo_ = 0.0, sceneTempoAt_ = 0.0;
@@ -2339,12 +2349,6 @@ class Engine {
     // Tracks whose voices go silent at the next block (TrackNotesOff command, audio thread).
     int32_t notesOffTracks_[8] = {};
     int32_t notesOffCount_ = 0;
-    // Queued Session launches to withdraw at the next block, before any track applies its request
-    // (#480; CancelSessionSlot / CancelSessionScene, audio thread). Slot entries: track id + scene.
-    int32_t cancelSlotTrack_[8] = {};
-    int32_t cancelSlotScene_[8] = {};
-    int32_t cancelSlotCount_ = 0;
-    int32_t cancelSceneRow_ = -1, cancelSceneGen_ = 0;
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time

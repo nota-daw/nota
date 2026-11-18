@@ -62,6 +62,12 @@ public sealed partial class NotaEngine
     public bool CancelSceneLaunch(int scene)
     { ThrowIfDisposed(); return NativeMethods.SessionCancelSceneLaunch(_handle, scene) == NativeMethods.NotaResult.Ok; }
 
+    public bool SessionSlotLaunchQueued(int trackId, int scene)
+    { ThrowIfDisposed(); return NativeMethods.SessionSlotLaunchQueued(_handle, trackId, scene) != 0; }
+
+    public bool SessionSceneQueued(int scene)
+    { ThrowIfDisposed(); return NativeMethods.SessionSceneQueued(_handle, scene) != 0; }
+
     /// <summary>Stops all session slots on all tracks (quantized).</summary>
     public void StopAllSession()
     { ThrowIfDisposed(); Check(NativeMethods.SessionStopAll(_handle)); }

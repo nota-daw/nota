@@ -43,10 +43,10 @@ enum class CommandType : uint32_t {
     // that put the playhead back, so every block rendered from here belongs to the new take:
     // i0 = the new take epoch, i1 = 1 to open the capture gate now (no count-in to wait for).
     TakeRestart,
-    // Cancel a queued Session launch before its boundary (#480). Drained into a fixed table and
-    // applied to every track before any of them applies its request, so a cancel and a boundary in
-    // the same block never split a scene. Slot: i0 = track id, i1 = scene. Scene: i0 = scene,
-    // i1 = the scene launch's generation (0 = only launches of that row).
+    // Cancel a queued Session launch before its boundary (#480). Applied as it is drained, before
+    // any track applies its request in that block, so a cancel and a boundary never split a scene.
+    // Slot: i0 = track or group id, i1 = scene. Scene: i0 = scene, i1 = the scene launch's
+    // generation (0 = only launches of that row's slots).
     CancelSessionSlot,
     CancelSessionScene,
 };

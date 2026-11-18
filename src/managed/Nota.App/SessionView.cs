@@ -435,7 +435,9 @@ public sealed partial class SessionView : UserControl
 
     // #480: withdraw a queued launch before its boundary — Alt+click on a queued launch button, or
     // "Cancel launch" in the menu. A second plain click keeps it queued, as it always did.
-    private bool SceneQueued(int scene) => LaunchCols.Any(c => _engine.SessionSlotState(c.TrackId, scene) == 2);
+    // Asked of the engine, not inferred from slot state 2: a row that queued only stops, or a queued
+    // restart of a slot already playing, is queued too.
+    private bool SceneQueued(int scene) => _engine.SessionSceneQueued(scene);
 
     private void CancelSlotLaunch(int trackId, int scene)
     {
@@ -443,13 +445,8 @@ public sealed partial class SessionView : UserControl
         UpdateStates();
     }
 
-    private void CancelGroupLaunch(Column g, int scene)
-    {
-        bool any = false;
-        foreach (int id in g.Children) any |= _engine.CancelSlotLaunch(id, scene);
-        if (any) Say(Loc.T("session.launch_cancelled"));
-        UpdateStates();
-    }
+    // One call: the engine withdraws every track below the group together, in the same block.
+    private void CancelGroupLaunch(Column g, int scene) => CancelSlotLaunch(g.TrackId, scene);
 
     private void CancelSceneLaunch(int scene)
     {

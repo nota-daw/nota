@@ -15,6 +15,16 @@ NOTA_API NotaResult nota_session_cancel_slot_launch(NotaEngine* engine, int32_t 
 NOTA_API NotaResult nota_session_cancel_scene_launch(NotaEngine* engine, int32_t scene);
 ```
 
+```c
+/* Whether a launch waits (something to cancel). Slot: the track's launch of `scene`, also a queued
+ * restart of the slot playing (state 3); a group id: any track below it. Scene: a direct launch of
+ * one of the row's slots, or the row's scene launch with nothing of it started — a row that queued
+ * only stops counts too. */
+NOTA_API int32_t nota_session_slot_launch_queued(const NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API int32_t nota_session_scene_queued(const NotaEngine* engine, int32_t scene);
+```
+
+`nota_session_cancel_slot_launch` takes a group id too: every track below it, in one command.
 `nota_session_slot_state` is unchanged: a withdrawn slot reads 1 (filled) again from the block
 after the cancel.
 

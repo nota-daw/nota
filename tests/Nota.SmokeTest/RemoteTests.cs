@@ -482,6 +482,10 @@ internal static class RemoteTests
         yield return (!Live(m1) && !Live(m2), $"cancel on a queued group slot withdraws each track's launch ({e.SessionSlotState(m1, 0)}, {e.SessionSlotState(m2, 0)})");
         Send(new { t = "scene", i = 0 });
         WaitFor(() => Queued(m1) && Queued(m2));
+        // The Session message names what waits: the row (q) and each track's waiting slot (w).
+        var qses = Wait("ses", 3000, m => m.TryGetProperty("q", out var q) && q.EnumerateArray().Any(v => v.GetInt32() == 0)
+            && m.GetProperty("tr").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() == m1 && x.TryGetProperty("w", out var wv) && wv.GetInt32() == 0));
+        yield return (qses is not null, "the Session message lists the queued row (q) and the track's waiting slot (w)");
         Send(new { t = "cancelScene", i = 0 });
         WaitFor(() => Rendered(() => !Live(m1) && !Live(m2)));
         yield return (!Live(m1) && !Live(m2), "cancelScene withdraws a queued scene launch");

@@ -634,7 +634,7 @@ void Engine::transportStop() {
         for (auto& t : authoring_->tracks)
             if (auto& sp = t->sessionPlayer;
                 sp && (sp->playing.load(std::memory_order_relaxed) >= 0 ||
-                          sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone))
+                          sp->pendingSlot() != SessionPlayer::kNone))
                 sp->requestStopNow();
     sceneFollowScene_ = -1;
     Command c;

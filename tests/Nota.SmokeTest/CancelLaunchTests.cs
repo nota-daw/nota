@@ -31,6 +31,12 @@ internal static class CancelLaunchTests
         foreach (var r in SecondPressAndStop()) yield return r;
         foreach (var r in StopAllDropsSceneTempo()) yield return r;
         foreach (var r in RepeatCancelled()) yield return r;
+        // Review of nota-daw/nota#677.
+        foreach (var r in BigGroupAndTwoRows()) yield return r;
+        foreach (var r in PartlyStartedSceneIsStarted()) yield return r;
+        foreach (var r in DueFollowComesBack()) yield return r;
+        foreach (var r in StartedBeforePollKeepsItsFollow()) yield return r;
+        foreach (var r in StopsOnlyRowAndRestart()) yield return r;
     }
 
     // Two tracks: drum plays 4-beat loops in rows 0 and 2; bass has clips in rows 1, 2 and 3.
@@ -59,6 +65,7 @@ internal static class CancelLaunchTests
         }
         public double BlockBeats => Chunk / (Sr * 60.0 / E.Bpm);
         public void Block() { E.RenderOffline(_buf, Chunk, Sr); E.Poll(); }
+        public void BlockNoPoll() => E.RenderOffline(_buf, Chunk, Sr);
         // Render until the transport reaches `beat`.
         public void To(double beat)
         {
@@ -277,6 +284,105 @@ internal static class CancelLaunchTests
         double after = e.SessionSlotPosition(r.Drum);
         yield return (e.SessionPlayingSlot(r.Drum) == 0 && after > 2.5,
             $"repeat: no more retriggers, the clip plays on ({after:F2})");
+    }
+
+    // Nine tracks in a group cancel together (no per-block limit), and two rows cancelled in the
+    // same block both go.
+    private static IEnumerable<(bool, string)> BigGroupAndTwoRows()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        var members = Enumerable.Range(0, 9).Select(_ => e.AddInstrumentTrack()).ToArray();
+        foreach (int m in members) e.AddSessionMidiClip(m, 5, 4.0);
+        int grp = e.CreateGroup(members);
+        e.LaunchSlot(r.Drum, 0);
+        r.To(5.0);
+        foreach (int m in members) e.LaunchSlot(m, 5);
+        yield return (e.SessionSlotLaunchQueued(grp, 5), "big group: its slot reads as queued");
+        yield return (e.CancelSlotLaunch(grp, 5), "big group: one cancel for the group slot");
+        r.Block();
+        int left = members.Count(m => e.SessionSlotState(m, 5) == 2);
+        yield return (left == 0, $"big group: all nine launches withdrawn ({left} left)");
+        // Two rows queued on different tracks, cancelled before the audio thread drains either.
+        e.LaunchSlot(r.Bass, 3);
+        e.LaunchSlot(r.Drum, 2);
+        yield return (e.CancelSceneLaunch(3) && e.CancelSceneLaunch(2), "two rows: both report a queued launch");
+        r.Block();
+        yield return (e.SessionSlotState(r.Bass, 3) == 1 && e.SessionSlotState(r.Drum, 2) == 1,
+            $"two rows: both withdrawn in one block (bass {e.SessionSlotState(r.Bass, 3)}, drum {e.SessionSlotState(r.Drum, 2)})");
+    }
+
+    // Clips with their own quanta start a scene at different boundaries: once one has started, the
+    // scene has started and is not cancelled, so it never ends up half launched.
+    private static IEnumerable<(bool, string)> PartlyStartedSceneIsStarted()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        var p = Props(e, r.Drum, 2); p.QuantBeats = 1.0; e.SetSessionClipProps(r.Drum, 2, p);
+        e.LaunchSlot(r.Drum, 0);
+        r.To(5.2);
+        e.LaunchScene(2); // drum Fill at beat 6, bass Walk at beat 8
+        r.To(6.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2 && !e.SessionSceneQueued(2) && !e.CancelSceneLaunch(2),
+            $"partly started: the scene counts as started, no cancel offered (drum {e.SessionPlayingSlot(r.Drum)}, queued {e.SessionSceneQueued(2)})");
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2 && e.SessionPlayingSlot(r.Bass) == 2,
+            $"partly started: the rest of the scene starts on its boundary (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+    }
+
+    // A manual launch cancelled after the previous follow's lead time passed: that follow still runs.
+    private static IEnumerable<(bool, string)> DueFollowComesBack()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSceneProps(0, new NotaSceneProps { Color = -1, Follow = 1, FollowBeats = 10 }); // → row 1
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(2); // by hand, for beat 8
+        r.To(6.5);        // row 0's follow (due at 10, lead 4) would have fired by now
+        yield return (e.CancelSceneLaunch(2), "due follow: the manual launch is cancelled");
+        r.To(12.5);
+        yield return (e.SessionPlayingSlot(r.Bass) == 1,
+            $"due follow: row 0's follow still launches row 1 (bass {e.SessionPlayingSlot(r.Bass)}, drum {e.SessionPlayingSlot(r.Drum)})");
+    }
+
+    // A scene that started before the UI polled, then another queued and cancelled: the follow that
+    // comes back is the started scene's, not the one from before it.
+    private static IEnumerable<(bool, string)> StartedBeforePollKeepsItsFollow()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSceneProps(1, new NotaSceneProps { Color = -1, Follow = 1, FollowBeats = 8 }); // → row 2
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(1);
+        for (int g = 0; g < 200000 && e.PositionBeats < 8.3; g++) r.BlockNoPoll(); // row 1 starts unpolled
+        e.LaunchScene(3);
+        yield return (e.CancelSceneLaunch(3), "started before poll: the next launch is cancelled");
+        r.To(16.5);
+        yield return (e.SessionPlayingSlot(r.Bass) == 2 && e.SessionPlayingSlot(r.Drum) == 2,
+            $"started before poll: row 1's own follow launches row 2 (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+    }
+
+    // A row that queues only stops is queued (and cancellable); so is a restart of a playing slot.
+    private static IEnumerable<(bool, string)> StopsOnlyRowAndRestart()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(6); // an empty row: stops the drum at beat 8
+        yield return (e.SessionSceneQueued(6) && e.SessionSlotState(r.Drum, 6) == 0, "stops-only row: reads as queued with no slot in state 2");
+        yield return (e.CancelSceneLaunch(6), "stops-only row: cancelled");
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0, $"stops-only row: the drum plays on ({e.SessionPlayingSlot(r.Drum)})");
+        e.LaunchSlot(r.Drum, 0); // a restart of the clip playing
+        yield return (e.SessionSlotState(r.Drum, 0) == 3 && e.SessionSlotLaunchQueued(r.Drum, 0) && e.SessionSceneQueued(0),
+            "restart: the playing slot's queued restart reads as queued");
+        yield return (e.CancelSlotLaunch(r.Drum, 0), "restart: cancelled");
+        r.To(12.5);
+        double pos = e.SessionSlotPosition(r.Drum);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && Math.Abs(pos - 0.5) < 0.05, $"restart: the clip plays on, not restarted ({pos:F2})");
     }
 
     private static NotaSessionClipProps Props(NotaEngine e, int track, int scene)

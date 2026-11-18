@@ -52,6 +52,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_session_cancel_scene_launch")]
     internal static partial NotaResult SessionCancelSceneLaunch(IntPtr engine, int scene);
 
+    [LibraryImport(Lib, EntryPoint = "nota_session_slot_launch_queued")]
+    internal static partial int SessionSlotLaunchQueued(IntPtr engine, int trackId, int scene);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_scene_queued")]
+    internal static partial int SessionSceneQueued(IntPtr engine, int scene);
+
     [LibraryImport(Lib, EntryPoint = "nota_session_stop_all")]
     internal static partial NotaResult SessionStopAll(IntPtr engine);
 

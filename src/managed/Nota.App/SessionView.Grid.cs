@@ -415,7 +415,7 @@ public sealed partial class SessionView
             bool hl = LaunchZone.Contains(p), hc = CentreZone.Contains(p);
             if (hl != _hoverLaunch || hc != _hoverCentre) { _hoverLaunch = hl; _hoverCentre = hc; InvalidateVisual(); }
             Cursor = (_filled || Recording) && hl || !_filled && hc ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
-            bool queuedTip = _filled && hl && _o._engine.SessionSlotState(_c.TrackId, _scene) == 2;
+            bool queuedTip = _filled && hl && _o._engine.SessionSlotLaunchQueued(_c.TrackId, _scene);
             if (queuedTip != (ToolTip.GetTip(this) is not null)) ToolTip.SetTip(this, queuedTip ? Loc.T("session.grid.queued_alt_click_to_cancel") : null);
 
             if (_pressed && _filled && !_dragging && Math.Abs(p.X - _pressAt.X) + Math.Abs(p.Y - _pressAt.Y) > 5) _dragging = true;
@@ -449,7 +449,7 @@ public sealed partial class SessionView
 
             if (Recording && LaunchZone.Contains(p)) { _o._engine.StopSessionRecordSlot(_c.TrackId); _o.Refresh(); return; }
             if (_filled && LaunchZone.Contains(p) && (e.KeyModifiers & KeyModifiers.Alt) != 0
-                && _o._engine.SessionSlotState(_c.TrackId, _scene) == 2)
+                && _o._engine.SessionSlotLaunchQueued(_c.TrackId, _scene))
             {
                 _o.CancelSlotLaunch(_c.TrackId, _scene);   // #480: Alt+click withdraws a queued launch
                 return;
@@ -718,7 +718,7 @@ public sealed partial class SessionView
             e.Handled = true;
             var p = pt.Position;
             if (Any && LaunchZone.Contains(p) && (e.KeyModifiers & KeyModifiers.Alt) != 0
-                && _g.Children.Any(id => _o._engine.SessionSlotState(id, _scene) == 2))
+                && _o._engine.SessionSlotLaunchQueued(_g.TrackId, _scene))
             { _o.CancelGroupLaunch(_g, _scene); return; }   // #480
             if (Any && LaunchZone.Contains(p)) { _o.LaunchGroup(_g, _scene); _o.UpdateStates(); return; }
             if (!Any && new Rect(Bounds.Width / 2 - 8, Bounds.Height / 2 - 8, 16, 16).Contains(p)) { _o.StopColumn(_g); _o.UpdateStates(); return; }
@@ -804,6 +804,7 @@ public sealed partial class SessionView
                 if (st == 2) queued = true;
                 sig = unchecked(sig * 7 + st);
             }
+            if (_o._engine.SessionSceneQueued(_scene)) { queued = true; sig = unchecked(sig * 7 + 9); }   // #480: stops-only rows, restarts
             if (_o._sceneDragTarget == _scene) sig ^= 0x5A5A;
             if (sig == _lastSig && !queued) return;
             _lastSig = sig;
@@ -878,6 +879,7 @@ public sealed partial class SessionView
                 if (st == 3) playing = true; else all = false;
                 if (st == 2) queued = true;
             }
+            queued |= eng.SessionSceneQueued(_scene);   // #480: a row queued as a whole blinks, whatever its slots show
             bool selected = _o._sel.Kind == SelKind.Scene && _o._sel.Scene == _scene;
             bool rowSel = _o._sel.Kind == SelKind.Slot && _o._sel.Scene == _scene;
             IBrush? edge = _o._sceneDragTarget == _scene ? NotaPalette.Accent : any && playing && all ? NotaPalette.Wash(NotaPalette.Success, 0x66) : null;
@@ -942,7 +944,7 @@ public sealed partial class SessionView
                 {
                     MenuKit.Item(Loc.T("session.launch"), GlyphKind.Play, () => _engine.LaunchSlot(c.TrackId, scene)),
                     // #480: only while the launch waits for its boundary.
-                    _engine.SessionSlotState(c.TrackId, scene) == 2
+                    _engine.SessionSlotLaunchQueued(c.TrackId, scene)
                         ? MenuKit.Item(Loc.T("session.grid.cancel_launch"), GlyphKind.Close, () => CancelSlotLaunch(c.TrackId, scene)) : null,
                     MenuKit.Item(Loc.T("common.edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
                     MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),

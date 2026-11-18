@@ -1095,7 +1095,39 @@ void Engine::launchCountInSlot() {
         if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire)) sp->requestLaunch(sc, 0.0);
 }
 
-void Engine::drainCommands() {
+void Engine::applyLaunchCancel(Graph* g, const Command& c) {
+    if (!g) return;
+    if (c.type == CommandType::CancelSessionSlot) {
+        // A track's queued launch of row i1 — or, for a group id, those of every track below it.
+        for (auto& t : g->tracks)
+            if (t->sessionPlayer && (t->id() == c.i0 || isUnderGroup(*g, *t, c.i0))) t->sessionPlayer->cancelSlot(c.i1);
+        return;
+    }
+    // A scene launch that has started on any track (clips may have their own quanta) is started:
+    // nothing of it is withdrawn, so a scene never ends up half launched.
+    if (c.i1 > 0)
+        for (auto& t : g->tracks)
+            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == c.i1) return;
+    for (auto& t : g->tracks)
+        if (t->sessionPlayer) t->sessionPlayer->cancelGen(c.i0, c.i1);
+}
+
+bool Engine::isUnderGroup(const Graph& g, const Track& t, int32_t groupId) {
+    if (groupId < 0) return false;
+    for (int32_t a = t.groupId(), hops = 0; a >= 0 && hops < 64; ++hops) {
+        if (a == groupId) return true;
+        int32_t parent = -1;
+        for (auto& o : g.tracks)
+            if (o->id() == a) {
+                parent = o->groupId();
+                break;
+            }
+        a = parent;
+    }
+    return false;
+}
+
+void Engine::drainCommands(Graph* g) {
     Command c;
     while (commands_.pop(c)) {
         switch (c.type) {
@@ -1144,15 +1176,7 @@ void Engine::drainCommands() {
             if (notesOffCount_ < 8) notesOffTracks_[notesOffCount_++] = c.i0;
             break;
         case CommandType::CancelSessionSlot:
-            if (cancelSlotCount_ < 8) {
-                cancelSlotTrack_[cancelSlotCount_] = c.i0;
-                cancelSlotScene_[cancelSlotCount_++] = c.i1;
-            }
-            break;
-        case CommandType::CancelSessionScene:
-            cancelSceneRow_ = c.i0;
-            cancelSceneGen_ = c.i1;
-            break;
+        case CommandType::CancelSessionScene: applyLaunchCancel(g, c); break;
         case CommandType::Seek:
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
@@ -1259,7 +1283,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     }
     // A retried Session MIDI take begins when its slot has relaunched: until then what is
     // played carries the old epoch and stays out (specs/078).
-    if (rtWaitScene_ >= 0 && slot && slot->pending.load(std::memory_order_relaxed) != rtWaitScene_ &&
+    if (rtWaitScene_ >= 0 && slot && slot->pendingSlot() != rtWaitScene_ &&
         slot->playing.load(std::memory_order_relaxed) == rtWaitScene_) {
         rtTakeEpoch_ = rtPendingEpoch_;
         rtTakeRestart_ = true;
@@ -2495,7 +2519,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     const bool tempoChanged = transport_.attachTempoMap(g ? g->tempoMap.get() : nullptr);
     struct TempoScope { Transport& t; ~TempoScope() { t.detachTempoMap(); } } tempoScope{transport_};
     if (tempoChanged && transport_.isPlaying()) seekedThisBlock_ = seekedWhileRolling_ = true;
-    drainCommands();
+    drainCommands(g);
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
     if (cue) std::fill(cue, cue + static_cast<size_t>(numFrames) * 2, 0.0f);
 
@@ -2541,18 +2565,6 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
                         if (md) md->reset();
                 }
     notesOffCount_ = 0;
-    // Cancelled Session launches (#480): withdrawn here, before any track reaches its boundary in
-    // this block — a scene is withdrawn on every track or (its boundary already passed) on none.
-    if (g && (cancelSlotCount_ > 0 || cancelSceneRow_ >= 0))
-        for (auto& tptr : g->tracks) {
-            SessionPlayer* sp = tptr->sessionPlayer.get();
-            if (!sp) continue;
-            for (int32_t k = 0; k < cancelSlotCount_; ++k)
-                if (tptr->id() == cancelSlotTrack_[k]) sp->cancelSlot(cancelSlotScene_[k]);
-            if (cancelSceneRow_ >= 0) sp->cancelGen(cancelSceneRow_, cancelSceneGen_);
-        }
-    cancelSlotCount_ = 0;
-    cancelSceneRow_ = -1;
     // Tracks disarmed with keys down (#366): they release on this render.
     if (g)
         for (int k = 0; k < liveReleaseCount_; ++k)

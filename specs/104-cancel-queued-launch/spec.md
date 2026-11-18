@@ -155,6 +155,11 @@ same result as Story 2.
 - **Cancel at the boundary**: a cancel that arrives in the same instant the boundary applies has
   exactly one outcome — either the launch is withdrawn whole or it has started and stays started;
   never half (a scene with some tracks switched and others not).
+- **Clips with their own quanta**: a scene whose clips start at different boundaries has started
+  once its first clip starts; from then on it is not cancelled as a scene (its remaining clips
+  start as launched; one of them can still be cancelled on its own slot).
+- **A row that queues only stops** (an empty row with stop buttons), or a restart of a clip that is
+  already playing, is queued too and can be cancelled, though no slot shows the queued state.
 - **Transport stopped**: launching with the transport stopped starts the Session clock and the
   launch applies at once, so there is nothing to cancel.
 - **Follow action of the playing clip** that is itself about to switch the track: it has queued
