@@ -21,7 +21,7 @@ public sealed class AudioExporter : IAudioExporter
     public void ExportMaster(IAudioEngine engine, ExportRequest r, IProgress<double>? progress = null)
     {
         int sr = r.SampleRate;
-        long totalFrames = FramesFor(r);
+        long totalFrames = FramesFor(engine, r);
 
         bool wasRunning = engine.IsRunning; // restart afterwards only what was running
         var loop = (engine.LoopStart, engine.LoopEnd);   // the region to put back afterwards
@@ -59,7 +59,7 @@ public sealed class AudioExporter : IAudioExporter
     public int ExportStems(IAudioEngine engine, ExportRequest r, IProgress<double>? progress = null)
     {
         int sr = r.SampleRate;
-        long totalFrames = FramesFor(r);
+        long totalFrames = FramesFor(engine, r);
 
         // Non-return tracks are the stem targets; returns fold into each stem via
         // sends (they're exempt from the solo/mute gate).
@@ -331,8 +331,8 @@ public sealed class AudioExporter : IAudioExporter
         }
     }
 
-    private static long FramesFor(ExportRequest r)
-        => (long)System.Math.Ceiling(r.TotalBeats * (r.SampleRate * 60.0 / r.Bpm));
+    private static long FramesFor(IAudioEngine engine, ExportRequest r)
+        => (long)System.Math.Ceiling((engine.BeatToSeconds(r.StartBeats + r.TotalBeats) - engine.BeatToSeconds(r.StartBeats)) * r.SampleRate);
 
     private static void Restore(IAudioEngine engine, ExportRequest r, bool wasRunning, (double Start, double End) loop)
     {

@@ -204,7 +204,9 @@ internal sealed class AuroraTableView : Control
             }
             _bgKey = key;
         }
-        ctx.DrawImage(_bg, new Rect(0, 0, w, h));
+        // The source rect is in the bitmap's pixels: with only a destination, a scaled screen
+        // (125 %, 200 %) drew just its top-left w×h pixels stretched over the window (#573).
+        ctx.DrawImage(_bg, new Rect(0, 0, _bg.PixelSize.Width, _bg.PixelSize.Height), new Rect(0, 0, w, h));
         if (_imp is { } imp) RenderImported(ctx, imp, w, h, stack: false);
         else RenderBuiltIn(ctx, w, h, stack: false);
         if (_drag)

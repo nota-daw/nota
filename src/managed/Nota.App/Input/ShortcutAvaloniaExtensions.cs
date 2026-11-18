@@ -29,14 +29,7 @@ public static class ShortcutAvaloniaExtensions
         if ((s.Modifiers & ShortcutModifiers.Ctrl) != 0)
             mods |= KeyModifiers.Control;
 
-        Key key = s.Key switch
-        {
-            "," => Key.OemComma,
-            "." => Key.OemPeriod,
-            "Esc" => Key.Escape,
-            _ when s.Key.Length == 1 && char.IsDigit(s.Key[0]) => Key.D0 + (s.Key[0] - '0'),
-            _ => Enum.TryParse<Key>(s.Key, ignoreCase: true, out var parsed) ? parsed : Key.None,
-        };
+        Key key = KeyTokens.ToKey(s.Key);
 
         return key == Key.None ? null : new KeyGesture(key, mods);
     }

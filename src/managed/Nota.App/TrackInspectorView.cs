@@ -294,7 +294,9 @@ internal sealed class TrackInspectorView : UserControl
         int cur = _engine.GetTrackMidiSource(id);
         var choices = new List<(int Id, string Name)> { (-1, Loc.T("common.none")) };
         choices.AddRange(_timeline.MidiSourceChoices(id));
-        string label = choices.FirstOrDefault(c => c.Id == cur).Name ?? Loc.T("common.none");
+        // A source that was removed shows as such (#504), not as None.
+        string label = choices.FirstOrDefault(c => c.Id == cur).Name
+            ?? (cur > 0 ? Loc.T("common.removed_track") : Loc.T("common.none"));
         var chip = SessionView.Chip(label, false, a =>
             SessionView.Pick(a, choices.Select(c => (c.Id, c.Name)), v => v == cur, v => { _engine.SetTrackMidiSource(id, v); Edited(); }));
         ToolTip.SetTip(chip, Loc.T("track_inspector.play_another_instrument_tracks_midi"));

@@ -78,6 +78,7 @@
             <NativeMenuItem Header="{app:T 'main.command_palette'}" app:Commands.Id="view.palette"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="{app:T 'common.mixer'}" app:Commands.Id="view.mixer"/>
+            <NativeMenuItem Header="{app:T 'assistant.title'}" app:Commands.Id="view.assistant"/>
             <NativeMenuItem Header="{app:T 'main.mixer_in_its_own_window'}" app:Commands.Id="view.mixerFloat" ToggleType="CheckBox"/>
             <NativeMenuItem Header="{app:T 'main.connect_phone'}" app:Commands.Id="view.connectPhone"/>
             <NativeMenuItem Header="{app:T 'main.articulation_maps'}" app:Commands.Id="view.articulationMaps"/>
@@ -157,10 +158,10 @@
          panel tone with a seam under it. Stop / play / record, position and loop share one
          30px recessed group inside it, so playback reads as one object rather than a row of
          keys. Reads left to right as: which view · what plays · the numbers you set ·
-         the switches you flip · then, pinned right, what the machine is doing. Launch
-         quantize shows only in Session, where it applies. The view switch leads the row.
-         When the window is too narrow the row sheds its least-needed parts first —
-         see MainWindow.TransportFit.cs for the order. -->
+         the switches you flip · then, pinned right, what the machine is doing, and ⋯ last.
+         The view switch leads the row. When the window is too narrow the row sheds its
+         least-needed parts first — see MainWindow.TransportFit.cs for the order — and the ⋯
+         menu lists whatever it shed (MainWindow.TransportOverflow.cs, #520). -->
     <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}">
       <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
@@ -295,7 +296,7 @@
               <TextBlock Classes="CellLabel" Text="{app:T 'main.key'}" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <Border Classes="tb-sep"/>
+          <Border x:Name="GridSep" Classes="tb-sep"/>
           <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
                click for the grid menu. SnapChip sizes the value to its widest label. -->
           <Button x:Name="SnapChip" Classes="cell">
@@ -308,8 +309,8 @@
         </StackPanel>
 
         <!-- Tools. Each draws the thing it does, so the row carries no prose: a metronome, a
-             playhead flag, a magnet, a breakpoint envelope. On is the soft tint (picked);
-             none sets Foreground, so the glyph takes the orange ink through
+             playhead flag, a magnet, a breakpoint envelope, faders. On is the soft tint
+             (picked); none sets Foreground, so the glyph takes the orange ink through
              ToggleButton:checked. -->
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="10,0,0,0">
           <Border Classes="tb-sep" Margin="0,0,8,0"/>
@@ -334,6 +335,15 @@
           <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
           <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation">
             <app:Glyph Kind="Automation" Size="16"/>
+          </ToggleButton>
+          <!-- Mixer: three channel faders. Runs view.mixer like View ▸ Mixer and ⌘⇧M, and reads
+               as on while the Mixer is shown, docked or in its own window (#516). -->
+          <ToggleButton x:Name="MixerToggle" Classes="tp-icon" Click="OnToggleMixerButton">
+            <app:Glyph Kind="Mixer" Size="16"/>
+          </ToggleButton>
+          <!-- Assistant: answers from the manual and Show me (specs/098). Runs view.assistant. -->
+          <ToggleButton x:Name="AssistantToggle" Classes="tp-icon" Click="OnToggleAssistantButton">
+            <app:Glyph Kind="Assistant" Size="16"/>
           </ToggleButton>
           <!-- Shown only while a hand-moved control has taken a lane over from
                playback (M9-C); one click hands every overridden lane back. -->
@@ -407,6 +417,19 @@
             <Panel x:Name="MasterMeterHost" Width="120" Height="8"/>
           </StackPanel>
         </StackPanel>
+
+        <!-- More (#520): what the bar had no room for, as a menu, then a few quick settings
+             (MainWindow.TransportOverflow.cs). Never shed. The dot says something is in it. -->
+        <Button x:Name="OverflowBtn" Grid.Column="10" Classes="tp-icon" Margin="8,0,0,0" VerticalAlignment="Center"
+                Click="OnOverflowClick"
+                ToolTip.Tip="{app:T 'main.more'}" AutomationProperties.Name="{app:T 'main.more'}">
+          <Panel>
+            <app:Glyph Kind="More" Size="16"/>
+            <Ellipse x:Name="OverflowDot" Width="5" Height="5" IsVisible="False"
+                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-3,-4,0"
+                     Fill="{DynamicResource Brush.Accent}"/>
+          </Panel>
+        </Button>
       </Grid>
     </Border>
 
@@ -454,9 +477,18 @@
     </Border>
 
 
+    <!-- Work area: the body (browser + main view over the Mixer and Detail panels) beside the
+         Assistant panel (specs/098), which takes the full height on the right. The splitter is
+         a 6px grab strip over the 1px seam, like the browser's. -->
+    <Grid x:Name="WorkGrid" Background="{DynamicResource Brush.Seam}">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MinWidth="360"/>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="0"/>
+      </Grid.ColumnDefinitions>
     <!-- Main area (fills) over a resizable bottom Detail panel, split by a
          draggable horizontal GridSplitter. -->
-    <Grid x:Name="BodyGrid" Background="{DynamicResource Brush.Seam}">
+    <Grid x:Name="BodyGrid" Grid.Column="0" Background="{DynamicResource Brush.Seam}">
       <Grid.RowDefinitions>
         <RowDefinition Height="*" MinHeight="120"/>
         <RowDefinition Height="Auto"/>
@@ -618,6 +650,36 @@
           </Grid>
           </Border>
           <ContentControl x:Name="DetailBody"/>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+      <GridSplitter x:Name="AssistantSplitter" Grid.Column="1" Width="6" MinWidth="0" Margin="-2,0,-4,0"
+                    IsVisible="False" Background="Transparent" ResizeDirection="Columns"/>
+      <!-- Assistant panel (specs/098): a chat answered from the user manual. -->
+      <Border x:Name="AssistantPanel" Grid.Column="2" Margin="1,0,0,0" IsVisible="False" ClipToBounds="True"
+              Background="{DynamicResource Brush.BgApp}" BorderThickness="0"
+              CornerRadius="{StaticResource Radius.Docked}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.Panel}"
+                  BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,0,0,1">
+            <Grid Margin="12,0,6,0" ColumnDefinitions="*,Auto,Auto">
+              <TextBlock Text="{app:T 'assistant.title'}" Classes="Title" VerticalAlignment="Center"/>
+              <Button x:Name="AssistantClear" Grid.Column="1" Classes="ghost" Height="22" Padding="6,0"
+                      Foreground="{DynamicResource Brush.TextTertiary}" Click="OnAssistantClear"
+                      ToolTip.Tip="{app:T 'assistant.clear'}"
+                      AutomationProperties.Name="{app:T 'assistant.clear'}">
+                <app:Glyph Kind="Trash"/>
+              </Button>
+              <Button Grid.Column="2" Classes="ghost" Height="22" Margin="2,0,0,0" Padding="6,0"
+                      Foreground="{DynamicResource Brush.TextTertiary}" Click="OnAssistantClose"
+                      ToolTip.Tip="{app:T 'assistant.close'}"
+                      AutomationProperties.Name="{app:T 'assistant.close'}">
+                <app:Glyph Kind="Close"/>
+              </Button>
+            </Grid>
+          </Border>
+          <ContentControl x:Name="AssistantHost"/>
         </DockPanel>
       </Border>
     </Grid>

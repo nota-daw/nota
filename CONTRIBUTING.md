@@ -30,6 +30,26 @@ Pull requests without one are closed unreviewed, however good the work is.
 Issues labelled `good first issue` or `help wanted` are already approved. Release pull
 requests cut by core contributors are the one exception.
 
+## How issues are labelled
+
+Every issue carries:
+
+- **one type**: `bug` or `enhancement`;
+- **at least one `area: <domain>`** label, the part of Nota it is about
+  (`area: session`, `area: clip-editor`, `area: mcp`, …), usually one or two;
+- **`platform: macos|windows|linux`** only when the problem is specific to that system.
+
+The issue forms set the type, and `.github/workflows/issue-labels.yml` turns the form's
+Area and "Only on this operating system?" answers into labels. An issue with no area
+gets `needs-triage`, and a maintainer labels it by hand. Blank issues are switched off,
+so open issues through a form. If you create one with `gh issue create` or the API,
+add the labels yourself.
+
+Each minor release has one focus, written in its milestone's description, for example
+"Focus: Session view and live performance". A feature goes into the milestone whose
+focus matches its area. A bug goes there too, or into the current patch milestone if it
+can't wait. Being in a milestone does not replace the `approved` label.
+
 ## Licensing your contribution
 
 Nota is licensed under `AGPL-3.0-only` (see [`LICENSES/`](LICENSES/)).

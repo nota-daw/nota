@@ -92,8 +92,8 @@ args). `npm run shots -- <id-prefix> …` retakes them into `src/assets/shots/{d
 - A scene breaks after an app refactor (renamed private method, control name) → fix the
   harness; it reflects into `MainWindow` / `PreferencesWindow` privates on purpose.
 - Shortcut changed → `npm run shortcuts` regenerates `reference/shortcuts` (EN + RU) from
-  `PreferencesWindow.ShortcutGroups`; run the `nota-shortcuts` skill first so that list is
-  right.
+  the key-action catalog and `ShortcutLayout` (specs/096); run the `nota-shortcuts` skill
+  first so they are right.
 
 ## 5. Verify and commit
 

@@ -39,6 +39,12 @@ public interface IAudioEngine : IDisposable
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
+    /// <summary>True while the master track's Tempo automation lane has points (specs/099):
+    /// the tempo follows it and <see cref="SetBpm"/> does nothing.</summary>
+    bool IsTempoAutomated { get; }
+    double BeatToSeconds(double beat);
+    double SecondsToBeat(double seconds);
+    double TempoAt(double beat);
     void SetTimeSignature(int num, int denom);
     void SetLoop(bool enabled, double startBeat, double endBeat);
     void SetMetronome(bool enabled);
@@ -54,6 +60,12 @@ public interface IAudioEngine : IDisposable
 
     // --- Mixer -------------------------------------------------------------
     void SetMasterVolume(float volume);
+    /// <summary>Master pan (specs/099), −1..1: after the master devices, before the master fader.
+    /// A plain set — wrap a drag in a mix gesture on <c>MixTarget.Pan(MasterTrackId)</c> for undo.</summary>
+    void SetMasterPan(float pan);
+    float MasterPan { get; }
+    /// <summary>Device-free engine self-test of master Pan / device lanes (specs/099); 0 = pass.</summary>
+    int MasterAutomationSelfTest();
 
     // --- Tracks & clips ----------------------------------------------------
     int AddAudioTrack();
@@ -430,6 +442,8 @@ public interface IAudioEngine : IDisposable
     void CancelFreeze();
     /// <summary>Arms a capture exactly <paramref name="lengthBeats"/> long (no ring-out tail); returns frames.</summary>
     long BeginBounce(int trackId, double lengthBeats);
+    /// <summary>Arms a capture over both mapped range endpoints, without a tail.</summary>
+    long BeginBounceRange(int trackId, double startBeat, double endBeat);
     /// <summary>Paste Bounced Audio: copies the armed capture's frames into <paramref name="outFrames"/>
     /// (interleaved stereo) and disarms it without freezing the track. Returns frames copied.</summary>
     long TakeFreezeCapture(float[] outFrames);
@@ -734,6 +748,8 @@ public interface IAudioEngine : IDisposable
     NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index);
     bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest);
     NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot);
+    /// <summary>Whether a rack chain's device can be keyed from a sidechain source (#643).</summary>
+    bool RackChainAcceptsSidechain(int trackId, int rackAddress, int chain, int slot);
     /// <summary>0 = set, -1 = bad address, -2 = no free route (the key is left as it was).</summary>
     int RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
     float MidiEffectCcDepth(int trackId, int index);
@@ -813,6 +829,12 @@ public interface IAudioEngine : IDisposable
     void ClosePluginEditor(int trackId, int deviceIndex);
     /// <summary>Whether the plugin's editor window is on screen (false when it failed to open).</summary>
     bool PluginEditorIsOpen(int trackId, int deviceIndex);
+    /// <summary>The keys the app plays with, as editor key codes (<see cref="Input.EditorKeyCodes"/>),
+    /// that a plug-in editor window hands to the app instead of the plug-in (#221).</summary>
+    void SetEditorTypingKeys(int[] tokenChars);
+    /// <summary>Moves the key presses / releases queued by plug-in editor windows into the
+    /// arrays (down = 1); returns how many (#221).</summary>
+    int DrainEditorKeys(int[] tokenChars, byte[] down);
     byte[] GetPluginState(int trackId, int deviceIndex);
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
     /// <summary>Editor preview (specs/046): the plug-in window's last look as JPEG, kept on the device;
@@ -1458,6 +1480,10 @@ public interface IAudioEngine : IDisposable
     string PluginParamText(int trackId, int deviceIndex, int paramIndex);
     /// <summary>The plugin's default for a param, normalized 0..1.</summary>
     float PluginParamDefault(int trackId, int deviceIndex, int paramIndex);
+    /// <summary>How many values a stepped param takes (specs/100): 0 = continuous, n ≥ 2 = the values k / (n − 1).</summary>
+    int PluginParamSteps(int trackId, int deviceIndex, int paramIndex) => 0;
+    /// <summary>The name of a stepped param's value <paramref name="step"/> ("A", "Pattern"), or "".</summary>
+    string PluginParamStepText(int trackId, int deviceIndex, int paramIndex, int step) => "";
     void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized);
     int AddPluginAutomationLane(int trackId, int deviceIndex, string paramId);
     string AutomationLaneParamId(int trackId, int laneIndex);
@@ -1496,6 +1522,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Master-volume automation (graph-level, not tied to a track).</summary>
     AutomationPoint[] GetMasterVolumeAutomation();
     void SetMasterVolumeAutomation(AutomationPoint[] points);
+    /// <summary>As <see cref="SetMasterVolumeAutomation"/> without an undo step: a drag's later moves.</summary>
+    void SetMasterVolumeAutomationLive(AutomationPoint[] points);
     /// <summary>Per-clip volume envelope for an audio clip (0..1, clip-local beats).</summary>
     AutomationPoint[] GetClipVolumeEnvelope(int trackId, int clipIndex);
     void SetClipVolumeEnvelope(int trackId, int clipIndex, AutomationPoint[] points);

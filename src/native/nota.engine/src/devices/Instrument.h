@@ -24,6 +24,7 @@
 namespace nota {
 
 struct MidiEv;
+struct AutomationLane;
 
 class RackCore;
 
@@ -63,6 +64,11 @@ class Instrument {
     // instrument (specs/085, FR-024). A built-in would play a keyswitch as a note, so it says no
     // and the engine sends it nothing; a hosted plug-in, or a rack holding one, says yes.
     virtual bool takesArticulations() const { return false; }
+    // An articulation's keyswitch note (specs/085), at eventOffset on eventChannel. A plain
+    // instrument takes it as a note; a rack hands it straight to the chains that take
+    // articulations, past its zones, mono and chain MIDI effects — a switch is not a note to play.
+    virtual void keyswitchOn(int32_t pitch, float velocity) { noteOn(pitch, velocity); }
+    virtual void keyswitchOff(int32_t pitch) { noteOff(pitch); }
 
     // Note events (applied at segment boundaries by the engine for sample accuracy, or at
     // eventOffset — see takesTimedEvents).
@@ -351,9 +357,32 @@ class Instrument {
         (void)index;
         (void)normalized;
     }
+    // Exact-time automation (specs/100): applyAutomation sets a lane's value at the block start
+    // (pluginParamSet above), then hands the lane itself here with the block's span in beats, so
+    // a param that switches something at a musical moment (a Rhythm bank, a Twin pattern) can
+    // read the lane at that moment instead — the same at every block size. `lane` is valid only
+    // during the call: copy what is needed (ParamLaneSteps), never keep it. Audio thread.
+    virtual void pluginParamLane(int32_t index, const AutomationLane& lane, double beatFrom, double beatTo) {
+        (void)index;
+        (void)lane;
+        (void)beatFrom;
+        (void)beatTo;
+    }
     virtual int32_t pluginParamIndexOfId(const std::string& id) const {
         (void)id;
         return -1;
+    }
+    // A stepped param (specs/100): how many values it takes — 0 for a continuous one, n ≥ 2 for
+    // the values k / (n − 1) — and the name of value k ("A", "Pattern"; "" for none), so an
+    // automation lane can draw and snap to its levels. Message thread.
+    virtual int32_t pluginParamSteps(int32_t index) const {
+        (void)index;
+        return 0;
+    }
+    virtual std::string pluginParamStepText(int32_t index, int32_t step) const {
+        (void)index;
+        (void)step;
+        return {};
     }
     // "Learn" (M9-B3): index of the parameter last moved in the plugin's own GUI
     // since the previous call, or -1. Consume-once (returns then clears).

@@ -113,6 +113,9 @@ internal static partial class NativeMethods
     internal static partial int RackChainSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
                                                    out int sourceTrack, out int tapPre, out float gainDb, out float mix);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_accepts_sidechain")]
+    internal static partial int RackChainAcceptsSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot);
+
     [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain")]
     internal static partial int RackChainSetSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
                                                       int sourceTrack, int tapPre, float gainDb, float mix);
@@ -322,6 +325,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_plugin_editor_is_open")]
     internal static partial int PluginEditorIsOpen(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_set_claimed")]
+    internal static partial void EditorKeysSetClaimed(int[] chars, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_push")]
+    internal static partial void EditorKeysPush(int code, int down);
+
+    [LibraryImport(Lib, EntryPoint = "nota_editor_keys_drain")]
+    internal static partial int EditorKeysDrain([Out] int[] outChars, [Out] byte[] outDown, int max);
+
     [LibraryImport(Lib, EntryPoint = "nota_plugin_get_state")]
     internal static partial int PluginGetState(IntPtr engine, int trackId, int deviceIndex,
                                                [Out] byte[]? outBuffer, int capacity);
@@ -394,6 +406,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_text")]
     internal static partial IntPtr PluginParamText(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_steps")]
+    internal static partial int PluginParamSteps(IntPtr engine, int trackId, int deviceIndex, int paramIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_param_step_text")]
+    internal static partial IntPtr PluginParamStepText(IntPtr engine, int trackId, int deviceIndex, int paramIndex, int step);
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_param_default")]
     internal static partial float PluginParamDefault(IntPtr engine, int trackId, int deviceIndex, int paramIndex);

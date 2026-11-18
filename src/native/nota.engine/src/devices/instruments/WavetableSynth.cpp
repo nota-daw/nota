@@ -710,12 +710,12 @@ void WavetableSynth::render(float* out, int32_t frames) {
         int live = 0;
         for (auto& v : voices_) {
             if (!v.active) continue;
-            advanceShapedEnv(v.env, v.stage, v.shape, atk, dec, sus, rel, bend1);
+            stepEnv(v.env, v.stage, v.shape, atk, dec, sus, rel, bend1);
             if (v.stage == Stage::Off) {
                 v.active = false;
                 continue;
             }
-            advanceShapedEnv(v.env2, v.stage2, v.shape2, atk2, dec2, sus2, rel2, bend2);
+            stepEnv(v.env2, v.stage2, v.shape2, atk2, dec2, sus2, rel2, bend2);
             ++live;
 
             double dst[kDests] = {
@@ -865,10 +865,10 @@ void WavetableSynth::render(float* out, int32_t frames) {
     scope_[1].store(follow[1], std::memory_order_relaxed);
     scope_[4].store((float)live, std::memory_order_relaxed);
     {
-        const Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+        Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
         const bool on = lv && lv->active;
-        publishEnvTele(envTele_, on, on ? lv->stage : Stage::Off, on ? lv->shape : EnvShapeState{});
-        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->stage2 : Stage::Off, on ? lv->shape2 : EnvShapeState{});
+        publishEnvTele(envTele_, on, on ? lv->stage : Stage::Off, on ? &lv->shape : nullptr, on ? lv->env : 0.0f, sus);
+        publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->stage2 : Stage::Off, on ? &lv->shape2 : nullptr, on ? lv->env2 : 0.0f, sus2);
     }
     if (live == 0 && peak <= 1.0e-5f) {
         quietSamples_ += (uint64_t)frames;

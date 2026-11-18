@@ -44,7 +44,7 @@ public readonly record struct GridStep(int Index, bool Triplet)
     [JsonIgnore] public bool IsBar => Normalize().Index >= FirstBar;
 
     /// <summary>Length in beats; bar steps follow the time signature.</summary>
-    public double Beats(int beatsPerBar)
+    public double Beats(double beatsPerBar)
     {
         var s = Normalize();
         if (s.Index >= FirstBar) return SnapGrid.BarBeats(beatsPerBar) * (1 << (s.Index - FirstBar));
@@ -96,14 +96,14 @@ public static class SnapGrid
         _ => 16,
     };
 
-    internal static double BarBeats(int beatsPerBar) => beatsPerBar > 0 ? beatsPerBar : 4;
+    internal static double BarBeats(double beatsPerBar) => beatsPerBar > 0 ? beatsPerBar : 4;
 
     // A sub-bar step as long as the bar or longer only lands on bar lines; adaptive skips it.
-    private static bool Usable(GridStep s, int beatsPerBar)
+    private static bool Usable(GridStep s, double beatsPerBar)
         => s.IsBar || s.Beats(beatsPerBar) < BarBeats(beatsPerBar) - Eps;
 
     // The finest step from `from` up whose lines are at least `px` apart (clamped to 4 bars).
-    private static GridStep FinestFrom(int from, bool triplet, double pixelsPerBeat, int beatsPerBar, double px)
+    private static GridStep FinestFrom(int from, bool triplet, double pixelsPerBeat, double beatsPerBar, double px)
     {
         for (int i = from; i < GridStep.Count; i++)
         {
@@ -115,7 +115,7 @@ public static class SnapGrid
     }
 
     /// <summary>The step to snap to and the step to draw for <paramref name="s"/> at a zoom.</summary>
-    public static ResolvedGrid Resolve(GridSetting s, double pixelsPerBeat, int beatsPerBar)
+    public static ResolvedGrid Resolve(GridSetting s, double pixelsPerBeat, double beatsPerBar)
     {
         if (!(pixelsPerBeat > 0))
         {
@@ -136,7 +136,7 @@ public static class SnapGrid
 
     /// <summary>The grid position nearest <paramref name="beat"/> (never negative). Sub-bar
     /// steps restart at every bar; bar steps are multiples of their length from beat 0.</summary>
-    public static double SnapBeat(double beat, double stepBeats, int beatsPerBar)
+    public static double SnapBeat(double beat, double stepBeats, double beatsPerBar)
     {
         if (!(stepBeats > 0)) return Math.Max(0, beat);
         double bar = BarBeats(beatsPerBar);
@@ -151,7 +151,7 @@ public static class SnapGrid
 
     /// <summary>The grid positions in [from, to], ascending — the same set
     /// <see cref="SnapBeat"/> snaps to, for drawing.</summary>
-    public static IEnumerable<double> GridLines(double from, double to, double stepBeats, int beatsPerBar)
+    public static IEnumerable<double> GridLines(double from, double to, double stepBeats, double beatsPerBar)
     {
         if (!(stepBeats > 0) || to < from) yield break;
         from = Math.Max(0, from);

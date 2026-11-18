@@ -52,6 +52,20 @@ class PluginCatalog {
     bool removeScanPath(int32_t index);
     int32_t scanPathCount() const;
     std::string scanPathAt(int32_t index) const;
+    // User-removed scan paths (scanpaths-removed.txt, one dir per line).
+    // Backfill skips them; an explicit add or a restore clears them.
+    bool isScanPathRemoved(const std::string& dir) const;
+
+    // Default scan folders for a plugin format ("VST3" today; "CLAP"/"LV2"
+    // add entries to kFormatsWithDefaults in the .cpp — no other code
+    // changes). Read live from the format's own standard locations, so the
+    // listing can never drift from what the scan searches. Empty for
+    // unknown formats. No persistence here — backfill and restore decide.
+    static std::vector<std::string> defaultScanPathsFor(const char* format);
+    // Appends the missing OS defaults for `format`, keeps existing entries
+    // (defaults and user-added) untouched and ordered. Returns how many
+    // were added; 0 for unknown formats or when complete.
+    int32_t restoreDefaultScanPaths(const char* format);
 
     // Mutation from the scan coordinator (unique lock).
     void addType(const juce::PluginDescription& desc);
@@ -81,6 +95,7 @@ class PluginCatalog {
     void save() const;
     void loadScanPathsOnce();
     void saveScanPaths() const;
+    void saveRemoved() const;
     void loadFailedOnce();
     void saveFailed() const;
 
@@ -97,6 +112,7 @@ class PluginCatalog {
     mutable std::shared_mutex mutex_;
     bool catalogLoaded_ = false;
     bool scanPathsLoaded_ = false;
+    bool removedLoaded_ = false;
     bool failedLoaded_ = false;
 };
 

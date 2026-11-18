@@ -420,8 +420,10 @@ public sealed partial class ArrangementView : UserControl
         }
         zoomBar.SizeChanged += (_, _) => FitZoomLabel();
         _overviewRange.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) FitZoomLabel(); };
-        var topLeft = HeaderPanel(zoomBar);
-        var topGrid = new Grid { Height = RulerH };
+        _zoomBar = zoomBar;
+        _tracksCaption.Text = Loc.T("modular.tracks");
+        var topLeft = HeaderPanel(new Panel { Children = { zoomBar, _tracksCaption } });
+        var topGrid = _topGrid = new Grid { Height = RulerH };
         topGrid.Children.Add(topLeft);
         topGrid.Children.Add(_ruler);
         AddSideRow(topGrid, topLeft, _ruler);
@@ -522,7 +524,7 @@ public sealed partial class ArrangementView : UserControl
         };
 
         // Bottom: a thin horizontal scrollbar under the lanes, on the well, past a hairline.
-        var bottomGrid = new Grid();
+        var bottomGrid = _bottomGrid = new Grid();
         var bottomLeft = HeaderPanel(null);
         bottomLeft.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         bottomGrid.Children.Add(bottomLeft);
@@ -594,13 +596,13 @@ public sealed partial class ArrangementView : UserControl
     /// every clip edit snaps to and the finest line drawn. Resolved on demand — it is a few
     /// comparisons and allocates nothing — so zoom, time signature and setting changes can
     /// never leave a stale cache behind. Snap off (the transport magnet, ⌘4) keeps the lines.</summary>
-    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.Arrangement), _pixelsPerBeat, _beatsPerBar);
+    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.Arrangement), _pixelsPerBeat, GridBarLength);
 
     /// <summary>The step in effect changed (zoom, time signature or the grid setting) — the
     /// toolbar's snap chip relabels.</summary>
     public event Action? GridChanged;
 
-    private double SnapStepBeats => SnapGridState.Snap.Beats(_beatsPerBar);
+    private double SnapStepBeats => SnapGridState.Snap.Beats(GridBarLength);
 
     /// <summary>How many clips print their name on the lane (View ▸ Clip names). The default
     /// names only the head of each run, so a repeating pattern reads as one block.</summary>
@@ -719,10 +721,9 @@ public sealed partial class ArrangementView : UserControl
         SetFollowSuspended(false);
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
-        double viewportBeats = laneWidth / _pixelsPerBeat;
-        double rel = _displayPlayheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
-        if (rel >= margin && rel <= viewportBeats - margin) return false;
-        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
+        double playheadX = BeatToX(_displayPlayheadBeats), margin = laneWidth * 0.05;
+        if (playheadX >= margin && playheadX <= laneWidth - margin) return false;
+        double target = Math.Clamp(ScrollBeatForX(_displayPlayheadBeats, laneWidth * 0.25), 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;
@@ -761,8 +762,7 @@ public sealed partial class ArrangementView : UserControl
     {
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
-        double viewportBeats = laneWidth / _pixelsPerBeat;
-        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats / 2.0, 0, Math.Max(0, _hScroll.Maximum));
+        double target = Math.Clamp(ScrollBeatForX(_displayPlayheadBeats, laneWidth / 2.0), 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;   // the InvalidateVisual calls below repaint with the new scroll
@@ -1062,7 +1062,8 @@ public sealed partial class ArrangementView : UserControl
         double old = _pixelsPerBeat;
         _pixelsPerBeat = Math.Clamp(_pixelsPerBeat * factor, 4, 240);
         if (Math.Abs(_pixelsPerBeat - old) < 1e-9) return;
-        _scrollBeats = Math.Max(0, beatAnchor - (beatAnchor - _scrollBeats) * (old / _pixelsPerBeat));
+        _scrollBeats = TempoAxis ? Math.Max(0, TempoBeat(TempoSeconds(beatAnchor) - (TempoSeconds(beatAnchor) - TempoSeconds(_scrollBeats)) * old / _pixelsPerBeat))
+            : Math.Max(0, beatAnchor - (beatAnchor - _scrollBeats) * (old / _pixelsPerBeat));
         SyncScroll(_lanes.Bounds.Width);   // clamps _scrollBeats to range + syncs the scrollbar
         Redraw();
     }
@@ -1143,6 +1144,7 @@ public sealed partial class ArrangementView : UserControl
                     if (!c.IsMidi && c.Peaks is not null) oldClips[(t.Id, c.ClipIndex)] = c;
         }
         if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
+        if (!movedOnly) ReloadTempo();
         _tracks.Clear();
         _returns.Clear();
         _link = null;   // group Link sets (specs/076): rebuilt on next use
@@ -1245,6 +1247,7 @@ public sealed partial class ArrangementView : UserControl
                     }
                     if (audioInfo)
                     {
+                        cvm.Warped = ai.WarpEnabled != 0 && ai.WarpBeats > 0;
                         cvm.Gain = ai.Gain;
                         cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
                         cvm.TakeId = eng.ClipTakeId(ti.Id, c);
@@ -1305,10 +1308,15 @@ public sealed partial class ArrangementView : UserControl
     // Keep the horizontal scrollbar's range in sync with the visible width.
     internal void SyncScroll(double laneWidth)
     {
-        double viewportBeats = laneWidth > 0 ? laneWidth / _pixelsPerBeat : _totalBeats;
-        _hScroll.ViewportSize = viewportBeats;
-        _hScroll.Maximum = Math.Max(0, _totalBeats - viewportBeats);
+        double viewportBeats = laneWidth > 0 ? XToBeat(laneWidth) - XToBeat(0) : _totalBeats;
+        // A mapped viewport spans fixed seconds, but a different number of beats at
+        // each origin. Find its last origin from the project ending, not today's span.
+        double maximum = laneWidth > 0 && TempoAxis
+            ? TempoBeat(Math.Max(0, TempoSeconds(_totalBeats) - laneWidth / (_pixelsPerBeat * 2)))
+            : _totalBeats - viewportBeats;
+        _hScroll.Maximum = Math.Max(0, maximum);
         if (_scrollBeats > _hScroll.Maximum) { _scrollBeats = _hScroll.Maximum; }
+        _hScroll.ViewportSize = laneWidth > 0 ? XToBeat(laneWidth) - XToBeat(0) : _totalBeats;
         _hScroll.Value = _scrollBeats;
     }
 
@@ -1331,7 +1339,7 @@ public sealed partial class ArrangementView : UserControl
         // ⌘/Ctrl + wheel → horizontal zoom toward the cursor (DAW-standard).
         if ((mods & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
         {
-            double beatAtCursor = _scrollBeats + cursorX / _pixelsPerBeat;
+            double beatAtCursor = XToBeat(cursorX);
             ZoomAtBeat(WheelInput.ZoomFactor(e.Delta.Y, 1.25), beatAtCursor);
             e.Handled = true;
             return;
@@ -1489,7 +1497,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return false;
         var sel = SelectionBlock();
-        if (sel.Length == 0 || !_engine.CutClipBlock(sel)) return false;
+        bool cut = false;
+        if (sel.Length > 0) RemovingClips(sel.Select(c => c.trackId), () => cut = _engine.CutClipBlock(sel));
+        if (!cut) return false;
         ClipTransfer.TookFromArrangement();
         FocusTopTrackOf(sel);
         Select(-1, -1);
@@ -1593,7 +1603,7 @@ public sealed partial class ArrangementView : UserControl
     internal double Snap(double beat)
     {
         var g = SnapGridState;
-        return g.SnapOn ? SnapGrid.SnapBeat(beat, g.Snap.Beats(_beatsPerBar), _beatsPerBar) : beat;
+        return g.SnapOn ? SnapGrid.SnapBeat(beat, g.Snap.Beats(GridBarLength), GridBarLength) : beat;
     }
 
     /// <summary>Snap unless Alt is held (Alt = free/fine positioning). Reads the live
@@ -1765,7 +1775,7 @@ public sealed partial class ArrangementView : UserControl
         int trackId = ti >= 0 ? _tracks[ti].Id : -1;
         // A drop on a header lands at the visible start, whichever side the headers are on.
         double x = p.X >= 0 && p.X <= _lanes.Bounds.Width ? p.X : 0;
-        double beat = Math.Max(0.0, Snap(_scrollBeats + x / _pixelsPerBeat));
+        double beat = Math.Max(0.0, Snap(XToBeat(x)));
         // One internal item drops as-is; multiple external files land the first on the
         // target track and each of the rest on its own new track (trackId -1), so they
         // never stack on top of each other.
@@ -1980,7 +1990,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || !HasTimeSelection) return false;
         var ids = TimeSelectionTrackIds();
-        if (ids.Length > 0) _engine.DeleteClipsInRange(ids, _timeSelStart, _timeSelEnd);
+        if (ids.Length > 0) RemovingClips(ids, () => _engine.DeleteClipsInRange(ids, _timeSelStart, _timeSelEnd));
         Refresh();
         return true;
     }
@@ -2046,7 +2056,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || !HasTimeSelection) return false;
         var ids = TimeSelectionTrackIds();
-        if (ids.Length == 0 || !_engine.CutRange(ids, _timeSelStart, _timeSelEnd)) return false;
+        bool cut = false;
+        if (ids.Length > 0) RemovingClips(ids, () => cut = _engine.CutRange(ids, _timeSelStart, _timeSelEnd));   // editors follow (#647)
+        if (!cut) return false;
         ClipTransfer.TookFromArrangement();
         FocusTrackId = ids[0];
         Refresh();
@@ -2249,6 +2261,27 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Runs <paramref name="edit"/>, which removes clips, and tells the open editors
+    /// where the rest went: a removal shifts the later clips of a track down an index, and an
+    /// editor still on the old index would show — and edit — a clip that is gone or another one
+    /// (#647). The removal is passed on as a block move, so an undo or redo of it takes the
+    /// editors along too.</summary>
+    /// <summary>Clips are about to be removed: a clip tool's preview is dropped first, while the
+    /// indices it would put the clip's own notes back under still name its clips.</summary>
+    public event Action? ClipsRemoving;
+
+    internal void RemovingClips(IEnumerable<int> touched, Action edit)
+    {
+        // The rows, and the touched tracks besides (a folded group's children have no row).
+        ClipsRemoving?.Invoke();
+        var tracks = _tracks.Select(t => t.Id).Concat(touched).Where(id => id > 0).Distinct().ToList();
+        var before = ClipStartsOf(tracks);
+        edit();
+        var after = ClipStartsOf(tracks);
+        if (ArrangementMoves.SameStarts(before, after)) return;
+        ClipsMoved?.Invoke(new ClipBlockMove(ArrangementMoves.AfterRemoval(before, after), before, after));
+    }
+
     public bool DeleteSelectedClips()
     {
         if (_engine is null || _sel.Count == 0) return false;
@@ -2257,11 +2290,11 @@ public sealed partial class ArrangementView : UserControl
         // (it survives edits and isn't cleared in automation mode), so tolerate an index
         // the engine rejects rather than throwing out of the keystroke handler.
         bool any = false;
-        OneUndoStep(() =>   // a linked delete is one step (specs/076)
+        RemovingClips(_sel.Select(c => c.track), () => OneUndoStep(() =>   // a linked delete is one step (specs/076)
         {
             foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip))
                 any |= _engine.TryDeleteClip(track, clip);
-        });
+        }));
         _sel.Clear();
         ClearLinkState();
         SelTrackId = -1; SelClipIndex = -1;
@@ -2881,6 +2914,7 @@ public sealed partial class ArrangementView : UserControl
         var vm = _tracks.FirstOrDefault(v => v.Id == trackId);
 
         var rename = MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
+        var showInModular = ShowInModularItem(trackId);
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked and shown on the item.
@@ -2933,12 +2967,13 @@ public sealed partial class ArrangementView : UserControl
         MenuItem? midiInput = vm is { IsInstrument: true } ? MidiInputPick.Menu(_engine, trackId) : null;
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
-        // this track's instrument. The current source is ticked and shown on the item.
+        // this track's instrument. The current source is ticked and shown on the item; one that
+        // was removed shows as such (#504) rather than as None.
         MenuItem? midiFrom = null;
         if (vm is { IsInstrument: true })
         {
             int curSrc = _engine.GetTrackMidiSource(trackId);
-            string curName = Loc.T("common.none");
+            string curName = curSrc > 0 ? Loc.T("common.removed_track") : Loc.T("common.none");
             var others = _tracks.Where(v => v.Id != trackId && v.IsInstrument).ToList();
             foreach (var v in others) if (v.Id == curSrc) curName = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id);
             midiFrom = MenuKit.ValueItem(Loc.T("arrangement.midi_from"), GlyphKind.Note, curName);
@@ -2978,7 +3013,7 @@ public sealed partial class ArrangementView : UserControl
         MenuKit.AddGroups(flyout.Items,
             new Control[] { MenuKit.Header(vm?.Name ?? "", TrackBrush(EffectiveColorIndex(_engine, trackId)), TrackBadge(trackId)) },
             new Control[] { TrackColourRow(one), TrackHeightRow(one) },
-            new Control?[] { rename, recInput, midiInput, midiFrom }.OfType<Control>(),
+            new Control?[] { rename, showInModular, recInput, midiInput, midiFrom }.OfType<Control>(),
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,
@@ -3522,7 +3557,9 @@ public sealed partial class ArrangementView : UserControl
                                            TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? Loc.T("common.return") : Loc.T("common.master")) },
             new Control[] { TrackColourRow(new[] { trackId }) },
             new Control[] { FooterHeightRow(isReturn ? _returns.FindIndex(r => r.Id == trackId) : _returns.Count) },
-            new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
+            isReturn
+                ? new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)), ShowInModularItem(trackId) }
+                : new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
             isReturn ? new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
@@ -3560,9 +3597,9 @@ public sealed partial class ArrangementView : UserControl
         return b;
     }
 
-    // Power-curve shaping, mirroring native AutomationLane::shape (M9-D).
+    // Segment shaping (M9-D, #591): the shared AutomationCurve, mirroring native AutomationLane::shape.
     internal static double Shape(double t, float curve)
-        => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        => AutomationCurve.Shape(t, curve);
 
     // ---- data colours (mirror the tokens in NotaTheme.axaml) --
     private static readonly IBrush LaneBgA = NotaPalette.BgApp;    // lanes on the ground
@@ -3793,7 +3830,7 @@ public sealed partial class ArrangementView : UserControl
 
     private static IBrush Alpha(Color c, double a) => new SolidColorBrush(Color.FromArgb((byte)(a * 255), c.R, c.G, c.B));
 
-    private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
+    private double BeatToX(double beat) => TempoAxis ? SecondsToX(TempoSeconds(beat)) : (beat - _scrollBeats) * _pixelsPerBeat;
 
     /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
     /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted phrase › bar ›
@@ -3802,12 +3839,13 @@ public sealed partial class ArrangementView : UserControl
     private void DrawGrid(DrawingContext ctx, double w, double h)
     {
         if (_pixelsPerBeat <= 0) return;
-        double step = SnapGridState.Draw.Beats(_beatsPerBar);
-        double bar = _beatsPerBar > 0 ? _beatsPerBar : 4;
-        foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
+        double step = SnapGridState.Draw.Beats(GridBarLength);
+        double bar = TempoAxis ? TempoBarLength : _beatsPerBar > 0 ? _beatsPerBar : 4;
+        double first = XToBeat(0), last = XToBeat(w);
+        foreach (double b in SnapGrid.GridLines(first, last, step, GridBarLength))
         {
             double x = BeatToX(b);
-            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, _beatsPerBar) ? PhrasePen
+            var pen = PhraseLines.IsPhraseLine(b, _phraseBars, GridBarLength) ? PhrasePen
                 : IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
             ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
         }

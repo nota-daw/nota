@@ -28,15 +28,15 @@ const AudioTake* findTake(const Track& t, int32_t takeId) {
 
 // A section still where its take put it starts where the take plays its first frame.
 bool atTakePosition(const AudioClip& c, const AudioTake& k) {
-    return std::abs(c.startBeat - (k.originBeat + c.sourceOffsetFrames * k.beatsPerFrame)) < 1e-6;
+    return std::abs(c.startBeat - k.beatAtFrame(c.sourceOffsetFrames)) < 1e-6;
 }
 
 // Timeline length (beats) of an unwarped clip at `spb` samples per beat. Matches playback.
-double unwarpedLenBeats(const AudioClip& c, double spb, double devSR) {
+double unwarpedLenBeats(const AudioClip& c, double spb, double devSR, const TempoMap* map) {
     if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
     const double devFrames =
         static_cast<double>(c.effectiveLength()) * devSR / c.sample->sourceSampleRate / c.pitchRatio();
-    return devFrames / spb;
+    return map ? map->beatAt(map->secondsAt(c.startBeat) + devFrames / devSR) - c.startBeat : devFrames / spb;
 }
 
 } // namespace
@@ -87,7 +87,7 @@ std::vector<uint8_t> Engine::takeJoinEdges(const Track& t) const {
         const AudioClip& c = t.clips[i];
         if (!c.sample || c.warpEnabled) continue;
         heads.push_back({c.startBeat, i, groupOf[i]});
-        tails.push_back({c.startBeat + unwarpedLenBeats(c, spb, devSR), i, groupOf[i]});
+        tails.push_back({c.startBeat + unwarpedLenBeats(c, spb, devSR, tempoMap()), i, groupOf[i]});
     }
     std::sort(heads.begin(), heads.end(), [](const Edge& a, const Edge& b) { return a.at < b.at; });
 
@@ -156,7 +156,7 @@ void Engine::placeTakesForTempo() {
     const bool joins = nextTakeId_ > 0 || joinedEdgesRestored_;
     auto stale = [&](const Track& t) {
         for (const auto& k : t.takes)
-            if (k.sample && k.beatsPerFrame != beatsPerSourceFrame(k.sample->sourceSampleRate)) return true;
+            if (k.sample && (k.tempoMap != authoring_->tempoMap || (!k.tempoMap && k.beatsPerFrame != beatsPerSourceFrame(k.sample->sourceSampleRate)))) return true;
         return joins && mayHaveTakeJoins(t) && !takeJoinsSettled(t);
     };
     // Runs after every undo/redo: no new graph unless a take is off its tempo or a join no
@@ -178,10 +178,11 @@ void Engine::placeTakesForTempo() {
         for (auto& c : nt->clips) {
             const AudioTake* k = c.takeId != 0 && !c.warpEnabled ? findTake(*nt, c.takeId) : nullptr;
             if (k && k->sample && atTakePosition(c, *k))
-                c.startBeat = k->originBeat + c.sourceOffsetFrames * beatsPerSourceFrame(k->sample->sourceSampleRate);
+                c.startBeat = tempoMap() ? secondsToBeat(beatToSeconds(k->originBeat) + c.sourceOffsetFrames / k->sample->sourceSampleRate)
+                    : k->originBeat + c.sourceOffsetFrames * beatsPerSourceFrame(k->sample->sourceSampleRate);
         }
         for (auto& k : nt->takes)
-            if (k.sample) k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
+            if (k.sample) { k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate); k.tempoMap = authoring_->tempoMap; }
         g->tracks.push_back(std::move(nt)); // publishRaw settles joins on this clone
         any = true;
     }
@@ -197,14 +198,13 @@ bool Engine::takeInfo(int32_t trackId, int32_t index, NotaTakeInfo* out) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || !out || index < 0 || index >= static_cast<int32_t>(t->takes.size())) return false;
     const AudioTake& k = t->takes[index];
-    const double bpf = k.beatsPerFrame;
     *out = NotaTakeInfo{};
     out->id = k.id;
     out->number = k.number;
     out->group = k.group;
     out->origin_beat = k.originBeat;
-    out->start_beat = k.originBeat + k.sourceOffsetFrames * bpf;
-    out->length_beats = static_cast<double>(k.lengthFrames) * bpf;
+    out->start_beat = k.beatAtFrame(k.sourceOffsetFrames);
+    out->length_beats = k.beatAtFrame(k.sourceOffsetFrames + k.lengthFrames) - out->start_beat;
     out->source_offset_frames = k.sourceOffsetFrames;
     out->length_frames = k.lengthFrames;
     out->sample_id = k.sample ? k.sample->id : 0;
@@ -239,12 +239,12 @@ bool Engine::compTake(int32_t trackId, int32_t takeId, double startBeat, double 
     // Whole frames of the take, clamped to what the pass recorded: sections from one
     // recording then meet frame to frame, so a comp has no gaps or overlaps at its seams.
     const double lo = k->sourceOffsetFrames, hi = k->sourceOffsetFrames + static_cast<double>(k->lengthFrames);
-    const double f0 = std::clamp(std::round((std::min(startBeat, endBeat) - k->originBeat) / bpf), lo, hi);
-    const double f1 = std::clamp(std::round((std::max(startBeat, endBeat) - k->originBeat) / bpf), lo, hi);
+    const double f0 = std::clamp(std::round(k->frameAtBeat(std::min(startBeat, endBeat))), lo, hi);
+    const double f1 = std::clamp(std::round(k->frameAtBeat(std::max(startBeat, endBeat))), lo, hi);
     if (f1 - f0 < 1.0) return false;
 
     auto nt = cloneTrack(*old);
-    const double ns = k->originBeat + f0 * bpf, ne = k->originBeat + f1 * bpf;
+    const double ns = k->beatAtFrame(f0), ne = k->beatAtFrame(f1);
     overwriteAudioClipsInRange(nt->clips, ns, ne, authoringSamplesPerBeat());
     AudioClip clip;
     clip.sample = k->sample;
@@ -292,7 +292,6 @@ bool Engine::flattenTakes(int32_t trackId) {
         };
         if (!first) continue;
         const SampleBuffer& ref = *first->sample;
-        const double origin = first->originBeat;
         const double bpf = first->beatsPerFrame;
         const int64_t frames = ref.frames;
         const int32_t ch = ref.channels;
@@ -308,7 +307,7 @@ bool Engine::flattenTakes(int32_t trackId) {
             const double off = std::round(c.sourceOffsetFrames);
             const int64_t len = c.effectiveLength();
             if (off < 0.0 || len <= 0 || static_cast<int64_t>(off) + len > frames) return false;
-            return bpf > 0.0 && std::abs(c.startBeat - (origin + off * bpf)) < 1e-6;
+            return bpf > 0.0 && std::abs(c.startBeat - first->beatAtFrame(off)) < 1e-6;
         };
 
         std::vector<const AudioClip*> merged; // into nt->clips, which `kept` leaves them in
@@ -361,15 +360,15 @@ bool Engine::flattenTakes(int32_t trackId) {
             sb->samples = std::move(buf);
             AudioClip clip;
             clip.sample = std::move(sb);
-            clip.startBeat = origin + static_cast<double>(lo) * bpf;
+            clip.startBeat = first->beatAtFrame(static_cast<double>(lo));
             clip.sourceOffsetFrames = static_cast<double>(lo);
             clip.lengthFrames = hi - lo;
             // A neighbour that could not merge (reversed, moved, pitched) and joined this range
             // keeps that join. publishRaw would otherwise fade both new edges.
-            const double mergedEnd = clip.startBeat + static_cast<double>(hi - lo) * bpf;
+            const double mergedEnd = first->beatAtFrame(static_cast<double>(hi));
             for (const auto& kpt : nt->clips) {
                 if (!kpt.sample || kpt.warpEnabled) continue;
-                const double kEnd = kpt.startBeat + unwarpedLenBeats(kpt, authoringSamplesPerBeat(), devSR);
+                const double kEnd = kpt.startBeat + unwarpedLenBeats(kpt, authoringSamplesPerBeat(), devSR, tempoMap());
                 if ((kpt.joinedEdges & 2) && std::abs(kEnd - clip.startBeat) < 1e-6) clip.joinedEdges |= 1;
                 if ((kpt.joinedEdges & 1) && std::abs(kpt.startBeat - mergedEnd) < 1e-6) clip.joinedEdges |= 2;
             }
@@ -405,6 +404,7 @@ int32_t Engine::restoreTake(int32_t trackId, const std::string& path, int32_t nu
     k.sourceOffsetFrames = std::clamp(sourceOffsetFrames, 0.0, static_cast<double>(k.sample->frames));
     k.lengthFrames = std::clamp<int64_t>(lengthFrames, 0, k.sample->frames - static_cast<int64_t>(k.sourceOffsetFrames));
     k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
+    k.tempoMap = authoring_->tempoMap;
     nt->takes.push_back(std::move(k));
     republishWithTrackRaw(trackId, nt);
     return nextTakeId_;

@@ -28,4 +28,10 @@ echo "==> Plugin scan check (large folders, scratch data dir)"
 NOTA_DATA_DIR="$(mktemp -d /tmp/nota-scan-scale-XXXX)" dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll \
   --scan-scale "$PWD/src/native/nota.engine/build/nota-scanworker"
 
+echo "==> Plugin scan paths check (OS defaults, scratch data dir)"
+NOTA_DATA_DIR="$(mktemp -d /tmp/nota-default-paths-XXXX)" dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll \
+  --default-scan-paths
+NOTA_DATA_DIR="$(mktemp -d /tmp/nota-default-paths-up-XXXX)" dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll \
+  --default-scan-paths-upgrade "$PWD/src/native/nota.engine/build/nota-scanworker"
+
 echo "==> Done. Run the app with: dotnet run --project src/managed/Nota.App"

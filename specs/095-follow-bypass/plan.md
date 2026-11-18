@@ -7,7 +7,7 @@
 A per-slot `followBypass` flag. The follow check counts the slot's follow time from a moving
 start (`SessionPlayer::followFrom`): a bypassed slot moves it on by the follow times that have
 ended, instead of firing, so turning the bypass off fires at the end of the time then
-running. The clip inspector gets a Bypass row; the flag is saved (format 33) and exposed over
+running. The clip inspector gets a Bypass row; the flag is saved (format 35) and exposed over
 MCP.
 
 ## Technical Context
@@ -23,7 +23,7 @@ which read it, are unaffected.
 
 **Testing**: `FollowBypassTests` in the smoke test (`-- --follow-bypass` alone, and in the full
 run): the clip held while another follows, settings kept, a hand launch, no catch-up when the
-bypass goes off, save → reopen, a v32 project.
+bypass goes off, save → reopen, a v34 project.
 
 ## Design
 
@@ -35,7 +35,7 @@ bypass goes off, save → reopen, a v32 project.
   bypassed slot then adds the whole follow times that have ended to `followFrom` and returns. A
   bypassed slot counts with the global Follow switch off too.
 - `SessionSlotDto.FollowBypass`, captured and applied with the other clip properties;
-  `CurrentFormatVersion` 33 with a no-op migration. `CueOutputTests` checks "32 or later" and the
+  `CurrentFormatVersion` 35 with a no-op migration. `CueOutputTests` checks the
   current format, like `AuroraTableTests` did for 31.
 - `SessionView.Inspector`: a **Bypass** row (On / Off chip) under the Follow action head; the
   head reads **Bypassed** in the warning ink; the A/B, Jump and After rows sit in their own panel

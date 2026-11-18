@@ -77,7 +77,7 @@ the third doesn't fire at once: the action fires where the third time ends.
 
 1. **Given** a bypassed clip, **When** the project is saved and reopened, **Then** the clip is
    still bypassed with its follow actions intact.
-2. **Given** a project saved before this change (format 32), **When** it opens, **Then** no clip
+2. **Given** a project saved before this change (format 34 or earlier), **When** it opens, **Then** no clip
    is bypassed.
 
 ### Edge Cases
@@ -125,7 +125,7 @@ the third doesn't fire at once: the action fires where the third time ends.
 - [x] Audio-thread impact: one bool per slot and one double per Session player, read and
   written by the audio thread's follow check; no allocation, lock or I/O
 - [x] ABI: `NotaSessionClipProps` gains `follow_bypass` at the end; the managed struct matches
-- [x] Project format 33, with a no-op migration from 32
+- [x] Project format 35, with a no-op migration from 34
 - [x] Smoke-test impact: `FollowBypassTests` (`-- --follow-bypass`)
 - [x] User-visible change → `CHANGELOG.md` `[Unreleased]` entry and FEATURES.md
 - [x] UI change → follows `DESIGN.md` (inspector row and chip, `Inactive` dimming, texts

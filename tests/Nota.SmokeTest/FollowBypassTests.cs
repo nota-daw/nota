@@ -5,7 +5,7 @@
 // chances, time and Jump stay as set; other clips' follow actions still run; a launch by hand
 // still works; turned back on, the action fires at the end of the follow time then running,
 // never at once for a time that ran out while it was bypassed; the bypass is saved with the
-// project (format 33), and an older project opens with nothing bypassed.
+// project (format 35), and an older project opens with nothing bypassed.
 
 using System.Text.Json.Nodes;
 using Nota.Application;
@@ -199,10 +199,10 @@ internal static class FollowBypassTests
                     "a clip's follow bypass and its follow action survive save → reopen");
                 yield return (e.TryGetSessionClipProps(t, 1, out var q) && q.FollowBypass == 0, "a clip not bypassed reopens not bypassed");
             }
-            // A v32 project: no slot is bypassed.
+            // A v34 project: no slot is bypassed.
             string manifest = Path.Combine(bundle, ProjectService.ManifestName);
             var node = JsonNode.Parse(File.ReadAllText(manifest))!;
-            node["formatVersion"] = 32;
+            node["formatVersion"] = 34;
             foreach (var track in node["tracks"]!.AsArray())
                 foreach (var slot in track!["sessionSlots"]?.AsArray() ?? new JsonArray())
                     slot!.AsObject().Remove("followBypass");
@@ -214,7 +214,7 @@ internal static class FollowBypassTests
                 int t = e.TryGetTrackInfo(0, out var ti) ? ti.Id : -1;
                 yield return (doc.FormatVersion == ProjectService.CurrentFormatVersion && e.TryGetSessionClipProps(t, 0, out var p)
                               && p.FollowBypass == 0 && p.FollowA == (int)SessionFollowAction.Next,
-                    "a v32 project opens with its follow actions not bypassed");
+                    "a v34 project opens with its follow actions not bypassed");
             }
         }
         finally { try { Directory.Delete(bundle, true); } catch { } }

@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Nota.App.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
@@ -69,9 +70,20 @@ public sealed partial class ModularView : UserControl
     private readonly TextBlock _status = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _statusRight = new() { Text = "", FontSize = 10, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center };
 
-    // track-list sidebar (Track view)
-    private readonly StackPanel _sidebar = new();
-    private readonly Border _sidebarPanel;
+    // The track column beside the canvas is the arrangement's own header column (specs/095);
+    // the host answers "which track's header is under this point" for cross-track CV drops.
+    /// <summary>Host hook: the track (and its header card) under a window point, or null.</summary>
+    public Func<Point, (int TrackId, Control Anchor)?>? TrackAtPoint { get; set; }
+    /// <summary>A CV cable drag started (true) or ended (false) — the host lights the column.</summary>
+    public event Action<bool>? ConnectHintChanged;
+    /// <summary>A line for the status bar (why a node couldn't be added, …).</summary>
+    public event Action<string>? StatusRequested;
+    /// <summary>Global view (islands) is shown.</summary>
+    public bool IsGlobal => _global;
+    /// <summary>Track ↔ Global switched — the host hides or shows the header column.</summary>
+    public event Action<bool>? GlobalChanged;
+    /// <summary>Nodes can be added: Track view with a track shown.</summary>
+    public bool CanAddNodes => !_global && _trackId > 0;
 
     /// <summary>Raised when a browser item is dropped on the canvas (adds it to the current track).</summary>
     public event Action<BrowserItem>? ItemDropped;
@@ -147,7 +159,8 @@ public sealed partial class ModularView : UserControl
         DragDrop.SetAllowDrop(_viewport, true);
         DragDrop.AddDragOverHandler(_viewport, (_, e) =>
         {
-            bool ok = BrowserView.IsAcceptableDrag(e) && _trackId > 0;
+            bool ok = BrowserView.IsModularNodeDrag ? CanAddNodes   // a Modular node (specs/095)
+                    : BrowserView.IsAcceptableDrag(e) && _trackId > 0;
             e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
             _dropGlow.IsVisible = ok;
         });
@@ -155,30 +168,24 @@ public sealed partial class ModularView : UserControl
         DragDrop.AddDropHandler(_viewport, (_, e) =>
         {
             _dropGlow.IsVisible = false;
-            foreach (var item in BrowserView.DroppedItems(e)) ItemDropped?.Invoke(item);
             e.Handled = true;
+            if (BrowserView.CurrentDrag is { Kind: BrowserItemKind.ModularNode } node)
+            {
+                // The node lands unconnected where it was dropped (specs/095).
+                if (!CanAddNodes) { StatusRequested?.Invoke(Loc.T("modular.open_a_track_to_add_nodes")); return; }
+                if (AddModulatorAt(node.BuiltinKind, e.GetPosition(_viewport)) >= 0)
+                    StatusRequested?.Invoke(Loc.F("modular.node_added", node.Name));
+                return;
+            }
+            foreach (var item in BrowserView.DroppedItems(e)) ItemDropped?.Invoke(item);
         });
 
-        // Middle row: track-list sidebar (Track view) + the canvas.
-        var header = new Border
-        {
-            Height = 26, Child = new TextBlock { Text = Loc.T("modular.tracks"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) },
-            BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1),
-        };
-        var listCol = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(header, Dock.Top);
-        listCol.Children.Add(header);
-        listCol.Children.Add(new ScrollViewer { Content = _sidebar, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
-        _sidebarPanel = new Border { Width = 176, Background = Rail, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 1, 0), Child = listCol };
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        body.Children.Add(_sidebarPanel);
-        Grid.SetColumn(_viewport, 1);
-        body.Children.Add(_viewport);
-
+        // Middle row: the canvas. The track column beside it is the arrangement's header
+        // column, laid out by the host (specs/095).
         var root = new Grid
         {
             RowDefinitions = new RowDefinitions("34,*,22"),
-            Children = { Toolbar(), Row(body, 1), StatusBar() },
+            Children = { Toolbar(), Row(_viewport, 1), StatusBar() },
         };
 
         // A docked panel like the browser and the arrangement: square, no frame of its own.
@@ -215,6 +222,7 @@ public sealed partial class ModularView : UserControl
     /// removed track's nodes on screen still wired to a dead track id.</summary>
     public void Show(int trackId)
     {
+        if (trackId > 0 && trackId == _engine.MasterTrackId) return;   // Modular doesn't patch the master
         if (trackId <= 0) { _trackId = -1; Rebuild(); RefreshSidebar(); return; }
         bool changed = trackId != _trackId;
         _trackId = trackId;
@@ -223,7 +231,13 @@ public sealed partial class ModularView : UserControl
         if (changed) FitToScreen();
     }
 
-    // The sidebar is the way in, so it refreshes even with no track picked yet (critique F3).
+    /// <summary>Show a track's graph from elsewhere (Show in Modular): Track view, that track.</summary>
+    public void ShowTrack(int trackId)
+    {
+        if (_global) { _trackId = trackId; SetGlobal(false); FitToScreen(); return; }
+        Show(trackId);
+    }
+
     public void Refresh() { if (_global || _trackId > 0) Rebuild(); RefreshSidebar(); }
 
     /// <summary>The track Modular opens on when nothing is selected: the first track that is
@@ -248,6 +262,7 @@ public sealed partial class ModularView : UserControl
         _globalBtn.IsChecked = global;
         if (_global == global) return;
         _global = global;
+        GlobalChanged?.Invoke(global);
         Rebuild();           // island / chain-node keys don't collide, so kept positions survive
         RefreshSidebar();
         FitToScreen();
@@ -260,35 +275,10 @@ public sealed partial class ModularView : UserControl
         else Show(trackId);   // already in Track view → just switch the graph
     }
 
-    // ---- track-list sidebar (Track view) --------------------------------
+    // ---- the empty-state hint (Track view with no track) -------------------
     private void RefreshSidebar()
     {
-        _sidebarPanel.IsVisible = !_global;   // collapses in Global view (islands are the tracks)
         _emptyHint.IsVisible = !_global && _trackId <= 0;   // the hint is Track view's; Global has islands
-        if (_global) return;
-        _sidebar.Children.Clear();
-        foreach (int i in ArrangementView.DisplayOrder(_engine))
-            if (_engine.TryGetTrackInfo(i, out var ti) && !ti.IsGroup)
-                _sidebar.Children.Add(TrackRow(ti.Id, ti));
-        if (_sidebar.Children.Count == 0)
-            _sidebar.Children.Add(new TextBlock { Text = Loc.T("modular.no_tracks_yet"), Classes = { "Caption" }, Margin = new Thickness(10, 8) });
-    }
-
-    private Control TrackRow(int trackId, NotaTrackInfo ti)
-    {
-        bool active = trackId == _trackId;
-        string name = _engine.GetTrackName(trackId);
-        if (string.IsNullOrEmpty(name)) name = ti.IsReturn ? Loc.F("common.return_n", trackId) : ti.IsInstrument ? Loc.F("modular.inst", trackId) : Loc.F("common.audio_n", trackId);
-        var color = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, trackId));
-        var row = new Border
-        {
-            Height = 34, Background = active ? NotaPalette.SurfaceHover : Brushes.Transparent,
-            BorderBrush = color, BorderThickness = new Thickness(3, 0, 0, 0),
-            Cursor = new Cursor(StandardCursorType.Hand), Tag = trackId,   // Tag → cross-track CV drop target
-            Child = new TextBlock { Text = name, FontSize = 11, FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal, Foreground = active ? Text1 : Text2, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) },
-        };
-        row.PointerPressed += (_, e) => { OpenTrack(trackId); e.Handled = true; };
-        return row;
     }
 
     // ---- layout persistence (UI-only data; sidecar in the .nota bundle) ----
@@ -298,10 +288,18 @@ public sealed partial class ModularView : UserControl
     /// track ids; on disk they're doc-indices so they survive id reassignment.</summary>
     public void SaveLayout(string bundleDir)
     {
-        if (_savedPos.Count == 0) return;
+        if (_savedPos.Count == 0 && _savedSize.Count == 0) return;
         var outMap = new Dictionary<string, double[]>();
+        // [x, y] or, for a node with a chosen size, [x, y, size] (1 XS, 2 S, 3 L — specs/101); an
+        // older Nota reads x, y and ignores the size.
         foreach (var (key, pt) in _savedPos)
-            if (ToDocKey(key) is { } dk) outMap[dk] = new[] { pt.X, pt.Y };
+            if (ToDocKey(key) is { } dk)
+                outMap[dk] = _savedSize.TryGetValue(key, out var sz) && sz != ModularNodeSize.Unset
+                    ? new[] { pt.X, pt.Y, (double)(int)sz } : new[] { pt.X, pt.Y };
+        foreach (var (key, sz) in _savedSize)
+            if (!_savedPos.ContainsKey(key) && sz != ModularNodeSize.Unset && ToDocKey(key) is { } dk
+                && _nodes.FirstOrDefault(x => PosKey(x) == key) is { } node)
+                outMap[dk] = new[] { node.World.X, node.World.Y, (double)(int)sz };
         if (outMap.Count == 0) return;
         try { System.IO.File.WriteAllText(System.IO.Path.Combine(bundleDir, LayoutSidecar), System.Text.Json.JsonSerializer.Serialize(outMap)); }
         catch { /* layout is cosmetic — never block a save */ }
@@ -310,6 +308,7 @@ public sealed partial class ModularView : UserControl
     public void LoadLayout(string bundleDir)
     {
         _savedPos.Clear();
+        _savedSize.Clear();
         var path = System.IO.Path.Combine(bundleDir, LayoutSidecar);
         if (!System.IO.File.Exists(path)) return;
         try
@@ -317,7 +316,13 @@ public sealed partial class ModularView : UserControl
             var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double[]>>(System.IO.File.ReadAllText(path));
             if (map == null) return;
             foreach (var (dk, xy) in map)
-                if (xy.Length >= 2 && FromDocKey(dk) is { } key) _savedPos[key] = new Point(xy[0], xy[1]);
+                if (xy.Length >= 2 && FromDocKey(dk) is { } key)
+                {
+                    _savedPos[key] = new Point(xy[0], xy[1]);
+                    // A third value is the node's size; anything else means "default".
+                    if (xy.Length >= 3 && !key.StartsWith("isl:", StringComparison.Ordinal) && (int)xy[2] is var code and >= 1 and <= 3)
+                        _savedSize[key] = (ModularNodeSize)code;
+                }
         }
         catch { /* a corrupt sidecar just means default layout */ }
     }
@@ -354,6 +359,7 @@ public sealed partial class ModularView : UserControl
     public void Tick(bool playing)
     {
         for (int i = 0; i < _liveKnobs.Count; i++) _liveKnobs[i]();
+        for (int i = 0; i < _instLiveViz.Count; i++) _instLiveViz[i]();   // card graphs (synth envelopes, …)
         _pulse = playing ? (_pulse + 0.06) % 1.0 : 0;
         _cvPhase = (_cvPhase + 0.03) % 1.0;   // CV dash-flow runs even when stopped
         if (_edgeList.Count > 0) _edges.InvalidateVisual();
@@ -379,12 +385,17 @@ public sealed partial class ModularView : UserControl
         _nodes.Clear();
         _edgeList.Clear();
         _liveKnobs.Clear();
+        _instLiveViz.Clear();
+        ClearParamUnderCable();
+        ParamPickerPanel.CloseOpen();   // its list may name a device that just left the chain
         if (_global) { RebuildGlobal(); return; }
         if (_trackId <= 0) { _grid.InvalidateVisual(); _edges.InvalidateVisual(); _mini.InvalidateVisual(); return; }
 
-        bool isInstrument = _engine.TryGetTrackInfo(TrackIndex(_trackId), out var ti) && ti.IsInstrument;
+        bool known = _engine.TryGetTrackInfo(TrackIndex(_trackId), out var ti);
+        bool isInstrument = known && ti.IsInstrument;
+        bool isGroup = known && ti.IsGroup;   // a group's own effect chain (specs/095)
         string trackName = _engine.GetTrackName(_trackId);
-        if (string.IsNullOrEmpty(trackName)) trackName = isInstrument ? Loc.F("modular.instrument", _trackId) : Loc.F("common.audio_n", _trackId);
+        if (string.IsNullOrEmpty(trackName)) trackName = isInstrument ? Loc.F("modular.instrument", _trackId) : isGroup ? Loc.T("common.group") : Loc.F("common.audio_n", _trackId);
 
         // Pre-scan incoming CV links (this track) so each modulated param gets its own input
         // port on its node — built before the nodes so their port blocks know the count.
@@ -416,7 +427,7 @@ public sealed partial class ModularView : UserControl
             AddNode(n);
             if (prevMidi != null) _edgeList.Add(new GEdge(prevMidi, PortKind.Midi, n, PortKind.Midi));
             prevMidi = n;
-            x += NodeW + GapX;
+            x = NextX(n, x, y);
         }
 
         // 2) Source: instrument (instrument track) or a clip/input node (audio track).
@@ -426,16 +437,17 @@ public sealed partial class ModularView : UserControl
             AddNode(inst);
             if (prevMidi != null) _edgeList.Add(new GEdge(prevMidi, PortKind.Midi, inst, PortKind.Midi));
             prevAudio = inst;
-            x += NodeW + GapX;
+            x = NextX(inst, x, y);
         }
         else
         {
-            var src = SimpleNode("input", Loc.T("modular.audio_in"), Sage, new Point(x, y),
+            // An audio track's clips / input, or the sum of a group's tracks.
+            var src = SimpleNode("input", isGroup ? Loc.T("modular.tracks_in") : Loc.T("modular.audio_in"), Sage, new Point(x, y),
                 audioIn: false, audioOut: true, midiIn: false, midiOut: false,
-                badge: "CLIPS", slot: Slot.Input);
+                badge: isGroup ? "GROUP" : "CLIPS", slot: Slot.Input);
             AddNode(src);
             prevAudio = src;
-            x += NodeW + GapX;
+            x = NextX(src, x, y);
         }
 
         // 3) Insert-effect chain.
@@ -446,7 +458,7 @@ public sealed partial class ModularView : UserControl
             AddNode(n);
             if (prevAudio != null) _edgeList.Add(new GEdge(prevAudio, PortKind.Audio, n, PortKind.Audio));
             prevAudio = n;
-            x += NodeW + GapX;
+            x = NextX(n, x, y);
         }
 
         // 4) Track output.
@@ -460,7 +472,10 @@ public sealed partial class ModularView : UserControl
         // CV links can find their source node.
         var modNodes = new Dictionary<int, GNode>();
         int mc = _engine.ModulatorCount(_trackId);
-        double mx = 40, my = y + 300;
+        // Below the tallest chain node (a card can be taller than the old row allowance).
+        double chainH = 0;
+        foreach (var cn in _nodes) chainH = Math.Max(chainH, cn.View.DesiredSize.Height > 0 ? cn.View.DesiredSize.Height : 0);
+        double mx = 40, my = y + Math.Max(300, chainH + 60);
         for (int i = 0; i < mc; i++)
         {
             int modId = _engine.ModulatorIdAt(_trackId, i);
@@ -537,6 +552,22 @@ public sealed partial class ModularView : UserControl
         _edges.InvalidateVisual();
         _mini.InvalidateVisual();
     }
+
+    // Where the next chain node goes: after this one. A node the user placed in the chain row
+    // pushes the rest right of it, so auto-placed nodes never land under a wider card (specs/101).
+    private static double NextX(GNode n, double x, double rowY)
+    {
+        // A node counts as in the row when it overlaps the row's band vertically (not only when
+        // its top is on the row): a card moved a little down still pushes what follows past it.
+        if (n.View.DesiredSize.Height <= 0) n.View.Measure(Size.Infinity);
+        double h = Math.Max(n.View.DesiredSize.Height, HeaderH);
+        bool inRow = n.World.Y < rowY + RowBandH && n.World.Y + h > rowY;
+        return (inRow ? Math.Max(x, n.World.X) : x) + n.NodeWidth + GapX;
+    }
+
+    // How tall the chain row is taken to be when deciding whether a placed node is in its way:
+    // a Detail card body plus a node's header and port rows.
+    private const double RowBandH = DeviceCardKit.CardH + HeaderH + 3 * PortRow;
 
     private void AddNode(GNode n)
     {
@@ -737,8 +768,8 @@ public sealed partial class ModularView : UserControl
             Bypassed = _engine.DeviceBypassed(_trackId, -1),                        // -1: the instrument (#148)
         };
         n.CvInputLabels = CvInputsFor(1, -1);
-        PopulateParams(n, _engine.PluginParamCount(_trackId, -1),
-            p => _engine.ParamModulated(1, _trackId, -1, p), p => InstrumentParam(p));
+        PrepareSize(n);
+        if (n.Size == ModularNodeSize.XS) PopulateXs(n);   // the parameter rows are the XS node; S / L show the card
         BuildNodeView(n);
         return n;
     }
@@ -753,8 +784,8 @@ public sealed partial class ModularView : UserControl
             CvOut = _exposedParams.Any(p => p.track == _trackId && p.dev == index),   // exposed param → CV source
         };
         n.CvInputLabels = CvInputsFor(0, index);
-        PopulateParams(n, _engine.DeviceParamCount(_trackId, index),
-            p => _engine.DeviceParamModulated(_trackId, index, p), p => DeviceParam(index, p));
+        PrepareSize(n);
+        if (n.Size == ModularNodeSize.XS) PopulateXs(n);   // the parameter rows are the XS node; S / L show the card
         BuildNodeView(n);
         return n;
     }
@@ -768,8 +799,8 @@ public sealed partial class ModularView : UserControl
             MidiIn = true, MidiOut = true, CvIn = true, Bypassed = bypassed, Slot = Slot.MidiFx, SlotIndex = index,   // params are CV targets
         };
         n.CvInputLabels = CvInputsFor(2, index);
-        PopulateParams(n, _engine.MidiEffectParamCount(_trackId, index),
-            p => _engine.ParamModulated(2, _trackId, index, p), p => MidiEffectParam(index, p));
+        PrepareSize(n);
+        if (n.Size == ModularNodeSize.XS) PopulateXs(n);   // the parameter rows are the XS node; S / L show the card
         BuildNodeView(n);
         return n;
     }
@@ -813,6 +844,22 @@ public sealed partial class ModularView : UserControl
         n.HiddenParamCount = expanded ? 0 : rest.Count;
     }
     private bool CanExpand(GNode n) => n.HiddenParamCount > 0;
+
+    // The XS rows of a chain-device node (its parameters, patched ones first).
+    private void PopulateXs(GNode n)
+    {
+        int t = _trackId, i = n.SlotIndex;
+        n.Params.Clear();
+        switch (n.Slot)
+        {
+            case Slot.Instrument:
+                PopulateParams(n, _engine.PluginParamCount(t, -1), p => _engine.ParamModulated(1, t, -1, p), InstrumentParam); break;
+            case Slot.Device:
+                PopulateParams(n, _engine.DeviceParamCount(t, i), p => _engine.DeviceParamModulated(t, i, p), p => DeviceParam(i, p)); break;
+            case Slot.MidiFx:
+                PopulateParams(n, _engine.MidiEffectParamCount(t, i), p => _engine.ParamModulated(2, t, i, p), p => MidiEffectParam(i, p)); break;
+        }
+    }
 
     // ---- param → knob cell (device/midi raw floats, instrument normalized) ----
 
@@ -869,12 +916,14 @@ public sealed partial class ModularView : UserControl
         float val = e.PluginParamGet(t, -1, pp);   // normalized 0..1
         bool modulated = e.ParamModulated(1, t, -1, pp);
         // Instrument params are modulated by dragging a CV cable onto the node (no right-click menu).
-        return ParamRow(name, val, e.InstrumentParamDefault(t, pp), frac => frac.ToString("0.00", NotaNum.Culture),
+        var row = ParamRow(name, val, e.InstrumentParamDefault(t, pp), frac => frac.ToString("0.00", NotaNum.Culture),
             frac => e.PluginParamSet(t, -1, pp, (float)frac),
             () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid),
             () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid),
             () => e.PluginParamGet(t, -1, pp),
-            out _, labelInk: modulated ? Text2 : null, modulated: modulated);
+            out var track, labelInk: modulated ? Text2 : null, modulated: modulated);
+        MidiLearn.Bind(track, MidiTarget.PluginParam(t, -1, pp), name);   // so a cable dropped on the row links it
+        return row;
     }
 
     // One parameter as an 18px row (style guide, modular node): its name (10.5, ink 3) · a short
@@ -948,28 +997,22 @@ public sealed partial class ModularView : UserControl
 
     // ---- modulators (Phase 3: LFO node + CV links) ---------------------
 
-    /// <summary>Adds a modulator node to the shown track without connections, at the pointer
-    /// when it is over the canvas, else in the middle of the view (the command palette). Returns
-    /// its id, or -1.</summary>
-    internal int AddModulatorAt(int kind)
+    /// <summary>Adds a modulator node to the shown track without connections: at
+    /// <paramref name="viewportPoint"/> (a browser drop), else at the pointer when it is over the
+    /// canvas, else in the middle of the view (the palette, a browser double-click). Returns its
+    /// id, or -1.</summary>
+    internal int AddModulatorAt(int kind, Point? viewportPoint = null)
     {
         if (_trackId <= 0) return -1;
         int id = _engine.ModulatorAdd(_trackId, kind);
         if (id < 0) return -1;
-        var scr = _pointerInViewport ?? Center();
+        var scr = viewportPoint ?? _pointerInViewport ?? Center();
         _savedPos[$"{_trackId}/mod{id}"] = new Point((scr.X - _pan.X) / _scale - 60, (scr.Y - _pan.Y) / _scale - 28);
         Rebuild(); Changed?.Invoke();
         return id;
     }
 
     private Point? _pointerInViewport;
-
-    private void AddModulator(int kind)
-    {
-        if (_trackId <= 0) return;
-        _engine.ModulatorAdd(_trackId, kind);   // 0 = LFO, 1 = envelope follower
-        Rebuild(); Changed?.Invoke();
-    }
 
     private void RemoveModulatorNode(GNode n)
     {
@@ -1220,42 +1263,20 @@ public sealed partial class ModularView : UserControl
                 mi.Click += (_, _) => { e.CvLinkAddToTarget(t, modId, targetKind, -1, device, param); Rebuild(); Changed?.Invoke(); };
                 flyout.Items.Add(mi); sources++;
             }
-            // Exposed parameters on this track as sources (param → param).
-            var paramSrc = new List<MenuItem>();
-            foreach (var (xt, xd, xp) in _exposedParams)
+            // Exposed parameters on this track as sources (param → param), and other tracks'
+            // modulators (cross-track; the link is owned by the source track): each opens the
+            // searchable picker rather than a submenu that can outgrow the screen (FR-002a).
+            if (ParamSourceEntries(targetKind, device, param).Count > 0)
             {
-                if (xt != t || (xd == device && xp == param)) continue;
-                int sd = xd, sp = xp;
-                var mi = new MenuItem { Header = Loc.F("modular.from", e.DeviceName(t, sd), e.DeviceParamName(t, sd, sp)) };
-                mi.Click += (_, _) => { e.CvLinkAddFromParamToTarget(t, sd, sp, targetKind, -1, device, param); Rebuild(); Changed?.Invoke(); };
-                paramSrc.Add(mi);
+                var mi = new MenuItem { Header = Loc.T("modular.modulate_from_a_parameter") + "…" };
+                mi.Click += (_, _) => { flyout.Hide(); ShowParamSourcePicker(anchor, targetKind, device, param, paramName); };
+                flyout.Items.Add(mi); sources++;
             }
-            if (paramSrc.Count > 0)
+            if (CrossSourceEntries().Count > 0)
             {
-                var sub = new MenuItem { Header = Loc.T("modular.modulate_from_a_parameter") };
-                foreach (var it in paramSrc) sub.Items.Add(it);
-                flyout.Items.Add(sub); sources++;
-            }
-            // Other tracks' modulators (cross-track): the link is owned by the source track.
-            var cross_ = new List<MenuItem>();
-            int tn = e.TrackCount;
-            for (int i = 0; i < tn; i++)
-            {
-                if (!e.TryGetTrackInfo(i, out var ti) || ti.Id == t) continue;
-                int omc = e.ModulatorCount(ti.Id);
-                for (int m = 0; m < omc; m++)
-                {
-                    int modId = e.ModulatorIdAt(ti.Id, m), src = ti.Id;
-                    var mi = new MenuItem { Header = $"{(e.ModulatorKind(src, modId) == 1 ? "Env" : "LFO")} {modId} · {TrackName(src)}" };
-                    mi.Click += (_, _) => { e.CvLinkAddToTarget(src, modId, targetKind, t, device, param); Rebuild(); Changed?.Invoke(); };
-                    cross_.Add(mi);
-                }
-            }
-            if (cross_.Count > 0)
-            {
-                var sub = new MenuItem { Header = Loc.T("modular.modulate_from_another_track") };
-                foreach (var it in cross_) sub.Items.Add(it);
-                flyout.Items.Add(sub); sources++;
+                var mi = new MenuItem { Header = Loc.T("modular.modulate_from_another_track") + "…" };
+                mi.Click += (_, _) => { flyout.Hide(); ShowCrossSourcePicker(anchor, targetKind, device, param, paramName); };
+                flyout.Items.Add(mi); sources++;
             }
             if (sources == 0)
                 flyout.Items.Add(new MenuItem { Header = Loc.T("modular.add_an_lfo_expose_a"), IsEnabled = false });
@@ -1469,16 +1490,17 @@ public sealed partial class ModularView : UserControl
         head.Children.Add(lead);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        if (HasCard(n)) actions.Children.Add(SizeChip(n));   // XS · S · L (specs/101)
         if (n.IsChainDevice)
         {
             // Only offer expand when there are more params than the node shows.
-            if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
+            if (n.Size == ModularNodeSize.XS && (CanExpand(n) || _expanded.Contains(n.Id))) actions.Children.Add(ExpandGlyph(n));
             // A bin, not ×: an × reads as "close", and closing the opened knobs deleted the device (#261).
             actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, Loc.T("modular.delete"), () => DeleteNode(n)));
         }
         else if (n.Slot == Slot.Instrument)
         {
-            if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
+            if (n.Size == ModularNodeSize.XS && (CanExpand(n) || _expanded.Contains(n.Id))) actions.Children.Add(ExpandGlyph(n));
         }
         else if (n.Slot == Slot.Modulator)
         {
@@ -1542,7 +1564,14 @@ public sealed partial class ModularView : UserControl
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.GroupValue + 1), Margin = new Thickness(-1),
             IsHitTestVisible = false, IsVisible = false,
         };
-        var frame = new Border { Width = NodeW, Child = new Panel { Children = { card, PortDots(n), ring } } };
+        var frame = new Border { Child = new Panel { Children = { card, PortDots(n), ring } } };
+        if (n.Size == ModularNodeSize.XS) frame.Width = NodeW; else frame.MinWidth = NodeW;
+        frame.SizeChanged += (_, e) =>
+        {
+            if (n.Slot == Slot.Island || Math.Abs(e.NewSize.Width - n.Width) < 0.5) return;
+            n.Width = e.NewSize.Width;
+            _edges.InvalidateVisual(); _mini.InvalidateVisual();
+        };
         n.View = frame;
         n.Ring = ring;
         frame.PointerEntered += (_, _) => { n.Hover = true; PaintOutline(n); };
@@ -1577,15 +1606,32 @@ public sealed partial class ModularView : UserControl
 
     private void BuildNodeView(GNode n)
     {
+        // S / L: the device's Detail card body under the ports (specs/101). One that can't be built
+        // here falls back to XS — with its parameter rows — before the header (and its size chip
+        // and chevron) is drawn.
+        Control? card = null;
+        if (n.Size != ModularNodeSize.XS && (card = BuildCardBody(n)) is null)
+        {
+            n.Size = ModularNodeSize.XS;
+            PopulateXs(n);
+        }
         var col = new StackPanel();
         var headBorder = NodeHeader(n);
         col.Children.Add(headBorder);
         // The ports come straight after the header, so their first row is level on every node.
         col.Children.Add(PortsBlock(n));
-        if (n.Params.Count > 0) col.Children.Add(ParamsBlock(n));
+        if (card is not null) col.Children.Add(card);
+        else if (n.Params.Count > 0) col.Children.Add(ParamsBlock(n));
         // An opened node says how to close it: a strip under it, as well as the header chevron and Esc (#261).
-        if (_expanded.Contains(n.Id)) col.Children.Add(CollapseStrip(n));
+        if (n.Size == ModularNodeSize.XS && _expanded.Contains(n.Id)) col.Children.Add(CollapseStrip(n));
         WrapFrame(n, col, headBorder);
+        if (n.Size != ModularNodeSize.XS)
+        {
+            // A card node is as wide as its card: measure it now for the default layout, then
+            // follow its real width so the output ports and cables stay on its right edge.
+            n.View.Measure(Size.Infinity);
+            n.Width = Math.Max(NodeW, n.View.DesiredSize.Width);
+        }
     }
 
     // The parameter rows under the ports. More than eight scroll, with a caption saying so.
@@ -1670,17 +1716,20 @@ public sealed partial class ModularView : UserControl
     // card colour. A modulator's CV out is a grab handle for wiring a CV link (P1 #13).
     private Control PortDots(GNode n)
     {
-        var canvas = new Canvas { IsHitTestVisible = true };
+        // Inputs on the left edge; outputs on a zero-width canvas pinned to the right edge, so they
+        // follow a card node's width.
+        var left = new Canvas { IsHitTestVisible = true };
+        var right = new Canvas { IsHitTestVisible = true, Width = 0, HorizontalAlignment = HorizontalAlignment.Right };
         var ins = n.Inputs(); var outs = n.Outputs();
-        for (int i = 0; i < ins.Count; i++) AddDot(ins[i].kind, 0, n.PortY(i), null);
+        for (int i = 0; i < ins.Count; i++) AddDot(left, ins[i].kind, 0, n.PortY(i), null);
         for (int i = 0; i < outs.Count; i++)
         {
             Action<PointerPressedEventArgs>? press = n.Slot == Slot.Modulator && outs[i].kind == PortKind.Cv ? e => BeginConnect(n, e) : null;
-            AddDot(outs[i].kind, NodeW, n.PortY(i), press);
+            AddDot(right, outs[i].kind, 0, n.PortY(i), press);
         }
-        return canvas;
+        return new Panel { Children = { left, right } };
 
-        void AddDot(PortKind kind, double x, double y, Action<PointerPressedEventArgs>? onPress)
+        void AddDot(Canvas canvas, PortKind kind, double x, double y, Action<PointerPressedEventArgs>? onPress)
         {
             bool cv = kind == PortKind.Cv;
             double d = cv ? 9 : 10;
@@ -1774,10 +1823,10 @@ public sealed partial class ModularView : UserControl
     // Target index within the node's lane, from its current X among same-slot siblings.
     private int LaneTarget(GNode n)
     {
-        double cx = n.World.X + NodeW / 2;
+        double cx = n.World.X + n.NodeWidth / 2;
         int t = 0;
         foreach (var s in _nodes)
-            if (s != n && s.Slot == n.Slot && s.World.X + NodeW / 2 < cx) t++;
+            if (s != n && s.Slot == n.Slot && s.World.X + s.NodeWidth / 2 < cx) t++;
         return t;
     }
 
@@ -1788,8 +1837,8 @@ public sealed partial class ModularView : UserControl
         if (others.Count == 0) return;
         int t = LaneTarget(n);
         double barX = t <= 0 ? others[0].World.X - GapX / 2
-            : t >= others.Count ? others[^1].World.X + NodeW + GapX / 2
-            : (others[t - 1].World.X + NodeW + others[t].World.X) / 2;
+            : t >= others.Count ? others[^1].World.X + others[^1].NodeWidth + GapX / 2
+            : (others[t - 1].World.X + others[t - 1].NodeWidth + others[t].World.X) / 2;
         double h = n.View.Bounds.Height > 0 ? n.View.Bounds.Height : 120;
         _dropBar.Height = h;
         Canvas.SetLeft(_dropBar, barX - 1.5);
@@ -1816,7 +1865,7 @@ public sealed partial class ModularView : UserControl
         _connectCursor = e.GetPosition(_viewport);
         e.Pointer.Capture(_viewport);
         HighlightTargets(true);
-        _sidebarPanel.BorderBrush = Brass;   // hint: drop on a track here to modulate across tracks
+        ConnectHintChanged?.Invoke(true);   // hint: drop on a track's header to modulate across tracks
         _edges.InvalidateVisual();
     }
 
@@ -1825,14 +1874,18 @@ public sealed partial class ModularView : UserControl
         _connecting = false;
         e.Pointer.Capture(null);
         HighlightTargets(false);
-        _sidebarPanel.BorderBrush = BorderDef;   // clear the cross-track drop hint
+        ConnectHintChanged?.Invoke(false);   // clear the cross-track drop hint
+        var onControl = ParamControlAt(e.GetPosition(_viewport));
+        ClearParamUnderCable();
 
-        // Dropped on the track list (left) → wire the modulator into a param on THAT track.
-        var sp = e.GetPosition(_sidebar);
-        if (sp.X >= 0 && sp.X <= _sidebar.Bounds.Width)
-            foreach (var child in _sidebar.Children)
-                if (child is Control c && c.Tag is int otherTrack && otherTrack != _trackId && c.Bounds.Contains(sp))
-                { ShowCrossTrackParamMenu(c, otherTrack, _connectMod); return; }
+        // Dropped on another track's header (the column beside the canvas) → wire the
+        // modulator into a param on THAT track.
+        if (TopLevel.GetTopLevel(this) is { } top && TrackAtPoint?.Invoke(e.GetPosition(top)) is var (otherTrack, anchor)
+            && otherTrack != _trackId)
+        { ShowCrossTrackPicker(anchor, otherTrack, _connectMod); return; }
+
+        // Dropped right on a knob / parameter row: link that parameter, no picker (FR-001a).
+        if (onControl is { } hit) { _edges.InvalidateVisual(); LinkHere(_connectMod, hit.target.Kind, hit.target.Device, hit.target.Param); return; }
 
         var scr = e.GetPosition(_viewport);
         var world = new Point((scr.X - _pan.X) / _scale, (scr.Y - _pan.Y) / _scale);
@@ -1842,7 +1895,7 @@ public sealed partial class ModularView : UserControl
             var n = _nodes[i];
             if (!IsConnectTarget(n)) continue;
             double h = n.View.Bounds.Height > 0 ? n.View.Bounds.Height : 120;
-            if (world.X >= n.World.X && world.X <= n.World.X + NodeW && world.Y >= n.World.Y && world.Y <= n.World.Y + h) { target = n; break; }
+            if (world.X >= n.World.X && world.X <= n.World.X + n.NodeWidth && world.Y >= n.World.Y && world.Y <= n.World.Y + h) { target = n; break; }
         }
         _edges.InvalidateVisual();
         if (target == null) return;
@@ -1861,75 +1914,11 @@ public sealed partial class ModularView : UserControl
             _engine.ModulatorSet(_trackId, target.ModId, 10, _connectMod);
             Rebuild(); Changed?.Invoke();
         }
-        else ShowConnectParamMenu(target, _connectMod);
+        else ShowTargetPicker(target, _connectMod);
     }
 
     // Nodes a CV cable can drop onto: insert effects, MIDI FX, the instrument, and Math inputs.
     private static bool IsConnectTarget(GNode n) => n.Slot is Slot.Device or Slot.MidiFx or Slot.Instrument || n.IsMathNode || n.IsScopeNode;
-
-    // Pick which param the dragged CV link should drive (device / MIDI-FX / instrument).
-    private void ShowConnectParamMenu(GNode node, int modId)
-    {
-        int t = _trackId;
-        int kind = node.Slot == Slot.MidiFx ? 2 : node.Slot == Slot.Instrument ? 1 : 0;
-        int di = node.Slot == Slot.Instrument ? -1 : node.SlotIndex;
-        int pc = kind == 2 ? _engine.MidiEffectParamCount(t, di)
-               : kind == 1 ? _engine.PluginParamCount(t, -1)
-                           : _engine.DeviceParamCount(t, di);
-        var flyout = new MenuFlyout();
-        for (int p = 0; p < pc; p++)
-        {
-            int prm = p;
-            string pn = kind == 2 ? _engine.MidiEffectParamName(t, di, prm)
-                      : kind == 1 ? _engine.PluginParamName(t, -1, prm)
-                                  : _engine.DeviceParamName(t, di, prm);
-            var mi = new MenuItem { Header = pn };
-            mi.Click += (_, _) => { _engine.CvLinkAddToTarget(t, modId, kind, -1, di, prm); Rebuild(); Changed?.Invoke(); };
-            flyout.Items.Add(mi);
-        }
-        if (pc == 0) flyout.Items.Add(new MenuItem { Header = Loc.T("modular.no_parameters"), IsEnabled = false });
-        flyout.ShowAt(node.View, showAtPointer: true);
-    }
-
-    // Cross-track wiring: a CV cable dropped on a track in the sidebar picks a param on THAT
-    // track (device / instrument / MIDI-FX). The link is owned by the modulator's track and
-    // targets the other one — the same thing the knob right-click "Modulate from another track"
-    // does, but reachable by dragging.
-    private void ShowCrossTrackParamMenu(Control anchor, int targetTrackId, int modId)
-    {
-        var e = _engine;
-        var flyout = new MenuFlyout();
-
-        void AddDeviceSub(string name, int kind, int di, int pc)
-        {
-            if (pc <= 0) return;
-            var sub = new MenuItem { Header = name };
-            for (int p = 0; p < pc; p++)
-            {
-                int prm = p;
-                string pn = kind == 2 ? e.MidiEffectParamName(targetTrackId, di, prm)
-                          : kind == 1 ? e.PluginParamName(targetTrackId, -1, prm)
-                                      : e.DeviceParamName(targetTrackId, di, prm);
-                var mi = new MenuItem { Header = pn };
-                mi.Click += (_, _) => { e.CvLinkAddToTarget(_trackId, modId, kind, targetTrackId, di, prm); Rebuild(); Changed?.Invoke(); };
-                sub.Items.Add(mi);
-            }
-            flyout.Items.Add(sub);
-        }
-
-        bool inst = e.TryGetTrackInfo(TrackIndex(targetTrackId), out var ti) && ti.IsInstrument;
-        if (inst)
-        {
-            int mc = e.TrackMidiEffectCount(targetTrackId);
-            for (int m = 0; m < mc; m++) AddDeviceSub(e.MidiEffectName(targetTrackId, m), 2, m, e.MidiEffectParamCount(targetTrackId, m));
-            AddDeviceSub(e.DeviceName(targetTrackId, -1), 1, -1, e.PluginParamCount(targetTrackId, -1));
-        }
-        int dc = e.TrackDeviceCount(targetTrackId);
-        for (int d = 0; d < dc; d++) AddDeviceSub(e.DeviceName(targetTrackId, d), 0, d, e.DeviceParamCount(targetTrackId, d));
-
-        if (flyout.Items.Count == 0) flyout.Items.Add(new MenuItem { Header = Loc.T("modular.no_modulatable_parameters_on_that"), IsEnabled = false });
-        flyout.ShowAt(anchor, showAtPointer: true);
-    }
 
     // While wiring, outline valid target nodes in brass (thicker so it's obvious).
     private void HighlightTargets(bool _)
@@ -2065,7 +2054,7 @@ public sealed partial class ModularView : UserControl
 
     private void OnViewportMoved(object? sender, PointerEventArgs e)
     {
-        if (_connecting) { _connectCursor = e.GetPosition(_viewport); _edges.InvalidateVisual(); return; }
+        if (_connecting) { _connectCursor = e.GetPosition(_viewport); TrackParamUnderCable(_connectCursor); _edges.InvalidateVisual(); return; }
         if (!_panning) return;
         var p = e.GetPosition(_viewport);
         _pan = _panOrigin + (p - _panStart);
@@ -2165,25 +2154,27 @@ public sealed partial class ModularView : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        bool mod = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
+        if (Keys.Capturing) return;
         var sel = Selected();
-        if (e.Key == Key.Space) { _spaceDown = true; _viewport.Cursor = new Cursor(StandardCursorType.SizeAll); }
-        else if (e.Key == Key.F && !mod) { FitNow(); e.Handled = true; }
-        else if (mod && e.Key == Key.D && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
-        else if (!mod && e.Key == Key.B && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && _selectedEdge is { IsCv: true, LinkOwner: >= 0 } ce)
+        bool delete = Keys.Owns(e, "edit.delete");
+        // Space held pans the canvas — a fixed key, like a mouse gesture (specs/096 FR-011).
+        if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None) { _spaceDown = true; _viewport.Cursor = new Cursor(StandardCursorType.SizeAll); }
+        else if (Keys.Owns(e, "modular.fit")) { FitNow(); e.Handled = true; }
+        else if (Keys.Owns(e, "edit.duplicate") && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
+        else if (Keys.Owns(e, "modular.bypass") && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
+        else if (delete && _selectedEdge is { IsCv: true, LinkOwner: >= 0 } ce)
         {
             _engine.CvLinkRemove(ce.LinkOwner, ce.LinkIndex); _selectedEdge = null;
             Rebuild(); Changed?.Invoke(); e.Handled = true;
         }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && _selectedEdge is { IsCv: true, ModInputField: >= 0 } me)
+        else if (delete && _selectedEdge is { IsCv: true, ModInputField: >= 0 } me)
         {
             RemoveModInputEdge(me); e.Handled = true;
         }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is { IsChainDevice: true }) { DeleteNode(sel); e.Handled = true; }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is { Slot: Slot.Modulator }) { RemoveModulatorNode(sel); e.Handled = true; }
-        else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && sel is not null && FixedReason(sel) is { } why) { _status.Text = why; e.Handled = true; }
-        else if (e.Key == Key.Escape && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
+        else if (delete && sel is { IsChainDevice: true }) { DeleteNode(sel); e.Handled = true; }
+        else if (delete && sel is { Slot: Slot.Modulator }) { RemoveModulatorNode(sel); e.Handled = true; }
+        else if (delete && sel is not null && FixedReason(sel) is { } why) { _status.Text = why; e.Handled = true; }
+        else if (Keys.Owns(e, "edit.cancel") && _expanded.Count > 0) { _expanded.Clear(); Rebuild(); e.Handled = true; }
     }
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
@@ -2203,20 +2194,8 @@ public sealed partial class ModularView : UserControl
             Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { _trackBtn, _globalBtn } },
         };
-        // All the modulator sources collapse into one "+ Add" dropdown (a normal chip
-        // button + a menu flyout) so the toolbar stays compact.
-        var addMenu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        void AddItem(string label, int kind)
-        {
-            var mi = new MenuItem { Header = label };
-            mi.Click += (_, _) => AddModulator(kind);
-            addMenu.Items.Add(mi);
-        }
-        foreach (var node in Nota.Application.Palette.ModularCatalog.All) AddItem(node.Name, node.Kind);   // the palette lists the same nodes
-        var addBtn = Chip(Loc.T("modular.add")); addBtn.Content = Glyph.Labeled(Loc.T("modular.add"), GlyphKind.ChevronDown);
-        addBtn.Flyout = addMenu;
+        // Nodes come from the browser's Modular tab and the palette (specs/095), not a toolbar menu.
         left.Children.Add(seg);
-        left.Children.Add(addBtn);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         var zoomOut = ZoomBtn("−"); zoomOut.Click += (_, _) => ZoomAround(Center(), 1 / 1.15);
@@ -2317,6 +2296,9 @@ public sealed partial class ModularView : UserControl
         public int HiddenParamCount; // unshown params (collapsed) → whether ↕ reveals anything
         public List<string> CvInputLabels = new();   // one CV input port per incoming CV link (param name)
         public double IslandHeight;  // explicit height for Global-view island layout
+        public ModularNodeSize Size = ModularNodeSize.XS;   // chain devices: XS list or the S / L card (specs/101)
+        public bool HasSmall;        // the device's card comes in S
+        public double Width = NodeW; // laid-out width: NodeW at XS, the card's width at S / L
 
         // CV input rows this node draws: one per incoming link, or a single generic port when
         // nothing is patched yet (so the card still shows it accepts CV).
@@ -2362,7 +2344,7 @@ public sealed partial class ModularView : UserControl
         public double PortY(int row) => HeaderH + PortPadTop + row * PortRow + PortRow / 2;
 
         /// <summary>Laid-out width (islands are wider than chain nodes).</summary>
-        public double NodeWidth => Slot == Slot.Island ? IslandW : NodeW;
+        public double NodeWidth => Slot == Slot.Island ? IslandW : Width;
 
         public GNode(string id, string title, IBrush stripe, Point world)
         { Id = id; Title = title; Stripe = stripe; World = world; }
@@ -2384,7 +2366,7 @@ public sealed partial class ModularView : UserControl
             if (idx >= 0 && kind == PortKind.Cv && !output && !IsMathNode)
                 idx = Math.Min(ports.Count - 1, idx + Math.Clamp(cvInput, 0, Math.Max(0, CvInputRows - 1)));
             if (idx < 0) idx = Math.Max(0, ports.Count - 1);
-            return new Point(World.X + (output ? NodeW : 0), World.Y + PortY(idx));
+            return new Point(World.X + (output ? NodeWidth : 0), World.Y + PortY(idx));
         }
     }
 

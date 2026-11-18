@@ -74,6 +74,7 @@ public partial class MainWindow
         B("view.session", () => SetView(MainView.Session));
         B("view.modular", () => SetView(MainView.Modular));
         B("view.mixer", ToggleMixer);
+        B("view.assistant", ToggleAssistant);
         B("view.mixerFloat", () => SetMixerFloating(!MixerFloating));
         B("view.connectPhone", ShowConnectPhone);
         B("view.articulationMaps", ShowArticulationMaps);

@@ -664,6 +664,11 @@ public sealed partial class NotaEngine
     public void PushMonitorFramesForTest(float[] interleavedStereo, int frames)
     { ThrowIfDisposed(); NativeMethods.EnginePushMonitorFrames(_handle, interleavedStereo, frames); }
 
+    /// <summary>Test hook (#563): the rate the pushed monitor frames were captured at (0 = the
+    /// engine's) and the capture callback size in frames (0 = leave it).</summary>
+    public void SetMonitorInputForTest(double sampleRate, int blockFrames)
+    { ThrowIfDisposed(); NativeMethods.EngineSetMonitorInputTest(_handle, sampleRate, blockFrames); }
+
     /// <summary>Sets an instrument track's MIDI input source (receive that track's MIDI; -1 = off).</summary>
     public void SetTrackMidiSource(int trackId, int sourceTrackId)
     { ThrowIfDisposed(); NativeMethods.TrackSetMidiSource(_handle, trackId, sourceTrackId); }
@@ -724,6 +729,8 @@ public sealed partial class NotaEngine
     /// ring-out tail) — a one-shot range bounce finished with <see cref="TakeFreezeCapture"/>.</summary>
     public long BeginBounce(int trackId, double lengthBeats)
     { ThrowIfDisposed(); return NativeMethods.TrackBounceBegin(_handle, trackId, lengthBeats); }
+    public long BeginBounceRange(int trackId, double startBeat, double endBeat)
+    { ThrowIfDisposed(); return NativeMethods.TrackBounceRangeBegin(_handle, trackId, startBeat, endBeat); }
 
     /// <summary>Copies the armed capture's rendered frames (interleaved stereo, device rate) into
     /// <paramref name="outFrames"/> and disarms it without freezing the track. Returns frames copied.</summary>

@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // A drawn controller stroke replaces only the stretch it covers (specs/063). The curve on
-// either side keeps the value it had: the left piece is the same power curve over a shorter
-// span (that shaping is a fraction of the segment, so it needs no new exponent), and the
-// right piece is refit because a new segment would otherwise start linear and straighten
-// everything after the stroke.
+// either side keeps the value it had: a piece of a shaped segment is the same shape with its
+// curve scaled to the piece's share of the segment (AutomationCurve, #591), so the left piece
+// and the right remainder are both exact — without the remainder a new segment would start
+// linear and straighten everything after the stroke.
 
 using System;
 using System.Collections.Generic;
@@ -22,8 +22,6 @@ public static class ControllerStroke
     /// (<c>ctlThinTolerance</c>).</summary>
     public const float Tolerance = 0.008f;
 
-    private const double MinPiece = 1.0 / 128.0;
-    private const int MaxSplits = 8;
 
     /// <summary>The engine's reading of a continuous controller curve
     /// (<c>ControllerCurve::valueAt</c>): held outside the first and last point.</summary>
@@ -62,10 +60,22 @@ public static class ControllerStroke
         var ordered = Sorted(samples);
         double a = ordered[0].Beat, b = ordered[^1].Beat;
         var outp = new List<AutomationPoint>(orig.Count + ordered.Count + 4);
+        int kept = 0;
         foreach (var q in orig)
-            if (q.Beat < a - Junction) outp.Add(q);
+            if (q.Beat < a - Junction) { outp.Add(q); kept++; }
         if (outp.Count > 0)
+        {
+            // The last point's segment now ends at the junction: shorten its curve so the
+            // stretch before the stroke keeps its values (#591).
+            if (kept < orig.Count)
+            {
+                var last = outp[^1];
+                double span = orig[kept].Beat - last.Beat;
+                if (span > 0) last.Curve = AutomationCurve.Sub(last.Curve, (a - Junction - last.Beat) / span);
+                outp[^1] = last;
+            }
             outp.Add(new AutomationPoint(a - Junction, ValueAt(orig, a - Junction)));
+        }
         foreach (var (sb, sv) in ordered)
             outp.Add(new AutomationPoint(sb, sv));
 
@@ -84,72 +94,20 @@ public static class ControllerStroke
             var left = orig[next - 1];
             var right = orig[next];
             if (edge > left.Beat + 1e-9 && edge < right.Beat)
-                EmitRemainder(outp, left, right, edge, right.Beat, 0);
+                EmitRemainder(outp, left, right, edge);
         }
         for (int i = next; i < orig.Count; i++)
             outp.Add(orig[i]);
         return CollapseBeats(outp);
     }
 
-    // The tail of the segment (left → right) from `from` up to `end` (the next stored point,
-    // not emitted here). One power curve when it stays within Tolerance; otherwise the piece
-    // is halved and each half is shaped on its own.
-    private static void EmitRemainder(
-        List<AutomationPoint> outp, AutomationPoint left, AutomationPoint right, double from, double end, int depth)
+    // The tail of the segment (left → right) from `from` on: the same shape with the curve
+    // scaled to the part that is left, which is exact (#591).
+    private static void EmitRemainder(List<AutomationPoint> outp, AutomationPoint left, AutomationPoint right, double from)
     {
-        float value = ValueOn(left, right, from);
-        if (Math.Abs(left.Curve) < 1e-6f)
-        {
-            outp.Add(new AutomationPoint(from, value, 0f));
-            return;
-        }
-        float curve = FitCurve(left, right, from, end, out float err);
-        if (err <= Tolerance || depth >= MaxSplits || end - from <= MinPiece)
-        {
-            outp.Add(new AutomationPoint(from, value, curve));
-            return;
-        }
-        double mid = (from + end) / 2;
-        EmitRemainder(outp, left, right, from, mid, depth + 1);
-        EmitRemainder(outp, left, right, mid, end, depth + 1);
-    }
-
-    private static float FitCurve(
-        AutomationPoint left, AutomationPoint right, double from, double end, out float err)
-    {
-        float bestC = 0f, bestE = float.MaxValue;
-        for (int i = 0; i <= 40; i++)
-            Consider(-1f + i / 20f);
-        float around = bestC;
-        for (int i = -10; i <= 10; i++)
-            Consider(Math.Clamp(around + i * 0.01f, -1f, 1f));
-        err = bestE;
-        return bestC;
-
-        void Consider(float c)
-        {
-            float e = MaxError(left, right, from, end, c);
-            if (e < bestE) { bestE = e; bestC = c; }
-        }
-    }
-
-    private static float MaxError(
-        AutomationPoint left, AutomationPoint right, double from, double end, float curve)
-    {
-        double span = end - from;
-        if (span <= 0) return 0;
-        float v0 = ValueOn(left, right, from), v1 = ValueOn(left, right, end);
-        float err = 0;
-        for (int k = 1; k < 16; k++)
-        {
-            double beat = from + span * k / 16.0;
-            float target = ValueOn(left, right, beat);
-            double t = (beat - from) / span;
-            float got = (float)(v0 + (v1 - v0) * Shape(t, curve));
-            float d = Math.Abs(target - got);
-            if (d > err) err = d;
-        }
-        return err;
+        double span = right.Beat - left.Beat;
+        float curve = span > 0 ? AutomationCurve.Sub(left.Curve, (right.Beat - from) / span) : 0f;
+        outp.Add(new AutomationPoint(from, ValueOn(left, right, from), curve));
     }
 
     private static float ValueOn(AutomationPoint left, AutomationPoint right, double beat)
@@ -161,7 +119,7 @@ public static class ControllerStroke
     }
 
     private static double Shape(double t, float curve)
-        => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
+        => AutomationCurve.Shape(t, curve);
 
     private static IReadOnlyList<AutomationPoint> SortedPoints(IReadOnlyList<AutomationPoint> orig)
     {

@@ -35,4 +35,11 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.23.2" />
   </ItemGroup>
 
+  <!-- The user manual's search index for the Assistant panel (specs/098): generated from
+       nota-docs by scripts/build-manual-index.sh and committed, so every build and the smoke
+       test have it without a nota-docs checkout. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\assets\manual\manual-index.json.gz" LogicalName="Nota.Manual.manual-index.json.gz" />
+  </ItemGroup>
+
 </Project>

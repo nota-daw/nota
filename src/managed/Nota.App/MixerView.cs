@@ -23,6 +23,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -111,6 +112,8 @@ public sealed partial class MixerView : UserControl
     public Func<float>? GetMasterVolume { get; set; }
     public Action<float>? SetMasterVolume { get; set; }
     private VFader? _masterFader;
+    private PanKnob? _masterPan;   // specs/099: follows automation, undo, MCP and project load
+    private PanBar? _masterPanBar; // its compact twin
     private MeterFader? _masterMeterFader;
     private DragNumber? _masterDb;
     // Project pan law (specs/006): the footer's Pan law control, its hint, the Older project
@@ -194,6 +197,9 @@ public sealed partial class MixerView : UserControl
     /// <summary>Raised after <see cref="Refresh"/> rebuilds the strips, so a host window can
     /// fit its width to them.</summary>
     public event Action? StripsChanged;
+
+    /// <summary>Raised when a press on a track's strip asks to select that track (#538).</summary>
+    public event Action<int>? TrackPicked;
 
     /// <summary>Raised after a group strip's Link key changed the group's Link (specs/076).</summary>
     public event Action? GroupLinkChanged;
@@ -307,7 +313,7 @@ public sealed partial class MixerView : UserControl
         _balBadges.Clear();
         _strips.Clear();
         _stripById.Clear();
-        _masterFader = null; _masterMeterFader = null;
+        _masterFader = null; _masterMeterFader = null; _masterPan = null; _masterPanBar = null;
         _cueFader = null; _cueMeterFader = null; _cueDb = null; _cueOutput = _cueSources = null;
         _builtCueShown = CueShown();   // Cue keys and the Cue strip (specs/089)
         int returns = _engine.ReturnTrackCount;
@@ -355,6 +361,13 @@ public sealed partial class MixerView : UserControl
         body.Child = null;   // detach before re-parenting
         body.Child = new Panel { Children = { inner, e.Outline } };
         e.Strip = body;
+        // A press anywhere on the strip — its name, fader, buttons — selects its track, as a
+        // click on its arrangement header does, so the Detail panel can follow from the Mixer (#538).
+        body.AddHandler(PointerPressedEvent, (_, pe) =>
+        {
+            if (!pe.GetCurrentPoint(body).Properties.IsLeftButtonPressed || e.Id == _selectedId) return;
+            TrackPicked?.Invoke(e.Id);
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
         _strips.Add(e);
         _stripById[e.Id] = e;
         _row.Children.Add(body);
@@ -521,6 +534,8 @@ public sealed partial class MixerView : UserControl
             if (_masterFader is { Dragging: false } f && Math.Abs(f.Value - v) > 1e-3) { f.SetValueExternal(v); db.Value = LinToDb(v); }
             if (_masterMeterFader is { Dragging: false } mf && Math.Abs(mf.Value - v) > 1e-3) { mf.SetValueExternal(v); db.Value = LinToDb(v); }
         }
+        if (_masterPan is { Dragging: false } mp && Math.Abs(mp.Pan - _engine.MasterPan) > 1e-3) mp.SetPanExternal(_engine.MasterPan);
+        if (_masterPanBar is { Dragging: false } mpb && Math.Abs(mpb.Pan - _engine.MasterPan) > 1e-3) mpb.Pan = _engine.MasterPan;
         // Sends follow the Devices panel's Sends card, the Session mixer and automation (#138).
         foreach (var (id, bus, send) in _sendFaders)
         {
@@ -612,19 +627,20 @@ public sealed partial class MixerView : UserControl
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
-        // Master has no sends or pan: blanks of their height line its fader up with the strips.
+        // Master has no sends: a blank of their height lines its fader up with the strips. Its pan
+        // (specs/099) sits after the master devices, before the fader, in the project pan law.
         var sends = Blank(SendsH);
         sends.IsVisible = SendsShown;
         _sendSections.Add(sends);
         col.Children.Add(sends);
-        col.Children.Add(Blank(38));
+        col.Children.Add(PanRow(_engine.MasterTrackId, _engine.MasterPan, master: true));
 
         Control db;
         var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Master, out db, out var meter);
         _meters.Add((-1, meter, meter.Push));
         col.Children.Add(faderRow);
         col.Children.Add(db);
-        // Master has no sends / pan / arm; keep the strip visually aligned with a
+        // Master has no M/S/Arm; keep the strip visually aligned with a
         // spacer where the buttons row sits.
         col.Children.Add(new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0) });
 
@@ -1009,10 +1025,11 @@ public sealed partial class MixerView : UserControl
         return new Border { Height = 42, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(7, 5), Child = body };
     }
 
-    private Control PanRow(int id, float pan, bool isGroup = false)
+    private Control PanRow(int id, float pan, bool isGroup = false, bool master = false)
     {
         var knob = new PanKnob(pan);
-        if (id > 0) SyncOf(id).Pan = knob;
+        if (master) _masterPan = knob;
+        else if (id > 0) SyncOf(id).Pan = knob;
         // One undo step per gesture (specs/009); opened before the automation write so a
         // recorded lane and the value undo together, closed after it.
         var undo = new MixGesture(_engine, MixTarget.Pan(id));
@@ -1020,11 +1037,11 @@ public sealed partial class MixerView : UserControl
         Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
         knob.PanChanged += p => undo.Change(p, setPan);
         ValueEntry.Attach(knob, knob.EntryField(Loc.T("common.pan"), NotaNum.Pan));
-        if (id > 0)   // M9-C: record pan moves (master pan isn't an automation target)
+        if (id > 0)   // M9-C: record pan moves (the master's too — specs/099)
         {
             knob.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
             knob.GestureEnd   += () => _engine.EndAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
-            MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
+            if (!master) MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
         }
         knob.GestureEnd += undo.End;
         Control label = Mono(Loc.T("common.pan"), TextTertiary);

@@ -608,7 +608,7 @@ SessionSlot Engine::slotFromAudioClip(const AudioClip& a) {
     s.audio = a;
     s.audio.startBeat = 0.0;
     s.audio.active = true;
-    if (warpNeedsBuild(s.audio)) // a stale cache, or a copied clip narrowed to the slot
+    if (warpNeedsBuild(s.audio, false)) // a stale cache, or a copied clip narrowed to the slot
         configureClipWarp(s.audio, transport_.samplesPerBeat(), transport_.sampleRate());
     s.name = a.name;
     const double beats = audioClipBeats(s.audio);
