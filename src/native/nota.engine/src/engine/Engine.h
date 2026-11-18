@@ -563,6 +563,11 @@ class Engine {
     bool setSessionClipName(int32_t trackId, int32_t scene, const std::string& name);
     bool sessionSlotStopButton(int32_t trackId, int32_t scene) const;
     bool setSessionSlotStopButton(int32_t trackId, int32_t scene, bool on);
+    // A slot's next-take length (#503, specs/106) and the beats a fresh take into it would get
+    // now (0 = open-ended).
+    bool sessionSlotTakeLength(int32_t trackId, int32_t scene, NextTakeLength& out) const;
+    bool setSessionSlotTakeLength(int32_t trackId, int32_t scene, const NextTakeLength& v);
+    double sessionSlotTakeBeats(int32_t trackId, int32_t scene) const;
     bool copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrack, int32_t dstScene);
     bool sceneProps(int32_t scene, NotaSceneProps* out) const;
     bool setSceneProps(int32_t scene, const NotaSceneProps& p);
@@ -2129,6 +2134,20 @@ class Engine {
     // cut to whole quanta.
     static constexpr double kGrowingTakeBeats = 4096.0;
     bool recordSessionGrowing_ = false;
+    // The Session take's length as resolved from its slot when it started (#503): beats, 0 =
+    // open-ended. It sizes the take; each slot of the take stops on its own lane's lenBeats.
+    double recordSessionLen_ = 0.0;
+    bool recordSessionOwnLen_ = false; // recordSessionLen_ is the slot's own (not Fixed's)
+    bool takeLengthReached_ = false;   // a take is landing because its length ran out (poll())
+    static bool ownTakeLength(const SessionSlot* s) {
+        return s && !s->hasClip && s->nextTake.mode == SlotTakeMode::Fixed;
+    }
+    static constexpr int32_t kMaxTakeBars = 64;   // a slot's prepared take: 1 beat .. 64 bars
+    static constexpr int32_t kMaxMeterBeats = 32; // a time signature's largest numerator
+    double resolveTakeBeats(const SessionSlot* s) const;
+    // Writes a clip's slot over another, keeping the destination's next-take length: that belongs
+    // to the slot, not to the clip (#503).
+    static void replaceSlotContent(SessionSlot& dst, SessionSlot src);
     double roundedTakeBeats(double beats) const;
     double audioClipBeats(const AudioClip& c) const;
     void syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
@@ -2159,6 +2178,8 @@ class Engine {
         // A Session take's lane records into a slot on that slot's own loop clock (specs/086).
         int32_t scene = -1;
         bool growing = false; // a fresh take with no fixed length: cut to whole quanta at its stop
+        double lenBeats = 0.0; // its slot's resolved take length, beats; 0 = until stopped (#503)
+        bool ownLen = false;   // that length is the slot's own: stopped by hand before it, it is cut
         std::shared_ptr<SessionPlayer> player;
         std::vector<TakeNote> takeNotes;
         std::array<CtlFold, kCtlCount> ctlFold{};
@@ -2578,6 +2599,11 @@ class Engine {
         int32_t channels = 2;         // stored channels
         int32_t scene = -1;           // Session slot the lane records into (-1: Arrangement)
         size_t offset = 0;            // take frame where the lane joined (a Session slot launched later)
+        double lenBeats = 0.0;        // a Session lane's resolved take length, beats; 0 = open (#503)
+        bool ownLen = false;          // the slot's own length: stopped by hand before it, it is cut
+        // Where a Session lane that joined the running take started recording; NaN = it counts
+        // from the take's own start (a retry's boundary included).
+        double startBeat = std::numeric_limits<double>::quiet_NaN();
         std::vector<float> buf;       // message thread, `channels` interleaved
         std::vector<float> scratch;   // this drain's frames
         std::vector<LoopPass> passes;

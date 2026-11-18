@@ -1483,6 +1483,24 @@ NOTA_API NotaResult nota_session_set_clip_name(NotaEngine* engine, int32_t track
 /* An EMPTY slot's stop button: 1 (default) = launching its scene stops the track, 0 = leaves it playing. */
 NOTA_API int32_t    nota_session_get_slot_stop_button(const NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_set_slot_stop_button(NotaEngine* engine, int32_t track_id, int32_t scene, int32_t on);
+/* A slot's next-take length (#503): how long a fresh take recorded into it runs.
+   mode: NOTA_SLOT_TAKE_GLOBAL follows nota_session_set_record_length, NOTA_SLOT_TAKE_OPEN records
+   until stopped, NOTA_SLOT_TAKE_FIXED records bars + beats of the meter in effect when the take
+   starts (1 beat .. 64 bars). The value belongs to the slot: kept, hidden, while it holds a clip. */
+#define NOTA_SLOT_TAKE_GLOBAL 0
+#define NOTA_SLOT_TAKE_OPEN 1
+#define NOTA_SLOT_TAKE_FIXED 2
+typedef struct NotaSlotTakeLength {
+    int32_t mode;
+    int32_t bars;  /* 0..64, Fixed only */
+    int32_t beats; /* 0..31 (a bar of the meter at most), Fixed only; 64 bars = 64 + 0 */
+} NotaSlotTakeLength;
+/* get: 1 and *out filled for an existing track/scene, 0 otherwise. set: one undo step;
+   NOTA_ERR_INVALID_ARG for an unknown track/scene/mode or a Fixed length out of range. */
+NOTA_API int32_t    nota_session_get_slot_take_length(const NotaEngine* engine, int32_t track_id, int32_t scene, NotaSlotTakeLength* out);
+NOTA_API NotaResult nota_session_set_slot_take_length(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaSlotTakeLength* in);
+/* The length a fresh take into the slot would get now, in beats; 0 = open-ended. */
+NOTA_API double     nota_session_slot_take_beats(const NotaEngine* engine, int32_t track_id, int32_t scene);
 /* Copy a slot (clip + properties) onto another slot of a track of the same kind; overwrites. */
 NOTA_API NotaResult nota_session_copy_slot(NotaEngine* engine, int32_t src_track, int32_t src_scene, int32_t dst_track, int32_t dst_scene);
 /* Scene properties and name. */

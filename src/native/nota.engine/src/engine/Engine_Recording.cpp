@@ -765,10 +765,14 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     if (!t || t->type() != TrackType::Instrument || scene < 0 || scene >= authoring_->sceneCount) return false;
     noteTakeTrack(trackId);
     const bool hasClip = scene < static_cast<int32_t>(t->sessionSlots.size()) && t->sessionSlots[scene].hasClip;
-    const bool growing = !hasClip && sessionRecordLen_ <= 0.0;
+    // An empty slot's own next-take length (#503); an overdub follows the Session record length.
+    const SessionSlot* slot =
+        hasClip || scene >= static_cast<int32_t>(t->sessionSlots.size()) ? nullptr : &t->sessionSlots[scene];
+    const double len = resolveTakeBeats(slot);
+    const bool growing = !hasClip && len <= 0.0;
     if (!hasClip) {
         TakePushScope takePush(*this); // the take's own clip (specs/078)
-        addSessionMidiClip(trackId, scene, growing ? kGrowingTakeBeats : sessionRecordLen_);
+        addSessionMidiClip(trackId, scene, growing ? kGrowingTakeBeats : len);
         t = findTrackAuthoring(trackId);
         if (!t) return false;
     }
@@ -776,6 +780,8 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     l.trackId = trackId;
     l.scene = scene;
     l.growing = growing;
+    l.lenBeats = len;
+    l.ownLen = ownTakeLength(slot);
     l.player = t->sessionPlayer;
     const size_t k = midiLanes_.size();
     midiLanes_.push_back(std::move(l));
@@ -789,18 +795,22 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     return true;
 }
 
-// A fresh MIDI take that ran open-ended: cut it to whole launch quanta (a bar when launching is
-// unquantized) — no undo step of its own, so undo drops the whole take.
+// A fresh MIDI take that ran open-ended — or one of its slot's own length stopped by hand before
+// that length (#503) — is cut to whole launch quanta (a bar when launching is unquantized), never
+// past its length. No undo step of its own, so undo drops the whole take.
 void Engine::cutGrowingLane(MidiTakeLane& l) {
-    if (!l.growing || l.trackId < 0 || l.scene < 0) return;
+    const bool cutShort = !l.growing && l.ownLen && !takeLengthReached_;
+    if ((!l.growing && !cutShort) || l.trackId < 0 || l.scene < 0) return;
     l.growing = false;
+    l.ownLen = false;
     double el = 0.0;
     if (l.player && l.player->playing.load(std::memory_order_relaxed) == l.scene)
         el = l.player->playedBeats.load(std::memory_order_relaxed);
     if (auto old = findTrackAuthoring(l.trackId); old && l.scene < static_cast<int32_t>(old->sessionSlots.size())) {
         auto nt = cloneTrack(*old);
         SessionSlot& sl = nt->sessionSlots[static_cast<size_t>(l.scene)];
-        const double len = roundedTakeBeats(el);
+        double len = roundedTakeBeats(el);
+        if (cutShort) len = std::min(len, l.lenBeats);
         sl.lengthBeats = len;
         sl.midi.lengthBeats = len;
         republishWithTrackRaw(l.trackId, nt);
@@ -825,6 +835,7 @@ void Engine::finishSessionMidiLane(int32_t lane) {
             recordSessionTrackId_ = n.trackId;
             recordSessionScene_ = n.scene;
             recordSessionGrowing_ = n.growing;
+            recordSessionLen_ = n.lenBeats;
             if (auto t = findTrackAuthoring(n.trackId); t && n.scene < static_cast<int32_t>(t->sessionSlots.size()))
                 recordSlotLen_.store(t->sessionSlots[static_cast<size_t>(n.scene)].lengthBeats, std::memory_order_relaxed);
             recordSlotHist_.publish(n.player);
@@ -1300,6 +1311,8 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         CaptureLane lane;
         lane.trackId = tracks[0]->id();
         lane.scene = recordSessionAudio_ ? recordSessionScene_ : -1;
+        lane.lenBeats = recordSessionAudio_ ? recordSessionLen_ : 0.0; // #503
+        lane.ownLen = recordSessionAudio_ && recordSessionOwnLen_;
         captureLanes_.push_back(std::move(lane));
         audioRecordTrackId_ = captureLanes_[0].trackId;
         audioRecordLatencyFrames_ = 0; // internal resampling has no device round trip (specs/049, R7)
@@ -1344,6 +1357,8 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         lane.width = t->inputWidth();
         lane.channels = lane.width; // a mono pick is stored mono
         lane.scene = recordSessionAudio_ ? recordSessionScene_ : -1;
+        lane.lenBeats = recordSessionAudio_ ? recordSessionLen_ : 0.0; // #503
+        lane.ownLen = recordSessionAudio_ && recordSessionOwnLen_;
         captureLanes_.push_back(std::move(lane));
     }
     if (captureLanes_.empty()) {
@@ -1497,6 +1512,13 @@ bool Engine::addSessionAudioLane(int32_t trackId, int32_t scene) {
     lane.channels = lane.width;
     lane.scene = scene;
     lane.offset = captureWritePos_;
+    { // its own slot's length (#503), counted from now: it records from here
+        const SessionSlot* sl =
+            scene < static_cast<int32_t>(t->sessionSlots.size()) ? &t->sessionSlots[scene] : nullptr;
+        lane.lenBeats = resolveTakeBeats(sl && !sl->hasClip ? sl : nullptr);
+        lane.ownLen = ownTakeLength(sl);
+        lane.startBeat = transport_.uiPositionBeats();
+    }
     captureLanes_.push_back(std::move(lane));
     noteTakeTrack(trackId);
     if (takeAttempt_.active) takeAttempt_.sessionSlots.emplace_back(trackId, scene); // a retry relaunches it
@@ -1565,7 +1587,11 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
             s.lengthBeats = spb > 0 ? deviceFrames / spb : 4.0;
             if (s.lengthBeats <= 0.0) s.lengthBeats = 4.0;
             // Fixed-length capture keeps its length; an open-ended take is cut to whole quanta.
-            s.lengthBeats = sessionRecordLen_ > 0.0 ? sessionRecordLen_ : roundedTakeBeats(s.lengthBeats);
+            // A take of the slot's own length stopped by hand before it is cut the same way (#503).
+            if (lane.lenBeats <= 0.0) s.lengthBeats = roundedTakeBeats(s.lengthBeats);
+            else if (lane.ownLen && !takeLengthReached_)
+                s.lengthBeats = std::min(lane.lenBeats, roundedTakeBeats(s.lengthBeats));
+            else s.lengthBeats = lane.lenBeats;
         }
         republishWithTrack(trackId, nt);
         return;

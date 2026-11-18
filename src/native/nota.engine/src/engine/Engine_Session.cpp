@@ -95,7 +95,7 @@ bool Engine::clearSessionSlot(int32_t trackId, int32_t scene) {
         if (p == scene || q == scene) old->sessionPlayer->requestStop();
     }
     auto nt = cloneTrack(*old);
-    nt->sessionSlots[scene] = SessionSlot{}; // empty the slot
+    replaceSlotContent(nt->sessionSlots[scene], SessionSlot{}); // empty the slot; its next-take length stays (#503)
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -460,6 +460,14 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         recordSessionTrackId_ = trackId;
         recordSessionScene_ = scene;
         recordSessionAudio_ = true;
+        // The take's length (#503): an empty slot's own next-take length; a take over a clip
+        // follows the Session record length as before.
+        {
+            const SessionSlot* sl =
+                scene < static_cast<int32_t>(t->sessionSlots.size()) ? &t->sessionSlots[scene] : nullptr;
+            recordSessionLen_ = resolveTakeBeats(sl && !sl->hasClip ? sl : nullptr);
+            recordSessionOwnLen_ = ownTakeLength(sl);
+        }
         recordCountIn_ = countIn; // startAudioRecording leaves rolling the transport to us
         const bool ok = startAudioRecording(trackId);
         recordCountIn_ = false;
@@ -480,6 +488,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         } else {
             recordStartStatus_ = 2;
             recordSessionAudio_ = false;
+            recordSessionLen_ = 0.0;
             recordSessionScene_ = -1;
             recordSessionTrackId_ = 0;
             closeTakeAttempt();
@@ -493,14 +502,22 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     }
     // Make sure the slot holds a clip we can overdub into.
     const bool hasClip = scene < static_cast<int32_t>(t->sessionSlots.size()) && t->sessionSlots[scene].hasClip;
-    // An empty slot records a fresh take: with a fixed length it is that long; otherwise it
-    // runs until stopped and is cut to whole quanta then (finalizeSessionRecord).
+    // An empty slot records a fresh take: with a fixed length — the slot's own, or the Session
+    // record length when the slot follows it (#503) — it is that long; otherwise it runs until
+    // stopped and is cut to whole quanta then (finalizeSessionRecord). An overdub keeps the clip
+    // and stops after the Session record length, as before.
     recordSessionGrowing_ = false;
+    recordSessionLen_ = sessionRecordLen_;
+    recordSessionOwnLen_ = false;
     if (!hasClip) {
-        recordSessionGrowing_ = sessionRecordLen_ <= 0.0;
+        const SessionSlot* sl =
+            scene < static_cast<int32_t>(t->sessionSlots.size()) ? &t->sessionSlots[scene] : nullptr;
+        recordSessionLen_ = resolveTakeBeats(sl);
+        recordSessionOwnLen_ = ownTakeLength(sl);
+        recordSessionGrowing_ = recordSessionLen_ <= 0.0;
         {
             TakePushScope takePush(*this); // the take's own clip (specs/078)
-            addSessionMidiClip(trackId, scene, recordSessionGrowing_ ? kGrowingTakeBeats : sessionRecordLen_);
+            addSessionMidiClip(trackId, scene, recordSessionGrowing_ ? kGrowingTakeBeats : recordSessionLen_);
         }
         t = findTrackAuthoring(trackId);
         if (!t) return;
@@ -511,6 +528,8 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     publishMidiLanes({trackId}); // its MIDI input filter decides what reaches the slot (specs/086)
     midiLanes_[0].scene = scene;
     midiLanes_[0].growing = recordSessionGrowing_;
+    midiLanes_[0].lenBeats = recordSessionLen_;
+    midiLanes_[0].ownLen = recordSessionOwnLen_;
     midiLanes_[0].player = t->sessionPlayer;
     publishSessionLaneSlots();
     takeAttempt_.sessionSlots.assign(1, {trackId, scene});
@@ -584,6 +603,26 @@ void Engine::finalizeSessionRecord(bool relaunch) {
             return;
         }
     }
+    // Stopped while still waiting for its launch boundary (#503): no slot of the MIDI take has
+    // started recording, so drop the take — its clip and its history steps, the slots back as
+    // they were (a slot's next-take length included) — and the launches it queued.
+    if (!recordSessionAudio_ && recordSessionScene_ >= 0 && takeAttempt_.active && takeAttempt_.session) {
+        std::vector<std::pair<int32_t, int32_t>> queued; // (track, scene) of each slot's launch
+        bool started = false;
+        for (const auto& l : midiLanes_) {
+            if (l.trackId < 0 || l.scene < 0 || !l.player) continue;
+            if (l.player->playing.load(std::memory_order_relaxed) == l.scene) started = true;
+            queued.emplace_back(l.trackId, l.scene);
+        }
+        if (!started && !queued.empty()) {
+            discardTake();
+            // Withdraw only the take's own launches (#480): a stop queued since stays, and what
+            // the track plays carries on.
+            for (auto [tid, sc] : queued) cancelSlotLaunch(tid, sc);
+            sessionCountInFresh_ = false;
+            return;
+        }
+    }
     // Audio take: materialise into the slot (reads recordSession* + clears the audio flags).
     if (recordSessionAudio_) {
         std::vector<std::pair<int32_t, int32_t>> slots; // every slot the take records (specs/086)
@@ -602,6 +641,7 @@ void Engine::finalizeSessionRecord(bool relaunch) {
         for (auto& l : midiLanes_)
             if (l.scene >= 0) cutGrowingLane(l);
     recordSessionGrowing_ = false;
+    recordSessionLen_ = 0.0;
     recording_.store(false, std::memory_order_relaxed);
     recordSlotPlayer_.store(nullptr, std::memory_order_release);
     recordSessionScene_ = -1;
@@ -623,6 +663,7 @@ void Engine::cancelSessionCountIn() {
     recordSessionTrackId_ = 0;
     recordSessionAudio_ = false;
     recordSessionGrowing_ = false;
+    recordSessionLen_ = 0.0;
     closeTakeAttempt();
     arrangementActive_.store(false, std::memory_order_relaxed);
     uiCountIn_.store(0.0, std::memory_order_relaxed);
@@ -693,7 +734,7 @@ bool Engine::arrangementClipToSession(int32_t trackId, int32_t clipIndex, int32_
     auto nt = cloneTrack(*old);
     if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
         nt->sessionSlots.resize(authoring_->sceneCount);
-    nt->sessionSlots[scene] = slotFromMidiClip(old->midiClips[clipIndex]);
+    replaceSlotContent(nt->sessionSlots[scene], slotFromMidiClip(old->midiClips[clipIndex]));
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -707,7 +748,7 @@ bool Engine::arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, i
     auto nt = cloneTrack(*old);
     if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
         nt->sessionSlots.resize(authoring_->sceneCount);
-    nt->sessionSlots[scene] = slotFromAudioClip(old->clips[clipIndex]);
+    replaceSlotContent(nt->sessionSlots[scene], slotFromAudioClip(old->clips[clipIndex]));
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -973,6 +1014,66 @@ bool Engine::setSessionSlotStopButton(int32_t trackId, int32_t scene, bool on) {
     return true;
 }
 
+// --- Next-take length per slot (#503, specs/106) -----------------------------------------------
+// The value belongs to the slot (track × scene) and lives in the graph, so Undo/Redo, scene
+// edits, a cancelled count-in and a retried take carry it like any slot property. It is kept,
+// hidden, while the slot holds a clip: a deleted clip or an undone take shows it again.
+
+bool Engine::sessionSlotTakeLength(int32_t trackId, int32_t scene, NextTakeLength& out) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || scene < 0 || scene >= authoring_->sceneCount) return false;
+    const SessionSlot* s = slotAt(*t, scene);
+    out = s ? s->nextTake : NextTakeLength{};
+    return true;
+}
+
+bool Engine::setSessionSlotTakeLength(int32_t trackId, int32_t scene, const NextTakeLength& v) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || scene < 0 || scene >= authoring_->sceneCount) return false;
+    NextTakeLength n{v.mode, 0, 0};
+    switch (v.mode) {
+    case SlotTakeMode::Global:
+    case SlotTakeMode::Open: break;
+    case SlotTakeMode::Fixed:
+        // 1 beat .. 64 bars. Beats are checked against the largest meter, not the current one:
+        // a meter change reaches the transport only at the next render, and a project loads its
+        // slots before that (the UI offers beats of the meter it shows).
+        if (v.bars < 0 || v.bars > kMaxTakeBars || v.beats < 0 || v.beats >= kMaxMeterBeats) return false;
+        if ((v.bars == 0 && v.beats == 0) || (v.bars == kMaxTakeBars && v.beats > 0)) return false;
+        n.bars = v.bars;
+        n.beats = v.beats;
+        break;
+    default: return false;
+    }
+    NextTakeLength cur;
+    sessionSlotTakeLength(trackId, scene, cur);
+    if (cur == n) return true;
+    auto nt = cloneTrack(*old);
+    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
+        nt->sessionSlots.resize(authoring_->sceneCount);
+    nt->sessionSlots[scene].nextTake = n;
+    republishWithTrack(trackId, nt); // one undo step, like the Stop button
+    return true;
+}
+
+double Engine::resolveTakeBeats(const SessionSlot* s) const {
+    if (!s || s->nextTake.mode == SlotTakeMode::Global) return sessionRecordLen_;
+    if (s->nextTake.mode == SlotTakeMode::Open) return 0.0;
+    // Bars of the meter in effect now — a meter change since preparing keeps the bar count.
+    return static_cast<double>(s->nextTake.bars) * std::max(1, transport_.beatsPerBar()) + s->nextTake.beats;
+}
+
+double Engine::sessionSlotTakeBeats(int32_t trackId, int32_t scene) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || scene < 0 || scene >= authoring_->sceneCount) return 0.0;
+    return resolveTakeBeats(slotAt(*t, scene));
+}
+
+void Engine::replaceSlotContent(SessionSlot& dst, SessionSlot src) {
+    src.nextTake = dst.nextTake;
+    dst = std::move(src);
+}
+
 bool Engine::copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrack, int32_t dstScene) {
     auto src = findTrackAuthoring(srcTrack);
     auto dst = findTrackAuthoring(dstTrack);
@@ -984,7 +1085,7 @@ bool Engine::copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrac
     auto nt = cloneTrack(*dst);
     if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
         nt->sessionSlots.resize(authoring_->sceneCount);
-    nt->sessionSlots[dstScene] = copy;
+    replaceSlotContent(nt->sessionSlots[dstScene], copy); // the destination keeps its next-take length (#503)
     republishWithTrack(dstTrack, nt);
     return true;
 }
@@ -1319,19 +1420,30 @@ void Engine::serviceSessionFollow() {
     // A scene launch still waiting for its boundary holds back its tempo and follow (#480).
     const bool waiting = sceneLaunchWaiting();
     if (!waiting && sceneTempoPending_ && transport_.uiPositionBeats() + 1e-6 >= sceneTempoAt_) applySceneTempo();
-    if (sessionRecordLen_ > 0.0) {
-        // Several MIDI slots (specs/086): each stops when its own length is recorded.
-        if (recording_.load(std::memory_order_relaxed) && !recordSessionAudio_ && openMidiLaneCount() > 1) {
-            std::vector<int32_t> done;
+    // Fixed-length capture: each slot of the take (several with specs/086) stops when its own
+    // length — resolved from its slot when it started (#503) — is recorded. Landing the last one
+    // ends the take (stopSessionRecordSlot), so one slot never cuts another short.
+    double el = 0.0;
+    if (sessionRecordTarget(nullptr, nullptr, &el)) {
+        std::vector<int32_t> done;
+        if (!recordSessionAudio_) {
             for (const auto& l : midiLanes_)
-                if (l.trackId >= 0 && l.scene >= 0 && l.player &&
+                if (l.trackId >= 0 && l.scene >= 0 && l.lenBeats > 0.0 && l.player &&
                     l.player->playing.load(std::memory_order_relaxed) == l.scene &&
-                    l.player->playedBeats.load(std::memory_order_relaxed) >= sessionRecordLen_ - 1e-6)
+                    l.player->playedBeats.load(std::memory_order_relaxed) >= l.lenBeats - 1e-6)
                     done.push_back(l.trackId);
-            for (int32_t tid : done) stopSessionRecordSlot(tid);
+        } else {
+            const double now = transport_.uiPositionBeats();
+            for (const auto& l : captureLanes_) {
+                if (l.scene < 0 || l.lenBeats <= 0.0) continue;
+                // A slot that joined later counts from its own start; the others from the take's.
+                const double lane = std::isnan(l.startBeat) ? el : now - l.startBeat;
+                if (lane >= l.lenBeats - 1e-6) done.push_back(l.trackId);
+            }
         }
-        double el = 0.0;
-        if (sessionRecordTarget(nullptr, nullptr, &el) && el >= sessionRecordLen_ - 1e-6) stopSessionRecord();
+        takeLengthReached_ = true; // they land at their length: nothing to cut (#503)
+        for (int32_t tid : done) stopSessionRecordSlot(tid);
+        takeLengthReached_ = false;
     }
     if (!transport_.uiIsPlaying()) {
         sceneFollowScene_ = -1;

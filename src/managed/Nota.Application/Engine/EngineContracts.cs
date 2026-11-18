@@ -313,6 +313,24 @@ public struct NotaSessionClipProps
     public int FollowBypass;
 }
 
+/// <summary>How long a fresh take into a Session slot runs (#503): Global follows the session
+/// record length, Open records until stopped, Fixed records bars + beats of the meter.</summary>
+public enum SlotTakeMode { Global = 0, Open = 1, Fixed = 2 }
+
+/// <summary>A Session slot's next-take length (#503). Matches native NotaSlotTakeLength.
+/// Bars 0..64 and Beats 0..beats-per-bar-1 apply to Fixed only (1 beat .. 64 bars).</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSlotTakeLength
+{
+    public int Mode;
+    public int Bars;
+    public int Beats;
+
+    public NotaSlotTakeLength(SlotTakeMode mode, int bars = 0, int beats = 0) { Mode = (int)mode; Bars = bars; Beats = beats; }
+    public readonly SlotTakeMode TakeMode => (SlotTakeMode)Mode;
+    public const int MaxBars = 64;
+}
+
 /// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a
 /// track-palette index (-1 = neutral); Tempo / SigNum+SigDen &gt; 0 apply on launch.</summary>
 [StructLayout(LayoutKind.Sequential)]

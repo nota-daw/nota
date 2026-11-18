@@ -238,7 +238,9 @@ own window — see
   tempo / signature and scene follow, inserted, duplicated, captured and reordered without
   stopping playback; a queued clip or scene cancelled before its launch point (**⌥-click** its
   launch button, or **Cancel launch**) — nothing of it starts, its tempo change and follow are
-  dropped, and what plays carries on unbroken; Session rec with fixed length; group columns that fold; returns +
+  dropped, and what plays carries on unbroken; Session rec with fixed length, and a **Take
+  length** per empty slot (Global — follow Fixed —, Open, or 1 beat … 64 bars of its own, shown
+  on the grid) so slots record different lengths, each stopping on its own; group columns that fold; returns +
   master; I/O · Sends · Mixer sections; removable stop buttons; per-track Back to
   Arrangement; and moving material between Session and Arrangement — the clipboard works
   both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
@@ -1788,7 +1790,8 @@ Coverage:
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
   release a slot, launch and stop a scene, cancel a queued slot or scene launch
   (`cancel_slot_launch`, `cancel_scene_launch`), launch quantization, the follow switch, slot and
-  scene recording with a fixed length, stopping one recording slot, back to arrangement, slot ↔ arrangement).
+  scene recording with a fixed length, a slot's own take length (`set_session_slot_take_length`),
+  stopping one recording slot, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
   8 macros and their mappings (range, curve), rack volume, glide and mono, a chain's MIDI

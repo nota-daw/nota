@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Session: a take length per empty slot** (#503, specs/106). An empty slot's inspector has a
+  **Take length**: **Global** (follow **Fixed** in the toolbar, as before — every slot starts
+  here), **Open** (record until stopped, whatever Fixed says), or a length of its own from
+  1 beat to 64 bars (1, 2, 3, 4, 8, 16 bars, or any bars + beats); the slot's right-click menu
+  has the same picks under **Take length**. The next take recorded into that slot starts on
+  the launch boundary and stops after that length — so slot A can be ready for 3 bars and
+  slot B for 8 without touching Fixed, the tempo or any clip. Slots recording together each
+  stop on their own length; stopped by hand before it, such a take is cut to whole bars of
+  what it recorded. The grid shows the length on the empty slot. The value belongs to the
+  slot: a cancelled count-in or a retried take leaves it, it
+  stays (hidden) under the clip a take leaves and shows again when the slot is emptied or the
+  take undone, changing it is one undo step, and it is saved with the project. MCP:
+  `set_session_slot_take_length`, and `get_session` lists prepared slots.
 - **Session: cancel a queued launch before it starts** (#480, specs/104). Queued the wrong clip
   or scene for the next bar? **⌥-click** (Alt-click) its blinking launch button, or right-click
   it and choose **Cancel launch**, before the launch point. The clip or scene never starts, and
@@ -64,6 +77,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - **Orientation**: ⋯ → **Session grid** chooses **Scenes down** (a scene per row, as in
     Nota, the default) or **Scenes across** (a scene per column, a track per row with its
     Stop beside its name). Each phone keeps its own choice.
+
+### Fixed
+- **Stopping a Session take before it starts leaves the slot empty** (#503). Stopping a fresh
+  MIDI take while it still waited for its launch boundary used to leave an empty clip in the
+  slot (as long as **Fixed**), which then played. Now nothing was recorded, so nothing stays:
+  the slot is empty, no undo step is left, and the clip the track was playing plays on.
 
 ## [0.60.3] — 2026-11-18
 

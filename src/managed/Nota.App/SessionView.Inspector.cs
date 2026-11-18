@@ -445,6 +445,7 @@ public sealed partial class SessionView
             Text = stop ? Loc.F("session.inspector.launching_this_scene_stops", c.Name) : Loc.F("session.inspector.launching_this_scene_keeps_playing", c.Name),
             FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
+        if (!rec) TakeLengthRows(rows, c, scene);
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
         if (c.IsInstrument) actions.Add((Loc.T("session.insert_midi_clip"), "", () => InsertMidiClip(c.TrackId, scene)));
@@ -452,6 +453,95 @@ public sealed partial class SessionView
                         : (Loc.T("session.record_here"), "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
         if (CanPaste) actions.Add((Loc.T("common.paste"), K("edit.paste"), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
+    }
+
+    // The slot's next-take length (#503): Global follows Fixed in the toolbar, Open records until
+    // stopped, or bars + beats of its own. It applies to the next take recorded into the slot only.
+    private static readonly int[] TakeLengthBars = { 1, 2, 3, 4, 8, 16 };
+
+    // The quick picks (Global with what it resolves to now, Open, whole bars) and the current label.
+    private (List<(NotaSlotTakeLength Value, string Label)> Items, string Current) TakeLengthChoices(NotaSlotTakeLength take)
+    {
+        double global = _engine.SessionRecordLength;
+        string globalText = Loc.F("session.take_length.global_value",
+            global > 0 ? FormatLength(global) : Loc.T("session.take_length.open"));
+        var items = new List<(NotaSlotTakeLength, string)>
+        {
+            (new NotaSlotTakeLength(SlotTakeMode.Global), globalText),
+            (new NotaSlotTakeLength(SlotTakeMode.Open), Loc.T("session.take_length.open")),
+        };
+        foreach (int b in TakeLengthBars) items.Add((new NotaSlotTakeLength(SlotTakeMode.Fixed, b), Loc.Plural("session.bars", b)));
+        return (items, take.TakeMode == SlotTakeMode.Global ? globalText : TakeLengthText(take));
+    }
+
+    private static bool SameTake(NotaSlotTakeLength a, NotaSlotTakeLength b) => a.Mode == b.Mode && a.Bars == b.Bars && a.Beats == b.Beats;
+
+    private void SetTakeLength(Column c, int scene, NotaSlotTakeLength v)
+    {
+        _engine.SetSessionSlotTakeLength(c.TrackId, scene, v);
+        RefreshSlot(c.TrackId, scene);
+    }
+
+    // "Take length ▸" in an empty slot's right-click menu: the same quick picks, right-click + pick.
+    private MenuItem? TakeLengthSubmenu(Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take)) return null;
+        var (items, current) = TakeLengthChoices(take);
+        var sub = MenuKit.ValueItem(Loc.T("session.inspector.take_length"), GlyphKind.Loop, current);
+        foreach (var (value, label) in items)
+        {
+            var v = value;
+            var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = SameTake(v, take) };
+            mi.Click += (_, _) => SetTakeLength(c, scene, v);
+            sub.Items.Add(mi);
+        }
+        return sub;
+    }
+
+    private void TakeLengthRows(StackPanel rows, Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take)) return;
+        var (items, label) = TakeLengthChoices(take);
+        rows.Children.Add(Row(Loc.T("session.inspector.take_length"), Chip(label, take.TakeMode != SlotTakeMode.Global,
+            a => Pick(a, items, v => SameTake(v, take), v => SetTakeLength(c, scene, v)))));
+
+        var hint = new TextBlock
+        {
+            Text = take.TakeMode switch
+            {
+                SlotTakeMode.Open => Loc.T("session.inspector.take_length_open_hint"),
+                SlotTakeMode.Fixed => Loc.T("session.inspector.take_length_hint"),
+                _ => Loc.T("session.inspector.take_length_global_hint"),
+            },
+            FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+        };
+        if (take.TakeMode == SlotTakeMode.Fixed)
+        {
+            // Bars and beats of the meter shown; the engine refuses 0 + 0 and anything past 64 bars,
+            // which the hint then says in the warning ink.
+            int bpb = Math.Max(1, Meter.BeatsPerBar);
+            int bars = take.Bars, beats = Math.Min(take.Beats, bpb - 1);
+            DragNumber Num(int value, int max, Action<int> set)
+            {
+                var dn = new DragNumber(value, 0, max, 0.25, "0", 10) { Width = 40, Height = 22 };
+                OneUndoStep(dn);
+                dn.ValueChanged += v => set((int)Math.Round(v));
+                return dn;
+            }
+            void Apply()
+            {
+                bool ok = _engine.SetSessionSlotTakeLength(c.TrackId, scene, new NotaSlotTakeLength(SlotTakeMode.Fixed, bars, beats));
+                hint.Foreground = ok ? NotaPalette.TextTertiary : NotaPalette.Warning;
+                if (ok) RefreshSlot(c.TrackId, scene, inspector: false);
+            }
+            var barsDn = Num(bars, NotaSlotTakeLength.MaxBars, v => { bars = v; Apply(); });
+            var beatsDn = Num(beats, bpb - 1, v => { beats = v; Apply(); });
+            Control Boxed(Control child) => new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = child };
+            var pair = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Boxed(barsDn), Mono(".", 10, NotaPalette.TextTertiary), Boxed(beatsDn) } };
+            ((TextBlock)pair.Children[1]).VerticalAlignment = VerticalAlignment.Center;
+            rows.Children.Add(Row(Loc.T("session.inspector.bars_beats"), pair));
+        }
+        rows.Children.Add(hint);
     }
 
     // A Return / Master column (#314): no slots to launch; its devices are in the panel below.

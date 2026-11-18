@@ -175,6 +175,9 @@ public sealed class TrackDto
     public List<SessionSlotDto> SessionSlots { get; set; } = new();
     /// <summary>Empty slots whose stop button was removed (scene launch leaves the track playing).</summary>
     public List<int>? SessionNoStop { get; set; }
+    /// <summary>Slots with a next-take length of their own (#503); absent = every slot Global.
+    /// Written for filled slots too: the value stays with the slot under a clip.</summary>
+    public List<SlotTakeLengthDto>? SessionTakeLengths { get; set; }
     public List<AutomationLaneDto> Automation { get; set; } = new();   // M9-A4 (format v2)
     public List<ModulatorDto> Modulators { get; set; } = new();        // CV modulation sources (Phase 3)
     public List<CvLinkDto> CvLinks { get; set; } = new();              // CV modulation edges (Phase 3)
@@ -593,6 +596,15 @@ public sealed class SceneDto
     public double FollowBeats { get; set; } = 32.0;
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>A Session slot's own next-take length (#503): Mode 1 = Open, 2 = Fixed (Bars + Beats).</summary>
+public sealed class SlotTakeLengthDto
+{
+    public int Scene { get; set; }
+    public int Mode { get; set; }
+    public int Bars { get; set; }
+    public int Beats { get; set; }
 }
 
 public sealed class SessionSlotDto
