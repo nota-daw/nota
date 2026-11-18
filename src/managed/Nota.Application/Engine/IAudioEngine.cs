@@ -130,6 +130,18 @@ public interface IAudioEngine : IDisposable
     void LaunchScene(int scene);
     void StopScene(int scene);
     void StopAllSession();
+    /// <summary>Cancel a slot's queued launch before its boundary (#480): the track carries on as if it
+    /// had never been asked. False when nothing of it is queued (it started, or never was).</summary>
+    bool CancelSlotLaunch(int trackId, int scene);
+    /// <summary>Cancel a queued scene launch (#480): every queued launch in that row and every stop the
+    /// scene launch queued are withdrawn, with its follow action and tempo change. False if nothing waits.</summary>
+    bool CancelSceneLaunch(int scene);
+    /// <summary>Whether a track's launch of a slot waits for its launch point — also a queued restart
+    /// of the slot already playing (state 3). A group id: any track below it (#480).</summary>
+    bool SessionSlotLaunchQueued(int trackId, int scene);
+    /// <summary>Whether a row has a launch waiting: a queued launch of one of its slots, or its scene
+    /// launch while nothing of it has started — a row that queued only stops counts too (#480).</summary>
+    bool SessionSceneQueued(int scene);
     /// <summary>Stop every session clip and hand all tracks back to the Arrangement timeline.</summary>
     void BackToArrangement();
     /// <summary>True when the Arrangement is playing; false in a session-only jam.</summary>

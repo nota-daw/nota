@@ -5,15 +5,26 @@
 
 namespace nota {
 
-void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float g) {
+void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float g, int32_t gen) {
     pendingQuant.store(quant, std::memory_order_relaxed);
     pendingLegato.store(legato, std::memory_order_relaxed);
     pendingGain.store(g, std::memory_order_relaxed);
-    pending.store(slot, std::memory_order_relaxed);
+    request.store(fresh(slot, gen));
+}
+
+SessionPlayer::GenView SessionPlayer::viewGen(int32_t gen) const {
+    const uint32_t s1 = applySeq.load();
+    const uint64_t r = request.load();
+    const bool applied = appliedGen.load() == gen;
+    const uint32_t s2 = applySeq.load();
+    const bool busy = (s1 & 1u) != 0 || s1 != s2;
+    const int32_t p = slotOf(r);
+    return {applied, !applied && genOf(r) == gen && p != kNone && p != kStopNow, busy};
 }
 
 bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double globalQuant, bool loopSeam) {
-    const int32_t p = pending.load(std::memory_order_relaxed);
+    uint64_t r = request.load(std::memory_order_relaxed);
+    const int32_t p = slotOf(r);
     if (p == kNone) return false;
 
     const double pq = pendingQuant.load(std::memory_order_relaxed);
@@ -27,9 +38,13 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     }
     if (!boundary) return false;
 
-    // A launch may have replaced the request between our two loads; only consume it if not.
-    int32_t expect = p;
-    if (!pending.compare_exchange_strong(expect, kNone, std::memory_order_relaxed)) return false;
+    // A launch may have replaced the request since we read it; only consume it if not. The
+    // generation is the consumed request's own, recorded inside the seqlock (viewGen).
+    applySeq.fetch_add(1);
+    const bool consumed = request.compare_exchange_strong(r, kIdle);
+    if (consumed && genOf(r) != 0) appliedGen.store(genOf(r)); // only scene requests: see appliedGen
+    applySeq.fetch_add(1);
+    if (!consumed) return false;
     // The caller flushes instrument voices when a launch/stop applies. Discard releases from
     // the outgoing slot so they cannot cut a newly launched slot's switch on the same key.
     articulationReleases.count = 0;

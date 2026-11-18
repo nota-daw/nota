@@ -23,6 +23,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Session: cancel a queued launch before it starts** (#480, specs/104). Queued the wrong clip
+  or scene for the next bar? **⌥-click** (Alt-click) its blinking launch button, or right-click
+  it and choose **Cancel launch**, before the launch point. The clip or scene never starts, and
+  everything playing carries on at the same place in its loop — the transport keeps running.
+  Cancelling a scene takes back all of it: its clips don't start, tracks it would have stopped
+  keep playing, its tempo / time-signature change doesn't apply and its follow action doesn't
+  fire; a scene follow that was running before it carries on. ⌥-click a group's slot to cancel
+  its tracks' queued launches in that scene. In Nota Remote, press and hold a queued clip, group
+  slot or scene to cancel it. Clicking a queued clip or scene again still leaves it queued, Stop
+  still stops the track at the launch point, and Stop All now also drops a queued scene's tempo
+  change. AI assistants get `cancel_slot_launch` and `cancel_scene_launch`.
 - **Session: bypass one clip's follow actions** (#499, specs/103). The switch in the clip
   inspector's **Follow action** head — or **Bypass follow actions** in the clip's right-click
   menu — holds that clip: it keeps looping and can still be launched by hand, while every other

@@ -521,10 +521,18 @@ class Engine {
     // --- Session view (M5) ---
     void setLaunchQuant(double beats);
     void launchSlot(int32_t trackId, int32_t scene); // quantized; empty slot = stop track
-    void launchScene(int32_t scene);                 // launch every track's slot in this row (empty = stop that track)
+    void launchScene(int32_t scene, bool fromFollow = false); // launch every track's slot in this row (empty = stop that track)
     void stopSlot(int32_t trackId);
     void stopScene(int32_t scene); // stop tracks whose playing/queued slot is this row
     void stopAllSession();
+    // Withdraw a queued launch before its boundary (#480): the track (or the row) carries on as if
+    // it had never been asked. False when nothing of it is queued — it started or never was.
+    bool cancelSlotLaunch(int32_t trackId, int32_t scene); // trackId may be a group
+    bool cancelSceneLaunch(int32_t scene);
+    // Whether a launch waits (#480): a track's launch of `scene` (also a queued restart), or a row
+    // — a queued slot launch in it, or its scene launch with nothing of it started yet.
+    bool sessionSlotLaunchQueued(int32_t trackId, int32_t scene) const;
+    bool sessionSceneQueued(int32_t scene) const;
     void recordSessionSlot(int32_t trackId, int32_t scene); // M5-4: launch + overdub-record MIDI into the slot
     // Stop one recording slot (specs/086): with other slots still recording only its lane lands
     // and loops back; the last one ends the take as stopSessionRecord() does.
@@ -1571,7 +1579,12 @@ class Engine {
     void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, double elapsedStartSamples,
         bool playing, double spb);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames); // live input monitoring
-    void drainCommands();
+    void drainCommands(Graph* g);
+    // #480: withdraw the queued Session launches cancels aimed at (CancelSessionLaunch), on the
+    // audio thread while it drains commands — before any track reaches its boundary.
+    void applyLaunchCancel(Graph* g, const Command& c);
+    // Is `t` inside group `groupId` (at any depth)? Walks the parent ids; no allocation.
+    static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
     void drainLiveMidi(double blockStartBeat, bool playing);
     void renderInstrumentRaw(
         Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing);
@@ -2089,12 +2102,23 @@ class Engine {
     // Session P0 helpers (message thread).
     int32_t insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying);
     void remapPlayers(const std::function<int32_t(int32_t)>& map); // shift players after a row insert/remove
-    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene);
+    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene, int32_t gen = 0);
     void serviceSessionFollow(); // poll(): scene follow + fixed-length capture
     std::atomic<bool> sessionFollow_{true};
     double sessionRecordLen_ = 0.0; // fixed session record length, beats (0 = off)
     int32_t sceneFollowScene_ = -1; // last launched scene (for scene follow)
     double sceneFollowStart_ = 0.0; // beat it started at (quantized)
+    // #480: a scene launch waits for its boundary until one of its requests applies (confirmed:
+    // its follow and tempo go ahead) or none is left queued (cancelled or replaced: the tempo change
+    // is dropped and the follow that ran before it comes back). Each launch has a generation that
+    // its tracks' requests carry (SessionPlayer::pendingGen / appliedGen).
+    int32_t sceneLaunchGen_ = 0;
+    int32_t waitSceneGen_ = 0, waitScene_ = -1; // the waiting launch (gen 0 = none)
+    int32_t prevFollowScene_ = -1;              // the scene follow running before it
+    double prevFollowStart_ = 0.0;
+    bool waitFromFollow_ = false;               // a scene follow action made the waiting launch
+    template <typename Match> bool aimLaunchCancel(bool wholeScene, Match match);
+    bool sceneLaunchWaiting(); // resolve the waiting launch (poll, and before a new one); true while it waits
     // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
     bool sceneTempoPending_ = false;
     double sceneTempo_ = 0.0, sceneTempoAt_ = 0.0;

@@ -1005,6 +1005,14 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Cancelling a queued Session launch alone (fast iteration): `--cancel-launch`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--cancel-launch")
+{
+    Console.WriteLine("-- cancel queued launch --");
+    foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CANCEL LAUNCH PASSED" : $"CANCEL LAUNCH FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MIDI In switched while a routed note is held alone (fast iteration): `--midi-source`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--midi-source")
 {
@@ -15115,6 +15123,9 @@ Console.WriteLine("-- MCP tools --");
         "MCP stop button + follow switch show in get_session");
     Check(mcpSession.MoveScene(4, 0).Result && mcpSession.DeleteScene(1).Result, "MCP move_scene + delete_scene");
     mcpSession.SetSessionFollow(true).Wait();
+    // #480: nothing queued → the cancel tools say so (the engine behaviour is CancelLaunchTests).
+    Check(!mcpSession.CancelSlotLaunch(mcpT, 0).Result && !mcpSession.CancelSceneLaunch(0).Result,
+        "MCP cancel_slot_launch / cancel_scene_launch: false with nothing queued");
 
     // Rack: build an Instrument Rack, add a chain, drive a macro + trigger note.
     int mcpRackT = mcpInstr.AddInstrumentTrack(3).Result;   // 3 = Instrument Rack
@@ -16112,6 +16123,7 @@ foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- MIDI In switch --");
 foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
+foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
 Console.WriteLine("-- cue output --");
 foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");

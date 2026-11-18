@@ -61,6 +61,7 @@ public static class ShortcutLayout
                 F("← → ↑ ↓", Loc.T("preferences.move_the_selection_between_slots")),
                 F(Loc.T("preferences.drag_clip"), Loc.T("preferences.move_it_to_another_slot")),
                 F(Loc.T("preferences.drag_scene"), Loc.T("preferences.reorder_scenes")),
+                F(Loc.T("preferences.alt_click_a_queued_launch"), Loc.T("preferences.cancel_the_launch_before_it")),   // #480
                 F(Loc.T("preferences.double_click_slot"), Loc.T("preferences.edit_the_clip_an_empty")),
                 F(Loc.T("preferences.double_click_header"), Loc.T("preferences.rename_the_track")),
                 F(Loc.T("preferences.right_click_header_or_grid"), Loc.T("preferences.add_an_instrument_audio_or")),

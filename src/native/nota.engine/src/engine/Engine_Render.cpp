@@ -1095,7 +1095,41 @@ void Engine::launchCountInSlot() {
         if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire)) sp->requestLaunch(sc, 0.0);
 }
 
-void Engine::drainCommands() {
+void Engine::applyLaunchCancel(Graph* g, const Command& c) {
+    if (!g) return;
+    const uint64_t target = static_cast<uint64_t>(static_cast<uint32_t>(c.i0)) |
+                            (static_cast<uint64_t>(static_cast<uint32_t>(c.i1)) << 32);
+    // A whole-scene cancel spares a scene launch that has started on any track (clips may have their
+    // own quanta), so a scene never ends up half launched; the whole batch is drained before any
+    // track applies its request, so every target sees the same answer. A slot cancel (d1 = 0) is the
+    // performer's choice for that slot and withdraws it either way.
+    if (const int32_t gen = SessionPlayer::genOf(target); gen > 0 && c.d1 != 0.0)
+        for (auto& t : g->tracks)
+            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == gen) return;
+    const int32_t trackId = static_cast<int32_t>(c.d0);
+    for (auto& t : g->tracks)
+        if (t->id() == trackId) {
+            if (t->sessionPlayer) t->sessionPlayer->withdraw(target);
+            return;
+        }
+}
+
+bool Engine::isUnderGroup(const Graph& g, const Track& t, int32_t groupId) {
+    if (groupId < 0) return false;
+    for (int32_t a = t.groupId(), hops = 0; a >= 0 && hops < 64; ++hops) {
+        if (a == groupId) return true;
+        int32_t parent = -1;
+        for (auto& o : g.tracks)
+            if (o->id() == a) {
+                parent = o->groupId();
+                break;
+            }
+        a = parent;
+    }
+    return false;
+}
+
+void Engine::drainCommands(Graph* g) {
     Command c;
     while (commands_.pop(c)) {
         switch (c.type) {
@@ -1143,6 +1177,7 @@ void Engine::drainCommands() {
         case CommandType::TrackNotesOff:
             if (notesOffCount_ < 8) notesOffTracks_[notesOffCount_++] = c.i0;
             break;
+        case CommandType::CancelSessionLaunch: applyLaunchCancel(g, c); break;
         case CommandType::Seek:
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
@@ -1249,7 +1284,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     }
     // A retried Session MIDI take begins when its slot has relaunched: until then what is
     // played carries the old epoch and stays out (specs/078).
-    if (rtWaitScene_ >= 0 && slot && slot->pending.load(std::memory_order_relaxed) != rtWaitScene_ &&
+    if (rtWaitScene_ >= 0 && slot && slot->pendingSlot() != rtWaitScene_ &&
         slot->playing.load(std::memory_order_relaxed) == rtWaitScene_) {
         rtTakeEpoch_ = rtPendingEpoch_;
         rtTakeRestart_ = true;
@@ -2485,7 +2520,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     const bool tempoChanged = transport_.attachTempoMap(g ? g->tempoMap.get() : nullptr);
     struct TempoScope { Transport& t; ~TempoScope() { t.detachTempoMap(); } } tempoScope{transport_};
     if (tempoChanged && transport_.isPlaying()) seekedThisBlock_ = seekedWhileRolling_ = true;
-    drainCommands();
+    drainCommands(g);
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
     if (cue) std::fill(cue, cue + static_cast<size_t>(numFrames) * 2, 0.0f);
 

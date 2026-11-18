@@ -467,6 +467,29 @@ internal static class RemoteTests
         Send(new { t = "stopSlot", id = grp });
         WaitFor(() => !Live(m1) && !Live(m2), 3000);
         yield return (!Live(m1) && !Live(m2), "a group's Stop stops each of its tracks");
+
+        // Holding a queued slot or scene cancels its launch (#480): launched one beat into a
+        // 4-beat quantum, the launches wait; the phone's cancel withdraws them before the bar.
+        double quant0 = e.LaunchQuant;
+        e.SetLaunchQuant(4); e.Seek(1);
+        var tiny = new float[64 * 2];
+        bool Queued(int id) => e.SessionSlotState(id, 0) == 2;
+        bool Rendered(Func<bool> done) { e.RenderOffline(tiny, 64); return done(); }
+        Send(new { t = "launch", id = grp, i = 0 });
+        WaitFor(() => Queued(m1) && Queued(m2));
+        Send(new { t = "cancel", id = grp, i = 0 });
+        WaitFor(() => Rendered(() => !Live(m1) && !Live(m2)));
+        yield return (!Live(m1) && !Live(m2), $"cancel on a queued group slot withdraws each track's launch ({e.SessionSlotState(m1, 0)}, {e.SessionSlotState(m2, 0)})");
+        Send(new { t = "scene", i = 0 });
+        WaitFor(() => Queued(m1) && Queued(m2));
+        // The Session message names what waits: the row (q) and each track's waiting slot (w).
+        var qses = Wait("ses", 3000, m => m.TryGetProperty("q", out var q) && q.EnumerateArray().Any(v => v.GetInt32() == 0)
+            && m.GetProperty("tr").EnumerateArray().Any(x => x.GetProperty("id").GetInt32() == m1 && x.TryGetProperty("w", out var wv) && wv.GetInt32() == 0));
+        yield return (qses is not null, "the Session message lists the queued row (q) and the track's waiting slot (w)");
+        Send(new { t = "cancelScene", i = 0 });
+        WaitFor(() => Rendered(() => !Live(m1) && !Live(m2)));
+        yield return (!Live(m1) && !Live(m2), "cancelScene withdraws a queued scene launch");
+        e.StopTransport(); e.Seek(0); e.SetLaunchQuant(quant0);
         e.RemoveTrack(m1); e.RemoveTrack(m2); e.RemoveTrack(grp);
 
         // A big grid at the real UI clock (33 ms): an edit that keeps a slot's state and length

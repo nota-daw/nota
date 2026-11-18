@@ -236,7 +236,9 @@ own window — see
   clip without changing its settings (and resumes on the next multiple of its time, never as a
   catch-up); scenes with names, colours,
   tempo / signature and scene follow, inserted, duplicated, captured and reordered without
-  stopping playback; Session rec with fixed length; group columns that fold; returns +
+  stopping playback; a queued clip or scene cancelled before its launch point (**⌥-click** its
+  launch button, or **Cancel launch**) — nothing of it starts, its tempo change and follow are
+  dropped, and what plays carries on unbroken; Session rec with fixed length; group columns that fold; returns +
   master; I/O · Sends · Mixer sections; removable stop buttons; per-track Back to
   Arrangement; and moving material between Session and Arrangement — the clipboard works
   both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
@@ -628,7 +630,8 @@ own window — see
   grid's edges while the clips scroll. Group tracks appear as on the desktop: tap the name to
   fold or unfold (shared with the Mixer); a group's slot reads "n of m" with a bar per
   track and launches them all, and its Stop stops them all. ⋯ → **Session grid** turns the
-  grid: **Scenes down** (as in Nota) or **Scenes across**, kept per phone.
+  grid: **Scenes down** (as in Nota) or **Scenes across**, kept per phone. Press and hold a
+  queued clip, group slot or scene to cancel its launch; a queued scene blinks like a queued clip.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
@@ -1783,7 +1786,8 @@ Coverage:
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch
   mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
-  release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
+  release a slot, launch and stop a scene, cancel a queued slot or scene launch
+  (`cancel_slot_launch`, `cancel_scene_launch`), launch quantization, the follow switch, slot and
   scene recording with a fixed length, stopping one recording slot, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,

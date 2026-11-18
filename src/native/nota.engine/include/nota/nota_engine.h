@@ -1414,6 +1414,23 @@ NOTA_API NotaResult nota_session_stop_slot(NotaEngine* engine, int32_t track_id)
 NOTA_API NotaResult nota_session_launch_scene(NotaEngine* engine, int32_t scene);
 NOTA_API NotaResult nota_session_stop_scene(NotaEngine* engine, int32_t scene);
 NOTA_API NotaResult nota_session_stop_all(NotaEngine* engine);
+/* Cancel a queued launch before its quantized start (#480). The track keeps doing what it does
+ * now (a playing clip plays on, uninterrupted); nothing is undoable or marks the project dirty.
+ * Slot: withdraws the track's queued launch of `scene`. Scene: withdraws every queued launch of a
+ * slot in that row and every stop the row's waiting scene launch queued, and drops that launch's
+ * follow action and tempo / signature change. Applied by the audio thread at the start of its next
+ * block, before any track's boundary — so a scene is withdrawn on all its tracks or none.
+ * Returns NOTA_OK if something was queued to cancel, NOTA_ERR_UNKNOWN if nothing was (the launch
+ * already started or was never queued: use the normal stop). */
+NOTA_API NotaResult nota_session_cancel_slot_launch(NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API NotaResult nota_session_cancel_scene_launch(NotaEngine* engine, int32_t scene);
+/* Whether a launch waits for its launch point (#480), i.e. there is something to cancel. Slot:
+ * the track's launch of `scene` — also a queued restart of the slot already playing, which
+ * nota_session_slot_state reports as playing (3). A group id: any track below it. Scene: a queued
+ * launch of one of the row's slots, or the row's scene launch while nothing of it has started (a
+ * row that queued only stops counts too). 1 = queued, 0 = not. */
+NOTA_API int32_t nota_session_slot_launch_queued(const NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API int32_t nota_session_scene_queued(const NotaEngine* engine, int32_t scene);
 /* Session vs Arrangement (M5): launching a session clip starts the clock but leaves the
  * Arrangement inactive (non-session tracks stay silent — a session-only jam). back_to_arrangement
  * stops every session clip and re-activates the timeline; arrangement_active returns 1 when the

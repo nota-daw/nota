@@ -485,6 +485,12 @@ public sealed partial class RemoteHub
         {
             w.WriteString("t", "ses");
             w.WriteNumber("n", scenes);
+            // #480: rows with a launch waiting (a row that queued only stops, or restarts of playing
+            // slots, shows no slot in state 2) — the phone's hold-to-cancel asks this, not the slots.
+            w.WriteStartArray("q");
+            for (int s = 0; s < scenes; s++)
+                if (_engine.SessionSceneQueued(s)) w.WriteNumberValue(s);
+            w.WriteEndArray();
             w.WriteStartArray("tr");
             foreach (var r in _tracks)
             {
@@ -503,6 +509,9 @@ public sealed partial class RemoteHub
                     w.WriteEndObject();
                     continue;
                 }
+                // #480: the slot whose launch waits, also a restart of the slot already playing.
+                for (int s = 0; s < scenes; s++)
+                    if (_engine.SessionSlotLaunchQueued(r.Id, s)) { w.WriteNumber("w", s); break; }
                 w.WriteStartArray("c");
                 for (int s = 0; s < scenes; s++)
                 {

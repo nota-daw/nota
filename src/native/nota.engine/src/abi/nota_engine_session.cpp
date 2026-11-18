@@ -61,6 +61,20 @@ NotaResult nota_session_stop_scene(NotaEngine* e, int32_t scene) {
     ENG(e)->stopScene(scene);
     return NOTA_OK;
 }
+NotaResult nota_session_cancel_slot_launch(NotaEngine* e, int32_t track_id, int32_t scene) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->cancelSlotLaunch(track_id, scene) ? NOTA_OK : NOTA_ERR_UNKNOWN;
+}
+NotaResult nota_session_cancel_scene_launch(NotaEngine* e, int32_t scene) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->cancelSceneLaunch(scene) ? NOTA_OK : NOTA_ERR_UNKNOWN;
+}
+int32_t nota_session_slot_launch_queued(const NotaEngine* e, int32_t track_id, int32_t scene) {
+    return (e && CENG(e)->sessionSlotLaunchQueued(track_id, scene)) ? 1 : 0;
+}
+int32_t nota_session_scene_queued(const NotaEngine* e, int32_t scene) {
+    return (e && CENG(e)->sessionSceneQueued(scene)) ? 1 : 0;
+}
 NotaResult nota_session_stop_all(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->stopAllSession();
