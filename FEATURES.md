@@ -622,7 +622,11 @@ own window — see
 - **Nota Remote Scenes shows clip contents**: each filled cell has the clip's name and
   length and a preview of what is in it — notes as a small piano roll, audio as a
   waveform — in the clip's colour, updated within a second of an edit and growing while a
-  take records.
+  take records. The scene launch buttons, track names, Stop and Stop All stay pinned at the
+  grid's edges while the clips scroll. Group tracks appear as on the desktop: tap the name to
+  fold or unfold (shared with the Mixer); a group's slot reads "n of m" with a bar per
+  track and launches them all, and its Stop stops them all. ⋯ → **Session grid** turns the
+  grid: **Scenes down** (as in Nota) or **Scenes across**, kept per phone.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that

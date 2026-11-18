@@ -32,6 +32,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   works the same after the project is saved and reopened. A layer that is still recording, or
   a loop whose first pass hasn't closed, shows the entry unavailable and says why instead of
   writing the mixed loop. The Export button still writes the whole loop as you hear it.
+- **Nota Remote: the Session grid keeps its controls in view, shows groups and turns** (#662,
+  specs/102).
+  - **Pinned controls**: the scene launch buttons, the track names, every track's Stop and
+    Stop All stay at the edges of the Scenes screen while the clips scroll under them, so a
+    scene launches or a track stops with one tap wherever the grid is scrolled.
+  - **Groups**: group tracks now appear in the grid, as on the desktop. Tap a group's name to
+    fold or unfold its tracks (the same choice as on the Mixer screen). A group's slot shows
+    how many of its tracks have a clip in that scene ("2 of 3"), with a bar per track. Tap the
+    slot to launch all those clips together, or the group's Stop to stop all its tracks.
+  - **Orientation**: ⋯ → **Session grid** chooses **Scenes down** (a scene per row, as in
+    Nota, the default) or **Scenes across** (a scene per column, a track per row with its
+    Stop beside its name). Each phone keeps its own choice.
 
 ## [0.60.2] — 2026-11-17
 
