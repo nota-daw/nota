@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Strata: export one layer on its own** (#482, specs/102). Right-click a layer in
+  Strata's layer list and choose **Export layer N as WAV…** to get just that pass — say, the
+  vocal overdub without the cello under it — for editing elsewhere. The file is the layer as
+  it was recorded: the input after Input gain, starting at the loop's top and exactly one loop
+  long, so it lines up with the loop. Speed, Reverse, Feedback, the layer's level and its mute
+  aren't applied, and the export leaves the loop untouched — no muting or soloing needed. It
+  works the same after the project is saved and reopened. A layer that is still recording, or
+  a loop whose first pass hasn't closed, shows the entry unavailable and says why instead of
+  writing the mixed loop. The Export button still writes the whole loop as you hear it.
 - **Nota Remote: the Session grid keeps its controls in view, shows groups and turns** (#662,
   specs/102).
   - **Pinned controls**: the scene launch buttons, the track names, every track's Stop and

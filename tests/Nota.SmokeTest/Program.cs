@@ -6056,6 +6056,112 @@ Console.WriteLine("-- Nota Strata --");
     Check(se.DeviceGetParam(st, sd, 0) > 60f, $"automation drives Strata Feedback ({se.DeviceGetParam(st, sd, 0):F1})");
 }
 
+// Strata layer export (#482, specs/102): one layer on its own, as recorded — after Input gain,
+// sample 0 at the loop's top, one cycle long, no Speed / Reverse / Feedback / level / mute, no
+// other layer — and the device is left exactly as it was.
+Console.WriteLine("-- Nota Strata layer export --");
+{
+    using var le = new NotaEngine();
+    le.SetBpm(120); le.SetTimeSignature(4, 4);
+    int lt = le.AddInstrumentTrack();
+    le.AddMidiClip(lt, 0.0, 16.0);
+    le.SetClipNotes(lt, 0, new[] { new NotaNote(48, 0.0, 3.5, 1.0f), new NotaNote(76, 4.6, 3.0, 1.0f) });   // a low pass, then a high one
+    int ld = le.AddBuiltinDevice(lt, 15);
+    le.DeviceSetParam(lt, ld, 3, 0f);   // Quantize Off: commands land on the next block's sl_first sample
+    const int Blk = 4096, Blocks = 24;
+    var sl_lb = new float[Blk * 2];
+    string sl_dir = Path.Combine(Path.GetTempPath(), $"nota-strata-layer-{Environment.ProcessId}");
+    Directory.CreateDirectory(sl_dir);
+
+    le.Seek(0); le.Play();
+    le.DeviceAction(lt, ld, 0, 0, 0); le.RenderOffline(sl_lb, Blk);                 // C_Record
+    var sl_first = le.DeviceGetState(lt, ld);
+    string sl_pFirst = Path.Combine(sl_dir, "first.wav");
+    Check(StrataLayerExport.WriteLayerWav(sl_first, 0, sl_pFirst) == StrataLayerExportResult.NoLoop && !File.Exists(sl_pFirst),
+        "a layer of a first pass that hasn't closed isn't exported (NoLoop, no file)");
+    for (int b = 1; b < Blocks; b++) le.RenderOffline(sl_lb, Blk);
+    le.DeviceAction(lt, ld, 1, 0, 0);                                             // C_Overdub: close, record layer 2
+    for (int b = 0; b < Blocks / 2; b++) le.RenderOffline(sl_lb, Blk);
+    var sl_mid = le.DeviceGetState(lt, ld);
+    string sl_pMid = Path.Combine(sl_dir, "mid.wav");
+    Check(StrataLayerExport.Check(sl_mid, 0) == StrataLayerExportResult.Written, "layer 1 exports while layer 2 records");
+    Check(StrataLayerExport.WriteLayerWav(sl_mid, 1, sl_pMid) == StrataLayerExportResult.Recording && !File.Exists(sl_pMid),
+        "a layer still recording isn't exported (Recording, no file)");
+    for (int b = Blocks / 2; b <= Blocks; b++) le.RenderOffline(sl_lb, Blk);
+    var sl_ls = new float[6 + 8 * 3];
+    le.DeviceScope(lt, ld, sl_ls, sl_ls.Length);
+    Check((int)sl_ls[3] == 2 && (int)sl_ls[4] == -1, $"two finished layers (count {(int)sl_ls[3]}, rec {(int)sl_ls[4]})");
+
+    // Playback settings far from their defaults: none of them may reach the file.
+    le.DeviceSetParam(lt, ld, 0, 40f); le.DeviceSetParam(lt, ld, 2, 2f); le.DeviceSetParam(lt, ld, 6, 1f);
+    le.DeviceAction(lt, ld, 7, 1, -9f); le.DeviceAction(lt, ld, 6, 1, 1f);       // layer 2: −9 dB, muted
+    le.RenderOffline(sl_lb, Blk); le.StopTransport();
+
+    var sl_before = le.DeviceGetState(lt, ld);
+    int sl_len = BitConverter.ToInt32(sl_before, 8), sl_lsr = BitConverter.ToInt32(sl_before, 4), sl_lcount = BitConverter.ToInt32(sl_before, 16);
+    Check(sl_len == Blocks * Blk && sl_lcount == 2, $"the loop is {Blocks} blocks long ({sl_len} frames, {sl_lcount} layers)");
+    string sl_p2 = Path.Combine(sl_dir, "layer2.wav");
+    var sl_res = StrataLayerExport.WriteLayerWav(sl_before, 1, sl_p2);
+    var sl_after = le.DeviceGetState(lt, ld);
+    Check(sl_res == StrataLayerExportResult.Written && File.Exists(sl_p2), $"layer 2 exported ({sl_res})");
+    Check(sl_before.AsSpan().SequenceEqual(sl_after), "exporting a layer leaves the Strata state byte-identical");
+    le.DeviceScope(lt, ld, sl_ls, sl_ls.Length);
+    Check(sl_ls[8 + 3] > 0.5f && Math.Abs(sl_ls[7 + 3] + 9f) < 1e-3, "the exported layer keeps its mute and level");
+
+    // The file: 32-bit float stereo at the loop's rate, one cycle, sample-identical to layer 2.
+    var sl_wav = File.ReadAllBytes(sl_p2);
+    int sl_fmt = BitConverter.ToInt16(sl_wav, 20), sl_ch = BitConverter.ToInt16(sl_wav, 22), sl_wsr = BitConverter.ToInt32(sl_wav, 24);
+    int sl_data = 12; while (sl_data + 8 <= sl_wav.Length && System.Text.Encoding.ASCII.GetString(sl_wav, sl_data, 4) != "data") sl_data += 8 + BitConverter.ToInt32(sl_wav, sl_data + 4);
+    int sl_dataBytes = BitConverter.ToInt32(sl_wav, sl_data + 4);
+    Check(sl_fmt == 3 && sl_ch == 2 && sl_wsr == sl_lsr, $"layer WAV is float stereo at the loop's rate (fmt {sl_fmt}, ch {sl_ch}, {sl_wsr} Hz)");
+    Check(sl_dataBytes == sl_len * 8, $"layer WAV is exactly one loop cycle ({sl_dataBytes / 8} of {sl_len} frames)");
+    int sl_l2At = 20 + sl_lcount * 12 + sl_len * 8, sl_l1At = 20 + sl_lcount * 12;
+    bool sl_same = sl_dataBytes == sl_len * 8 && sl_wav.AsSpan(sl_data + 8, sl_dataBytes).SequenceEqual(sl_before.AsSpan(sl_l2At, sl_len * 8));
+    Check(sl_same, "layer WAV is sample-identical to layer 2 as recorded (loop top first, nothing applied)");
+    Check(!sl_before.AsSpan(sl_l1At, sl_len * 8).SequenceEqual(sl_before.AsSpan(sl_l2At, sl_len * 8)), "layer 2 differs from layer 1 (no other layer in the file)");
+    StrataLayerExport.TryReadLayer(sl_before, 1, out _, out var sl_l2pcm, out _);
+    Check(Rms(sl_l2pcm, sl_len) > 0.001f, $"layer 2 carries its pass (rms {Rms(sl_l2pcm, sl_len):F3})");
+
+    // Save / reopen: the sl_same layer from the restored device is the sl_same file.
+    int sl_rt = le.AddInstrumentTrack(); int sl_rd = le.AddBuiltinDevice(sl_rt, 15);
+    le.DeviceSetState(sl_rt, sl_rd, sl_before);
+    string sl_pRe = Path.Combine(sl_dir, "reopened.wav");
+    Check(StrataLayerExport.WriteLayerWav(le.DeviceGetState(sl_rt, sl_rd), 1, sl_pRe) == StrataLayerExportResult.Written
+        && File.ReadAllBytes(sl_pRe).AsSpan().SequenceEqual(sl_wav), "after save/reopen the layer exports to the identical file");
+
+    // Saved mid-overdub (review of #663): a load stops recording, so the reopened pass is a finished
+    // layer that exports — not one stuck "recording".
+    int sl_mt = le.AddInstrumentTrack(); int sl_md = le.AddBuiltinDevice(sl_mt, 15);
+    le.DeviceSetState(sl_mt, sl_md, sl_mid);
+    var sl_ms = new float[6 + 8 * 3];
+    le.DeviceScope(sl_mt, sl_md, sl_ms, sl_ms.Length);
+    Check((int)sl_ms[4] == -1 && (int)sl_ms[6 + 3] != 2, $"a Strata saved mid-overdub reopens with nothing recording (rec {(int)sl_ms[4]}, layer 2 state {(int)sl_ms[6 + 3]})");
+    Check(StrataLayerExport.Check(le.DeviceGetState(sl_mt, sl_md), 1) == StrataLayerExportResult.Written, "…and its last pass exports");
+
+    // The same slot, another take (review of #663): undo layer 2 and record it again while a save
+    // dialog would be open — the card's take fingerprint (the layer's peak envelope) must tell them apart.
+    float[] SlPrint() { var w = new float[512]; int n = le.DeviceLayerWave(lt, ld, 1, w, w.Length); return w[..Math.Max(0, n)]; }
+    var sl_print = SlPrint();
+    le.RenderOffline(sl_lb, Blk);
+    Check(sl_print.Length > 0 && SlPrint().AsSpan().SequenceEqual(sl_print), "an untouched layer keeps its take fingerprint");
+    le.Seek(0); le.Play();
+    le.DeviceAction(lt, ld, 4, 0, 0); le.RenderOffline(sl_lb, Blk);               // C_Undo: layer 2 dropped
+    le.DeviceAction(lt, ld, 1, 0, 0);                                             // C_Overdub: a new layer 2
+    for (int b = 0; b <= Blocks + 1; b++) le.RenderOffline(sl_lb, Blk);
+    le.StopTransport();
+    var sl_retake = le.DeviceGetState(lt, ld);
+    Check(StrataLayerExport.Check(sl_retake, 1) == StrataLayerExportResult.Written && !SlPrint().AsSpan().SequenceEqual(sl_print),
+        "a slot undone and recorded again has another take fingerprint (the export reports the chosen one gone)");
+
+    // Nothing there: no fallback to the mix.
+    string sl_pNo = Path.Combine(sl_dir, "none.wav");
+    Check(StrataLayerExport.WriteLayerWav(sl_before, 2, sl_pNo) == StrataLayerExportResult.NoLayer && !File.Exists(sl_pNo), "a layer that isn't there exports nothing (NoLayer)");
+    Check(StrataLayerExport.WriteLayerWav(sl_before[..(sl_before.Length - 16)], 1, sl_pNo) == StrataLayerExportResult.Invalid && !File.Exists(sl_pNo), "a truncated state exports nothing (Invalid)");
+    le.DeviceAction(lt, ld, 5, 0, 0); le.Seek(0); le.Play(); le.RenderOffline(sl_lb, Blk); le.StopTransport();   // C_Clear
+    Check(StrataLayerExport.Check(le.DeviceGetState(lt, ld), 1) == StrataLayerExportResult.NoLayer, "a cleared loop has no layer to export");
+    try { Directory.Delete(sl_dir, true); } catch (IOException) { }
+}
+
 // ============================ Nota EQ-3 ====================================
 Console.WriteLine("-- Nota EQ-3 --");
 {
