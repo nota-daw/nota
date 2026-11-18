@@ -5,11 +5,34 @@
 
 namespace nota {
 
-void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float g) {
+void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float g, int32_t gen) {
     pendingQuant.store(quant, std::memory_order_relaxed);
     pendingLegato.store(legato, std::memory_order_relaxed);
     pendingGain.store(g, std::memory_order_relaxed);
-    pending.store(slot, std::memory_order_relaxed);
+    pendingGen.store(gen);
+    pending.store(slot);
+}
+
+bool SessionPlayer::cancelSlot(int32_t slot) {
+    if (slot < 0) return false;
+    int32_t expect = slot;
+    if (!pending.compare_exchange_strong(expect, kNone)) return false;
+    int32_t rep = slot;
+    repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
+    return true;
+}
+
+bool SessionPlayer::cancelGen(int32_t scene, int32_t gen) {
+    const int32_t p = pending.load();
+    if (p == kNone || p == kStopNow) return false;
+    if (p != scene && (gen <= 0 || pendingGen.load() != gen)) return false;
+    int32_t expect = p;
+    if (!pending.compare_exchange_strong(expect, kNone)) return false;
+    if (p >= 0) {
+        int32_t rep = p;
+        repeatSlot.compare_exchange_strong(rep, -1, std::memory_order_relaxed);
+    }
+    return true;
 }
 
 bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double globalQuant, bool loopSeam) {
@@ -30,6 +53,7 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     // A launch may have replaced the request between our two loads; only consume it if not.
     int32_t expect = p;
     if (!pending.compare_exchange_strong(expect, kNone, std::memory_order_relaxed)) return false;
+    appliedGen.store(pendingGen.load(std::memory_order_relaxed), std::memory_order_release);
     // The caller flushes instrument voices when a launch/stop applies. Discard releases from
     // the outgoing slot so they cannot cut a newly launched slot's switch on the same key.
     articulationReleases.count = 0;

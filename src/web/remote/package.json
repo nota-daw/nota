@@ -11,7 +11,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview",
     "mock": "node mock/nota-mock.mjs",
-    "test": "node --test test/roll.test.ts test/grid.test.ts"
+    "test": "node --test test/roll.test.ts test/grid.test.ts test/press.test.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

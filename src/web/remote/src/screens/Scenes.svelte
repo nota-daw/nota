@@ -10,7 +10,8 @@
      is in it below — its notes or its waveform, in the clip's colour. A queued clip blinks until
      the launch point; a playing one fills with its colour and shows a play mark and a progress
      line; a recording one is red and shows its take growing. Every button takes its own finger
-     (use:tap), so several clips launch at once. -->
+     (use:tap), so several clips launch at once. Press and hold a queued clip, group slot or scene
+     to cancel its launch before the launch point (issue 480); a tap never cancels. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
@@ -50,6 +51,21 @@
     if (set.has(l.id)) set.delete(l.id); else set.add(l.id);
     app.prefs.groupsOpen = [...set];
   }
+  // Issue 480: a queued clip, group slot or scene is cancelled by pressing and holding it. A tap keeps
+  // launching (a queued one stays queued); the hold is the deliberate gesture, and only acts while
+  // something waits for its launch point.
+  const queued = (id: number, i: number) => s?.tr.find((r) => r.id === id)?.c[i]?.[0] === 2;
+  const sceneQueued = (i: number) => !!s?.tr.some((r) => r.c[i]?.[0] === 2);
+  const holdCancel = (id: number, i: number, members?: number[]) => () => {
+    if (!(members ?? [id]).some((m) => queued(m, i)) || !guard()) return false;
+    app.send({ t: 'cancel', id, i });
+    return true;
+  };
+  const holdCancelScene = (i: number) => () => {
+    if (!sceneQueued(i) || !guard()) return false;
+    app.send({ t: 'cancelScene', i });
+    return true;
+  };
   const colourOf = (id: number) => tracks.get(id)?.color;
   const barInk = (st: number, id: number) => (st === 3 ? 'var(--success)' : st === 4 || st === 5 ? 'var(--record)' : st ? colourOf(id) : undefined);
 </script>
@@ -74,7 +90,9 @@
 {/snippet}
 
 {#snippet sceneButton(i: number)}
-  <button class="scene" use:tap={() => guard() && app.send({ t: 'scene', i })} aria-label="Launch scene {i + 1}">
+  <button class="scene" class:queued={sceneQueued(i)}
+    use:tap={{ tap: () => guard() && app.send({ t: 'scene', i }), hold: holdCancelScene(i) }}
+    aria-label="Launch scene {i + 1}{sceneQueued(i) ? ' — queued, hold to cancel' : ''}">
     <span class="tri"></span>Scene {i + 1}
   </button>
 {/snippet}
@@ -112,7 +130,7 @@
                 <div class="clip empty"></div>
               {:else}
                 <button class="clip group" class:playing={g.playing} style:--gc={colourOf(l.id)}
-                  use:tap={() => guard() && app.send({ t: 'launch', id: l.id, i })}
+                  use:tap={{ tap: () => guard() && app.send({ t: 'launch', id: l.id, i }), hold: holdCancel(l.id, i, l.members) }}
                   aria-label="{tracks.get(l.id)?.name} · scene {i + 1}: {g.has} of {g.of} tracks{g.playing ? ', playing' : ''}">
                   <span class="top"><span class="tri" class:on={g.playing}></span><span class="len">{g.has} of {g.of}</span></span>
                   <span class="mbars">
@@ -134,8 +152,8 @@
               {:else}
                 <button class="clip" class:playing={st === 3} class:queued={st === 2} class:rec
                   style:--tc={col} style:--tc-ink={col ? look.inkOn(col) : undefined}
-                  use:tap={() => guard() && app.send({ t: 'launch', id: l.id, i })}
-                  aria-label="{pv?.nm ?? t?.name} · scene {i + 1}: {STATE[st].toLowerCase()}">
+                  use:tap={{ tap: () => guard() && app.send({ t: 'launch', id: l.id, i }), hold: holdCancel(l.id, i) }}
+                  aria-label="{pv?.nm ?? t?.name} · scene {i + 1}: {STATE[st].toLowerCase()}{st === 2 ? ', hold to cancel' : ''}">
                   <span class="top">
                     {#if st === 3}<span class="ptri"></span>{:else if rec}<span class="rdot"></span>{/if}
                     <span class="cn">{pv?.nm ?? STATE[st]}</span>
@@ -189,6 +207,8 @@
   .scene { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: min(var(--r-cell), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
   .tri { flex: none; width: 0; height: 0; border-left: 9px solid var(--text-secondary); border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
   .tri.on { border-left-color: var(--success); }
+  /* A queued scene blinks Caution until its launch point, as on the desktop (issue 480: hold to cancel). */
+  .scene.queued .tri { border-left-color: var(--warning); animation: blink 800ms steps(1) infinite; }
   /* A clip slot, as the desktop's: raised when filled — its name, the preview in its colour
      below; playing and queued fill with the clip's colour, recording with red — ink derived. */
   .clip { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 8px 7px; border-radius: min(var(--r-cell), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); overflow: hidden; min-width: 0; text-align: left; }

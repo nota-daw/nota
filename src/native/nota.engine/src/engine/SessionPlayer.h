@@ -34,6 +34,11 @@ class SessionPlayer {
     std::atomic<bool> pendingLegato{false}; // keep the loop position across the switch
     std::atomic<float> pendingGain{1.0f};   // launch-velocity gain for the incoming slot
     std::atomic<int32_t> repeatSlot{-1};    // Repeat mode: retrigger this slot every quantum while held
+    // #480: the scene launch that queued the pending request (its generation; 0 = a direct launch,
+    // a stop, a follow action or a repeat), and the generation of the request that last applied —
+    // so the engine can tell a scene launch that started from one that was cancelled or replaced.
+    std::atomic<int32_t> pendingGen{0};
+    std::atomic<int32_t> appliedGen{0};
     // Audio thread writes, UI reads: the playing slot's loop position (progress) and beats
     // played since it launched (follow actions / fixed-length capture).
     std::atomic<double> uiLocalBeats{0.0};
@@ -44,15 +49,24 @@ class SessionPlayer {
     ArticulationReleaseState articulationReleases; // pending latching keys, timed by rendered frames
     float gain = 1.0f;       // launch-velocity gain of the playing slot
 
-    void requestLaunch(int32_t slot, double quant = -1.0, bool legato = false, float g = 1.0f);
-    void requestStop() {
+    void requestLaunch(int32_t slot, double quant = -1.0, bool legato = false, float g = 1.0f, int32_t gen = 0);
+    void requestStop(int32_t gen = 0) {
         repeatSlot.store(-1, std::memory_order_relaxed);
-        pending.store(kStop, std::memory_order_relaxed);
+        pendingGen.store(gen);
+        pending.store(kStop);
     }
     void requestStopNow() {
         repeatSlot.store(-1, std::memory_order_relaxed);
-        pending.store(kStopNow, std::memory_order_relaxed);
+        pendingGen.store(0);
+        pending.store(kStopNow);
     }
+
+    // Audio thread, before maybeApply (#480): withdraw a queued request so the track carries on
+    // as if it had never been made. cancelSlot: the queued launch of `slot` (and its Repeat).
+    // cancelGen: a queued launch of row `scene`, or any request (a stop) scene launch `gen` queued.
+    // A request replaced in the meantime no longer matches and stays. Never a kStopNow.
+    bool cancelSlot(int32_t slot);
+    bool cancelGen(int32_t scene, int32_t gen);
 
     // Audio thread: if a pending request exists and a quantize boundary falls in
     // this block (or quant<=0), apply it. `loopSeam`: the block starts where the transport

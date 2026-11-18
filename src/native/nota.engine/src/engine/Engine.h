@@ -525,6 +525,10 @@ class Engine {
     void stopSlot(int32_t trackId);
     void stopScene(int32_t scene); // stop tracks whose playing/queued slot is this row
     void stopAllSession();
+    // Withdraw a queued launch before its boundary (#480): the track (or the row) carries on as if
+    // it had never been asked. False when nothing of it is queued — it started or never was.
+    bool cancelSlotLaunch(int32_t trackId, int32_t scene);
+    bool cancelSceneLaunch(int32_t scene);
     void recordSessionSlot(int32_t trackId, int32_t scene); // M5-4: launch + overdub-record MIDI into the slot
     // Stop one recording slot (specs/086): with other slots still recording only its lane lands
     // and loops back; the last one ends the take as stopSessionRecord() does.
@@ -2089,12 +2093,21 @@ class Engine {
     // Session P0 helpers (message thread).
     int32_t insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying);
     void remapPlayers(const std::function<int32_t(int32_t)>& map); // shift players after a row insert/remove
-    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene);
+    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene, int32_t gen = 0);
     void serviceSessionFollow(); // poll(): scene follow + fixed-length capture
     std::atomic<bool> sessionFollow_{true};
     double sessionRecordLen_ = 0.0; // fixed session record length, beats (0 = off)
     int32_t sceneFollowScene_ = -1; // last launched scene (for scene follow)
     double sceneFollowStart_ = 0.0; // beat it started at (quantized)
+    // #480: a scene launch waits for its boundary until one of its requests applies (confirmed:
+    // its follow and tempo go ahead) or none is left queued (cancelled or replaced: the tempo change
+    // is dropped and the follow that ran before it comes back). Each launch has a generation that
+    // its tracks' requests carry (SessionPlayer::pendingGen / appliedGen).
+    int32_t sceneLaunchGen_ = 0;
+    int32_t waitSceneGen_ = 0, waitScene_ = -1; // the waiting launch (gen 0 = none)
+    int32_t prevFollowScene_ = -1;              // the scene follow running before it
+    double prevFollowStart_ = 0.0;
+    bool sceneLaunchWaiting(); // poll(): resolve the waiting launch; true while it still waits
     // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
     bool sceneTempoPending_ = false;
     double sceneTempo_ = 0.0, sceneTempoAt_ = 0.0;
@@ -2326,6 +2339,12 @@ class Engine {
     // Tracks whose voices go silent at the next block (TrackNotesOff command, audio thread).
     int32_t notesOffTracks_[8] = {};
     int32_t notesOffCount_ = 0;
+    // Queued Session launches to withdraw at the next block, before any track applies its request
+    // (#480; CancelSessionSlot / CancelSessionScene, audio thread). Slot entries: track id + scene.
+    int32_t cancelSlotTrack_[8] = {};
+    int32_t cancelSlotScene_[8] = {};
+    int32_t cancelSlotCount_ = 0;
+    int32_t cancelSceneRow_ = -1, cancelSceneGen_ = 0;
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time

@@ -136,6 +136,12 @@ public sealed partial class RemoteHub
                     foreach (int id in Members(cmd.Id) ?? new List<int> { cmd.Id }) _engine.StopSlot(id);
                 break;
             case "stopAll": _engine.StopAllSession(); break;
+            // #480: hold a queued clip / group slot / scene on the phone to withdraw its launch.
+            case "cancel":
+                if (TrackExists(cmd.Id) && cmd.I >= 0 && cmd.I < _engine.SceneCount)
+                    foreach (int id in Members(cmd.Id) ?? new List<int> { cmd.Id }) _engine.CancelSlotLaunch(id, cmd.I);
+                break;
+            case "cancelScene": if (cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.CancelSceneLaunch(cmd.I); break;
         }
     }
 

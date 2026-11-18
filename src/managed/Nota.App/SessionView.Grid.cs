@@ -412,6 +412,8 @@ public sealed partial class SessionView
             bool hl = LaunchZone.Contains(p), hc = CentreZone.Contains(p);
             if (hl != _hoverLaunch || hc != _hoverCentre) { _hoverLaunch = hl; _hoverCentre = hc; InvalidateVisual(); }
             Cursor = (_filled || Recording) && hl || !_filled && hc ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+            bool queuedTip = _filled && hl && _o._engine.SessionSlotState(_c.TrackId, _scene) == 2;
+            if (queuedTip != (ToolTip.GetTip(this) is not null)) ToolTip.SetTip(this, queuedTip ? Loc.T("session.grid.queued_alt_click_to_cancel") : null);
 
             if (_pressed && _filled && !_dragging && Math.Abs(p.X - _pressAt.X) + Math.Abs(p.Y - _pressAt.Y) > 5) _dragging = true;
             if (_dragging)
@@ -443,6 +445,12 @@ public sealed partial class SessionView
             e.Handled = true;
 
             if (Recording && LaunchZone.Contains(p)) { _o._engine.StopSessionRecordSlot(_c.TrackId); _o.Refresh(); return; }
+            if (_filled && LaunchZone.Contains(p) && (e.KeyModifiers & KeyModifiers.Alt) != 0
+                && _o._engine.SessionSlotState(_c.TrackId, _scene) == 2)
+            {
+                _o.CancelSlotLaunch(_c.TrackId, _scene);   // #480: Alt+click withdraws a queued launch
+                return;
+            }
             if (_filled && LaunchZone.Contains(p))
             {
                 _o._engine.LaunchSlotVelocity(_c.TrackId, _scene, 1f);
@@ -699,6 +707,9 @@ public sealed partial class SessionView
             if (!pt.Properties.IsLeftButtonPressed) return;
             e.Handled = true;
             var p = pt.Position;
+            if (Any && LaunchZone.Contains(p) && (e.KeyModifiers & KeyModifiers.Alt) != 0
+                && _g.Children.Any(id => _o._engine.SessionSlotState(id, _scene) == 2))
+            { _o.CancelGroupLaunch(_g, _scene); return; }   // #480
             if (Any && LaunchZone.Contains(p)) { _o.LaunchGroup(_g, _scene); _o.UpdateStates(); return; }
             if (!Any && new Rect(Bounds.Width / 2 - 8, Bounds.Height / 2 - 8, 16, 16).Contains(p)) { _o.StopColumn(_g); _o.UpdateStates(); return; }
             _o.Select(new Selection(SelKind.Slot, _g.TrackId, _scene));
@@ -794,6 +805,8 @@ public sealed partial class SessionView
             var p = e.GetPosition(this);
             bool h = LaunchBox.Contains(p);
             if (h != _hoverLaunch) { _hoverLaunch = h; Cursor = h ? new Cursor(StandardCursorType.Hand) : Cursor.Default; InvalidateVisual(); }
+            bool queuedTip = h && _o.SceneQueued(_scene);
+            if (queuedTip != (ToolTip.GetTip(this) is not null)) ToolTip.SetTip(this, queuedTip ? Loc.T("session.grid.queued_alt_click_to_cancel") : null);
             // Drag a scene up or down the rail to reorder it.
             if (_pressed && !_dragging && Math.Abs(p.Y - _pressAt.Y) > 5) _dragging = true;
             if (_dragging)
@@ -833,6 +846,8 @@ public sealed partial class SessionView
             }
             if (!pt.Properties.IsLeftButtonPressed) return;
             e.Handled = true;
+            if (LaunchBox.Contains(pt.Position) && (e.KeyModifiers & KeyModifiers.Alt) != 0 && _o.SceneQueued(_scene))
+            { _o.CancelSceneLaunch(_scene); return; }   // #480: Alt+click withdraws the queued scene
             if (LaunchBox.Contains(pt.Position)) { _o.LaunchSceneRow(_scene); _o.UpdateStates(); return; }
             _o.Select(new Selection(SelKind.Scene, 0, _scene));
             if (e.ClickCount == 2) { _o.PromptText(this, _named ? _name : "", t => { _o._engine.SetSceneName(_scene, t); _o.RefreshScene(_scene); }); return; }
@@ -899,12 +914,15 @@ public sealed partial class SessionView
             string name = _engine.GetSessionClipName(c.TrackId, scene);
             MenuKit.AddGroups(f.Items,
                 new Control[] { MenuKit.Header(name.Length > 0 ? name : Loc.T("common.clip"), c.Brush, Loc.F("session.grid.scene_2", c.Name, scene + 1)) },
-                new Control[]
+                new Control?[]
                 {
                     MenuKit.Item(Loc.T("session.launch"), GlyphKind.Play, () => _engine.LaunchSlot(c.TrackId, scene)),
+                    // #480: only while the launch waits for its boundary.
+                    _engine.SessionSlotState(c.TrackId, scene) == 2
+                        ? MenuKit.Item(Loc.T("session.grid.cancel_launch"), GlyphKind.Close, () => CancelSlotLaunch(c.TrackId, scene)) : null,
                     MenuKit.Item(Loc.T("common.edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
                     MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
-                },
+                }.OfType<Control>().ToArray(),
                 LocateItems(c.TrackId, scene),
                 new Control[] { MenuKit.Item(Loc.T("session.grid.copy_to_arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
                 new Control[] { AddTrackSubmenu(c.TrackId) },
@@ -1017,12 +1035,13 @@ public sealed partial class SessionView
         string name = _engine.GetSceneName(scene);
         MenuKit.AddGroups(f.Items,
             new Control[] { MenuKit.Header(name.Length > 0 ? name : Loc.F("session.scene", scene + 1), null, Loc.F("session.grid.scene_n", scene + 1)) },
-            new Control[]
+            new Control?[]
             {
                 MenuKit.Item(Loc.T("session.grid.launch_scene"), GlyphKind.Play, () => LaunchSceneRow(scene)),
+                SceneQueued(scene) ? MenuKit.Item(Loc.T("session.grid.cancel_launch"), GlyphKind.Close, () => CancelSceneLaunch(scene)) : null,   // #480
                 MenuKit.Item(Loc.T("session.grid.stop_scene"), GlyphKind.Stop, () => _engine.StopScene(scene)),
                 MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
-            },
+            }.OfType<Control>().ToArray(),
             new Control[]
             {
                 MenuKit.Item(Loc.T("session.grid.insert_scene_below"), GlyphKind.Plus, () => InsertSceneAtSelection(), MenuKit.Cmd(Key.I)),

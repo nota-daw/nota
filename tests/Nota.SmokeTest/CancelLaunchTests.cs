@@ -1,0 +1,287 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// Cancelling a queued Session launch before its quantized start (#480, specs/104). A cancelled
+// slot never starts and the clip playing on its track plays on, unbroken; a cancelled scene takes
+// back everything its launch queued — the clips it would start and the stops of tracks whose slot
+// in that row is empty — together with its follow action and tempo change, and the scene follow
+// that ran before it carries on. A cancel and a boundary in the same block never split a scene. A
+// second launch keeps a launch queued; Stop and Stop All still stop.
+
+using Nota.Application;
+using Nota.Infrastructure;
+
+namespace Nota.SmokeTest;
+
+internal static class CancelLaunchTests
+{
+    private const double Sr = 48000.0;
+    private const int Chunk = 256;
+    private const double Bar = 4.0; // launch quantum, beats
+
+    public static IEnumerable<(bool, string)> Run()
+    {
+        foreach (var r in SlotCancel()) yield return r;
+        foreach (var r in SceneCancelKeepsDrum()) yield return r;
+        foreach (var r in BoundaryRace()) yield return r;
+        foreach (var r in NewerLaunchSurvives()) yield return r;
+        foreach (var r in LastSlotCancelledDropsScene()) yield return r;
+        foreach (var r in FollowComesBack()) yield return r;
+        foreach (var r in FollowLaunchedSceneCancelled()) yield return r;
+        foreach (var r in SecondPressAndStop()) yield return r;
+        foreach (var r in StopAllDropsSceneTempo()) yield return r;
+        foreach (var r in RepeatCancelled()) yield return r;
+    }
+
+    // Two tracks: drum plays 4-beat loops in rows 0 and 2; bass has clips in rows 1, 2 and 3.
+    // Row 1 = bass + an empty drum slot (with its stop button): the issue's "bass scene".
+    private sealed class Rig : IDisposable
+    {
+        public readonly NotaEngine E = new();
+        public readonly int Drum, Bass;
+        private readonly float[] _buf = new float[Chunk * 2];
+        public Rig()
+        {
+            E.SetBpm(120);
+            E.SetLaunchQuant(Bar);
+            Drum = E.AddInstrumentTrack();
+            Bass = E.AddInstrumentTrack();
+            E.AddSessionMidiClip(Drum, 0, 4.0);
+            E.AddSessionMidiClip(Drum, 2, 4.0);
+            E.AddSessionMidiClip(Bass, 1, 4.0);
+            E.AddSessionMidiClip(Bass, 2, 4.0);
+            E.AddSessionMidiClip(Bass, 3, 4.0);
+            E.SetSessionNotes(Drum, 0, new[] { new NotaNote(36, 0.0, 0.5, 0.9f) });
+            E.SetSessionNotes(Bass, 1, new[] { new NotaNote(40, 0.0, 1.0, 0.9f) });
+            E.StopTransport();
+            E.Seek(0);
+            E.RenderOffline(_buf, 64, Sr);
+        }
+        public double BlockBeats => Chunk / (Sr * 60.0 / E.Bpm);
+        public void Block() { E.RenderOffline(_buf, Chunk, Sr); E.Poll(); }
+        // Render until the transport reaches `beat`.
+        public void To(double beat)
+        {
+            for (int g = 0; g < 200000 && E.PositionBeats < beat; g++) Block();
+        }
+        // Render up to the last block that ends before `beat` (the next block holds it).
+        public void JustBefore(double beat)
+        {
+            for (int g = 0; g < 200000 && E.PositionBeats + BlockBeats < beat - 1e-9; g++) Block();
+        }
+        public void Dispose() => E.Dispose();
+    }
+
+    private static IEnumerable<(bool, string)> SlotCancel()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        yield return (!e.CancelSlotLaunch(r.Drum, 0), "slot cancel: nothing queued yet → false");
+        e.LaunchSlot(r.Drum, 0);
+        r.To(5.0);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0, "slot cancel: drum plays");
+        // A clip with its own one-beat quantum, queued on the same track: it would start at beat 6.
+        var p = Props(e, r.Drum, 2); p.QuantBeats = 1.0; e.SetSessionClipProps(r.Drum, 2, p);
+        e.LaunchSlot(r.Drum, 2);
+        yield return (e.SessionSlotState(r.Drum, 2) == 2, "slot cancel: the other clip is queued");
+        yield return (e.CancelSlotLaunch(r.Drum, 2), "slot cancel: cancel reports a queued launch");
+        r.Block();
+        yield return (e.SessionSlotState(r.Drum, 2) == 1, $"slot cancel: no longer queued (state {e.SessionSlotState(r.Drum, 2)})");
+        r.To(6.5);
+        double pos = e.SessionSlotPosition(r.Drum);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && Math.Abs(pos - 2.5) < 0.05,
+            $"slot cancel: the drum plays on through the boundary, unbroken (slot {e.SessionPlayingSlot(r.Drum)}, at {pos:F2}, want 2.50)");
+        yield return (!e.CancelSlotLaunch(r.Drum, 2), "slot cancel: a second cancel finds nothing");
+        e.LaunchSlot(r.Drum, 2);
+        r.To(7.2);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2, "slot cancel: launching it again later works as ever");
+        yield return (!e.CancelSlotLaunch(r.Drum, 2), "slot cancel: a started launch cannot be cancelled");
+    }
+
+    // The issue's example: drum plays, the bass scene is queued for the next bar, then cancelled.
+    private static IEnumerable<(bool, string)> SceneCancelKeepsDrum()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSceneProps(1, new NotaSceneProps { Color = -1, Tempo = 140, Follow = 1, FollowBeats = 4 });
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(1);
+        yield return (e.SessionSlotState(r.Bass, 1) == 2, "scene cancel: the bass scene is queued");
+        yield return (e.CancelSceneLaunch(1), "scene cancel: cancel reports a queued scene");
+        r.Block();
+        yield return (e.SessionSlotState(r.Bass, 1) == 1, "scene cancel: the bass slot is no longer queued");
+        r.To(8.5);
+        double pos = e.SessionSlotPosition(r.Drum);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && e.SessionPlayingSlot(r.Bass) == -1,
+            $"scene cancel: the drum keeps playing, the bass never starts (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+        yield return (Math.Abs(pos - 0.5) < 0.05, $"scene cancel: the drum's loop runs on unbroken ({pos:F2})");
+        r.To(8.5 + 16 * Bar);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && e.SessionPlayingSlot(r.Bass) == -1,
+            $"scene cancel: its follow action never fires over 16 bars (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+        yield return (!e.TakeSceneTempoChange(out _, out _, out _) && Math.Abs(e.Bpm - 120) < 1e-9,
+            $"scene cancel: its tempo change never applies ({e.Bpm})");
+        yield return (!e.CancelSceneLaunch(1), "scene cancel: nothing left to cancel");
+    }
+
+    // A cancel drained in the block that holds the boundary withdraws every track; one block later
+    // every track has started. Never a mix.
+    private static IEnumerable<(bool, string)> BoundaryRace()
+    {
+        foreach (bool late in new[] { false, true })
+        {
+            using var r = new Rig();
+            var e = r.E;
+            e.LaunchScene(0);
+            r.To(5.0);
+            e.LaunchScene(1);
+            r.JustBefore(8.0);
+            if (late) r.Block(); // the boundary block has rendered: the scene started
+            bool queued = e.CancelSceneLaunch(1);
+            r.Block();
+            int drum = e.SessionPlayingSlot(r.Drum), bass = e.SessionPlayingSlot(r.Bass);
+            if (!late)
+                yield return (queued && drum == 0 && bass == -1,
+                    $"boundary race: cancelled in the boundary block → all withdrawn (drum {drum}, bass {bass})");
+            else
+                yield return (!queued && drum == -1 && bass == 1,
+                    $"boundary race: one block late → all started (drum {drum}, bass {bass}, cancel {queued})");
+        }
+    }
+
+    // A newer launch on one of the scene's tracks is not the scene's to withdraw.
+    private static IEnumerable<(bool, string)> NewerLaunchSurvives()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(1);       // bass row 1, drum stop
+        e.LaunchSlot(r.Drum, 2); // the drum's request is now a launch of row 2
+        e.CancelSceneLaunch(1);
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2 && e.SessionPlayingSlot(r.Bass) == -1,
+            $"newer launch: survives the scene cancel (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+    }
+
+    // A scene whose only request is cancelled by hand counts as cancelled: no tempo change.
+    private static IEnumerable<(bool, string)> LastSlotCancelledDropsScene()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSessionSlotStopButton(r.Drum, 3, false); // row 3 queues only the bass
+        e.SetSceneProps(3, new NotaSceneProps { Color = -1, Tempo = 150 });
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(3);
+        yield return (e.CancelSlotLaunch(r.Bass, 3), "last slot: cancelled by hand");
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Bass) == -1 && e.SessionPlayingSlot(r.Drum) == 0
+                      && !e.TakeSceneTempoChange(out _, out _, out _) && Math.Abs(e.Bpm - 120) < 1e-9,
+            $"last slot: the scene's tempo change is dropped with it ({e.Bpm})");
+    }
+
+    // The scene follow that ran before a cancelled launch carries on.
+    private static IEnumerable<(bool, string)> FollowComesBack()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSceneProps(0, new NotaSceneProps { Color = -1, Follow = 1, FollowBeats = 16 }); // → row 1
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(2);
+        e.CancelSceneLaunch(2);
+        r.To(12.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && e.SessionPlayingSlot(r.Bass) == -1,
+            "follow comes back: row 0 still playing before its follow time");
+        r.To(16.5);
+        yield return (e.SessionPlayingSlot(r.Bass) == 1 && e.SessionPlayingSlot(r.Drum) == -1,
+            $"follow comes back: row 0's follow still launches row 1 on time (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+    }
+
+    // A scene a follow action launched, cancelled: follow ends, the outgoing row plays on.
+    private static IEnumerable<(bool, string)> FollowLaunchedSceneCancelled()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSceneProps(0, new NotaSceneProps { Color = -1, Follow = 1, FollowBeats = 8 });
+        e.LaunchScene(0);
+        r.To(5.0); // the follow (lead one quantum) has queued row 1 for beat 8
+        yield return (e.SessionSlotState(r.Bass, 1) == 2, "follow-launched: row 1 queued by the follow action");
+        yield return (e.CancelSceneLaunch(1), "follow-launched: cancelled");
+        r.To(8.5 + 8 * Bar);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && e.SessionPlayingSlot(r.Bass) == -1,
+            $"follow-launched: scene follow ends, row 0 plays on (drum {e.SessionPlayingSlot(r.Drum)}, bass {e.SessionPlayingSlot(r.Bass)})");
+    }
+
+    private static IEnumerable<(bool, string)> SecondPressAndStop()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.LaunchSlot(r.Drum, 0);
+        r.To(5.0);
+        e.LaunchSlot(r.Drum, 2);
+        e.LaunchSlot(r.Drum, 2); // a second press
+        r.Block();
+        yield return (e.SessionSlotState(r.Drum, 2) == 2, "second press: the launch stays queued");
+        r.To(8.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == 2, "second press: it starts at the boundary");
+        e.LaunchSlot(r.Drum, 0);
+        e.StopSlot(r.Drum);
+        r.Block();
+        yield return (e.SessionSlotState(r.Drum, 0) == 1 && e.SessionPlayingSlot(r.Drum) == 2,
+            "stop: withdraws the queued launch; the playing clip plays to the boundary");
+        r.To(12.5);
+        yield return (e.SessionPlayingSlot(r.Drum) == -1, "stop: the track stops at the boundary");
+    }
+
+    private static IEnumerable<(bool, string)> StopAllDropsSceneTempo()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        e.SetSceneProps(1, new NotaSceneProps { Color = -1, Tempo = 140, Follow = 1, FollowBeats = 4 });
+        e.LaunchScene(0);
+        r.To(5.0);
+        e.LaunchScene(1);
+        e.StopAllSession();
+        r.To(8.5 + 4 * Bar);
+        yield return (e.SessionPlayingSlot(r.Drum) == -1 && e.SessionPlayingSlot(r.Bass) == -1,
+            "stop all: everything stops, the queued scene never starts");
+        yield return (!e.TakeSceneTempoChange(out _, out _, out _) && Math.Abs(e.Bpm - 120) < 1e-9,
+            $"stop all: the queued scene's tempo change is dropped ({e.Bpm})");
+
+        // Back to Arrangement stops every Session clip the same way: a waiting scene's tempo goes too.
+        e.LaunchScene(0);
+        r.To(e.PositionBeats + 1.0);
+        e.LaunchScene(1);
+        e.BackToArrangement();
+        r.To(e.PositionBeats + 2 * Bar);
+        yield return (e.SessionPlayingSlot(r.Bass) == -1 && !e.TakeSceneTempoChange(out _, out _, out _) && Math.Abs(e.Bpm - 120) < 1e-9,
+            $"back to arrangement: the queued scene never starts, its tempo change is dropped ({e.Bpm})");
+    }
+
+    // A held Repeat clip re-queues itself each quantum; cancelling ends the repeat, the clip plays on.
+    private static IEnumerable<(bool, string)> RepeatCancelled()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        var p = Props(e, r.Drum, 0); p.LaunchMode = (int)SessionLaunchMode.Repeat; p.QuantBeats = 1.0;
+        e.SetSessionClipProps(r.Drum, 0, p);
+        e.LaunchSlot(r.Drum, 0);
+        r.To(2.5);
+        double before = e.SessionSlotPosition(r.Drum);
+        yield return (before < 0.75, $"repeat: retriggers every beat while held ({before:F2})");
+        r.To(2.7); // past the block that queues the next retrigger
+        yield return (e.CancelSlotLaunch(r.Drum, 0), "repeat: its queued retrigger is cancelled");
+        r.To(5.5);
+        double after = e.SessionSlotPosition(r.Drum);
+        yield return (e.SessionPlayingSlot(r.Drum) == 0 && after > 2.5,
+            $"repeat: no more retriggers, the clip plays on ({after:F2})");
+    }
+
+    private static NotaSessionClipProps Props(NotaEngine e, int track, int scene)
+    {
+        e.TryGetSessionClipProps(track, scene, out var p);
+        return p;
+    }
+}

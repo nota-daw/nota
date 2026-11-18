@@ -7,36 +7,54 @@
 // button, and wasn't taken by the browser for a scroll (pointercancel). Firing on release keeps
 // a scrollable grid safe to drag. Keyboard and assistive-technology activation still come as a
 // plain click and always act; only the click a browser synthesises right after a pointer lifted
-// on the button (detail > 0) is that same tap again, and is dropped.
+// on the button (detail > 0) is that same tap again, and is dropped. An optional hold handler
+// runs when a press stays put for HOLD_MS; a hold it takes is not also a tap (lib/press.ts).
 import type { Action } from 'svelte/action';
+import { Presses, HOLD_MS } from './press';
 
-const SLOP = 10;          // px a finger may wander and still count as a tap
 const SAME_TAP_MS = 800;  // a pointer click this soon after a pointer lifted belongs to that pointer
 
-export const tap: Action<HTMLElement, () => void> = (node, fn) => {
-  let act = fn;
-  const down = new Map<number, [number, number]>();   // pointer → where it landed
+/** A tap handler, or a tap and a hold: `hold` runs when a press stays down HOLD_MS and returns
+ *  true when it acted — then that press's release is not a tap as well (issue 480). */
+export type TapParam = (() => void) | { tap: () => void; hold?: () => boolean };
+
+export const tap: Action<HTMLElement, TapParam> = (node, param) => {
+  let act: () => void, hold: (() => boolean) | undefined;
+  const set = (p: TapParam) => {
+    if (typeof p === 'function') { act = p; hold = undefined; } else { act = p.tap; hold = p.hold; }
+  };
+  set(param);
+  const presses = new Presses();
+  const timers = new Map<number, ReturnType<typeof setTimeout>>();
   let lifted = -Infinity;
 
-  const far = (e: PointerEvent, p: [number, number]) => Math.hypot(e.clientX - p[0], e.clientY - p[1]) > SLOP;
+  const clearTimer = (id: number) => {
+    const t = timers.get(id);
+    if (t !== undefined) { clearTimeout(t); timers.delete(id); }
+  };
   const onDown = (e: PointerEvent) => {
-    if (e.button === 0) down.set(e.pointerId, [e.clientX, e.clientY]);
+    if (e.button !== 0) return;
+    presses.press(e.pointerId, e.clientX, e.clientY);
+    clearTimer(e.pointerId);
+    if (hold)
+      timers.set(e.pointerId, setTimeout(() => {
+        timers.delete(e.pointerId);
+        presses.held(e.pointerId, () => hold?.() ?? false);
+      }, HOLD_MS));
   };
   const onMove = (e: PointerEvent) => {
-    const p = down.get(e.pointerId);
-    if (p && far(e, p)) down.delete(e.pointerId);
+    if (!presses.move(e.pointerId, e.clientX, e.clientY)) clearTimer(e.pointerId);
   };
   const onUp = (e: PointerEvent) => {
-    const p = down.get(e.pointerId);
+    clearTimer(e.pointerId);
     lifted = performance.now();
-    if (!p) return;
-    down.delete(e.pointerId);
     const r = node.getBoundingClientRect();
     const over = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    if (!far(e, p) && over) act();
+    if (presses.release(e.pointerId, e.clientX, e.clientY, over)) act();
   };
   const onCancel = (e: PointerEvent) => {
-    if (down.delete(e.pointerId)) lifted = performance.now();
+    clearTimer(e.pointerId);
+    if (presses.cancel(e.pointerId)) lifted = performance.now();
   };
   const onClick = (e: MouseEvent) => {
     // A keyboard click (Enter / Space) has detail 0 and is never a pointer tap's echo.
@@ -50,8 +68,9 @@ export const tap: Action<HTMLElement, () => void> = (node, fn) => {
   node.addEventListener('pointercancel', onCancel);
   node.addEventListener('click', onClick);
   return {
-    update(f) { act = f; },
+    update(p) { set(p); },
     destroy() {
+      for (const t of timers.values()) clearTimeout(t);
       node.removeEventListener('pointerdown', onDown);
       node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);

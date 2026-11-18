@@ -1143,6 +1143,16 @@ void Engine::drainCommands() {
         case CommandType::TrackNotesOff:
             if (notesOffCount_ < 8) notesOffTracks_[notesOffCount_++] = c.i0;
             break;
+        case CommandType::CancelSessionSlot:
+            if (cancelSlotCount_ < 8) {
+                cancelSlotTrack_[cancelSlotCount_] = c.i0;
+                cancelSlotScene_[cancelSlotCount_++] = c.i1;
+            }
+            break;
+        case CommandType::CancelSessionScene:
+            cancelSceneRow_ = c.i0;
+            cancelSceneGen_ = c.i1;
+            break;
         case CommandType::Seek:
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
@@ -2531,6 +2541,18 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
                         if (md) md->reset();
                 }
     notesOffCount_ = 0;
+    // Cancelled Session launches (#480): withdrawn here, before any track reaches its boundary in
+    // this block — a scene is withdrawn on every track or (its boundary already passed) on none.
+    if (g && (cancelSlotCount_ > 0 || cancelSceneRow_ >= 0))
+        for (auto& tptr : g->tracks) {
+            SessionPlayer* sp = tptr->sessionPlayer.get();
+            if (!sp) continue;
+            for (int32_t k = 0; k < cancelSlotCount_; ++k)
+                if (tptr->id() == cancelSlotTrack_[k]) sp->cancelSlot(cancelSlotScene_[k]);
+            if (cancelSceneRow_ >= 0) sp->cancelGen(cancelSceneRow_, cancelSceneGen_);
+        }
+    cancelSlotCount_ = 0;
+    cancelSceneRow_ = -1;
     // Tracks disarmed with keys down (#366): they release on this render.
     if (g)
         for (int k = 0; k < liveReleaseCount_; ++k)

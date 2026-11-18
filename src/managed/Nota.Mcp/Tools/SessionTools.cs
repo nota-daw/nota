@@ -239,6 +239,18 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
     [McpServerTool(Name = "stop_scene"), Description("Stop every session clip in a scene (row).")]
     public Task StopScene(int scene) => Mutate(() => E.StopScene(scene));
 
+    [McpServerTool(Name = "cancel_slot_launch"), Description(
+        "Cancel a slot's queued launch before its launch point (a slot in state \"queued\"): it never starts and the "
+        + "track keeps playing what it plays now, unbroken. Returns false if nothing was queued there — a launch that "
+        + "already started is stopped with stop_slot instead. Launching a queued slot again keeps it queued.")]
+    public Task<bool> CancelSlotLaunch(int trackId, int scene) => Mutate(() => E.CancelSlotLaunch(trackId, scene));
+
+    [McpServerTool(Name = "cancel_scene_launch"), Description(
+        "Cancel a queued scene launch before its launch point: its clips never start, tracks it would have stopped "
+        + "keep playing, and its follow action and tempo / signature change are dropped. Returns false if nothing of "
+        + "that scene was queued.")]
+    public Task<bool> CancelSceneLaunch(int scene) => Mutate(() => E.CancelSceneLaunch(scene));
+
     [McpServerTool(Name = "stop_all_session"), Description("Stop all playing session clips on every track.")]
     public Task StopAllSession() => Mutate(() => E.StopAllSession());
 
