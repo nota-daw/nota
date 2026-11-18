@@ -71,3 +71,8 @@ remaining work.
 - FR-008: device re-found by instance id after the picker; `NoLayer` / `Recording` /
   `NoLoop` / `Invalid` write nothing and report in the status bar (smoke: no file created).
 - FR-010: the rail's Export is unchanged.
+
+## Review follow-up (PR #663, 2026-11-18)
+
+- [x] T014 `Strata::setState` restores a layer saved mid-recording as finished (`LS_Rec` → `LS_Play`; recording is already stopped on load), so it exports after reopen; smoke check
+- [x] T015 Take identity across the save dialog: the card snapshots the state when the command is chosen and `StrataLayerExport.SameTake` compares the slot's samples afterwards; a re-recorded slot reports the layer gone; smoke check

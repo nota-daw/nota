@@ -417,6 +417,10 @@ internal sealed class StrataDeviceBody : IDeviceBody
             var top = root is null ? null : TopLevel.GetTopLevel(root);
             if (top is null) return;
             float id = scN > S_Id ? scope[S_Id] : 0f;   // follow this Strata if devices move while the dialog is open
+            // The take chosen now: the slot may be undone and recorded again while the dialog is open.
+            var chosen = engine.DeviceGetState(track, di);
+            var now = Nota.Infrastructure.StrataLayerExport.Check(chosen, k);
+            if (now != Nota.Infrastructure.StrataLayerExportResult.Written) { ctx.Status(Outcome(now, k, "")); return; }
             var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
             {
                 Title = Loc.F("device.strata.export_layer_title", k + 1),
@@ -437,16 +441,21 @@ internal sealed class StrataDeviceBody : IDeviceBody
             }
             // The layer as it is now, read from the device state (what a saved project keeps).
             var blob = engine.DeviceGetState(track, at);
+            if (Nota.Infrastructure.StrataLayerExport.Check(blob, k) == Nota.Infrastructure.StrataLayerExportResult.Written
+                && !Nota.Infrastructure.StrataLayerExport.SameTake(chosen, blob, k))
+            { ctx.Status(Loc.F("device.strata.layer_gone", k + 1)); return; }   // the slot holds another take now
             var r = await System.Threading.Tasks.Task.Run(() => Nota.Infrastructure.StrataLayerExport.WriteLayerWav(blob, k, path));
-            ctx.Status(r switch
-            {
-                Nota.Infrastructure.StrataLayerExportResult.Written => Loc.F("main.files.exported", System.IO.Path.GetFileName(path)),
-                Nota.Infrastructure.StrataLayerExportResult.Recording => Loc.F("device.strata.layer_recording_nothing", k + 1),
-                Nota.Infrastructure.StrataLayerExportResult.NoLoop => Loc.T("device.strata.loop_not_closed_nothing"),
-                Nota.Infrastructure.StrataLayerExportResult.Invalid => Loc.F("main.files.export_failed", Loc.T("device.strata.state_unreadable")),
-                _ => Loc.F("device.strata.layer_gone", k + 1),
-            });
+            ctx.Status(Outcome(r, k, path));
         }
+
+        static string Outcome(Nota.Infrastructure.StrataLayerExportResult r, int k, string path) => r switch
+        {
+            Nota.Infrastructure.StrataLayerExportResult.Written => Loc.F("main.files.exported", System.IO.Path.GetFileName(path)),
+            Nota.Infrastructure.StrataLayerExportResult.Recording => Loc.F("device.strata.layer_recording_nothing", k + 1),
+            Nota.Infrastructure.StrataLayerExportResult.NoLoop => Loc.T("device.strata.loop_not_closed_nothing"),
+            Nota.Infrastructure.StrataLayerExportResult.Invalid => Loc.F("main.files.export_failed", Loc.T("device.strata.state_unreadable")),
+            _ => Loc.F("device.strata.layer_gone", k + 1),
+        };
 
         // ---------- live refresh ----------
         void Refresh()

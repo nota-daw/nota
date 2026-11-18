@@ -130,6 +130,11 @@ overdub — it is available.
   layer exports normally; the recording carries on unaffected.
 - The overdub started mid-loop or was stopped before a full cycle: the file is still
   one cycle long with the pass at its position in the cycle and silence elsewhere.
+- The layer slot is undone and recorded again while the save dialog is open: the take
+  the user chose is gone, so nothing is written and the status bar says so — the new
+  take in the same slot is never exported in its place.
+- The project was saved during an overdub: after reopening, nothing is recording, so
+  that pass is a finished (partial) layer and exports like any other.
 - The layer is silent (e.g. recorded with no input): a silent file of one cycle is
   written; no special case.
 - Writing fails (full disk, locked file): the status bar reports the failure, as the

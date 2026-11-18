@@ -6129,6 +6129,27 @@ Console.WriteLine("-- Nota Strata layer export --");
     Check(StrataLayerExport.WriteLayerWav(le.DeviceGetState(sl_rt, sl_rd), 1, sl_pRe) == StrataLayerExportResult.Written
         && File.ReadAllBytes(sl_pRe).AsSpan().SequenceEqual(sl_wav), "after save/reopen the layer exports to the identical file");
 
+    // Saved mid-overdub (review of #663): a load stops recording, so the reopened pass is a finished
+    // layer that exports — not one stuck "recording".
+    int sl_mt = le.AddInstrumentTrack(); int sl_md = le.AddBuiltinDevice(sl_mt, 15);
+    le.DeviceSetState(sl_mt, sl_md, sl_mid);
+    var sl_ms = new float[6 + 8 * 3];
+    le.DeviceScope(sl_mt, sl_md, sl_ms, sl_ms.Length);
+    Check((int)sl_ms[4] == -1 && (int)sl_ms[6 + 3] != 2, $"a Strata saved mid-overdub reopens with nothing recording (rec {(int)sl_ms[4]}, layer 2 state {(int)sl_ms[6 + 3]})");
+    Check(StrataLayerExport.Check(le.DeviceGetState(sl_mt, sl_md), 1) == StrataLayerExportResult.Written, "…and its last pass exports");
+
+    // The same slot, another take (review of #663): undo layer 2 and record it again while a save
+    // dialog would be open — the take chosen before is gone.
+    Check(StrataLayerExport.SameTake(sl_before, le.DeviceGetState(lt, ld), 1), "an untouched layer is the same take");
+    le.Seek(0); le.Play();
+    le.DeviceAction(lt, ld, 4, 0, 0); le.RenderOffline(sl_lb, Blk);               // C_Undo: layer 2 dropped
+    le.DeviceAction(lt, ld, 1, 0, 0);                                             // C_Overdub: a new layer 2
+    for (int b = 0; b <= Blocks + 1; b++) le.RenderOffline(sl_lb, Blk);
+    le.StopTransport();
+    var sl_retake = le.DeviceGetState(lt, ld);
+    Check(StrataLayerExport.Check(sl_retake, 1) == StrataLayerExportResult.Written && !StrataLayerExport.SameTake(sl_before, sl_retake, 1),
+        "a slot undone and recorded again is another take (the export reports the chosen one gone)");
+
     // Nothing there: no fallback to the mix.
     string sl_pNo = Path.Combine(sl_dir, "none.wav");
     Check(StrataLayerExport.WriteLayerWav(sl_before, 2, sl_pNo) == StrataLayerExportResult.NoLayer && !File.Exists(sl_pNo), "a layer that isn't there exports nothing (NoLayer)");
