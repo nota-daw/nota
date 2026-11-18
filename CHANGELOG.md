@@ -65,6 +65,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     Nota, the default) or **Scenes across** (a scene per column, a track per row with its
     Stop beside its name). Each phone keeps its own choice.
 
+## [0.60.3] — 2026-11-18
+
+### Fixed
+- **Synced LFOs in Nota Aurora and Nota Volt stay on the beat in the export** (#676): an LFO
+  synced to the tempo now follows the song position while the transport plays, as the effects'
+  LFOs do. It used to carry on from whatever played before, so a pulse, gate or wobble that sat
+  on the beat while you worked could land somewhere else in the beat in the exported file, or
+  after playing from another bar. Factory presets this touches: Aurora Shimmer Arp, Wobble Wave,
+  Chime Sequence, Glacier Pad; Volt Wobble Bass, Growl Bass, Sample & Hold.
+
 ## [0.60.2] — 2026-11-17
 
 ### Added
