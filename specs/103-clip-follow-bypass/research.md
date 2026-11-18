@@ -45,12 +45,14 @@ whole `SessionSlot`, so FR-010 and FR-011 come for free.
 
 The C ABI struct `NotaSessionClipProps` gains `int32_t follow_bypass` at the end. It ends today
 with `int32_t jump_scene` after a `double`, so the new field fills existing tail padding — the
-struct stays 72 bytes. The C# mirror gains `int FollowBypass` at the end.
+struct stays 64 bytes (`follow_bypass` at offset 60). The C# mirror gains `int FollowBypass` at the end.
 
 ## R4 — Order of checks in `sessionPreApply`
 
-Bypass handling goes before the global-switch check, so the resume base is taken when the clip
-is un-bypassed even if the global switch is off at that moment. The global switch keeps its
+Bypass handling goes before the queued-launch guard and the global-switch check, so the resume
+base is taken when the clip is un-bypassed even while a launch is queued (and later cancelled,
+e.g. its row removed) or the global switch is off at that moment. The bypass return itself comes
+after the guard and after Repeat, so a queued launch and Repeat still take priority. The global switch keeps its
 existing resume behaviour (Assumptions).
 
 ## R5 — Persistence

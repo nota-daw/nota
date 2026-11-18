@@ -909,8 +909,7 @@ public sealed partial class SessionView
             if (!_engine.TryGetSessionClipProps(trackId, scene, out var cur)) return;
             cur.FollowBypass = cur.FollowBypass != 0 ? 0 : 1;
             _engine.SetSessionClipProps(trackId, scene, cur);
-            RefreshSlot(trackId, scene);
-            RebuildInspector();
+            RefreshSlot(trackId, scene);   // also rebuilds the inspector
             Say(cur.FollowBypass != 0 ? Loc.T("session.follow_bypassed") : Loc.T("session.follow_restored"));
         });
     }

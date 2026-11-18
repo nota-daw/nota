@@ -24,7 +24,7 @@ launch / None outcome     → p = 0, followBase = 0, followHeld = false
 
 ## NotaSessionClipProps (C ABI) / NotaSessionClipProps (C#)
 
-Appends `int32_t follow_bypass` / `int FollowBypass` (0/1). Size unchanged (72 bytes).
+Appends `int32_t follow_bypass` / `int FollowBypass` (0/1). Size unchanged (64 bytes; the field sits at offset 60).
 
 ## SessionSlotDto (project file, v35)
 

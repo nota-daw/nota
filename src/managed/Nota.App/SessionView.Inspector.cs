@@ -288,7 +288,7 @@ public sealed partial class SessionView
         var faSwitch = new SwitchTrack { IsOn = !bypassed, IsDim = !follow };
         var faToggle = new Button { Padding = new Thickness(0), MinHeight = 0, Height = 14, Background = Brushes.Transparent, MinWidth = 0, Content = faSwitch, VerticalAlignment = VerticalAlignment.Center };
         ToolTip.SetTip(faToggle, Loc.T("session.inspector.follow_switch_tip"));
-        faToggle.Click += (_, _) => { Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; }); RebuildInspector(); };
+        faToggle.Click += (_, _) => Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; });   // Set's RefreshSlot rebuilds the inspector
         Grid.SetColumn(faToggle, 2); faHead.Children.Add(faToggle);
         faBox.Children.Add(faHead);
         faBox.Children.Add(fa);

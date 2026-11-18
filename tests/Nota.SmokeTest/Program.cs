@@ -9286,6 +9286,27 @@ engine.StopTransport();
     Run(0.7);
     Check(e.SessionPlayingSlot(t) == 1, $"then fires at the normal follow time (playing {e.SessionPlayingSlot(t)})");
     e.StopAllSession(); Run(0.1);
+
+    // A launch queued while the bypass came and went, then cancelled (its row removed): the
+    // bypass still re-bases the follow count, so nothing fires as a catch-up (beat 6, not at once).
+    int qs = e.InsertScene(2);
+    e.AddSessionMidiClip(t, qs, 4.0);
+    e.SetSessionNotes(t, qs, new[] { new NotaNote(62, 0.0, 1.0, 0.9f) });
+    Check(e.TryGetSessionClipProps(t, qs, out var qp), "queued-slot props");
+    qp.QuantBeats = 16.0; e.SetSessionClipProps(t, qs, qp);
+    Start(); e.LaunchSlot(t, 0); Run(0.5);
+    e.LaunchSlot(t, qs); Run(0.5);
+    trig.FollowBypass = 1; e.SetSessionClipProps(t, 0, trig);
+    Run(4.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.1);
+    Check(e.SessionPlayingSlot(t) == 0 && e.SessionSlotState(t, qs) == 2, $"the launch is still queued while the bypass ends (state {e.SessionSlotState(t, qs)})");
+    e.RemoveScene(qs);
+    Run(0.4);
+    Check(e.SessionPlayingSlot(t) == 0, $"cancelling a queued launch after a bypass fires no catch-up (playing {e.SessionPlayingSlot(t)})");
+    Run(0.8);
+    Check(e.SessionPlayingSlot(t) == 1, $"the follow action lands on the next multiple after the cancelled launch (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
     e.RemoveTrack(tf);
     trig.FollowBeats = 1.0; e.SetSessionClipProps(t, 0, trig);
 
