@@ -29,3 +29,32 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007/T008 → T009 → T01
 
 ## Phase 8: Convergence
 - [ ] T017 [SC-004] Obtain a passing full smoke run for the overloaded render-pool deadline guards on a stable verification host. Current run reproduces the two previously documented failures; no Color checks fail. This is the remaining global verification gap, outside the new Color DSP implementation.
+
+## Phase 9: Clean color bass — reproducible foundation
+- [x] T018 Extend specs/100-color-bass-prototype/{spec,plan,research,data-model,contracts/device}.md with FR-016–021 and the accepted fixed-parameter/fixed-latency design.
+- [x] T019 Restore tests/native/ChromaTest.cpp and scripts/test-color.sh with source-override baseline renders, allocation guard, boundary/attack/release/stereo tests and repeatable WAV/CPU output (FR-021).
+
+## Phase 10: US1 — stable and clear coloration
+- [x] T020 [US1] Implement selected-note hysteresis, reliable startup estimates and predicted/energy-aware peak matching in src/native/nota.engine/src/devices/effects/Chroma.{h,cpp} (FR-016–017).
+- [x] T021 [US1] Add frame-centred phase and two-hop placement transitions in src/native/nota.engine/src/devices/effects/Chroma.{h,cpp}; preserve exact zero-shift/stereo and test moving/overlapping partials (FR-017).
+- [x] T022 [US1] Add local stereo-linked attack protection, honest Decay release, smooth obsolete-tail release and energy-based sleep in src/native/nota.engine/src/devices/effects/Chroma.{h,cpp} (FR-018–019).
+
+## Phase 11: US2 — sound selection and recall
+- [x] T023 [US2] Add three presets to the existing FactoryPresetCatalog and update tests/Nota.SmokeTest/ColorTests.cs for six presets, unchanged 24-param persistence and boundary behavior (FR-020).
+
+## Phase 12: US3 — validation and listening
+- [x] T024 [US3] Run scripts/test-color.sh before/after, generate level-matched WAVs and CPU/block metrics under build/color-prototype/clean, and record evidence in specs/100-color-bass-prototype/verification.md (FR-021).
+- [x] T025 Update CHANGELOG.md, FEATURES.md and sibling nota-docs EN/RU Chroma pages, build/check docs, run scripts/build.sh, update quickstart and perform convergence.
+
+Clean iteration dependencies: T018 → T019 → T020 → T021 → T022 → T023 → T024 → T025.
+Independent baseline/measurement reads may overlap; DSP changes are sequential. Each DSP
+stage reruns native regression checks; US2 independently verifies preset/old-state recall,
+and US3 provides listening evidence without claiming human approval. T017 remains the
+pre-existing global smoke gate and must be reassessed after the full build.
+
+## Phase 13: Polyphonic scale correction
+- [x] T026 Add native polyphonic acceptance fixtures to tests/native/ChromaTest.cpp.
+- [x] T027 Implement bounded voice detection, assignment, synthesis and mode transitions in the native Chroma effect.
+- [x] T028 Add Mode to the existing Chroma card, preserve project and preset defaults, and cover the public path in tests/Nota.SmokeTest/ColorTests.cs.
+- [x] T029 Generate piano listening examples, run the focused and full builds and document verification.
+- [x] T030 Update user documentation, FEATURES.md and CHANGELOG.md and check convergence against FR-022–025.

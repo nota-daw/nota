@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
-// Spectral pitch quantizer: manual note mask, coloration and aligned mix.
+// Spectral and polyphonic scale correction with a shared note selector.
 using System;
 using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -16,7 +17,8 @@ namespace Nota.App;
 
 internal sealed class ChromaDeviceBody : IDeviceBody
 {
-    private const int Root = 0, Scale = 1, Amount = 2, Resonance = 3, Decay = 4, Low = 5, High = 6, Mix = 7, Output = 8, NoteC = 9, Morph = 21, Gate = 22, GateThreshold = 23;
+    private const int Root = 0, Scale = 1, Amount = 2, Resonance = 3, Decay = 4, Low = 5, High = 6,
+        Mix = 7, Output = 8, NoteC = 9, Morph = 21, Gate = 22, GateThreshold = 23, Mode = 24;
     private static readonly string[] Notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     public double Width => 560;
 
@@ -27,6 +29,7 @@ internal sealed class ChromaDeviceBody : IDeviceBody
     {
         var e = ctx.Engine; int track = ctx.TrackId;
         float P(int p) => e.DeviceGetParam(track, index, p);
+        bool Polyphonic() => P(Mode) >= .5f;
         void Begin(int p) => e.BeginAutomationWrite(track, AutomationTarget.DeviceParam, index, p, "");
         void End(int p) => e.EndAutomationWrite(track, AutomationTarget.DeviceParam, index, p, "");
         void Set(int p, double v) { Begin(p); e.DeviceSetParam(track, index, p, (float)Math.Clamp(v, 0, 1)); End(p); }
@@ -57,7 +60,8 @@ internal sealed class ChromaDeviceBody : IDeviceBody
         string[] scales = [Loc.T("device.color.major"), Loc.T("device.color.minor"), Loc.T("device.color.major_pentatonic"), Loc.T("device.color.minor_pentatonic"), Loc.T("device.color.custom")];
         Border Drop(int param, string[] items, double width)
         {
-            int Cur() => Math.Clamp((int)Math.Round(P(param) * (items.Length - 1)), 0, items.Length - 1);
+            int Cur() => param == Mode ? (Polyphonic() ? 1 : 0) :
+                Math.Clamp((int)Math.Round(P(param) * (items.Length - 1)), 0, items.Length - 1);
             var label = new TextBlock { FontSize = 8.5, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
             DockPanel.SetDock(chev, Dock.Right);
@@ -79,7 +83,7 @@ internal sealed class ChromaDeviceBody : IDeviceBody
                 {
                     int iv = i;
                     var mi = new MenuItem { Header = items[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
-                    mi.Click += (_, _) => { Set(param, iv / (double)(items.Length - 1)); Refresh(); };
+                    mi.Click += (_, _) => { Set(param, iv / (double)(items.Length - 1)); Refresh(); ctx.NotifyChanged(); };
                     fly.Items.Add(mi);
                 }
                 fly.ShowAt(box);
@@ -90,6 +94,8 @@ internal sealed class ChromaDeviceBody : IDeviceBody
 
         var rootPicker = Drop(Root, Notes, 44);
         var scalePicker = Drop(Scale, scales, 134);
+        var modePicker = Drop(Mode, [Loc.T("device.color.spectral"), Loc.T("device.color.polyphonic")], 88);
+        AutomationProperties.SetName(modePicker, e.DeviceParamName(track, index, Mode));
         var notes = new Canvas { Width = 182, Height = 44 };
         int[] white = [0, 2, 4, 5, 7, 9, 11];
         int[] black = [1, 3, 6, 8, 10];
@@ -146,22 +152,23 @@ internal sealed class ChromaDeviceBody : IDeviceBody
             int count = e.DeviceScope(track, index, telemetry, telemetry.Length);
             if (count >= 2 && telemetry[0] > 0) latency.Text = Loc.F("device.color.latency", NotaNum.F($"{telemetry[1] * 1000 / telemetry[0]:0.0}"));
             double lowHz = ExpHz(P(Low), 40, 2000), highHz = ExpHz(P(High), 1000, 20000);
-            spectrum.Update(telemetry, count, Mask(), Math.Min(lowHz, highHz), Math.Max(lowHz, highHz));
+            spectrum.Update(telemetry, count, Math.Min(lowHz, highHz), Math.Max(lowHz, highHz), !Polyphonic());
         });
 
         var select = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { rootPicker, scalePicker } };
         var keyBlock = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { select, notes } };
         var divider = new Border { Width = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(8, 2) };
+        var resonance = KnobFor(Resonance, Percent);
+        var decay = KnobFor(Decay, v => NotaNum.F($"{20 * Math.Pow(50, v):0}\u2009ms"));
+        var low = KnobFor(Low, v => Hz(v, 40, 2000));
+        var high = KnobFor(High, v => Hz(v, 1000, 20000));
         var knobs = new UniformGrid
         {
             Rows = 1, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
                 KnobFor(Amount, Percent, 36, 48),
-                KnobFor(Resonance, Percent),
-                KnobFor(Decay, v => NotaNum.F($"{20 * Math.Pow(50, v):0}\u2009ms")),
-                KnobFor(Low, v => Hz(v, 40, 2000)),
-                KnobFor(High, v => Hz(v, 1000, 20000)),
+                resonance, decay, low, high,
                 KnobFor(Output, v => NotaNum.F($"{v * 36 - 24:0.0}\u2009dB")),
                 KnobFor(Mix, Percent, 36, 48),
             },
@@ -183,7 +190,24 @@ internal sealed class ChromaDeviceBody : IDeviceBody
                 KnobFor(GateThreshold, v => NotaNum.F($"{v * 80 - 80:0.0}\u2009dBFS"), cellW: 84),
             },
         };
-        var controlRows = new StackPanel { Spacing = 3, Children = { knobs, spectral } };
+        var modes = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center,
+            Children = { modePicker, spectral },
+        };
+        bool? wasPolyphonic = null;
+        refreshers.Add(() =>
+        {
+            bool polyphonic = Polyphonic();
+            if (wasPolyphonic == polyphonic) return;
+            wasPolyphonic = polyphonic;
+            Inactive.Set(resonance, polyphonic);
+            Inactive.Set(decay, polyphonic);
+            Inactive.Set(low, polyphonic);
+            Inactive.Set(high, polyphonic);
+            Inactive.Set(spectral, polyphonic);
+        });
+        var controlRows = new StackPanel { Spacing = 3, Children = { knobs, modes } };
         Grid.SetColumn(divider, 1); Grid.SetColumn(controlRows, 2);
         var deck = new Grid
         {
@@ -207,6 +231,7 @@ internal sealed class ChromaSpectrumView : Control
     private readonly float[] levels = new float[512], tunedLevels = new float[512];
     private double lowHz = 150.0, highHz = 8000.0;
     private int hoverEdge = -1, dragEdge = -1;
+    private bool bandEditable = true;
 
     public event Action<int, double>? EdgeChanged;
     public event Action<int>? EdgeGestureBegin;
@@ -215,7 +240,7 @@ internal sealed class ChromaSpectrumView : Control
 
     public ChromaSpectrumView() { ClipToBounds = true; MinHeight = 96; }
 
-    public void Update(float[] source, int count, int mask, double low, double high)
+    public void Update(float[] source, int count, double low, double high, bool editBand)
     {
         for (int i = 0; i < levels.Length; i++)
         {
@@ -224,6 +249,12 @@ internal sealed class ChromaSpectrumView : Control
         }
         lowHz = Math.Clamp(low, MinHz, MaxHz);
         highHz = Math.Clamp(high, lowHz, MaxHz);
+        bandEditable = editBand;
+        if (!editBand)
+        {
+            hoverEdge = -1;
+            Cursor = Cursor.Default;
+        }
         InvalidateVisual();
     }
 
@@ -244,6 +275,7 @@ internal sealed class ChromaSpectrumView : Control
 
     private int EdgeAt(Point p)
     {
+        if (!bandEditable) return -1;
         double dl = Math.Abs(p.X - X(lowHz)), dh = Math.Abs(p.X - X(highHz));
         if (Math.Min(dl, dh) > 6) return -1;
         return dl <= dh ? 0 : 1;
@@ -253,7 +285,7 @@ internal sealed class ChromaSpectrumView : Control
     {
         base.OnPointerMoved(e);
         var p = e.GetPosition(this);
-        if (dragEdge >= 0) { EdgeChanged?.Invoke(dragEdge, HzAt(p.X)); return; }
+        if (dragEdge >= 0) { if (bandEditable) EdgeChanged?.Invoke(dragEdge, HzAt(p.X)); return; }
         int h = EdgeAt(p);
         if (h != hoverEdge)
         {
@@ -343,10 +375,10 @@ internal sealed class ChromaSpectrumView : Control
         // 4. Out-of-band dimming and draggable Low / High cutoff lines.
         double xl = X(lowHz), xh = X(highHz);
         var outsideWash = NotaPalette.Wash(NotaPalette.BgSunken, 0x50);
-        if (xl > x0 + 1) context.DrawRectangle(outsideWash, null, new Rect(x0, top, xl - x0, plotH));
-        if (xh < x1 - 1) context.DrawRectangle(outsideWash, null, new Rect(xh, top, x1 - xh, plotH));
+        if (bandEditable && xl > x0 + 1) context.DrawRectangle(outsideWash, null, new Rect(x0, top, xl - x0, plotH));
+        if (bandEditable && xh < x1 - 1) context.DrawRectangle(outsideWash, null, new Rect(xh, top, x1 - xh, plotH));
 
-        for (int edge = 0; edge < 2; edge++)
+        for (int edge = 0; bandEditable && edge < 2; edge++)
         {
             bool hot = edge == dragEdge || (dragEdge < 0 && edge == hoverEdge);
             double ex = Math.Round(edge == 0 ? xl : xh) + 0.5;

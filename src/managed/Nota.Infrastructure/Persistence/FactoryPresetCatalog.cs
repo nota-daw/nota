@@ -2478,6 +2478,12 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Fx("color", 27, "Color bass", ("Amount", 1f), ("Resonance", 0.65f), ("Mix", 1f));
         Fx("color", 27, "Short chord", ("Scale", 1f), ("Resonance", 0.5f), ("Decay", 0.15f),
             ("C", 1f), ("D", 0f), ("D#", 1f), ("F", 0f), ("G", 1f), ("G#", 0f), ("A#", 0f));
+        Fx("color", 27, "Tight bass", ("Resonance", 0.18f), ("Decay", 0.22f),
+            ("Mix", 0.9f), ("Morph", 0.12f), ("Gate", 1f), ("Gate threshold", 0.3f));
+        Fx("color", 27, "Clear growl", ("Resonance", 0.4f), ("Decay", 0.42f),
+            ("Low", 0.39f), ("High", 0.65f), ("Mix", 0.95f), ("Morph", 0.23f));
+        Fx("color", 27, "Spacious resonance", ("Resonance", 0.8f), ("Decay", 0.88f),
+            ("Mix", 0.8f), ("Output", 0.58f));
 
         // ---- Nota Vocoder (kind 26) — channel vocoder. Written in units through Vo(): bands
         //      8..32, Low Hz 20..1000, High Hz 2000..20000, Q 1..10, Formant −12..+12 st, Attack

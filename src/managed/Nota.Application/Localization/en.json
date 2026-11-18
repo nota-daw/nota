@@ -12,6 +12,8 @@
     "device.color.major_pentatonic": "Major pentatonic",
     "device.color.minor_pentatonic": "Minor pentatonic",
     "device.color.custom": "Custom",
+    "device.color.spectral": "Spectral",
+    "device.color.polyphonic": "Polyphonic",
     "device.color.latency": "Latency: {0} ms",
     "device.color.spectrum": "Spectrum",
     "device.color.dry": "Dry",

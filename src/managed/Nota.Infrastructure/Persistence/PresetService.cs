@@ -554,6 +554,9 @@ public static class PresetService
                 {
                     for (int i = 0; i < doc.Params.Length && i < pc; i++)
                         engine.DeviceSetParam(trackId, deviceIndex, i, doc.Params[i]);
+                    // Positional Chroma presets from before Mode always meant Spectral.
+                    if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == 27 && pc > 24 && doc.Params.Length <= 24)
+                        engine.DeviceSetParam(trackId, deviceIndex, 24, 0f);
                 }
                 LegacyRange(doc, engine, trackId, deviceIndex);
                 // The preset's band labels replace the device's (none for a factory preset).

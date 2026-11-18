@@ -16,3 +16,51 @@ Publish separate 512-bin log-frequency dry and shifted contributions through the
 
 ## Naturalness extension
 Use local one-to-one peak matching within four FFT bins, minimizing frequency distance, then preferring energy and lower index. Carry prior output phase forward by the target-frequency increment and derive a common rotation against current input phase. Never globally reset phase. Stereo-linked Morph interpolates magnitudes after resonance, with 20 ms parameter smoothing; Gate follows using a soft knee and 5/50 ms attack/release. Append indices 21–23, disabled by default; threshold default normalized .25 (−60 dBFS). Prepare all track/gate buffers off-thread. UI adds a second row, retaining original parameter order, dimensions and graph minimum. No new C ABI functions or dependencies.
+
+## Clean color bass iteration
+Continue this feature rather than creating a second device/spec. All 24 parameters and
+N-sample latency stay fixed. Add native tests and WAV/benchmark generation under
+tests/native/ChromaTest.cpp and scripts/test-color.sh, compiling the actual DSP and the
+existing Signalsmith FFT. A source override supports the baseline without duplicating DSP
+inside the test. Tests run before implementation to record failures, then after each change.
+
+Track a selected MIDI note per peak, with 15-cent hysteresis beyond the nearest-note
+boundary, deterministic lower-note ties, and re-selection when the mask changes.
+Use magnitude interpolation for the initial frequency and phase-derived frequency for
+established partials. Prioritize strong peaks, match nearby predicted frequencies, reject
+implausible energy/frequency jumps and retain a shared stereo phase reference.
+
+Smooth integer-bin placement changes over two hops with phase referred to the frame
+centre, preserving whole-region relative phase. Measure the transition against the baseline
+and keep exact zero-shift reconstruction. Local stereo-linked positive spectral flux
+protects attacks by temporarily blending affected bins towards the original spectrum;
+return to the tuned spectrum over 20 ms, before Morph/Gate and without extra lookahead.
+
+Remove the hidden 60-ms-input-silence release cap. Retain Decay's 20–1000 ms exponential
+pole-time mapping; smoothly release obsolete tails on scale/band changes. Measure actual
+post-mix output and prepared-buffer tail state; only permit sleep once input/OLA drain
+and output stays below −90 dBFS. Parameter changes and non-silent input wake normally.
+
+Keep existing preset IDs; add Tight bass, Clear growl and Spacious resonance. Update the
+focused C-ABI smoke tests (six presets plus boundary regression), FEATURES, changelog and
+EN/RU manual. Supply baseline/current WAV pairs and CPU median/max-block measurements.
+Run full scripts/build.sh and converge; distinguish any reproduced unrelated deadline
+failures from the focused Chroma results. Listening acceptance remains human-owned.
+
+## Polyphonic scale correction
+Reuse Chroma's FFT, tracked peaks and synthesis. Score note candidates from the
+weighted energy of reliably located partials, removing evidence assigned to each
+selected voice before selecting another. Fit and track up to four fundamentals
+across frames, allowing upper piano partials to deviate slightly. Use fixed
+scratch space. Map the stabilized chord jointly with an ordered, injective
+assignment that keeps in-scale voices fixed and prefers correcting more voices,
+then minimizing distance and choosing the lower note on ties. Retain source
+audio when assignment or partial ownership is uncertain. Feed each assigned
+partial a single frequency ratio shared by its note.
+
+Append Mode at index 24 (0 Spectral, 1 Polyphonic). Keep FFT length, hop and
+scope layout. Skip spectral coloration in Polyphonic. Fade the wet mix to
+aligned dry, reset spectral synthesis state at a frame boundary, allow the new
+overlap buffers to fill, and fade it back in. Integrate the selector using Chroma's
+existing card controls, localization and generic parameter persistence. Existing
+presets use the default mode. No new ABI, dependency, or project-key routing.
