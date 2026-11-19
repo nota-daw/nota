@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.60.3** (plus changes in development on `main`). This document describes what is
+**0.60.4** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -29,14 +29,17 @@ Contents
 
 - **Multi-output audio interfaces**: every backend opens all of the device's outputs (up
   to 64), so Main and Cue can play on any two pairs.
-- **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
+- **macOS** (≥ 12.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
   hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
 - **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency) or **ASIO**
   (any installed driver; falls back to WASAPI if it can't start), WinMM MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
   Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
-  with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). Settings live in
+  with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). On **NixOS** (or any
+  Linux with Nix) `nix run github:nota-daw/nota` builds and runs a Nix package from the
+  flake (x86_64 / aarch64), and `nix develop` / `devenv shell` give a development shell with
+  the build tools. Settings live in
   `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`). Without a working xdg-desktop-portal file
   chooser Nota falls back to its own file dialog (`NOTA_FILE_DIALOG=builtin` forces it), and
   with no audio output that opens it runs on a silent device and says so.
@@ -372,7 +375,9 @@ own window — see
     it: every source picker lists the parts under their track. Pre takes a part before its own
     effects, Post after them and its level and pan. A muted or solo-silenced pad still drives
     its key (a "ghost kick"); the key follows its pad through edits and is saved with the
-    project. Up to 16 distinct sources at once.
+    project. Up to 16 distinct sources at once. The key arrives in the same moment as the
+    audio it keys, live and in an export (a key from a group or return, or two tracks keying
+    each other, one audio block later).
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
 - **Device chain** per track: instrument + effects + MIDI effects, laid out in a row. The
   **+** at its end opens the browser on Audio effects with the cursor in the search.
