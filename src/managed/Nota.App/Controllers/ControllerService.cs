@@ -1015,6 +1015,13 @@ public sealed class ControllerService
     // track, the master.
     private MidiTarget? ValueTarget(ConnectedController c, ControlDecl d, List<int> trackIds)
     {
+        // Mapped with MIDI Learn: the control drives (and shows) that mapping, not its role.
+        if (_learn is not null && d.Message is ControlMessage.Cc or ControlMessage.Note)
+        {
+            var kind = d.Message == ControlMessage.Note ? MidiSourceKind.Note : MidiSourceKind.Cc;
+            foreach (var m in _learn.Mappings)
+                if (m.SourceKind == kind && m.Channel == d.Channel && m.Number == d.Number) return m.Target;
+        }
         if (Pin(c, d) is { } pin) return FromStored(pin.Target);
         switch (d.Role.Kind)
         {
