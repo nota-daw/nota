@@ -184,6 +184,23 @@ public sealed class MidiLearnService
         return $"{m.SourceLabel} · {(name.Length > 0 ? name : $"Track {i + 1}")}";
     }
 
+    /// <summary>A Session launch mapping named from the grid when the MIDI map draws it (#601): its
+    /// track's name and its row's scene, so a renamed track or scene isn't shown under its old name.
+    /// Null for any other target, which keeps the name it was learned under.</summary>
+    public string? SessionLabel(MidiMapping m) => m.Target.Kind switch
+    {
+        MidiTargetKind.SessionSlotLaunch => Loc.F("midi_map.launch_clip", TrackNames.Of(_engine, m.Target.TrackId), SceneLabel(_engine, m.Target.ParamIndex)),
+        MidiTargetKind.SessionSceneLaunch => Loc.F("midi_map.launch_scene", SceneLabel(_engine, m.Target.ParamIndex)),
+        _ => null,
+    };
+
+    /// <summary>A scene row as the Session grid names it: its own name, else "Scene N".</summary>
+    internal static string SceneLabel(IAudioEngine engine, int scene)
+    {
+        string name = scene >= 0 && scene < engine.SceneCount ? engine.GetSceneName(scene) : "";
+        return name.Length > 0 ? name : Loc.F("session.scene", scene + 1);
+    }
+
     public void RemoveMapping(MidiMapping m)
     {
         if (_mappings.Remove(m)) MappingsChanged?.Invoke();
@@ -257,9 +274,12 @@ public sealed class MidiLearnService
             int number = _buf[i * 4 + 2];
             int value = _buf[i * 4 + 3];
             string src = $"{(kind == MidiSourceKind.Cc ? "CC" : "Note")} {number} ch{channel + 1} v{value}";
-            RecordSeen(kind == MidiSourceKind.Note, channel, number, value);
+            // A note-off (value 0) only releases what its note-on pressed: it is not activity to
+            // discover, and it never binds — a key let go after clicking a control isn't a choice.
+            bool noteOff = kind == MidiSourceKind.Note && value == 0;
+            if (!noteOff) RecordSeen(kind == MidiSourceKind.Note, channel, number, value);
 
-            if (_pending is { } p)
+            if (_pending is { } p && !noteOff)
             {
                 Bind(p, kind, channel, number);
                 LogMidi(string.Format("MIDI learn: {0} → bound to '{1}'", src, p.Name));
@@ -312,28 +332,35 @@ public sealed class MidiLearnService
 
     private void Apply(MidiMapping m, int value127)
     {
-        if (m.Target.IsButton && m.SourceKind == MidiSourceKind.Note)
+        if (m.SourceKind == MidiSourceKind.Note)
         {
-            // A note-on fires; anything else crosses the half-way point (ApplyNormalized).
-            ApplyNormalized(m, value127 > 0 ? 1.0 : 0.0);
+            // A note-on fires a button, with its velocity for a clip launch (#601); its note-off
+            // releases it and resets the latch for the next press. A continuous target keeps the
+            // last note-on's velocity: the note-off leaves it where it is, as before note-offs
+            // reached MIDI Learn.
+            if (m.Target.IsButton) ApplyNormalized(m, value127 > 0 ? 1.0 : 0.0, Math.Clamp(value127 / 127f, 0f, 1f));
+            else if (value127 > 0) ApplyNormalized(m, Math.Clamp(value127 / 127.0, 0, 1));
             return;
         }
+        // Anything else crosses the half-way point for a button (ApplyNormalized).
         ApplyNormalized(m, Math.Clamp(value127 / 127.0, 0, 1));
     }
 
-    private void ApplyNormalized(MidiMapping m, double norm)
+    private void ApplyNormalized(MidiMapping m, double norm, float velocity = 1f)
     {
         var t = m.Target;
         if (t.IsButton)
         {
             // Crossing the half-way point. Latch on the edge: a swept CC or a squeezed
             // trigger sends a run of values past the threshold, and toggling on each one
-            // would make the target flutter.
+            // would make the target flutter. The way back down is the button's release (a
+            // Gate / Repeat clip stops); an inverted source has no velocity of its own.
             bool on = norm >= 0.5;
             if (m.Invert) on = !on;
             if (on == m.TriggerLatch) return;
             m.TriggerLatch = on;
-            if (on) _applier.Trigger(t);
+            if (on) _applier.Trigger(t, m.Invert ? 1f : velocity);
+            else _applier.Release(t);
             return;
         }
 
@@ -452,7 +479,8 @@ public sealed class MidiLearnService
         or MidiTargetKind.TrackCue
         or MidiTargetKind.RackVolume or MidiTargetKind.RackChainGain
         or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo
-        or MidiTargetKind.TrackArm or MidiTargetKind.TrackSelect or MidiTargetKind.TrackSend;
+        or MidiTargetKind.TrackArm or MidiTargetKind.TrackSelect or MidiTargetKind.TrackSend
+        or MidiTargetKind.SessionSlotLaunch;
 
     private int IndexOfTrackId(int trackId)
     {

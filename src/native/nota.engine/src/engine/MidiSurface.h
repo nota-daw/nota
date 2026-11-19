@@ -64,14 +64,15 @@ class MidiSurface {
     // The routing rule both the engine and the self-test run: a claimed message goes to the
     // surface queue (and, while MIDI Learn listens, to the learn copy); anything else to the
     // instruments and the learn copy, as before. learn(kind, channel, number, value) gets
-    // CC (kind 0) and note-on (kind 1) only.
+    // CC (kind 0) and notes (kind 1): a note-off — or a note-on at velocity 0 — as value 0, so a
+    // mapped pad has a release (#601) and a mapped button's latch resets for the next press.
     template <typename InstrumentsFn, typename LearnFn>
     void route(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2, InstrumentsFn&& instruments,
                LearnFn&& learn) {
         auto learnCopy = [&] {
             if (status == 0xB0) learn(0, channel, d1, d2);
-            else if (status == 0x90 && d2 > 0)
-                learn(1, channel, d1, d2);
+            else if (status == 0x90) learn(1, channel, d1, d2);
+            else if (status == 0x80) learn(1, channel, d1, 0);
         };
         if (claimed(source, status, channel, d1)) {
             const int32_t st = (status == 0x90 && d2 == 0) ? 0x80 : status;

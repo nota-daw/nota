@@ -392,6 +392,9 @@ internal static class ControllerTests
         yield return (nl == 1 && learn[0] == 1 && learn[2] == 60,
             "the claimed CC is not learnable, the unclaimed note is");
         e.MidiTestInject(src, new byte[] { 0x80, 60, 0 });   // release the note it played
+        nl = e.PollMidiControlEvents(learn);
+        yield return (nl == 1 && learn[0] == 1 && learn[2] == 60 && learn[3] == 0,
+            "the note's release reaches MIDI Learn as value 0 (a mapped pad's release, #601)");
 
         e.SetMidiLearnListening(true);
         e.MidiTestInject(src, new byte[] { 0xB0, 20, 1 });

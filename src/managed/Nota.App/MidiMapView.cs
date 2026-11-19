@@ -78,7 +78,7 @@ public sealed partial class MidiMapView : UserControl
     {
         var name = new TextBlock
         {
-            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : Shown(m),
+            Text = _learn.SessionLabel(m) ?? (string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : Shown(m)),
             FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };

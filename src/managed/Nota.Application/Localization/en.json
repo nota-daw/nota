@@ -3057,6 +3057,8 @@
     "midi_learn.right_stick_2": "Right stick ↑↓",
     "midi_learn.right_trigger": "Right trigger",
     "midi_map.invert": "Invert",
+    "midi_map.launch_clip": "Launch · {0} · {1}",
+    "midi_map.launch_scene": "Launch · {0}",
     "midi_map.master_volume": "Master Volume",
     "midi_map.max": "Max",
     "midi_map.midi_mappings": "MIDI mappings",

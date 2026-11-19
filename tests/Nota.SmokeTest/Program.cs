@@ -1021,6 +1021,14 @@ if (args.Length >= 1 && args[0] == "--cancel-launch")
     Console.WriteLine(failures == 0 ? "CANCEL LAUNCH PASSED" : $"CANCEL LAUNCH FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Session launch buttons pressed by a mapped pad alone (fast iteration): `--session-launch`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--session-launch")
+{
+    Console.WriteLine("-- session launch from a pad --");
+    foreach (var (ok, label) in SessionLaunchTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SESSION LAUNCH PASSED" : $"SESSION LAUNCH FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MIDI In switched while a routed note is held alone (fast iteration): `--midi-source`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--midi-source")
 {
@@ -16182,6 +16190,8 @@ foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- MIDI In switch --");
 foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
 foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
+Console.WriteLine("-- session launch from a pad --");
+foreach (var (ok, label) in SessionLaunchTests.Run()) Check(ok, label);
 Console.WriteLine("-- cue output --");
 foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");

@@ -329,7 +329,7 @@ public sealed partial class SessionView
 
     /// <summary>A track's clip slot: empty (stop / record affordance), a clip, or a take
     /// being recorded.</summary>
-    private sealed class SlotCell : Control, ILiveCell
+    private sealed class SlotCell : Control, ILiveCell, IMidiLearnRegions
     {
         private readonly SessionView _o;
         private readonly Column _c;
@@ -395,6 +395,14 @@ public sealed partial class SessionView
 
         private static readonly Rect LaunchZone = new(3, 3, 18, 18);
         private Rect CentreZone => new(Bounds.Width / 2 - 8, Bounds.Height / 2 - 8, 16, 16);
+
+        // MIDI Learn (#601): the button a click would press — a clip's (or a take's) launch button, an
+        // empty slot's stop / record button. Learnable either way, so a pad grid can be mapped before
+        // the clips are recorded.
+        public IReadOnlyList<(Rect rect, MidiTarget target, string name)> GetMidiLearnRegions()
+            => [(_filled || Recording ? LaunchZone : CentreZone, MidiTarget.SessionSlotLaunch(_c.TrackId, _scene),
+                Loc.F("midi_map.launch_clip", _c.Name, MidiLearnService.SceneLabel(_o._engine, _scene)))];
+
         // The take's own slot, or another slot recording along with it (specs/086).
         private bool Recording => (_o._recTrack == _c.TrackId && _o._recScene == _scene)
                                   || (_o._recScene >= 0 && _o._engine.SessionSlotState(_c.TrackId, _scene) == 4);
@@ -773,7 +781,7 @@ public sealed partial class SessionView
         return p.Y < 0 ? 0 : _sceneCells.Count - 1;
     }
 
-    private sealed class SceneCell : Control
+    private sealed class SceneCell : Control, IMidiLearnRegions
     {
         private readonly SessionView _o;
         private readonly int _scene;
@@ -799,6 +807,11 @@ public sealed partial class SessionView
         }
 
         private static readonly Rect LaunchBox = new(8, (CellH - 22) / 2, 22, 22);
+
+        // MIDI Learn (#601): the scene's launch button.
+        public IReadOnlyList<(Rect rect, MidiTarget target, string name)> GetMidiLearnRegions()
+            => [(LaunchBox, MidiTarget.SessionSceneLaunch(_scene), Loc.F("midi_map.launch_scene", _name))];
+
         private int _lastSig = -1;
         private bool _pressed, _dragging;
         private Point _pressAt;

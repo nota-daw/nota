@@ -90,6 +90,10 @@ public enum MidiTargetKind
     // Instrument Rack, ≥ 0 Audio Effect Rack, ≤ MidiRackBase − mi MIDI Effect Rack), ParamIndex =
     // the parameter, Sub = the chain (and for a chain device its slot, see MidiTarget.ChainSlot).
     RackChainDeviceParam, RackChainInstrumentParam,
+    // Session launch buttons (#601). Appended: saved as ints. A slot is its track (TrackId) and its
+    // row (ParamIndex); a scene is its row (ParamIndex) alone. A row is a position in the grid, as
+    // on a pad grid: a mapping drives whatever slot or scene sits at that row.
+    SessionSlotLaunch, SessionSceneLaunch,
 }
 
 /// <summary>Stable identity of a mappable control. TrackId is a runtime engine id;
@@ -131,13 +135,16 @@ public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int D
     public static MidiTarget TrackArm(int track) => new(MidiTargetKind.TrackArm, track, -1, -1);
     public static MidiTarget TrackSelect(int track) => new(MidiTargetKind.TrackSelect, track, -1, -1);
     public static MidiTarget TrackSend(int track, int bus) => new(MidiTargetKind.TrackSend, track, -1, bus);
+    public static MidiTarget SessionSlotLaunch(int track, int scene) => new(MidiTargetKind.SessionSlotLaunch, track, -1, scene);
+    public static MidiTarget SessionSceneLaunch(int scene) => new(MidiTargetKind.SessionSceneLaunch, -1, -1, scene);
 
     /// <summary>True for on/off targets (buttons) — applied as a trigger, not a value.</summary>
     public bool IsButton => Kind is MidiTargetKind.TrackMute or MidiTargetKind.TrackSolo or MidiTargetKind.TrackCue
         or MidiTargetKind.TransportPlay or MidiTargetKind.TransportStop or MidiTargetKind.TransportRecord
         or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo
         or MidiTargetKind.TransportLoop or MidiTargetKind.TransportRewind or MidiTargetKind.TransportForward
-        or MidiTargetKind.TrackArm or MidiTargetKind.TrackSelect;
+        or MidiTargetKind.TrackArm or MidiTargetKind.TrackSelect
+        or MidiTargetKind.SessionSlotLaunch or MidiTargetKind.SessionSceneLaunch;
 }
 
 /// <summary>Attached to a control so the learn overlay can find it and label it, and

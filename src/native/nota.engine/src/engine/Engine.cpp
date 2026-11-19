@@ -180,7 +180,7 @@ void Engine::onMidiMessage(int32_t source, int32_t status, int32_t channel, int3
             mpeSinks_[s].channel = std::clamp(channel, 0, 15);
             mpeInputs_[s].message(status, channel, d1, d2, mpeSinks_[s]);
         },
-        // Surface CC + note-on to the UI for MIDI-learn (drop silently if the queue is full —
+        // Surface CC + notes to the UI for MIDI-learn (drop silently if the queue is full —
         // learn is best-effort and must never block the MIDI thread).
         [&](int32_t kind, int32_t ch, int32_t number, int32_t value) { midiControl_.push({kind, ch, number, value}); });
 }
