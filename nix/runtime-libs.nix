@@ -4,6 +4,7 @@ pkgs:
 with pkgs;
 [
   alsa-lib
+  libpulseaudio # PulseAudio / PipeWire output: miniaudio dlopens libpulse.so.0
   libGL
   libxkbcommon
   fontconfig
