@@ -83,12 +83,15 @@ public sealed class RoleRouter
         return claims;
     }
 
-    /// <summary>The declared control a message belongs to, or null.</summary>
-    public static ControlDecl? Find(ControllerProfile profile, int status, int channel, int d1)
+    /// <summary>The declared control a message belongs to, or null. <paramref name="nrpn"/> is the
+    /// NRPN parameter selected on that channel (CC 99 / 98): every NRPN control shares the same CC
+    /// numbers, so the selected parameter tells them apart.</summary>
+    public static ControlDecl? Find(ControllerProfile profile, int status, int channel, int d1, int? nrpn = null)
     {
         foreach (var d in profile.Controls)
         {
             if (d.Channel != channel) continue;
+            if (d.Message == ControlMessage.Nrpn && nrpn is { } p && p != d.Number) continue;
             foreach (var (st, number) in ControlDecoder.Messages(d))
             {
                 bool statusOk = st == 0x80 ? status is 0x80 or 0x90 : st == status;
@@ -212,7 +215,8 @@ public sealed class RoleRouter
     // control (an encoder clicked as a button) fires on any step.
     private IReadOnlyList<ControllerAction> Press(ControlDecl decl, ControlValue v, ControllerAction action)
     {
-        bool down = v.IsRelative ? v.Steps != 0 : v.Position >= 0.5;
+        // A note is pressed at any velocity (a soft pad hit is still a press); a CC past half-way.
+        bool down = v.IsRelative ? v.Steps != 0 : decl.Message == ControlMessage.Note ? v.Position > 0 : v.Position >= 0.5;
         bool was = _down.TryGetValue(decl, out var w) && w;
         _down[decl] = !v.IsRelative && down;
         return down && (v.IsRelative || !was) ? new[] { action } : Array.Empty<ControllerAction>();

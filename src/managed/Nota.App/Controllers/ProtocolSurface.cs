@@ -40,6 +40,12 @@ internal sealed class ProtocolSurface
     /// <summary>A target the user unbound (specs/051 Story 7): the surface leaves it alone.</summary>
     public Func<MidiTarget, bool>? Unbound { get; set; }
 
+    /// <summary>The Session view shows (Story 8): the jog wheel walks its clips and the channel
+    /// buttons its tracks, as on a generic controller. Null = never.</summary>
+    public Func<bool>? SessionShown { get; set; }
+    /// <summary>Runs a palette command (the Session walk); null = none.</summary>
+    public Func<string, bool>? RunCommand { get; set; }
+
     public ProtocolSurface(ConnectedController c, ISurfaceCodec codec, IAudioEngine engine, ControlApplier applier)
     {
         _c = c;
@@ -71,9 +77,16 @@ internal sealed class ProtocolSurface
     public void Release()
     {
         foreach (var m in _codec.Blank()) Send(m);
+        EndTouches();
+        Refresh();
+    }
+
+    /// <summary>Every held fader let go — also when the surface was unplugged mid-touch, so no
+    /// automation write stays open.</summary>
+    public void EndTouches()
+    {
         for (int s = 0; s < _touched.Length; s++)
             if (_touched[s]) { _touched[s] = false; _applier.TouchEnd(_touchTarget[s]); }
-        Refresh();
     }
 
     // ---- input ------------------------------------------------------------------------------
@@ -121,6 +134,10 @@ internal sealed class ProtocolSurface
             case SurfaceInputKind.Loop: Press(MidiTarget.TransportLoop); break;
             case SurfaceInputKind.Rewind: Press(MidiTarget.TransportRewind); break;
             case SurfaceInputKind.Forward: Press(MidiTarget.TransportForward); break;
+            case SurfaceInputKind.Jog when e.Value != 0 && SessionShown?.Invoke() == true:
+                for (int i = 0, n = Math.Min(Math.Abs(e.Value), 8); i < n; i++)
+                    RunCommand?.Invoke(e.Value > 0 ? "session.selectDown" : "session.selectUp");
+                break;
             case SurfaceInputKind.Jog when !_engine.IsPlaying && e.Value != 0:
                 _engine.Seek(Math.Max(0, _engine.PositionBeats + e.Value * 0.25));   // one 16th per step, stopped
                 break;
@@ -131,6 +148,9 @@ internal sealed class ProtocolSurface
                     SurfaceInputKind.BankLeft => -ControllerState.BankSize, SurfaceInputKind.BankRight => ControllerState.BankSize,
                     SurfaceInputKind.ChannelLeft => -1, _ => 1,
                 };
+                // In the Session the channel buttons also walk the selected slot across.
+                if (Math.Abs(step) == 1 && SessionShown?.Invoke() == true)
+                    RunCommand?.Invoke(step > 0 ? "session.selectRight" : "session.selectLeft");
                 if (!st.BankStep(step, trackIds.Count)) return false;
                 Refresh();   // eight new strips: everything again
                 return true;
@@ -141,6 +161,8 @@ internal sealed class ProtocolSurface
 
     private void Fader(int strip, MidiTarget t, double pos)
     {
+        // A fader held through a bank change keeps writing the track it was touched on.
+        if (_touched[strip]) t = _touchTarget[strip];
         if (Unbound?.Invoke(t) == true) return;   // the user unbound it from the control's menu (FR-032)
         // A motor fader (or pickup off) jumps; one without a motor picks up first.
         bool pickup = _c.State.PickupOn && _c.Profile?.Pickup == true && !_touched[strip];
@@ -211,15 +233,18 @@ internal sealed class ProtocolSurface
             if (_alive && now - _lastAliveMs > 3000) _alive = false;
             if (!_alive) return;   // nobody there: feedback waits for the next answer
         }
-        foreach (var msg in _differ.Diff(_want, _touched)) Send(msg);
+        long nowMs = Environment.TickCount64;
+        if (_retryAt > 0 && nowMs >= _retryAt) { _retryAt = 0; _differ.Invalidate(); }   // a send failed: everything again
+        bool ok = true;
+        foreach (var msg in _differ.Diff(_want, _touched)) ok &= Send(msg);
+        if (!ok && _retryAt == 0) _retryAt = nowMs + 1000;   // the output went away for a moment: retry once a second
     }
+
+    private long _retryAt;
 
     private static int Pos(double norm) => (int)Math.Round(Math.Clamp(norm, 0, 1) * 16383);
 
-    private void Send(byte[] m)
-    {
-        if (_c.OutputUid.Length > 0) _engine.MidiSend(_c.OutputUid, m);
-    }
+    private bool Send(byte[] m) => _c.OutputUid.Length > 0 && _engine.MidiSend(_c.OutputUid, m);
 
     /// <summary>Faders waiting to pick up: their target and hardware position (the hint, FR-020).</summary>
     public IEnumerable<(MidiTarget Target, double Physical)> Ghosts()

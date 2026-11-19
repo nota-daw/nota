@@ -134,6 +134,14 @@ public abstract class NotaWindow : Window
     /// hosted here can be highlighted/selected while learn is armed.</summary>
     public void EnableMidiLearn(MidiLearnService? service) => _learnGlass.Service = service;
 
+    /// <summary>Lay <paramref name="overlay"/> over the body, under the learn glass (the hardware
+    /// controller's knob numbers and pickup hints for controls popped out into this window).</summary>
+    public void AddBodyOverlay(Control overlay)
+    {
+        if (_learnGlass.Parent is Panel layer && !layer.Children.Contains(overlay))
+            layer.Children.Insert(layer.Children.IndexOf(_learnGlass), overlay);
+    }
+
     /// <summary>True when the OS draws the window frame and title (Linux): a subclass's own
     /// title bar then needs no inset for window buttons and does not drag the window.</summary>
     protected static bool NativeFrame => OperatingSystem.IsLinux();

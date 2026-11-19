@@ -49,6 +49,8 @@ public sealed class ConnectedController
     internal int PickupEpoch { get; set; } = -1;
     // A Mackie Control / HUI surface: its codec, feedback and touch state (US4 / US6).
     internal ProtocolSurface? Surface { get; set; }
+    // Last value-feedback sent per control (a ring, a motor fader), 14-bit.
+    internal Dictionary<ControlDecl, int> Values { get; } = new(ReferenceEqualityComparer.Instance);
     // Pinned buttons held down (a press fires once).
     internal Dictionary<ControlDecl, bool> PinDown { get; } = new(ReferenceEqualityComparer.Instance);
 
@@ -150,12 +152,13 @@ public sealed class ControllerService
         ControllersChanged?.Invoke();
     }
 
-    /// <summary>A MIDI Learn target as the overrides keep it (a track only for track targets).</summary>
+    /// <summary>A MIDI Learn target as the overrides keep it, its whole address (a rack, a chain, a
+    /// chain device) so a pin comes back on the same control.</summary>
     public static StoredTarget Store(MidiTarget t)
-        => new((int)t.Kind, t.TrackId > 0 ? t.TrackId : -1, t.Kind == MidiTargetKind.TrackSend ? t.ParamIndex : -1);
+        => new((int)t.Kind, t.TrackId > 0 ? t.TrackId : -1, t.ParamIndex, t.DeviceIndex, t.Sub);
 
     public static MidiTarget FromStored(StoredTarget s)
-        => new((MidiTargetKind)s.Kind, s.TrackId, -1, s.Param);
+        => new((MidiTargetKind)s.Kind, s.TrackId, s.Device, s.Param, s.Sub);
 
     private bool Unbound(MidiTarget t) => _overrides?.IsUnbound(Store(t)) == true;
 
@@ -454,6 +457,7 @@ public sealed class ControllerService
         {
             c.State.Reset();
             c.Leds.Clear();
+            c.Values.Clear();
             c.Pickups.Clear();
             c.Surface?.Refresh();
         }
@@ -556,6 +560,7 @@ public sealed class ControllerService
             c.Identity = null;
             c.Profile = null;
             c.Leds.Clear();
+            c.Values.Clear();
             _controllers[p.Uid] = c;
             if (p.OutputUid.Length > 0 && _engine.MidiSend(p.OutputUid, IdentityReply.Request))
             {
@@ -564,14 +569,19 @@ public sealed class ControllerService
             }
             else Match(c);
         }
+        bool bankGone = false;
         foreach (var c in _controllers.Values.Where(c => !present.Contains(c.Uid) && c.Stage != ControllerStage.Gone))
         {
+            bankGone |= c.Stage == ControllerStage.Active;
+            c.Surface?.EndTouches();   // unplugged mid-touch: no write stays open
+            c.Surface = null;
             c.Stage = ControllerStage.Gone;
             _claimsDirty = true;
             _log?.Info($"Controller gone: {c.Name}");
             changed = true;
         }
         if (changed) ControllersChanged?.Invoke();
+        if (bankGone) BankChanged?.Invoke();   // its bank's track marks go
     }
 
     // Matched → Active when enabled; the choice in Preferences can force a profile or none.
@@ -605,6 +615,7 @@ public sealed class ControllerService
             c.Stage = ControllerStage.Active;
             c.State.PickupOn = choice.PickupOn && profile.Pickup;
             c.Leds.Clear();
+            c.Values.Clear();
             foreach (var m in profile.Init) _engine.MidiSend(c.OutputUid, m);
             StartSurface(c);
             _log?.Info($"Controller {c.Name}: profile {profile.Id}{(c.Identity is null ? " (port name)" : " (identity)")}");
@@ -633,8 +644,8 @@ public sealed class ControllerService
     {
         c.Surface = c.Profile?.Protocol switch
         {
-            ControllerProtocol.Mcu => new ProtocolSurface(c, new McuCodec(), _engine, _applier) { Unbound = Unbound },
-            ControllerProtocol.Hui => new ProtocolSurface(c, new HuiCodec(), _engine, _applier) { Unbound = Unbound },
+            ControllerProtocol.Mcu => new ProtocolSurface(c, new McuCodec(), _engine, _applier) { Unbound = Unbound, SessionShown = () => SessionShown?.Invoke() == true, RunCommand = id => RunCommand?.Invoke(id) == true },
+            ControllerProtocol.Hui => new ProtocolSurface(c, new HuiCodec(), _engine, _applier) { Unbound = Unbound, SessionShown = () => SessionShown?.Invoke() == true, RunCommand = id => RunCommand?.Invoke(id) == true },
             _ => null,
         };
         c.Surface?.Connect();
@@ -753,7 +764,7 @@ public sealed class ControllerService
             }
 
             _decoder.Observe(source, status, channel, d1, d2);
-            if (RoleRouter.Find(profile, status, channel, d1) is not { } decl)
+            if (RoleRouter.Find(profile, status, channel, d1, _decoder.NrpnParam(source, channel)) is not { } decl)
             {
                 // A claimed message no control declares (a whole-port profile in another mode, a
                 // control the profile misses): log the first few, so a silent controller is diagnosable.
@@ -771,7 +782,7 @@ public sealed class ControllerService
                 var pt = FromStored(pin.Target);
                 if (pt.IsButton)
                 {
-                    bool down = value.IsRelative ? value.Steps != 0 : value.Position >= 0.5;
+                    bool down = value.IsRelative ? value.Steps != 0 : decl.Message == ControlMessage.Note ? value.Position > 0 : value.Position >= 0.5;
                     bool was = c.PinDown.TryGetValue(decl, out var w) && w;
                     c.PinDown[decl] = !value.IsRelative && down;
                     if (down && (value.IsRelative || !was)) _applier.Trigger(pt);
@@ -967,12 +978,23 @@ public sealed class ControllerService
     // Transport LEDs a profile declares: sent when the state they show changes (and on connect).
     private void SendLeds()
     {
+        List<int>? trackIds = null;
         foreach (var c in _controllers.Values)
         {
             if (c.Stage != ControllerStage.Active || c.Profile is null || c.OutputUid.Length == 0) continue;
             foreach (var d in c.Profile.Controls)
             {
                 if (d.Feedback is not { } fb) continue;
+                if (fb.ValueTemplate is { Length: > 0 } template)
+                {
+                    // A ring or a motor fader: the value of what it drives now, through the template.
+                    trackIds ??= TrackIds();
+                    if (ValueTarget(c, d, trackIds) is not { } vt || _applier.CurrentNormalized(vt) is not { } v) continue;
+                    int v14 = (int)Math.Round(Math.Clamp(v, 0, 1) * 16383);
+                    if (c.Values.TryGetValue(d, out int was) && was == v14) continue;
+                    if (ControlFeedback.Fill(template, v14) is { } msg && _engine.MidiSend(c.OutputUid, msg)) c.Values[d] = v14;
+                    continue;
+                }
                 bool? on = d.Role.Kind switch
                 {
                     ControlRoleKind.Play => _engine.IsPlaying,
@@ -983,9 +1005,28 @@ public sealed class ControllerService
                 };
                 if (on is not { } lit) continue;
                 if (c.Leds.TryGetValue(d, out bool sent) && sent == lit) continue;
-                c.Leds[d] = lit;
-                if ((lit ? fb.On : fb.Off) is { } bytes) _engine.MidiSend(c.OutputUid, bytes);
+                // Remembered only once sent: a failed send is tried again on the next tick.
+                if ((lit ? fb.On : fb.Off) is not { } bytes || _engine.MidiSend(c.OutputUid, bytes)) c.Leds[d] = lit;
             }
         }
+    }
+
+    // What a value-feedback control shows: its pin, the focused device's knob, the bank fader's
+    // track, the master.
+    private MidiTarget? ValueTarget(ConnectedController c, ControlDecl d, List<int> trackIds)
+    {
+        if (Pin(c, d) is { } pin) return FromStored(pin.Target);
+        switch (d.Role.Kind)
+        {
+            case ControlRoleKind.Knob:
+                return RoleRouter.KnobTarget(c.State, d.Role.Index, trackIds, _focused, IsReturn) is { } kt ? ToMidiTarget(kt) : null;
+            case ControlRoleKind.Fader:
+            {
+                int i = c.State.BankOrigin + d.Role.Index;
+                return d.Role.Index < ControllerState.BankSize && i >= 0 && i < trackIds.Count ? MidiTarget.TrackVolume(trackIds[i]) : null;
+            }
+            case ControlRoleKind.MasterFader: return MidiTarget.MasterVolume;
+        }
+        return null;
     }
 }

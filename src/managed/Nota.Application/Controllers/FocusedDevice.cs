@@ -158,18 +158,40 @@ public sealed class FocusedDevice
     /// <summary>The type key of the device at <paramref name="a"/>, or null when it is gone.</summary>
     public static string? TypeKeyOf(IAudioEngine e, DeviceAddress a) => Describe(e, a)?.Key;
 
-    /// <summary>The type keys of every track-level device in the project (what its pages copy keeps).</summary>
+    /// <summary>The type keys of every device in the project — track level and inside racks —
+    /// which is what its pages copy keeps.</summary>
     public static IEnumerable<string> TypeKeysIn(IAudioEngine e)
     {
         for (int i = 0, n = e.TrackCount; i < n; i++)
         {
             if (!e.TryGetTrackInfo(i, out var ti)) continue;
             int t = ti.Id;
-            if (TypeKeyOf(e, DeviceAddress.Instrument(t)) is { } ik) yield return ik;
+            if (TypeKeyOf(e, DeviceAddress.Instrument(t)) is { } ik)
+            {
+                yield return ik;
+                if (ik == DeviceTypeKey.RackInstrument)
+                    for (int c = 0, cc = e.RackChainCount(t); c < cc; c++)
+                        for (int s = -1, sc = e.RackChainDeviceCount(t, c); s < sc; s++)   // −1: the chain's instrument
+                            if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Instrument, -1, new RackPath(c, s))) is { } rk) yield return rk;
+            }
             for (int m = 0, mc = e.TrackMidiEffectCount(t); m < mc; m++)
-                if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Midi, m)) is { } mk) yield return mk;
+                if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Midi, m)) is { } mk)
+                {
+                    yield return mk;
+                    if (mk == DeviceTypeKey.RackMidi)
+                        for (int c = 0, cc = e.MidiRackChainCount(t, m); c < cc; c++)
+                            for (int s = 0, sc = e.MidiRackChainDeviceCount(t, m, c); s < sc; s++)
+                                if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Midi, m, new RackPath(c, s))) is { } rk) yield return rk;
+                }
             for (int d = 0, dc = e.TrackDeviceCount(t); d < dc; d++)
-                if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Audio, d)) is { } dk) yield return dk;
+                if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Audio, d)) is { } dk)
+                {
+                    yield return dk;
+                    if (dk == DeviceTypeKey.RackAudio)
+                        for (int c = 0, cc = e.RackDevChainCount(t, d); c < cc; c++)
+                            for (int s = 0, sc = e.RackDevChainDeviceCount(t, d, c); s < sc; s++)
+                                if (TypeKeyOf(e, new DeviceAddress(t, FocusSection.Audio, d, new RackPath(c, s))) is { } rk) yield return rk;
+                }
         }
     }
 

@@ -36,7 +36,9 @@ public sealed class ControlApplier(IAudioEngine engine)
     /// <summary>Ends controller movements after their pause; call on every UI tick.</summary>
     public void Poll(long nowMs)
     {
-        foreach (var m in _mixUndo.Values) m.Poll(nowMs);
+        // A fader held by its touch sensor is one movement however long it rests: its release ends it.
+        foreach (var (key, m) in _mixUndo)
+            if (!_touchedMix.Contains(key)) m.Poll(nowMs);
     }
 
     private void MixTouch(MixTarget target, Action set)
@@ -48,11 +50,13 @@ public sealed class ControlApplier(IAudioEngine engine)
     // Motor faders held by their touch sensor (FR-024): the touch is the movement — automation
     // writes while held (not latching) and the undo step ends on release.
     private readonly HashSet<MidiTarget> _touched = new();
+    private readonly HashSet<MixTarget> _touchedMix = new();
 
     /// <summary>A touch-sensitive fader was touched: its movement starts now.</summary>
     public void TouchBegin(MidiTarget t)
     {
         if (!_touched.Add(t)) return;
+        if (MixKey(t) is { } k) _touchedMix.Add(k);
         if (Lane(t) is { } l) engine.BeginAutomationWrite(t.TrackId, l.Target, l.Device, l.Param, l.Id, latch: false);
     }
 
@@ -61,7 +65,11 @@ public sealed class ControlApplier(IAudioEngine engine)
     {
         if (!_touched.Remove(t)) return;
         if (Lane(t) is { } l) engine.EndAutomationWrite(t.TrackId, l.Target, l.Device, l.Param, l.Id);
-        if (MixKey(t) is { } k && _mixUndo.TryGetValue(k, out var m)) m.End();
+        if (MixKey(t) is { } k)
+        {
+            _touchedMix.Remove(k);
+            if (_mixUndo.TryGetValue(k, out var m)) m.End();
+        }
     }
 
     private static MixTarget? MixKey(MidiTarget t) => t.Kind switch

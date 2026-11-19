@@ -164,7 +164,9 @@ public sealed class ControllerAccess(Nota.App.Controllers.ControllerService svc,
 
     public bool SetController(string portUid, string? profileId, bool? enabled, bool? pickup)
     {
-        if (profileId is not null && profileId != "none" && svc.Profiles.All(p => p.Id != profileId)) return false;
+        // "none", the forced Mackie Control / HUI choices (as Preferences offers them) or a loaded profile.
+        if (profileId is not null && profileId is not ("none" or Nota.App.Controllers.ControllerService.ForcedMcu or Nota.App.Controllers.ControllerService.ForcedHui)
+            && svc.Profiles.All(p => p.Id != profileId)) return false;
         var choice = svc.ChoiceFor(portUid);
         svc.SetChoice(portUid, profileId, enabled ?? choice.Enabled, pickup);
         return true;

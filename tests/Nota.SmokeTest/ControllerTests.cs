@@ -46,6 +46,7 @@ internal static class ControllerTests
         foreach (var r in Decoding()) yield return r;
         foreach (var r in Routing()) yield return r;
         foreach (var r in Overrides()) yield return r;
+        foreach (var r in ReviewFixes()) yield return r;
         foreach (var r in ShippedEndToEnd()) yield return r;
         foreach (var r in DevicePages()) yield return r;
         foreach (var r in KnobFocus()) yield return r;
@@ -632,6 +633,54 @@ internal static class ControllerTests
         var far = FocusedDevice.WithParamAt(pages, "Reso", 2, 0);
         yield return (far.Count == 3 && far[2].Params[0] == "Reso" && far[0].Params[1] is null,
             "page edit: a page past the end is added");
+    }
+
+    // Review follow-ups on nota#928.
+    private static IEnumerable<(bool, string)> ReviewFixes()
+    {
+        // Two NRPN knobs on one channel: the selected parameter picks the declaration.
+        var n1 = new ControlDecl(new ControlRole(ControlRoleKind.Knob, 0), ControlMessage.Nrpn, 0, 300, EncoderMode.Absolute, false, null);
+        var n2 = new ControlDecl(new ControlRole(ControlRoleKind.Knob, 1), ControlMessage.Nrpn, 0, 301, EncoderMode.Absolute, false, null);
+        var prof = new ControllerProfile("t", "T", ControllerProtocol.Generic, null, Array.Empty<System.Text.RegularExpressions.Regex>(), null,
+            Array.Empty<byte[]>(), Array.Empty<byte[]>(), true, false, new[] { n1, n2 }, ProfileOrigin.User, "t.json");
+        var dec = new ControlDecoder();
+        foreach (var (d1, d2) in new[] { (99, 301 >> 7), (98, 301 & 0x7F) }) dec.Observe(0, 0xB0, 0, d1, d2);
+        var found = RoleRouter.Find(prof, 0xB0, 0, 6, dec.NrpnParam(0, 0));
+        var value = found is null ? null : dec.Decode(found, 0, 0xB0, 0, 6, 100);
+        yield return (ReferenceEquals(found, n2) && value is { IsRelative: false }, "NRPN: the second knob on a channel is found by its selected parameter");
+
+        // A soft note press still presses a button.
+        var r = new RoleRouter();
+        var playNote = new ControlDecl(new ControlRole(ControlRoleKind.Play), ControlMessage.Note, 0, 60, EncoderMode.Absolute, false, null);
+        var soft = r.Route(playNote, ControlValue.Absolute(20 / 127.0), new ControllerState(), new List<int>());
+        yield return (soft is [{ Kind: ControllerActionKind.Trigger }], "a note button fires at velocity 20 too");
+
+        // Mistyped numbers are warnings, not exceptions.
+        const string Mistyped = """
+            { "format": 1, "id": "m", "name": "M", "match": { "portNames": ["^m$"] }, "controls": [
+              { "role": "knob", "index": "1", "message": "cc", "channel": 1, "number": 20 },
+              { "role": "knob", "index": 2, "message": "cc", "channel": "1", "number": 21 },
+              { "role": "knob", "index": 3, "message": "cc", "channel": 1, "number": null } ] }
+            """;
+        bool threw = false;
+        (ControllerProfile? P, IReadOnlyList<string> W) loaded = (null, Array.Empty<string>());
+        try { loaded = ProfileLoader.Load(Mistyped, "m.json", ProfileOrigin.User); } catch (InvalidOperationException) { threw = true; }
+        yield return (!threw && loaded.P is { Controls.Count: 0 } && loaded.W.Count == 3, "profile: string / null numbers are skipped with warnings, not thrown");
+        bool pagesThrew = false;
+        try { DevicePagesFile.Parse("""{ "format": "1", "types": {} }""", out _); } catch (InvalidOperationException) { pagesThrew = true; }
+        yield return (!pagesThrew, "device pages: a string format is an error, not an exception");
+
+        // A rack pin keeps its whole address through the project file.
+        var rackGain = new StoredTarget(11, 101, 2, 3, -1);   // RackChainGain: chain 2 of the rack at device 3
+        var json = ControllerOverrides.Write(Array.Empty<StoredTarget>(), new[] { new ControlPin("p", "cc:1:20", "Knob 1", rackGain) }, id => id == 101 ? 0 : -1, true);
+        var back = ControllerOverrides.Parse(json, i => i == 0 ? 201 : -1);
+        yield return (back?.Pins.SingleOrDefault()?.Target == rackGain with { TrackId = 201 }, "overrides: a rack chain pin keeps its rack and chain");
+
+        // Value feedback fills its template.
+        var ring = ControlFeedback.Fill("B0 10 vv", 16383);
+        var motor = ControlFeedback.Fill("E0 ll hh", 8192);
+        yield return (ring is [0xB0, 0x10, 0x7F] && motor is [0xE0, 0x00, 0x40] && ControlFeedback.Fill("zz vv", 1) is null,
+            "value feedback: vv / ll hh filled, a non-hex template refused");
     }
 
     private static IEnumerable<(bool, string)> Routing()

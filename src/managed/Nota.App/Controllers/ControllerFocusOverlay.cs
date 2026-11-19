@@ -47,12 +47,30 @@ public sealed class ControllerFocusOverlay : Control
         get => _service;
         set
         {
-            if (_service is { } old) { old.FocusChanged -= Changed; old.PickupChanged -= Changed; old.ControllersChanged -= Changed; }
+            if (_service is { } old && _subscribed) { old.FocusChanged -= Changed; old.PickupChanged -= Changed; old.ControllersChanged -= Changed; }
+            _subscribed = false;
             _service = value;
-            if (_service is { } s) { s.FocusChanged += Changed; s.PickupChanged += Changed; s.ControllersChanged += Changed; }
+            if (_service is { } s) { s.FocusChanged += Changed; s.PickupChanged += Changed; s.ControllersChanged += Changed; _subscribed = true; }
             Changed();
         }
     }
+
+    // A floating window's overlay leaves with its window: no timer or service events after that.
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (_service is { } s && !_subscribed) { s.FocusChanged += Changed; s.PickupChanged += Changed; s.ControllersChanged += Changed; _subscribed = true; }
+        Changed();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _tick.Stop();
+        if (_service is { } s && _subscribed) { s.FocusChanged -= Changed; s.PickupChanged -= Changed; s.ControllersChanged -= Changed; _subscribed = false; }
+    }
+
+    private bool _subscribed;
 
     private void Changed()
     {
@@ -67,7 +85,7 @@ public sealed class ControllerFocusOverlay : Control
                 ? Loc.F("controllers.page_named", kf.Page + 1, Math.Max(1, f.PageCount), name)
                 : Loc.F("controllers.page", kf.Page + 1, Math.Max(1, f.PageCount));
         }
-        bool any = _knobOf.Count > 0 || _service?.PickupGhosts.Count > 0;
+        bool any = (_knobOf.Count > 0 || _service?.PickupGhosts.Count > 0) && this.IsAttachedToVisualTree();
         if (any) { if (!_tick.IsEnabled) _tick.Start(); }
         else if (_tick.IsEnabled) _tick.Stop();
         InvalidateVisual();

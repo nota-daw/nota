@@ -63,6 +63,7 @@ public partial class MainWindow
         win.DockRequested += DockDetail;
         win.EnableMidiLearn(_learn);   // so the popped-out chain/clip editor can be mapped
         _controllerMenu?.Attach(win);  // …and rebound from a control's menu (specs/051 Story 7)
+        if (NewControllerOverlay() is { } chainOverlay) win.AddBodyOverlay(chainOverlay);   // knob numbers, pickup hints
         _detailWindow = win;
 
         // Move current content across: device chain → bottom pane, current clip editor → top.

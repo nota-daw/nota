@@ -62,7 +62,29 @@ public readonly record struct ControlRole(ControlRoleKind Kind, int Index = 0, s
 /// <summary>Feedback a control accepts: fixed on / off messages (button LEDs) or a value
 /// template (rings, motor faders) where <c>vv</c> is the 7-bit value and <c>ll hh</c> the
 /// 14-bit low / high bytes.</summary>
-public sealed record ControlFeedback(byte[]? On, byte[]? Off, string? ValueTemplate);
+public sealed record ControlFeedback(byte[]? On, byte[]? Off, string? ValueTemplate)
+{
+    /// <summary>A value template ("B0 10 vv", "E0 ll hh") with a 14-bit value filled in: vv the
+    /// 7-bit value, ll / hh the 14-bit low and high bytes; null when it isn't a MIDI message in hex.</summary>
+    public static byte[]? Fill(string template, int v14)
+    {
+        var parts = template.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var bytes = new byte[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+        {
+            switch (parts[i].ToLowerInvariant())
+            {
+                case "vv": bytes[i] = (byte)((v14 >> 7) & 0x7F); break;
+                case "ll": bytes[i] = (byte)(v14 & 0x7F); break;
+                case "hh": bytes[i] = (byte)((v14 >> 7) & 0x7F); break;
+                default:
+                    if (!byte.TryParse(parts[i], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out bytes[i])) return null;
+                    break;
+            }
+        }
+        return bytes.Length > 0 && (bytes[0] & 0x80) != 0 ? bytes : null;
+    }
+}
 
 public sealed record ControlDecl(
     ControlRole Role,
@@ -233,7 +255,7 @@ public static class ProfileLoader
         int index = 0;
         if (ControlRole.IsIndexed(kind.Value))
         {
-            if (!c.TryGetProperty("index", out var ix) || !ix.TryGetInt32(out int n) || n < 1 || n > 128)
+            if (!c.TryGetProperty("index", out var ix) || ix.ValueKind != JsonValueKind.Number || !ix.TryGetInt32(out int n) || n < 1 || n > 128)
             { warn(Loc.F("controllers.profile.no_index", i, roleName)); return null; }
             index = n - 1;
         }
@@ -252,14 +274,14 @@ public static class ProfileLoader
         };
         if (msg is null) { warn(Loc.F("controllers.profile.bad_message", i, Str(c, "message"))); return null; }
 
-        if (!c.TryGetProperty("channel", out var chEl) || !chEl.TryGetInt32(out int channel) || channel < 1 || channel > 16)
+        if (!c.TryGetProperty("channel", out var chEl) || chEl.ValueKind != JsonValueKind.Number || !chEl.TryGetInt32(out int channel) || channel < 1 || channel > 16)
         { warn(Loc.F("controllers.profile.bad_channel", i)); return null; }
 
         int number = 0;
         if (msg != ControlMessage.PitchBend)
         {
             int max = msg switch { ControlMessage.Nrpn => 16383, ControlMessage.Cc14 => 31, _ => 127 };
-            if (!c.TryGetProperty("number", out var nEl) || !nEl.TryGetInt32(out number) || number < 0 || number > max)
+            if (!c.TryGetProperty("number", out var nEl) || nEl.ValueKind != JsonValueKind.Number || !nEl.TryGetInt32(out number) || number < 0 || number > max)
             { warn(Loc.F("controllers.profile.bad_number", i, max)); return null; }
         }
 

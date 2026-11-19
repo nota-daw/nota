@@ -86,6 +86,9 @@ public sealed class ControlDecoder
         else if (d1 == 98) _nrpn[key] = ((s.param & ~0x7F) | (d2 & 0x7F), -1);
     }
 
+    /// <summary>The NRPN parameter selected on a source's channel, or null when none was.</summary>
+    public int? NrpnParam(int source, int channel) => _nrpn.TryGetValue((source, channel), out var s) ? s.param : null;
+
     private ControlValue? Nrpn(ControlDecl decl, int source, int channel, int d1, int d2)
     {
         var key = (source, channel);

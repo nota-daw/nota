@@ -28,7 +28,7 @@ public static class DevicePagesFile
         {
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object) { error = Loc.T("controllers.profile.not_object"); return null; }
-            if (!root.TryGetProperty("format", out var f) || !f.TryGetInt32(out int format) || format < 1)
+            if (!root.TryGetProperty("format", out var f) || f.ValueKind != JsonValueKind.Number || !f.TryGetInt32(out int format) || format < 1)
             { error = Loc.T("controllers.profile.no_format"); return null; }
             if (format > Format) { error = Loc.F("controllers.profile.newer_format", format); return null; }
 

@@ -26,6 +26,20 @@ public partial class MainWindow
     private DevicePagesStore? _devicePages;
     private ControllerContextMenu? _controllerMenu;
 
+    // The knob numbers and pickup hints over the Devices panel and the Mixer: one per window
+    // they can sit in — the main window, the floating Mixer, the popped-out Devices.
+    private ControllerFocusOverlay? NewControllerOverlay()
+    {
+        if (_controllers is null) return null;
+        var applier = App.Services.GetRequiredService<ControlApplier>();
+        return new ControllerFocusOverlay
+        {
+            Roots = () => new Visual?[] { _deviceChain, _mixer },
+            ValueOf = t => applier.CurrentNormalized(t),
+            Service = _controllers,
+        };
+    }
+
     private void InitControllerUi()
     {
         if (_controllers is null) return;
@@ -46,12 +60,7 @@ public partial class MainWindow
                 _ = new DevicePageEditor(App.Services.GetRequiredService<Nota.Application.IAudioEngine>(), _devicePages, device, _devicePages).ShowDialog(this);
         var applier = App.Services.GetRequiredService<ControlApplier>();
 
-        _controllerOverlay = new ControllerFocusOverlay
-        {
-            Roots = () => new Visual?[] { _deviceChain, _mixer },
-            ValueOf = t => applier.CurrentNormalized(t),
-            Service = _controllers,
-        };
+        _controllerOverlay = NewControllerOverlay();
         if (LearnOverlay.Parent is Panel host) host.Children.Insert(host.Children.IndexOf(LearnOverlay), _controllerOverlay);
 
         _controllerLabel = new TextBlock { VerticalAlignment = VerticalAlignment.Center };

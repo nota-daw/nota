@@ -19,8 +19,9 @@ using System.Text.Json.Serialization;
 namespace Nota.Application.Controllers;
 
 /// <summary>A target as MIDI Learn addresses it: kind (MidiTargetKind as an int), track
-/// (−1 = none), parameter (a send bus; −1 = none).</summary>
-public readonly record struct StoredTarget(int Kind, int TrackId = -1, int Param = -1)
+/// (−1 = none), parameter (a send bus, a chain; −1 = none), device (a rack's position in the
+/// chain; −1 = none / the Instrument Rack) and sub (a chain device's chain and slot).</summary>
+public readonly record struct StoredTarget(int Kind, int TrackId = -1, int Param = -1, int Device = -1, int Sub = -1)
 {
     public bool HasTrack => TrackId >= 0;
 }
@@ -175,6 +176,8 @@ public sealed class ControllerOverrides(string globalPath)
         [JsonPropertyName("kind")] public int Kind { get; set; }
         [JsonPropertyName("track")] public int Track { get; set; } = -1;   // a track position, −1 = none
         [JsonPropertyName("param")] public int Param { get; set; } = -1;
+        [JsonPropertyName("device")] public int Device { get; set; } = -1;
+        [JsonPropertyName("sub")] public int Sub { get; set; } = -1;
     }
 
     private sealed class PinDto
@@ -200,10 +203,10 @@ public sealed class ControllerOverrides(string globalPath)
     {
         TargetDto? Dto(StoredTarget t)
         {
-            if (!t.HasTrack) return new TargetDto { Kind = t.Kind, Param = t.Param };
+            if (!t.HasTrack) return new TargetDto { Kind = t.Kind, Param = t.Param, Device = t.Device, Sub = t.Sub };
             if (trackIndexOf is null) return null;
             int i = trackIndexOf(t.TrackId);
-            return i < 0 ? null : new TargetDto { Kind = t.Kind, Track = i, Param = t.Param };
+            return i < 0 ? null : new TargetDto { Kind = t.Kind, Track = i, Param = t.Param, Device = t.Device, Sub = t.Sub };
         }
         var f = new FileDto { Global = globalCopy };
         foreach (var t in unbinds) if (Dto(t) is { } d) f.Unbind.Add(d);
@@ -221,10 +224,10 @@ public sealed class ControllerOverrides(string globalPath)
         if (f is null || f.Format != 1) return null;
         StoredTarget? T(TargetDto d)
         {
-            if (d.Track < 0) return new StoredTarget(d.Kind, -1, d.Param);
+            if (d.Track < 0) return new StoredTarget(d.Kind, -1, d.Param, d.Device, d.Sub);
             if (trackIdAt is null) return null;
             int id = trackIdAt(d.Track);
-            return id < 0 ? null : new StoredTarget(d.Kind, id, d.Param);
+            return id < 0 ? null : new StoredTarget(d.Kind, id, d.Param, d.Device, d.Sub);
         }
         var unbinds = new List<StoredTarget>();
         foreach (var d in f.Unbind) if (T(d) is { } t && !unbinds.Contains(t)) unbinds.Add(t);
