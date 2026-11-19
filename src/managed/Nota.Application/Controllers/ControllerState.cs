@@ -39,6 +39,21 @@ public sealed class ControllerState
         return true;
     }
 
+    /// <summary>Move the bank the least amount that puts track <paramref name="index"/> inside it
+    /// (after Track ◀ / ▶ selected a track, specs/107 FR-007). Returns whether the origin moved.</summary>
+    public bool BankFollow(int index, int trackCount)
+    {
+        if (index < 0 || index >= trackCount) return false;
+        int to = BankOrigin;
+        if (index < BankOrigin) to = index;
+        else if (index >= BankOrigin + BankSize) to = index - BankSize + 1;
+        to = Math.Clamp(to, 0, Math.Max(0, trackCount - 1));
+        if (to == BankOrigin) return false;
+        BankOrigin = to;
+        Touch();
+        return true;
+    }
+
     /// <summary>Keep the origin on a track that exists after tracks were removed.</summary>
     public void Clamp(int trackCount) => BankOrigin = Math.Clamp(BankOrigin, 0, Math.Max(0, trackCount - 1));
 

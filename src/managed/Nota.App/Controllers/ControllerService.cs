@@ -90,6 +90,9 @@ public sealed class ControllerService
         _settings = settings;
         _userDir = userProfileDir;
         _log = log;
+        FocusChanged += InvalidateSummary;
+        BankChanged += InvalidateSummary;
+        ControllersChanged += InvalidateSummary;
     }
 
     /// <summary>Connected (and recently unplugged) controllers, by port uid.</summary>
@@ -362,6 +365,31 @@ public sealed class ControllerService
         return null;
     }
 
+    /// <summary>The lead controller (the first active one with knobs, as the indicator shows it):
+    /// what its knobs are on (specs/107). Null when no active controller has knobs.</summary>
+    public ControllerFocusSummary? FocusSummary()
+    {
+        var active = _controllers.Values.Where(c => c.Stage == ControllerStage.Active).ToList();
+        var lead = active.FirstOrDefault(c => c.HasKnobs);
+        if (lead is null) return null;
+        string name = active.Count == 1 ? lead.Profile?.Name ?? lead.Name : Loc.Plural("controllers.count", active.Count);
+        var mode = lead.State.KnobMode;
+        if (mode.Kind != KnobModeKind.Device)
+        {
+            int count = TrackIds().Count;
+            int first = Math.Min(lead.State.BankOrigin, Math.Max(0, count - 1));
+            return new ControllerFocusSummary(name, mode, 0, "", null, null, 0, 0, "",
+                count == 0 ? 0 : first + 1, Math.Min(first + ControllerState.BankSize, count));
+        }
+        var f = _focused;
+        int track = f?.Address.TrackId ?? _selectedTrack;
+        string trackName = track > 0 ? _engine.GetTrackName(track) : "";
+        if (f is null) return new ControllerFocusSummary(name, mode, Math.Max(0, track), trackName, null, null, 0, 0, "", 0, 0);
+        int page = Math.Clamp(lead.State.Page, 0, Math.Max(0, f.PageCount - 1));
+        return new ControllerFocusSummary(name, mode, track, trackName, f.DeviceName, f.Address,
+            page, Math.Max(1, f.PageCount), f.PageName(page), 0, 0);
+    }
+
     /// <summary>Controls that have not picked up yet: their target and physical position (0..1).</summary>
     public IReadOnlyDictionary<MidiTarget, double> PickupGhosts => _ghosts;
     private readonly Dictionary<MidiTarget, double> _ghosts = new();
@@ -536,7 +564,31 @@ public sealed class ControllerService
             _focusCheckMs = now;
             if (_selectedTrack > 0 || _focused is not null) RefreshFocus();
         }
+        // The readout and Remote (specs/107): a rename, a bank or page move, a mode — compared as a
+        // key a few times a second, and at once after this tick's controller messages.
+        if (_summaryDirty || now - _summaryCheckMs >= 150)
+        {
+            _summaryDirty = false;
+            _summaryCheckMs = now;
+            var sum = FocusSummary();
+            string key = sum?.Key ?? "";
+            if (key != _summaryKey) { _summaryKey = key; _summary = sum; FocusSummaryChanged?.Invoke(); }
+        }
     }
+
+    private long _summaryCheckMs;
+    private bool _summaryDirty = true;
+    private string? _summaryKey;
+    private ControllerFocusSummary? _summary;
+
+    /// <summary>The last <see cref="FocusSummary"/> the readout was told about.</summary>
+    public ControllerFocusSummary? CurrentSummary => _summary;
+
+    /// <summary>What <see cref="FocusSummary"/> returns changed (track, device, page, mode, bank, a name).</summary>
+    public event Action? FocusSummaryChanged;
+
+    /// <summary>Re-read the summary on the next tick (after a change Nota made itself).</summary>
+    public void InvalidateSummary() => _summaryDirty = true;
 
     private void Rescan(long now)
     {
@@ -812,9 +864,9 @@ public sealed class ControllerService
                 break;
             case ControllerActionKind.BankStep:
                 if (c.State.BankStep(a.Index, trackIds.Count)) BankChanged?.Invoke();
-                // In the Session the track buttons also move the selected slot across.
-                if ((decl.Role.Kind is ControlRoleKind.TrackNext or ControlRoleKind.TrackPrev) && Math.Abs(a.Index) == 1 && SessionShown?.Invoke() == true)
-                    RunCommand?.Invoke(a.Index > 0 ? "session.selectRight" : "session.selectLeft");
+                break;
+            case ControllerActionKind.TrackStep:
+                StepTrack(c, a.Index, trackIds);
                 break;
             case ControllerActionKind.Knob when RoleRouter.KnobTarget(c.State, a.Index, trackIds, _focused, IsReturn) is { } kt
                                                  && ToMidiTarget(kt) is { } t && !Unbound(t):
@@ -847,6 +899,27 @@ public sealed class ControllerService
                 break;
         }
     }
+
+    // Track ◀ / ▶ (specs/107 FR-006–FR-009): select the neighbour in the order the user sees, as
+    // a header click does (in the Session its slot in the same row), then move the bank the
+    // least amount that keeps it inside.
+    private void StepTrack(ConnectedController c, int delta, List<int> trackIds)
+    {
+        var rows = ArrangementView.HierarchyOrder(_engine).Select(r => (r.Id, r.ParentGroupId));
+        var order = ControllerTrackStep.Order(rows, id => GroupCollapsed?.Invoke(id) == true);
+        if (ControllerTrackStep.Step(order, _selectedTrack, delta) is not { } to) return;
+        SelectTrack?.Invoke(to);
+        if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
+    }
+
+    /// <summary>Select a track as a header click would (wired by the main window; specs/107).</summary>
+    public Action<int>? SelectTrack { get; set; }
+    /// <summary>Whether a group is collapsed in the track list (its members aren't stepped to).</summary>
+    public Func<int, bool>? GroupCollapsed { get; set; }
+    /// <summary>Next / Previous device (wired by the main window, specs/107): MCP steps through it.</summary>
+    public Func<int, bool>? StepDevice { get; set; }
+    /// <summary>The Session view's selection — "none" / "slot" / "scene", track, scene (for MCP).</summary>
+    public Func<(string Kind, int Track, int Scene)>? SessionSelection { get; set; }
 
     // An absolute move: through pickup unless the control is motorised or pickup is off (FR-019, FR-021).
     private void Apply(ConnectedController c, ControlDecl decl, MidiTarget t, double position)

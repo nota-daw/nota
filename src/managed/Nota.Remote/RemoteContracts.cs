@@ -40,6 +40,20 @@ public enum PhoneControlResult
     Mapped,
 }
 
+/// <summary>Nota's Session selection as the phone outlines it (specs/107): a slot, a scene row,
+/// or nothing (the Session isn't showing, or a Return / Master column is selected).</summary>
+public readonly record struct RemoteSessionSelection(bool Slot, bool Row, int TrackId, int Scene)
+{
+    public static readonly RemoteSessionSelection None = default;
+}
+
+/// <summary>What the lead hardware controller's knobs are on (specs/107, contracts/remote-focus.md).
+/// <see cref="MacroIndex"/> is the device's index in the phone's Macros list for that track
+/// (−1 the instrument / rack, ≥0 an audio effect), null when the phone can't show it.</summary>
+public sealed record RemoteControllerFocus(
+    string Controller, string Mode, int Send, int TrackId, string TrackName, string? Device,
+    int? MacroIndex, int Page, int PageCount, string PageName, int BankFirst, int BankLast);
+
 /// <summary>The app side of Nota Remote: everything that lives above the engine (the transport
 /// view-model, MIDI Learn, the arrangement's sections, track colours, redraws). Implemented by
 /// Nota.App. Every member is called on the UI thread, from <see cref="RemoteHub.Tick"/>.</summary>
@@ -58,6 +72,10 @@ public interface IRemoteHost
     string ClipColor(int trackId, int scene);
     /// <summary>The track selected in Nota (0 = none), for "Follow Nota's selection".</summary>
     int SelectedTrackId { get; }
+    /// <summary>The Session view's selection (specs/107).</summary>
+    RemoteSessionSelection SessionSelection { get; }
+    /// <summary>The lead controller's focus, or null when no controller with knobs is active (specs/107).</summary>
+    RemoteControllerFocus? ControllerFocus { get; }
     /// <summary>The project key as a <c>MusicalKey.Code</c>, −1 = none.</summary>
     int ProjectKeyCode { get; }
     /// <summary>The arrangement's sections (Intro, Verse…), in time order.</summary>

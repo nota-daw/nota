@@ -23,6 +23,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Controllers: see what the knobs are on, and step through a track's devices** (#929,
+  specs/107).
+  - **Always in view**: the controller chip next to **MIDI** in the top bar reads
+    *track · device · page* (or *Volume · tracks 9–16* in a mixer mode), in every view, and
+    follows each track, device and page change at once. In the Session, where the Clip editor
+    keeps the panel, it is how you see the device. On the Devices panel the device the knobs are
+    on carries an orange line and a **Controller** tag. Click the chip → **Show device** opens it.
+  - **Track buttons select the track**: Track ◀ / ▶ now select the previous / next track in
+    every view (as a click on its header — the knobs, the Devices panel and the Mixer follow),
+    and the eight-track bank moves along to keep it inside; Bank ◀ / ▶ still step by eight. In
+    the Session they move the selection to the same scene of the next track.
+  - **Next / Previous device**: two new commands walk the track's chain — MIDI effects, the
+    instrument, the audio effects, a rack as one device — and select it, scrolled into view.
+    Bind them to controller buttons in **Set up…** (a new Devices step), from a control's
+    right-click menu, or to keys in Settings → Shortcuts. MCP: `step_controller_device`,
+    `get_session_selection`.
+  - **In Nota Remote**: the Scenes grid outlines the slot (or scene) selected in Nota — moved by
+    the mouse or the controller — and the header shows what the knobs are on. A phone that
+    follows Nota's selection turns its Macros screen to the controller's device.
 - **Controller auto-mapping** (#100, specs/051): plug in a controller and it works — no MIDI
   Learn needed.
   - **Recognised on plug-in**: Nota knows a controller by a profile (port name and its MIDI

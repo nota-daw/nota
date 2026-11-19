@@ -48,6 +48,7 @@ public sealed class RemoteClient
     // What this phone was last sent, so a tick only sends what changed.
     internal string? SentTheme;
     internal string? SentProject;
+    internal string? SentFocus;      // the last controller focus (specs/107)
     internal string? SentWho;
     internal string? SentTransport;
     internal string? SentLit;

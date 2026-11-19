@@ -378,6 +378,10 @@ public sealed partial class SessionView : UserControl
             SlotSelected?.Invoke(sel.TrackId, sel.Scene);
     }
 
+    /// <summary>What is selected: a slot, a scene row or a Return / Master column (specs/107: the
+    /// controller's track step keeps the row, Remote outlines it).</summary>
+    internal Selection CurrentSelection => _sel;
+
     /// <summary>Selects the slot at (<paramref name="trackId"/>, <paramref name="scene"/>) — e.g. where a browser drop landed.</summary>
     internal void SelectSlot(int trackId, int scene)
     {

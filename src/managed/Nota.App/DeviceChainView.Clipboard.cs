@@ -83,6 +83,28 @@ public sealed partial class DeviceChainView
 
     private void ClearDeviceSelection() => _sel.Clear();
 
+    /// <summary>Select one top-level device of the track shown — the controller's Next / Previous
+    /// device and its "Show device" (specs/107). The rebuild hands the focus on as a click does.
+    /// False when the panel shows another track or the device isn't there.</summary>
+    public bool SelectAddress(DeviceAddress a)
+    {
+        if (a.TrackId != _trackId || _trackId <= 0) return false;
+        var kind = a.Section switch { FocusSection.Midi => ChainKind.Midi, FocusSection.Instrument => ChainKind.Instrument, _ => ChainKind.Effect };
+        int count = kind switch { ChainKind.Midi => MidiCount, ChainKind.Effect => FxCount, _ => 1 };
+        if (kind != ChainKind.Instrument && (a.Index < 0 || a.Index >= count)) return false;
+        _rackSel = null; _rackCmds = null;
+        SelectDevices(new[] { (kind, kind == ChainKind.Instrument ? -1 : a.Index) });
+        Rebuild();
+        // A long chain scrolls sideways: bring the device the knobs went to into view.
+        var top = new DeviceAddress(a.TrackId, a.Section, kind == ChainKind.Instrument ? -1 : a.Index);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var c in _row.Children)
+                if (Controllers.ControllerFocusOverlay.GetCardAddress(c) == top) { c.BringIntoView(); break; }
+        }, Avalonia.Threading.DispatcherPriority.Background);
+        return true;
+    }
+
     // A device in a rack chain (specs/042): the rack card selects it and hands over what the
     // keys do to it; the track chain's selection clears.
     private RackDeviceSel? _rackSel;

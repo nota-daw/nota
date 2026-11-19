@@ -84,6 +84,8 @@ public partial class MainWindow
             _ => Need(_detailMaximized || CanMaximizeDetail, Loc.T("main.open_a_clip_in_the")));
         B("view.showDevices", () => { int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack(); if (t > 0) ShowDevices(t); },
             c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
+        B("device.focusNext", () => StepControllerDevice(+1), c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
+        B("device.focusPrevious", () => StepControllerDevice(-1), c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
         B("view.popOutDetail", () => OnToggleDetailWindow(this, e));
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));

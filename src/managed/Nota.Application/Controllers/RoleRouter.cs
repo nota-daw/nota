@@ -42,9 +42,9 @@ public readonly record struct ControllerTarget(ControllerTargetKind Kind, int Tr
         => new(ControllerTargetKind.RackChainInstrumentParam, t, rack, p, chain);
 }
 
-public enum ControllerActionKind { Trigger, SetNormalized, Nudge, BankStep, Knob, PageStep, KnobMode, Jog, Command }
+public enum ControllerActionKind { Trigger, SetNormalized, Nudge, BankStep, Knob, PageStep, KnobMode, Jog, Command, TrackStep }
 
-/// <summary>Something to do. Trigger / SetNormalized / Nudge carry a target; BankStep and
+/// <summary>Something to do. Trigger / SetNormalized / Nudge carry a target; BankStep, TrackStep and
 /// PageStep a signed amount in <see cref="Index"/>; Knob the knob index and its value; KnobMode
 /// the mode; Jog its steps in <see cref="Index"/>; Command the command id. Nudge values are
 /// fractions of the travel.</summary>
@@ -124,8 +124,8 @@ public sealed class RoleRouter
             case ControlRoleKind.Forward: return Press(decl, v, Trigger(ControllerTargetKind.TransportForward));
             case ControlRoleKind.BankNext: return Press(decl, v, new ControllerAction(ControllerActionKind.BankStep, Index: ControllerState.BankSize));
             case ControlRoleKind.BankPrev: return Press(decl, v, new ControllerAction(ControllerActionKind.BankStep, Index: -ControllerState.BankSize));
-            case ControlRoleKind.TrackNext: return Press(decl, v, new ControllerAction(ControllerActionKind.BankStep, Index: 1));
-            case ControlRoleKind.TrackPrev: return Press(decl, v, new ControllerAction(ControllerActionKind.BankStep, Index: -1));
+            case ControlRoleKind.TrackNext: return Press(decl, v, new ControllerAction(ControllerActionKind.TrackStep, Index: 1));   // select the track (specs/107)
+            case ControlRoleKind.TrackPrev: return Press(decl, v, new ControllerAction(ControllerActionKind.TrackStep, Index: -1));
             case ControlRoleKind.PageNext: return Press(decl, v, new ControllerAction(ControllerActionKind.PageStep, Index: 1));
             case ControlRoleKind.PagePrev: return Press(decl, v, new ControllerAction(ControllerActionKind.PageStep, Index: -1));
             case ControlRoleKind.ModeDevice: return Press(decl, v, new ControllerAction(ControllerActionKind.KnobMode, Mode: KnobModeKind.Device));
@@ -198,8 +198,8 @@ public sealed class RoleRouter
         ControlRoleKind.Forward => Trigger(ControllerTargetKind.TransportForward),
         ControlRoleKind.BankNext => new ControllerAction(ControllerActionKind.BankStep, Index: ControllerState.BankSize),
         ControlRoleKind.BankPrev => new ControllerAction(ControllerActionKind.BankStep, Index: -ControllerState.BankSize),
-        ControlRoleKind.TrackNext => new ControllerAction(ControllerActionKind.BankStep, Index: 1),
-        ControlRoleKind.TrackPrev => new ControllerAction(ControllerActionKind.BankStep, Index: -1),
+        ControlRoleKind.TrackNext => new ControllerAction(ControllerActionKind.TrackStep, Index: 1),
+        ControlRoleKind.TrackPrev => new ControllerAction(ControllerActionKind.TrackStep, Index: -1),
         ControlRoleKind.PageNext => new ControllerAction(ControllerActionKind.PageStep, Index: 1),
         ControlRoleKind.PagePrev => new ControllerAction(ControllerActionKind.PageStep, Index: -1),
         _ => null,

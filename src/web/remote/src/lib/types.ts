@@ -125,6 +125,24 @@ export interface Session {
   tr: SessionTrack[];
   /** Rows with a launch waiting, including rows that queued only stops (issue 480). Older Nota: absent. */
   q?: number[];
+  /** Nota's Session selection (specs/107): a slot, a scene row, or nothing. Older Nota: absent. */
+  sel?: { id: number; i: number } | { row: number } | null;
+}
+
+/** What a hardware controller's knobs are on in Nota (specs/107, contracts/remote-focus.md). */
+export interface Focus {
+  on: true;
+  ctl: string;
+  mode: 'device' | 'volume' | 'pan' | 'send';
+  send?: number;
+  id: number;
+  tn: string;
+  dev: string | null;
+  md: number | null;
+  pg: number;
+  pn: number;
+  pgn: string;
+  bank: [number, number];
 }
 
 export interface Learn {
