@@ -33,7 +33,7 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]
 SURFACE, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
-SCEN_NAME = {"audio": "audio", "inst": "synth"}
+SCEN_NAME = {"audio": "audio", "inst": "synth", "keyed": "sidechained"}
 
 
 def group_name(scenario, tracks, block="512", mode=""):

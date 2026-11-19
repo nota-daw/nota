@@ -1,0 +1,55 @@
+{
+  "cpm": {
+    "version": "v0.43.2",
+    "sha256": "49a3bef91ceb65bb66d57255e12d1ffd22abc2f6408fa9fe4534c544a2f232aa"
+  },
+  "cmakeDeps": {
+    "nlohmann_json": {
+      "url": "https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz",
+      "hash": "sha256-tOInM4YYi/cbHCWP2R0jlFzlaTN0ZVgHFMWagz9Wnvk="
+    },
+    "dr_libs": {
+      "url": "https://github.com/mackron/dr_libs/archive/cd99e2cca5ccb48f8d000f1cd844424dcdbbaf59.tar.gz",
+      "hash": "sha256-MbeC6gGz68bto0MK0xFb9iQ65w8uN7Vm7ZxYZj7IT+8="
+    },
+    "miniaudio": {
+      "url": "https://github.com/mackron/miniaudio/archive/refs/tags/0.11.25.tar.gz",
+      "hash": "sha256-2k346Z/ueINPbaY20P2cbBvRfFXXH0ugdv4d7WaYt2w="
+    },
+    "signalsmith_linear": {
+      "url": "https://github.com/Signalsmith-Audio/linear/archive/7f53cdd1ccd52b409dacf2af24e7ff838c5580cd.tar.gz",
+      "hash": "sha256-3IwQgT4LlCKryKyxr1w8CzdpNSdzU8DIMEsfqAZ8ZGI="
+    },
+    "pffft": {
+      "url": "https://github.com/marton78/pffft/archive/v1.3.0.tar.gz",
+      "hash": "sha256-+36zlaB2vEaeRJTXchAoHNfEqh7R7Az1B1otjuZP4d4="
+    },
+    "signalsmith_stretch": {
+      "url": "https://github.com/Signalsmith-Audio/signalsmith-stretch/archive/57b93f4e9206a089a45387eaa39bdc9f310d3308.tar.gz",
+      "hash": "sha256-UFZsof6eclOlLqYzq4oK40waMGBEFmZAzMm67tL9pxs="
+    },
+    "hiir": {
+      "url": "https://ldesoras.fr/src/hiir-1.50.zip",
+      "hash": "sha256-ML5xnmwmJlp7K5nxH3iiB8E17kt+SIXukFTKAwdqxfc=",
+      "stripRoot": false
+    },
+    "flac": {
+      "url": "https://github.com/xiph/flac/archive/refs/tags/1.5.0.tar.gz",
+      "hash": "sha256-B6XRai5UOAtY/7JXNbI3YuBgazi1Xd2ZOs6vvLq9LIs="
+    },
+    "rtmidi": {
+      "url": "https://github.com/thestk/rtmidi/archive/518f8f1168afe745ea9660e11eeee044e74eeaa1.tar.gz",
+      "hash": "sha256-4AXjOvSGSeM7m/Pc62a0Bsr2To4ljAekCZ5R398cAKg="
+    },
+    "lame": {
+      "url": "https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz/download",
+      "hash": "sha256-bBJ8Ox4pbXujRQhS40sDhmtbk09H419PDDN1VFHKhoM=",
+      "extension": "tar.gz"
+    },
+    "JUCE": {
+      "url": "https://github.com/juce-framework/JUCE/archive/refs/tags/8.0.14.tar.gz",
+      "hash": "sha256-oXFYfFqySW2XtM1e5/ifxAp9qSIVLzY1WAUKE3EscoQ="
+    }
+  },
+  "npmHash": "sha256-7409zkTqYl+fPWxq68KMIxnTy7YFwUpcmeo13mTqSyY="
+}
