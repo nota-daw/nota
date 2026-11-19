@@ -105,7 +105,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
   <!-- The languages of src/managed/Nota.App/Languages: macOS shows its own text (Hide, Quit, the
        open panels) in one of these when the app asks for it (MacSystemLanguage.cs). -->
   <key>CFBundleLocalizations</key>   <array><string>en</string><string>fr</string></array>
-  <key>LSMinimumSystemVersion</key>  <string>13.0</string>
+  <key>LSMinimumSystemVersion</key>  <string>12.0</string>
   <key>NSHighResolutionCapable</key> <true/>
   <key>NSMicrophoneUsageDescription</key>
   <string>Nota records audio from your selected input device.</string>

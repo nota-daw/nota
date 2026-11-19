@@ -39,7 +39,7 @@ EOF
 
 cxx="${CXX:-c++}"
 flags=(-std=c++20 -O2 -I"$root/src/native/nota.engine/include")
-[ "$(uname)" = "Darwin" ] && flags+=(-mmacosx-version-min=13.0)
+[ "$(uname)" = "Darwin" ] && flags+=(-mmacosx-version-min=12.0)
 
 labels=()
 for spec in "$@"; do

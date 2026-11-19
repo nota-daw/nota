@@ -113,8 +113,8 @@ Download the file for your system from the
 
 | System | File | Notes |
 |---|---|---|
-| **macOS 13+**, Apple Silicon (M1 and later) | `Nota-<version>-arm64.dmg` | |
-| **macOS 13+**, Intel | `Nota-<version>-x86_64.dmg` | |
+| **macOS 12+**, Apple Silicon (M1 and later) | `Nota-<version>-arm64.dmg` | |
+| **macOS 12+**, Intel | `Nota-<version>-x86_64.dmg` | |
 | **Windows 10/11**, most PCs | `Nota-Setup-<version>-x64.exe` | |
 | **Windows 11** on ARM | `Nota-Setup-<version>-arm64.exe` | |
 | **Linux**, most PCs | `Nota-<version>-x86_64.AppImage` | |
@@ -157,7 +157,7 @@ xattr -dr com.apple.quarantine /Applications/Nota.app
 This removes the "downloaded from the internet" mark from Nota only. Then open Nota
 normally.
 
-On **macOS 13–14** there's also a shortcut for step 3: in Finder, **right-click** (or
+On **macOS 12–14** there's also a shortcut for step 3: in Finder, **right-click** (or
 Control-click) Nota in Applications → **Open** → **Open**.
 </details>
 
