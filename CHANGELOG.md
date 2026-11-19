@@ -130,6 +130,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     Stop beside its name). Each phone keeps its own choice.
 
 ### Fixed
+- **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
+  ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
+  kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
+  selected now, unit included: a bare number takes the unit shown when it fits, else the unit
+  that fits — `500` there is 500 Hz, `12` over `10.0 ms` is still 12 ms, and `1.2k` or
+  `1.2 kHz` work as before.
 - **Stopping a Session take before it starts leaves the slot empty** (#503). Stopping a fresh
   MIDI take while it still waited for its launch boundary used to leave an empty clip in the
   slot (as long as **Fixed**), which then played. Now nothing was recorded, so nothing stays:

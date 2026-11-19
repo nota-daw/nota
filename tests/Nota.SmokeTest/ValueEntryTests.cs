@@ -95,6 +95,20 @@ internal static class ValueEntryTests
         yield return ((s = Typed("off", Amount, 0.5)) == "off", $"value entry: a word the read-out shows ({s})");
         yield return (ValueText.Solve("abc", Db(0.5), Db) is null, "value entry: unreadable text finds nothing");
 
+        // The box opens with the whole read-out selected, unit included (#661), so what is typed
+        // replaces the unit too and a bare number is read against the read-out shown when it opened.
+        double at2k = 2.0 / 3, at10ms = 0.25;   // Hz: "2.00 kHz"; Time: "10 ms"
+        yield return ((s = Typed("500", Hz, at2k)) == "500 Hz",
+            $"value entry: \"500\" typed over \"{Hz(at2k)}\" is 500 Hz, not 500 kHz clamped to the top ({s})");
+        yield return ((s = Typed("500 kHz", Hz, at2k)) == "20.00 kHz",
+            $"value entry: the unit left in place (\"500 kHz\") was what clamped to the top ({s})");
+        yield return ((s = Typed("1.2", Hz, at2k)) == "1.20 kHz" && Typed("1.2 kHz", Hz, at2k) == "1.20 kHz",
+            $"value entry: \"1.2\" and \"1.2 kHz\" over \"{Hz(at2k)}\" both read 1.20 kHz ({s})");
+        yield return ((s = Typed("12", Time, at10ms)) == "12 ms",
+            $"value entry: \"12\" typed over \"{Time(at10ms)}\" still reads 12 ms ({s})");
+        yield return ((s = Typed("2 s", Time, at10ms)) == "2.00 s" && Typed("2", Time, 0.9) == "2.00 s",
+            $"value entry: ms → s: \"2 s\" over \"{Time(at10ms)}\", \"2\" over \"{Time(0.9)}\" ({s})");
+
         // A stepped read-out: "0" lands in the middle of the run of positions showing 0.0 dB.
         double? z = ValueText.Solve("0", Db(0.2), Db);
         double exact = 60.0 / 72, step = 0.1 / 72;
