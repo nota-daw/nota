@@ -603,25 +603,23 @@ void Engine::finalizeSessionRecord(bool relaunch) {
             return;
         }
     }
-    // Stopped while still waiting for its launch boundary (#503): every slot of the MIDI take
-    // still has its own launch queued and was never seen recording, so drop the take — its clip
-    // and its history steps, the slots back as they were (a slot's next-take length included) —
-    // and those launches. A slot that started and was stopped since (Back to Arrangement) is
-    // not waiting: its take is kept.
+    // Stopped before it started (#503): no slot of the MIDI take was ever seen recording — it
+    // still waits for its launch boundary, or that launch was cancelled (#480) — so drop the
+    // take: its clip and its history steps, the slots back as they were (a slot's next-take
+    // length included), and any launch of it still queued. A slot that started and was stopped
+    // since (Back to Arrangement) has started: its take is kept.
     if (!recordSessionAudio_ && recordSessionScene_ >= 0 && takeAttempt_.active && takeAttempt_.session) {
         std::vector<std::pair<int32_t, int32_t>> queued; // (track, scene) of each slot's launch
         bool waiting = true;
         for (const auto& l : midiLanes_) {
             if (l.trackId < 0 || l.scene < 0 || !l.player) continue;
-            if (l.started || l.player->playing.load(std::memory_order_relaxed) == l.scene ||
-                l.player->pendingSlot() != l.scene)
-                waiting = false;
+            if (l.started || l.player->playing.load(std::memory_order_relaxed) == l.scene) waiting = false;
             queued.emplace_back(l.trackId, l.scene);
         }
         if (waiting && !queued.empty()) {
             discardTake();
-            // Withdraw only the take's own launches (#480): a stop queued since stays, and what
-            // the track plays carries on.
+            // Withdraw only the take's own launches still queued (#480): a stop queued since
+            // stays, and what the track plays carries on.
             for (auto [tid, sc] : queued) cancelSlotLaunch(tid, sc);
             sessionCountInFresh_ = false;
             return;

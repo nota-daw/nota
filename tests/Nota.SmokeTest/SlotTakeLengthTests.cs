@@ -39,6 +39,7 @@ internal static class SlotTakeLengthTests
         foreach (var r in StoppedWhileWaiting()) yield return r;
         foreach (var r in StoppedEarly()) yield return r;
         foreach (var r in StoppedAfterBackToArrangement()) yield return r;
+        foreach (var r in StoppedAfterCancelLaunch()) yield return r;
         foreach (var r in AudioStoppedEarly()) yield return r;
         foreach (var r in KeptUndoRedo()) yield return r;
         foreach (var r in BelongsToTheSlot()) yield return r;
@@ -271,6 +272,29 @@ internal static class SlotTakeLengthTests
         var notes = e.GetSessionNotes(t, 0);
         yield return (e.SessionSlotState(t, 0) != 0 && notes.Any(n => n.Pitch == 60),
             $"a take stopped after Back to Arrangement keeps what it recorded (state {e.SessionSlotState(t, 0)}, {notes.Length} notes)");
+        e.StopTransport();
+    }
+
+    // The take's launch cancelled before its boundary (#480), then the take stopped: it never
+    // started, so the slot is empty again with its value, and a new take is a fresh one.
+    private static IEnumerable<(bool, string)> StoppedAfterCancelLaunch()
+    {
+        using var e = Armed(out int t);
+        e.SetSessionSlotTakeLength(t, 0, Bars(3));
+        Rolling(e);
+        e.RecordSessionSlot(t, 0);                    // waits for beat 4
+        Beats(e, 1.0);
+        bool cancelled = e.CancelSlotLaunch(t, 0);
+        Beats(e, 4.0);                                // past beat 4: nothing started
+        e.StopSessionRecord();
+        Beats(e, 0.1);
+        yield return (cancelled && e.SessionSlotState(t, 0) == 0 && Same(Get(e, t, 0), Bars(3)),
+            $"a take whose launch was cancelled, then stopped, leaves the slot empty with its value (state {e.SessionSlotState(t, 0)})");
+        e.RecordSessionSlot(t, 0);
+        Beats(e, 0.01);
+        yield return (Near(e.SessionSlotLength(t, 0), 12, 1e-9), $"recording into it again is a fresh 3-bar take ({e.SessionSlotLength(t, 0)})");
+        e.StopSessionRecord();
+        e.StopAllSession();
         e.StopTransport();
     }
 
