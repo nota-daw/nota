@@ -341,6 +341,7 @@ public sealed partial class SessionView
         private readonly SolidColorBrush _brush;
         private readonly bool _stopButton;
         private readonly bool _followHeld;   // follow actions configured but bypassed (#499)
+        private readonly string _prepared = ""; // an empty slot's own next-take length (#503)
         private readonly List<(double Start, double Len, int Pitch)> _notes = new();
         private int _minPitch, _maxPitch;
         private readonly float[]? _peaks;
@@ -357,6 +358,8 @@ public sealed partial class SessionView
             _filled = eng.SessionSlotState(c.TrackId, scene) != 0;
             _brush = _filled ? o.ClipBrush(c, scene) : c.Brush;
             _stopButton = eng.GetSessionSlotStopButton(c.TrackId, scene);
+            if (!_filled && eng.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take))
+                _prepared = TakeLengthText(take);
             if (_filled)
             {
                 _name = o.ClipName(c, scene);
@@ -518,6 +521,12 @@ public sealed partial class SessionView
                     ctx.DrawEllipse(null, new Pen(_hoverCentre ? NotaPalette.Record : NotaPalette.TextMuted, 1.5), c, 3.25, 3.25);
                 else if (_stopButton)
                     ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 3, c.Y - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
+                if (_prepared.Length > 0)
+                {
+                    // The next take's own length (#503), where a clip shows its length — muted, no name.
+                    var prepFt = Ft(_prepared, NotaFonts.Measure, 10, NotaPalette.TextMuted, r.Width - 12);
+                    ctx.DrawText(prepFt, new Point(r.Width - 6 - prepFt.Width, (TopRowH - prepFt.Height) / 2));
+                }
                 if (selected) DrawSelection(ctx, r);
                 return;
             }
@@ -963,6 +972,7 @@ public sealed partial class SessionView
             create.Add(MenuKit.Item(Loc.T("session.record_here"), GlyphKind.Record, () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
             bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
             create.Add(MenuKit.Item(stop ? Loc.T("session.grid.remove_stop_button") : Loc.T("session.grid.add_stop_button"), GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
+            if (TakeLengthSubmenu(c, scene) is { } takeLength) create.Add(takeLength);
             MenuKit.AddGroups(f.Items, create,
                 new Control[] { MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste) },
                 new Control[] { AddTrackSubmenu(c.TrackId) });

@@ -170,6 +170,13 @@ public interface IAudioEngine : IDisposable
     /// <summary>An empty slot's stop button: true (default) = launching its scene stops the track.</summary>
     bool GetSessionSlotStopButton(int trackId, int scene);
     void SetSessionSlotStopButton(int trackId, int scene, bool on);
+    /// <summary>A slot's next-take length (#503); false for an unknown track/scene. Kept, hidden,
+    /// while the slot holds a clip.</summary>
+    bool TryGetSessionSlotTakeLength(int trackId, int scene, out NotaSlotTakeLength value);
+    /// <summary>One undo step; false when refused (unknown slot or mode, Fixed outside 1 beat .. 64 bars).</summary>
+    bool SetSessionSlotTakeLength(int trackId, int scene, NotaSlotTakeLength value);
+    /// <summary>Beats a fresh take into the slot would record now; 0 = until stopped.</summary>
+    double SessionSlotTakeBeats(int trackId, int scene);
     /// <summary>Copies a slot (clip + properties) onto a slot of a same-kind track.</summary>
     bool CopySessionSlot(int srcTrackId, int srcScene, int dstTrackId, int dstScene);
     bool TryGetSceneProps(int scene, out NotaSceneProps props);

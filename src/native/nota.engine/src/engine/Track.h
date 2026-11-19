@@ -172,6 +172,15 @@ enum class FollowAction : int32_t { None = 0, Stop, Again, Previous, Next, First
 // starts / stops, Repeat retriggers at the launch quantum while held.
 enum class LaunchMode : int32_t { Trigger = 0, Gate, Toggle, Repeat };
 
+// A slot's next fresh take (#503, specs/106): Global follows the Session record length, Open
+// records until stopped, Fixed records bars + beats of the meter in effect when it starts.
+enum class SlotTakeMode : int32_t { Global = 0, Open = 1, Fixed = 2 };
+struct NextTakeLength {
+    SlotTakeMode mode = SlotTakeMode::Global;
+    int32_t bars = 0, beats = 0; // Fixed only
+    bool operator==(const NextTakeLength&) const = default;
+};
+
 struct SessionSlot {
     bool hasClip = false;
     MidiClip midi;            // instrument tracks: notes relative to slot start
@@ -194,6 +203,7 @@ struct SessionSlot {
     int32_t jumpScene = 0;              // FollowAction::Jump target
     bool followBypass = false;          // hold the Follow actions without changing them (#499)
     bool stopButton = true;             // an EMPTY slot stops its track on scene launch
+    NextTakeLength nextTake;            // belongs to the slot, kept (hidden) under a clip (#503)
 };
 
 // Scene metadata (Session P0). Graph-level, one per scene row; kept in step with sceneCount.

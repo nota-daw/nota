@@ -140,6 +140,7 @@ void Engine::discardTake() {
     recordSessionTrackId_ = 0;
     recordSessionAudio_ = false;
     recordSessionGrowing_ = false;
+    recordSessionLen_ = 0.0;
     sessionCountIn_ = false;
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
 

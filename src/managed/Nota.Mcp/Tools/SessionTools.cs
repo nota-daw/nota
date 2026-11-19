@@ -28,8 +28,14 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
     public sealed record Scene(int Index, string Name, int Color, double? Tempo, string? Signature, double? FollowNextAfterBeats);
     public sealed record TrackState(int TrackId, int PlayingScene, double PositionBeats);
     public sealed record SlotRef(int TrackId, int Scene);
+    public sealed record PreparedSlot(int TrackId, int Scene,
+        [property: Description("\"open\" (records until stopped) or \"fixed\" (bars + beats).")] string Mode, int Bars, int Beats,
+        [property: Description("Beats the next take into this slot would record now (0 = until stopped).")] double ResolvedBeats);
     public sealed record SessionSnapshot(int SceneCount, double LaunchQuantBeats, bool FollowActions, double RecordLengthBeats,
-        Scene[] Scenes, Slot[] FilledSlots, TrackState[] Playing, SlotRef[] NoStopButton);
+        Scene[] Scenes, Slot[] FilledSlots, TrackState[] Playing, SlotRef[] NoStopButton,
+        [property: Description("Empty slots with a next-take length of their own (the rest follow RecordLengthBeats).")] PreparedSlot[] PreparedSlots);
+
+    private static readonly string[] TakeModes = { "global", "open", "fixed" };
 
     private static readonly string[] Modes = { "trigger", "gate", "toggle", "repeat" };
     private static readonly string[] Actions = { "none", "stop", "again", "previous", "next", "first", "last", "any", "other", "jump" };
@@ -51,13 +57,15 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         + "the launch quantum, the global follow-action switch, the fixed record length, every non-empty slot "
         + "(track id, scene, state, loop length in beats, name, colour, launch mode, quantum, legato, loop, velocity "
         + "amount, follow actions A/B with chances and time), which scene each track is playing (with its position "
-        + "in the loop), and empty slots whose stop button was removed. Call before launching or filling slots.")]
+        + "in the loop), empty slots whose stop button was removed, and empty slots with a next-take length of their own. "
+        + "Call before launching or filling slots.")]
     public Task<SessionSnapshot> GetSession() => Read(() =>
     {
         int scenes = E.SceneCount, n = E.TrackCount;
         var slots = new List<Slot>();
         var playing = new List<TrackState>();
         var noStop = new List<SlotRef>();
+        var prepared = new List<PreparedSlot>();
         for (int i = 0; i < n; i++)
         {
             if (!E.TryGetTrackInfo(i, out var ti) || ti.IsReturn || ti.IsGroup) continue;
@@ -69,6 +77,8 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
                 if (st == 0)
                 {
                     if (!E.GetSessionSlotStopButton(ti.Id, s)) noStop.Add(new SlotRef(ti.Id, s));
+                    if (E.TryGetSessionSlotTakeLength(ti.Id, s, out var take) && take.TakeMode != SlotTakeMode.Global)
+                        prepared.Add(new PreparedSlot(ti.Id, s, TakeModes[take.Mode], take.Bars, take.Beats, E.SessionSlotTakeBeats(ti.Id, s)));
                     continue;
                 }
                 E.TryGetSessionClipProps(ti.Id, s, out var c);
@@ -86,7 +96,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
                 p.SigNum > 0 && p.SigDen > 0 ? $"{p.SigNum}/{p.SigDen}" : null, p.Follow != 0 ? p.FollowBeats : null));
         }
         return new SessionSnapshot(scenes, E.LaunchQuant, E.SessionFollow, E.SessionRecordLength,
-            sceneList.ToArray(), slots.ToArray(), playing.ToArray(), noStop.ToArray());
+            sceneList.ToArray(), slots.ToArray(), playing.ToArray(), noStop.ToArray(), prepared.ToArray());
     });
 
     // ---- slots -------------------------------------------------------------------------------
@@ -171,6 +181,23 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         "An EMPTY slot's stop button. on=true (default): launching that scene stops the track. on=false: the scene leaves "
         + "the track playing — e.g. keep the drums going while scenes change.")]
     public Task SetSessionSlotStopButton(int trackId, int scene, bool on) => Mutate(() => E.SetSessionSlotStopButton(trackId, scene, on));
+
+    [McpServerTool(Name = "set_session_slot_take_length"), Description(
+        "Prepare how long the next take recorded into an EMPTY Session slot runs (#503): mode \"global\" follows the "
+        + "session record length (set_session_record_length), \"open\" records until stopped, \"fixed\" records bars + "
+        + "beats of the current meter (1 beat to 64 bars). It does not change clips, the tempo or the global length; "
+        + "the value stays with the slot after the take.")]
+    public Task SetSessionSlotTakeLength(int trackId, int scene, string mode, int bars = 0, int beats = 0) => Mutate(() =>
+    {
+        var m = (SlotTakeMode)Parse(mode, TakeModes, "take length mode");
+        if (scene < 0 || scene >= E.SceneCount) throw new ArgumentException($"No scene {scene}.");
+        if (E.SessionSlotState(trackId, scene) != 0)
+            throw new ArgumentException($"Slot (track {trackId}, scene {scene}) is not empty: its next-take length applies to an empty slot.");
+        if (!E.SetSessionSlotTakeLength(trackId, scene, new NotaSlotTakeLength(m, bars, beats)))
+            throw new ArgumentException(m == SlotTakeMode.Fixed
+                ? "A fixed take length is 1 beat to 64 bars: bars 0-64, beats 0-31 (keep them below one bar of the meter)."
+                : $"No track {trackId}.");
+    });
 
     // ---- scenes ------------------------------------------------------------------------------
 

@@ -1055,6 +1055,14 @@ if (args.Length >= 1 && args[0] == "--retry-take")
     Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// A Session slot's next-take length alone (fast iteration): `--slot-take-length`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--slot-take-length")
+{
+    Console.WriteLine("-- slot take length --");
+    foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SLOT TAKE LENGTH PASSED" : $"SLOT TAKE LENGTH FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -15135,6 +15143,30 @@ Console.WriteLine("-- MCP tools --");
     Check(!mcpSession.CancelSlotLaunch(mcpT, 0).Result && !mcpSession.CancelSceneLaunch(0).Result,
         "MCP cancel_slot_launch / cancel_scene_launch: false with nothing queued");
 
+    // A slot's next-take length over MCP (#503): set on an empty slot, listed by get_session, refused
+    // on a filled slot or out of range; the global record length stays.
+    {
+        int emptyScene = -1;
+        var takeSnap0 = mcpSession.GetSession().Result;
+        for (int s = 0; s < takeSnap0.SceneCount && emptyScene < 0; s++)
+            if (!Array.Exists(takeSnap0.FilledSlots, x => x.TrackId == mcpT && x.Scene == s)) emptyScene = s;
+        int filledScene = Array.Find(takeSnap0.FilledSlots, x => x.TrackId == mcpT)?.Scene ?? -1;
+        mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "fixed", 3, 0).Wait();
+        var takeSnap = mcpSession.GetSession().Result;
+        var prep = Array.Find(takeSnap.PreparedSlots, x => x.TrackId == mcpT && x.Scene == emptyScene);
+        Check(prep is { Mode: "fixed", Bars: 3, Beats: 0 } && Math.Abs(prep.ResolvedBeats - 12) < 1e-9
+              && takeSnap.RecordLengthBeats == takeSnap0.RecordLengthBeats,
+            $"MCP set_session_slot_take_length shows in get_session ({prep?.Mode} {prep?.Bars} = {prep?.ResolvedBeats})");
+        bool McpRefused(Func<Task> call) { try { call().GetAwaiter().GetResult(); return false; } catch (ArgumentException) { return true; } }
+        Check(filledScene >= 0 && McpRefused(() => mcpSession.SetSessionSlotTakeLength(mcpT, filledScene, "fixed", 2, 0))
+              && McpRefused(() => mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "fixed", 65, 0))
+              && McpRefused(() => mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "sometimes")),
+            "MCP set_session_slot_take_length refuses a filled slot, 65 bars and an unknown mode");
+        mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "global").Wait();
+        Check(!Array.Exists(mcpSession.GetSession().Result.PreparedSlots, x => x.TrackId == mcpT && x.Scene == emptyScene),
+            "MCP: a slot set back to global leaves PreparedSlots");
+    }
+
     // Rack: build an Instrument Rack, add a chain, drive a macro + trigger note.
     int mcpRackT = mcpInstr.AddInstrumentTrack(3).Result;   // 3 = Instrument Rack
     int mcpChain = mcpRack.AddRackChain(mcpRackT, 6).Result; // 6 = Volt chain
@@ -16113,6 +16145,8 @@ Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
 Console.WriteLine("-- retry take --");
 foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
+Console.WriteLine("-- slot take length --");
+foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");

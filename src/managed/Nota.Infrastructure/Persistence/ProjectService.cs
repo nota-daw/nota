@@ -288,6 +288,11 @@ public sealed class ProjectService
             {
                 if (!engine.GetSessionSlotStopButton(ti.Id, s) && engine.SessionSlotState(ti.Id, s) == 0)
                     (t.SessionNoStop ??= new List<int>()).Add(s);
+                if (engine.TryGetSessionSlotTakeLength(ti.Id, s, out var take) && take.TakeMode != SlotTakeMode.Global)
+                    (t.SessionTakeLengths ??= new List<SlotTakeLengthDto>()).Add(new SlotTakeLengthDto
+                    {
+                        Scene = s, Mode = take.Mode, Bars = take.Bars, Beats = take.Beats,
+                    });
                 // Persist any slot that holds a clip — skip only truly empty ones. (A slot
                 // that's playing/queued/recording is state 2-4, not 1, but still has content;
                 // gating on == 1 dropped it when saving mid-jam.)
@@ -961,6 +966,10 @@ public sealed class ProjectService
             }
             if (t.SessionNoStop is { } noStop)
                 foreach (int sc in noStop) engine.SetSessionSlotStopButton(id, sc, false);
+            if (t.SessionTakeLengths is { } takeLens)
+                foreach (var tl in takeLens)
+                    if (!engine.SetSessionSlotTakeLength(id, tl.Scene, new NotaSlotTakeLength((SlotTakeMode)tl.Mode, tl.Bars, tl.Beats)))
+                        warnings.Add($"Scene {tl.Scene + 1}: a Session slot's take length couldn't be restored.");
 
             // Automation lanes (M9-A4). Devices are already rebuilt above.
             ApplyLanes(engine, id, t.Automation, warnings);
