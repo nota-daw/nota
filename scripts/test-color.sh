@@ -8,26 +8,20 @@ source_root="$root/src/native/nota.engine/src"
 out=
 args=(--tests)
 inputs=()
-polyphonic=false
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --source) source_root="$2"; shift 2 ;;
         --out) out="$2"; shift 2 ;;
         --listen-only) args=(--listen-only); shift ;;
         --input) inputs+=("$2"); shift 2 ;;
-        --polyphonic) polyphonic=true; shift ;;
-        *) echo "Usage: $0 [--source <native-src>] [--out <directory>] [--listen-only] [--polyphonic] [--input <audio>]..." >&2; exit 2 ;;
+        --tests-only) args=(--tests-only); shift ;;
+        *) echo "Usage: $0 [--source <native-src>] [--out <directory>] [--listen-only | --tests-only] [--input <audio>]..." >&2; exit 2 ;;
     esac
 done
 if [ -z "$out" ]; then
-    if $polyphonic; then
-        out="$root/build/color-prototype/polyphonic/current"
-    else
-        out="$root/build/color-prototype/clean/current"
-    fi
+    out="$root/build/color-prototype/hq/current"
 fi
 mkdir -p "$out"
-if $polyphonic; then args+=(--polyphonic); fi
 if [ "${inputs[0]+present}" = present ]; then
     for index in "${!inputs[@]}"; do
         raw="$out/recording-$((index + 1)).f32"
@@ -45,5 +39,6 @@ if [ "$(uname)" = Darwin ]; then
     flags+=(-DSIGNALSMITH_USE_ACCELERATE -framework Accelerate)
 fi
 "${CXX:-c++}" "${flags[@]}" "$root/tests/native/ChromaTest.cpp" \
-    "$source_root/devices/effects/Chroma.cpp" -o "$out/chroma-test"
+    "$source_root/devices/effects/Chroma.cpp" "$root/src/native/nota.engine/src/dsp/primitives/BiquadCascade.cpp" \
+    -o "$out/chroma-test"
 "$out/chroma-test" "$out" "${args[@]}" | tee "$out/results.txt"

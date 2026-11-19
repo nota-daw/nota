@@ -5,7 +5,6 @@ Scope telemetry: sample rate, latency, 512 dry and 512 tuned log-frequency value
 
 Appended: 21 Morph [0,1], default 0; 22 Gate off/on, default 0; 23 Gate threshold −80 + 80v dBFS, default .25. Indices 0–20 remain stable.
 
-Index 24 is Mode (normalized, values below 0.5 choose Spectral and other values
-choose Polyphonic). Existing layouts remain append-only. Polyphonic consumes
-Root, Scale, Custom notes, Amount, Mix and Output. Both modes report the same
-latency and scope shape.
+The device reports 1024 samples at all sample rates. Indices 0–23 are
+active. Index 24, formerly Mode, is ignored by the DSP and omitted from newly
+saved parameter arrays. Named and positional presets retain their active values.

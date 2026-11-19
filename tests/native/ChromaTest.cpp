@@ -80,301 +80,187 @@ double energy(const Audio& a, size_t begin, size_t end, int channel = 0) {
     for (size_t i = begin; i < end; ++i) e += double(a[2 * i + channel]) * a[2 * i + channel];
     return e / std::max(size_t(1), end - begin);
 }
-double residual(const Audio& a, double hz, double sr, size_t begin, size_t end) {
-    double yc = 0, ys = 0, cc = 0, ss = 0, cs = 0, e = 0;
+double level(const Audio& audio, double hz, double sr, double from = .65, double to = 1.15, int channel = 0) {
+    const size_t begin = size_t(from * sr), end = size_t(to * sr);
+    double cosine = 0, sine = 0;
     for (size_t i = begin; i < end; ++i) {
-        double angle = tau * hz * i / sr, c = std::cos(angle), s = std::sin(angle), y = a[2 * i];
-        yc += y * c; ys += y * s; cc += c * c; ss += s * s; cs += c * s; e += y * y;
+        const double phase = tau * hz * i / sr;
+        cosine += audio[2 * i + channel] * std::cos(phase);
+        sine += audio[2 * i + channel] * std::sin(phase);
     }
-    double det = cc * ss - cs * cs;
-    double ac = (yc * ss - ys * cs) / det, as = (ys * cc - yc * cs) / det;
-    return std::max(0., e - ac * yc - as * ys) / std::max(e, 1e-30);
+    return 2 * std::hypot(cosine, sine) / (end - begin);
 }
-double nearest(double hz) {
-    double midi = 69 + 12 * std::log2(hz / 440.), distance = 1e9;
-    int note = 0;
-    for (int n = 0; n < 128; ++n) if (0x5ad & (1 << (n % 12))) {
-        double d = std::abs(n - midi);
-        if (d < distance - 1e-5) { distance = d; note = n; }
-    }
-    return 440 * std::exp2((note - 69) / 12.);
+double noteHz(int note) { return 440 * std::exp2((note - 69) / 12.); }
+using Fx = nota::Chroma;
+void mask(Fx& fx, unsigned classes) {
+    fx.setParam(Fx::Scale, 1);
+    for (int i = 0; i < 12; ++i) fx.setParam(Fx::NoteC + i, (classes >> i) & 1);
 }
-Configure noRes = [](auto& fx) { fx.setParam(nota::Chroma::Resonance, 0); };
-void basicTests() {
-    for (double sr : {44100., 48000., 88200., 96000.}) {
-        const std::string suffix = " at " + std::to_string(int(sr)) + " Hz";
-        nota::Chroma fx; fx.setSampleRate(sr, 512);
-        int latency = fx.latencySamples();
-        check(latency == (sr <= 48000 ? 2048 : 4096), "unchanged latency" + suffix);
-        auto input = tone(440, sr, .5);
-        for (int mode = 0; mode < 3; ++mode) {
-            auto output = render(input, sr, [mode](auto& f) {
-                if (mode == 0) f.setParam(nota::Chroma::Mix, 0);
-                if (mode == 1) f.setParam(nota::Chroma::Amount, 0);
-                if (mode == 2) { f.setParam(nota::Chroma::Scale, 1); for (int p = 9; p < 21; ++p) f.setParam(p, 0); }
-            });
-            double error = 0;
-            for (size_t i = latency; i < output.size() / 2; ++i) error = std::max(error, std::abs(double(output[2 * i]) - input[2 * (i - latency)]));
-            check(error < 1e-5, "delayed dry mode " + std::to_string(mode) + suffix);
-        }
-        for (double hz : {220., 440., 880., 1760.}) {
-            auto output = render(tone(hz, sr, 1.5), sr, noRes);
-            double r = residual(output, nearest(hz), sr, size_t(sr * .75), size_t(sr * 1.5));
-            double gain = 10 * std::log10(energy(output, size_t(sr * .75), size_t(sr * 1.5)) / .005);
-            std::printf("boundary %.0f @ %.0f: residual %.2f dB, level %+.2f dB\n", hz, sr, 10 * std::log10(std::max(r, 1e-20)), gain);
-            check(r < 1e-4 && std::abs(gain) < 1., "stable lower-note boundary " + std::to_string(int(hz)) + suffix);
-        }
-        auto keyed = render(tone(440 * std::exp2(-1. / 12), sr, 1), sr, noRes);
-        auto source = tone(440 * std::exp2(-1. / 12), sr, 1);
-        double error = 0;
-        for (size_t i = size_t(sr * .5); i < keyed.size() / 2; ++i) error = std::max(error, std::abs(double(keyed[2 * i]) - source[2 * (i - latency)]));
-        check(error < 2e-5, "in-key tone reconstructs unchanged" + suffix);
-    }
-    for (double hz : {439., 441., 430., 460.}) {
-        auto output = render(tone(hz, 48000, 1.5), 48000, noRes);
-        check(residual(output, nearest(hz), 48000, 36000, 72000) < 1e-4, "off-boundary tone " + std::to_string(int(hz)));
-    }
-    auto late = tone(440, 48000, 1.5);
-    late.insert(late.begin(), 48000, 0.f);
-    auto lateOutput = render(late, 48000, noRes);
-    check(residual(lateOutput, nearest(440), 48000, 72000, 96000) < 1e-4,
-          "a new boundary tone after silence settles on the lower note");
-    auto input = tone(440, 48000, 1);
-    for (size_t i = 0; i < input.size() / 2; ++i) input[2 * i + 1] *= -.4f;
-    auto stereo = render(input, 48000, noRes, {1, 17, 113, 512, 37});
-    double stereoError = 0;
-    for (size_t i = 0; i < input.size() / 2; ++i) stereoError = std::max(stereoError, std::abs(double(stereo[2 * i + 1]) + .4 * stereo[2 * i]));
-    check(stereoError < 2e-6, "stereo preserves antiphase and amplitude ratio");
-    auto irregular = render(input, 48000, noRes, {29, 251, 1024, 7});
-    double blockError = 0;
-    for (size_t i = 0; i < stereo.size(); ++i) blockError = std::max(blockError, std::abs(double(stereo[i]) - irregular[i]));
-    check(blockError < 1e-7, "arbitrary block partition invariance");
-    for (size_t i = 0; i < input.size() / 2; ++i) input[2 * i] = 0;
-    auto right = render(input, 48000);
-    check(energy(right, 0, 48000, 0) == 0 && energy(right, 24000, 48000, 1) > 1e-5, "right-only stereo stays isolated");
-    auto open = render(tone(430, 48000, 1), 48000, [](auto& f) { f.setParam(nota::Chroma::Gate, 1); f.setParam(nota::Chroma::GateThreshold, 0); });
-    auto closed = render(tone(430, 48000, 1), 48000, [](auto& f) { f.setParam(nota::Chroma::Gate, 1); f.setParam(nota::Chroma::GateThreshold, 1); });
-    check(energy(closed, 24000, 48000) < .01 * energy(open, 24000, 48000), "spectral Gate attenuates below-threshold signal");
-    auto shaped = render(tone(430, 48000, 1), 48000, [](auto& f) { f.setParam(nota::Chroma::Morph, 1); });
-    check(std::all_of(shaped.begin(), shaped.end(), [](float x) { return std::isfinite(x); }), "full Morph remains finite");
-    input = tone(55, 48000, 1);
-    auto sub = render(input, 48000, noRes);
-    double subError = 0;
-    for (int i = 24000; i < 48000; ++i) subError = std::max(subError, std::abs(double(sub[2 * i]) - input[2 * (i - 2048)]));
-    check(subError < 2e-5, "subbass outside processing band is preserved");
-    input.assign(48000 * 2, 0);
-    input[200] = std::numeric_limits<float>::quiet_NaN();
-    input[201] = std::numeric_limits<float>::infinity();
-    auto sanitized = render(input, 48000);
-    check(std::all_of(sanitized.begin(), sanitized.end(), [](float x) { return std::isfinite(x); }), "non-finite input is sanitized");
-    check(allocations.load() == 0, "no allocations in process");
+void onlyC(Fx& fx) {
+    mask(fx, 1);
+    fx.setParam(Fx::Resonance, 0);
 }
-void motionTests() {
-    double sr = 48000;
-    Audio input(2 * 144000);
-    double phase = 0, phase2 = 0;
-    for (int i = 0; i < 144000; ++i) {
-        double t = i / sr, hz = t < .25 ? 439 : 440 * std::exp2(.035 * std::sin(tau * 5 * (t - .25)) / 12);
-        phase += tau * hz / sr;
-        input[2 * i] = input[2 * i + 1] = .1f * float(std::sin(phase));
-    }
-    auto vibrato = render(input, sr, noRes);
-    // Vibrato stays well inside the held-note hysteresis; the last second must be tonal.
-    double vibratoResidual = residual(vibrato, nearest(440), sr, 96000, 144000);
-    std::printf("boundary vibrato: residual %.2f dB\n", 10 * std::log10(vibratoResidual));
-    check(vibratoResidual < .02, "small boundary vibrato holds one selected note");
-    phase = 0;
-    for (int i = 0; i < 144000; ++i) {
-        double t = i / sr;
-        double hz = 439 + 9 * std::clamp((t - 1.) / .25, 0., 1.);
-        phase += tau * hz / sr;
-        input[2 * i] = input[2 * i + 1] = .1f * float(std::sin(phase));
-    }
-    auto glissando = render(input, sr, noRes);
-    check(residual(glissando, nearest(439), sr, 24000, 48000) < 1e-4 &&
-          residual(glissando, nearest(448), sr, 96000, 144000) < 1e-4,
-          "glissando changes the held note once it passes the hysteresis band");
-    for (int i = 0; i < 144000; ++i) {
-        double t = i / sr, hz = 300 + 400 * t / 3, hz2 = 700 - 400 * t / 3;
-        phase += tau * hz / sr; phase2 += tau * hz2 / sr;
-        input[2 * i] = .08f * float(std::sin(phase) + .7 * std::sin(phase2));
-        input[2 * i + 1] = -.5f * input[2 * i];
-    }
-    auto crossing = render(input, sr);
-    double step = 0, peak = 0, stereo = 0;
-    for (size_t i = 1; i < crossing.size() / 2; ++i) {
-        step = std::max(step, std::abs(double(crossing[2 * i]) - crossing[2 * (i - 1)]));
-        peak = std::max(peak, std::abs(double(crossing[2 * i])));
-        stereo = std::max(stereo, std::abs(double(crossing[2 * i + 1]) + .5 * crossing[2 * i]));
-    }
-    check(std::isfinite(peak) && peak < .8 && step < .2 && stereo < 2e-6, "crossing partials stay finite, bounded and stereo linked");
-    nota::Chroma fx; fx.setSampleRate(sr, 256);
-    auto automated = tone(430, sr, 2);
-    for (int offset = 0; offset < 96000; offset += 256) {
-        if (offset % 4096 == 0) {
-            fx.setParam(nota::Chroma::Root, float((offset / 4096) % 12) / 11);
-            fx.setParam(nota::Chroma::Amount, offset % 8192 ? 0 : 1);
-            fx.setParam(nota::Chroma::Morph, offset % 8192 ? 1 : 0);
-            fx.setParam(nota::Chroma::Gate, offset % 8192 ? 1 : 0);
-        }
-        countAllocations = true;
-        fx.process(automated.data() + 2 * offset, std::min(256, 96000 - offset));
-        countAllocations = false;
-    }
-    check(std::all_of(automated.begin(), automated.end(), [](float x) { return std::isfinite(x) && std::abs(x) < 2; }), "rapid scale/Amount/Morph/Gate automation remains bounded");
+bool finite(const Audio& audio, double bound = 64.) {
+    return std::all_of(audio.begin(), audio.end(), [=](float x) { return std::isfinite(x) && std::abs(x) <= bound; });
 }
-void releaseTests() {
-    const double sr = 48000, hz = 440 * std::exp2(-1. / 12);
-    Audio input = tone(hz, sr, 2, .2);
-    input.resize(2 * 48000 * 14, 0);
-    auto longTail = render(input, sr, [](auto& f) { f.setParam(nota::Chroma::Resonance, 1); f.setParam(nota::Chroma::Decay, 1); });
-    auto shortTail = render(input, sr, [](auto& f) { f.setParam(nota::Chroma::Resonance, 1); f.setParam(nota::Chroma::Decay, 0); });
-    double longE = energy(longTail, 120000, 132000), shortE = energy(shortTail, 120000, 132000);
-    std::printf("release: long %.2f dBFS, short %.2f dBFS at 0.5–0.75 sec after input\n", 10 * std::log10(std::max(longE, 1e-30)), 10 * std::log10(std::max(shortE, 1e-30)));
-    check(longE > 1e-5 && longE > 100 * shortE, "Gate-off long Decay retains a musical release");
-    check(energy(longTail, 13 * 48000, 14 * 48000) < 1e-9, "long resonant tail eventually drains below -90 dBFS");
-    auto gated = render(input, sr, [](auto& f) {
-        f.setParam(nota::Chroma::Resonance, 1);
-        f.setParam(nota::Chroma::Decay, 1);
-        f.setParam(nota::Chroma::Gate, 1);
-    });
-    check(energy(gated, 120000, 132000) < longE * .01, "Gate attenuates a long resonance after input ends");
-    nota::Chroma fx; fx.setParam(nota::Chroma::Resonance, 1); fx.setParam(nota::Chroma::Decay, 1); fx.setSampleRate(sr, 256);
-    Audio output = input;
-    bool premature = false;
-    size_t firstIdle = 0;
-    for (size_t offset = 0; offset < output.size() / 2; offset += 256) {
-        int n = int(std::min(size_t(256), output.size() / 2 - offset));
-        countAllocations = true; fx.process(output.data() + 2 * offset, n); countAllocations = false;
-        if (fx.isIdle()) {
-            if (firstIdle == 0) firstIdle = offset;
-            if (energy(output, offset, offset + n) > 1e-9) premature = true;
-        }
-    }
-    std::printf("first idle after %.3f s (0 means never)\n", firstIdle / sr);
-    check(!premature && fx.isIdle(), "sleep waits for audible tail and eventually becomes idle");
-    auto restart = tone(hz, sr, .5);
-    for (size_t offset = 0; offset < restart.size() / 2; offset += 256)
-        fx.process(restart.data() + 2 * offset, int(std::min(size_t(256), restart.size() / 2 - offset)));
-    check(!fx.isIdle() && energy(restart, 12000, 24000) > 1e-4, "new input wakes a drained Chroma");
-}
-double noteHz(int note) {
-    return 440 * std::exp2((note - 69) / 12.);
-}
-Audio chord(double sr, std::initializer_list<int> notes, double seconds = 1.5) {
-    Audio out(2 * size_t(sr * seconds));
-    for (int note : notes) {
-        const double f = noteHz(note);
-        for (int h = 1; h <= 9; ++h) {
-            const double partial = f * h * std::sqrt(1 + .00008 * (h * h - 1));
-            for (size_t i = 0; i < out.size() / 2; ++i) {
-                double value = .045 / h * std::sin(tau * partial * i / sr + .3 * h);
-                out[2 * i] += float(value);
-                out[2 * i + 1] += float(value * (note % 2 ? .7 : -.4));
-            }
-        }
-    }
-    return out;
-}
-double partialLevel(const Audio& audio, double sr, double hz, double start = .6, double end = 1.4) {
-    double re = 0, im = 0;
-    const size_t begin = size_t(start * sr), count = size_t(end * sr) - begin;
-    for (size_t i = 0; i < count; ++i) {
-        double w = .5 - .5 * std::cos(tau * i / count);
-        double x = audio[2 * (begin + i)] * w;
-        re += x * std::cos(tau * hz * i / sr);
-        im += x * std::sin(tau * hz * i / sr);
-    }
-    return 4 * std::hypot(re, im) / count;
-}
-void polyphonicTests() {
-    Configure poly = [](auto& f) { f.setParam(24, 1); };
+void delayAndRoutingTests() {
     for (double sr : {44100., 48000., 88200., 96000.}) {
         const auto suffix = " at " + std::to_string(int(sr)) + " Hz";
-        auto input = chord(sr, {60, 64, 67});
-        auto output = render(input, sr, poly);
-        double c = partialLevel(output, sr, noteHz(60)), g = partialLevel(output, sr, noteHz(67));
-        double e = partialLevel(output, sr, noteHz(64)), eb = partialLevel(output, sr, noteHz(63));
-        double eb2 = partialLevel(output, sr, 2 * noteHz(63) * std::sqrt(1 + .00024));
-        std::printf("poly C minor %.0f: C %.4f E %.4f Eb %.4f G %.4f Eb2 %.4f\n", sr, c, e, eb, g, eb2);
-        check(c > .035 && g > .035 && eb > .032 && e < .009 && eb2 > .010,
-            "polyphonic C–E–G becomes C–Eb–G and E's overtone follows" + suffix);
-        // Projection at the exact target over 800 ms rejects a mistuned fundamental.
-        double best = 0, tunedHz = 0;
-        for (int cent = -20; cent <= 20; ++cent) {
-            double hz = noteHz(63) * std::exp2(cent / 1200.);
-            double level = partialLevel(output, sr, hz);
-            if (level > best) { best = level; tunedHz = hz; }
+        auto input = tone(440, sr, .10);
+        auto delayed = input;
+        std::copy_backward(input.begin(), input.end() - 2048, delayed.end());
+        std::fill_n(delayed.begin(), 2048, 0.f);
+        check(render(input, sr, [](auto& fx) { fx.setParam(Fx::Mix, 0); }) == delayed, "Mix dry is delayed by 1024 samples" + suffix);
+        for (unsigned selection : {0u, 4095u})
+            check(render(input, sr, [=](auto& fx) { mask(fx, selection); }) == delayed,
+                  "empty/full mask is delay-aligned dry" + suffix);
+        for (int sourceNote : {61, 71}) {
+            const double source = noteHz(sourceNote);
+            const double ratio = sourceNote == 61 ? 242. / 256 : 271. / 256;
+            auto shifted = render(tone(source, sr, 1.2), sr, onlyC);
+            const double tuned = level(shifted, source * ratio, sr), original = level(shifted, source, sr);
+            std::printf("%g Hz @ %.0f: HQ target %.5f, source %.5f\n", source, sr, tuned, original);
+            check(tuned > .015 && original < tuned * .35,
+                  std::string(sourceNote == 61 ? "down" : "up across B/C") + " semitone suppresses the source" + suffix);
         }
-        check(best > .032 && std::abs(1200 * std::log2(tunedHz / noteHz(63))) <= 10,
-              "polyphonic target within 10 cents" + suffix);
-        input = chord(sr, {60, 63, 67});
-        output = render(input, sr, poly);
-        const int latency = sr <= 48000 ? 2048 : 4096;
-        double error = 0;
-        for (size_t i = size_t(.45 * sr); i < output.size() / 2; ++i)
-            for (int ch = 0; ch < 2; ++ch)
-                error = std::max(error, std::abs(double(output[2 * i + ch] - input[2 * (i - latency) + ch])));
-        std::printf("poly in-scale max error %.6f\n", error);
-        check(error < 2e-5, "in-scale chord reconstructs with the original latency" + suffix);
     }
-    const double sr = 48000;
-    auto aMinor = render(chord(sr, {62, 66, 69}), sr, [](auto& f) {
-        f.setParam(24, 1);
-        f.setParam(nota::Chroma::Root, 9.f / 11.f);
-    });
-    check(partialLevel(aMinor, sr, noteHz(62)) > .027 && partialLevel(aMinor, sr, noteHz(65)) > .027 &&
-          partialLevel(aMinor, sr, noteHz(66)) < .012 && partialLevel(aMinor, sr, noteHz(69)) > .027,
-          "A minor keeps D and A while correcting F-sharp to F");
-    auto inversion = render(chord(sr, {55, 60, 64, 69}), sr, poly);
-    check(partialLevel(inversion, sr, noteHz(55)) > .025 && partialLevel(inversion, sr, noteHz(60)) > .025 &&
-          partialLevel(inversion, sr, noteHz(63)) > .025 && partialLevel(inversion, sr, noteHz(68)) > .025,
-          "four voices in an inversion keep their order and tune independently");
-    // This voicing keeps the adjacent candidate peaks resolvable at the fixed FFT size.
-    auto collision = render(chord(sr, {72, 74, 79}), sr, [](auto& f) {
-        f.setParam(24, 1);
-        f.setParam(nota::Chroma::Scale, 1);
-        for (int p = 0; p < 12; ++p) f.setParam(nota::Chroma::NoteC + p, p == 0 || p == 4 || p == 7 ? 1 : 0);
-    });
-    check(partialLevel(collision, sr, noteHz(72)) > .025 && partialLevel(collision, sr, noteHz(76)) > .025 &&
-          partialLevel(collision, sr, noteHz(74)) < .012,
-          "matched C stays while D takes the next free scale note E");
-    auto close = render(chord(sr, {63, 64, 67}), sr, poly);
-    const double closeEb = partialLevel(close, sr, noteHz(63)), closeE = partialLevel(close, sr, noteHz(64));
-    std::printf("unresolved adjacent fundamentals: Eb %.4f, E %.4f\n", closeEb, closeE);
-    check(closeEb > .02 && closeE > .02, "unresolved adjacent fundamentals retain their original audio");
-    auto low = chord(sr, {40});
-    auto lowTuned = render(low, sr, poly);
-    check(std::equal(lowTuned.begin() + 2 * 24000, lowTuned.end(), low.begin() + 2 * (24000 - 2048),
-                     [](float x, float y) { return std::abs(x - y) < 2e-5f; }),
-          "an out-of-range E2 does not have its overtones mistaken for separate notes");
-    auto input = chord(sr, {60, 64, 67});
-    for (size_t i = 0; i < input.size() / 2; ++i) input[2 * i + 1] = -.4f * input[2 * i];
-    auto a = render(input, sr, poly), b = render(input, sr, poly, {37, 113, 1024, 1});
-    double difference = 0, stereoError = 0;
-    for (size_t i = 0; i < a.size() / 2; ++i) {
-        difference = std::max(difference, std::abs(double(a[2 * i] - b[2 * i])));
-        stereoError = std::max(stereoError, std::abs(double(a[2 * i + 1] + .4 * a[2 * i])));
+    const double sr = 48000, source = noteHz(61);
+    auto tie = render(tone(source, sr, 1.2), sr, [](auto& fx) { onlyC(fx); mask(fx, (1 << 0) | (1 << 2)); });
+    check(level(tie, source * 242 / 256, sr) > 5 * level(tie, source * 271 / 256, sr), "lower note wins a two-neighbor tie");
+    auto noNeighbor = render(tone(noteHz(66), sr, 1.2), sr, onlyC);
+    check(energy(noNeighbor, 36000, 54000) < .0002, "notch suppresses a note with no in-scale neighbor");
+    auto diatonic = render(tone(noteHz(61), sr, 1.2), sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Scale, 0); });
+    check(level(diatonic, source * 242 / 256, sr) > .01 && level(diatonic, source * 271 / 256, sr) < .005,
+          "major scale routes its sources through the downward branch only");
+}
+
+void resonanceAndBandTests() {
+    constexpr double sr = 48000;
+    auto input = tone(440, sr, 1.2);
+    const auto voice = [](auto& fx, float resonance, float decay) {
+        mask(fx, 1 << 9);
+        fx.setParam(Fx::Resonance, resonance);
+        fx.setParam(Fx::Decay, decay);
+    };
+    const float defaultDecay = float(std::log(6.) / std::log(50.));
+    const auto base = render(input, sr, [&](auto& fx) { voice(fx, 0, defaultDecay); });
+    const double baseLevel = level(base, 440, sr);
+    for (const auto& [resonance, expected] : {std::pair{.5f, 5.175}, std::pair{1.f, 7.32605}}) {
+        const auto resonated = render(input, sr, [&](auto& fx) { voice(fx, resonance, defaultDecay); });
+        const double db = 20 * std::log10(level(resonated, 440, sr) / baseLevel);
+        std::printf("single-note resonance %g: %+.2f dB relative to no resonance\n", resonance, db);
+        check(std::abs(db - expected) < 1.0, "two cascaded peaking sections and density makeup at " + std::to_string(resonance));
     }
-    check(difference < 1e-7 && stereoError < 2e-6, "polyphonic block partitions and antiphase stereo agree");
-    auto automated = input;
-    nota::Chroma fx;
-    poly(fx);
+    input.resize(2 * 96000);
+    std::fill(input.begin() + 48000, input.end(), 0.f);
+    auto shortTail = render(input, sr, [&](auto& fx) { voice(fx, 1, 0); });
+    auto longTail = render(input, sr, [&](auto& fx) { voice(fx, 1, 1); });
+    check(energy(longTail, 33000, 39000) > 100 * energy(shortTail, 33000, 39000),
+          "Decay changes ringdown without moving the target note");
+    auto shapedTail = render(input, sr, [&](auto& fx) {
+        voice(fx, 1, 1);
+        fx.setParam(Fx::Gate, 1);
+        fx.setParam(Fx::GateThreshold, 1);
+    });
+    const double tailRatio = energy(shapedTail, 33000, 39000) / energy(longTail, 33000, 39000);
+    check(tailRatio > .9 && tailRatio < 1.1, "spectral Gate leaves the separate peaking tail intact");
+    for (double hz : {35., 18000.}) {
+        auto side = render(tone(hz, sr, 1.2), sr, onlyC);
+        check(std::abs(20 * std::log10(level(side, hz, sr) / .1)) < 1.,
+              "side band retains level near " + std::to_string(int(hz)) + " Hz");
+    }
+
+    Audio impulse(2 * 5000);
+    impulse[0] = impulse[1] = .5f;
+    auto split = render(impulse, sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Amount, 0); });
+    const auto first = std::find_if(split.begin(), split.end(), [](float x) { return std::abs(x) > 1e-7f; });
+    check(first - split.begin() == 2048, "crossover mid and side bands start at the reported delay");
+}
+
+void shapeAndStereoTests() {
+    constexpr double sr = 48000, source = 277.1826309768721, target = source * 242 / 256;
+    const auto input = tone(source, sr, 1.2);
+    auto neutral = render(input, sr, onlyC);
+    auto closed = render(input, sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Gate, 1); fx.setParam(Fx::GateThreshold, 1); });
+    auto open = render(input, sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Gate, 1); fx.setParam(Fx::GateThreshold, 0); });
+    const double neutralLevel = level(neutral, target, sr);
+    check(level(closed, target, sr) < .1 * neutralLevel && level(open, target, sr) > .9 * neutralLevel,
+          "spectral Gate attenuates the correction according to the dry-bin threshold");
+    auto morph = render(input, sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Morph, 1); });
+    check(finite(morph) && std::abs(level(morph, target, sr) - neutralLevel) > .005,
+          "full Morph changes the magnitudes of the correction");
+    Audio anti = input;
+    for (size_t i = 1; i < anti.size(); i += 2) anti[i] = -anti[i];
+    const Configure shape = [](auto& fx) { onlyC(fx); fx.setParam(Fx::Morph, .35f); fx.setParam(Fx::Gate, 1); };
+    auto stereo = render(anti, sr, shape, {1, 64, 256, 511, 1024});
+    double difference = 0;
+    for (size_t i = 0; i < stereo.size(); i += 2)
+        difference = std::max(difference, std::abs(double(stereo[i] + stereo[i + 1])));
+    check(difference < 1e-5, "anti-phase stereo retains phase through Morph and Gate");
+    check(stereo == render(anti, sr, shape, {1024}), "steady parameters render identically across arbitrary block sizes");
+    Audio right = input;
+    for (size_t i = 0; i < right.size(); i += 2) right[i] = 0;
+    right = render(right, sr, shape);
+    check(energy(right, 0, right.size() / 2) == 0 && energy(right, 20000, 50000, 1) > 1e-5,
+          "right-only stereo remains isolated");
+    Audio invalid = input;
+    invalid[200] = std::numeric_limits<float>::quiet_NaN();
+    invalid[201] = std::numeric_limits<float>::infinity();
+    check(finite(render(invalid, sr)), "non-finite input is sanitized");
+    Fx fx;
+    onlyC(fx);
+    fx.setParam(Fx::Resonance, std::numeric_limits<float>::quiet_NaN());
+    fx.setParam(24, 1);
+    check(fx.getParam(Fx::Resonance) == 0 && fx.getParam(24) == 0 && fx.paramCount() == 24,
+          "non-finite parameters and retired Mode are ignored");
+}
+
+void automationAndScopeTests() {
+    constexpr double sr = 48000, source = 277.1826309768721;
+    Audio input = tone(source, sr, 2);
+    Fx fx;
+    onlyC(fx);
     fx.setSampleRate(sr, 480);
-    for (int offset = 0; offset < int(automated.size() / 2); offset += 480) {
-        if (offset == 19200) fx.setParam(nota::Chroma::Scale, 0); // To C major, while the chord sustains.
-        if (offset == 48000) fx.setParam(24, 0);                   // Return to Spectral during playback.
+    for (int i = 0; i < 96000; i += 480) {
+        if (i == 33600) mask(fx, 1 << 2);
+        if (i == 48000) {
+            fx.setParam(Fx::Low, 1);
+            fx.setParam(Fx::High, 0);
+            fx.setParam(Fx::Resonance, 1);
+            fx.setParam(Fx::Decay, 1);
+        }
+        if (i == 52800) {
+            fx.setParam(Fx::Low, .25);
+            fx.setParam(Fx::High, .5);
+            fx.setParam(Fx::Resonance, 0);
+            fx.setParam(Fx::Decay, .45);
+        }
         countAllocations = true;
-        fx.process(automated.data() + 2 * offset, 480);
+        fx.process(input.data() + 2 * i, 480);
         countAllocations = false;
     }
-    check(partialLevel(automated, sr, noteHz(63), .2, .37) > .026 &&
-          partialLevel(automated, sr, noteHz(64), .65, .93) > .037,
-          "changing the scale during a held chord updates its destination");
-    check(fx.latencySamples() == 2048 &&
-          std::equal(automated.begin() + 2 * 48700, automated.begin() + 2 * 49700,
-                     input.begin() + 2 * (48700 - 2048), [](float x, float y) { return std::abs(x - y) < 2e-6f; }),
-          "a playing mode switch passes through delay-aligned dry audio");
+    check(level(input, source * 242 / 256, sr, .25, .6) > .02 &&
+          level(input, source * 271 / 256, sr, 1.4, 1.9) > .02,
+          "changing scale on sustained audio crossfades to the new direction");
+    double step = 0;
+    for (size_t i = 2; i < input.size(); i += 2) step = std::max(step, std::abs(double(input[i] - input[i - 2])));
+    check(finite(input, 5) && step < .35, "live band, resonance and scale changes remain bounded");
+    float scope[1026];
+    check(fx.scopeRead(scope, 1026) == 1026 && scope[0] == sr && scope[1] == 1024 &&
+          *std::max_element(scope + 2, scope + 514) > .3f && *std::max_element(scope + 514, scope + 1026) > .3f,
+          "scope reports dry and correction with fixed latency");
+    fx.setParam(Fx::Mix, 0);
+    Audio zeroMix = tone(source, sr, .6);
+    fx.process(zeroMix.data(), int(zeroMix.size() / 2));
+    fx.scopeRead(scope, 1026);
+    check(*std::max_element(scope + 514, scope + 1026) < .05f, "Tuned scope follows Mix");
+    fx.setParam(Fx::Mix, 1);
+    Audio quiet(2 * 96000);
+    fx.process(quiet.data(), int(quiet.size() / 2));
+    check(fx.isIdle(), "settled silence permits idle");
+    auto wake = tone(source, sr, .25);
+    fx.process(wake.data(), int(wake.size() / 2));
+    check(!fx.isIdle() && energy(wake, 7000, 12000) > .0001, "audio wakes after silence");
 }
 void writeWav(const std::filesystem::path& path, const Audio& audio, double sr) {
     std::ofstream f(path, std::ios::binary);
@@ -415,47 +301,45 @@ Audio readRecording(const std::filesystem::path& path) {
     return input;
 }
 void attackTest() {
-    auto input = scene("attack");
-    auto wet = render(input, 48000, noRes);
-    double error = 0, reference = 0;
-    for (int onset : {28800, 57600, 86400}) {
-        for (int i = onset; i < onset + 240; ++i) {
-            double dry = input[2 * i], difference = dry - wet[2 * (i + 2048)];
-            error += difference * difference;
-            reference += dry * dry;
-        }
+    constexpr int sr = 48000;
+    Audio hits(2 * sr);
+    for (int i = 24000; i < 26400; ++i) {
+        const double t = (i - 24000) / double(sr);
+        hits[2 * i] = float(.4 * std::sin(tau * 700 * t) * std::exp(-90 * t));
+        hits[2 * i + 1] = hits[2 * i];
     }
-    std::printf("attack: first 5 ms residual %.2f dB relative to input\n", 10 * std::log10(error / reference));
-    check(error < .65 * reference, "short attacks retain the shape of the unprocessed onset");
+    auto guarded = render(hits, sr, onlyC);
+    auto antiphase = hits;
+    for (size_t i = 1; i < antiphase.size(); i += 2) antiphase[i] = -antiphase[i];
+    const auto unguarded = render(antiphase, sr, onlyC); // The summed transient detector sees zero.
+    double guardedError = 0, unguardedError = 0;
+    const auto midOnly = render(hits, sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Amount, 0); });
+    for (int i = 24000 + 1024; i < 24000 + 1024 + 240; ++i) {
+        guardedError += std::pow(guarded[2 * i] - midOnly[2 * i], 2);
+        unguardedError += std::pow(unguarded[2 * i] - midOnly[2 * i], 2);
+    }
+    check(guardedError < .8 * unguardedError, "guard keeps the first 5 ms closer to the dry crossover response");
 }
-void listening(const std::filesystem::path& out, int recordingCount, char** recordings, bool polyphonic) {
+
+void listening(const std::filesystem::path& out, int recordingCount, char** recordings) {
     std::ofstream csv(out / "metrics.csv");
     csv << "scene,median_ms,p99_block_us,max_block_us,rms_match_gain,raw_peak,tail_rms_dbfs\n";
     std::vector<std::string> scenes = {"fm", "growl", "chord", "attack", "decay", "boundary"};
-    if (polyphonic) scenes = {"chord"};
     const size_t generated = scenes.size();
     for (int i = 0; i < recordingCount; ++i) scenes.push_back("recording-" + std::to_string(i + 1));
     for (size_t index = 0; index < scenes.size(); ++index) {
         const auto& name = scenes[index];
         Audio input = index < generated ? scene(name) : readRecording(recordings[index - generated]);
-        if (polyphonic && name == "chord") {
-            input = chord(48000, {60, 64, 67}, 5);
-            for (size_t i = 0; i < input.size() / 2; ++i) {
-                const double time = i / 48000.;
-                const float envelope = float(std::exp(-time * .8) * std::clamp((5 - time) * 2, 0., 1.));
-                input[2 * i] *= envelope;
-                input[2 * i + 1] *= envelope;
-            }
-        }
+        writeWav(out / (name + "-source.wav"), input, 48000);
         Audio wet;
+        int latency = 0;
         std::vector<double> times;
         std::vector<double> blockTimes;
         blockTimes.reserve(5 * 938);
         for (int run = 0; run < 5; ++run) {
             nota::Chroma fx;
-            if (polyphonic) fx.setParam(24, 1);
             if (name == "decay") { fx.setParam(nota::Chroma::Decay, 1); fx.setParam(nota::Chroma::Resonance, .7f); }
-            fx.setSampleRate(48000, 256); wet = input;
+            fx.setSampleRate(48000, 256); latency = fx.latencySamples(); wet = input;
             auto start = std::chrono::steady_clock::now();
             for (int i = 0; i < 240000; i += 256) {
                 auto before = std::chrono::steady_clock::now();
@@ -468,7 +352,7 @@ void listening(const std::filesystem::path& out, int recordingCount, char** reco
         std::sort(blockTimes.begin(), blockTimes.end());
         const double p99 = blockTimes[blockTimes.size() * 99 / 100], maxBlock = blockTimes.back();
         Audio aligned(wet.size(), 0);
-        std::copy(wet.begin() + 4096, wet.end(), aligned.begin());
+        std::copy(wet.begin() + 2 * latency, wet.end(), aligned.begin());
         writeWav(out / (name + "-raw-wet.wav"), wet, 48000);
         const double dryEnergy = energy(input, 0, 240000) + energy(input, 0, 240000, 1);
         const double wetEnergy = energy(aligned, 0, 240000) + energy(aligned, 0, 240000, 1);
@@ -480,7 +364,7 @@ void listening(const std::filesystem::path& out, int recordingCount, char** reco
         for (size_t i = 0; i < aligned.size(); ++i) { aligned[i] *= float(gain * attenuation); input[i] *= float(attenuation); }
         writeWav(out / (name + "-dry.wav"), input, 48000);
         writeWav(out / (name + "-wet.wav"), aligned, 48000);
-        if (polyphonic) {
+        {
             Audio pair = input;
             pair.resize(pair.size() + 48000, 0);
             pair.insert(pair.end(), aligned.begin(), aligned.end());
@@ -495,18 +379,16 @@ void listening(const std::filesystem::path& out, int recordingCount, char** reco
 }
 int main(int argc, char** argv) {
     if (argc < 3) return 2;
-    bool listenOnly = std::string(argv[2]) == "--listen-only";
-    if (!listenOnly) {
-        basicTests();
-        motionTests();
-        releaseTests();
+    const std::string mode = argv[2];
+    if (mode != "--listen-only") {
+        delayAndRoutingTests();
+        resonanceAndBandTests();
+        shapeAndStereoTests();
+        automationAndScopeTests();
         attackTest();
-        polyphonicTests();
         check(allocations.load() == 0, "all guarded renders allocate nothing");
     }
-    const bool polyphonic = argc > 3 && std::string(argv[3]) == "--polyphonic";
-    const int firstRecording = polyphonic ? 4 : 3;
-    listening(argv[1], argc - firstRecording, argv + firstRecording, polyphonic);
+    if (mode != "--tests-only") listening(argv[1], argc - 3, argv + 3);
     std::printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

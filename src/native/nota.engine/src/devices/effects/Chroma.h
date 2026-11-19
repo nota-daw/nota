@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
-// Stereo-linked spectral retuning. All working storage is prepared off-thread.
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/primitives/BiquadCascade.h"
 #include <signalsmith-linear/fft.h>
 #include <array>
 #include <complex>
@@ -27,13 +27,12 @@ class Chroma final : public Device {
         Morph = NoteC + 12,
         Gate,
         GateThreshold,
-        Mode,
         kNumParams
     };
     Chroma();
     void setSampleRate(double sr, int32_t maxBlock) override;
     void process(float* buf, int32_t frames) override;
-    int32_t latencySamples() const override { return n_; }
+    int32_t latencySamples() const override { return kWindow; }
     const char* displayName() const override { return "Nota Chroma"; }
     int32_t builtinKind() const override { return 27; }
     int32_t paramCount() const override { return kNumParams; }
@@ -48,57 +47,116 @@ class Chroma final : public Device {
     int noteMask() const;
 
   private:
+    static constexpr int kWindow = 1024, kHop = 256, kBins = kWindow / 2, kRing = 2 * kWindow;
+    static constexpr int kPitchClasses = 12, kAllNotes = (1 << kPitchClasses) - 1;
+    static constexpr int kFirstMidi = 36, kLastMidi = 151, kBankCapacity = 80, kSpectrumBins = 512;
+    using Stereo = std::array<float, 2>;
     using Complex = std::complex<float>;
-    struct Placement {
-        int from = 0, to = 0, hops = 0;
+    using FFT = signalsmith::linear::RealFFT<float>;
+    using Magnitudes = std::array<float, kBins + 1>;
+
+    struct StereoFilter {
+        std::array<dsp::BiquadSection, 2> channel{};
+        void tune(dsp::BiquadCoeffs coeff);
+        Stereo run(Stereo in);
     };
-    void frame();
-    void resetMode(bool polyphonic);
-    void analyseChord(int mask, double binHz);
-    void applySpectralColor(int mask, float amount, double low, double high, double binHz);
-    int targetNote(double hz, int mask, int previous = -1) const;
+
+    struct Bank {
+        struct Note {
+            std::array<StereoFilter, 2> sections{};
+            bool active = false;
+        };
+        std::array<Note, kLastMidi - kFirstMidi + 1> notes{};
+        std::array<int, kBankCapacity> active{};
+        int count = 0;
+
+        void tune(const std::array<double, kLastMidi - kFirstMidi + 1>& frequencies, double sr, int mask, double low,
+            double high, double q, double gain = 0.);
+        Stereo run(Stereo in);
+    };
+
+    struct Shifter {
+        std::array<Stereo, kWindow> input{};
+        std::array<Stereo, kRing> output{};
+        std::array<std::array<double, kBins>, 2> analysisPhase{}, synthesisPhase{};
+        std::array<std::array<Complex, kBins>, 2> spectrum{};
+        double ratio = 1, rmsSum = 0, lastRms = 0, onsetEnvelope = 0;
+        std::vector<float> rmsHistory;
+        int rmsPosition = 0, refractory = 0;
+        bool firstFrame = true;
+
+        void reset();
+        void push(Stereo in, uint64_t sample);
+        void analyse(Chroma& effect, uint64_t end);
+        void synthesize(Chroma& effect, uint64_t end, const Magnitudes* gain);
+        void accumulate(Magnitudes& power) const;
+        Stereo pop(uint64_t sample);
+    };
+
+    struct Path {
+        int mask = 0, down = 0, up = 0, common = 0;
+        bool dirty = true;
+        double tunedLow = -1, tunedHigh = -1, tunedQ = -1, tunedGain = -1;
+        Bank shared{}, downInput{}, upInput{}, reject{}, resonator{};
+        std::array<Shifter, 2> shift{};
+        StereoFilter correctionHigh{}, correctionLow{};
+        Magnitudes gateGain{};
+        float notchGain = 1, resonanceGain = 1, resonanceGainTarget = 1, resonanceBlend = 0;
+
+        void reset(int newMask);
+        void tune(const Chroma& effect);
+        void frame(Chroma& effect, uint64_t end, const Magnitudes* dry);
+        Stereo process(
+            Chroma& effect, Stereo mid, Stereo dry, float transient, Stereo dynamics, uint64_t sample, Stereo& tuned);
+        bool active() const { return mask != 0 && mask != kAllNotes; }
+    };
+
+    struct Envelope {
+        double value = 0;
+        double run(double input, double attack, double release);
+    };
+
+    void updateControls();
+    void updateBand();
+    float transientMask(Stereo dry);
+    Stereo correctionMask(Stereo mid);
+    void analyseDry(uint64_t end);
+    void publishSpectrum();
+    void publishLine(
+        const std::array<Stereo, kWindow>& history, std::array<std::atomic<float>, kSpectrumBins>& destination);
+    float pole(double ms) const;
+
     std::array<std::atomic<float>, kNumParams> p_{};
-    signalsmith::linear::RealFFT<float> fft_;
-    double sr_ = 44100;
-    int n_ = 2048, hop_ = 256, bins_ = 1024;
-    uint64_t count_ = 0, quiet_ = 0, quietOutput_ = 0, quietTail_ = 0;
-    bool idle_ = false, snap_ = true, firstFrame_ = true, polyphonic_ = false;
-    float mixS_ = 1, gainS_ = 1, modeWet_ = 1;
-    int modeWarmup_ = 0;
-    double amountS_ = 1, resS_ = .25, lowS_ = 150, highS_ = 8000;
-    double morphS_ = 0, gateS_ = 0, thresholdS_ = -60;
-    std::vector<float> window_, time_, energy_, previousEnergy_, gateGain_;
-    std::array<std::vector<float>, 2> input_, ola_, previousPhase_;
-    std::array<std::vector<Complex>, 2> spectrum_, wet_, tail_, tunedViewBins_, tunedTail_;
-    std::vector<double> rotation_, previousRotation_, shift_, previousShift_, peakHz_, previousPeakHz_;
-    std::vector<double> velocity_, previousVelocity_;
-    std::vector<Placement> placement_, previousPlacement_;
-    std::vector<Complex> rotationFactor_, resonanceTurn_;
-    std::vector<float> tunedWeight_, previousTunedWeight_, attackKeep_;
-    std::vector<int> resonanceNote_, binNote_;
-    std::vector<Complex> binTurn_;
-    std::array<double, 513> viewEdges_{};
-    std::vector<int> peaks_, owner_, reference_, previousReference_, peakAge_, previousPeakAge_, matched_;
-    std::vector<int> matchOrder_, peakMatch_, selectedNote_, previousNote_;
-    // Look one octave below the correction range so low notes can claim
-    // their own overtones without being retuned.
-    static constexpr int kFirstCandidate = 36, kFirstVoice = 48, kLastVoice = 84;
-    static constexpr int kVoiceNotes = kLastVoice - kFirstCandidate + 1;
-    struct Voice {
-        double hz = 0;
-        int seen = 0, missed = 0, target = -1;
-    };
-    std::array<Voice, kVoiceNotes> voices_{};
-    std::array<double, kVoiceNotes> voicePitch_{};
-    std::array<int, 4> chord_{ {-1, -1, -1, -1} };
-    int chordMask_ = 0;
-    std::vector<float> partialEvidence_;
-    std::vector<double> partialShift_;
-    int previousMask_ = 0;
-    int peakCount_ = 0;
-    static constexpr int kSpectrumBins = 512;
     std::array<std::atomic<float>, kSpectrumBins> spectrumView_{}, tunedView_{};
-    std::atomic<float> srView_{44100}, latencyView_{2048};
+    std::atomic<float> srView_{44100};
+    FFT fft_;
+    std::array<float, kWindow> window_{}, time_{};
+    std::array<Complex, kBins> fftBins_{};
+    std::array<double, kBins> phaseAdvance_{};
+    std::array<double, kLastMidi - kFirstMidi + 1> frequencies_{};
+    std::array<double, kSpectrumBins + 1> viewEdges_{};
+    std::array<Stereo, kWindow> fullDelay_{}, midDelay_{}, sidesDelay_{}, dryView_{}, tunedViewHistory_{};
+    Magnitudes dryMagnitude_{};
+    std::array<Path, 2> paths_{};
+    StereoFilter low1_{}, low2_{}, high1_{}, high2_{}, midHigh_{}, midLow_{}, finalHigh_{}, finalLow_{};
+    dsp::BiquadSection guardHigh_{}, guardLow_{};
+    std::array<Envelope, 2> fast_{}, slow_{}, noteMaskEnvelope_{};
+    Envelope guardEnvelope_{}, guardRelease_{};
+
+    double sr_ = 44100, low_ = 150, high_ = 8000, targetLow_ = 150, targetHigh_ = 8000;
+    double decay_ = .12, resonance_ = 0, resonanceTarget_ = 0, guardRamp_ = 0;
+    float amount_ = 1, mix_ = 1, gain_ = 1, morph_ = 0, gate_ = 0, gateThreshold_ = -60;
+    float amountTarget_ = 1, mixTarget_ = 1, gainTarget_ = 1, morphTarget_ = 0, gateTarget_ = 0;
+    float fastRelease_ = 0, slowAttack_ = 0, slowRelease_ = 0, noteRelease_ = 0;
+    float guardAttack_ = 0, guardSlowRelease_ = 0, guardFastRelease_ = 0, onsetPole_ = 0;
+    float bandPole_ = 0, resonantPole_ = 0, makeupPole_ = 0, blendStep_ = 0, controlPole_ = 0;
+    float amountDelta_ = 0;
+    int amountRampLength_ = 0, amountRemaining_ = 0;
+    float gateOpen_ = 0, gateClose_ = 0;
+    int controlInterval_ = 8, currentPath_ = 0, requestedMask_ = 0, fadeLength_ = 0, fadeRemaining_ = 0;
+    int guardLength_ = 0, guardPosition_ = 0;
+    uint64_t sample_ = 0, quiet_ = 0;
+    bool idle_ = false, snap_ = true;
 };
 
 } // namespace nota

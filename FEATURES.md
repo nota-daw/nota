@@ -959,12 +959,11 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 ### Audio effects
 
-- **Nota Chroma** (27) — **Spectral** tuning for color bass and **Polyphonic** scale
-  correction for up to four notes in sustained chords (C3–C6). Automatic attack
-  protection, adjustable resonant tails in Spectral, live Dry and
-  Tuned spectrum, piano-style note selection, root, four scales or custom pitch classes,
-  Amount, Resonance, Decay, Low/High processing limits, stereo-linked Morph, spectral
-  Gate with threshold, Mix and Output. Six presets and about 43–46 ms latency.
+- **Nota Chroma** (kind 27) — HQ color-bass effect with semitone shifts and attack protection.
+  Choose a root, one of four scales or custom pitch classes, and limit the affected frequency
+  band. Separate Amount, Resonance and Decay controls, stereo-linked Morph and Gate for
+  shifted frequencies, Mix and Output, live Dry and Tuned spectra, and six factory presets.
+  Latency is 1024 samples.
 - **Nota EQ-8** (kind 0) — in three sizes (L 700 / S 260 / XL, S·L·XL toggle; S is the graph with the selected band's Freq, Gain, Q and Output; XL moves the whole editor into a large panel above the device chain, graph stretched, one per track, following the selected track, its height set with the Devices panel's splitter; the header's pop-out key opens it in its own resizable window instead) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
   Notch / High shelf / High cut, frequency, gain, Q (resonance on the cuts), a 12 / 24 / 48 dB/oct
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every

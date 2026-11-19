@@ -231,15 +231,15 @@ public static class PresetService
                 if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int di = engine.AddBuiltinDevice(targetTrackId, doc.BuiltinKind);
                 if (di < 0) return Loc.T("persistence.preset.failed_to_add_device");
+                int pc = engine.DeviceParamCount(targetTrackId, di);
                 if (EffectNamed(doc, doc.BuiltinKind) is { Count: > 0 } named)
                 {
-                    int pc = engine.DeviceParamCount(targetTrackId, di);
                     for (int i = 0; i < pc; i++)
                         if (named.TryGetValue(engine.DeviceParamName(targetTrackId, di, i), out var v))
                             engine.DeviceSetParam(targetTrackId, di, i, v);
                 }
                 else
-                    for (int i = 0; i < doc.Params.Length; i++)
+                    for (int i = 0; i < doc.Params.Length && i < pc; i++)
                         engine.DeviceSetParam(targetTrackId, di, i, doc.Params[i]);
                 LegacyRange(doc, engine, targetTrackId, di);
                 if (doc.BuiltinKind == EqKind) ApplyBandText(doc.BandText, engine, targetTrackId, di);
@@ -554,9 +554,6 @@ public static class PresetService
                 {
                     for (int i = 0; i < doc.Params.Length && i < pc; i++)
                         engine.DeviceSetParam(trackId, deviceIndex, i, doc.Params[i]);
-                    // Positional Chroma presets from before Mode always meant Spectral.
-                    if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == 27 && pc > 24 && doc.Params.Length <= 24)
-                        engine.DeviceSetParam(trackId, deviceIndex, 24, 0f);
                 }
                 LegacyRange(doc, engine, trackId, deviceIndex);
                 // The preset's band labels replace the device's (none for a factory preset).

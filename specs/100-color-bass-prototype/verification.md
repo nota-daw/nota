@@ -14,7 +14,7 @@
 - WAVs: `build/color-prototype/{fm,growl,chord}-{dry,wet}.wav`, stereo PCM16, 48 kHz, 5 seconds. Wet latency is removed from listening copies only, then RMS level matched; common attenuation prevents clipping. DSP processing keeps its reported latency.
 
 ## Limits and listening acceptance
-Latency is 2048 samples at 44.1/48 kHz and 4096 at 88.2/96 kHz (46.44/42.67 ms). One quality mode; no MIDI chord following. Exact Chroma equivalence has not been established: no Chroma instance/reference recordings were provided. Integer-bin peak-region placement and exact phase advance can still produce artifacts on moving/overlapping partials; the user's audition determines whether another DSP iteration is needed.
+Latency is 2048 samples at 44.1/48 kHz and 4096 at 88.2/96 kHz (46.44/42.67 ms). This iteration uses a single quality mode and manual note selection. Integer-bin peak-region placement and exact phase advance can still produce artifacts on moving or overlapping partials. Listening acceptance remains open.
 
 Use Mix=0 for a time-aligned dry comparison. Host bypass retains existing Nota behavior (the engine skips bypassed latent devices).
 
@@ -136,3 +136,36 @@ Replaced stepped opacity tiles with continuous theme-aware gradients and narrow 
   scenarios without Chroma. The shared full-suite gate remains open as T017.
 - Convergence: FR-022–025 and T026–030 are covered by the current code, tests,
   recordings and manual. Subjective listening and the shared build gate remain.
+
+## HQ engine iteration
+
+- Native harness passes 45 checks. Dry and neutral masks reproduce the input
+  exactly after 1024 samples at 44.1, 48, 88.2 and 96 kHz. The tests exercise
+  both semitone directions, stereo, branch selection, scale/band automation,
+  Morph and Gate, tail, transient guard, arbitrary block partitions and zero
+  callback allocations. In the C-sharp-down probe, the settled correction
+  amplitude changes with the fixed FFT size in samples. It measures 0.171
+  at 48 kHz and 0.026 at 88.2 kHz for the same 0.1 input amplitude.
+- The C ABI smoke verifies 24 parameters and 1024 samples, clone and project
+  recall, legacy layouts with 21, 24 and 25 values, retained but inactive
+  Mode automation, named/positional presets, live spectra and an audible
+  semitone shift. All 13 Chroma assertions pass.
+- The actual card was rendered and inspected in Studio Dark and Studio
+  Light. The EN/RU manual and feature descriptions are updated. The site
+  builds 340 pages and its check reports zero errors and 89 warnings.
+- `build/color-prototype/hq/ab` contains aligned, RMS-matched baseline/HQ
+  auditions for FM, growl, chord, attack, decay and a moving tone. The
+  sibling `baseline` and `current` folders keep raw renders and CSV metrics.
+  Baseline uses the default Spectral engine at `dada1c49`.
+- External listening comparison remains pending (T035). The native harness
+  exports the source WAVs, and the quickstart records the settings for a
+  level-matched comparison.
+- The universal native build, scanner self-test and .NET Release build pass.
+  Two complete smoke runs fail only at the already tracked overloaded
+  render-pool checks (T017). The final run counted 284 of 4,125 late blocks
+  and a peak burst of nine. That scenario builds plain audio playback tracks
+  without Chroma. All three subsequent scanner checks pass when run separately.
+- On the local Mac, the median wall time for five seconds of stereo audio
+  at 48 kHz and 256-frame blocks was 57–76 ms for the baseline and 247–252 ms
+  for HQ across the six scenes. The HQ 99th-percentile block time was
+  0.34–0.38 ms. Both benchmarks used the same harness and matching source WAVs.

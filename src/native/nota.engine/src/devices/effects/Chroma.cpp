@@ -1,643 +1,615 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 #include "devices/effects/Chroma.h"
-#include <cmath>
+
 #include <algorithm>
+#include <bit>
+#include <cmath>
+#include <numbers>
+
 namespace nota {
 namespace {
-constexpr double pi = 3.14159265358979323846, tau = 2 * pi;
-constexpr double identityHzFraction = .00014442; // About a quarter-cent in relative Hz.
-constexpr float quietOutputThreshold = 3.16227766e-5f; // -90 dBFS peak.
-constexpr double maxOutputGain = 3.98107171; // +12 dB
-double wrap(double v) {
-    return std::remainder(v, tau);
+constexpr double tau = 2 * std::numbers::pi;
+constexpr double butterworthQ = std::numbers::sqrt2 / 2;
+constexpr float silence = 3.16227766e-5f;               // -90 dBFS peak.
+constexpr double resonanceCurve = 1.736965594166206;    // log(.3) / log(.5).
+constexpr double compensationCurve = .6611980865482415; // log(21.5 / 34) / log(.5).
+
+float clean(float value) {
+    return std::isfinite(value) && std::abs(value) > 1e-20f ? value : 0.f;
 }
-double noteHz(int note) {
-    return 440 * std::exp2((note - 69) / 12.);
+
+float dbToGain(double db) {
+    return float(std::pow(10., db / 20));
 }
-bool containsNote(int mask, int note) {
-    return (mask & (1 << ((note % 12 + 12) % 12))) != 0;
+
+float approach(float value, float target, float step) {
+    return value + std::clamp(target - value, -step, step);
 }
-float clean(float v) {
-    return std::isfinite(v) && std::abs(v) > 1e-20f ? std::clamp(v, -64.f, 64.f) : 0.f;
+
+float cubic(float a, float b, float c, float d, float frac) {
+    const float slope = .5f * (c - a);
+    const float curvature = b - c + slope;
+    const float cubicTerm = .5f * (d - b) + curvature + b - c;
+    return ((cubicTerm * frac - (cubicTerm + curvature)) * frac + slope) * frac + b;
 }
 } // namespace
+
 double Chroma::expMap(double v, double lo, double hi) {
     return lo * std::pow(hi / lo, std::clamp(v, 0., 1.));
 }
+
 Chroma::Chroma() {
     const float defaults[] = {0, .25f, 1, .25f, float(std::log(120. / 20) / std::log(50.)),
         float(std::log(150. / 40) / std::log(50.)), float(std::log(8000. / 1000) / std::log(20.)), 1, 2.f / 3};
     for (int i = 0; i < NoteC; ++i) p_[i].store(defaults[i]);
-    for (int i = 0; i < 12; ++i) p_[NoteC + i].store((0x5ad >> i) & 1); // C natural minor
+    for (int i = 0; i < kPitchClasses; ++i) p_[NoteC + i].store((0x5ad >> i) & 1);
     p_[GateThreshold].store(.25f);
     setSampleRate(44100, 1024);
 }
+
 const char* Chroma::paramName(int32_t i) const {
     static constexpr const char* names[] = {"Root", "Scale", "Amount", "Resonance", "Decay", "Low", "High", "Mix",
-        "Output", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "Morph", "Gate", "Gate threshold", "Mode"};
+        "Output", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "Morph", "Gate", "Gate threshold"};
+    static_assert(std::size(names) == kNumParams);
     return i >= 0 && i < kNumParams ? names[i] : "";
 }
+
 float Chroma::getParam(int32_t i) const {
     return i >= 0 && i < kNumParams ? p_[i].load(std::memory_order_relaxed) : 0;
 }
+
 void Chroma::setParam(int32_t i, float v) {
     if (i >= 0 && i < kNumParams && std::isfinite(v)) p_[i].store(std::clamp(v, 0.f, 1.f), std::memory_order_relaxed);
 }
+
 int Chroma::noteMask() const {
-    int scale = int(std::lround(getParam(Scale) * 4));
+    const int scale = int(std::lround(getParam(Scale) * 4));
     if (scale == 4) {
         int mask = 0;
-        for (int i = 0; i < 12; ++i)
+        for (int i = 0; i < kPitchClasses; ++i)
             if (getParam(NoteC + i) >= .5f) mask |= 1 << i;
         return mask;
     }
     constexpr int masks[] = {0xab5, 0x5ad, 0x295, 0x4a9};
-    int root = int(std::lround(getParam(Root) * 11)), m = masks[scale];
-    return ((m << root) | (m >> (12 - root))) & 4095;
+    const int root = int(std::lround(getParam(Root) * 11));
+    return ((masks[scale] << root) | (masks[scale] >> (kPitchClasses - root))) & kAllNotes;
 }
+
+void Chroma::StereoFilter::tune(dsp::BiquadCoeffs coeff) {
+    for (auto& section : channel) section.c = coeff;
+}
+
+Chroma::Stereo Chroma::StereoFilter::run(Stereo in) {
+    return {float(channel[0].run(in[0])), float(channel[1].run(in[1]))};
+}
+
+void Chroma::Bank::tune(const std::array<double, kLastMidi - kFirstMidi + 1>& frequencies, double sr, int mask,
+    double low, double high, double q, double gain) {
+    const double first = low / 1.8, last = high * 1.8;
+    int candidates = 0;
+    count = 0;
+    for (int i = 0; i <= kLastMidi - kFirstMidi; ++i) {
+        const int bit = 1 << ((i + kFirstMidi) % kPitchClasses);
+        const double frequency = frequencies[i];
+        const bool selected = (mask & bit) != 0;
+        if (selected) ++candidates;
+        const bool enabled =
+            selected && candidates <= kBankCapacity && frequency >= first && frequency <= last && frequency < .49 * sr;
+        auto& note = notes[i];
+        if (enabled) {
+            dsp::BiquadCoeffs coeff;
+            if (gain == 0.) {
+                coeff = dsp::BiquadCascade::notch(sr, frequency, q);
+            } else {
+                const double edge =
+                    std::min({1., (frequency - first) / (low - first), (last - frequency) / (last - high)});
+                coeff = dsp::BiquadCascade::bell(sr, frequency, 20 * std::log10(1 + edge * (gain - 1)), q);
+            }
+            for (auto& section : note.sections) section.tune(coeff);
+            active[count++] = i;
+        } else if (note.active) {
+            note.sections = {};
+        }
+        note.active = enabled;
+    }
+}
+
+Chroma::Stereo Chroma::Bank::run(Stereo in) {
+    // Keep both biquad stages on the same signal path for each note.
+    double left = in[0], right = in[1];
+    for (int i = 0; i < count; ++i) {
+        auto& stages = notes[active[i]].sections;
+        left = stages[1].channel[0].run(stages[0].channel[0].run(left));
+        right = stages[1].channel[1].run(stages[0].channel[1].run(right));
+    }
+    return {float(left), float(right)};
+}
+
+void Chroma::Shifter::reset() {
+    input.fill({});
+    output.fill({});
+    std::fill(rmsHistory.begin(), rmsHistory.end(), 0.f);
+    rmsSum = lastRms = onsetEnvelope = 0;
+    rmsPosition = refractory = 0;
+    firstFrame = true;
+}
+
+void Chroma::Shifter::push(Stereo in, uint64_t sample) {
+    input[sample % kWindow] = in;
+    const float power = .5f * (in[0] * in[0] + in[1] * in[1]);
+    rmsSum += double(power) - rmsHistory[rmsPosition];
+    rmsHistory[rmsPosition] = power;
+    rmsPosition = (rmsPosition + 1) % int(rmsHistory.size());
+}
+
+void Chroma::Shifter::analyse(Chroma& effect, uint64_t end) {
+    const double rms = std::sqrt(std::max(0., rmsSum) / double(rmsHistory.size()));
+    const double rise = std::max(0., rms - lastRms);
+    lastRms = rms;
+    const bool onset = refractory == 0 && rise > .001 && rise > 8 * onsetEnvelope;
+    onsetEnvelope = rise + effect.onsetPole_ * (onsetEnvelope - rise);
+    if (onset) refractory = int(std::lround(.08 * effect.sr_)) / kHop;
+    else if (refractory > 0)
+        --refractory;
+
+    for (int ch = 0; ch < 2; ++ch) {
+        for (int i = 0; i < kWindow; ++i) effect.time_[i] = input[(end + i) % kWindow][ch] * effect.window_[i];
+        auto& bins = spectrum[ch];
+        effect.fft_.fft(effect.time_.data(), bins.data());
+        bins[0] = {bins[0].real(), 0}; // Packed Nyquist is outside the correction band.
+        for (int k = 1; k < kBins; ++k) {
+            const double phase = std::arg(bins[k]);
+            if (onset || firstFrame) {
+                synthesisPhase[ch][k] = phase;
+            } else {
+                const double advance = effect.phaseAdvance_[k];
+                const double delta = std::remainder(phase - analysisPhase[ch][k] - advance, tau);
+                synthesisPhase[ch][k] = std::remainder(synthesisPhase[ch][k] + ratio * (advance + delta), tau);
+                bins[k] = std::polar(std::abs(bins[k]), float(synthesisPhase[ch][k]));
+            }
+            analysisPhase[ch][k] = phase;
+        }
+    }
+    firstFrame = false;
+}
+
+void Chroma::Shifter::accumulate(Magnitudes& power) const {
+    for (int k = 1; k < kBins; ++k) {
+        const double destination = k * ratio;
+        const int bin = int(destination);
+        if (bin >= kBins) break;
+        const float frac = float(destination - bin);
+        const float value = std::norm(spectrum[0][k]) + std::norm(spectrum[1][k]);
+        power[bin] += (1 - frac) * value;
+        power[bin + 1] += frac * value;
+    }
+}
+
+void Chroma::Shifter::synthesize(Chroma& effect, uint64_t end, const Magnitudes* gain) {
+    const int length = int(std::lround(kWindow / ratio));
+    for (int ch = 0; ch < 2; ++ch) {
+        auto& bins = spectrum[ch];
+        if (gain) {
+            for (int k = 1; k < kBins; ++k) {
+                const double destination = k * ratio;
+                const int bin = int(destination);
+                if (bin >= kBins) {
+                    bins[k] = {};
+                    continue;
+                }
+                bins[k] *= std::lerp((*gain)[bin], (*gain)[bin + 1], float(destination - bin));
+            }
+        }
+        effect.fft_.ifft(bins.data(), effect.time_.data());
+        for (int i = 0; i < kWindow; ++i) effect.time_[i] *= effect.window_[i];
+        for (int i = 0; i < length; ++i) {
+            const double read = i * (double(kWindow) / length);
+            const int j = int(read);
+            const auto& x = effect.time_;
+            const float value = cubic(x[std::max(0, j - 1)], x[j], x[std::min(j + 1, kWindow - 1)],
+                x[std::min(j + 2, kWindow - 1)], float(read - j));
+            output[(end + i) % kRing][ch] += value * (2.f * kHop / (kWindow * kWindow));
+        }
+    }
+}
+
+Chroma::Stereo Chroma::Shifter::pop(uint64_t sample) {
+    auto& slot = output[sample % kRing];
+    const Stereo value = slot;
+    slot = {};
+    return value;
+}
+
+void Chroma::Path::reset(int newMask) {
+    mask = newMask;
+    down = up = common = 0;
+    if (active()) {
+        const int outside = kAllNotes ^ mask;
+        for (int note = 0; note < kPitchClasses; ++note) {
+            const int bit = 1 << note;
+            if (!(outside & bit)) continue;
+            if (mask & (1 << ((note + 11) % kPitchClasses))) down |= bit;
+            else if (mask & (1 << ((note + 1) % kPitchClasses)))
+                up |= bit;
+        }
+        common = kAllNotes ^ (down | up);
+    }
+    shared = {};
+    downInput = {};
+    upInput = {};
+    reject = {};
+    resonator = {};
+    correctionHigh = {};
+    correctionLow = {};
+    for (auto& branch : shift) branch.reset();
+    gateGain.fill(1);
+    notchGain = dbToGain(1 + 1.9 * (std::popcount(unsigned(kAllNotes ^ mask)) - 1));
+    resonanceGain = resonanceGainTarget = 1;
+    resonanceBlend = 0;
+    dirty = true;
+}
+
+void Chroma::Path::tune(const Chroma& effect) {
+    if (!active()) return;
+    const double sr = effect.sr_, low = effect.low_, high = effect.high_;
+    const bool bandChanged = dirty || low != tunedLow || high != tunedHigh;
+    if (bandChanged) {
+        shared.tune(effect.frequencies_, sr, common, low, high, 16);
+        downInput.tune(effect.frequencies_, sr, up, low, high, 16);
+        upInput.tune(effect.frequencies_, sr, down, low, high, 16);
+        reject.tune(effect.frequencies_, sr, kAllNotes ^ mask, low, high, 12.5);
+        const double sourceLow = shared.count ? effect.frequencies_[shared.active[0]] : low;
+        const double sourceHigh = shared.count ? effect.frequencies_[shared.active[shared.count - 1]] : high;
+        correctionHigh.tune(dsp::BiquadCascade::highpass(sr, std::min(sourceLow * 1.5, .49 * sr), butterworthQ));
+        correctionLow.tune(dsp::BiquadCascade::lowpass(sr, sourceHigh / 1.5, butterworthQ));
+        tunedLow = low;
+        tunedHigh = high;
+    }
+    const double r = effect.resonance_;
+    const double q = (18 + r) * effect.decay_ / .12;
+    const double gain = 1 + 5 * r;
+    if (r > 0 && (bandChanged || q != tunedQ || gain != tunedGain)) {
+        resonator.tune(effect.frequencies_, sr, mask, low, high, q, gain);
+        const double density = (std::popcount(unsigned(mask)) - 1) / 11.;
+        resonanceGainTarget = dbToGain(-34 * std::pow(r, compensationCurve) * .7 * (1 + density));
+        tunedQ = q;
+        tunedGain = gain;
+    } else if (r == 0) {
+        resonanceGainTarget = 1;
+        if (resonanceBlend == 0 && resonator.count) {
+            resonator = {};
+            tunedGain = -1;
+        }
+    }
+    dirty = false;
+}
+
+void Chroma::Path::frame(Chroma& effect, uint64_t end, const Magnitudes* dry) {
+    if (!down) return;
+    shift[0].analyse(effect, end);
+    if (up) shift[1].analyse(effect, end);
+
+    Magnitudes gains{};
+    if (dry) {
+        Magnitudes power{};
+        shift[0].accumulate(power);
+        if (up) shift[1].accumulate(power);
+        for (int k = 0; k <= kBins; ++k) {
+            const float wet = std::sqrt(power[k]);
+            const float target = (*dry)[k];
+            const double db = 20 * std::log10(std::max(1e-12f, target / (.450158f * kWindow)));
+            const float knee = float(std::clamp((db - effect.gateThreshold_ + 3) / 6, 0., 1.));
+            const float gateTarget = knee * knee * (3 - 2 * knee);
+            float& current = gateGain[k];
+            current += (gateTarget - current) * (gateTarget > current ? effect.gateOpen_ : effect.gateClose_);
+            const float morphGain = wet > 1e-8f ? std::lerp(1.f, std::min(target / wet, 16.f), effect.morph_) : 1.f;
+            gains[k] = morphGain * std::lerp(1.f, current, effect.gate_);
+        }
+    }
+    shift[0].synthesize(effect, end, dry ? &gains : nullptr);
+    if (up) shift[1].synthesize(effect, end, dry ? &gains : nullptr);
+}
+
+Chroma::Stereo Chroma::Path::process(
+    Chroma& effect, Stereo mid, Stereo dry, float transient, Stereo dynamics, uint64_t sample, Stereo& tuned) {
+    tuned = {};
+    if (!active()) return dry;
+    if (down) {
+        const Stereo source = shared.run(mid);
+        shift[0].push(downInput.run(source), sample);
+        Stereo correction = shift[0].pop(sample);
+        if (up) {
+            shift[1].push(upInput.run(source), sample);
+            const Stereo raised = shift[1].pop(sample);
+            for (int ch = 0; ch < 2; ++ch) correction[ch] += raised[ch];
+        }
+        for (int ch = 0; ch < 2; ++ch) correction[ch] *= 1.6f * dynamics[ch];
+        tuned = correctionLow.run(correctionHigh.run(correction));
+    }
+    Stereo input{dry[0] + tuned[0], dry[1] + tuned[1]};
+    Stereo wet = reject.run(input);
+    for (auto& value : wet) value *= notchGain;
+    const double r = effect.resonance_;
+    resonanceBlend = approach(resonanceBlend, r > 0 ? 1.f : 0.f, effect.blendStep_);
+    if (resonator.count && resonanceBlend > 0) {
+        resonanceGain = resonanceGainTarget + effect.makeupPole_ * (resonanceGain - resonanceGainTarget);
+        const Stereo resonated = resonator.run(wet);
+        for (int ch = 0; ch < 2; ++ch) wet[ch] = std::lerp(wet[ch], resonated[ch] * resonanceGain, resonanceBlend);
+    }
+    for (int ch = 0; ch < 2; ++ch) {
+        tuned[ch] *= effect.amount_ * (1 - transient);
+        wet[ch] = std::lerp(dry[ch], wet[ch], effect.amount_ * (1 - transient));
+    }
+    return wet;
+}
+
+double Chroma::Envelope::run(double input, double attack, double release) {
+    value = input + (input > value ? attack : release) * (value - input);
+    return value;
+}
+
+float Chroma::pole(double ms) const {
+    return float(std::exp(-tau * 1000 / (sr_ * ms)));
+}
+
 void Chroma::setSampleRate(double sr, int32_t) {
     sr_ = std::isfinite(sr) && sr >= 8000 ? std::min(sr, 768000.) : 44100.;
-    n_ = 2048;
-    while (n_ < 32768 && sr_ / n_ > 48000. / 2048) n_ *= 2;
-    hop_ = n_ / 8;
-    bins_ = n_ / 2;
-    for (int i = 0; i <= kSpectrumBins; ++i) viewEdges_[i] = 40.0 * std::pow(500.0, double(i) / kSpectrumBins);
-    fft_.resize(n_);
-    window_.resize(n_);
-    time_.resize(n_);
-    energy_.resize(bins_);
-    previousEnergy_.assign(bins_, 0);
-    gateGain_.assign(bins_, 1);
-    for (int i = 0; i < n_; ++i) window_[i] = float(.5 - .5 * std::cos(tau * i / n_));
-    for (int c = 0; c < 2; ++c) {
-        input_[c].assign(n_, 0);
-        ola_[c].assign(2 * n_, 0);
-        previousPhase_[c].assign(bins_, 0);
-        spectrum_[c].assign(bins_, {});
-        wet_[c].assign(bins_, {});
-        tail_[c].assign(bins_, {});
-        tunedViewBins_[c].assign(bins_, {});
-        tunedTail_[c].assign(bins_, {});
+    fft_.resize(kWindow);
+    for (int i = 0; i < kWindow; ++i) window_[i] = float(std::sqrt(.5 - .5 * std::cos(tau * i / kWindow)));
+    for (int k = 0; k < kBins; ++k) phaseAdvance_[k] = tau * k * kHop / kWindow;
+    for (int i = 0; i <= kLastMidi - kFirstMidi; ++i) frequencies_[i] = 440 * std::exp2((i + kFirstMidi - 69) / 12.);
+    for (int i = 0; i <= kSpectrumBins; ++i) viewEdges_[i] = 40 * std::pow(500., i / double(kSpectrumBins));
+    for (auto& path : paths_) {
+        for (auto& branch : path.shift) branch.rmsHistory.assign(size_t(std::lround(.008 * sr_)), 0);
+        path.shift[0].ratio = 242. / 256;
+        path.shift[1].ratio = 271. / 256;
+        path.reset(0);
     }
-    rotation_.assign(bins_, 0);
-    previousRotation_ = rotation_;
-    shift_ = rotation_;
-    previousShift_ = rotation_;
-    peakHz_ = previousPeakHz_ = rotation_;
-    velocity_ = previousVelocity_ = rotation_;
-    placement_.assign(bins_, {});
-    previousPlacement_ = placement_;
-    rotationFactor_.assign(bins_, {1, 0});
-    tunedWeight_.assign(bins_, 0);
-    previousTunedWeight_ = attackKeep_ = tunedWeight_;
-    resonanceNote_.assign(bins_, -1);
-    binNote_ = resonanceNote_;
-    resonanceTurn_.assign(bins_, {1, 0});
-    binTurn_ = resonanceTurn_;
-    peaks_.assign(bins_, 0);
-    owner_.assign(bins_, 0);
-    reference_ = previousReference_ = owner_;
-    peakAge_ = previousPeakAge_ = matched_ = owner_;
-    matchOrder_ = owner_;
-    peakMatch_ = owner_;
-    selectedNote_.assign(bins_, -1);
-    previousNote_ = selectedNote_;
-    partialEvidence_.assign(bins_, 0);
-    partialShift_.assign(bins_, 0);
-    for (int i = 0; i < kVoiceNotes; ++i) voicePitch_[i] = noteHz(kFirstCandidate + i);
-    resetMode(getParam(Mode) >= .5f);
-    modeWet_ = 1;
-    modeWarmup_ = 0;
-    count_ = quiet_ = quietOutput_ = quietTail_ = 0;
-    idle_ = false;
-    snap_ = firstFrame_ = true;
-    morphS_ = getParam(Morph);
-    gateS_ = getParam(Gate) >= .5f ? 1 : 0;
-    thresholdS_ = -80 + 80 * getParam(GateThreshold);
-    amountS_ = getParam(Amount);
-    resS_ = getParam(Resonance);
-    lowS_ = expMap(getParam(Low), 40, 2000);
-    highS_ = expMap(getParam(High), 1000, 20000);
+
+    sample_ = quiet_ = 0;
+    fadeLength_ = int(std::lround(.15 * sr_));
+    fadeRemaining_ = currentPath_ = 0;
+    controlInterval_ = std::max(1, int(std::lround(.00018140589 * sr_)));
+    fullDelay_ = midDelay_ = sidesDelay_ = dryView_ = tunedViewHistory_ = {};
+    low1_ = low2_ = high1_ = high2_ = midHigh_ = midLow_ = finalHigh_ = finalLow_ = {};
+    guardHigh_ = {dsp::BiquadCascade::highpass(sr_, 100, butterworthQ)};
+    guardLow_ = {dsp::BiquadCascade::lowpass(sr_, 3000, butterworthQ)};
+    fast_ = slow_ = noteMaskEnvelope_ = {};
+    guardEnvelope_ = guardRelease_ = {};
+    guardRamp_ = 0;
+    guardPosition_ = 0;
+    guardLength_ = int(.0025 * sr_);
+    fastRelease_ = pole(32);
+    slowAttack_ = pole(100);
+    slowRelease_ = pole(400);
+    noteRelease_ = pole(8);
+    guardAttack_ = pole(75);
+    guardSlowRelease_ = pole(300);
+    guardFastRelease_ = pole(88);
+    onsetPole_ = std::pow(pole(10), kHop);
+    bandPole_ = float(std::exp(-controlInterval_ / (.02 * sr_)));
+    resonantPole_ = pole(200);
+    makeupPole_ = float(std::exp(-1 / (.010 * sr_)));
+    controlPole_ = makeupPole_;
+    amountRampLength_ = int(std::lround(.001 * sr_));
+    amountRemaining_ = 0;
+    blendStep_ = float(10 / sr_);
+    gateOpen_ = float(1 - std::exp(-kHop / (.005 * sr_)));
+    gateClose_ = float(1 - std::exp(-kHop / (.050 * sr_)));
+
+    srView_.store(float(sr_), std::memory_order_relaxed);
     for (auto& value : spectrumView_) value.store(0.f, std::memory_order_relaxed);
     for (auto& value : tunedView_) value.store(0.f, std::memory_order_relaxed);
-    srView_.store(float(sr_));
-    latencyView_.store(float(n_));
+    idle_ = false;
+    snap_ = true;
 }
-int Chroma::targetNote(double hz, int mask, int previous) const {
-    double midi = 69 + 12 * std::log2(std::max(hz, 1.) / 440.), dist = 1e9;
-    int best = -1;
-    int center = int(std::floor(midi));
-    for (int note = center - 12; note <= center + 12; ++note)
-        if (containsNote(mask, note)) {
-            double d = std::abs(note - midi);
-            // Float FFT estimates fluctuate around an exact tie; always prefer its lower note.
-            if (d < dist - .002) {
-                dist = d;
-                best = note;
-            }
-        }
-    // The distance difference changes twice as fast as motion past the midpoint:
-    // 0.30 semitone therefore extends the held note's boundary by 15 cents.
-    if (previous >= 0 && containsNote(mask, previous) &&
-        std::abs(previous - midi) <= dist + .30) return previous;
-    return best;
+
+void Chroma::updateBand() {
+    const auto highpass = dsp::BiquadCascade::highpass(sr_, low_, butterworthQ);
+    const auto lowpass = dsp::BiquadCascade::lowpass(sr_, high_, butterworthQ);
+    const auto lowSide = dsp::BiquadCascade::lowpass(sr_, low_, butterworthQ);
+    const auto highSide = dsp::BiquadCascade::highpass(sr_, high_, butterworthQ);
+    low1_.tune(lowSide);
+    low2_.tune(lowSide);
+    high1_.tune(highSide);
+    high2_.tune(highSide);
+    midHigh_.tune(highpass);
+    finalHigh_.tune(highpass);
+    midLow_.tune(lowpass);
+    finalLow_.tune(lowpass);
 }
-void Chroma::resetMode(bool polyphonic) {
-    polyphonic_ = polyphonic;
-    voices_ = {};
-    chord_.fill(-1);
-    chordMask_ = 0;
-    previousMask_ = 0;
-    std::fill(previousPeakAge_.begin(), previousPeakAge_.end(), 0);
-    std::fill(previousNote_.begin(), previousNote_.end(), -1);
-    std::fill(gateGain_.begin(), gateGain_.end(), 1);
-    std::fill(resonanceNote_.begin(), resonanceNote_.end(), -1);
-    std::fill(binNote_.begin(), binNote_.end(), -1);
-    for (int c = 0; c < 2; ++c) {
-        std::fill(ola_[c].begin(), ola_[c].end(), 0.f);
-        std::fill(tail_[c].begin(), tail_[c].end(), Complex{});
-        std::fill(tunedTail_[c].begin(), tunedTail_[c].end(), Complex{});
+
+void Chroma::updateControls() {
+    requestedMask_ = noteMask();
+    targetLow_ = std::min(.245 * sr_, expMap(getParam(Low), 40, 2000));
+    targetHigh_ = std::min(.49 * sr_, std::max(2 * targetLow_, expMap(getParam(High), 1000, 20000)));
+
+    resonanceTarget_ = std::pow(getParam(Resonance), resonanceCurve);
+    const float amountTarget = getParam(Amount);
+    if (amountTarget != amountTarget_) {
+        amountTarget_ = amountTarget;
+        amountRemaining_ = amountRampLength_;
+        amountDelta_ = (amountTarget_ - amount_) / amountRemaining_;
     }
-}
-void Chroma::analyseChord(int mask, double binHz) {
-    constexpr int harmonics = 12, confirmFrames = 4, releaseFrames = 6;
-    struct Candidate {
-        std::array<int, harmonics> peaks{};
+    mixTarget_ = getParam(Mix);
+    const float output = getParam(Output);
+    gainTarget_ = output == 2.f / 3 ? 1.f : dbToGain(-24 + 36 * output);
+    morphTarget_ = getParam(Morph);
+    gateTarget_ = getParam(Gate) >= .5f ? 1.f : 0.f;
+    gateThreshold_ = -80 + 80 * getParam(GateThreshold);
+    const auto smoothBand = [&](double current, double target) {
+        return snap_ || std::abs(current - target) < .01 ? target : target + bandPole_ * (current - target);
     };
-    std::array<Candidate, kVoiceNotes> candidates{};
-    std::array<bool, kVoiceNotes> picked{};
-    std::fill(partialEvidence_.begin(), partialEvidence_.end(), 0);
-    std::fill(partialShift_.begin(), partialShift_.end(), 0);
-    if (quiet_ >= uint64_t(n_)) {
-        voices_ = {};
-        chord_.fill(-1);
-        return;
+    const double low = smoothBand(low_, targetLow_), high = smoothBand(high_, targetHigh_);
+    const double decayTarget = expMap(getParam(Decay), .02, 1);
+    decay_ =
+        snap_ || std::abs(decayTarget - decay_) < 1e-5 ? decayTarget : decayTarget + bandPole_ * (decay_ - decayTarget);
+    if (snap_ || low != low_ || high != high_) {
+        low_ = low;
+        high_ = high;
+        updateBand();
     }
-    float frameMax = 0;
-    for (int j = 0; j < peakCount_; ++j) {
-        const int k = peaks_[j];
-        if (peakAge_[k] < 2) continue;
-        partialEvidence_[k] = std::sqrt(energy_[k]);
-        frameMax = std::max(frameMax, partialEvidence_[k]);
+    if (snap_) {
+        paths_[currentPath_].reset(requestedMask_);
+        amount_ = amountTarget_;
+        amountRemaining_ = 0;
+        mix_ = mixTarget_;
+        gain_ = gainTarget_;
+        resonance_ = resonanceTarget_;
+        morph_ = morphTarget_;
+        gate_ = gateTarget_;
+        snap_ = false;
+    } else if (fadeRemaining_ == 0 && requestedMask_ != paths_[currentPath_].mask) {
+        paths_[1 - currentPath_].reset(requestedMask_);
+        fadeRemaining_ = fadeLength_;
     }
-    for (int p = 0; p < kVoiceNotes; ++p) {
-        // A separate pitch slot keeps held notes stable when their loudest
-        // partial moves between FFT bins or the chord's balance changes.
-        double fundamental = voicePitch_[p];
-        for (int h = 1; h <= harmonics; ++h) {
-            const double expected = fundamental * h;
-            const int bin = int(std::lround(expected / binHz));
-            if (bin >= bins_ - 1) break;
-            // A broad fundamental window mistakes the blended peak of two
-            // nearby notes for a single flat note. Upper partials may stretch.
-            double distance = expected * (.014 + .0009 * (h - 1));
-            for (int b = std::max(1, bin - 1); b <= bin + 1; ++b) {
-                const int k = owner_[b];
-                const double error = std::abs(peakHz_[k] - expected);
-                if (partialEvidence_[k] > frameMax * .018f && error < distance) {
-                    distance = error;
-                    candidates[p].peaks[h - 1] = k;
-                }
-            }
-            if (h == 1) {
-                if (candidates[p].peaks[0] == 0) break;
-                fundamental = peakHz_[candidates[p].peaks[0]];
-            }
-        }
-    }
-    double strongest = 0;
-    for (int pick = 0; pick < int(chord_.size()); ++pick) {
-        int best = -1;
-        double bestScore = 0;
-        for (int p = 0; p < kVoiceNotes; ++p) {
-            if (picked[p]) continue;
-            const auto& peaks = candidates[p].peaks;
-            const double fundamental = partialEvidence_[peaks[0]];
-            if (fundamental <= frameMax * .04) continue;
-            double score = fundamental;
-            int independent = 1;
-            for (int h = 2; h <= harmonics; ++h) {
-                const double evidence = partialEvidence_[peaks[h - 1]];
-                if (evidence <= frameMax * .018) continue;
-                score += evidence * (2. / (h + 1));
-                ++independent;
-            }
-            if (independent < 2) continue;
-            if (voices_[p].seen >= confirmFrames) score *= 1.12;
-            if (score > bestScore) { best = p; bestScore = score; }
-        }
-        if (best < 0 || bestScore < strongest * .065) break;
-        if (pick == 0) strongest = bestScore;
-        picked[best] = true;
-        const auto& ps = candidates[best].peaks;
-        const double measured = peakHz_[ps[0]];
-        Voice& voice = voices_[best];
-        voice.hz = voice.seen == 0 ? measured : voice.hz + .27 * (measured - voice.hz);
-        voice.seen = std::min(voice.seen + 1, confirmFrames);
-        voice.missed = 0;
-        // The same evidence cannot form another voice. A coincident partial
-        // will be considered against all confirmed notes again for synthesis.
-        for (int k : ps) partialEvidence_[k] = 0;
-    }
-    std::array<int, 4> active{ {-1, -1, -1, -1} };
-    int count = 0;
-    for (int p = 0; p < kVoiceNotes; ++p) {
-        auto& voice = voices_[p];
-        if (!picked[p] && (++voice.missed >= releaseFrames || voice.seen < confirmFrames)) voice = {};
-        // Confirmed voices that still have evidence take precedence over
-        // recently missed ones when a new chord replaces a decaying chord.
-        if (picked[p] && voice.seen == confirmFrames && count < int(active.size())) active[count++] = p;
-    }
-    for (int p = 0; p < kVoiceNotes && count < int(active.size()); ++p)
-        if (!picked[p] && voices_[p].seen == confirmFrames) active[count++] = p;
-    std::sort(active.begin(), active.begin() + count);
-    if (active != chord_ || mask != chordMask_) {
-        std::array<int, 4> selected{};
-        int bestCost = 1000;
-        // Four voices with at most five options each. Enumerate in ascending
-        // note order so equal-cost assignments prefer lower notes.
-        auto assign = [&](auto&& self, int i, int lower, int cost) -> void {
-            if (cost >= bestCost) return;
-            if (i == count) {
-                bestCost = cost;
-                for (int v = 0; v < count; ++v) voices_[active[v]].target = selected[v];
-                return;
-            }
-            const int source = kFirstCandidate + active[i];
-            const bool fixed = source < kFirstVoice || containsNote(mask, source);
-            for (int target = source - 2; target <= source + 2; ++target) {
-                if (target <= lower || (fixed && target != source)) continue;
-                const bool allowed = containsNote(mask, target);
-                if (!allowed && target != source) continue;
-                selected[i] = target;
-                self(self, i + 1, target, cost + (allowed ? std::abs(target - source) : 16));
-            }
-        };
-        assign(assign, 0, 0, 0);
-        chord_ = active;
-        chordMask_ = mask;
-    }
-    std::array<double, 4> ratio{};
-    for (int i = 0; i < count; ++i) {
-        const auto& voice = voices_[active[i]];
-        ratio[i] = voice.target == kFirstCandidate + active[i] ? 1 :
-            std::pow(noteHz(voice.target) / voice.hz, amountS_);
-    }
-    for (int j = 0; j < peakCount_; ++j) {
-        const int k = peaks_[j];
-        if (peakAge_[k] < 2 || energy_[k] < frameMax * frameMax * .000016f) continue;
-        const double hz = peakHz_[k];
-        int owner = -1;
-        bool ambiguous = false;
-        for (int i = 0; i < count; ++i) {
-            const auto& voice = voices_[active[i]];
-            const int h = int(std::lround(hz / voice.hz));
-            if (h < 1 || h > 24) continue;
-            const double expected = voice.hz * h;
-            const double error = hz - expected;
-            const double below = std::min(voice.hz * .12, expected * .013);
-            const double above = std::min(voice.hz * .18, expected * (.013 + .0009 * (h - 1)));
-            if (error < -below || error > above) continue;
-            if (owner < 0) owner = i;
-            else if (std::abs(ratio[owner] - ratio[i]) > .0005778) ambiguous = true;
-        }
-        if (owner >= 0 && !ambiguous) partialShift_[k] = hz * (ratio[owner] - 1);
-    }
+    paths_[currentPath_].tune(*this);
+    if (fadeRemaining_) paths_[1 - currentPath_].tune(*this);
 }
-void Chroma::applySpectralColor(int mask, float amount, double low, double high, double binHz) {
-    // Let active resonance retain Decay after input ends. If the band or scale
-    // leaves a bin's note behind, release its old phase before retuning the bin.
-    const double seconds = expMap(getParam(Decay), .02, 1.);
-    const float pole = float(std::exp(-double(hop_) / (seconds * sr_)));
-    const float obsoletePole = float(std::exp(-double(hop_) / (.015 * sr_)));
-    const float resonance = float(2 * resS_ * amountS_);
-    const bool checkTail = quiet_ >= uint64_t(2 * n_);
-    double remaining = 0;
-    for (int k = 1; k < bins_; ++k) {
-        const double hz = k * binHz;
-        if (mask != previousMask_) {
-            binNote_[k] = targetNote(hz, mask);
-            const double tuned = 440 * std::exp2((binNote_[k] - 69) / 12.);
-            binTurn_[k] = std::polar(1.f, float(tau * tuned * hop_ / sr_));
-        }
-        const int wanted = hz > low && hz < high ? binNote_[k] : -1;
-        const float memory = std::norm(tail_[0][k]) + std::norm(tail_[1][k]) +
-                             std::norm(tunedTail_[0][k]) + std::norm(tunedTail_[1][k]);
-        constexpr float replaceBelow = 1e-8f;
-        if (resonanceNote_[k] != wanted && memory < replaceBelow) {
-            resonanceNote_[k] = wanted;
-            resonanceTurn_[k] = binTurn_[k];
-        }
-        if (resonanceNote_[k] < 0 && memory < 1e-20f) continue;
-        const bool active = wanted >= 0 && wanted == resonanceNote_[k];
-        const Complex turn = resonanceTurn_[k] * (active ? pole : obsoletePole);
-        const float feed = active ? 1 - pole : 0;
-        for (int c = 0; c < 2; ++c) {
-            auto& t = tail_[c][k];
-            t = t * turn + wet_[c][k] * feed;
-            if (std::norm(t) < 1e-20f) t = {};
-            wet_[c][k] += t * resonance;
-            auto& vt = tunedTail_[c][k];
-            vt = vt * turn + tunedViewBins_[c][k] * feed;
-            if (std::norm(vt) < 1e-20f) vt = {};
-            tunedViewBins_[c][k] += vt * resonance;
-            if (checkTail) remaining += std::abs(t);
-        }
-    }
-    // A bin contributes at most twice its magnitude to the real IFFT. The
-    // overlapping Hann windows sum to 4, and synthesis scales by 1/(3*N).
-    // Bound the remaining tail at maximum resonance and output, even if
-    // automation changes gains. Wait for earlier OLA samples to drain, too.
-    const double tailBound = remaining * (16 * maxOutputGain / (3 * n_));
-    quietTail_ = checkTail && tailBound < quietOutputThreshold ? quietTail_ + hop_ : 0;
-    // Morph and Gate use shared stereo gains so neither changes relative channel phase.
-    const float open = float(1 - std::exp(-double(hop_) / (.005 * sr_)));
-    const float close = float(1 - std::exp(-double(hop_) / (.05 * sr_)));
-    if (morphS_ > 1e-7 || gateS_ > 1e-7) {
-        for (int k = 1; k < bins_; ++k) {
-            double hz = k * binHz;
-            if (hz <= low || hz >= high || !mask || amount <= 0) {
-                gateGain_[k] = 1;
-                continue;
-            }
-            float gain = 1;
-            double dryMag = std::sqrt(energy_[k]);
-            double wetMag = std::sqrt(std::norm(wet_[0][k]) + std::norm(wet_[1][k]));
-            if (morphS_ > 1e-7 && wetMag > 1e-10) gain = float((1 - morphS_) + morphS_ * dryMag / wetMag);
-            if (gateS_ > 1e-7) {
-                double db = 20 * std::log10(std::max(1e-15, dryMag / (n_ * .35355339)));
-                double knee = std::clamp((db - thresholdS_ + 3) / 6, 0., 1.);
-                float target = float(knee * knee * (3 - 2 * knee));
-                gateGain_[k] += (target > gateGain_[k] ? open : close) * (target - gateGain_[k]);
-                gain *= float(1 + gateS_ * (gateGain_[k] - 1));
-            } else
-                gateGain_[k] = 1;
-            for (int c = 0; c < 2; ++c) {
-                wet_[c][k] *= gain;
-                tunedViewBins_[c][k] *= gain;
-            }
-        }
-    } else
-        std::fill(gateGain_.begin(), gateGain_.end(), 1.f);
-}
-void Chroma::frame() {
-    const int start = int(count_ % n_);
-    for (int c = 0; c < 2; ++c) {
-        for (int i = 0; i < n_; ++i) time_[i] = input_[c][(start + i) % n_] * window_[i];
-        fft_.fft(time_.data(), spectrum_[c].data());
-        std::fill(wet_[c].begin(), wet_[c].end(), Complex{});
-        std::fill(tunedViewBins_[c].begin(), tunedViewBins_[c].end(), Complex{});
-        wet_[c][0] = spectrum_[c][0]; // Packed DC and Nyquist are never retuned.
-    }
-    double control = 1 - std::exp(-double(hop_) / (.02 * sr_));
-    morphS_ += control * (getParam(Morph) - morphS_);
-    gateS_ += control * ((getParam(Gate) >= .5f ? 1 : 0) - gateS_);
-    thresholdS_ += control * (-80 + 80 * getParam(GateThreshold) - thresholdS_);
-    amountS_ += control * (getParam(Amount) - amountS_);
-    resS_ += control * (getParam(Resonance) - resS_);
-    lowS_ += control * (expMap(getParam(Low), 40, 2000) - lowS_);
-    highS_ += control * (expMap(getParam(High), 1000, 20000) - highS_);
-    double low = std::min(lowS_, highS_), high = std::min(std::max(lowS_, highS_), sr_ * .45), binHz = sr_ / n_;
-    const int mask = noteMask();
-    const float amount = getParam(Amount);
-    for (int k = 1; k < bins_; ++k) energy_[k] = std::norm(spectrum_[0][k]) + std::norm(spectrum_[1][k]);
-    energy_[0] = 0;
-    const float peakFloor = std::max(1e-12f, *std::max_element(energy_.begin(), energy_.end()) * 1e-8f);
-    peakCount_ = 0;
-    for (int k = 1; k < bins_ - 1; ++k)
-        if (energy_[k] > peakFloor && energy_[k] >= energy_[k - 1] && energy_[k] > energy_[k + 1])
-            peaks_[peakCount_++] = k;
-    if (!peakCount_) peaks_[peakCount_++] = 1;
-    int at = 0;
-    for (int k = 1; k < bins_; ++k) {
-        while (at + 1 < peakCount_ && 2 * k > peaks_[at] + peaks_[at + 1]) ++at;
-        owner_[k] = peaks_[at];
-    }
-    std::fill(peakAge_.begin(), peakAge_.end(), 0);
-    std::fill(matched_.begin(), matched_.end(), 0);
-    std::copy_n(peaks_.begin(), peakCount_, matchOrder_.begin());
-    std::sort(matchOrder_.begin(), matchOrder_.begin() + peakCount_, [&](int a, int b) {
-        return energy_[a] == energy_[b] ? a < b : energy_[a] > energy_[b];
-    });
-    for (int j = 0; j < peakCount_; ++j) {
-        int k = matchOrder_[j];
-        int ref = std::norm(spectrum_[1][k]) > std::norm(spectrum_[0][k]) ? 1 : 0;
-        double left = std::log(std::max(1e-30f, energy_[k - 1]));
-        double middle = std::log(std::max(1e-30f, energy_[k]));
-        double right = std::log(std::max(1e-30f, energy_[std::min(k + 1, bins_ - 1)]));
-        double denominator = left - 2 * middle + right;
-        double offset = denominator < -1e-12 ? std::clamp(.5 * (left - right) / denominator, -.5, .5) : 0;
-        double magnitudeHz = (k + offset) * binHz;
-        auto frequency = [&](int channel) {
-            double hz = (k + wrap(std::arg(spectrum_[channel][k]) - previousPhase_[channel][k] - tau * k * hop_ / n_) *
-                                 n_ / (tau * hop_)) *
-                        binHz;
-            return firstFrame_ || hz <= 0 || previousEnergy_[k] < peakFloor ||
-                           std::abs(hz - magnitudeHz) > 1.5 * binHz
-                       ? magnitudeHz : hz;
-        };
-        double hz = frequency(ref), distance = 1e30;
-        int prev = -1;
-        for (int candidate = std::max(1, k - 4); candidate <= std::min(bins_ - 1, k + 4); ++candidate) {
-            if (!previousPeakAge_[candidate] || matched_[candidate]) continue;
-            double ratio = energy_[k] / std::max(peakFloor, previousEnergy_[candidate]);
-            double prediction = previousPeakHz_[candidate] + previousVelocity_[candidate];
-            double frequencyDistance = std::abs(prediction - hz);
-            if (ratio < .01 || ratio > 100 || frequencyDistance > 2 * binHz) continue;
-            double d = frequencyDistance + .1 * binHz * std::abs(std::log(ratio));
-            if (d < distance || (d == distance && prev >= 0 && previousEnergy_[candidate] > previousEnergy_[prev])) {
-                distance = d;
-                prev = candidate;
-            }
-        }
-        if (prev >= 0) {
-            matched_[prev] = 1;
-            ref = previousReference_[prev];
-            if (std::norm(spectrum_[1 - ref][k]) > 2 * std::norm(spectrum_[ref][k])) ref = 1 - ref;
-            hz = frequency(ref);
-        }
-        peakMatch_[k] = prev;
-        reference_[k] = ref;
-        peakHz_[k] = hz;
-        velocity_[k] = prev < 0 ? 0 : .5 * previousVelocity_[prev] +
-            .5 * std::clamp(hz - previousPeakHz_[prev], -binHz, binHz);
-        const int stableAge = n_ / hop_ + 1;
-        if (energy_[k] > peakFloor)
-            peakAge_[k] = prev < 0 ? 1 : std::min(stableAge, previousPeakAge_[prev] + 1);
-    }
-    if (polyphonic_) analyseChord(mask, binHz);
-    for (int j = 0; j < peakCount_; ++j) {
-        const int k = matchOrder_[j], prev = peakMatch_[k], ref = reference_[k];
-        const double hz = peakHz_[k];
-        double desired;
-        if (polyphonic_) {
-            desired = partialShift_[k];
-        } else {
-            int held = prev >= 0 && mask == previousMask_ ? previousNote_[prev] : -1;
-            int note = targetNote(hz, mask, held);
-            // A new partial (including after silence) needs a window of history
-            // before its frequency estimate can lock a note at the boundary.
-            selectedNote_[k] = peakAge_[k] >= n_ / hop_ + 1 ? note : -1;
-            double weight = std::clamp((hz - low) / std::max(binHz * 2, low * .15), 0., 1.) *
-                            std::clamp((high - hz) / std::max(binHz * 2, high * .1), 0., 1.);
-            double tuned = noteHz(note);
-            desired = mask && std::abs(tuned - hz) > hz * identityHzFraction ?
-                                 (tuned - hz) * amountS_ * weight : 0;
-        }
-        shift_[k] = prev < 0 ? desired : previousShift_[prev] + control * (desired - previousShift_[prev]);
-        const bool tunedLane = std::abs(shift_[k]) > hz * identityHzFraction;
-        const float oldWeight = prev < 0 ? 0 : previousTunedWeight_[prev];
-        // Fade back to the unrotated source before parking the synthesis phase.
-        tunedWeight_[k] = tunedLane ? 1.f : std::max(0.f, oldWeight - .5f);
-        if (!tunedLane) shift_[k] = 0;
-        const int offsetBins = int(std::lround(shift_[k] / binHz));
-        auto placement = prev < 0 ? Placement{offsetBins, offsetBins, 0} : previousPlacement_[prev];
-        if (placement.hops > 0 && --placement.hops == 0) placement.from = placement.to;
-        if (placement.hops == 0 && placement.to != offsetBins) {
-            placement.to = offsetBins;
-            placement.hops = 2;
-        }
-        placement_[k] = placement;
-        // Store phase at the Hann centre so both placements agree there, including
-        // when a matched peak's strongest bin moves by an odd number of bins.
-        rotation_[k] = prev < 0 || oldWeight == 0 || tunedWeight_[k] == 0 ? 0 :
-            wrap(previousPhase_[ref][prev] + previousRotation_[prev] +
-                 pi * (prev - k) + tau * (hz + shift_[k]) * hop_ / sr_ - std::arg(spectrum_[ref][k]));
-        rotationFactor_[k] = tunedWeight_[k] > 0 ? std::polar(1.f, float(rotation_[k])) : Complex(1, 0);
-    }
-    const float attackRelease = float(hop_ / (.020 * sr_));
-    const float attackFloor = float(n_ * n_) * 2e-8f;
-    for (int k = 1; k < bins_; ++k) {
-        int peak = owner_[k];
-        double hz = k * binHz;
-        bool inBand = polyphonic_ ? std::abs(k - peak) <= 2 : hz > low && hz < high;
-        const int next = std::min(k + 1, bins_ - 1);
-        const float local = energy_[k - 1] + 2 * energy_[k] + energy_[next];
-        const float history = previousEnergy_[k - 1] + 2 * previousEnergy_[k] + previousEnergy_[next];
-        const float flux = std::clamp((local - 2.5f * history) / (local + attackFloor), 0.f, 1.f);
-        attackKeep_[k] = std::max(.8f * flux, attackKeep_[k] - attackRelease);
-        const float tuned = inBand ? tunedWeight_[peak] * (1 - attackKeep_[k]) : 0.f;
-        const auto placement = placement_[peak];
-        const float blend = placement.hops > 0 ? (3 - placement.hops) / 3.f : 1.f;
-        const bool showTuned = std::abs(shift_[peak]) > hz * .0005777895;
-        auto place = [&](int offset, float weight) {
-            if (weight == 0) return;
-            const int dest = k + offset;
-            const bool valid = dest > 0 && dest < bins_;
-            const Complex factor = valid ? rotationFactor_[peak] * ((offset % 2) ? -weight : weight) :
-                                           Complex(weight, 0);
-            for (int c = 0; c < 2; ++c) {
-                const auto v = spectrum_[c][k] * factor;
-                wet_[c][valid ? dest : k] += v;
-                if (valid && showTuned) tunedViewBins_[c][dest] += v;
-            }
-        };
-        for (int c = 0; c < 2; ++c) {
-            wet_[c][k] += spectrum_[c][k] * (1 - tuned);
-        }
-        place(placement.from, tuned * (1 - blend));
-        place(placement.to, tuned * blend);
-    }
-    if (polyphonic_) {
-        quietTail_ = quiet_ >= uint64_t(2 * n_) ? quietTail_ + hop_ : 0;
+
+float Chroma::transientMask(Stereo dry) {
+    const double detected = guardLow_.run(guardHigh_.run(.5 * (dry[0] + dry[1])));
+    if (detected > .001 && detected >= 10 * guardEnvelope_.value) {
+        if (guardPosition_ == 0) guardPosition_ = 1;
+        guardEnvelope_.value = .25 * detected;
     } else {
-        applySpectralColor(mask, amount, low, high, binHz);
+        guardEnvelope_.run(std::abs(detected), guardAttack_, guardSlowRelease_);
     }
-    // Publish independent dry and shifted spectra; all storage is prepared off-thread.
-    float mixVis = mask && amount > 0 ? mixS_ * modeWet_ : 0.f;
-    auto publish = [&](int i, bool tuned) {
-        double hz0 = viewEdges_[i];
-        double hz1 = viewEdges_[i + 1];
-        if (hz0 >= sr_ * .5) return 0.f;
-        auto energy = [&](int k) {
-            return tuned ? (std::norm(tunedViewBins_[0][k]) + std::norm(tunedViewBins_[1][k])) * mixVis * mixVis
-                         : energy_[k];
-        };
-        double fb = std::clamp((hz0 + hz1) * .5 / binHz, 1.0, double(bins_ - 1));
-        int k = std::min(int(fb), bins_ - 2);
-        float f = float(fb - k), e = (1 - f) * energy(k) + f * energy(k + 1);
-        int k0 = std::clamp(int(std::ceil(hz0 / binHz)), 1, bins_ - 1);
-        int k1 = std::clamp(int(std::floor(hz1 / binHz)), 1, bins_ - 1);
-        for (int j = k0; j <= k1; ++j) e = std::max(e, energy(j));
-        float amp = std::sqrt(e) / float(n_ * .35355339);
-        return amp > 1e-7f ? std::clamp((20.f * std::log10(amp) + 80.f) / 80.f, 0.f, 1.f) : 0.f;
-    };
-    for (int i = 0; i < kSpectrumBins; ++i) {
-        spectrumView_[i].store(publish(i, false), std::memory_order_relaxed);
-        tunedView_[i].store(publish(i, true), std::memory_order_relaxed);
+    if (guardPosition_ != 0) {
+        guardRamp_ = std::sqrt(guardPosition_ / double(guardLength_));
+        if (++guardPosition_ > guardLength_) guardPosition_ = 0;
+    } else {
+        guardRamp_ = 0;
     }
-    for (int c = 0; c < 2; ++c) {
-        for (int k = 1; k < bins_; ++k) previousPhase_[c][k] = std::arg(spectrum_[c][k]);
-        fft_.ifft(wet_[c].data(), time_.data());
-        for (int i = 0; i < n_; ++i) ola_[c][(count_ + i) % (2 * n_)] += time_[i] * window_[i] / float(3 * n_);
-    }
-    previousPeakAge_.swap(peakAge_);
-    previousPeakHz_.swap(peakHz_);
-    previousVelocity_.swap(velocity_);
-    previousNote_.swap(selectedNote_);
-    previousMask_ = mask;
-    previousReference_.swap(reference_);
-    std::copy(energy_.begin(), energy_.end(), previousEnergy_.begin());
-    previousRotation_.swap(rotation_);
-    previousShift_.swap(shift_);
-    previousPlacement_.swap(placement_);
-    previousTunedWeight_.swap(tunedWeight_);
-    firstFrame_ = false;
+    return float(guardRelease_.run(guardRamp_, 0, guardFastRelease_));
 }
+
+Chroma::Stereo Chroma::correctionMask(Stereo mid) {
+    Stereo result{};
+    for (int ch = 0; ch < 2; ++ch) {
+        const double magnitude = std::abs(mid[ch]);
+        const double quick = 4.2 * fast_[ch].run(magnitude, 0, fastRelease_);
+        const double slow = slow_[ch].run(magnitude, slowAttack_, slowRelease_);
+        result[ch] = float(noteMaskEnvelope_[ch].run(quick >= slow && quick > .001 ? 1 : 0, 0, noteRelease_));
+    }
+    return result;
+}
+
+void Chroma::analyseDry(uint64_t end) {
+    dryMagnitude_.fill(0);
+    for (int ch = 0; ch < 2; ++ch) {
+        for (int i = 0; i < kWindow; ++i) time_[i] = midDelay_[(end + i) % kWindow][ch] * window_[i];
+        fft_.fft(time_.data(), fftBins_.data());
+        for (int k = 1; k < kBins; ++k) dryMagnitude_[k] += std::norm(fftBins_[k]);
+    }
+    for (auto& value : dryMagnitude_) value = std::sqrt(value);
+}
+
+void Chroma::publishLine(
+    const std::array<Stereo, kWindow>& history, std::array<std::atomic<float>, kSpectrumBins>& destination) {
+    Magnitudes power{};
+    for (int ch = 0; ch < 2; ++ch) {
+        for (int i = 0; i < kWindow; ++i) time_[i] = history[(sample_ + i) % kWindow][ch] * window_[i];
+        fft_.fft(time_.data(), fftBins_.data());
+        for (int k = 1; k < kBins; ++k) power[k] += std::norm(fftBins_[k]);
+    }
+    const double binsPerHz = kWindow / sr_;
+    for (int i = 0; i < kSpectrumBins; ++i) {
+        const double first = viewEdges_[i] * binsPerHz, last = viewEdges_[i + 1] * binsPerHz;
+        float level = 0;
+        if (first < kBins) {
+            const double center = std::min((first + last) * .5, double(kBins - 1));
+            const int mid = int(center);
+            level = std::lerp(power[mid], power[mid + 1], float(center - mid));
+            for (int k = std::max(1, int(std::ceil(first))); k < kBins && k <= last; ++k)
+                level = std::max(level, power[k]);
+            const float amplitude = std::sqrt(level) / (.450158f * kWindow);
+            level = amplitude > 1e-4f ? std::clamp((20 * std::log10(amplitude) + 80) / 80, 0.f, 1.f) : 0.f;
+        }
+        destination[i].store(level, std::memory_order_relaxed);
+    }
+}
+
+void Chroma::publishSpectrum() {
+    publishLine(dryView_, spectrumView_);
+    publishLine(tunedViewHistory_, tunedView_);
+}
+
 void Chroma::process(float* buf, int32_t frames) {
     if (!buf || frames <= 0 || bypassed()) return;
-    const float coeff = float(1 - std::exp(-1 / (.01 * sr_)));
-    const float modeStep = float(1 / (.010 * sr_));
-    const bool requestedMode = getParam(Mode) >= .5f;
-    float mixTarget = noteMask() && getParam(Amount) > 0 ? getParam(Mix) : 0;
-    float gainTarget = float(std::pow(10., (-24 + 36 * getParam(Output)) / 20));
-    if (snap_) {
-        mixS_ = mixTarget;
-        gainS_ = gainTarget;
-        if (requestedMode != polyphonic_) resetMode(requestedMode);
-        snap_ = false;
-    }
+    const uint64_t scopeInterval = kHop * uint64_t(std::ceil(sr_ / (50 * kHop)));
     for (int i = 0; i < frames; ++i) {
-        int in = int(count_ % n_), out = int(count_ % (2 * n_));
-        float l = clean(buf[2 * i]), r = clean(buf[2 * i + 1]);
-        quiet_ = std::max(std::abs(l), std::abs(r)) < 1e-8f ? quiet_ + 1 : 0;
-        mixS_ += coeff * (mixTarget - mixS_);
-        gainS_ += coeff * (gainTarget - gainS_);
-        if (requestedMode != polyphonic_)
-            modeWet_ = std::max(0.f, modeWet_ - modeStep);
-        else if (modeWarmup_ > 0)
-            --modeWarmup_;
-        else
-            modeWet_ = std::min(1.f, modeWet_ + modeStep);
-        float peak = 0;
-        for (int c = 0; c < 2; ++c) {
-            float dry = input_[c][in], wet = ola_[c][out];
-            ola_[c][out] = 0;
-            input_[c][in] = c ? r : l;
-            buf[2 * i + c] = clean((dry + mixS_ * modeWet_ * (wet - dry)) * gainS_);
-            peak = std::max(peak, std::abs(buf[2 * i + c]));
-        }
-        quietOutput_ = peak < quietOutputThreshold ? quietOutput_ + 1 : 0;
-        ++count_;
-        if (count_ % hop_ == 0) {
-            if (requestedMode != polyphonic_ && modeWet_ == 0) {
-                resetMode(requestedMode);
-                modeWarmup_ = n_;
+        if (snap_ || sample_ % controlInterval_ == 0) updateControls();
+        if (amountRemaining_ > 0) amount_ = --amountRemaining_ > 0 ? amount_ + amountDelta_ : amountTarget_;
+        mix_ = mixTarget_ + controlPole_ * (mix_ - mixTarget_);
+        gain_ = gainTarget_ + controlPole_ * (gain_ - gainTarget_);
+        morph_ = morphTarget_ + controlPole_ * (morph_ - morphTarget_);
+        gate_ = gateTarget_ + controlPole_ * (gate_ - gateTarget_);
+        resonance_ = std::abs(resonance_ - resonanceTarget_) < 1e-4
+                         ? resonanceTarget_
+                         : resonanceTarget_ + resonantPole_ * (resonance_ - resonanceTarget_);
+
+        const Stereo in{std::clamp(clean(buf[2 * i]), -64.f, 64.f), std::clamp(clean(buf[2 * i + 1]), -64.f, 64.f)};
+        const size_t slot = sample_ % kWindow;
+        const Stereo dryFull = fullDelay_[slot], dryMid = midDelay_[slot], sides = sidesDelay_[slot];
+        fullDelay_[slot] = in;
+        const Stereo mid = midLow_.run(midHigh_.run(in));
+        midDelay_[slot] = mid;
+        const Stereo low = low2_.run(low1_.run(in)), high = high2_.run(high1_.run(in));
+        sidesDelay_[slot] = {low[0] + high[0], low[1] + high[1]};
+
+        const float transient = transientMask(dryMid);
+        const Stereo dynamics = correctionMask(mid);
+        auto& current = paths_[currentPath_];
+        float active = current.active() ? 1.f : 0.f;
+        Stereo tuned{};
+        Stereo wet = current.process(*this, mid, dryMid, transient, dynamics, sample_, tuned);
+        if (fadeRemaining_) {
+            auto& next = paths_[1 - currentPath_];
+            const float fade = 1.f - float(fadeRemaining_) / fadeLength_;
+            Stereo nextTuned{};
+            const Stereo nextWet = next.process(*this, mid, dryMid, transient, dynamics, sample_, nextTuned);
+            active = std::lerp(active, next.active() ? 1.f : 0.f, fade);
+            for (int ch = 0; ch < 2; ++ch) {
+                if (current.active() && next.active()) wet[ch] = std::lerp(wet[ch], nextWet[ch], fade);
+                else if (next.active())
+                    wet[ch] = nextWet[ch];
+                tuned[ch] = std::lerp(tuned[ch], nextTuned[ch], fade);
             }
-            frame();
         }
+        wet = finalLow_.run(finalHigh_.run(wet));
+        dryView_[slot] = dryFull;
+        for (int ch = 0; ch < 2; ++ch) {
+            buf[2 * i + ch] = clean(gain_ * std::lerp(dryFull[ch], wet[ch] + sides[ch], mix_ * active));
+            tunedViewHistory_[slot][ch] = tuned[ch] * mix_ * gain_;
+        }
+        const float peak = std::max({std::abs(in[0]), std::abs(in[1]), std::abs(buf[2 * i]), std::abs(buf[2 * i + 1])});
+        quiet_ = peak < silence ? quiet_ + 1 : 0;
+
+        ++sample_;
+        if (fadeRemaining_ && --fadeRemaining_ == 0) currentPath_ = 1 - currentPath_;
+        if (sample_ % kHop == 0) {
+            const bool shape = (morph_ > 1e-6f || gate_ > 1e-6f) &&
+                               (paths_[currentPath_].down || (fadeRemaining_ && paths_[1 - currentPath_].down));
+            if (shape) analyseDry(sample_);
+            paths_[currentPath_].frame(*this, sample_, shape ? &dryMagnitude_ : nullptr);
+            if (fadeRemaining_) paths_[1 - currentPath_].frame(*this, sample_, shape ? &dryMagnitude_ : nullptr);
+        }
+        if (sample_ % scopeInterval == 0) publishSpectrum();
     }
-    idle_ = quiet_ >= uint64_t(2 * n_) && quietOutput_ >= uint64_t(n_) && quietTail_ >= uint64_t(n_);
+    idle_ = quiet_ >= std::max(uint64_t(2 * kWindow), uint64_t(.4 * sr_)) && fadeRemaining_ == 0;
 }
+
 int32_t Chroma::scopeRead(float* out, int32_t max) const {
     if (!out || max < 2) return 0;
-    out[0] = srView_.load();
-    out[1] = latencyView_.load();
-    int count = std::min(max - 2, 2 * kSpectrumBins);
+    out[0] = srView_.load(std::memory_order_relaxed);
+    out[1] = kWindow;
+    const int count = std::min(max - 2, 2 * kSpectrumBins);
     for (int i = 0; i < count; ++i)
         out[i + 2] = i < kSpectrumBins ? spectrumView_[i].load(std::memory_order_relaxed)
                                        : tunedView_[i - kSpectrumBins].load(std::memory_order_relaxed);
     return 2 + count;
 }
+
 } // namespace nota

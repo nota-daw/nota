@@ -58,3 +58,12 @@ pre-existing global smoke gate and must be reassessed after the full build.
 - [x] T028 Add Mode to the existing Chroma card, preserve project and preset defaults, and cover the public path in tests/Nota.SmokeTest/ColorTests.cs.
 - [x] T029 Generate piano listening examples, run the focused and full builds and document verification.
 - [x] T030 Update user documentation, FEATURES.md and CHANGELOG.md and check convergence against FR-022–025.
+
+## HQ color-bass engine
+
+- [x] T031 Replace the peak tracker and Polyphonic path with the fixed-latency HQ topology.
+- [x] T032 Keep independent Nota controls, apply Morph/Gate in the correction frames,
+  and preserve legacy parameters with Mode retired.
+- [x] T033 Run native, C ABI and full build verification and record the results. The shared render-pool timing gate remains tracked by T017.
+- [x] T034 Update the bilingual manual, capture the card and generate baseline/HQ comparisons.
+- [ ] T035 Complete the external listening comparison with matched inputs and playback levels.

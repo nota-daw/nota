@@ -1,5 +1,26 @@
 # Implementation Plan: Nota Color
-## Summary
+## Current iteration — HQ engine
+
+- Derive candidate pitch classes from the manual scale. Split the audio band
+  with independent Butterworth sections. Filter both pitch branches before
+  phase-vocoder transposition (1024/256), and align dry and side bands.
+- Add the spectrally gated correction to the aligned mid band. Cascade pairs
+  of notch and peaking biquads, compensate level according to note density and
+  protect transients. Use a 150 ms blend between two prepared paths when the mask changes.
+- Use the original normalized control ranges. Amount blends the working band,
+  Resonance follows a nonlinear gain curve, and Decay scales peaking Q
+  around the nominal 120 ms setting. Use the HQ correction FFT for Morph and
+  Gate. The scope analyzes aligned dry and the actual correction separately.
+- Retire the last parameter and reuse the generic preset/project paths to load
+  the remaining values. Scope and ABI shapes stay stable. Update the card in
+  place, the prototype manual, and the release-facing feature descriptions.
+- Test the production DSP through the native harness and C ABI. Capture
+  repeatable baseline/current renders. Assess tone, attacks and decay by
+  comparing renders with matched input, time alignment and playback level.
+
+## Earlier iterations
+
+### Summary
 Local quality-first prototype, kind 27, C++20 Device with C# Avalonia card. No new dependency or C ABI functions. Accepted user plan is the source of scope.
 ## Technical Context
 Signalsmith RealFFT, 2048-point Hann analysis/synthesis at <=48 kHz, hop N/8, N doubled with sample rate (maximum 32768). Stereo linked peak detection using summed channel powers (not mono sum), instantaneous frequency from phase differences, nearest allowed equal-tempered note, identity phase locking across each peak region. Preserve outside-band bins. Normalized overlap-add (sum Hann² = 3), unnormalized IFFT scaled by 1/N. Packed DC/Nyquist remain untouched. Fixed N-sample latency with exact delayed dry path.

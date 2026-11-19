@@ -3,9 +3,30 @@
 **Feature Branch**: `feat/color-bass-prototype`
 **Created**: 2026-11-16
 **Status**: Accepted for local prototype
-**Input**: A clean Chroma-like color bass effect in Nota, quality over latency, manual notes, isolated branch. The user explicitly defers the GitHub issue until listening approval.
+**Input**: A clean color bass effect in Nota, quality over latency, manual notes, isolated branch. The user explicitly defers the GitHub issue until listening approval.
 
-## User Scenarios & Testing
+## Current iteration — HQ color bass
+
+The existing device and card use one HQ path with semitone correction and
+tuned resonance. The following requirements supersede the DSP, latency and
+mode behavior described in the earlier iterations below.
+
+- FR-026: Process the chosen band with semitone correction, out-of-scale
+  attenuation, in-scale resonance and attack protection. The selected lower
+  note wins ties. Empty and full masks pass delay-aligned dry audio.
+- FR-027: Keep the card layout and independent Amount, Resonance and Decay.
+  Keep stereo-linked Morph and Gate on the shifted components. Latency is
+  fixed at 1024 samples and both controls default off.
+- FR-028: Remove Polyphonic and its selector. Keep kind 27, parameter indices
+  0–23, automation, default values, scope shape and all six preset identities.
+  Load former Polyphonic sessions using the retained values in HQ.
+- FR-029: Verify routing, resonance, stereo, attacks, automation, latency and
+  real-time behavior. Supply level-matched comparisons with the previous
+  prototype. Evaluate timbre, attacks and decay separately in listening comparisons.
+
+## Earlier iterations
+
+### User Scenarios & Testing
 ### User Story 1 — Color a bass (P1)
 Add Nota Color to an audio or instrument track and tune its spectrum to C minor or another selected scale. This is the core listening experiment.
 Acceptance: an out-of-scale sustained tone in the processing band moves to the nearest selected note; subbass outside the band stays intact; resonance and decay change coloration without runaway output.
@@ -34,7 +55,7 @@ Silence, non-finite inputs/params, empty masks, crossed band limits, rapid note 
 - SC-002: Delayed dry reconstruction has maximum error below 1e-5 for finite normal input.
 - SC-003: All tested settings produce finite output, and silent tails decay below -90 dBFS.
 - SC-004: Build and smoke tests pass, performance and latency are measured.
-- SC-005: User can audition FM, growl and chord dry/wet pairs; similarity to Chroma is not claimed without reference audio.
+- SC-005: User can audition FM, growl and chord dry/wet pairs.
 
 ## Assumptions
 Local prototype only, no issue/PR/push. Existing Device ABI and UI conventions. Quality takes precedence over latency. Listening approval is separate from implementation acceptance.
@@ -46,7 +67,7 @@ Local prototype only, no issue/PR/push. Existing Device ABI and UI conventions. 
 - FR-013: Apply Morph then Gate after resonance and before synthesis, only inside the processing band; reflect their gains in Tuned telemetry.
 - FR-014: Append Morph, Gate and Gate threshold as parameters 21–23. Old 21-param projects retain off defaults. Automation, MIDI Learn, presets, reset and persistence work normally.
 - FR-015: Keep the 560×260 card with a second control row and at least 96 px graph height. Preserve latency and real-time safety.
-Acceptance: target tones within 10 cents; block partition invariance; finite output and silence; no render allocations; stable mono/antiphase/right-only stereo; Morph/Gate endpoints and automation; old-state loading; before/after FM, growl, chord, attack and decay WAVs plus CPU measurements. Naturalness is evaluated by listening, without claiming Chroma DSP equivalence.
+Acceptance: target tones within 10 cents; block partition invariance; finite output and silence; no render allocations; stable mono/antiphase/right-only stereo; Morph/Gate endpoints and automation; old-state loading; before/after FM, growl, chord, attack and decay WAVs plus CPU measurements. Naturalness is evaluated by listening.
 
 ## Clean color bass iteration (accepted 2026-11-18)
 User goal: cleaner color bass with a clear attack, stable tuning and useful resonant
@@ -73,8 +94,7 @@ Acceptance: stable single-note boundary output within 10 cents; retained delayed
 reconstruction; finite automation/overlap/crossing signals; mono/antiphase/right-only stereo;
 four sample rates and arbitrary blocks; no render allocations; Gate-off release follows
 Decay and drains below −90 dBFS before sleep. Compare attacks and moving tones with the
-baseline. Human listening decides whether the result is cleaner and more interesting;
-synthetic checks alone do not establish professional quality or superiority to Xynth.
+baseline. Evaluate audible artifacts and timbre by listening.
 
 ## Polyphonic scale correction
 - FR-022: On an audio or instrument track, Polyphonic moves individual notes of a

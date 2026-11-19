@@ -8,7 +8,11 @@
 - Implementation detail: place complete peak regions at integer FFT-bin offsets, while exact phase advancement supplies the fractional frequency shift. This avoids interpolating opposite-phase Hann bins. Tones verify target accuracy, but moving peak regions may still produce audible prototype artifacts and require listening iteration.
 
 ## Naturalness extension
-Chroma documents magnitude-domain Morph and a dry-sidechained per-bin Gate: https://www.xynth.audio/docs/plugins/chroma#spectral . Its full internal phase algorithm is not disclosed. Nota independently tracks local peaks and propagates output phase while preserving shared stereo rotation. Morph retains phase per FFT bin; reweighting resonant bins can still alter the resultant waveform phase, so carrier-phase tests isolate the no-resonance case. Neither effect promises sample-identical original audio or Chroma equivalence.
+This iteration tracks local peaks and propagates output phase while preserving
+shared stereo rotation. Morph blends magnitudes and retains phase per FFT bin.
+Gate applies a per-bin gain from the dry spectrum. Reweighting resonant bins
+can alter the resultant waveform phase, so carrier-phase tests isolate the
+no-resonance case.
 
 ## Clean color bass decisions — 2026-11-18
 - Current-source probes at 48 kHz, C minor, full Amount/Mix and Resonance=0 show 439 Hz
@@ -37,3 +41,10 @@ Chroma documents magnitude-domain Morph and a dry-sidechained per-bin Gate: http
   detector also models C2–B2 as dry voices so their harmonics cannot masquerade
   as notes in the correction range. Choosing to leave uncertainty audible
   protects the chord more reliably than forcing every partial onto the scale.
+
+## HQ resonance and spectral controls
+
+Resonance uses a nonlinear curve for the peaking gain. At the nominal 120 ms
+Decay setting, peaking Q ranges from 18 to 19. Decay scales that Q, so actual
+ringdown varies by frequency. Applying Morph and Gate in the HQ correction
+frames keeps latency at 1024 samples.
