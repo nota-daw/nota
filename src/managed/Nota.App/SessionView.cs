@@ -392,13 +392,14 @@ public sealed partial class SessionView : UserControl
 
     // Rebuild one slot's cell (after an edit to it) instead of the whole grid, plus the group
     // slots that summarise it.
-    private void RefreshSlot(int trackId, int scene)
+    // inspector: false while the inspector itself is being edited (a drag would lose its control).
+    private void RefreshSlot(int trackId, int scene, bool inspector = true)
     {
         if (ColumnFor(trackId) is not { Kind: ColKind.Track } c || scene < 0 || scene >= c.Cells.Count) { Refresh(); return; }
         ReplaceCell(c.Cells, scene, new SlotCell(this, c, scene));
         foreach (var g in _cols)
             if (g.Kind == ColKind.Group && g.Children.Contains(trackId)) ReplaceCell(g.Cells, scene, new GroupCell(this, g, scene));
-        RebuildInspector();
+        if (inspector) RebuildInspector();
     }
 
     private void RefreshScene(int scene)
@@ -431,6 +432,27 @@ public sealed partial class SessionView : UserControl
     private void LaunchGroup(Column g, int scene)
     {
         foreach (int id in g.Children) _engine.LaunchSlot(id, scene);
+    }
+
+    // #480: withdraw a queued launch before its boundary — Alt+click on a queued launch button, or
+    // "Cancel launch" in the menu. A second plain click keeps it queued, as it always did.
+    // Asked of the engine, not inferred from slot state 2: a row that queued only stops, or a queued
+    // restart of a slot already playing, is queued too.
+    private bool SceneQueued(int scene) => _engine.SessionSceneQueued(scene);
+
+    private void CancelSlotLaunch(int trackId, int scene)
+    {
+        if (_engine.CancelSlotLaunch(trackId, scene)) Say(Loc.T("session.launch_cancelled"));
+        UpdateStates();
+    }
+
+    // One call: the engine withdraws every track below the group together, in the same block.
+    private void CancelGroupLaunch(Column g, int scene) => CancelSlotLaunch(g.TrackId, scene);
+
+    private void CancelSceneLaunch(int scene)
+    {
+        if (_engine.CancelSceneLaunch(scene)) Say(Loc.T("session.launch_cancelled"));
+        UpdateStates();
     }
 
     private void StopColumn(Column c)
@@ -731,6 +753,15 @@ public sealed partial class SessionView : UserControl
         => Math.Abs(beats - 1) < 1e-6 ? Loc.T("session.one_beat") : Loc.F("session.beats", NotaNum.Str(beats, "0.##"));
 
     /// <summary>"2 bars", "3 beats", "2.2 bars" — a clip length as the grid shows it.</summary>
+    /// <summary>A slot's own next-take length as the grid and inspector show it (#503): "3 bars",
+    /// "2 bars 2", "Open"; empty for Global.</summary>
+    internal static string TakeLengthText(NotaSlotTakeLength take) => take.TakeMode switch
+    {
+        SlotTakeMode.Open => Loc.T("session.take_length.open"),
+        SlotTakeMode.Fixed => FormatLength(take.Bars * Meter.BeatsPerBar + take.Beats),
+        _ => "",
+    };
+
     internal static string FormatLength(double beats)
     {
         if (beats <= 0) return "";

@@ -271,7 +271,7 @@ public partial class MainWindow
             finally { Engine.SetDeferWarpBuild(false); }
             _links.Clear();   // the old project's live-freeze ids mean nothing in the loaded graph
             // Load resets the engine but leaves transport; restore it via the VM.
-            _vm.Transport.Bpm = (decimal)result.Transport.Bpm;
+            _vm.Transport.RestoreBpm(result.Transport.Bpm);
             _vm.Transport.MasterVolume = result.Transport.MasterVolume;
             _vm.Transport.MetronomeOn = result.Transport.MetronomeOn;
             _vm.Transport.SyncLoop();   // the loop (on/off and its region) came with the project (#455)
@@ -297,6 +297,7 @@ public partial class MainWindow
             _vm.StatusText = warnings.Count == 0
                 ? Loc.F("main.files.opened", System.IO.Path.GetFileName(dir))
                 : Loc.F("main.files.opened_item_s_downgraded", System.IO.Path.GetFileName(dir), warnings.Count, warnings[0]);
+            if (result.TempoClamped) _vm.StatusText = Loc.T("project.tempo_clamped");   // specs/099, once: saving drops it
             _ = BuildWarpCachesAsync();   // fill the deferred warp caches in the background
             _ = OfferMissingPluginsAsync(dir, result.MissingPlugins);
         }
@@ -457,6 +458,7 @@ public partial class MainWindow
         _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project, and so do device windows
+        _showMe?.Stop();                   // a Show me walkthrough points at the old project's controls (specs/098)
         _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
         PianoRollView.ForgetBendPicks();   // and the Bend lane ranges picked per clip

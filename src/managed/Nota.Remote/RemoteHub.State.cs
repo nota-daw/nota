@@ -18,6 +18,7 @@ public sealed partial class RemoteHub
 {
     private string? _projectJson;            // shared part of the project message, re-read every few ticks
     private List<TrackRow> _tracks = new();
+    private Dictionary<int, List<int>> _groupMembers = new();   // group id → its members, with _tracks
 
     internal sealed record TrackRow(int Id, string Name, string Color, string Kind, string Device, int Group, int Index, bool Mpe = false);
 
@@ -110,6 +111,7 @@ public sealed partial class RemoteHub
             rows.Add(new TrackRow(ti.Id, _engine.GetTrackName(ti.Id), host.TrackColor(ti.Id), kind, dev, ti.GroupId, i, mpe));
         }
         _tracks = rows;
+        _groupMembers = GroupMembers(rows.Select(r => (r.Id, r.Group, r.Kind == "group", r.Kind == "return")).ToList());
 
         _projectJson = Json(w =>
         {
@@ -483,12 +485,33 @@ public sealed partial class RemoteHub
         {
             w.WriteString("t", "ses");
             w.WriteNumber("n", scenes);
+            // #480: rows with a launch waiting (a row that queued only stops, or restarts of playing
+            // slots, shows no slot in state 2) — the phone's hold-to-cancel asks this, not the slots.
+            w.WriteStartArray("q");
+            for (int s = 0; s < scenes; s++)
+                if (_engine.SessionSceneQueued(s)) w.WriteNumberValue(s);
+            w.WriteEndArray();
             w.WriteStartArray("tr");
             foreach (var r in _tracks)
             {
-                if (r.Kind is "group" or "return") continue;
+                if (r.Kind == "return") continue;
                 w.WriteStartObject();
                 w.WriteNumber("id", r.Id);
+                if (r.Kind == "group")
+                {
+                    // A group has no clips of its own: its members' ids, the phone draws the
+                    // summary slot from their rows (#662; specs/102 contracts/session-message.md).
+                    w.WriteStartArray("k");
+                    foreach (int id in _groupMembers.GetValueOrDefault(r.Id) ?? new List<int>()) w.WriteNumberValue(id);
+                    w.WriteEndArray();
+                    w.WriteStartArray("c");
+                    w.WriteEndArray();
+                    w.WriteEndObject();
+                    continue;
+                }
+                // #480: the slot whose launch waits, also a restart of the slot already playing.
+                for (int s = 0; s < scenes; s++)
+                    if (_engine.SessionSlotLaunchQueued(r.Id, s)) { w.WriteNumber("w", s); break; }
                 w.WriteStartArray("c");
                 for (int s = 0; s < scenes; s++)
                 {

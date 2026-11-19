@@ -31,7 +31,9 @@ class AudioInput {
 
     // Open the given input device (a backend-specific handle carried as a plain
     // integer; 0 = system default input) and begin delivering frames to `cb`.
-    virtual bool start(InputCallback cb, uint32_t device = 0) = 0;
+    // `preferredRate` (> 0): the engine's rate — run the device at it where the backend can,
+    // so live monitoring needs no conversion (#563). sampleRate() reports what it runs at.
+    virtual bool start(InputCallback cb, uint32_t device = 0, double preferredRate = 0.0) = 0;
     virtual void stop() = 0;
     virtual bool isRunning() const = 0;
     virtual double sampleRate() const = 0;

@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.60.1** (plus changes in development on `main`). This document describes what is
+**0.60.4** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -29,14 +29,17 @@ Contents
 
 - **Multi-output audio interfaces**: every backend opens all of the device's outputs (up
   to 64), so Main and Cue can play on any two pairs.
-- **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
+- **macOS** (≥ 12.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
   hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
 - **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency) or **ASIO**
   (any installed driver; falls back to WASAPI if it can't start), WinMM MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
   Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
-  with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). Settings live in
+  with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). On **NixOS** (or any
+  Linux with Nix) `nix run github:nota-daw/nota` builds and runs a Nix package from the
+  flake (x86_64 / aarch64), and `nix develop` / `devenv shell` give a development shell with
+  the build tools. Settings live in
   `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`). Without a working xdg-desktop-portal file
   chooser Nota falls back to its own file dialog (`NOTA_FILE_DIALOG=builtin` forces it), and
   with no audio output that opens it runs on a silent device and says so.
@@ -49,6 +52,14 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ---
 
 ## Project and transport
+
+- **Tempo automation**: tempo is a lane on the master track — pick **Tempo** in the
+  master row's target pill (next to Volume) and draw it like any automation: points,
+  curved segments for smooth ramps, two points on one beat for an instant change, marquee,
+  copy/paste, undo. BPM scale with an editable range; 20–300 BPM. Playback, grid, metronome,
+  MIDI, warped audio, freeze, bounce and export follow it; unwarped audio keeps its time.
+  While automated, the transport BPM field shows the tempo under the playhead (read-only).
+  Projects from the earlier tempo track open with the same timing.
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation — including volume, pan and master-volume moves and the parameters of effects,
@@ -224,9 +235,15 @@ own window — see
   previews and a progress pie on the clip's own clock; selection apart from launching,
   keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag between slots;
   launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato, one-shot,
-  velocity amount and follow actions with a global switch; scenes with names, colours,
+  velocity amount and follow actions with a global switch and a per-clip bypass that holds one
+  clip without changing its settings (and resumes on the next multiple of its time, never as a
+  catch-up); scenes with names, colours,
   tempo / signature and scene follow, inserted, duplicated, captured and reordered without
-  stopping playback; Session rec with fixed length; group columns that fold; returns +
+  stopping playback; a queued clip or scene cancelled before its launch point (**⌥-click** its
+  launch button, or **Cancel launch**) — nothing of it starts, its tempo change and follow are
+  dropped, and what plays carries on unbroken; Session rec with fixed length, and a **Take
+  length** per empty slot (Global — follow Fixed —, Open, or 1 beat … 64 bars of its own, shown
+  on the grid) so slots record different lengths, each stopping on its own; group columns that fold; returns +
   master; I/O · Sends · Mixer sections; removable stop buttons; per-track Back to
   Arrangement; and moving material between Session and Arrangement — the clipboard works
   both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
@@ -235,11 +252,16 @@ own window — see
   on an instrument column replaces its instrument (a rack gets a chain or pad); on an audio
   column or right of the last column it starts a new track.
 - **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
-  effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
-  canvas (node positions are saved with the project), plus a **Global view** that shows
-  tracks as islands with cross-track connections. Its centrepiece is **CV modulation** —
-  drag a modulator's CV output onto any device, instrument or MIDI-FX parameter to link
-  them with a patch cable; click an edge to edit depth and mode, select and delete edges.
+  effects shown as nodes you can bypass, duplicate, delete and reorder right on the
+  canvas, plus a **Global view** that shows tracks as islands with cross-track
+  connections. A device node shows the device's own card, playable in place, at the size
+  its header's **XS · S · L** chip picks — XS is a compact, expandable parameter list; a
+  card that comes in S starts at S, otherwise at L. Sizes and positions are saved with the
+  project, independent of Detail's card size. Its centrepiece is **CV modulation** — drag a
+  modulator's CV output onto any device, instrument or MIDI-FX parameter to link them with
+  a patch cable: drop it on a knob to link that knob, or on the node to pick from a
+  searchable parameter panel (type to filter, ↑ ↓ and Enter; fast with plug-ins of
+  thousands of parameters); click an edge to edit depth and mode, select and delete edges.
   Modulators: **LFO** (with phase), an **envelope follower**, **MIDI→CV**
   (velocity/gate/note), **ADSR** (gated by notes), **Macro** (a manual control → CV) and
   **Math** (two CV inputs → one output); any parameter can also be a CV source
@@ -250,7 +272,8 @@ own window — see
   tab (dragged to a spot on the canvas, or double-clicked into the middle) and the command
   palette. Beside the canvas, Track view shows the arrangement's own track headers — every
   control, menu, tray and meter, on the side **Track headers on the right** picks: click one
-  to see its graph, or drop a CV cable on another track's header to modulate it. A group's
+  to see its graph, or drop a CV cable on another track's header to modulate it (the panel
+  then lists that track's parameters grouped by device). A group's
   header opens the group's effect chain (Tracks in → effects → out), patched like any
   track's. **Show in Modular** in the arrangement's and Session's track menus opens a track
   here.
@@ -343,14 +366,18 @@ own window — see
     arpeggiator or other MIDI FX drives the receiver. Selectors live in the track header,
     the mixer channel I/O, and the context menu. A muted source keeps sending MIDI.
     Recording on the receiver prints the incoming MIDI into a clip. Saved with the
-    project.
+    project. Switching MIDI In (to None, to another track, or by removing the source) while
+    a note is held ends the notes the old route started, and only those; a removed source
+    shows as **Removed track** until undo brings it back.
   - **Send/Return** buses (sends to returns) with a return list.
   - **Sidechain keys** — a device's key (and Nota Flux's React) listens to another track, or
     to one pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm on
     it: every source picker lists the parts under their track. Pre takes a part before its own
     effects, Post after them and its level and pan. A muted or solo-silenced pad still drives
     its key (a "ghost kick"); the key follows its pad through edits and is saved with the
-    project. Up to 16 distinct sources at once.
+    project. Up to 16 distinct sources at once. The key arrives in the same moment as the
+    audio it keys, live and in an export (a key from a group or return, or two tracks keying
+    each other, one audio block later).
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
 - **Device chain** per track: instrument + effects + MIDI effects, laid out in a row. The
   **+** at its end opens the browser on Audio effects with the cursor in the search.
@@ -592,6 +619,9 @@ own window — see
   automatically (USB, then Wi-Fi, then Ethernet) or by hand, in Settings → Remote or with a
   click on another address in Connect phone; the link opens in the browser or copies with a
   click.
+  Pads' **Repeat** (1/4 … 1/32T, triplets included) plays rolls like a hardware pad controller:
+  sliding a held pad up or down changes its rate in time, and on an MPE track sliding sideways
+  bends the repeated note; the pad shows its rate and bend.
 - **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
   every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
   In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
@@ -603,7 +633,12 @@ own window — see
 - **Nota Remote Scenes shows clip contents**: each filled cell has the clip's name and
   length and a preview of what is in it — notes as a small piano roll, audio as a
   waveform — in the clip's colour, updated within a second of an edit and growing while a
-  take records.
+  take records. The scene launch buttons, track names, Stop and Stop All stay pinned at the
+  grid's edges while the clips scroll. Group tracks appear as on the desktop: tap the name to
+  fold or unfold (shared with the Mixer); a group's slot reads "n of m" with a bar per
+  track and launches them all, and its Stop stops them all. ⋯ → **Session grid** turns the
+  grid: **Scenes down** (as in Nota) or **Scenes across**, kept per phone. Press and hold a
+  queued clip, group slot or scene to cancel its launch; a queued scene blinks like a queued clip.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
@@ -737,7 +772,8 @@ own window — see
 - **Automation lanes** on tracks and returns, with curved segments (Alt+drag) and points
   (double-click to add, double-click a point to remove). A track lane drives Volume, Pan or a
   device parameter. A return's lane (Volume, Pan or a
-  device on its chain) is edited in its footer row, the master's volume in the Master row.
+  device on its chain) is edited in its footer row. The Master row's lane drives the master's
+  Volume, Tempo, Pan or a parameter of a device on the master chain.
 - **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
   shows its first automated parameter.
 - **Draw mode** (the `A` key): drawn automation changes the device parameter in real time,
@@ -757,6 +793,9 @@ own window — see
 - **Overriding** — touch an automated parameter while not recording and the lane hands
   control to you; the toolbar's **Re-enable Automation** button gives it back.
 - **Reading** during playback and scrubbing (volume and pan controls follow the automation).
+- **Master pan**: a pan knob on the Mixer's master strip, after the master devices and before
+  the master fader, in the project pan law with the centre at 0 dB; automatable like a
+  track's, saved with the project.
 - **MIDI Learn** — the MIDI button in the top right enters learn mode: mappable controls
   light up, and a click plus a move on the controller creates the binding. Mappable
   targets cover every built-in instrument, effect and MIDI FX parameter (switches, ADSR
@@ -871,7 +910,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   (Age/Motion/Filter/Env/Space), glide, tune and volume. 25 factory presets.
 - **Nota Rhythm** — drum machine: 8 voices (analog and FM kick, noise snare, metallic
   hats, clap, rim, tom, perc), a 16-step sequencer (locked to the transport), 4 pattern
-  banks (A–D, copy / clear), accents, quiet steps, per-step velocity, Swing/Humanize, a
+  banks (A–D, copy / clear; the bank is an automatable **Bank** parameter, read at each step,
+  so an arrangement lane, MIDI learn or a macro switches patterns in the song — at the next
+  step or at the pattern start, per **Bank Switch**), accents, quiet steps, per-step velocity, Swing/Humanize, a
   **Glue** bus compressor, and a per-voice **Sample** mode (load your own one-shot, with a
   Start / Length region and Reverse). The 700 × 260 card: kit list, an interactive hit
   contour or sample region, Perform rail (Swing, Humanize, Accent, Volume, Glue), a full-width step strip with
@@ -1075,7 +1116,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   strip with the band's Freq, Gain and Q; 33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
 - **Nota Strata** (15) — in two sizes (L 700 / S 260, S·L toggle; S is the counter over the transport and Feedback, Input, Speed) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
-  count-in, set-tempo, Export; audio layers persist into the project.
+  count-in, set-tempo, Export (the loop as heard), and a layer's right-click Export layer N as
+  WAV (that layer alone, as recorded: loop-aligned, one cycle, after input gain — #482); audio
+  layers persist into the project.
 - **Nota Forge** (17) — in two sizes (L 700 / S 260, S·L toggle; S is the curve and harmonics over Amount, Wet, Out) — multi-stage saturator: 3 stages (Tube/Tape/Diode/Fuzz/Fold/Digital),
   each with drive, output trim, feedback and its own Bias / Tone / Width; Serial / Parallel /
   Mid-Side (Mid · Side · M+S) / Multiband (< 180 Hz · mids · > 2.4 kHz) routings; Amount /
@@ -1281,7 +1324,8 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
-  paths in Preferences, and Rescan. Four plugins load at a time, each with a time limit
+  paths in Preferences — the system's standard VST3 folders listed as removable `Default`
+  entries, with **Restore defaults** — and Rescan. Four plugins load at a time, each with a time limit
   (a stuck one is retried alone, then skipped); progress shows as "312 of 1,000"; results
   are saved as the scan goes; plugins that failed are skipped until they change or a Rescan;
   each scan writes `logs/plugin-scan.log`.
@@ -1603,6 +1647,14 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **User manual** (EN / FR / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the interface language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
+- **Assistant panel** (#606, specs/098) — a chat docked on the right, full height (toolbar key,
+  **View ▸ Assistant**, ⌘⇧H): questions in English or Russian are answered offline from the
+  manual, which ships inside each release (word search with typo, keyboard-layout and word-form
+  tolerance); replies quote up to three sections in the question's language with links, rendered
+  as Markdown (tables, code, key caps, note / tip / caution boxes) and copyable. **Show me** under a
+  how-to walks its steps — opens the view or panel and outlines each control (Back / Next / Done).
+  Optional **Manual search** model (multilingual-e5-small, Settings → Downloads → AI Models) adds
+  search by meaning. Width and open state are remembered.
 - **Custom keyboard shortcuts** in Preferences → Shortcuts (specs/096): every key is
   rebindable — menu commands, view keys (piano roll, arrangement, Session, devices, Files
   browser, Modular) and the computer-keyboard note map — with a second key per action,
@@ -1635,7 +1687,8 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
-- **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
+- **Plug-ins**: scan paths (the OS-standard VST3 folders as `Default` entries, **Restore
+  defaults**), Rescan, **Open plug-in window on insert**.
 - **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: **Sample folders** — the list the browser's Files tab shows (Add folder…,
@@ -1725,8 +1778,9 @@ Coverage:
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split; read and write a clip's controller curves (sustain, wheels, any CC).
-- **Automation**: create a lane (volume, pan, a device or instrument parameter),
-  read and write points. A send is not a lane target.
+- **Automation**: create a lane (volume, pan, a device, plug-in or instrument parameter),
+  read and write points — on the master too (tempo, pan, master device parameters;
+  `set_master_pan` sets its pan). A send is not a lane target.
 - **MIDI effects** and engine status.
 - **Themes and skins**: `list_themes`, `get_theme` (the file, as a template),
   `get_theme_catalogue` (every colour token with what it colours, the radius steps),
@@ -1740,8 +1794,10 @@ Coverage:
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch
   mode / quantize / legato / loop / follow actions, scene name / colour / tempo / signature /
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
-  release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
-  scene recording with a fixed length, stopping one recording slot, back to arrangement, slot ↔ arrangement).
+  release a slot, launch and stop a scene, cancel a queued slot or scene launch
+  (`cancel_slot_launch`, `cancel_scene_launch`), launch quantization, the follow switch, slot and
+  scene recording with a fixed length, a slot's own take length (`set_session_slot_take_length`),
+  stopping one recording slot, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
   8 macros and their mappings (range, curve), rack volume, glide and mono, a chain's MIDI
@@ -1796,5 +1852,7 @@ Coverage:
   pull requests: instruction counts (fails above 1%) and timing (above 15%) per scenario
   against the base branch, plus an idle-CPU check on all three OSes
   (`scripts/perf-gate.sh`).
+- **Accelerated FFT**: spectral processing (convolution, analyzers) runs on Accelerate on
+  macOS and PFFFT on Windows and Linux.
 - **Third-party notices**: bundled/linked dependencies and their copyrights are recorded in
   [`LICENSES/THIRD-PARTY-NOTICES.md`](LICENSES/THIRD-PARTY-NOTICES.md).

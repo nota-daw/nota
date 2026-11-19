@@ -41,8 +41,14 @@ public sealed class TransportTools(IAudioEngine engine, IEngineDispatch dispatch
     [McpServerTool(Name = "seek"), Description("Move the playhead to a beat position (0 = bar 1).")]
     public Task Seek([Description("Target position in beats")] double beat) => Mutate(() => E.Seek(Math.Max(0, beat)));
 
-    [McpServerTool(Name = "set_tempo"), Description("Set the project tempo in beats per minute.")]
-    public Task SetTempo([Description("Tempo in BPM (e.g. 120)")] double bpm) => Mutate(() => E.SetBpm(Math.Clamp(bpm, 20, 300)));
+    [McpServerTool(Name = "set_tempo"), Description("Set the project tempo in beats per minute. Fails while the tempo is "
+        + "automated (the master track's Tempo lane has points): edit that lane with set_automation_points instead.")]
+    public Task SetTempo([Description("Tempo in BPM (e.g. 120)")] double bpm) => Mutate(() =>
+    {
+        if (E.IsTempoAutomated)
+            throw new InvalidOperationException("Tempo is automated on the master track; edit its Tempo lane");
+        E.SetBpm(Math.Clamp(bpm, 20, 300));
+    });
 
     [McpServerTool(Name = "set_time_signature"), Description("Set the time signature, e.g. numerator=4 denominator=4.")]
     public Task SetTimeSignature([Description("Beats per bar")] int numerator, [Description("Beat unit (1,2,4,8,16)")] int denominator)
@@ -60,4 +66,7 @@ public sealed class TransportTools(IAudioEngine engine, IEngineDispatch dispatch
 
     [McpServerTool(Name = "set_master_volume"), Description("Set the master output volume (0..1 linear).")]
     public Task SetMasterVolume([Description("Linear gain 0..1")] float volume) => Mutate(() => E.SetMasterVolume(Math.Clamp(volume, 0f, 1f)));
+
+    [McpServerTool(Name = "set_master_pan"), Description("Set the master pan (−1 left .. 0 centre .. 1 right), applied after the master devices, before the master fader.")]
+    public Task SetMasterPan([Description("Pan −1..1")] float pan) => Mutate(() => E.SetMasterPan(Math.Clamp(pan, -1f, 1f)));
 }

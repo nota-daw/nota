@@ -231,7 +231,7 @@ public sealed partial class SessionView
             double len = _engine.SessionRecordLength;
             int sel = Array.FindIndex(FixedBars, b => Math.Abs(b * 4 - len) < 1e-6);
             var seg = Segmented(Array.ConvertAll(FixedBars, b => b == 0 ? Loc.T("common.off") : b.ToString(NotaNum.Culture)), sel < 0 ? 0 : sel,
-                i => _engine.SessionRecordLength = FixedBars[i] * 4.0, mono: true);
+                i => { _engine.SessionRecordLength = FixedBars[i] * 4.0; RebuildInspector(); }, mono: true); // "Global (…)" follows it (#503)
             _fixedSeg.Child = seg;
         }
         for (int i = 0; i < _sectionToggles.Count; i++)

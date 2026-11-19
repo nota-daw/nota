@@ -28,11 +28,13 @@ export interface Prefs {
   xyHold: boolean;
   bank: number;
   groupsOpen: number[];
+  /** Scenes grid: scenes as rows ('down', tracks across) or as columns ('across', tracks down). */
+  sessionAxis: 'down' | 'across';
 }
 
 const defaultPrefs: Prefs = {
   theme: 'nota', haptics: true, countIn: true, fullVel: false, keysMode: 'Scale', expressive: false, octave: 3, key: null,
-  xyHold: true, bank: 0, groupsOpen: [],
+  xyHold: true, bank: 0, groupsOpen: [], sessionAxis: 'down',
 };
 
 function guessName(): string {
@@ -362,10 +364,18 @@ export class App {
 
   /** Per-note expression for a held note: d 0 = bend (semitones), 1 = pressure, 2 = slide.
    * Coalesced to one message per note and dimension per frame — a finger moves far faster
-   * than Wi-Fi should carry. */
-  noteExpr(p: number, d: 0 | 1 | 2, v: number) {
+   * than Wi-Fi should carry. `now` sends it at once instead: a note-on resets the note's
+   * expression, so a value carried over to a new note-on (Pads' Repeat bend) goes right after
+   * it, or the note would sound unbent for a frame. */
+  noteExpr(p: number, d: 0 | 1 | 2, v: number, now = false) {
     if (!this.held.has(p)) return;
-    this.exprPending.set(p * 4 + d, Math.round(v * 1000) / 1000);
+    v = Math.round(v * 1000) / 1000;
+    if (now) {
+      this.exprPending.delete(p * 4 + d);
+      this.send({ t: 'x', p, d, v });
+      return;
+    }
+    this.exprPending.set(p * 4 + d, v);
     if (!this.exprFrame) this.exprFrame = requestAnimationFrame(() => this.flushExpr());
   }
 

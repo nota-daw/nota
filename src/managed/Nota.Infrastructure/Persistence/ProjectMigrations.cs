@@ -128,7 +128,49 @@ public static class ProjectMigrations
         // v31 -> v32 (specs/089): tracks gain Cue, the mixer CueVolume. Absent -> not in Cue,
         // unity Cue level; no-op, stamp version.
         new Migration(31, _ => { }),
+        // v32 -> v33 (specs/086): optional tempo map; absence preserves the global BPM.
+        new Migration(32, _ => { }),
+        // v33 -> v34 (specs/099): tempo is the master track's Tempo automation lane. The #568
+        // tempo points become that lane (same timing; values limited to 20–300 BPM, flagged
+        // so the app can say so once); `master.automation` and `master.pan` are new.
+        new Migration(33, MigrateTempoPoints),
+        // v34 -> v35 (specs/103): Session slots gain FollowBypass. Absent = follow active — no-op.
+        new Migration(34, _ => { }),
     };
+
+    private static void MigrateTempoPoints(JsonObject root)
+    {
+        if (root["tempoPoints"] is not JsonArray arr) { root.Remove("tempoPoints"); return; }
+        root.Remove("tempoPoints");
+        var legacy = new List<TempoMigration.LegacyPoint>();
+        try
+        {
+            foreach (var n in arr)
+            {
+                if (n is not JsonObject o) return;
+                double D(string k, double d) => o[k] is JsonValue v && v.TryGetValue(out double x) ? x : d;
+                int shape = o["shape"] is JsonValue sv && sv.TryGetValue(out int si) ? si : 0;
+                legacy.Add(new TempoMigration.LegacyPoint(D("beat", double.NaN), D("bpm", double.NaN), shape,
+                    D("x1", 1.0 / 3), D("y1", 0), D("x2", 2.0 / 3), D("y2", 1), D("incomingBpm", 0)));
+            }
+        }
+        catch (Exception) { return; }   // malformed: the project keeps its single tempo
+        var lane = TempoMigration.Convert(legacy, out bool clamped);
+        if (lane.Count == 0) return;
+        var master = root["master"] as JsonObject ?? new JsonObject();
+        root["master"] = master;
+        var lanes = master["automation"] as JsonArray ?? new JsonArray();
+        master["automation"] = lanes;
+        var points = new JsonArray();
+        foreach (var p in lane)
+            points.Add(new JsonObject { ["beat"] = p.Beat, ["value"] = p.Value, ["curve"] = p.Curve });
+        lanes.Add(new JsonObject
+        {
+            ["target"] = 6, ["deviceIndex"] = -1, ["paramIndex"] = -1, ["points"] = points,
+        });
+        if (root["transport"] is JsonObject transport) transport["bpm"] = (double)lane[0].Value;
+        if (clamped) root["tempoClamped"] = true;
+    }
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>
     /// using the registered steps.</summary>

@@ -46,6 +46,18 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_session_stop_scene")]
     internal static partial NotaResult SessionStopScene(IntPtr engine, int scene);
 
+    [LibraryImport(Lib, EntryPoint = "nota_session_cancel_slot_launch")]
+    internal static partial NotaResult SessionCancelSlotLaunch(IntPtr engine, int trackId, int scene);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_cancel_scene_launch")]
+    internal static partial NotaResult SessionCancelSceneLaunch(IntPtr engine, int scene);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_slot_launch_queued")]
+    internal static partial int SessionSlotLaunchQueued(IntPtr engine, int trackId, int scene);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_scene_queued")]
+    internal static partial int SessionSceneQueued(IntPtr engine, int scene);
+
     [LibraryImport(Lib, EntryPoint = "nota_session_stop_all")]
     internal static partial NotaResult SessionStopAll(IntPtr engine);
 
@@ -123,6 +135,15 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_session_set_slot_stop_button")]
     internal static partial NotaResult SessionSetSlotStopButton(IntPtr engine, int trackId, int scene, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_get_slot_take_length")]
+    internal static partial int SessionGetSlotTakeLength(IntPtr engine, int trackId, int scene, out NotaSlotTakeLength value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_set_slot_take_length")]
+    internal static partial NotaResult SessionSetSlotTakeLength(IntPtr engine, int trackId, int scene, in NotaSlotTakeLength value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_slot_take_beats")]
+    internal static partial double SessionSlotTakeBeats(IntPtr engine, int trackId, int scene);
 
     [LibraryImport(Lib, EntryPoint = "nota_session_copy_slot")]
     internal static partial NotaResult SessionCopySlot(IntPtr engine, int srcTrack, int srcScene, int dstTrack, int dstScene);

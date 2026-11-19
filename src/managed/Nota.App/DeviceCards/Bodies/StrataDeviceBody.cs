@@ -9,7 +9,8 @@
 // mute) | a Loop rail (Feedback · Input gain · Speed · Quantize · count-in /
 // set-tempo / reverse switches · Undo / Export / Clear). Transport + editing go
 // through the device command channel; state and per-layer waveforms come from the
-// device scope; Export mixes the recorded layers from the device state blob. S (260, #531):
+// device scope; Export mixes the recorded layers from the device state blob, and a layer's
+// right-click menu exports that one layer as recorded (#482). S (260, #531):
 // the bar counter and the beat ticks over the four transport actions and Feedback · Input gain
 // · Speed knobs.
 
@@ -162,7 +163,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         bool On(int p) => P(p) > 0.5f;
 
         var readouts = new List<Action>();
-        var scope = new float[S_Pending + 1];
+        var scope = new float[S_Id + 1];
         int scN = 0;
         float Sc(int i) => i < scN ? scope[i] : 0f;
         var waveBuf = new float[96];
@@ -376,6 +377,101 @@ internal sealed class StrataDeviceBody : IDeviceBody
             if (path is null) return;
             await System.Threading.Tasks.Task.Run(() => WriteLoopWav(blob, fb, speed, reverse, path));
         }
+
+        // ---------- one layer (#482) ----------
+        // A layer's right-click menu exports it on its own: the samples Strata keeps for it — the
+        // input after Input gain, sample 0 at the loop's top, one cycle long — with no Speed,
+        // Reverse, Feedback, level or mute, and no other layer. The device is left as it is.
+        // What an export of layer k would do now, from the live scope (no copy of the layers).
+        Nota.Infrastructure.StrataLayerExportResult LayerNow(int k)
+        {
+            int mode = (int)Sc(0), recL = (int)Sc(4);
+            if (k >= (int)Sc(3)) return Nota.Infrastructure.StrataLayerExportResult.NoLayer;
+            if (mode == M_Rec && Sc(S_LoopBpm) <= 0) return Nota.Infrastructure.StrataLayerExportResult.NoLoop;
+            if (recL == k) return Nota.Infrastructure.StrataLayerExportResult.Recording;
+            return Nota.Infrastructure.StrataLayerExportResult.Written;
+        }
+        string? LayerUnavailable(int k) => LayerNow(k) switch
+        {
+            Nota.Infrastructure.StrataLayerExportResult.Written => null,
+            Nota.Infrastructure.StrataLayerExportResult.NoLoop => Loc.T("device.strata.loop_not_closed"),
+            Nota.Infrastructure.StrataLayerExportResult.Recording => Loc.T("device.strata.layer_still_recording"),
+            _ => Loc.T("device.strata.layer_not_there"),
+        };
+        // A small fingerprint of one take: the layer's peak envelope (a finished layer is never
+        // rewritten, so a slot recorded again reads differently). Reads that layer only.
+        float[] TakePrint(int dev, int k)
+        {
+            var w = new float[512];
+            int n = engine.DeviceLayerWave(track, dev, k, w, w.Length);
+            return n > 0 ? w[..n] : Array.Empty<float>();
+        }
+        void ShowLayerMenu(int k, Control anchor)
+        {
+            string? why = LayerUnavailable(k);
+            var f = new MenuFlyout();
+            f.Items.Add(MenuKit.Caption(Loc.F("device.strata.layer_n", k + 1)));
+            var mi = MenuKit.Item(Loc.F("device.strata.export_layer_as_wav", k + 1), GlyphKind.Save, () => ExportLayer(k), enabled: why is null);
+            if (why is not null) MenuKit.SetTrailing(mi, why);
+            ToolTip.SetTip(mi, Loc.T("device.strata.export_layer_what"));
+            f.Items.Add(mi);
+            FlyoutBase.SetAttachedFlyout(anchor, f);   // the row keeps its last menu
+            FlyoutBase.ShowAttachedFlyout(anchor);
+        }
+        for (int i = 0; i < MaxLayers; i++)
+        {
+            int iv = i;
+            layerRows[i].ContextRequested += (_, e) => { ShowLayerMenu(iv, layerRows[iv]); e.Handled = true; };
+        }
+        async void ExportLayer(int k)
+        {
+            try { await ExportLayerAsync(k); }
+            catch (Exception ex) { ctx.Status(Loc.F("main.files.export_failed", ex.Message)); }   // a full disk, a locked file
+        }
+        async System.Threading.Tasks.Task ExportLayerAsync(int k)
+        {
+            var top = root is null ? null : TopLevel.GetTopLevel(root);
+            if (top is null) return;
+            float id = scN > S_Id ? scope[S_Id] : 0f;   // follow this Strata if devices move while the dialog is open
+            var now = LayerNow(k);
+            if (now != Nota.Infrastructure.StrataLayerExportResult.Written) { ctx.Status(Outcome(now, k, "")); return; }
+            // The take chosen now, by its fingerprint: the slot may be undone and recorded again while
+            // the dialog is open.
+            var chosen = TakePrint(di, k);
+            var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
+            {
+                Title = Loc.F("device.strata.export_layer_title", k + 1),
+                DefaultExtension = "wav",
+                SuggestedFileName = Loc.F("device.strata.layer_file_name", k + 1),
+                FileTypeChoices = new[] { new FilePickerFileType(Loc.T("device.strata.wav_audio")) { Patterns = new[] { "*.wav" } } },
+            });
+            string? path = file?.TryGetLocalPath();
+            if (path is null) return;
+            int at = di;
+            if (id > 0)
+            {
+                var sc = new float[S_Id + 1];
+                int count = engine.TrackDeviceCount(track);
+                if (InstanceAt(engine, track, at, sc, out _) != id)
+                    for (at = 0; at < count && InstanceAt(engine, track, at, sc, out _) != id; at++) { }
+                if (at >= count) { ctx.Status(Loc.F("device.strata.layer_gone", k + 1)); return; }
+            }
+            if (!TakePrint(at, k).AsSpan().SequenceEqual(chosen))
+            { ctx.Status(Loc.F("device.strata.layer_gone", k + 1)); return; }   // gone, or the slot holds another take now
+            // The layer as it is now, read from the device state (what a saved project keeps).
+            var blob = engine.DeviceGetState(track, at);
+            var r = await System.Threading.Tasks.Task.Run(() => Nota.Infrastructure.StrataLayerExport.WriteLayerWav(blob, k, path));
+            ctx.Status(Outcome(r, k, path));
+        }
+
+        static string Outcome(Nota.Infrastructure.StrataLayerExportResult r, int k, string path) => r switch
+        {
+            Nota.Infrastructure.StrataLayerExportResult.Written => Loc.F("main.files.exported", System.IO.Path.GetFileName(path)),
+            Nota.Infrastructure.StrataLayerExportResult.Recording => Loc.F("device.strata.layer_recording_nothing", k + 1),
+            Nota.Infrastructure.StrataLayerExportResult.NoLoop => Loc.T("device.strata.loop_not_closed_nothing"),
+            Nota.Infrastructure.StrataLayerExportResult.Invalid => Loc.F("main.files.export_failed", Loc.T("device.strata.state_unreadable")),
+            _ => Loc.F("device.strata.layer_gone", k + 1),
+        };
 
         // ---------- live refresh ----------
         void Refresh()

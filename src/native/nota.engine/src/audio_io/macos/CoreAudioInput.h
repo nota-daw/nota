@@ -26,7 +26,7 @@ class CoreAudioInput final : public AudioInput {
 
     // Open the given input device (a CoreAudio AudioDeviceID carried as a plain
     // integer; 0 = system default input) and begin delivering frames to `cb`.
-    bool start(InputCallback cb, uint32_t device = 0) override;
+    bool start(InputCallback cb, uint32_t device = 0, double preferredRate = 0.0) override;
     void stop() override;
     bool isRunning() const override { return running_; }
     double sampleRate() const override { return sampleRate_; }

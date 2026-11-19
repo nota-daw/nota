@@ -20,7 +20,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # otherwise their static libs come out single-arch and the universal link fails.
 if(APPLE)
     if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "" FORCE)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "" FORCE)
     endif()
     if(NOT CMAKE_OSX_ARCHITECTURES)
         set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
@@ -60,11 +60,13 @@ if(APPLE)
     enable_language(OBJCXX)
 endif()
 
-# --- macOS target (min macOS 13, universal arm64 + x86_64) -------------------
-# 13.0 must match Info.plist LSMinimumSystemVersion and the launcher's
-# -mmacosx-version-min in scripts/package-dmg.sh. The .NET 10 runtime floor is
-# macOS 12, JUCE supports far older — so 13 is the app-wide minimum. Never raise
-# this to the build host's OS: the dylib's minos gates dlopen on the user's Mac.
+# --- macOS target (min macOS 12, universal arm64 + x86_64) -------------------
+# 12.0 must match Info.plist LSMinimumSystemVersion (scripts/bundle-mac.sh,
+# scripts/package-dmg.sh). The bundled .NET 10 runtime and the launcher are built
+# for macOS 12, Avalonia / Skia / JUCE for older — so 12 is the app-wide minimum
+# (#684; Microsoft lists only 15+ as supported for .NET 10: 12–14 are ours to
+# test). Never raise this to the build host's OS: the dylib's minos gates dlopen
+# on the user's Mac. Anything newer than 12 goes behind @available.
 # (Arch/target defaults themselves are set above the CPM include.)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -285,7 +287,9 @@ set_target_properties(nota_engine PROPERTIES
 )
 
 if(APPLE)
+    target_compile_definitions(nota_engine PRIVATE SIGNALSMITH_USE_ACCELERATE)
     target_link_libraries(nota_engine PRIVATE
+        "-framework Accelerate"
         "-framework AudioToolbox"
         "-framework CoreAudio"
         "-framework CoreMIDI"
@@ -312,6 +316,16 @@ elseif(UNIX AND NOT APPLE)
     # host needs libasound2-dev; libpulse is optional at runtime.
     target_compile_definitions(nota_engine PRIVATE __LINUX_ALSA__)
     target_link_libraries(nota_engine PRIVATE asound pthread dl m)
+endif()
+
+if(NOT APPLE)
+    add_library(nota_pffft STATIC ${pffft_SOURCE_DIR}/src/pffft.c ${pffft_SOURCE_DIR}/src/pffft_common.c)
+    set_target_properties(nota_pffft PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(nota_pffft PRIVATE ${pffft_SOURCE_DIR}/include/pffft)
+    target_compile_definitions(nota_pffft PUBLIC PFFFT_STATIC_DEFINE)
+    target_include_directories(nota_engine SYSTEM PRIVATE ${pffft_SOURCE_DIR}/include)
+    target_compile_definitions(nota_engine PRIVATE SIGNALSMITH_USE_PFFFT)
+    target_link_libraries(nota_engine PRIVATE nota_pffft)
 endif()
 
 # --- Audio codecs for export (FLAC encode, MP3 encode) ----------------------

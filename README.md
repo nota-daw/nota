@@ -26,6 +26,10 @@
   <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-FF9F1C" alt="Documentation"></a>
 </p>
 
+<p align="center">
+  <a href="https://upstar.dev/r/nota-daw/nota"><picture><source media="(prefers-color-scheme: dark)" srcset="https://upstar.dev/badge/nota-daw/nota/award/audio-dark.svg"><img alt="Upstar: #3 Riser Of The Week in Audio, November 2026" src="https://upstar.dev/badge/nota-daw/nota/award/audio.svg" width="250" height="55"></picture></a>
+</p>
+
 ![Nota playing a song in the Arrangement view, with the selected track's devices open below](assets/screenshots/playback.webp)
 
 <p align="center">▶ <a href="https://www.youtube.com/watch?v=zmvKOCIm4ig"><b>Watch the demo with sound</b></a> (1:45, YouTube)</p>
@@ -109,12 +113,13 @@ Download the file for your system from the
 
 | System | File | Notes |
 |---|---|---|
-| **macOS 13+**, Apple Silicon (M1 and later) | `Nota-<version>-arm64.dmg` | |
-| **macOS 13+**, Intel | `Nota-<version>-x86_64.dmg` | |
+| **macOS 12+**, Apple Silicon (M1 and later) | `Nota-<version>-arm64.dmg` | |
+| **macOS 12+**, Intel | `Nota-<version>-x86_64.dmg` | |
 | **Windows 10/11**, most PCs | `Nota-Setup-<version>-x64.exe` | |
 | **Windows 11** on ARM | `Nota-Setup-<version>-arm64.exe` | |
 | **Linux**, most PCs | `Nota-<version>-x86_64.AppImage` | |
 | **Linux** on ARM | `Nota-<version>-aarch64.AppImage` | |
+| **NixOS** (or Nix on Linux) | `nix run github:nota-daw/nota` | builds once, then cached |
 
 ### First launch
 
@@ -153,7 +158,7 @@ xattr -dr com.apple.quarantine /Applications/Nota.app
 This removes the "downloaded from the internet" mark from Nota only. Then open Nota
 normally.
 
-On **macOS 13–14** there's also a shortcut for step 3: in Finder, **right-click** (or
+On **macOS 12–14** there's also a shortcut for step 3: in Finder, **right-click** (or
 Control-click) Nota in Applications → **Open** → **Open**.
 </details>
 
@@ -201,7 +206,7 @@ JUCE-free.
 git clone https://github.com/nota-daw/nota.git
 cd nota
 scripts/build.sh            # Build on macOS.
-scripts/build-linux.sh      # Build on Linux.
+scripts/build-linux.sh      # Build on Linux (on NixOS: `nix develop` first).
 scripts/build-win.ps1       # Build on Windows.
 dotnet run --project src/managed/Nota.App
 ```

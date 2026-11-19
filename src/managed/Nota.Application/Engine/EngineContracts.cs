@@ -293,7 +293,8 @@ public enum SessionFollowAction { None = 0, Stop, Again, Previous, Next, First, 
 
 /// <summary>Session clip (slot) properties. Matches native NotaSessionClipProps (Session P0).
 /// Color is a track-palette index (-1 = the track's colour); QuantBeats &lt; 0 = global;
-/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass.</summary>
+/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass. FollowBypass 1 holds
+/// the clip's follow actions without changing them (#499).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionClipProps
 {
@@ -309,6 +310,25 @@ public struct NotaSessionClipProps
     public int ChanceB;
     public double FollowBeats;
     public int JumpScene;
+    public int FollowBypass;
+}
+
+/// <summary>How long a fresh take into a Session slot runs (#503): Global follows the session
+/// record length, Open records until stopped, Fixed records bars + beats of the meter.</summary>
+public enum SlotTakeMode { Global = 0, Open = 1, Fixed = 2 }
+
+/// <summary>A Session slot's next-take length (#503). Matches native NotaSlotTakeLength.
+/// Bars 0..64 and Beats 0..beats-per-bar-1 apply to Fixed only (1 beat .. 64 bars).</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSlotTakeLength
+{
+    public int Mode;
+    public int Bars;
+    public int Beats;
+
+    public NotaSlotTakeLength(SlotTakeMode mode, int bars = 0, int beats = 0) { Mode = (int)mode; Bars = bars; Beats = beats; }
+    public readonly SlotTakeMode TakeMode => (SlotTakeMode)Mode;
+    public const int MaxBars = 64;
 }
 
 /// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a
@@ -340,7 +360,8 @@ public struct NotaMeter
 /// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.
 /// <see cref="Send"/> (specs/072) is a track's send level into the return bus held in the
 /// lane's device index (0..3), values 0..1.</summary>
-public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5 }
+/// <summary>Tempo (specs/099) is valid only on the master track; its values are BPM (20–300).</summary>
+public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5, Tempo = 6 }
 
 /// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
 /// track's instrument. Matches nota_track_transfer_device's family.</summary>

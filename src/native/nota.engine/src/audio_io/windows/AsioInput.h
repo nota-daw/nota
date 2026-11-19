@@ -16,7 +16,7 @@ class AsioInput final : public AudioInput {
   public:
     ~AsioInput() override;
 
-    bool start(InputCallback cb, uint32_t device = 0) override;
+    bool start(InputCallback cb, uint32_t device = 0, double preferredRate = 0.0) override;
     void stop() override;
     bool isRunning() const override;
     double sampleRate() const override;

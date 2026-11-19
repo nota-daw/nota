@@ -213,6 +213,10 @@ class Device {
     virtual int32_t sidechainSourceTrackId() const { return -1; }
     virtual void setSidechainSourceTrackId(int32_t /*trackId*/) {}
     virtual void setSidechain(const float* /*interleaved*/, int32_t /*frames*/) {}
+    // Whether the key handed with setSidechain is the source's previous block rather than this
+    // one (#676): a key cycle, or a track keyed by a group or return. Audio thread, just after
+    // setSidechain. Only a device that lines the key up with its own audio (Lens) cares.
+    virtual void setSidechainLate(bool /*late*/) {}
 
     // Preview key (the browser's preset audition): the audition rig has no other tracks, so it
     // hands every device the phrase it is about to process, right before process(). A device

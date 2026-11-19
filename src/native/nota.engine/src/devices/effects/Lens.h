@@ -194,6 +194,7 @@ class Lens : public Device {
         scBuf_ = interleaved;
         scFrames_ = frames;
     }
+    void setSidechainLate(bool late) override { scLate_ = late; }
     bool acceptsSidechain() const override { return true; }
     static int fftSizeOf(float v) {
         static const int n[4] = {512, 2048, 4096, 16384};
@@ -327,8 +328,10 @@ class Lens : public Device {
     const uint32_t instance_ = nextInstance_.fetch_add(1, std::memory_order_relaxed) & 0xFFFFFF; // exact in a float
     const float* scBuf_ = nullptr;
     int32_t scFrames_ = 0;
-    // The engine hands a sidechain key one block late, so with a key routed the capture runs a
-    // block behind: the held block and its transport, captured with the next block's key.
+    // The engine hands the key in the same block, or — a key cycle, a key from a group or a
+    // return (#676) — one block late (scLate_). Then the capture runs a block behind: the held
+    // block and its transport, captured with the next block's key.
+    bool scLate_ = false;
     std::vector<float> pend_;
     int32_t pendN_ = 0;
     double pendBeat_ = 0.0, pendSpb_ = 0.0;

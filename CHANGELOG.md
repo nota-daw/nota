@@ -23,6 +23,60 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Session: a take length per empty slot** (#503, specs/106). An empty slot's inspector has a
+  **Take length**: **Global** (follow **Fixed** in the toolbar, as before — every slot starts
+  here), **Open** (record until stopped, whatever Fixed says), or a length of its own from
+  1 beat to 64 bars (1, 2, 3, 4, 8, 16 bars, or any bars + beats); the slot's right-click menu
+  has the same picks under **Take length**. The next take recorded into that slot starts on
+  the launch boundary and stops after that length — so slot A can be ready for 3 bars and
+  slot B for 8 without touching Fixed, the tempo or any clip. Slots recording together each
+  stop on their own length; stopped by hand before it, such a take is cut to whole bars of
+  what it recorded. The grid shows the length on the empty slot. The value belongs to the
+  slot: a cancelled count-in or a retried take leaves it, it
+  stays (hidden) under the clip a take leaves and shows again when the slot is emptied or the
+  take undone, changing it is one undo step, and it is saved with the project. MCP:
+  `set_session_slot_take_length`, and `get_session` lists prepared slots.
+- **Session: cancel a queued launch before it starts** (#480, specs/104). Queued the wrong clip
+  or scene for the next bar? **⌥-click** (Alt-click) its blinking launch button, or right-click
+  it and choose **Cancel launch**, before the launch point. The clip or scene never starts, and
+  everything playing carries on at the same place in its loop — the transport keeps running.
+  Cancelling a scene takes back all of it: its clips don't start, tracks it would have stopped
+  keep playing, its tempo / time-signature change doesn't apply and its follow action doesn't
+  fire; a scene follow that was running before it carries on. ⌥-click a group's slot to cancel
+  its tracks' queued launches in that scene. In Nota Remote, press and hold a queued clip, group
+  slot or scene to cancel it. Clicking a queued clip or scene again still leaves it queued, Stop
+  still stops the track at the launch point, and Stop All now also drops a queued scene's tempo
+  change. AI assistants get `cancel_slot_launch` and `cancel_scene_launch`.
+- **Session: bypass one clip's follow actions** (#499, specs/103). The switch in the clip
+  inspector's **Follow action** head — or **Bypass follow actions** in the clip's right-click
+  menu — holds that clip: it keeps looping and can still be launched by hand, while every other
+  clip's follow actions and the global **Follow** switch carry on. Its A/B actions, chances,
+  Jump target and time stay as they were (and stay editable, greyed, under **Bypassed**); the
+  slot shows a bypass ring next to its length. Switch it back on and the action fires at the
+  next multiple of its time since the clip launched — the point where it would have fired
+  anyway — never at once as a catch-up. Saved with the project; undoable; copies of the clip
+  keep it; the MCP `get_session` / `set_session_clip` tools read and set it.
+- **Nota Strata: export one layer on its own** (#482, specs/102). Right-click a layer in
+  Strata's layer list and choose **Export layer N as WAV…** to get just that pass — say, the
+  vocal overdub without the cello under it — for editing elsewhere. The file is the layer as
+  it was recorded: the input after Input gain, starting at the loop's top and exactly one loop
+  long, so it lines up with the loop. Speed, Reverse, Feedback, the layer's level and its mute
+  aren't applied, and the export leaves the loop untouched — no muting or soloing needed. It
+  works the same after the project is saved and reopened. A layer that is still recording, or
+  a loop whose first pass hasn't closed, shows the entry unavailable and says why instead of
+  writing the mixed loop. The Export button still writes the whole loop as you hear it.
+- **Nota Remote: the Session grid keeps its controls in view, shows groups and turns** (#662,
+  specs/102).
+  - **Pinned controls**: the scene launch buttons, the track names, every track's Stop and
+    Stop All stay at the edges of the Scenes screen while the clips scroll under them, so a
+    scene launches or a track stops with one tap wherever the grid is scrolled.
+  - **Groups**: group tracks now appear in the grid, as on the desktop. Tap a group's name to
+    fold or unfold its tracks (the same choice as on the Mixer screen). A group's slot shows
+    how many of its tracks have a clip in that scene ("2 of 3"), with a bar per track. Tap the
+    slot to launch all those clips together, or the group's Stop to stop all its tracks.
+  - **Orientation**: ⋯ → **Session grid** chooses **Scenes down** (a scene per row, as in
+    Nota, the default) or **Scenes across** (a scene per column, a track per row with its
+    Stop beside its name). Each phone keeps its own choice.
 - **A Semitones knob on every Operator** (#589). Each of the four operators gains a SEMI
   knob between CRS and FINE: a whole-semitone offset from that operator's coarse ratio, ±12
   st, 0 at centre. CRS stays the ratio and FINE the cents, so a ×1 operator at +7 sounds the
@@ -30,6 +84,243 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   without transposing the clip. Each row's WAVE is now four drawn waveforms in a 2 × 2 block
   rather than four words, so the table keeps its LEVEL slider and the card its 700 × 260 size.
   Saved projects and factory presets read 0 st and are unchanged.
+
+### Fixed
+- **Stopping a Session take before it starts leaves the slot empty** (#503). Stopping a fresh
+  MIDI take while it still waited for its launch boundary used to leave an empty clip in the
+  slot (as long as **Fixed**), which then played. Now nothing was recorded, so nothing stays:
+  the slot is empty, no undo step is left, and the clip the track was playing plays on.
+
+## [0.60.4] — 2026-11-19
+
+### Added
+- **Nota on NixOS** (#596, from #621 by @Rudi-Regentonne): `nix run github:nota-daw/nota`
+  builds a Nix package of Nota from the flake and starts it (x86_64 and aarch64 Linux), with
+  every dependency pinned so the build needs no network. In a checkout, `nix develop` or
+  `devenv shell` opens a shell with the build tools, and `nix run .#dev` builds and runs the
+  working tree. `scripts/update-nix-deps.sh` refreshes the pins when dependencies change.
+
+### Changed
+- **macOS 12 (Monterey) is enough** (#684): Nota used to need macOS 13. The engine and the
+  app bundle now ask for macOS 12, which the rest of the app already ran on.
+
+### Fixed
+- **Sidechain pumping stays on the kick in the export** (#676): a device keyed by another
+  track — a Compressor ducking under the kick, a gate, Dynamic EQ, the vocoder, Nota Flux's
+  React — now hears its key track in the same moment, live and in the export. It used to hear
+  the key one audio block late: a few milliseconds while you worked, but a whole export chunk
+  (about 170 ms) in the exported file, so the pumping landed well after the kick. Live, keyed
+  devices now react without the buffer's delay too. A track keyed by a group or a return, and
+  tracks that key each other, still hear their key one block late.
+
+## [0.60.3] — 2026-11-18
+
+### Fixed
+- **Synced LFOs in Nota Aurora and Nota Volt stay on the beat in the export** (#676): an LFO
+  synced to the tempo now follows the song position while the transport plays, as the effects'
+  LFOs do. It used to carry on from whatever played before, so a pulse, gate or wobble that sat
+  on the beat while you worked could land somewhere else in the beat in the exported file, or
+  after playing from another bar. Factory presets this touches: Aurora Shimmer Arp, Wobble Wave,
+  Chime Sequence, Glacier Pad; Volt Wobble Bass, Growl Bass, Sample & Hold.
+
+## [0.60.2] — 2026-11-17
+
+### Added
+- **Device cards in Modular** (#656, #605, specs/101): a Modular node for a MIDI effect, the
+  instrument, an audio effect or a plug-in now shows the device's real card — the same one
+  Detail draws, playable right there — under the node's header and ports. A size chip in
+  the header switches it between **XS** (the compact parameter list Modular had before),
+  **S** and **L**; a device whose card comes in S starts at S, any other at L. The size is
+  the node's own (Detail's card size doesn't change) and is saved with the project's
+  Modular layout. Nodes you placed stay put when a card grows; the rest of the chain
+  moves aside. A CV cable dropped right on a knob (or on an XS parameter row) links that
+  parameter at once, with the knob outlined while you aim.
+- **Nota Remote: slide a held pad to change Repeat's rate and pitch** (#558, specs/100). With
+  Repeat on, a finger holding a pad now plays rolls and fills the way a hardware pad controller
+  does.
+  - **Rate**: slide up for a faster rate and down for a slower one, one step every half a pad's
+    height: 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, in the project's tempo. The next hit
+    follows the new rate from the last one, with no gap and no double hit. The rate chip picks
+    the rate a press starts at (1/16 at first).
+  - **Pitch**: on a track whose instrument takes per-note expression (MPE), slide sideways to
+    bend the repeated note, a pad's width per semitone. Only that pad bends, and the next press
+    starts in tune.
+  - The pad shows its rate and bend under the finger, and a hint under the pads says what a
+    slide does. Each finger keeps its own rate and pitch. Velocity still comes from where the
+    finger lands, or is full with Full velocity. Without Repeat, Pads work as before.
+- **Automate the Nota Rhythm bank** (#609, specs/100): the pattern bank (A–D) is now a parameter,
+  **Perform › Bank** in the automation menu, so a lane in the arrangement switches a groove to its
+  fill and back — and MIDI learn and rack macros can drive it too. The A–D buttons set the same
+  parameter: they follow a playing lane, a click is one undo step, and with automation write armed
+  it records. **Bank Switch** (the bank buttons' right-click menu, or Perform › Bank Switch) chooses
+  when a new bank takes over: at the next step (as before) or at the pattern start, where a chosen
+  bank waits, tinted, until the next bar. The lane shows the four banks as named levels and its
+  points snap to them (so do the levels of Nota Twin's stepped params, such as the sequencer
+  Pattern), drawn as the steps it plays. A bank lane is read at each step, so a switch drawn on a
+  bar line plays on the downbeat — the same in playback and export. Projects saved before open on
+  the bank they were saved with.
+- **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
+  OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
+  always shown, even when a folder doesn't exist on disk. They are removable, and
+  **Restore defaults** re-adds the missing ones without touching folders you added
+  yourself. Removed defaults stay removed across restarts. Existing installs gain
+  the missing defaults once, with no duplicates.
+  The defaults are read live from each format's own standard locations, so adding a
+  future format (CLAP, LV2) needs no UI or settings rework.
+- **An Assistant that answers from the manual** (#606, specs/098). A chat panel on the right of
+  the main window, the full height of the work area — the toolbar's speech-bubble key, View →
+  Assistant or ⌘⇧H (Ctrl+Shift+H) open and close it. Ask in your own words, in English or Russian:
+  the reply quotes the two or three manual sections that answer it, in the language you asked in,
+  with a link to each page. It works offline and needs no AI model: the manual ships inside Nota.
+  Replies read like the manual — headings, lists, tables, code, key caps and the note / tip /
+  caution boxes, in every theme and the classic look — and can be copied. Under a how-to,
+  **Show me** walks you through the steps: it opens the view or panel a control lives in and
+  outlines the control, with Back / Next / Done. Install **Manual search** in Settings → Downloads →
+  AI Models (multilingual-e5-small, about 135 MB) and questions phrased differently from the
+  manual find their answer too. The panel remembers its width and whether it was open.
+- **Tempo automation on the master track** (#93, #535, specs/099): tempo changes are
+  automation now. In automation mode, the master row's target pill picks **Tempo** next to
+  **Volume**, and tempo is drawn like any other lane: click to add a point, drag it, bend a
+  segment for a smooth accelerando or ritardando, put two points on one beat for an instant
+  change; marquee, copy, paste and Delete work as on every lane. The lane reads in BPM, its
+  range set by the two labels at its right edge, and tempo stays within 20–300 BPM. The
+  grid, playback, metronome, warped audio, freeze, bounce and export follow it; unwarped
+  audio keeps its place in time. While the tempo is automated the transport's BPM field
+  shows the tempo under the playhead and can't be typed into. There is no separate tempo
+  row above the tracks, so the arrangement keeps its full height. Projects saved with the
+  earlier tempo track open with the same timing, their tempo moved onto the master lane.
+- **Master pan and master device automation** (#93, specs/099): the Mixer's master strip
+  has a pan knob — after the master devices, before the master fader, in the project pan law
+  with the centre at 0 dB — and the Master row's lane picks **Pan** or any parameter of a
+  device on the master chain, from the same target menu as a track's. Touching a master
+  device's knob in automation mode shows its lane; removing the device removes its lanes, and
+  undo brings both back. MCP gains `set_master_pan` and `add_plugin_param_automation`, and the
+  automation tools work on the master's pan and device lanes.
+
+### Changed
+- **Changing MIDI In ends the notes it was playing** (#504, specs/093). When an instrument
+  track takes its MIDI from another track and you switch its **MIDI In** to None or to another
+  track, or remove that track, while a key is held there, the note it was playing used to keep
+  sounding: its note-off went to the old route. Now the notes the old route started end at the
+  switch, and the new route plays from then on.
+  - Only those notes end: the track's own notes, and the sound of the track it took MIDI from,
+    carry on.
+  - Switched away and back before the next audio block, nothing has changed, so the note ends
+    with its own key.
+  - A MIDI In track that was removed shows as **Removed track** (**From a removed track** in the
+    track header, mixer and Session mixer selectors), not as None or All inputs. Undo brings the
+    track and the route back.
+- **Picking a parameter for a CV cable is a searchable panel** (#656, specs/101): a cable
+  dropped on a Modular node or on another track's header, and the **Modulate from a
+  parameter… / Modulate from another track…** items, open a compact panel (at most
+  320 × 420) instead of a menu that could grow past the screen. The search field has focus
+  at once — type to filter, ↑ ↓ to move, Enter to pick, Esc to close — and the list only
+  builds the rows it shows, so a plug-in with thousands of parameters opens instantly.
+  Another track's parameters are grouped by device, and the search covers them all.
+
+### Fixed
+- **Nota Twin's Pattern automation lands on the bar** (#609, specs/100): a Sequencer Pattern lane
+  that changes on the bar line where the playing pattern ends now starts the new pattern on that
+  bar, instead of one whole pattern later.
+- **Nota Rhythm no longer double-fires steps around MIDI notes**: a note on a Rhythm track that fell
+  mid-block restarted the sequencer's clock for the rest of the block, so a step could play twice.
+- **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
+  clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
+  acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid
+  give up the keyboard.
+- **Deleting a clip closes its editor** (#647): deleting (or cutting) the MIDI clip open in the
+  piano roll closes the roll instead of leaving the clip's notes on screen, where an edit
+  crashed Nota. An editor on a later clip of the same track follows it to its new place, and
+  undo and redo of the delete take the editors along too.
+- **Resizing a clip while a MIDI tool previews** (#648): changing the length of a clip whose
+  Euclid, Melody step or other tool preview is showing no longer crashes Nota on the next
+  tool change. The preview is dropped and the clip comes back as it was; the next tool change
+  previews over the new length.
+- **Notes that kept sounding** (#649): a clip deleted while one of its notes plays, a note
+  deleted, moved or shortened under the playhead, or an undo that takes one away now stops that
+  note instead of holding it until Stop. Keys held on Nota Volt while a preset (or the Mono
+  switch) turns it mono stop when they come up, and a note auditioned in the piano roll stops
+  when another clip's editor replaces it.
+- **Nota Monolith: repeated notes of one pitch** (#645): back-to-back notes of the same pitch
+  each sound and retrigger, with Legato on or off — only the first one was heard. Legato still
+  glides between overlapping notes while a key is held.
+- **Drum Rack: unmuting a pad mid-playback** (#650): a muted pad (or one silenced by another
+  pad's solo) keeps time, so unmuting it no longer fires a stray hit at full level; it is heard
+  from its next note. The same holds for Instrument Rack chains.
+- **Drum Rack: hits lost in a choke group** (#644): with the kit's Humanize on, hits on the same
+  step now move together, and a pad struck at the very same moment as another pad of its choke
+  group is no longer cut by it — an open hat programmed with a closed hat on every 1/8 sounded
+  on some steps only, different ones every pass.
+- **Drum Rack: sidechain on a chain's Compressor** (#643): a Compressor (or any keyed effect)
+  inside a Drum Rack or Instrument Rack chain now takes a sidechain source from another track or
+  one of its parts, with its gain, mix and Pre / Post tap, like a device on a track. The picker
+  used to fall back to Internal.
+- **Input monitoring clicks** (#563): monitoring a microphone or audio interface
+  no longer clicks several times a second or plays at the wrong pitch when the
+  input device runs at another sample rate than Nota (a MacBook microphone at
+  48 kHz under a 44.1 kHz project). Nota now runs the input device at its own
+  rate where the device allows it, and converts the rate where it doesn't
+  (Bluetooth, fixed-rate microphones), following the two clocks so they can't
+  drift apart. Recording was not affected.
+- **Multi-clip automation across tempo changes** (#535): duplicate, paste and
+  block moves retain every copied point regardless of selection order, clearing
+  all landing spans before inserting their automation.
+- **Tempo-map copies and comp edits** (#535): range duplication clears the copied
+  audio's actual landing span, and block paste clears automation only under its
+  destination span. Section moves, duplication and deletion keep partial takes
+  aligned with their comp clips, so subsequent comp edits select the same source audio.
+- **Tempo-map moves and scrolling** (#535): moving natural-rate audio carries the
+  automation from its whole original span and clears only its landing span. The
+  horizontal scrollbar reaches the last clip across large tempo changes.
+- **Tempo-map rendering** (#535): reversed warped clips keep their musical positions,
+  Consolidate captures the full mapped range, and natural-rate clip releases fade at
+  the mapped ending.
+- **Tempo-map editing and capture** (#535): splits, trims, paste and duplicate use the
+  mapped source boundaries. Loop recording, freeze and range bounce retain audio across
+  tempo changes; saved freezes retain their timing. Bar snapping respects the
+  time-signature denominator, and warped waveforms align with the audible content at
+  every zoom level.
+- Starting or seeking between beats no longer produces an immediate extra metronome click.
+- **Removing a track with its clip open in the piano roll no longer crashes Nota** (#530). The
+  Clip editor closes with the track, and pressing Delete in a roll left behind is harmless.
+- **"To transients" no longer runs the clip editor's playhead ahead of the waveform** (#537).
+  The editor read only the first 128 warp markers, and "To transients" can place up to 258, so
+  it measured the warp by the wrong one. A save now keeps every marker too (it also stopped at
+  128). Undoing a warp redraws the editor, and an editor whose clip was undone away closes.
+- **Duplicate on a section makes room for the copy** (#529): the copy goes right after the
+  section and the sections and music after it move later, as with Duplicate with content.
+- **Resizing one clip of a selection resizes them all** (#604): the selection stays, and each
+  selected clip's edge moves by the same amount.
+- **Notes stay put while a MIDI clip's left edge is dragged** (#565); before, they rode along
+  with the edge and jumped back on release.
+- **Clicking a strip in the Mixer selects its track** (#538), so the Detail panel follows.
+- **Up and Down no longer walk into the File menu** (#548), and a click on a clip takes the
+  keyboard back from the menu bar, so the arrow keys nudge clips again.
+- **The piano roll no longer scrolls away as a selection starts** (#445): pressing on the note
+  grid scrolled it to bring the grid into view, and a drag that merely started near the top or
+  bottom row pulled the view along. Edge scrolling now needs a move toward that edge.
+- **A split or an overwrite keeps the clip as it was** (#467): a deactivated MIDI clip's pieces
+  stay deactivated, MIDI pieces keep their part of the velocity and volume envelopes, and the
+  right-hand piece of an audio clip plays its envelopes from where it begins.
+- **Output, Gain, Makeup and Mix glide on more devices** (#559): Valve (Output, Mix), Vintage
+  (Output), Crush (Output), Ceiling (Gain), Compressor (Makeup, Mix) and Forge (Output and the
+  stage trims) now ramp across each audio block instead of stepping once per block.
+- **Aurora's wavetable stack fits its window on a scaled display** (#573); at 125 % it was drawn
+  magnified and cut off.
+- **The computer keyboard plays while a plug-in's window has the focus** (#221), with the whole
+  note map, the octave and velocity keys and your own bindings, as over the main window, on
+  every platform. Other keys, chords and typing in the plug-in's own fields still go to the
+  plug-in.
+- **A layout mix-up after moving a panel between windows no longer closes Nota** (#164): the
+  layout catches up on the next pass, and the log notes it.
+- **Indexing a very large sample folder no longer slows the whole system down** (#358): linked
+  folders aren't walked into (a link back up the tree made the walk endless), a big index is
+  saved less often, and on Linux the indexer reads the disk only when nothing else wants it.
+- **A plug-in that won't load says why in the log** (#544).
+- **Small buffers under a heavy session make fewer late blocks.** When one thread couldn't keep
+  up, the render threads that join it could pile on until they all ran and their wake-ups made
+  the dropouts worse. They now join as many as the work needs and add more only while blocks
+  keep running over.
 
 ## [0.60.1] — 2026-11-13
 

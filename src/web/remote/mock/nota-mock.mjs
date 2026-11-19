@@ -80,13 +80,14 @@ const trackDefs = [
   { id: 4, name: 'Vocals', slot: 8, kind: 'audio', dev: 'Audio', grp: 0 },
   { id: 5, name: 'Pads', slot: 5, kind: 'group', dev: 'Group', grp: 0 },
   { id: 6, name: 'Strings', slot: 6, kind: 'inst', dev: 'Nota Chamber', grp: 5 },
+  { id: 8, name: 'Choir', slot: 7, kind: 'inst', dev: 'Nota Aurora', grp: 5 },
   { id: 7, name: 'Reverb', slot: 9, kind: 'return', dev: 'Return', grp: 0 },
 ];
 const pads = [[36, 'Kick'], [37, 'Rim'], [38, 'Snare'], [39, 'Clap'], [42, 'Closed hat'], [46, 'Open hat'], [45, 'Low tom'], [49, 'Crash']];
 
 const state = {
   tp: { play: true, rec: false, loop: true, met: false, pos: 22.5, bpm: 122, ls: 16, le: 32, can: true },
-  mix: new Map(trackDefs.map((t, i) => [t.id, { vol: [0.9, 0.75, 0.6, 1.1, 0.8, 0.7, 0.5][i], pan: [0, -0.2, 0.3, 0, 0, -0.4, 0][i], mute: t.id === 3, solo: t.id === 2, arm: t.id === 4 }])),
+  mix: new Map(trackDefs.map((t, i) => [t.id, { vol: [0.9, 0.75, 0.6, 1.1, 0.8, 0.7, 0.65, 0.5][i], pan: [0, -0.2, 0.3, 0, 0, -0.4, 0.4, 0][i], mute: t.id === 3, solo: t.id === 2, arm: t.id === 4 }])),
   master: 1,
   you: 1,
   follow: false,
@@ -97,7 +98,7 @@ function proj() {
   return {
     t: 'proj', host: 'Studio Mac', dark: themes[look.on].dark,
     tracks: trackDefs.map((t) => ({ id: t.id, name: t.name, color: colour(t.slot), kind: t.kind, dev: t.dev, grp: t.grp, ...(t.mpe ? { mpe: true } : {}), ...(t.kind === 'drum' ? { pads } : {}) })),
-    key: { root: 9, minor: true, name: 'A minor' }, scenes: 4,
+    key: { root: 9, minor: true, name: 'A minor' }, scenes: SCENES,
     sections: [['Intro', 0], ['Verse', 16], ['Chorus', 32], ['Bridge', 48], ['Outro', 64]],
     access: 'control', you: state.you, follow: state.follow,
   };
@@ -127,16 +128,23 @@ const mac = () => ({
     { n: 'LFO rate', v: 0.55, txt: '2.20 Hz', map: null }, { map: null },
   ],
 });
+// Twelve scenes, so the grid scrolls on a phone either way round (specs/102); the first four
+// are the hand-made ones, the rest repeat them.
+const SCENES = 12;
+const more = (four) => Array.from({ length: SCENES }, (_, i) => (i < 4 ? four[i] : [four[i % 4][0] === 0 ? 0 : 1, four[i % 4][1], 0]));
 function ses() {
   const prog = (((Date.now() - state.started) / 1000) % 8) / 8;
   return {
-    t: 'ses', n: 4,
+    t: 'ses', n: SCENES,
+    // A group (Pads) sends its tracks' ids and no slots of its own (contracts/session-message.md).
     tr: [
-      { id: 1, c: [[3, 16, prog], [1, 16, 0], [1, 8, 0], [0, 0, 0]] },
-      { id: 2, c: [[1, 16, 0], [3, 16, prog], [2, 16, 0], [0, 0, 0]] },
-      { id: 3, c: [[1, 32, 0], [0, 0, 0], [1, 16, 0], [1, 4, 0]] },
-      { id: 4, c: [[0, 0, 0], [4, 16, 0], [0, 0, 0], [0, 0, 0]] },
-      { id: 6, c: [[1, 16, 0], [1, 16, 0], [0, 0, 0], [3, 16, prog]] },
+      { id: 1, c: more([[3, 16, prog], [1, 16, 0], [1, 8, 0], [0, 0, 0]]) },
+      { id: 2, c: more([[1, 16, 0], [3, 16, prog], [2, 16, 0], [0, 0, 0]]) },
+      { id: 3, c: more([[1, 32, 0], [0, 0, 0], [1, 16, 0], [1, 4, 0]]) },
+      { id: 4, c: more([[0, 0, 0], [4, 16, 0], [0, 0, 0], [0, 0, 0]]) },
+      { id: 5, k: [6, 8], c: [] },
+      { id: 6, c: more([[1, 16, 0], [1, 16, 0], [0, 0, 0], [3, 16, prog]]) },
+      { id: 8, c: more([[0, 0, 0], [1, 8, 0], [0, 0, 0], [1, 16, 0]]) },
     ],
   };
 }
@@ -190,7 +198,7 @@ function notesOf(seed, count, lo, span, len = 4) {
   return out;
 }
 const peaksOf = (seed, n = 48) => { const r = rnd(seed); return Array.from({ length: n }, (_, i) => Math.round(99 * Math.min(1, 0.25 + 0.75 * Math.abs(Math.sin(i / 3 + seed)) * r()))); };
-const clipNames = { 1: ['Beat A', 'Beat B', 'Fill', ''], 2: ['Bass line', 'Bass line 2', 'Walk', ''], 3: ['Chords', '', 'Chords alt', 'Stab'], 4: ['', 'Vox take', '', ''], 6: ['Strings', 'Strings hi', '', 'Swell'] };
+const clipNames = { 1: ['Beat A', 'Beat B', 'Fill', ''], 2: ['Bass line', 'Bass line 2', 'Walk', ''], 3: ['Chords', '', 'Chords alt', 'Stab'], 4: ['', 'Vox take', '', ''], 6: ['Strings', 'Strings hi', '', 'Swell'], 8: ['', 'Ooh', '', 'Aah'] };
 function clips(all) {
   const s = [];
   for (const tr of ses().tr) {
@@ -246,6 +254,7 @@ function onMessage(c, m) {
     case 'mvol': state.master = m.v; break;
     case 'on': c.send({ t: 'lit', n: [m.p] }); break;
     case 'off': c.send({ t: 'lit', n: [] }); break;
+    case 'launch': case 'stopSlot': case 'scene': case 'stopAll': console.log('session', JSON.stringify(m)); break;
   }
 }
 

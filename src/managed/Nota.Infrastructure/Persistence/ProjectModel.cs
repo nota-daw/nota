@@ -24,6 +24,10 @@ public sealed class ProjectDocument
     public int FormatVersion { get; set; } = ProjectService.CurrentFormatVersion;
     public string App { get; set; } = "Nota";
     public TransportDto Transport { get; set; } = new();
+    /// <summary>Set by the v33 → v34 migration (specs/099) when a #568 tempo point lay outside
+    /// 20–300 BPM and was limited: the app tells the user once. Never written back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool TempoClamped { get; set; }
     public int SceneCount { get; set; } = 8;
     /// <summary>Session view settings + scene rows (names, colours, tempo, follow). Null in
     /// files from before Session P0 = defaults.</summary>
@@ -71,6 +75,11 @@ public sealed class MasterDto
     public List<DeviceDto> Devices { get; set; } = new();
     // Sidechain keys of devices inside the master's racks (v25, specs/044), as on a track.
     public List<NestedSidechainDto>? NestedSidechains { get; set; }
+    /// <summary>Automation lanes on the master track (v34, specs/099): Tempo, Pan and master
+    /// device parameters, as on a track. Master volume stays in <c>masterVolumeAutomation</c>.</summary>
+    public List<AutomationLaneDto>? Automation { get; set; }
+    /// <summary>Master pan (specs/099), −1..1; null = centre (and older files).</summary>
+    public float? Pan { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -166,6 +175,9 @@ public sealed class TrackDto
     public List<SessionSlotDto> SessionSlots { get; set; } = new();
     /// <summary>Empty slots whose stop button was removed (scene launch leaves the track playing).</summary>
     public List<int>? SessionNoStop { get; set; }
+    /// <summary>Slots with a next-take length of their own (#503); absent = every slot Global.
+    /// Written for filled slots too: the value stays with the slot under a clip.</summary>
+    public List<SlotTakeLengthDto>? SessionTakeLengths { get; set; }
     public List<AutomationLaneDto> Automation { get; set; } = new();   // M9-A4 (format v2)
     public List<ModulatorDto> Modulators { get; set; } = new();        // CV modulation sources (Phase 3)
     public List<CvLinkDto> CvLinks { get; set; } = new();              // CV modulation edges (Phase 3)
@@ -586,6 +598,15 @@ public sealed class SceneDto
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
+/// <summary>A Session slot's own next-take length (#503): Mode 1 = Open, 2 = Fixed (Bars + Beats).</summary>
+public sealed class SlotTakeLengthDto
+{
+    public int Scene { get; set; }
+    public int Mode { get; set; }
+    public int Bars { get; set; }
+    public int Beats { get; set; }
+}
+
 public sealed class SessionSlotDto
 {
     public int Scene { get; set; }
@@ -608,6 +629,7 @@ public sealed class SessionSlotDto
     public int ChanceB { get; set; }
     public double FollowBeats { get; set; }
     public int JumpScene { get; set; }
+    public bool FollowBypass { get; set; }   // v35 (specs/103): follow actions held, settings kept
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

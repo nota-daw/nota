@@ -194,8 +194,11 @@ class VoltSynth final : public Instrument {
     // both cutoffs, slide → both cutoffs (±2 octaves).
     bool supportsMpe() const override { return true; }
     void noteExpression(int32_t pitch, int32_t dim, float value) override;
-    void setTransport(double /*beatStart*/, double samplesPerBeat, bool /*playing*/) override {
+    void setTransport(double beatStart, double samplesPerBeat, bool playing) override {
         if (samplesPerBeat > 0.0) samplesPerBeat_ = samplesPerBeat;
+        beat_ = std::isfinite(beatStart) ? beatStart : 0.0;
+        playing_ = playing;
+        sinceBlock_ = 0;
     }
     // Active (sounding) voice count, for the editor's voice meter. Message thread read
     // of an audio-thread-updated snapshot; approximate is fine.
@@ -313,6 +316,8 @@ class VoltSynth final : public Instrument {
     static double lfoValue(int shape, double ph, float shHold);
     // Free-run increment, or tempo-synced division when Sync param > 0.
     double lfoInc(Param rate, Param sync) const;
+    // The synced division's cycle in beats (0 = free rate).
+    double syncBeats(Param sync) const;
     float fadeInc(Param p) const;
 
     // Wave chip (0 saw, 1 square, 2 tri, 3 sine) with Shape blending it toward the next wave
@@ -345,6 +350,13 @@ class VoltSynth final : public Instrument {
     float exprCoef_ = exprSmoothCoef(44100.0);
     GlobalExpr gexpr_;            // pitch wheel / channel pressure (pitch −1)
     double samplesPerBeat_ = 0.0; // from setTransport, for LFO sync
+    // The block's start beat and whether the transport plays (setTransport): a synced LFO
+    // takes its phase from the song position while it plays (#676).
+    double beat_ = 0.0;
+    bool playing_ = false;
+    // Frames rendered since setTransport: the engine renders a block in slices, up to each
+    // note or expression event, with one setTransport for the whole block.
+    int64_t sinceBlock_ = 0;
     double lfoPhase1_ = 0.0, lfoPhase2_ = 0.0, vibPhase_ = 0.0;
     float lfoSh1_ = 0.0f, lfoSh2_ = 0.0f; // sample & hold values
     double lastFreq_ = 0.0;               // portamento reference

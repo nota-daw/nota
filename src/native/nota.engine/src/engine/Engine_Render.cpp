@@ -46,6 +46,47 @@ inline PanGains panGains(float pan, float vol, PanLaw law) {
     return {static_cast<float>(c) * vol, 0.0f, static_cast<float>(b) * vol, static_cast<float>(s - b) * vol};
 }
 
+// The master pan stage (specs/099): the project pan law with centre at unity (0 dB) — the
+// track gains scaled by √2 — and no channel ever boosted above its input, so centre is
+// bit-exact pass-through and a full pan never adds level.
+inline PanGains masterPanGains(float pan, PanLaw law) {
+    if (pan == 0.0f) return {1.0f, 0.0f, 0.0f, 1.0f};
+    PanGains k = panGains(pan, 1.0f, law);
+    constexpr float kRoot2 = 1.41421356f;
+    k = {std::min(1.0f, k.ll * kRoot2), k.lr * kRoot2, k.rl * kRoot2, std::min(1.0f, k.rr * kRoot2)};
+    return k;
+}
+
+}  // namespace (reopened below)
+
+// Master pan over one chunk (specs/099): gains ramp linearly from the last chunk's, so a
+// pan change never steps; centre with nothing to ramp is skipped (bit-exact pass-through).
+// After a seek, a start or a loop wrap (an export starts with one) masterPanSnap first sets
+// the gains for where the playhead landed: there is nothing continuous to ramp from.
+void Engine::masterPanSnap(float pan, PanLaw law) {
+    const PanGains g = masterPanGains(pan, law);
+    masterPanG_[0] = g.ll, masterPanG_[1] = g.lr, masterPanG_[2] = g.rl, masterPanG_[3] = g.rr;
+}
+
+void Engine::masterPanStage(float* out, int32_t n, float pan, PanLaw law) {
+    const PanGains to = masterPanGains(pan, law);
+    float* f = masterPanG_;
+    const bool same = f[0] == to.ll && f[1] == to.lr && f[2] == to.rl && f[3] == to.rr;
+    if (same && to.ll == 1.0f && to.lr == 0.0f && to.rl == 0.0f && to.rr == 1.0f) return;
+    const float inv = n > 0 ? 1.0f / static_cast<float>(n) : 1.0f;
+    for (int32_t i = 0; i < n; ++i) {
+        const float x = same ? 1.0f : static_cast<float>(i + 1) * inv;
+        const float ll = f[0] + (to.ll - f[0]) * x, lr = f[1] + (to.lr - f[1]) * x;
+        const float rl = f[2] + (to.rl - f[2]) * x, rr = f[3] + (to.rr - f[3]) * x;
+        const float inL = out[i * 2], inR = out[i * 2 + 1];
+        out[i * 2] = ll * inL + lr * inR;
+        out[i * 2 + 1] = rl * inL + rr * inR;
+    }
+    f[0] = to.ll, f[1] = to.lr, f[2] = to.rl, f[3] = to.rr;
+}
+
+namespace {
+
 // One track's pan for one segment. Without cross terms or a law crossfade it is the plain
 // two-gain multiply (so Balance renders stay bit-identical); during a crossfade the gains
 // blend from the old law's to the new law's per sample.
@@ -306,7 +347,8 @@ ChainRest chainRest(const Track& t) {
 } // namespace
 
 void Engine::noteExprEvents(
-    const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap) {
+    const Note& note, double onS, double offS, int32_t frames, double spb, ExprEv* out, int& n, int cap,
+    const TempoMap* map, double sr, double sampleStart, double startBeat, double shift) {
     static constexpr int32_t kExprStep = 64; // ~1.3 ms at 48 kHz; the voices smooth between
     if (!note.expr || spb <= 0.0 || offS <= 0.0 || onS >= frames || offS <= onS) return;
     const int32_t first = static_cast<int32_t>(std::max(0.0, onS)); // the note-on's own offset
@@ -316,19 +358,19 @@ void Engine::noteExprEvents(
     for (int32_t d = 0; d < kExprDims; ++d) {
         const auto& c = e.dim[d];
         if (c.empty()) continue;
-        auto valueAt = [&](int32_t off) { return e.valueAt(d, (off - onS) / spb); };
+        auto valueAt = [&](int32_t off) { return e.valueAt(d, map ? map->beatAt((sampleStart + off - shift) / sr) - startBeat : (off - onS) / spb); };
         if (n < cap) out[n++] = ExprEv{first, note.pitch, d, valueAt(first)};
         if (c.size() < 2) continue;
         // While the curve moves (one step past its last point, to land on it).
-        const double moveFrom = onS + c.front().beat * spb - kExprStep;
-        const double moveTo = onS + c.back().beat * spb + kExprStep;
+        const double moveFrom = (map ? map->secondsAt(startBeat + c.front().beat) * sr + shift - sampleStart : onS + c.front().beat * spb) - kExprStep;
+        const double moveTo = (map ? map->secondsAt(startBeat + c.back().beat) * sr + shift - sampleStart : onS + c.back().beat * spb) + kExprStep;
         for (int32_t off = (first / kExprStep + 1) * kExprStep; off < end && n < cap; off += kExprStep)
             if (off >= moveFrom && off <= moveTo) out[n++] = ExprEv{off, note.pitch, d, valueAt(off)};
     }
 }
 
 void Engine::clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart, int32_t frames,
-    double spb, bool chase, ExprEv* out, int& n, int cap) {
+    double spb, bool chase, ExprEv* out, int& n, int cap, const TempoMap* map, double sr, double sampleStart) {
     static constexpr int32_t kStep = 64; // as recorded MPE: the instrument smooths between
     if (clip.controllers.empty() || spb <= 0.0) return;
     const double b1 = blockStart + frames;
@@ -338,7 +380,7 @@ void Engine::clipCtlEvents(const MidiClip& clip, double clipStartS, double clipE
     const int32_t end = std::min(frames, static_cast<int32_t>(std::ceil(to - blockStart)));
     const bool entry =
         chase || (clipStartS >= blockStart - 0.5 && clipStartS < b1 - 0.5); // half-sample slack, as below
-    auto beatAt = [&](double off) { return (blockStart + off - clipStartS) / spb; };
+    auto beatAt = [&](double off) { return map ? map->beatAt((sampleStart + off) / sr) - clip.startBeat : (blockStart + off - clipStartS) / spb; };
     for (const auto& cp : clip.controllers) {
         if (!cp || cp->points.empty()) continue;
         const ControllerCurve& c = *cp;
@@ -351,7 +393,7 @@ void Engine::clipCtlEvents(const MidiClip& clip, double clipStartS, double clipE
         // sample, with a hair of slack, so rounding never lets one fall between two blocks.
         for (const auto& p : c.points) {
             if (n >= cap) break;
-            const double rel = clipStartS + p.beat * spb - blockStart;
+            const double rel = map ? map->secondsAt(clip.startBeat + p.beat) * sr - sampleStart : clipStartS + p.beat * spb - blockStart;
             const int64_t off = static_cast<int64_t>(std::floor(rel + 1e-6));
             if (off < first || off >= end || off >= frames) continue;
             out[n++] = ExprEv{static_cast<int32_t>(off), -1, dim, p.value};
@@ -966,7 +1008,13 @@ void Engine::render(float* out, float* cue, int32_t numFrames) {
     dsp::ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
     deviceBlock_ = true; // a deadline, whatever the gap since the last block
+    phaseNs_ = 0.0;
     processBlock(out, cue, numFrames);
+    // The transport's rate, as mixGraph sizes by (a device-block render in tests has no device).
+    if (phaseNs_ > 0.0 && numFrames > 0 && transport_.sampleRate() > 0.0)
+        adjustPoolSizing((double)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now() - t0).count(),
+            1e9 * numFrames / transport_.sampleRate());
     // DSP load = render time / block budget, smoothed (Phase 11). Live-device
     // path only; renderOffline stays untimed.
     const double sr = sampleRate();
@@ -975,6 +1023,32 @@ void Engine::render(float* out, float* cue, int32_t numFrames) {
         const double load = elapsed / (numFrames / sr);
         const float prev = cpuLoad_.load(std::memory_order_relaxed);
         cpuLoad_.store(static_cast<float>(prev * 0.9 + load * 0.1), std::memory_order_relaxed);
+    }
+}
+
+// After a device callback that rendered leaves: what the callback spent outside them (its
+// serial work), and — while the pool runs — its sizing (see mixGraph).
+// The parallel phase has the buffer less the callback's serial work (serial tracks, groups,
+// returns, the master): that is its time. The sizing grows by a quarter when callbacks keep
+// coming in late with the phase over its time — the work grew while the pool ran — a share,
+// smoothed over ~32 blocks, past kOverrunShare. A callback that made its deadline doesn't count,
+// however its time split: a late wake-up or a preempted thread stretches the phase or the
+// serial part for a block, and more threads only make that likelier. A phase that overran
+// while the serial work alone made the callback late doesn't count either: helpers can't
+// shorten that. The sizing never passes the pool's own over-reading task time (the old
+// sizing), and eases back toward the single-thread cost while phases take under half their time.
+void Engine::adjustPoolSizing(double totalNs, double periodNs) {
+    const double serial = std::max(0.0, totalNs - phaseNs_);
+    serialNs_ += (serial - serialNs_) / 16.0;
+    if (!rtParallel_) return;
+    const double room = std::max(0.25 * periodNs, periodNs - serialNs_);
+    const bool overrun = totalNs > periodNs && phaseNs_ > room && serial < periodNs;
+    overrunShare_ += ((overrun ? 1.0 : 0.0) - overrunShare_) / 32.0;
+    if (overrunShare_ > kOverrunShare) {
+        sizeWorkNs_ = std::min(std::max(sizeWorkNs_, leafWorkNs_) * 5 / 4, std::max(parWorkNs_, leafWorkNs_));
+        overrunShare_ = 0.0;
+    } else if (phaseNs_ < 0.5 * room) {
+        sizeWorkNs_ -= (sizeWorkNs_ - leafWorkNs_) / 64;
     }
 }
 
@@ -1021,7 +1095,41 @@ void Engine::launchCountInSlot() {
         if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire)) sp->requestLaunch(sc, 0.0);
 }
 
-void Engine::drainCommands() {
+void Engine::applyLaunchCancel(Graph* g, const Command& c) {
+    if (!g) return;
+    const uint64_t target = static_cast<uint64_t>(static_cast<uint32_t>(c.i0)) |
+                            (static_cast<uint64_t>(static_cast<uint32_t>(c.i1)) << 32);
+    // A whole-scene cancel spares a scene launch that has started on any track (clips may have their
+    // own quanta), so a scene never ends up half launched; the whole batch is drained before any
+    // track applies its request, so every target sees the same answer. A slot cancel (d1 = 0) is the
+    // performer's choice for that slot and withdraws it either way.
+    if (const int32_t gen = SessionPlayer::genOf(target); gen > 0 && c.d1 != 0.0)
+        for (auto& t : g->tracks)
+            if (t->sessionPlayer && t->sessionPlayer->appliedGen.load(std::memory_order_relaxed) == gen) return;
+    const int32_t trackId = static_cast<int32_t>(c.d0);
+    for (auto& t : g->tracks)
+        if (t->id() == trackId) {
+            if (t->sessionPlayer) t->sessionPlayer->withdraw(target);
+            return;
+        }
+}
+
+bool Engine::isUnderGroup(const Graph& g, const Track& t, int32_t groupId) {
+    if (groupId < 0) return false;
+    for (int32_t a = t.groupId(), hops = 0; a >= 0 && hops < 64; ++hops) {
+        if (a == groupId) return true;
+        int32_t parent = -1;
+        for (auto& o : g.tracks)
+            if (o->id() == a) {
+                parent = o->groupId();
+                break;
+            }
+        a = parent;
+    }
+    return false;
+}
+
+void Engine::drainCommands(Graph* g) {
     Command c;
     while (commands_.pop(c)) {
         switch (c.type) {
@@ -1069,6 +1177,7 @@ void Engine::drainCommands() {
         case CommandType::TrackNotesOff:
             if (notesOffCount_ < 8) notesOffTracks_[notesOffCount_++] = c.i0;
             break;
+        case CommandType::CancelSessionLaunch: applyLaunchCancel(g, c); break;
         case CommandType::Seek:
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
@@ -1175,7 +1284,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     }
     // A retried Session MIDI take begins when its slot has relaunched: until then what is
     // played carries the old epoch and stays out (specs/078).
-    if (rtWaitScene_ >= 0 && slot && slot->pending.load(std::memory_order_relaxed) != rtWaitScene_ &&
+    if (rtWaitScene_ >= 0 && slot && slot->pendingSlot() != rtWaitScene_ &&
         slot->playing.load(std::memory_order_relaxed) == rtWaitScene_) {
         rtTakeEpoch_ = rtPendingEpoch_;
         rtTakeRestart_ = true;
@@ -1462,14 +1571,14 @@ int Engine::gatherInstrumentNotes(
         if (xev)
             for (const MidiClip& clip : t.midiClips)
                 if (clip.active)
-                    clipCtlEndResets(clip, clip.startBeat * spb, (clip.startBeat + clip.lengthBeats) * spb, blockStart,
+                    clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb), renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart,
                         frames, xev, *xn, kMaxBlockExpr);
         for (const MidiClip& clip : t.midiClips) {
             // Deactivated clip (key 0): emit NO new note-ons, but still emit note-offs — so a
             // note already sounding when the clip was switched off releases instead of hanging.
             const bool clipActive = clip.active;
-            const double clipStart = clip.startBeat * spb;
-            const double clipEnd = clipStart + clip.lengthBeats * spb;
+            const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
+            const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
             const bool hasVel = !clip.velocityEnvelope.points.empty();
             // Track MIDI offset (ms → samples at the device rate). Playback-only: the shift
             // is applied to the scheduled times below, never to the stored notes.
@@ -1478,7 +1587,17 @@ int Engine::gatherInstrumentNotes(
             const double msToS = transport_.sampleRate() / 1000.0;
             const double trackShiftS = t.midiOffsetMs() * msToS;
             const ArticulationTable* artTable = t.articulationTable.get();
-            const auto gatherClip = [&]<bool shifted>() {
+            const bool mapped = transport_.hasTempoMap();
+            // Unmapped keeps the original arithmetic (clipStart + beat * spb) with no per-note branch;
+            // mapped asks the transport for the beat position on the block clock.
+            const double seamEnd = mapped ? blockStart + seamEndSamples_ - transport_.playheadSamples() : seamEndSamples_;
+            const TempoMap* tmap = transport_.tempoMap();
+            const double tsr = transport_.sampleRate(), tplay = transport_.playheadSamples();
+            const auto gatherClip = [&]<bool shifted, bool isMapped>() {
+                const auto at = [&](double clipBeat) {
+                    if constexpr (isMapped) return renderSampleAtBeat(clip.startBeat + clipBeat, blockStart, spb);
+                    else return clipStart + clipBeat * spb;
+                };
                 for (const Note& note : clip.notes) {
                     // FR-018: track offset + the note's articulation offset, applied once (specs/085).
                     double shiftS = 0.0;
@@ -1488,10 +1607,10 @@ int Engine::gatherInstrumentNotes(
                     // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
                     // sounds from the clip start for the part that reaches into it.
                     if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
-                    const double nominalOn = clipStart + std::max(0.0, note.startBeat) * spb;
+                    const double nominalOn = at(std::max(0.0, note.startBeat));
                     // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
                     // shortened) end stops at the boundary instead of sounding its full length.
-                    double nominalOff = clipStart + (note.startBeat + note.lengthBeats) * spb;
+                    double nominalOff = at(note.startBeat + note.lengthBeats);
                     if (nominalOff > clipEnd) nominalOff = clipEnd;
                     const double onS = shifted ? nominalOn + shiftS : nominalOn;
                     const double offS = shifted ? nominalOff + shiftS : nominalOff;
@@ -1504,7 +1623,7 @@ int Engine::gatherInstrumentNotes(
                             static_cast<float>((offS - onS) / spb)};
                     // Loop seam: a note still sounding at the loop end releases here, ahead of any
                     // chase re-trigger at the same offset (offs sort first).
-                    if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
+                    if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
                         evs[n++] = {0, false, note.pitch, 0.0f};
                     // Chase: a note already held at the jump point starts sounding right here.
                     if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
@@ -1513,16 +1632,21 @@ int Engine::gatherInstrumentNotes(
                         evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
                     // Recorded MPE: the note's curve while it sounds in this block.
                     if (xev && note.expr && clipActive)
-                        noteExprEvents(note, (shifted ? clipStart + note.startBeat * spb + shiftS : clipStart + note.startBeat * spb) - blockStart,
+                        noteExprEvents(note, at(note.startBeat) + shiftS - blockStart,
                             offS - blockStart, frames, spb,
-                            xev, *xn, kMaxBlockExpr); // curve timed from the true start
+                            xev, *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS); // curve timed from the true start
                 }
             };
-            if (!artTable && trackShiftS == 0.0) gatherClip.template operator()<false>();
-            else gatherClip.template operator()<true>();
+            const bool unshifted = !artTable && trackShiftS == 0.0;
+            if (mapped) {
+                if (unshifted) gatherClip.template operator()<false, true>();
+                else gatherClip.template operator()<true, true>();
+            } else if (unshifted) gatherClip.template operator()<false, false>();
+            else gatherClip.template operator()<true, false>();
             // The clip's controllers (specs/020).
             if (xev && clipActive)
-                clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr);
+                clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr,
+                    transport_.tempoMap(), transport_.sampleRate(), transport_.playheadSamples());
         }
     }
     // Notes a loop record replace removed from this track's take: release them (once), unless
@@ -1594,6 +1718,19 @@ bool Engine::passesMidiInput(const Track& t, const MidiEvent& e) const {
     return t.id() == auditionTrackId_.load(std::memory_order_relaxed) || t.acceptsMidiFrom(e.source, e.channel);
 }
 
+// The note-offs of the notes MIDI In started on a track and no longer ends (#504), appended to
+// evs at the block start; the note-ons of a new route at the same offset sort after them.
+int Engine::releaseRouted(Track::LiveHeld& held, MidiEv* evs, int n) {
+    for (int h = 0; h < 2; ++h) {
+        uint64_t& bits = held.routedBits[h];
+        while (bits && n < 1024) { // a full buffer keeps the rest for the next block
+            evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
+            bits &= bits - 1;
+        }
+    }
+    return n;
+}
+
 // Live expression bypasses the MIDI FX chain (it is keyed by the pitch the player holds) and
 // reaches an instrument the way live notes do: through its own track, or through the track
 // it takes its MIDI from.
@@ -1630,8 +1767,13 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
     if (auto* dr = dynamic_cast<DrumRack*>(t.instrument.get())) {
         const float sw = dr->swing(), hz = dr->humanize();
         if ((sw > 0.0f || hz > 0.0f) && spb > 0.0) {
-            static uint32_t rng = 0x9E3779B9u;
+            static thread_local uint32_t rng = 0x9E3779B9u; // tracks may run on the render pool
             const double sixteenth = spb * 0.25; // samples per 1/16 note
+            // Hits on one step move together: one jitter per moment, not per note. Jittered
+            // apart, an open and a closed hat on one step (one choke group) landed in a random
+            // order and the open one was cut on random passes (#644).
+            int32_t stepAt = -1;
+            double stepJitter = 0.0;
             for (int k = 0; k < n; ++k) {
                 if (!evs[k].on) continue;
                 double delay = 0.0;
@@ -1640,9 +1782,12 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
                     if (idx & 1L) delay += (double)sw * sixteenth * 0.6; // up to 60% of a 1/16
                 }
                 if (hz > 0.0f) {
-                    rng = rng * 1664525u + 1013904223u;
-                    const double j = ((rng >> 9) & 0xFFFF) / 65535.0; // 0..1
-                    delay += j * (double)hz * sixteenth * 0.35;
+                    if (evs[k].off != stepAt) {
+                        stepAt = evs[k].off;
+                        rng = rng * 1664525u + 1013904223u;
+                        stepJitter = ((rng >> 9) & 0xFFFF) / 65535.0; // 0..1
+                    }
+                    delay += stepJitter * (double)hz * sixteenth * 0.35;
                 }
                 evs[k].off = std::clamp(evs[k].off + (int32_t)std::llround(delay), 0, frames - 1);
             }
@@ -1738,6 +1883,29 @@ void Engine::renderInstrumentRaw(
         // Recording the destination prints the routed MIDI into its take (arm the destination).
         const int32_t recLane = srcId >= 0 ? midiLaneOfRt(t.id()) : -1; // its MIDI take lane (specs/086)
         const bool captureRouted = recLane >= 0 && (playing || countInActive_) && spb > 0.0;
+        // MIDI In changed since the last render (#504): the notes the old route started end
+        // here, since their note-offs now go nowhere. A route switched away and back between
+        // two renders changed nothing, so its notes end with their own note-offs.
+        Track::LiveHeld* held = t.liveHeld.get();
+        // A replaced instrument never heard the old one's notes: forget them, not release them.
+        // Its uid tells a replacement from an edit: an edit that forks the object (a rack chain
+        // renamed) keeps the uid and the voices, so its notes are still the route's to end.
+        if (held && held->routedInstUid != inst->uid()) {
+            held->forgetRouted();
+            held->routedInstUid = inst->uid();
+        }
+        if (held && held->routedFrom != srcId) {
+            n = releaseRouted(*held, evs, n);
+            held->routedFrom = srcId;
+        }
+        bool srcFound = false;
+        // Per pitch: the offset of the latest event that sets or clears its routed bit, valid
+        // where `decided` has its bit. Only a track with a route or saved routed notes tracks
+        // anything, so the others pay nothing per block.
+        const bool trackRouted = held && (srcId >= 0 || (held->routedBits[0] | held->routedBits[1]) != 0);
+        uint64_t decided[2] = {0, 0};
+        int32_t decidedAt[128];
+        bool decidedSet[128];
         const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
         for (size_t j = 0; j < nt; ++j) {
             Track* p = g->tracks[j].get();
@@ -1749,7 +1917,24 @@ void Engine::renderInstrumentRaw(
             if (!self && !routed) continue;
             const int m = rs_->blockMidiN[j];
             const MidiEv* srcEvs = rs_->blockMidi[j].data();
-            for (int k = 0; k < m && n < 1024; ++k) evs[n++] = srcEvs[k];
+            if (routed) srcFound = true;
+            // The route's notes are tracked as delivered: an event the full buffer drops never
+            // reached the instrument, so it must not change what the route is holding (#504).
+            // A note-on of the track's own (a clip, a key played on it) takes its pitch over:
+            // its own note-off ends that pitch, and a later switch must not cut it, whatever
+            // happened to the instrument meanwhile (replaced, a rack chain swapped). The latest
+            // event per pitch decides, by time and not by track order (applied after the loop).
+            for (int k = 0; k < m && n < 1024; ++k) {
+                evs[n++] = srcEvs[k];
+                const int pitch = srcEvs[k].pitch;
+                if (!trackRouted || pitch < 0 || pitch >= 128) continue;
+                if (!routed && !srcEvs[k].on) continue; // an own note-off changes nothing
+                const uint64_t bit = 1ull << (pitch & 63);
+                if ((decided[pitch >> 6] & bit) && srcEvs[k].off < decidedAt[pitch]) continue;
+                decided[pitch >> 6] |= bit;
+                decidedAt[pitch] = srcEvs[k].off;
+                decidedSet[pitch] = routed && srcEvs[k].on;
+            }
             if (j < rs_->blockExprN.size())
                 for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
             if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
@@ -1767,6 +1952,18 @@ void Engine::renderInstrumentRaw(
                     }
             }
         }
+        for (int h = 0; h < 2; ++h)
+            for (uint64_t bits = decided[h]; bits; bits &= bits - 1) {
+                const int pitch = h * 64 + std::countr_zero(bits);
+                const uint64_t bit = 1ull << (pitch & 63);
+                if (decidedSet[pitch]) held->routedBits[h] |= bit;
+                else held->routedBits[h] &= ~bit;
+            }
+        // MIDI In names a track that is gone (deleted): its notes end too (#504).
+        if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
+        // A switched-off instrument drops this block's events (playEvents), so nothing the route
+        // started is sounding on it: forget those notes rather than release them later (#504).
+        if (held && inst->bypassed()) held->forgetRouted();
     } else {
         n = computeInstrumentMidi(t, evs, frames, blockStart, spb, playing,
             arrangementActive_.load(std::memory_order_relaxed), xev, &xn); // fallback: no graph
@@ -1786,6 +1983,8 @@ void Engine::renderInstrumentRaw(
         ab.blockStart = blockStart;
         ab.spb = spb;
         ab.sampleRate = transport_.sampleRate();
+        ab.tempoMap = transport_.tempoMap();
+        if (ab.tempoMap) ab.blockStart = transport_.playheadSamples();
         ab.trackOffsetMs = t.midiOffsetMs();
         ab.chase = chaseNotes_;
         ab.chaseStart = articulationChaseStart_;
@@ -1802,12 +2001,15 @@ void Engine::renderInstrumentRaw(
     if (playing) {
         for (const MidiClip& clip : t.midiClips) {
             if (!clip.active || clip.volumeEnvelope.points.empty()) continue;
-            const double clipStart = clip.startBeat * spb;
-            const double clipEnd = clipStart + clip.lengthBeats * spb;
+            const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
+            const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
+            const bool mappedEnv = transport_.hasTempoMap();
+            const double elapsed = transport_.playheadSamples();
             for (int32_t i = 0; i < frames; ++i) {
                 const double p = blockStart + i;
                 if (p < clipStart || p >= clipEnd) continue;
-                const float g = std::clamp(clip.volumeEnvelope.valueAt((p - clipStart) / spb), 0.0f, 1.0f);
+                const double beat = mappedEnv ? transport_.beatAtSamples(elapsed + i) - clip.startBeat : (p - clipStart) / spb;
+                const float g = std::clamp(clip.volumeEnvelope.valueAt(beat), 0.0f, 1.0f);
                 dst[i * 2] *= g;
                 dst[i * 2 + 1] *= g;
             }
@@ -1960,7 +2162,7 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
         const double toEnd = (L - local) * spb;
         int32_t seg = static_cast<int32_t>(std::min<double>(frames - done, std::ceil(toEnd - 1e-9)));
         if (seg <= 0) seg = 1;
-        mixAudioClip(s.audio, dst + done * 2, seg, local * spb, spb, sp.gain);
+        mixAudioClip(s.audio, dst + done * 2, seg, local * spb, spb, sp.gain, transport_);
         done += seg;
         p += seg / spb;
     }
@@ -1972,16 +2174,34 @@ void Engine::renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, dou
 void Engine::renderAudioClipsRaw(
     const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
-    for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f);
+    if (transport_.hasTempoMap()) {
+        const double elapsed = transport_.playheadSamples();
+        for (const AudioClip& clip : clips) mixAudioClip<true>(clip, dst, frames, elapsed, spb, 1.0f, transport_);
+    } else
+        for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f, transport_);
+}
+
+// Consolidation owns this clock; rendering must neither attach to nor advance the live one.
+void Engine::renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
+    const Transport& clock) {
+    std::fill_n(dst, frames * 2, 0.0f);
+    for (const AudioClip& clip : clips) {
+        if (clock.hasTempoMap()) mixAudioClip<true>(clip, dst, frames, clock.playheadSamples(), clock.samplesPerBeat(), 1.0f, clock);
+        else mixAudioClip(clip, dst, frames, clock.playheadSamples(), clock.samplesPerBeat(), 1.0f, clock);
+    }
 }
 
 // One clip of renderAudioClipsRaw — shared with Session audio slots, which loop a clip on
 // their own clock (renderSessionAudioSlotRaw).
+template <bool mapped>
 void Engine::mixAudioClip(
-    const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain) {
+    const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
+    const Transport& clock) {
     if (!clip.active) return; // deactivated clip (key 0): stays on the timeline but silent
-    const double sr = transport_.sampleRate();
-    const double startSamples = clip.startBeat * spb;
+    const double sr = clock.sampleRate();
+    double startSamples;
+    if constexpr (mapped) startSamples = clock.samplesAtBeat(clip.startBeat);
+    else startSamples = clip.startBeat * spb;
     // Clip envelopes (M9 follow-up): 0..1 volume + -1..1 pan curves in clip-local
     // beats, applied per sample. Empty = fast path (no cost). Pan uses a balance
     // law (unity at centre) so it composes with the track's own pan stage.
@@ -1991,7 +2211,9 @@ void Engine::mixAudioClip(
     const bool hasEnv = hasVol || hasPan || hasAdsr;
     double lenBeats = 0.0; // played length (beats) for the ADSR release — set per path below
     auto applyEnv = [&](double p, float& l, float& r) {
-        const double b = (p - startSamples) / spb;
+        double b;
+        if constexpr (mapped) b = clock.beatAtSamples(p) - clip.startBeat;
+        else b = (p - startSamples) / spb;
         if (hasAdsr) {
             const float g = clip.adsr.gainAt(b, lenBeats);
             l *= g;
@@ -2015,17 +2237,25 @@ void Engine::mixAudioClip(
     // at the device rate, so there is no realtime stretch here — just a memcpy-cheap
     // read (no per-clip-start priming spike). The clip's on-timeline length is the
     // cache's frame count (both are warpPlayLen×spb once rebuilt for the tempo).
-    if (clip.warpEnabled && clip.warpCache && clip.warpCache->frames > 0) {
-        const WarpCache& wc = *clip.warpCache;
+    const WarpCache* readyCache;
+    if constexpr (mapped) readyCache = clip.tempoWarpCache();
+    else readyCache = clip.warpCache.get();
+    if (clip.warpEnabled && readyCache && readyCache->frames > 0) {
+        const WarpCache& wc = *readyCache;
+        bool reverseRead = clip.reversed;
+        if constexpr (mapped) reverseRead = clip.reversed != clip.tempoWarp->reversed;
         // A stale cache (an edit's rebuild still running in the background) keeps playing,
         // clipped to the clip's new played length so it never spills past the clip's end.
         // Both edges sit on whole frames rounded from the timeline (not start + a rounded
         // length), so clips that meet — the halves of a split — leave no frame between them.
         const int64_t startF = std::llround(startSamples);
-        const int64_t endF =
-            std::min<int64_t>(startF + wc.frames, std::llround(startSamples + clip.warpPlayLen() * spb));
+        double endAt;
+        if constexpr (mapped) endAt = clock.samplesAtBeat(clip.startBeat + clip.warpPlayLen());
+        else endAt = startSamples + clip.warpPlayLen() * spb;
+        const int64_t endF = std::min<int64_t>(startF + wc.frames, std::llround(endAt));
         const double clipDeviceLen = static_cast<double>(endF - startF);
-        lenBeats = clipDeviceLen / spb;
+        if constexpr (mapped) lenBeats = clip.warpPlayLen();
+        else lenBeats = clipDeviceLen / spb;
         const double ovStart = std::max(blockStart, static_cast<double>(startF));
         const double ovEnd = std::min(blockStart + frames, static_cast<double>(endF));
         if (ovEnd <= ovStart) return;
@@ -2041,7 +2271,7 @@ void Engine::mixAudioClip(
         // a body loop that reloaded its pointers cost another +3.6%. The extra sample on
         // each edge covers a rounding step; a body sample it pulls in has sustain gain 1.
         // Every other clip takes the original loop below, unchanged.
-        if (hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan) {
+        if (!mapped && hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan) {
             int32_t head = 0, tail = segLen;
             if (clip.adsr.attack > 0.0) {
                 const double n = startSamples + clip.adsr.attack * spb + 1.0 - ovStart; // j < n
@@ -2057,7 +2287,7 @@ void Engine::mixAudioClip(
             }
             if (head > tail) head = tail = segLen; // edges overlap: the whole block fades
             for (int32_t j = 0; j < head; ++j) {
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 applyEnv(ovStart + j, l, r);
@@ -2065,14 +2295,14 @@ void Engine::mixAudioClip(
                 dst[(dstOff + j) * 2 + 1] += r * g;
             }
             for (int32_t j = head; j < tail; ++j) {
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 const float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 dst[(dstOff + j) * 2] += l * g;
                 dst[(dstOff + j) * 2 + 1] += r * g;
             }
             for (int32_t j = tail; j < segLen; ++j) {
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 applyEnv(ovStart + j, l, r);
@@ -2081,9 +2311,9 @@ void Engine::mixAudioClip(
             }
         } else {
             for (int32_t j = 0; j < segLen; ++j) {
-                // Reverse reads the same cache back-to-front: the window is already the
-                // played length, so mirroring the index is exact (no resample).
-                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                // Ordinary caches mirror their read index. Mapped caches already hold
+                // the requested direction, baked into the source mapping before stretch.
+                const int64_t ci = reverseRead ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
                 if (ci < 0 || ci >= wc.frames) continue;
                 float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 if (hasEnv) applyEnv(ovStart + j, l, r);
@@ -2105,7 +2335,8 @@ void Engine::mixAudioClip(
     const double ratio = sb.sourceSampleRate / sr * clip.pitchRatio();
     const int64_t len = clip.effectiveLength();
     const double clipDeviceLen = len / ratio;
-    lenBeats = clipDeviceLen / spb;
+    if constexpr (mapped) lenBeats = clock.beatAtSamples(startSamples + clipDeviceLen) - clip.startBeat;
+    else lenBeats = clipDeviceLen / spb;
     for (int32_t i = 0; i < frames; ++i) {
         const double p = blockStart + i;
         if (p < startSamples || p >= startSamples + clipDeviceLen) continue;
@@ -2143,9 +2374,17 @@ void Engine::fillFrozen(Track& t, float* dst, int32_t frames, double blockStart,
     }
     const std::vector<float>& buf = *bufPtr;
     const int64_t n = static_cast<int64_t>(buf.size() / 2);
+    const auto* timing = t.frozenTiming.get();
+    const bool mappedClock = transport_.hasTempoMap();
+    const double elapsed = transport_.playheadSamples();
+    const double origin = timing && timing->map ? timing->map->secondsAt(timing->startBeat) * timing->sampleRate : 0.0;
+    const bool sameMap = timing && timing->map && timing->map.get() == transport_.tempoMap();
     for (int32_t i = 0; i < frames; ++i) {
-        const double beat = (blockStart + i) / spb;
-        const double srcF = beat * t.frozenSpb;
+        const double beat = !sameMap && mappedClock ? transport_.beatAtSamples(elapsed + i) : (blockStart + i) / spb;
+        const double srcF = timing && timing->map
+            ? sameMap ? (elapsed + i) * timing->sampleRate / transport_.sampleRate() - origin
+                : timing->map->secondsAt(beat) * timing->sampleRate - origin
+            : (beat - (timing ? timing->startBeat : 0.0)) * t.frozenSpb;
         const int64_t i0 = static_cast<int64_t>(srcF);
         if (srcF < 0.0 || i0 >= n) {
             dst[i * 2] = 0.0f;
@@ -2216,12 +2455,72 @@ void Engine::triggerPassReplace() {
     replaceUpTo_.store(recordPass_, std::memory_order_release);
 }
 
+// The master section when the master is more than a wire (specs/099): devices, lanes and the
+// pan stage, per chunk. Out of line on purpose: inlined into processBlock it took the
+// registers of the output loop below it (the perf gate's GCC build spilled the clamp bound
+// there, two loads a sample).
+#if defined(__GNUC__) || defined(__clang__)
+[[gnu::noinline]]
+#elif defined(_MSC_VER)
+__declspec(noinline)
+#endif
+void Engine::processMasterChain(Graph& g, float* out, int32_t numFrames, double spb, int32_t nAnchors) {
+    const SegAnchor* const anchors = segAnchors_;
+    Track& master = *g.masterTrack;
+    const bool mappedMaster = transport_.hasTempoMap();
+    const bool lanes = !master.automation.empty();
+    int32_t ai = 0;
+    for (int32_t off = 0; off < numFrames;) {
+        while (ai + 1 < nAnchors && anchors[ai + 1].off <= off) ++ai;
+        const SegAnchor& an = anchors[ai];
+        const int32_t pieceEnd = ai + 1 < nAnchors ? anchors[ai + 1].off : numFrames;
+        const int32_t n = std::min({numFrames - off, kMaxBlock, pieceEnd - off});
+        const bool snap = an.jump && off == an.off; // first chunk after a seek / start / wrap
+        const double s0 = an.samples + (an.rolling ? off - an.off : 0);
+        const double s1 = s0 + (an.rolling ? n : 0);
+        double beat = 0.0, endBeat = 0.0, chunkSpb = spb;
+        float pan = std::clamp(master.pan(), -1.0f, 1.0f), startPan = pan;
+        if (spb > 0.0) {
+            if (mappedMaster) {
+                beat = transport_.beatAtSamples(s0);
+                endBeat = transport_.beatAtSamples(s1);
+                chunkSpb = endBeat > beat ? n / (endBeat - beat) : spb;
+            } else { // fixed tempo: the exact spb, so synced devices never see rounding as a tempo change
+                beat = s0 / spb;
+                endBeat = s1 / spb;
+            }
+            if (lanes) {
+                applyMasterLanes(master, beat);
+                // The pan stage ramps to the lane's value at the chunk's end, so a drawn
+                // pan sweep is followed exactly, not one chunk late.
+                if (const TrackLane* pl = masterPanLane(master)) {
+                    startPan = std::clamp(pl->valueAt(beat), -1.0f, 1.0f);
+                    pan = std::clamp(pl->valueAt(endBeat), -1.0f, 1.0f);
+                }
+            }
+        }
+        for (auto& d : master.devices) {
+            if (!d || d->bypassed()) continue;
+            if (spb > 0.0) d->setTransport(beat, chunkSpb, an.rolling);
+            d->process(out + off * 2, n);
+        }
+        if (snap) masterPanSnap(startPan, g.panLaw); // from where the playhead landed
+        masterPanStage(out + off * 2, n, pan, g.panLaw);
+        off += n;
+    }
+}
+
 void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
     // live MIDI, capture), so this scope keeps the player it points at alive.
     const SnapshotHistory<SessionPlayer>::RenderScope recordSlotScope(recordSlotHist_);
     const SnapshotHistory<SessionLaneSlots>::RenderScope laneSlotScope(laneSlotsHist_); // specs/086
-    drainCommands();
+    const SnapshotHistory<Graph>::RenderScope graphScope(graphHist_);
+    Graph* g = graphHist_.live();
+    const bool tempoChanged = transport_.attachTempoMap(g ? g->tempoMap.get() : nullptr);
+    struct TempoScope { Transport& t; ~TempoScope() { t.detachTempoMap(); } } tempoScope{transport_};
+    if (tempoChanged && transport_.isPlaying()) seekedThisBlock_ = seekedWhileRolling_ = true;
+    drainCommands(g);
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
     if (cue) std::fill(cue, cue + static_cast<size_t>(numFrames) * 2, 0.0f);
 
@@ -2229,12 +2528,10 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     const double spb = transport_.samplesPerBeat();
     bool playing = transport_.isPlaying(); // flips to true mid-block when a count-in runs out
 
-    drainLiveMidi(transport_.playheadSamples() / spb, playing);
+    drainLiveMidi(transport_.positionBeats(), playing);
 
     // The graph, then this block's scratch: publishRaw publishes the scratch first, so it
     // always fits the graph seen here. Both held until their scopes end the render epoch.
-    const SnapshotHistory<Graph>::RenderScope graphScope(graphHist_);
-    Graph* g = graphHist_.live();
     const SnapshotHistory<RenderScratch>::RenderScope scratchScope(scratchHist_);
     rs_ = scratchHist_.live();
 
@@ -2243,6 +2540,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             for (auto& tptr : g->tracks)
                 if (tptr->instrument && !sessionActiveOf(*tptr)) {
                     tptr->instrument->allNotesOff();
+                    if (tptr->liveHeld) tptr->liveHeld->forgetRouted(); // #504
                     releaseHeldControllers(*tptr->instrument); // a clip's pedal / wheel (specs/020)
                     for (auto& md : tptr->midiEffects)
                         if (md) md->reset(); // flush arp held/pending
@@ -2262,6 +2560,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
                     if (tptr->instrument) {
                         tptr->instrument->allNotesOff();
                         releaseHeldControllers(*tptr->instrument);
+                        if (tptr->liveHeld) tptr->liveHeld->forgetRouted(); // #504
                     }
                     for (auto& md : tptr->midiEffects)
                         if (md) md->reset();
@@ -2276,6 +2575,12 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     // notes that began before the playhead but are still held get re-triggered at the
     // jump point — otherwise a note you start in the middle of stays silent.
     bool chase = playing && (!renderWasPlaying_ || seeked);
+    if (chase) {
+        const double b = transport_.positionBeats() * transport_.timeSigDenom() / 4.0;
+        const auto whole = static_cast<int64_t>(std::floor(b));
+        lastBeatEmitted_ = b - whole < 1e-8 ? whole - 1 : whole;
+        clickRemaining_ = 0;
+    }
     renderWasPlaying_ = playing;
 
     // Split the block at loop boundaries so the loop is sample-accurate: nothing
@@ -2286,13 +2591,21 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     int32_t nLoopSeams = 0; // block offsets where the loop wrapped
     double presentationStart = transport_.playheadSamples();
     int32_t presentationFrames = 0, presentationLead = 0;
+    // Where each segment starts on the timeline (specs/099): the master section runs after this
+    // loop and reads its lanes / tempo from these, so a loop wrap or a count-in ending inside the
+    // block puts each master chunk at the beat that actually sounded there. `jump`: the playhead
+    // got there by a seek, a start or a wrap (the master pan snaps instead of ramping).
+    // (a member, not a local: a compiler that zero-fills locals would clear it every block)
+    SegAnchor* const anchors = segAnchors_;
+    int32_t nAnchors = 0;
     while (done < numFrames) {
         if (playing && transport_.isLooping() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             // No voice flush here: clip notes crossing the loop end get note-offs in the next
             // segment (seamOffs_), so live-held keys keep sounding and tails ring out (#29).
             seamEndSamples_ = transport_.playheadSamples();
             transport_.wrapToLoopStart();
-            if (spb > 0.0) onLoopWrap(g, transport_.loopStartSamples() / spb, seamEndSamples_ / spb);
+            if (spb > 0.0) onLoopWrap(g, transport_.beatAtSamples(transport_.loopStartSamples()), transport_.beatAtSamples(seamEndSamples_));
+            lastBeatEmitted_ = static_cast<int64_t>(std::ceil(transport_.positionBeats() * transport_.timeSigDenom() / 4.0 - 1e-8)) - 1;
             seamOffs_ = true;
             chase = true;
             if (nLoopSeams < 16) loopSeams[nLoopSeams++] = done; // declick this seam below
@@ -2304,18 +2617,37 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         }
         // End the segment where the count-in runs out, so the transport rolls on that sample.
         if (countInActive_ && spb > 0.0) {
-            const double left = (countInTotal_ - countInPos_) * spb;
+            const double left = (countInTotal_ - countInPos_) * spb * 4.0
+                / std::max(1, transport_.timeSigDenom());
             if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
         }
         const double segStart = transport_.playheadSamples();
+        double localSpb = spb, musicalStart = segStart;
+        if (transport_.hasTempoMap()) {
+            const double beatStart = transport_.positionBeats();
+            if (playing) {
+                const auto& points = g->tempoMap->points;
+                auto next = std::upper_bound(points.begin(), points.end(), beatStart + 1e-8,
+                    [](double b, const auto& p) { return b < p.beat; });
+                if (next != points.end()) {
+                    const double until = transport_.samplesAtBeat(next->beat) - segStart;
+                    if (until > .5 && until < seg) seg = std::max(1, static_cast<int32_t>(std::ceil(until)));
+                }
+                const double beatEnd = transport_.beatAtSamples(segStart + seg);
+                if (beatEnd > beatStart) localSpb = seg / (beatEnd - beatStart);
+            }
+            musicalStart = beatStart * localSpb;
+        }
         if (playing) {
             if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
             presentationFrames += seg;
         }
+        if (nAnchors < kMaxSegAnchors && (nAnchors == 0 || chase || playing != anchors[nAnchors - 1].rolling))
+            anchors[nAnchors++] = {done, segStart, playing, chase};
         chaseNotes_ = chase;
-        if (chase) articulationChaseStart_ = segStart;
+        if (chase) articulationChaseStart_ = transport_.hasTempoMap() ? segStart : musicalStart;
         cueSeg_ = cue ? cue + done * 2 : nullptr; // this segment of the Cue bus (specs/089)
-        if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
+        if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, musicalStart, segStart, playing, localSpb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
@@ -2328,7 +2660,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             transport_.play();
             launchCountInSlot();
             // Let the metronome click the beat we launch on (not when starting mid-beat).
-            const double b = transport_.playheadSamples() / spb;
+            const double b = transport_.positionBeats() * transport_.timeSigDenom() / 4.0;
             const int64_t fb = static_cast<int64_t>(std::floor(b));
             lastBeatEmitted_ = (b - fb < 1e-6) ? fb - 1 : fb;
             playing = chase = renderWasPlaying_ = true;
@@ -2362,21 +2694,16 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     renderTone(out, numFrames);
     renderPreview(out, numFrames); // audition voice (M7-4a), pre-master
 
-    // Master effect chain (post-mix, pre-fader): run the whole mix through the master
-    // track's devices, in kMaxBlock chunks so each device sees at most a full block.
-    if (g && g->masterTrack) {
-        // The master runs after the transport advanced past this block; recover the
-        // block's start beat so tempo-synced master devices line up.
-        const double masterStartBeat = spb > 0.0 ? transport_.positionBeats() - numFrames / spb : 0.0;
-        for (auto& d : g->masterTrack->devices) {
-            if (!d || d->bypassed()) continue;
-            for (int32_t off = 0; off < numFrames; off += kMaxBlock) {
-                const int32_t n = std::min(numFrames - off, kMaxBlock);
-                if (spb > 0.0) d->setTransport(masterStartBeat + off / spb, spb, playing);
-                d->process(out + off * 2, n);
-            }
-        }
-    }
+    // Master effect chain (post-mix, pre-fader) and master pan (specs/099): run the whole mix
+    // through the master track's devices, then the pan stage, in kMaxBlock chunks so each
+    // device sees at most a full block — and the master's own lanes (Pan, device params) are
+    // read per chunk, as track lanes are per segment, however long the call (export).
+    // Fast path: no devices, no lanes, centred and nothing ramping — the master is a wire, as it
+    // was before the pan stage, and the per-block cost stays what it was (perf gate).
+    const bool masterWire = !g || !g->masterTrack ||
+        (g->masterTrack->devices.empty() && g->masterTrack->automation.empty() && g->masterTrack->pan() == 0.0f &&
+         masterPanG_[0] == 1.0f && masterPanG_[1] == 0.0f && masterPanG_[2] == 0.0f && masterPanG_[3] == 1.0f);
+    if (!masterWire) processMasterChain(*g, out, numFrames, spb, nAnchors);
 
     const float mv = masterVolume_.load(std::memory_order_relaxed);
     float mpkL = 0.0f, mpkR = 0.0f;
@@ -2605,28 +2932,34 @@ void Engine::feedPartTaps(const Track& t) {
 
 // The key buffer for a consumer: its route slot's tap, nullptr for none — or, for a part key
 // whose part is gone (specs/050), silence: a detector handed nullptr keys off its own input,
-// and the key is shown as missing, not as Internal.
+// and the key is shown as missing, not as Internal. This block's tap once the source has
+// written it (routeFresh_, #676), else the previous block's.
 const float* Engine::keyBuffer(int32_t src, uint64_t part, bool pre) const {
     const int32_t s = routeSlotFor(src, part);
-    if (s >= 0) return pre ? routeBusPre_[s].data() : routeBus_[s].data();
+    if (s >= 0) {
+        if (routeFresh_[s]) return pre ? routeBusPreNext_[s].data() : routeBusNext_[s].data();
+        return pre ? routeBusPre_[s].data() : routeBus_[s].data();
+    }
     return part != 0 ? silentKey_.data() : nullptr;
 }
 
-// Hand a device its sidechain key for this block (the source track's previous-block
-// signal, pre- or post-FX tap) or its MIDI key; a rack passes keys on to its chain
-// children, each with its own source (specs/044). Audio thread.
+// Hand a device its sidechain key for this block (the source track's signal, pre- or post-FX
+// tap: this block's when the source rendered first, see keyBuffer) or its MIDI key; a rack
+// passes keys on to its chain children, each with its own source (specs/044). Audio thread.
 void Engine::feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames) {
     const int32_t src = d.sidechainSourceTrackId();
     if (src >= 0) {
         d.setSidechain(keyBuffer(src, d.sidechainPart(), d.sidechainTapPre() != 0), frames);
+        const int32_t s = routeSlotFor(src, d.sidechainPart());
+        d.setSidechainLate(s >= 0 && !routeFresh_[s]);
         if (d.wantsMidiKey()) feedMidiKey(g, d, src);
     } else if (d.wantsOwnMidiKey())
         feedMidiKey(g, d, ownTrackId); // no key track: this track's notes
     if (auto* r = d.asRack()) feedRackChildKeys(g, *r, ownTrackId, frames);
 }
 
-// React (Nota Flux): hand a listening instrument its source track's previous-block, post-fader
-// signal just before it renders; and the keyed devices and instruments inside an Instrument
+// React (Nota Flux): hand a listening instrument its source track's post-fader signal (see
+// keyBuffer) just before it renders; and the keyed devices and instruments inside an Instrument
 // Rack's chains theirs (specs/044). Audio thread.
 void Engine::feedInstrumentKeys(Graph* g, Track& t, int32_t frames) {
     if (!t.instrument) return;
@@ -2647,12 +2980,12 @@ void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, 
 }
 
 // Step 2/2b for Pass 1: insert effect chain (M3) + PDC, in place. Verbatim
-// moved from the old inline loop (sidechain taps read the previous block,
-// tempo sync, hosted-plugin sync, frozen tracks skip baked-in devices).
+// moved from the old inline loop (sidechain keys via keyBuffer, tempo sync,
+// hosted-plugin sync, frozen tracks skip baked-in devices).
 void Engine::processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
     double spb, bool playing, const TransportInfo& ti) {
     // 2) Insert effect chain (M3), in place. Hand each sidechain consumer
-    //    its source track's signal (previous block) just before it runs —
+    //    its source track's signal (see keyBuffer) just before it runs —
     //    the pre-FX or post-FX tap per the device's setting (Phase D). A frozen
     //    track skips this: its buffer already baked in the devices.
     if (!w.frozenActive)
@@ -2671,7 +3004,8 @@ void Engine::processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* 
     if (!w.frozenActive && t.pdc) t.pdc->process(buf, frames);
 }
 
-void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, bool playing, double spb) {
+void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, double elapsedStart, bool playing,
+    double spb) {
     {
         // Pan law (specs/006): a change of the live law starts a 10 ms crossfade of the pan
         // gains; flipping back mid-fade reverses it from where it is, so nothing jumps. A law
@@ -2696,21 +3030,21 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // Automation (M9): read-mode block-rate eval — write each active lane's
         // value into its target atomic before the mix reads it. Always runs (also
         // when stopped: the playhead is static, so scrub shows automation too).
-        if (spb > 0.0) applyAutomation(g, blockStart / spb);
+        if (spb > 0.0) applyAutomation(g, blockStart / spb, (blockStart + frames) / spb);
 
         // CV modulation (Phase 3): drive modulated device params to base∘mod for this
         // segment. The device atomic holds the live modulated value continuously (no
         // restore), so the UI shows the movement smoothly; the base lives in the link.
         if (spb > 0.0) {
             const double srMod = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
-            updateModulators(g, blockStart / spb, blockStart / srMod, frames / srMod); // stateful + Math
-            applyModulation(g, blockStart / spb, blockStart / srMod);
+            updateModulators(g, blockStart / spb, elapsedStart / srMod, frames / srMod); // stateful + Math
+            applyModulation(g, blockStart / spb, elapsedStart / srMod);
         }
 
         // Transport snapshot for this segment: pushed to every instrument/device
         // before it runs so hosted plugins drive their own tempo-synced behaviour off
         // the DAW clock (AudioPlayHead). Built-ins ignore it; racks forward to children.
-        const TransportInfo ti = transport_.transportInfo(blockStart);
+        const TransportInfo ti = transport_.transportInfo(transport_.hasTempoMap() ? transport_.playheadSamples() : blockStart);
 
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
@@ -2748,6 +3082,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         for (int b = 0; b < numReturns; ++b) // clear send buses for this block (M6-1)
             std::fill_n(returnBus_[b].data(), frames * 2, 0.0f);
         // Phase B/D: clear this block's route-write buffers (post + pre) for active slots.
+        // None holds this block's signal yet (#676): every slot, so one claimed mid-block
+        // never hands out a Next bus nobody cleared.
+        std::fill_n(routeFresh_, kMaxRoutes, false);
         for (int s = 0, n = routeSlotCount_.load(std::memory_order_acquire); s < n; ++s)
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
                 std::fill_n(routeBusNext_[s].data(), frames * 2, 0.0f);
@@ -2878,6 +3215,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (sp->maybeApply(
                         blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed), seamOffs_)) {
                     if (t.instrument) t.instrument->allNotesOff();
+                    if (t.liveHeld) t.liveHeld->forgetRouted(); // #504: the voices are gone
                     for (auto& md : t.midiEffects)
                         if (md) md->reset(); // clock switch → flush arp
                 }
@@ -2891,7 +3229,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     // The clip moves on without its note-offs reaching the instrument: release
                     // what it holds, or a note crossed while silent would sound on after unmute.
                     // Once, on going silent: a hosted plug-in queues each release until it renders.
-                    if (t.instrument && !t.sessionSilentReleased) t.instrument->allNotesOff();
+                    if (t.instrument && !t.sessionSilentReleased) {
+                        t.instrument->allNotesOff();
+                        if (t.liveHeld) t.liveHeld->forgetRouted(); // #504
+                    }
                     // Those voices were flushed; an old latching release must not survive the
                     // silent interval and cut a new momentary hold after mute/solo is lifted.
                     t.sessionPlayer->articulationReleases.count = 0;
@@ -2982,15 +3323,136 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             w.eligible = eligible;
         }
 
+        // Same-block keys (#676): a leaf whose devices, instrument or rack children listen to
+        // another leaf renders a level after it, and each level's taps are written before the
+        // next level renders, so the key it hears is this block's, not the previous one (a
+        // whole 8192-frame chunk in an export). A cycle can't be ordered: its levels stop at
+        // the cap and its keys stay a block late, as every key was. With no leaf-to-leaf key
+        // every leaf stays on level 0: one dispatch and the serial accumulate, as before.
+        const int32_t nRoutes = routeSlotCount_.load(std::memory_order_acquire);
+        int slotLeaf[kMaxRoutes]; // the leaf (index) feeding each slot, -1 none this block
+        int maxLevel = 0;
+        auto leafKeyNeeds = [&](const Track& t, const LeafWork& w) {
+            uint32_t mask = 0;
+            auto add = [&](int32_t src, uint64_t part) {
+                if (src < 0) return;
+                const int32_t s = routeSlotFor(src, part);
+                if (s >= 0) mask |= 1u << s;
+            };
+            auto children = [&](const RackCore& r) { // as feedRackChildKeys hands them out
+                r.forEachChildDevice([&](Device& c) {
+                    if (!c.bypassed() && !c.asRack()) add(c.sidechainSourceTrackId(), c.sidechainPart());
+                });
+                r.forEachChildInstrument([&](Instrument& i) { add(i.sidechainSourceTrackId(), i.sidechainPart()); });
+            };
+            if (t.instrument && (w.path == LeafPath::Instrument || w.path == LeafPath::SessionInst)) {
+                add(t.instrument->sidechainSourceTrackId(), t.instrument->sidechainPart());
+                if (auto* r = t.instrument->asRack()) children(*r);
+            }
+            if (!w.frozenActive)
+                for (auto& d : t.devices)
+                    if (d && !d->bypassed()) {
+                        add(d->sidechainSourceTrackId(), d->sidechainPart());
+                        if (auto* r = d->asRack()) children(*r);
+                    }
+            return mask;
+        };
+        if (nRoutes > 0) {
+            for (int s = 0; s < nRoutes; ++s) slotLeaf[s] = -1;
+            for (size_t li = 0; li < ntracks; ++li) {
+                LeafWork& w = rs_->leafWork[li];
+                if (!w.t || w.path == LeafPath::Skip) continue;
+                for (int s = 0; s < nRoutes; ++s)
+                    if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == w.t->id()) slotLeaf[s] = (int)li;
+            }
+            if (parallelOk) { // the staged render needs every leaf's own leafBuf region
+                for (size_t li = 0; li < ntracks; ++li) {
+                    LeafWork& w = rs_->leafWork[li];
+                    if (w.t && w.path != LeafPath::Skip) w.keyNeeds = leafKeyNeeds(*w.t, w);
+                }
+                // Longest path over the key edges, at most kMaxKeyLevels passes.
+                for (int pass = 0; pass < kMaxKeyLevels; ++pass) {
+                    bool changed = false;
+                    for (size_t li = 0; li < ntracks; ++li) {
+                        LeafWork& w = rs_->leafWork[li];
+                        if (w.keyNeeds == 0) continue;
+                        for (int s = 0; s < nRoutes; ++s) {
+                            const int p = slotLeaf[s];
+                            if (!((w.keyNeeds >> s) & 1u) || p < 0 || p == (int)li) continue;
+                            const int nl = rs_->leafWork[(size_t)p].level + 1;
+                            if (nl > w.level && nl <= kMaxKeyLevels) {
+                                w.level = nl;
+                                changed = true;
+                            }
+                        }
+                    }
+                    if (!changed) break;
+                }
+                for (size_t li = 0; li < ntracks; ++li) maxLevel = std::max(maxLevel, rs_->leafWork[li].level);
+            }
+        }
+        const bool staged = maxLevel > 0; // implies parallelOk
+        // A leaf's pre-FX tap and post-fader route tap, written as the accumulate below would
+        // (same ops, same fader); the accumulate then skips them.
+        auto writeLeafTaps = [&](LeafWork& w, const float* pre, const float* post) {
+            Track& t = *w.t;
+            const int32_t preSlot = routeSlotForTrack(t.id());
+            if (preSlot >= 0) simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, frames);
+            w.vol = t.volume();
+            w.pan = std::clamp(t.pan(), -1.0f, 1.0f);
+            w.tapsDone = true;
+            float* route = w.route;
+            if (!route || w.postTapMuted || w.cueOnly) return;
+            const PanStage ps(w.pan, w.vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);
+            if (!ps.cross) {
+                simd_audio::scaleStereo(mixTmp_.data(), post, ps.to.ll, ps.to.rr, frames);
+                simd_audio::addStereoScaled(route, mixTmp_.data(), 1.0f, 1.0f, frames);
+            } else {
+                for (int32_t i = 0; i < frames; ++i) {
+                    float l, r;
+                    ps.apply(i, post[i * 2], post[i * 2 + 1], l, r);
+                    route[i * 2] += l;
+                    route[i * 2 + 1] += r;
+                }
+            }
+        };
+        // After a level's pool tasks: its serial leaves render (track order) into their own
+        // regions, then the level's taps are written and its slots marked fresh.
+        auto finishLevel = [&](int L) {
+            for (size_t li = 0; li < ntracks; ++li) {
+                LeafWork& w = rs_->leafWork[li];
+                if (!w.t || w.path == LeafPath::Skip || w.level != L) continue;
+                float* base = leafBase(li, stride);
+                if (!w.eligible) {
+                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                    std::copy_n(base, stride, base + stride);
+                    processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
+                }
+                w.preRendered = true;
+            }
+            for (size_t li = 0; li < ntracks; ++li) {
+                LeafWork& w = rs_->leafWork[li];
+                if (!w.t || w.path == LeafPath::Skip || w.level != L) continue;
+                float* base = leafBase(li, stride);
+                writeLeafTaps(w, base, base + stride);
+            }
+            for (int s = 0; s < nRoutes; ++s)
+                if (slotLeaf[s] >= 0 && rs_->leafWork[(size_t)slotLeaf[s]].level == L) routeFresh_[s] = true;
+        };
+
         // Parallel DSP phase: eligible leaves render dry into their own
         // rs_->leafBuf region, copy to the post half, run devices in place
         // there. Regions are per-track (never shared), so completion order
         // cannot mix signals; the serial accumulate below fixes mix order.
         if (parallelOk) {
             int m = 0;
-            for (size_t li = 0; li < ntracks; ++li) {
-                const LeafWork& w = rs_->leafWork[li];
-                if (w.t && w.path != LeafPath::Skip && w.eligible) rs_->parIdx[(size_t)m++] = (int)li;
+            int levelEnd[kMaxKeyLevels + 1]; // parIdx is grouped by level (track order within)
+            for (int L = 0; L <= maxLevel; ++L) {
+                for (size_t li = 0; li < ntracks; ++li) {
+                    const LeafWork& w = rs_->leafWork[li];
+                    if (w.t && w.path != LeafPath::Skip && w.eligible && w.level == L) rs_->parIdx[(size_t)m++] = (int)li;
+                }
+                levelEnd[L] = m;
             }
             // Offline (export, freeze: no deadline): every thread, finish fast. With a
             // device: this thread alone unless it can't keep up (see rtParallel_); then
@@ -3000,11 +3462,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // with the encoder's work between them, and an overloaded callback arrives late.)
             const bool offline = !deviceBlock_;
             const double periodNs = 1e9 * frames / std::max(1.0, transport_.sampleRate());
+            // The leaves don't have the whole buffer: the callback's serial work (tracks that
+            // can't go to the pool, groups, returns, the master — measured in render(), see
+            // adjustPoolSizing) needs its share. Joining, leaving and sizing all go by what
+            // is left; by the whole period the pool could leave while every callback ran late.
+            const double roomNs = std::max(0.25 * periodNs, periodNs - serialNs_);
             int helpers = -1;
             if (!offline) {
                 helpers = 0;
                 if (rtParallel_ && (rtParallelLeftNs_ -= periodNs) <= 0) {
-                    if (parWorkNs_ <= periodNs) {
+                    if (parWorkNs_ <= roomNs) {
                         rtParallel_ = false; // even the over-reading bound fits: try alone
                         leafWorkNs_ = parWorkNs_;
                         rtProbeLeftNs_ = kRtProbeSeconds * 1e9;
@@ -3013,8 +3480,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     }
                 }
                 if (rtParallel_) {
-                    const double work = (double)std::max(leafWorkNs_, parWorkNs_);
-                    const double target = kRtSizeLoad * periodNs;
+                    // Sized from what the work costs on one thread, not from parWorkNs_: tasks
+                    // cost more the more threads run them (cold cores, shared caches), so
+                    // sizing by the pool's own task time added threads that raised it further
+                    // until the pool ran on every thread and its wake-ups made late blocks.
+                    // sizeWorkNs_ starts at that single-thread cost and grows only when a
+                    // parallel phase overruns the buffer (see below).
+                    const double work = (double)std::max(leafWorkNs_, sizeWorkNs_);
+                    const double target = kRtSizeLoad * roomNs;
                     int threads = (int)std::ceil(work / target);
                     // Track jobs are indivisible: four 1.4 ms jobs cannot meet a
                     // 2.67 ms deadline on three threads even though their total
@@ -3040,21 +3513,34 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
-            pool_->dispatch(
-                m,
-                [&](int wid, int j) {
-                    const size_t i = (size_t)rs_->parIdx[(size_t)j];
-                    LeafWork& w = rs_->leafWork[i];
-                    const auto t0 = std::chrono::steady_clock::now();
-                    w.wid = wid;
-                    float* base = leafBase(i, stride);
-                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
-                    std::copy_n(base, stride, base + stride);
-                    processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
-                    w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - t0).count();
-                },
-                helpers);
+            // One dispatch per level (one in all without leaf-to-leaf keys); the serial work
+            // between them (finishLevel) is not the pool's, so only the dispatches are timed.
+            int64_t poolPhaseNs = 0;
+            int off = 0;
+            auto task = [&](int wid, int j) {
+                const size_t i = (size_t)rs_->parIdx[(size_t)(off + j)];
+                LeafWork& w = rs_->leafWork[i];
+                const auto t0 = std::chrono::steady_clock::now();
+                w.wid = wid;
+                float* base = leafBase(i, stride);
+                renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                std::copy_n(base, stride, base + stride);
+                processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
+                w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - t0).count();
+            };
+            for (int L = 0; L <= maxLevel; ++L) {
+                const int n = levelEnd[L] - off;
+                if (n > 0) {
+                    const int h = helpers <= 0 ? helpers : std::min(helpers, std::max(1, n - 1));
+                    const auto phase0 = std::chrono::steady_clock::now();
+                    pool_->dispatch(n, [&](int wid, int j) { task(wid, j); }, h);
+                    poolPhaseNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - phase0).count();
+                }
+                off = levelEnd[L];
+                if (staged) finishLevel(L);
+            }
             // The single-thread cost, from blocks this thread rendered alone, and the
             // pool's summed task time while it runs (see leafWorkNs_).
             if (!offline && m > 0) {
@@ -3068,19 +3554,24 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     alone = alone && w.wid == pool_->workerCount();
                 }
                 leafPeakNs_ += (peak - leafPeakNs_) / 16;
+                // Timed, alone or not, for render() to tell the callback's serial work from it
+                // and to size the pool (see adjustPoolSizing).
+                phaseNs_ += (double)poolPhaseNs;
                 if (rtParallel_) {
                     parWorkNs_ += (work - parWorkNs_) / 16;
                 } else {
                     // Just left the pool: one block over its period proves the bound wrong.
                     // Rejoin at once and wait twice as long before the next try.
-                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work > periodNs;
+                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work > roomNs;
                     if (alone) leafWorkNs_ += (work - leafWorkNs_) / 16;
-                    if (probeMissed || (alone && leafWorkNs_ > periodNs)) {
+                    if (probeMissed || (alone && leafWorkNs_ > roomNs)) {
                         if (probeMissed) rtHoldNs_ = std::min(2 * rtHoldNs_, kRtMaxHoldSeconds * 1e9);
                         rtParallel_ = true;
                         rtParallelLeftNs_ = rtHoldNs_;
                         rtProbeLeftNs_ = 0;
                         parWorkNs_ = std::max(leafWorkNs_, work);
+                        sizeWorkNs_ = std::max(leafWorkNs_, work);
+                        overrunShare_ = 0.0;
                     } else if (rtProbeLeftNs_ > 0 && (rtProbeLeftNs_ -= periodNs) <= 0) {
                         rtHoldNs_ = kRtHoldSeconds * 1e9; // the probe held: back to the short hold
                     }
@@ -3101,7 +3592,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             float* pre = nullptr;
             float* post = nullptr;
             bool parallelDsp = false;
-            if (w.eligible && parallelOk) {
+            if ((w.eligible && parallelOk) || w.preRendered) { // pool, or staged ahead (#676)
                 float* base = leafBase(li, stride);
                 pre = base;
                 post = base + stride;
@@ -3113,7 +3604,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
             // 1b) Pre-FX tap (Phase D): if this track feeds a sidechain, capture its
             //     dry pre-fader signal now, before its own devices colour it.
-            {
+            if (!w.tapsDone) { // a staged leaf wrote its taps already (#676)
                 const int32_t preSlot = routeSlotForTrack(t.id());
                 if (preSlot >= 0)
                     simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, frames);
@@ -3158,12 +3649,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 continue;
             }
 
-            // 3) Channel fader + equal-power pan into the master mix + sends.
-            const float vol = t.volume();
-            const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
+            // 3) Channel fader + equal-power pan into the master mix + sends (at the fader its
+            //    staged taps were written with).
+            const float vol = w.tapsDone ? w.vol : t.volume();
+            const float pan = w.tapsDone ? w.pan : std::clamp(t.pan(), -1.0f, 1.0f);
             const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep); // project pan law
             float* dest = w.dest;
-            float* route = w.route;
+            float* route = w.tapsDone ? nullptr : w.route;
             float pkL = 0.0f, pkR = 0.0f;
             double sqL = 0.0, sqR = 0.0, sLR = 0.0; // sLR: Stereo Map (specs/008)
             int64_t recDropped = 0;
@@ -3227,6 +3719,15 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }
 
+        // Every leaf has written its taps: groups and returns hear this block's (#676), and a
+        // group or return marks its own slot once written, for the ones after it.
+        for (int s = 0; s < nRoutes; ++s)
+            if (slotLeaf[s] >= 0) routeFresh_[s] = true;
+        auto markFresh = [&](int32_t id) {
+            const int32_t s = routeSlotForTrack(id);
+            if (s >= 0) routeFresh_[s] = true;
+        };
+
         // An armed audio track that isn't monitoring meters its input instead (#352): the
         // level to set before a take, without hearing it. Pre-fader, like a console's input
         // meter; a monitoring track already meters what it hears. Nothing here is heard, so
@@ -3269,6 +3770,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 Track& t = *grpT[gi];
                 if (grpFeedMute[gi]) {
                     t.setMeter(0, 0, 0, 0);
+                    markFresh(t.id()); // its taps stay silent this block
                     continue;
                 } // muted group (or muted ancestor)
 
@@ -3294,6 +3796,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (cueOn && t.cue()) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
                 if (t.mute()) { // muted but cued: heard in Cue only
                     t.setMeter(0, 0, 0, 0);
+                    markFresh(t.id());
                     continue;
                 }
                 // Muted only through a cued ancestor: still folds into the parent's bus, so the
@@ -3337,6 +3840,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 else
                     t.setMeter(pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)),
                         static_cast<float>(std::sqrt(sqR / frames)));
+                markFresh(t.id());
             }
 
         // Pass 2: return buses -> device chain -> master (M6-1). Exempt from the
@@ -3350,6 +3854,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             if (bus < 0 || bus >= numReturns || (t.mute() && !returnCue)) {
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
+                markFresh(t.id());
                 continue;
             }
 
@@ -3374,6 +3879,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             if (t.mute()) { // muted but cued: heard in Cue only
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
+                markFresh(t.id());
                 continue;
             }
 
@@ -3426,6 +3932,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             t.stereoFold(sqL, sqR, sLR, frames, stereoA);
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+            markFresh(t.id());
         }
 
         // Internal resampling from the master bus: capture the fully-mixed output.
@@ -3470,7 +3977,6 @@ void Engine::renderClick(float* out, float* cue, int32_t i, int clickLen, double
 void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSamples) {
     if (!transport_.metronomeEnabled()) return;
     const double sr = transport_.sampleRate();
-    const double spb = transport_.samplesPerBeat();
     const int beatsPerBar = transport_.beatsPerBar();
     const int clickLen = static_cast<int>(0.03 * sr);
     const int32_t dest = clickDest_.load(std::memory_order_relaxed);
@@ -3479,7 +3985,7 @@ void Engine::renderMetronome(float* out, int32_t numFrames, double blockStartSam
     for (int32_t i = 0; i < numFrames; ++i) {
         const double p = blockStartSamples + i;
         if (p >= 0.0) {
-            const int64_t beat = static_cast<int64_t>(p / spb);
+            const int64_t beat = static_cast<int64_t>(transport_.beatAtSamples(p) * transport_.timeSigDenom() / 4.0 + 1e-10);
             if (beat != lastBeatEmitted_) {
                 lastBeatEmitted_ = beat;
                 clickRemaining_ = clickLen;
@@ -3497,7 +4003,9 @@ bool Engine::renderCountIn(float* out, int32_t numFrames, double spb) {
     const double sr = transport_.sampleRate();
     const int beatsPerBar = std::max(1, transport_.beatsPerBar());
     const int clickLen = static_cast<int>(0.03 * sr);
-    const double inc = spb > 0.0 ? 1.0 / spb : 0.0;
+    // countInPos_ is expressed in the signature's beat unit so 6/8 clicks six
+    // eighth notes while recorded pickup positions remain quarter-note beats.
+    const double inc = spb > 0.0 ? transport_.timeSigDenom() / (4.0 * spb) : 0.0;
     const int32_t dest = clickDest_.load(std::memory_order_relaxed);
     const float gain = clickGain_.load(std::memory_order_relaxed);
 

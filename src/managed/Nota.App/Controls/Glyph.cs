@@ -43,6 +43,7 @@ internal enum GlyphKind
     Home, Drive, AudioFile,        // the Files browse view: home folder, a drive, an audio file (spec 092)
     Menu,                          // the transport bar's Menu key: the whole app menu on Windows / Linux (#518)
     More,                          // the transport bar's overflow key: what the bar had no room for (#520)
+    Assistant,                     // the Assistant panel's key: a speech bubble with a question mark (specs/098)
 }
 
 internal sealed class Glyph : Control
@@ -538,6 +539,7 @@ internal sealed class Glyph : Control
         [GlyphKind.Automation] = ("M3 17.5 H9 L14.5 7.5 H21", "M7.099 17.5 A1.9 1.9 0 1 0 10.901 17.5 A1.9 1.9 0 1 0 7.099 17.5 ZM12.6 7.5 A1.9 1.9 0 1 0 16.399 7.5 A1.9 1.9 0 1 0 12.6 7.5 Z"),
         // Three channel faders, each a slot with a solid cap at its own level (the Mixer).
         [GlyphKind.Mixer] = ("M6 4 V20 M12 4 V20 M18 4 V20", "M4 12.5 H8 V16 H4 ZM10 6.5 H14 V10 H10 ZM16 10 H20 V13.5 H16 Z"),
+        [GlyphKind.Assistant] = ("M5.5 4 H18.5 A1.5 1.5 0 0 1 20 5.5 V15 A1.5 1.5 0 0 1 18.5 16.5 H10.5 L6.5 20 V16.5 H5.5 A1.5 1.5 0 0 1 4 15 V5.5 A1.5 1.5 0 0 1 5.5 4 Z M9.9 8.3 A2.15 2.15 0 1 1 12.9 10.2 C12.3 10.6 12 11 12 11.7", "M11.1 13.9 A0.9 0.9 0 1 0 12.9 13.9 A0.9 0.9 0 1 0 11.1 13.9 Z"),
         // The Apple mark.
         [GlyphKind.Apple] = (null, "F1 M8 4.8 C6.4 3.733 3 3.867 3 7.867 C3 11.067 4.933 14 6.2 14 C7.067 14 7.333 13.533 8 13.533 C8.667 13.533 8.933 14 9.8 14 C10.8 14 12.267 12.133 12.867 10.267 C11.733 9.8 11.067 8.8 11.067 7.667 C11.067 6.6 11.667 5.733 12.533 5.267 C11.467 4 9.333 3.933 8 4.8 ZM8.133 4.2 C8.133 2.867 9.067 1.867 10.4 1.8 C10.4 3.133 9.467 4.133 8.133 4.2 Z"),
         // The Windows mark.

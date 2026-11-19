@@ -144,7 +144,8 @@ void Lens::capture(const float* main, const float* key, int32_t keyFrames, int32
 
 void Lens::process(float* buf, int32_t frames) {
     const bool frozen = get(Freeze) >= 0.5f;
-    // The key (specs/050): the engine hands it over before each process(), one block late.
+    // The key (specs/050): the engine hands it over before each process(), this block's or,
+    // when scLate_ says so, the previous one.
     const float* key = scBuf_ && scFrames_ > 0 ? scBuf_ : nullptr;
     const int32_t keyN = scFrames_;
     scBuf_ = nullptr;
@@ -160,7 +161,7 @@ void Lens::process(float* buf, int32_t frames) {
     syncPrev_ = sync;
     // The plain scope (no key, no Sync) only fills the main ring, in the loop below.
     const bool lean = !frozen && !keyed && !sync;
-    const bool delay = keyed && (size_t)frames * 2 <= pend_.size();
+    const bool delay = keyed && scLate_ && (size_t)frames * 2 <= pend_.size();
     if (frozen || lean)
         pendN_ = 0;
     else if (delay) {
@@ -172,6 +173,8 @@ void Lens::process(float* buf, int32_t frames) {
         pendSpb_ = spb_;
         pendPlaying_ = playing_;
     } else {
+        // The key just stopped being late: the held block goes in without one (its key is gone).
+        if (pendN_ > 0 && !frozen && !lean) capture(pend_.data(), nullptr, 0, pendN_, pendBeat_, pendSpb_, pendPlaying_, sync);
         pendN_ = 0;
         capture(buf, key, keyN, frames, beat0_, spb_, playing_, sync);
     }

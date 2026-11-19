@@ -32,7 +32,7 @@ MiniaudioInput::~MiniaudioInput() {
     delete impl_;
 }
 
-bool MiniaudioInput::start(InputCallback cb, uint32_t device) {
+bool MiniaudioInput::start(InputCallback cb, uint32_t device, double preferredRate) {
     if (running_) return true;
     cb_ = std::move(cb);
 
@@ -43,6 +43,9 @@ bool MiniaudioInput::start(InputCallback cb, uint32_t device) {
     config.capture.pDeviceID = haveId ? &id : nullptr; // NULL = system default input
     config.capture.format = ma_format_f32;
     config.capture.channels = 0; // the device's own channel count (specs/086)
+    // The engine's rate (#563): miniaudio converts from the device's, so live monitoring
+    // hears the input at the right speed. 0 keeps the device's own rate.
+    config.sampleRate = preferredRate > 0.0 ? static_cast<ma_uint32>(preferredRate + 0.5) : 0;
     config.dataCallback = &captureCallback;
     config.pUserData = impl_;
 

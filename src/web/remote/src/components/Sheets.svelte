@@ -65,6 +65,14 @@
       </div>
       <span class="d2">{wearing}</span>
     </div>
+    <div class="block">
+      <span class="label">Session grid</span>
+      <div class="seg">
+        <button class:on={app.prefs.sessionAxis !== 'across'} onclick={() => (app.prefs.sessionAxis = 'down')}>Scenes down</button>
+        <button class:on={app.prefs.sessionAxis === 'across'} onclick={() => (app.prefs.sessionAxis = 'across')}>Scenes across</button>
+      </div>
+      <span class="d2">{app.prefs.sessionAxis === 'across' ? 'A scene per column, a track per row' : 'A scene per row, a track per column, as in Nota'}</span>
+    </div>
     <button class="toggle" onclick={() => (app.prefs.haptics = !app.prefs.haptics)}>
       <span class="switch" class:on={app.prefs.haptics}></span><span class="n2">Haptics on pads</span>
     </button>
@@ -109,7 +117,9 @@
   /* A floating sheet drawn in the page: a menu-sized card with the popover ring and drop. */
   .sheet { position: absolute; z-index: 21; left: 12px; top: calc(env(safe-area-inset-top) + 64px); width: 360px; max-width: calc(100% - 24px); max-height: calc(100% - 88px); background: var(--panel); border-radius: min(var(--r-group), 12px); box-shadow: var(--popover); display: flex; flex-direction: column; overflow: hidden; }
   .sheet.bottom { top: auto; right: 12px; width: auto; bottom: max(24px, env(safe-area-inset-bottom)); max-height: 75%; }
-  .sheet.menu { left: auto; right: 12px; width: 300px; }
+  /* The menu scrolls when it is taller than the screen (a phone on its side). */
+  .sheet.menu { left: auto; right: 12px; width: 300px; overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; }
+  .sheet.menu > * { flex: none; }
   .head { padding: 14px 16px 8px; }
   .list { overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; }
   /* Rows on rules, full width; the chosen one is picked: the soft tint, orange name and a 2 × 14 orange tick. */

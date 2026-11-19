@@ -233,6 +233,23 @@ scripts/package-linux.sh  # portable AppImage in dist/
   macOS or Windows, run the build inside a Linux container — see
   [Building a Linux AppImage from macOS/Windows](#building-a-linux-appimage-from-macoswindows).
 
+### NixOS and Nix
+
+The flake (`flake.nix`, x86_64 and aarch64 Linux) has three entry points:
+
+```bash
+nix develop            # or `devenv shell`: CMake, Ninja, .NET 10, Node and the native libs
+nix build              # the Nota package in ./result (bin/nota)
+nix run .#dev          # build this working tree and run it (engine rebuilt incrementally)
+```
+
+`nix build` runs in the Nix sandbox with no network, so every download the normal build
+makes is pinned in `nix/`: the CPM sources (`nix/nix-deps.json`, with the npm hash of the
+Remote page), and the NuGet packages (`nix/nuget-deps.json`). When `cmake/dependencies.cmake`,
+a `.csproj` package or `src/web/remote/package-lock.json` changes, run
+`scripts/update-nix-deps.sh` (needs Nix) and commit the two files with the change; a stale
+pin fails `nix build` with a hash or restore error.
+
 ## Packaging (installers and AppImages)
 
 All scripts write to `dist/`.

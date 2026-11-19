@@ -449,6 +449,10 @@ public sealed partial class PianoRollView : UserControl
             Background = Bg,   // the well below the rows when they don't fill the viewport
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            // A press focuses the note grid (it takes the keys); the grid is taller than the
+            // view, so bringing it into view on focus scrolled the rows away under the pointer
+            // just as a selection started (#445).
+            BringIntoViewOnFocusChange = false,
         };
 
         // Ruler row (corner + ruler) pinned above; velocity row pinned below.
@@ -819,7 +823,11 @@ public sealed partial class PianoRollView : UserControl
 
     private void Load(IEnumerable<NotaNote> notes, IEnumerable<int> owners, double lengthBeats)
     {
+        // A reload ends any preview in flight; the backup and its owners go together, or the
+        // next preview would pair a fresh backup with the old owners and index past it (#648).
         _previewBackup = null;
+        _previewOwners = null;
+        _ghosts.Clear();
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
         // A Session slot has no live path, so a velocity-wheel burst lives only in _notes until
         // the idle timer commits it. Recording reloads this roll ~60 Hz; dropping the burst
@@ -2166,6 +2174,8 @@ public sealed partial class PianoRollView : UserControl
         // Vertical auto-scroll while a drag runs past the viewport edges.
         private DispatcherTimer? _autoScroll;
         private double _autoVelY;
+        // The drag's lowest / highest view-y so far: an edge scrolls once the pointer moved toward it (#445).
+        private double _autoMinViewY = double.NaN, _autoMaxViewY = double.NaN;
         private Point _lastGrid;
 
         private readonly List<(Rect, Color)> _doomed = new();   // per-frame scratch for the overwrite marks
@@ -2738,6 +2748,7 @@ public sealed partial class PianoRollView : UserControl
         private void EndDrag()
         {
             StopAutoScroll();
+            _autoMinViewY = _autoMaxViewY = double.NaN;
             if (_drag == Mode.None) return;
             var was = _drag;
             _drag = Mode.None;
@@ -2805,10 +2816,18 @@ public sealed partial class PianoRollView : UserControl
             double top = sv.Offset.Y, vh = sv.Viewport.Height;
             if (vh <= 0) { StopAutoScroll(); return; }
             double yInView = gridP.Y - top;
-            const double margin = 28, speed = 14;
+            const double margin = 28, speed = 14, intent = 6;
+            // Scroll only toward an edge the pointer has moved to: a drag that merely starts
+            // near the top or bottom row (a selection there) must not pull the view (#445).
+            // Measured in the view, from the point farthest from that edge so far — not from
+            // the press's grid row, which a scroll moves away: after scrolling down, a move
+            // back up to the top edge must scroll up again.
+            if (double.IsNaN(_autoMinViewY)) _autoMinViewY = _autoMaxViewY = yInView;
+            _autoMinViewY = Math.Min(_autoMinViewY, yInView);
+            _autoMaxViewY = Math.Max(_autoMaxViewY, yInView);
             double vel = 0;
-            if (yInView < margin) vel = -speed * (1 - Math.Clamp(yInView, 0, margin) / margin);
-            else if (yInView > vh - margin) vel = speed * (1 - Math.Clamp(vh - yInView, 0, margin) / margin);
+            if (yInView < margin && yInView < _autoMaxViewY - intent) vel = -speed * (1 - Math.Clamp(yInView, 0, margin) / margin);
+            else if (yInView > vh - margin && yInView > _autoMinViewY + intent) vel = speed * (1 - Math.Clamp(vh - yInView, 0, margin) / margin);
             _autoVelY = vel;
             if (Math.Abs(vel) < 0.01) StopAutoScroll(); else StartAutoScroll();
         }

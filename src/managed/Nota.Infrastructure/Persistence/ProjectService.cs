@@ -42,7 +42,10 @@ public sealed class ProjectService
     /// v30 (specs/085) adds MidiOffsetMs and ArticulationMap on tracks and Articulation on notes.
     /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
     /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
-    public const int CurrentFormatVersion = 32;
+    /// v33 (specs/086) adds the optional tempo map and curve handles.
+    /// v34 (specs/099) makes tempo the master track's Tempo automation lane.
+    /// v35 (specs/103) adds FollowBypass on Session slots.
+    public const int CurrentFormatVersion = 35;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -72,7 +75,7 @@ public sealed class ProjectService
             Session = CaptureSession(engine),
             Transport = new TransportDto
             {
-                Bpm = transport.Bpm,
+                Bpm = engine.IsTempoAutomated ? engine.TempoAt(0) : transport.Bpm,
                 MasterVolume = transport.MasterVolume,
                 MetronomeOn = transport.MetronomeOn,
                 LoopOn = transport.LoopOn,
@@ -285,6 +288,11 @@ public sealed class ProjectService
             {
                 if (!engine.GetSessionSlotStopButton(ti.Id, s) && engine.SessionSlotState(ti.Id, s) == 0)
                     (t.SessionNoStop ??= new List<int>()).Add(s);
+                if (engine.TryGetSessionSlotTakeLength(ti.Id, s, out var take) && take.TakeMode != SlotTakeMode.Global)
+                    (t.SessionTakeLengths ??= new List<SlotTakeLengthDto>()).Add(new SlotTakeLengthDto
+                    {
+                        Scene = s, Mode = take.Mode, Bars = take.Bars, Beats = take.Beats,
+                    });
                 // Persist any slot that holds a clip — skip only truly empty ones. (A slot
                 // that's playing/queued/recording is state 2-4, not 1, but still has content;
                 // gating on == 1 dropped it when saving mid-jam.)
@@ -320,24 +328,7 @@ public sealed class ProjectService
             }
 
             // Automation lanes (M9-A4; plugin-param lanes carry a stable id, M9-B4).
-            int laneCount = engine.AutomationLaneCount(ti.Id);
-            for (int l = 0; l < laneCount; l++)
-            {
-                var info = engine.AutomationLaneInfo(ti.Id, l);
-                var (laneChain, laneSlot) = engine.AutomationLanePath(ti.Id, l);
-                t.Automation.Add(new AutomationLaneDto
-                {
-                    Chain = laneChain >= 0 ? laneChain : null,
-                    Slot = laneChain >= 0 ? laneSlot : null,
-                    Target = (int)info.Target,
-                    DeviceIndex = info.DeviceIndex,
-                    ParamIndex = info.ParamIndex,
-                    PluginParamId = info.Target == AutomationTarget.PluginParam
-                        ? engine.AutomationLaneParamId(ti.Id, l) : null,
-                    Points = System.Array.ConvertAll(engine.GetAutomationPoints(ti.Id, l),
-                        p => new AutomationPointDto(p)),
-                });
-            }
+            t.Automation.AddRange(CaptureLanes(engine, ti.Id));
 
             // CV modulation (Phase 3): LFO sources + links to device params.
             int modCount = engine.ModulatorCount(ti.Id);
@@ -410,9 +401,70 @@ public sealed class ProjectService
             ColorIndex = engine.GetTrackColorIndex(masterId),
             Devices = CaptureDevices(engine, masterId, doc, idToIndex, warnings, "Master"),
             NestedSidechains = NestedLinks(engine, masterId, idToIndex).Item1,   // keys inside the master's racks
+            Automation = CaptureLanes(engine, masterId) is { Count: > 0 } masterLanes ? masterLanes : null,
+            Pan = engine.MasterPan is var mPan && mPan != 0f ? mPan : null,
         };
 
         return doc;
+    }
+
+    // A track's (or the master's) automation lanes, as saved (M9-A4; plug-in lanes by stable id).
+    private static List<AutomationLaneDto> CaptureLanes(IAudioEngine engine, int trackId)
+    {
+        var lanes = new List<AutomationLaneDto>();
+        int laneCount = engine.AutomationLaneCount(trackId);
+        for (int l = 0; l < laneCount; l++)
+        {
+            var info = engine.AutomationLaneInfo(trackId, l);
+            var (laneChain, laneSlot) = engine.AutomationLanePath(trackId, l);
+            lanes.Add(new AutomationLaneDto
+            {
+                Chain = laneChain >= 0 ? laneChain : null,
+                Slot = laneChain >= 0 ? laneSlot : null,
+                Target = (int)info.Target,
+                DeviceIndex = info.DeviceIndex,
+                ParamIndex = info.ParamIndex,
+                PluginParamId = info.Target == AutomationTarget.PluginParam
+                    ? engine.AutomationLaneParamId(trackId, l) : null,
+                Points = System.Array.ConvertAll(engine.GetAutomationPoints(trackId, l),
+                    p => new AutomationPointDto(p)),
+            });
+        }
+        return lanes;
+    }
+
+    // Recreates saved lanes on a track (or the master) whose devices are already rebuilt, so
+    // DeviceParam lanes resolve to the same chain positions; plugin-param lanes by stable id.
+    private static void ApplyLanes(IAudioEngine engine, int id, IEnumerable<AutomationLaneDto> saved, List<string> warnings)
+    {
+        foreach (var lane in saved)
+        {
+            int li;
+            if (lane.Chain is int lc) // a lane on a device grouped into a rack (specs/044)
+            {
+                li = engine.AddNestedAutomationLane(id, (AutomationTarget)lane.Target, lane.DeviceIndex, lc, lane.Slot ?? 0,
+                                                    lane.ParamIndex, lane.PluginParamId);
+                if (li < 0) { warnings.Add("Couldn't recreate an automation lane on a device in a rack."); continue; }
+            }
+            else if ((AutomationTarget)lane.Target == AutomationTarget.PluginParam)
+            {
+                string pid = lane.PluginParamId ?? "";
+                li = engine.AddPluginAutomationLane(id, lane.DeviceIndex, pid);
+                if (li < 0) { warnings.Add("Couldn't recreate a plugin-param automation lane."); continue; }
+                // Keep the data, but flag if the id no longer maps to a live param
+                // (plugin updated/replaced): the envelope stays saved, just inert.
+                if (!PluginParamExists(engine, id, lane.DeviceIndex, pid))
+                    warnings.Add($"Plugin parameter \"{pid}\" not found — its automation was kept but is inactive.");
+            }
+            else
+            {
+                li = engine.AddAutomationLane(id, (AutomationTarget)lane.Target, lane.DeviceIndex, lane.ParamIndex);
+                if (li < 0) { warnings.Add("Couldn't recreate an automation lane."); continue; }
+            }
+            if (lane.Points.Length > 0)
+                engine.SetAutomationPoints(id, li,
+                    System.Array.ConvertAll(lane.Points, p => p.ToPoint()));
+        }
     }
 
     // Capture a track's device chain (built-in params / plugin identity+state / rack blob,
@@ -590,6 +642,9 @@ public sealed class ProjectService
         // The saved tempo before any clip (specs/067): take lanes lay their comp out on it, so a
         // section the user moved isn't mistaken for one still on its take when the UI's tempo lands.
         if (doc.Transport.Bpm > 0) engine.SetBpm(doc.Transport.Bpm);
+        // The master Tempo lane (specs/099) before any clip too: clips are saved on its beats.
+        var masterLanes = doc.Master?.Automation ?? new List<AutomationLaneDto>();
+        ApplyLanes(engine, engine.MasterTrackId, masterLanes.Where(l => l.Target == (int)AutomationTarget.Tempo), warnings);
 
         // The loop: its region as saved (#455) and whether it's on; the transport bar reads both back.
         if (doc.Transport.LoopStart is double ls && doc.Transport.LoopEnd is double le && le > ls)
@@ -911,38 +966,13 @@ public sealed class ProjectService
             }
             if (t.SessionNoStop is { } noStop)
                 foreach (int sc in noStop) engine.SetSessionSlotStopButton(id, sc, false);
+            if (t.SessionTakeLengths is { } takeLens)
+                foreach (var tl in takeLens)
+                    if (!engine.SetSessionSlotTakeLength(id, tl.Scene, new NotaSlotTakeLength((SlotTakeMode)tl.Mode, tl.Bars, tl.Beats)))
+                        warnings.Add($"Scene {tl.Scene + 1}: a Session slot's take length couldn't be restored.");
 
-            // Automation lanes (M9-A4). Devices are already rebuilt above, so
-            // DeviceParam lanes resolve to the same chain positions; plugin-param
-            // lanes resolve by stable id (M9-B4).
-            foreach (var lane in t.Automation)
-            {
-                int li;
-                if (lane.Chain is int lc) // a lane on a device grouped into a rack (specs/044)
-                {
-                    li = engine.AddNestedAutomationLane(id, (AutomationTarget)lane.Target, lane.DeviceIndex, lc, lane.Slot ?? 0,
-                                                        lane.ParamIndex, lane.PluginParamId);
-                    if (li < 0) { warnings.Add("Couldn't recreate an automation lane on a device in a rack."); continue; }
-                }
-                else if ((AutomationTarget)lane.Target == AutomationTarget.PluginParam)
-                {
-                    string pid = lane.PluginParamId ?? "";
-                    li = engine.AddPluginAutomationLane(id, lane.DeviceIndex, pid);
-                    if (li < 0) { warnings.Add("Couldn't recreate a plugin-param automation lane."); continue; }
-                    // Keep the data, but flag if the id no longer maps to a live param
-                    // (plugin updated/replaced): the envelope stays saved, just inert.
-                    if (!PluginParamExists(engine, id, lane.DeviceIndex, pid))
-                        warnings.Add($"Plugin parameter \"{pid}\" not found — its automation was kept but is inactive.");
-                }
-                else
-                {
-                    li = engine.AddAutomationLane(id, (AutomationTarget)lane.Target, lane.DeviceIndex, lane.ParamIndex);
-                    if (li < 0) { warnings.Add("Couldn't recreate an automation lane."); continue; }
-                }
-                if (lane.Points.Length > 0)
-                    engine.SetAutomationPoints(id, li,
-                        System.Array.ConvertAll(lane.Points, p => p.ToPoint()));
-            }
+            // Automation lanes (M9-A4). Devices are already rebuilt above.
+            ApplyLanes(engine, id, t.Automation, warnings);
 
             // CV modulation (Phase 3). Devices are rebuilt above, so link device
             // indices resolve. Saved modulator ids are remapped to the fresh ids.
@@ -1015,9 +1045,12 @@ public sealed class ProjectService
             int masterId = engine.MasterTrackId;
             if (md.Name is { Length: > 0 } mnm) engine.SetTrackName(masterId, mnm);
             if (md.ColorIndex >= 0) engine.SetTrackColorIndex(masterId, md.ColorIndex);
+            engine.SetMasterPan(md.Pan is { } mp && float.IsFinite(mp) ? mp : 0f);
             ApplyDevices(engine, masterId, md.Devices, bundleDir, scDeferred, warnings);
             foreach (var n in md.NestedSidechains ?? new())
                 if (n.Source >= 0) nestedScDeferred.Add((masterId, n));
+            // Master lanes other than Tempo (applied first, above), now that its devices exist.
+            ApplyLanes(engine, masterId, (md.Automation ?? new()).Where(l => l.Target != (int)AutomationTarget.Tempo), warnings);
         }
 
         // Sidechain wiring, now that every track exists (Phase B). Source is a doc index.
@@ -1480,7 +1513,7 @@ public sealed class ProjectService
         dto.Color = p.Color; dto.LaunchMode = p.LaunchMode; dto.Quant = p.QuantBeats;
         dto.Legato = p.Legato != 0; dto.Loop = p.Loop != 0; dto.VelocityAmount = p.VelocityAmount;
         dto.FollowA = p.FollowA; dto.FollowB = p.FollowB; dto.ChanceA = p.ChanceA; dto.ChanceB = p.ChanceB;
-        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene;
+        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene; dto.FollowBypass = p.FollowBypass != 0;
         return dto;
     }
 
@@ -1492,7 +1525,7 @@ public sealed class ProjectService
             Color = sl.Color, LaunchMode = sl.LaunchMode, QuantBeats = sl.Quant,
             Legato = sl.Legato ? 1 : 0, Loop = sl.Loop ? 1 : 0, VelocityAmount = sl.VelocityAmount,
             FollowA = sl.FollowA, FollowB = sl.FollowB, ChanceA = sl.ChanceA, ChanceB = sl.ChanceB,
-            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene,
+            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene, FollowBypass = sl.FollowBypass ? 1 : 0,
         });
     }
 }

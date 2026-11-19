@@ -125,10 +125,23 @@ public sealed partial class RemoteHub
             }
 
             // ---- session ------------------------------------------------------------
-            case "launch": if (TrackExists(cmd.Id) && cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.LaunchSlot(cmd.Id, cmd.I); break;
+            // A group id launches / stops each of its members, as the desktop's group slot does (#662).
+            case "launch":
+                if (TrackExists(cmd.Id) && cmd.I >= 0 && cmd.I < _engine.SceneCount)
+                    foreach (int id in Members(cmd.Id) ?? new List<int> { cmd.Id }) _engine.LaunchSlot(id, cmd.I);
+                break;
             case "scene": if (cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.LaunchScene(cmd.I); break;
-            case "stopSlot": if (TrackExists(cmd.Id)) _engine.StopSlot(cmd.Id); break;
+            case "stopSlot":
+                if (TrackExists(cmd.Id))
+                    foreach (int id in Members(cmd.Id) ?? new List<int> { cmd.Id }) _engine.StopSlot(id);
+                break;
             case "stopAll": _engine.StopAllSession(); break;
+            // #480: hold a queued clip / group slot / scene on the phone to withdraw its launch.
+            // A group id cancels every track below it in one go — the engine withdraws them together.
+            case "cancel":
+                if (TrackExists(cmd.Id) && cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.CancelSlotLaunch(cmd.Id, cmd.I);
+                break;
+            case "cancelScene": if (cmd.I >= 0 && cmd.I < _engine.SceneCount) _engine.CancelSceneLaunch(cmd.I); break;
         }
     }
 
@@ -230,6 +243,42 @@ public sealed partial class RemoteHub
 
     internal static void Toast(RemoteClient c, string msg)
         => c.Send(Json(w => { w.WriteString("t", "toast"); w.WriteString("msg", msg); }));
+
+    /// <summary>A group's members — every track below it that holds clips (not a group, not a
+    /// return), nested groups included, in project order, as the desktop's Session grid counts
+    /// them; null when <paramref name="trackId"/> is not a group. Read fresh from the engine:
+    /// a command must act on the project as it is now.</summary>
+    private List<int>? Members(int trackId)
+    {
+        var rows = new List<(int Id, int Group, bool IsGroup, bool IsReturn)>();
+        int n = _engine.TrackCount;
+        for (int i = 0; i < n; i++)
+            if (_engine.TryGetTrackInfo(i, out var ti)) rows.Add((ti.Id, ti.GroupId, ti.IsGroup, ti.IsReturn));
+        return GroupMembers(rows).TryGetValue(trackId, out var m) ? m : null;
+    }
+
+    /// <summary>Every group's members (see <see cref="Members"/>) in one pass over the track list.</summary>
+    internal static Dictionary<int, List<int>> GroupMembers(IReadOnlyList<(int Id, int Group, bool IsGroup, bool IsReturn)> rows)
+    {
+        var parent = new Dictionary<int, int>(rows.Count);
+        var result = new Dictionary<int, List<int>>();
+        foreach (var r in rows)
+        {
+            parent[r.Id] = r.Group;
+            if (r.IsGroup) result[r.Id] = new List<int>();
+        }
+        foreach (var r in rows)
+        {
+            if (r.IsGroup || r.IsReturn) continue;
+            int g = r.Group, guard = 0;
+            while (g > 0 && guard++ < 32)
+            {
+                if (result.TryGetValue(g, out var list)) list.Add(r.Id);
+                g = parent.TryGetValue(g, out int p) ? p : -1;
+            }
+        }
+        return result;
+    }
 
     private bool TrackExists(int trackId)
     {

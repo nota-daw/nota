@@ -76,6 +76,7 @@ struct ArticulationBlock {
     double seamEnd = 0.0;    // where the seam was (samples), when seamOffs
     double chaseStart = -1.0; // last discontinuity on this clock, for a chased key's later release
     ArticulationReleaseState* releases = nullptr; // Session: rendered-frame clock for all latching releases
+    const class TempoMap* tempoMap = nullptr; // arrangement absolute timing, no effect on Session's local clock
 };
 
 // Fills `out` (capacity `cap`) with the block's events, sorted, and returns how many. Events that

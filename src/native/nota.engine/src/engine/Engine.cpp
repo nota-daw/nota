@@ -634,7 +634,7 @@ void Engine::transportStop() {
         for (auto& t : authoring_->tracks)
             if (auto& sp = t->sessionPlayer;
                 sp && (sp->playing.load(std::memory_order_relaxed) >= 0 ||
-                          sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone))
+                          sp->pendingSlot() != SessionPlayer::kNone))
                 sp->requestStopNow();
     sceneFollowScene_ = -1;
     Command c;
@@ -649,7 +649,9 @@ void Engine::backToArrangement() {
     sceneFollowScene_ = -1;
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
-void Engine::setBpm(double bpm) {
+bool Engine::setBpm(double bpm) {
+    if (!std::isfinite(bpm) || bpm < 1 || bpm > 999) return false;
+    if (tempoMap()) return false; // the master Tempo lane leads (specs/099)
     Command c;
     c.type = CommandType::SetBpm;
     c.d0 = bpm;
@@ -664,9 +666,10 @@ void Engine::setBpm(double bpm) {
         authoringBpm_ = bpm;
         placeTakesForTempo(); // take lanes + their comp keep one mapping (specs/067)
     }
+    return true;
 }
 double Engine::bpm() const {
-    return transport_.bpm();
+    return transport_.uiBpm();
 }
 void Engine::setTimeSignature(int num, int denom) {
     Command c;
@@ -711,7 +714,8 @@ std::shared_ptr<Track> Engine::findTrackAuthoring(int32_t id) const {
 std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     // Reuse playback state at construction: allocating a fresh player here only to replace it
     // later wastes its fixed release storage on every clip edit and undo.
-    auto nt = std::make_shared<Track>(t.id(), t.type(), t.sessionPlayer);
+    // The same goes for the held live notes (#366, #504), shared by every version of the track.
+    auto nt = std::make_shared<Track>(t.id(), t.type(), t.sessionPlayer, t.liveHeld);
     nt->setVolume(t.volume());
     nt->setPan(t.pan());
     nt->setMute(t.mute());
@@ -743,10 +747,10 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
-    nt->liveHeld = t.liveHeld;           // shared — held live notes (#366) and effect tail (#449) persist
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
+    nt->frozenTiming = t.frozenTiming;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
     nt->pianoFold = t.pianoFold;
@@ -806,7 +810,81 @@ bool Engine::setRenderThreads(int n) {
     return true;
 }
 
+// A clip note sounds until the render reaches its note-off. An edit that takes a sounding note
+// away — its clip deleted or cut, the note deleted, moved or shortened, an undo, a tool preview
+// put back — leaves that note-off nowhere to come from, and the voice held on until Stop
+// (#649). While playing, each instrument track an edit replaced is compared with the one
+// before it: a note of its arrangement clips around the playhead that the edit took away has
+// its pitch released on the audio thread (ReleaseNote, which spares a key held live), unless
+// the track still holds that pitch now. The window is wide because the UI's playhead trails
+// the render's; releasing a pitch that had already stopped is harmless, and notes the edit
+// left as they were release nothing.
+void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
+    const double pos = transport_.uiPositionBeats();
+    constexpr double kWindow = 0.5; // beats: what may be sounding around the UI's playhead
+    constexpr double kAhead = 0.05; // beats: what the render may already have started past it
+    struct Span {
+        int32_t pitch;
+        double on, off;
+    };
+    // The notes a track's clips sound within the window around the playhead, in absolute beats.
+    const auto around = [&](const Track& t, std::vector<Span>& out) {
+        for (const MidiClip& clip : t.midiClips) {
+            const double end = clip.startBeat + clip.lengthBeats;
+            if (clip.startBeat > pos + kWindow || end < pos - kWindow) continue;
+            for (const Note& n : clip.notes) {
+                if (n.pitch < 0 || n.pitch >= 128 || n.startBeat >= clip.lengthBeats) continue;
+                const double on = clip.startBeat + std::max(0.0, n.startBeat);
+                const double off = std::min(end, clip.startBeat + n.startBeat + n.lengthBeats);
+                if (off > on && on <= pos + kWindow && off >= pos - kWindow) out.push_back({n.pitch, on, off});
+            }
+        }
+    };
+    std::vector<Span> was, is;
+    for (const auto& old : before.tracks) {
+        if (!old || old->type() != TrackType::Instrument || old->midiClips.empty()) continue;
+        const Track* now = nullptr;
+        bool same = false;
+        for (const auto& t : after.tracks)
+            if (t && t->id() == old->id()) {
+                now = t.get();
+                same = (t == old);
+                break;
+            }
+        if (same || !now) continue; // untouched, or gone with its instrument
+        was.clear();
+        around(*old, was);
+        if (was.empty()) continue;
+        is.clear();
+        around(*now, is);
+        // Only a note the edit took away counts: one still there as it was (a rename, an edit
+        // elsewhere) releases nothing. A vanished note's pitch is let go unless the edited
+        // track holds that pitch right now — a later note of the pitch doesn't keep it ringing.
+        uint32_t gone[4] = {};
+        for (const Span& w : was) {
+            bool kept = false;
+            for (const Span& n : is)
+                if (n.pitch == w.pitch && std::fabs(n.on - w.on) < 1e-6 && std::fabs(n.off - w.off) < 1e-6) {
+                    kept = true;
+                    break;
+                }
+            if (!kept) gone[w.pitch >> 5] |= 1u << (w.pitch & 31);
+        }
+        for (const Span& n : is)
+            if (n.on <= pos + kAhead && n.off >= pos) gone[n.pitch >> 5] &= ~(1u << (n.pitch & 31));
+        for (int p = 0; p < 128; ++p) {
+            if (!((gone[p >> 5] >> (p & 31)) & 1u)) continue;
+            Command c;
+            c.type = CommandType::ReleaseNote;
+            c.i0 = old->id();
+            c.i1 = p;
+            commands_.push(c);
+        }
+    }
+}
+
 void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
+    if (g && !restored) deriveTempoMap(*g); // specs/099: the master Tempo lane is the tempo
     // Fade flags are derived, not stored. A track this graph shares with the one still
     // playing is the audio thread's — leave it. Any other one an edit just cloned is
     // settled in place. A restored track (undo, redo, take retry) was published before and
@@ -852,6 +930,24 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             settleArticulations(*t);
         }
     }
+    // A mapped stretch is prepared before publication, never in render. Reuse it
+    // across unrelated edits; clone only the tracks whose cache identity changed.
+    if (g && g->tempoMap) for (auto& t : g->tracks) {
+        bool copied = false;
+        for (size_t i = 0; i < t->clips.size(); ++i) {
+            const auto& c = t->clips[i];
+            if (!c.warpEnabled || !c.sample) continue;
+            const auto* cache = c.tempoWarpCache();
+            if (cache && c.tempoWarp->map == g->tempoMap && cache->devSR == transport_.sampleRate() &&
+                c.tempoWarp->startBeat == c.startBeat && c.tempoWarp->reversed == c.reversed &&
+                cache->inputs.sample == c.sample.get() && cache->inputs.markers == c.warpMarkers &&
+                cache->inputs.playStart == c.warpPlayStart && cache->inputs.playEnd == c.warpPlayEndEff() &&
+                cache->inputs.pitch == c.pitchSemitones && cache->inputs.mode == c.warpMode) continue;
+            if (!copied) { t = cloneTrack(*t); copied = true; }
+            configureTempoWarp(t->clips[i], g->tempoMap, transport_.sampleRate());
+        }
+    }
+    if (g && authoring_ && transport_.uiIsPlaying()) releaseVanishedClipNotes(*authoring_, *g);
     authoring_ = g;
     if (g) ensureRenderScratch(g->tracks.size());
     // Fresh track objects only: the audio thread never sees them change. Before any CC target
@@ -1280,6 +1376,56 @@ bool Engine::setPanLaw(PanLaw law, bool checkpoint) {
         panLawSnap_.store(true, std::memory_order_release);
     }
     return true;
+}
+
+const TrackLane* Engine::masterTempoLane(const Graph& g) {
+    if (!g.masterTrack) return nullptr;
+    for (const auto& lane : g.masterTrack->automation)
+        if (lane.target == AutomationTarget::Tempo) return &lane;
+    return nullptr;
+}
+
+bool Engine::tempoAutomated() const {
+    return tempoMap() != nullptr;
+}
+
+void Engine::deriveTempoMap(Graph& g) const {
+    const TrackLane* lane = masterTempoLane(g);
+    const bool hasPoints = lane && !lane->points.empty();
+    const auto& old = authoring_ ? authoring_->tempoMap : nullptr;
+    if (!hasPoints && !g.tempoMap) return;
+    if (hasPoints && g.tempoMap && g.tempoMap->source.size() == lane->points.size() &&
+        std::equal(lane->points.begin(), lane->points.end(), g.tempoMap->source.begin(),
+            [](const AutomationPoint& a, const AutomationPoint& b) {
+                return a.beat == b.beat && a.value == b.value && a.curve == b.curve;
+            })) return;
+    g.tempoMap = hasPoints ? TempoMap::fromLane(lane->points) : nullptr;
+    if (g.tempoMap == old) return;
+    // Natural-rate recordings are physical-time anchors: reproject their beat placement,
+    // never their source samples, when the musical ruler changes. Only tracks this edit left
+    // alone (still shared with the published graph): an edit that moved clips itself (a
+    // section move carrying clips and tempo together) placed them already.
+    auto shared = [&](const std::shared_ptr<Track>& t) {
+        if (!authoring_) return false;
+        for (const auto& o : authoring_->tracks) if (o == t) return true;
+        return false;
+    };
+    auto toBeat = [&](double seconds) {
+        return g.tempoMap ? g.tempoMap->beatAt(seconds) : seconds * authoringBpm_ / 60.0;
+    };
+    for (auto& t : g.tracks) {
+        if (!shared(t)) { // this edit's own clone: its placement stands, its takes follow the map
+            for (auto& take : t->takes) take.tempoMap = g.tempoMap;
+            continue;
+        }
+        if (t->takes.empty() && std::none_of(t->clips.begin(), t->clips.end(), [](const auto& c) { return !c.warpEnabled; })) continue;
+        t = cloneTrack(*t);
+        for (auto& c : t->clips) if (!c.warpEnabled) c.startBeat = toBeat(beatToSeconds(c.startBeat));
+        for (auto& take : t->takes) {
+            take.originBeat = toBeat(beatToSeconds(take.originBeat));
+            take.tempoMap = g.tempoMap;
+        }
+    }
 }
 
 // --- arrangement sections (specs/016) ---------------------------------------

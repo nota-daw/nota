@@ -30,6 +30,18 @@ public interface IPluginCatalog
     void RemoveScanPath(int index);
     int ScanPathCount { get; }
     string? ScanPath(int index);
+
+    /// <summary>Number of OS-standard default scan folders for <paramref name="format"/>
+    /// ("VST3" today; 0 for unknown formats).</summary>
+    int DefaultScanPathCount(string format) => 0;
+    /// <summary>Absolute OS-standard default scan folder <paramref name="index"/> for
+    /// <paramref name="format"/>, or null when out of range or format unknown.</summary>
+    string? DefaultScanPath(string format, int index) => null;
+    /// <summary>Re-adds the missing OS-standard defaults for <paramref name="format"/>;
+    /// keeps everything else untouched. Returns how many were added.</summary>
+    int RestoreDefaultScanPaths(string format) => 0;
+    /// <summary>Whether <paramref name="dir"/> was removed by the user (backfill skips it).</summary>
+    bool IsScanPathRemoved(string dir) => false;
 }
 
 /// <summary>A running plugin scan: probes finished of <see cref="Total"/> (0 while still
