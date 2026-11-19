@@ -1077,6 +1077,14 @@ if (args.Length >= 1 && args[0] == "--midi-ctl")
     Console.WriteLine(failures == 0 ? "MIDI CTL PASSED" : $"MIDI CTL FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Sidechain keys arrive in the same block (#676) alone: `--sidechain-sync`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--sidechain-sync")
+{
+    Console.WriteLine("-- sidechain sync --");
+    foreach (var (ok, label) in SidechainSyncTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SIDECHAIN SYNC PASSED" : $"SIDECHAIN SYNC FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Tempo-synced synth LFOs follow the song position (#676) alone: `--synth-lfo-sync`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--synth-lfo-sync")
 {
@@ -15977,6 +15985,7 @@ Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- synth lfo sync --");
 foreach (var (ok, label) in SynthLfoSyncTests.Run()) Check(ok, label);
+foreach (var (ok, label) in SidechainSyncTests.Run()) Check(ok, label);
 Console.WriteLine("-- preset init --");
 foreach (var (ok, label) in PresetInitTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota mosaic --");

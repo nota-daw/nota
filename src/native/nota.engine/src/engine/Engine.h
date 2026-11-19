@@ -2693,6 +2693,14 @@ class Engine {
         float sends[kMaxReturns] = {};
         bool anySend = false;
         bool tapRec = false;
+        // Same-block sidechain keys (#676): the route slots this leaf's devices, instrument and
+        // rack children listen to, the render level that puts it after the leaves feeding them,
+        // whether it was rendered ahead of the accumulate (its own leafBuf region), and whether
+        // its pre-FX and post-fader taps are already written (at that fader: vol / pan).
+        uint32_t keyNeeds = 0;
+        int level = 0;
+        bool preRendered = false, tapsDone = false;
+        float vol = 1.0f, pan = 0.0f;
     };
     // Per-block render scratch, by position in the live graph's track list: Pass 1 leaf
     // work + render storage and the MIDI/expression pre-pass buffers. The audio thread
@@ -2852,10 +2860,12 @@ class Engine {
 
     // Signal routing (Phase B): a pool of route buses that source tracks tap their
     // post-fader signal into, for sidechain / inter-track routing. Double-buffered:
-    // consumers (a compressor's detector) read routeBus_ (previous block) while
-    // sources fill routeBusNext_ this block; swapped at block end. This makes the
-    // routing order-independent (no track-ordering dependency, no double render) at
-    // the cost of one block of detector latency — inaudible after attack/release.
+    // sources fill routeBusNext_ this block; swapped at block end into routeBus_.
+    // A consumer hears this block's signal when its source is already written (the slot is
+    // fresh, routeFresh_): Pass 1 renders a keyed leaf a level after the leaves keying it,
+    // and groups and returns run after every leaf (#676 — a block of key latency was a whole
+    // 8192-frame chunk in an export, the pump ~170 ms late). Otherwise (a leaf keyed by a
+    // group or return, a key cycle) it reads routeBus_, the previous block.
     // Each source slot mirrors two tap points so consumers can pick (Phase D):
     // routeBus{Post,Pre}_ = post-FX post-fader and pre-FX pre-fader signal.
     // A slot may also mirror one part of the source's instrument (specs/050): a Drum Rack pad,
@@ -2929,6 +2939,12 @@ class Engine {
     struct SegAnchor { int32_t off; double samples; bool rolling, jump; };
     static constexpr int32_t kMaxSegAnchors = 32;
     SegAnchor segAnchors_[kMaxSegAnchors] = {};
+    // Which route slots hold this block's signal already (see routeBus_): cleared with the
+    // Next buses at the start of mixGraph, set once a source's taps are written. Written by the
+    // audio thread between pool dispatches only, so a leaf rendering in the pool reads a value
+    // that can't change under it. Kept last, as above.
+    bool routeFresh_[kSidechainRoutes] = {};
+    static constexpr int kMaxKeyLevels = kSidechainRoutes; // a chain of keys this long, at most
 };
 
 } // namespace nota

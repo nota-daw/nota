@@ -22,6 +22,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.60.4] — 2026-11-19
+
+### Added
+- **Nota on NixOS** (#596, from #621 by @Rudi-Regentonne): `nix run github:nota-daw/nota`
+  builds a Nix package of Nota from the flake and starts it (x86_64 and aarch64 Linux), with
+  every dependency pinned so the build needs no network. In a checkout, `nix develop` or
+  `devenv shell` opens a shell with the build tools, and `nix run .#dev` builds and runs the
+  working tree. `scripts/update-nix-deps.sh` refreshes the pins when dependencies change.
+
+### Changed
+- **macOS 12 (Monterey) is enough** (#684): Nota used to need macOS 13. The engine and the
+  app bundle now ask for macOS 12, which the rest of the app already ran on.
+
+### Fixed
+- **Sidechain pumping stays on the kick in the export** (#676): a device keyed by another
+  track — a Compressor ducking under the kick, a gate, Dynamic EQ, the vocoder, Nota Flux's
+  React — now hears its key track in the same moment, live and in the export. It used to hear
+  the key one audio block late: a few milliseconds while you worked, but a whole export chunk
+  (about 170 ms) in the exported file, so the pumping landed well after the kick. Live, keyed
+  devices now react without the buffer's delay too. A track keyed by a group or a return, and
+  tracks that key each other, still hear their key one block late.
+
 ## [0.60.3] — 2026-11-18
 
 ### Fixed

@@ -2897,28 +2897,34 @@ void Engine::feedPartTaps(const Track& t) {
 
 // The key buffer for a consumer: its route slot's tap, nullptr for none — or, for a part key
 // whose part is gone (specs/050), silence: a detector handed nullptr keys off its own input,
-// and the key is shown as missing, not as Internal.
+// and the key is shown as missing, not as Internal. This block's tap once the source has
+// written it (routeFresh_, #676), else the previous block's.
 const float* Engine::keyBuffer(int32_t src, uint64_t part, bool pre) const {
     const int32_t s = routeSlotFor(src, part);
-    if (s >= 0) return pre ? routeBusPre_[s].data() : routeBus_[s].data();
+    if (s >= 0) {
+        if (routeFresh_[s]) return pre ? routeBusPreNext_[s].data() : routeBusNext_[s].data();
+        return pre ? routeBusPre_[s].data() : routeBus_[s].data();
+    }
     return part != 0 ? silentKey_.data() : nullptr;
 }
 
-// Hand a device its sidechain key for this block (the source track's previous-block
-// signal, pre- or post-FX tap) or its MIDI key; a rack passes keys on to its chain
-// children, each with its own source (specs/044). Audio thread.
+// Hand a device its sidechain key for this block (the source track's signal, pre- or post-FX
+// tap: this block's when the source rendered first, see keyBuffer) or its MIDI key; a rack
+// passes keys on to its chain children, each with its own source (specs/044). Audio thread.
 void Engine::feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames) {
     const int32_t src = d.sidechainSourceTrackId();
     if (src >= 0) {
         d.setSidechain(keyBuffer(src, d.sidechainPart(), d.sidechainTapPre() != 0), frames);
+        const int32_t s = routeSlotFor(src, d.sidechainPart());
+        d.setSidechainLate(s >= 0 && !routeFresh_[s]);
         if (d.wantsMidiKey()) feedMidiKey(g, d, src);
     } else if (d.wantsOwnMidiKey())
         feedMidiKey(g, d, ownTrackId); // no key track: this track's notes
     if (auto* r = d.asRack()) feedRackChildKeys(g, *r, ownTrackId, frames);
 }
 
-// React (Nota Flux): hand a listening instrument its source track's previous-block, post-fader
-// signal just before it renders; and the keyed devices and instruments inside an Instrument
+// React (Nota Flux): hand a listening instrument its source track's post-fader signal (see
+// keyBuffer) just before it renders; and the keyed devices and instruments inside an Instrument
 // Rack's chains theirs (specs/044). Audio thread.
 void Engine::feedInstrumentKeys(Graph* g, Track& t, int32_t frames) {
     if (!t.instrument) return;
@@ -2939,12 +2945,12 @@ void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, 
 }
 
 // Step 2/2b for Pass 1: insert effect chain (M3) + PDC, in place. Verbatim
-// moved from the old inline loop (sidechain taps read the previous block,
-// tempo sync, hosted-plugin sync, frozen tracks skip baked-in devices).
+// moved from the old inline loop (sidechain keys via keyBuffer, tempo sync,
+// hosted-plugin sync, frozen tracks skip baked-in devices).
 void Engine::processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
     double spb, bool playing, const TransportInfo& ti) {
     // 2) Insert effect chain (M3), in place. Hand each sidechain consumer
-    //    its source track's signal (previous block) just before it runs —
+    //    its source track's signal (see keyBuffer) just before it runs —
     //    the pre-FX or post-FX tap per the device's setting (Phase D). A frozen
     //    track skips this: its buffer already baked in the devices.
     if (!w.frozenActive)
@@ -3041,6 +3047,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         for (int b = 0; b < numReturns; ++b) // clear send buses for this block (M6-1)
             std::fill_n(returnBus_[b].data(), frames * 2, 0.0f);
         // Phase B/D: clear this block's route-write buffers (post + pre) for active slots.
+        // None holds this block's signal yet (#676): every slot, so one claimed mid-block
+        // never hands out a Next bus nobody cleared.
+        std::fill_n(routeFresh_, kMaxRoutes, false);
         for (int s = 0, n = routeSlotCount_.load(std::memory_order_acquire); s < n; ++s)
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
                 std::fill_n(routeBusNext_[s].data(), frames * 2, 0.0f);
@@ -3279,15 +3288,136 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             w.eligible = eligible;
         }
 
+        // Same-block keys (#676): a leaf whose devices, instrument or rack children listen to
+        // another leaf renders a level after it, and each level's taps are written before the
+        // next level renders, so the key it hears is this block's, not the previous one (a
+        // whole 8192-frame chunk in an export). A cycle can't be ordered: its levels stop at
+        // the cap and its keys stay a block late, as every key was. With no leaf-to-leaf key
+        // every leaf stays on level 0: one dispatch and the serial accumulate, as before.
+        const int32_t nRoutes = routeSlotCount_.load(std::memory_order_acquire);
+        int slotLeaf[kMaxRoutes]; // the leaf (index) feeding each slot, -1 none this block
+        int maxLevel = 0;
+        auto leafKeyNeeds = [&](const Track& t, const LeafWork& w) {
+            uint32_t mask = 0;
+            auto add = [&](int32_t src, uint64_t part) {
+                if (src < 0) return;
+                const int32_t s = routeSlotFor(src, part);
+                if (s >= 0) mask |= 1u << s;
+            };
+            auto children = [&](const RackCore& r) { // as feedRackChildKeys hands them out
+                r.forEachChildDevice([&](Device& c) {
+                    if (!c.bypassed() && !c.asRack()) add(c.sidechainSourceTrackId(), c.sidechainPart());
+                });
+                r.forEachChildInstrument([&](Instrument& i) { add(i.sidechainSourceTrackId(), i.sidechainPart()); });
+            };
+            if (t.instrument && (w.path == LeafPath::Instrument || w.path == LeafPath::SessionInst)) {
+                add(t.instrument->sidechainSourceTrackId(), t.instrument->sidechainPart());
+                if (auto* r = t.instrument->asRack()) children(*r);
+            }
+            if (!w.frozenActive)
+                for (auto& d : t.devices)
+                    if (d && !d->bypassed()) {
+                        add(d->sidechainSourceTrackId(), d->sidechainPart());
+                        if (auto* r = d->asRack()) children(*r);
+                    }
+            return mask;
+        };
+        if (nRoutes > 0) {
+            for (int s = 0; s < nRoutes; ++s) slotLeaf[s] = -1;
+            for (size_t li = 0; li < ntracks; ++li) {
+                LeafWork& w = rs_->leafWork[li];
+                if (!w.t || w.path == LeafPath::Skip) continue;
+                for (int s = 0; s < nRoutes; ++s)
+                    if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == w.t->id()) slotLeaf[s] = (int)li;
+            }
+            if (parallelOk) { // the staged render needs every leaf's own leafBuf region
+                for (size_t li = 0; li < ntracks; ++li) {
+                    LeafWork& w = rs_->leafWork[li];
+                    if (w.t && w.path != LeafPath::Skip) w.keyNeeds = leafKeyNeeds(*w.t, w);
+                }
+                // Longest path over the key edges, at most kMaxKeyLevels passes.
+                for (int pass = 0; pass < kMaxKeyLevels; ++pass) {
+                    bool changed = false;
+                    for (size_t li = 0; li < ntracks; ++li) {
+                        LeafWork& w = rs_->leafWork[li];
+                        if (w.keyNeeds == 0) continue;
+                        for (int s = 0; s < nRoutes; ++s) {
+                            const int p = slotLeaf[s];
+                            if (!((w.keyNeeds >> s) & 1u) || p < 0 || p == (int)li) continue;
+                            const int nl = rs_->leafWork[(size_t)p].level + 1;
+                            if (nl > w.level && nl <= kMaxKeyLevels) {
+                                w.level = nl;
+                                changed = true;
+                            }
+                        }
+                    }
+                    if (!changed) break;
+                }
+                for (size_t li = 0; li < ntracks; ++li) maxLevel = std::max(maxLevel, rs_->leafWork[li].level);
+            }
+        }
+        const bool staged = maxLevel > 0; // implies parallelOk
+        // A leaf's pre-FX tap and post-fader route tap, written as the accumulate below would
+        // (same ops, same fader); the accumulate then skips them.
+        auto writeLeafTaps = [&](LeafWork& w, const float* pre, const float* post) {
+            Track& t = *w.t;
+            const int32_t preSlot = routeSlotForTrack(t.id());
+            if (preSlot >= 0) simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, frames);
+            w.vol = t.volume();
+            w.pan = std::clamp(t.pan(), -1.0f, 1.0f);
+            w.tapsDone = true;
+            float* route = w.route;
+            if (!route || w.postTapMuted || w.cueOnly) return;
+            const PanStage ps(w.pan, w.vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);
+            if (!ps.cross) {
+                simd_audio::scaleStereo(mixTmp_.data(), post, ps.to.ll, ps.to.rr, frames);
+                simd_audio::addStereoScaled(route, mixTmp_.data(), 1.0f, 1.0f, frames);
+            } else {
+                for (int32_t i = 0; i < frames; ++i) {
+                    float l, r;
+                    ps.apply(i, post[i * 2], post[i * 2 + 1], l, r);
+                    route[i * 2] += l;
+                    route[i * 2 + 1] += r;
+                }
+            }
+        };
+        // After a level's pool tasks: its serial leaves render (track order) into their own
+        // regions, then the level's taps are written and its slots marked fresh.
+        auto finishLevel = [&](int L) {
+            for (size_t li = 0; li < ntracks; ++li) {
+                LeafWork& w = rs_->leafWork[li];
+                if (!w.t || w.path == LeafPath::Skip || w.level != L) continue;
+                float* base = leafBase(li, stride);
+                if (!w.eligible) {
+                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                    std::copy_n(base, stride, base + stride);
+                    processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
+                }
+                w.preRendered = true;
+            }
+            for (size_t li = 0; li < ntracks; ++li) {
+                LeafWork& w = rs_->leafWork[li];
+                if (!w.t || w.path == LeafPath::Skip || w.level != L) continue;
+                float* base = leafBase(li, stride);
+                writeLeafTaps(w, base, base + stride);
+            }
+            for (int s = 0; s < nRoutes; ++s)
+                if (slotLeaf[s] >= 0 && rs_->leafWork[(size_t)slotLeaf[s]].level == L) routeFresh_[s] = true;
+        };
+
         // Parallel DSP phase: eligible leaves render dry into their own
         // rs_->leafBuf region, copy to the post half, run devices in place
         // there. Regions are per-track (never shared), so completion order
         // cannot mix signals; the serial accumulate below fixes mix order.
         if (parallelOk) {
             int m = 0;
-            for (size_t li = 0; li < ntracks; ++li) {
-                const LeafWork& w = rs_->leafWork[li];
-                if (w.t && w.path != LeafPath::Skip && w.eligible) rs_->parIdx[(size_t)m++] = (int)li;
+            int levelEnd[kMaxKeyLevels + 1]; // parIdx is grouped by level (track order within)
+            for (int L = 0; L <= maxLevel; ++L) {
+                for (size_t li = 0; li < ntracks; ++li) {
+                    const LeafWork& w = rs_->leafWork[li];
+                    if (w.t && w.path != LeafPath::Skip && w.eligible && w.level == L) rs_->parIdx[(size_t)m++] = (int)li;
+                }
+                levelEnd[L] = m;
             }
             // Offline (export, freeze: no deadline): every thread, finish fast. With a
             // device: this thread alone unless it can't keep up (see rtParallel_); then
@@ -3348,22 +3478,34 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
-            const auto phase0 = std::chrono::steady_clock::now();
-            pool_->dispatch(
-                m,
-                [&](int wid, int j) {
-                    const size_t i = (size_t)rs_->parIdx[(size_t)j];
-                    LeafWork& w = rs_->leafWork[i];
-                    const auto t0 = std::chrono::steady_clock::now();
-                    w.wid = wid;
-                    float* base = leafBase(i, stride);
-                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
-                    std::copy_n(base, stride, base + stride);
-                    processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
-                    w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - t0).count();
-                },
-                helpers);
+            // One dispatch per level (one in all without leaf-to-leaf keys); the serial work
+            // between them (finishLevel) is not the pool's, so only the dispatches are timed.
+            int64_t poolPhaseNs = 0;
+            int off = 0;
+            auto task = [&](int wid, int j) {
+                const size_t i = (size_t)rs_->parIdx[(size_t)(off + j)];
+                LeafWork& w = rs_->leafWork[i];
+                const auto t0 = std::chrono::steady_clock::now();
+                w.wid = wid;
+                float* base = leafBase(i, stride);
+                renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                std::copy_n(base, stride, base + stride);
+                processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
+                w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - t0).count();
+            };
+            for (int L = 0; L <= maxLevel; ++L) {
+                const int n = levelEnd[L] - off;
+                if (n > 0) {
+                    const int h = helpers <= 0 ? helpers : std::min(helpers, std::max(1, n - 1));
+                    const auto phase0 = std::chrono::steady_clock::now();
+                    pool_->dispatch(n, [&](int wid, int j) { task(wid, j); }, h);
+                    poolPhaseNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - phase0).count();
+                }
+                off = levelEnd[L];
+                if (staged) finishLevel(L);
+            }
             // The single-thread cost, from blocks this thread rendered alone, and the
             // pool's summed task time while it runs (see leafWorkNs_).
             if (!offline && m > 0) {
@@ -3379,8 +3521,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 leafPeakNs_ += (peak - leafPeakNs_) / 16;
                 // Timed, alone or not, for render() to tell the callback's serial work from it
                 // and to size the pool (see adjustPoolSizing).
-                phaseNs_ += (double)std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now() - phase0).count();
+                phaseNs_ += (double)poolPhaseNs;
                 if (rtParallel_) {
                     parWorkNs_ += (work - parWorkNs_) / 16;
                 } else {
@@ -3416,7 +3557,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             float* pre = nullptr;
             float* post = nullptr;
             bool parallelDsp = false;
-            if (w.eligible && parallelOk) {
+            if ((w.eligible && parallelOk) || w.preRendered) { // pool, or staged ahead (#676)
                 float* base = leafBase(li, stride);
                 pre = base;
                 post = base + stride;
@@ -3428,7 +3569,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
 
             // 1b) Pre-FX tap (Phase D): if this track feeds a sidechain, capture its
             //     dry pre-fader signal now, before its own devices colour it.
-            {
+            if (!w.tapsDone) { // a staged leaf wrote its taps already (#676)
                 const int32_t preSlot = routeSlotForTrack(t.id());
                 if (preSlot >= 0)
                     simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, frames);
@@ -3473,12 +3614,13 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 continue;
             }
 
-            // 3) Channel fader + equal-power pan into the master mix + sends.
-            const float vol = t.volume();
-            const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
+            // 3) Channel fader + equal-power pan into the master mix + sends (at the fader its
+            //    staged taps were written with).
+            const float vol = w.tapsDone ? w.vol : t.volume();
+            const float pan = w.tapsDone ? w.pan : std::clamp(t.pan(), -1.0f, 1.0f);
             const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep); // project pan law
             float* dest = w.dest;
-            float* route = w.route;
+            float* route = w.tapsDone ? nullptr : w.route;
             float pkL = 0.0f, pkR = 0.0f;
             double sqL = 0.0, sqR = 0.0, sLR = 0.0; // sLR: Stereo Map (specs/008)
             int64_t recDropped = 0;
@@ -3542,6 +3684,15 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }
 
+        // Every leaf has written its taps: groups and returns hear this block's (#676), and a
+        // group or return marks its own slot once written, for the ones after it.
+        for (int s = 0; s < nRoutes; ++s)
+            if (slotLeaf[s] >= 0) routeFresh_[s] = true;
+        auto markFresh = [&](int32_t id) {
+            const int32_t s = routeSlotForTrack(id);
+            if (s >= 0) routeFresh_[s] = true;
+        };
+
         // An armed audio track that isn't monitoring meters its input instead (#352): the
         // level to set before a take, without hearing it. Pre-fader, like a console's input
         // meter; a monitoring track already meters what it hears. Nothing here is heard, so
@@ -3584,6 +3735,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 Track& t = *grpT[gi];
                 if (grpFeedMute[gi]) {
                     t.setMeter(0, 0, 0, 0);
+                    markFresh(t.id()); // its taps stay silent this block
                     continue;
                 } // muted group (or muted ancestor)
 
@@ -3609,6 +3761,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 if (cueOn && t.cue()) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
                 if (t.mute()) { // muted but cued: heard in Cue only
                     t.setMeter(0, 0, 0, 0);
+                    markFresh(t.id());
                     continue;
                 }
                 // Muted only through a cued ancestor: still folds into the parent's bus, so the
@@ -3652,6 +3805,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 else
                     t.setMeter(pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)),
                         static_cast<float>(std::sqrt(sqR / frames)));
+                markFresh(t.id());
             }
 
         // Pass 2: return buses -> device chain -> master (M6-1). Exempt from the
@@ -3665,6 +3819,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             if (bus < 0 || bus >= numReturns || (t.mute() && !returnCue)) {
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
+                markFresh(t.id());
                 continue;
             }
 
@@ -3689,6 +3844,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             if (t.mute()) { // muted but cued: heard in Cue only
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
+                markFresh(t.id());
                 continue;
             }
 
@@ -3741,6 +3897,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             t.stereoFold(sqL, sqR, sLR, frames, stereoA);
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+            markFresh(t.id());
         }
 
         // Internal resampling from the master bus: capture the fully-mixed output.
