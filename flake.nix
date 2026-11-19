@@ -85,15 +85,17 @@
             cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build \
               -DCMAKE_BUILD_TYPE=Release \
               ${cmakeFetchContentFlags}
-            cmake --build src/native/nota.engine/build
+            cmake --build src/native/nota.engine/build --parallel "$NIX_BUILD_CORES"
 
-            # 2. Restore and publish Avalonia UI offline
+            # 2. Restore and publish Avalonia UI offline (into the build tree; installPhase
+            #    copies it to $out). The publish copies libnota_engine.so and nota-scanworker
+            #    from the engine build itself (Nota.App.csproj, NotaNativeDir).
             dotnet restore src/managed/Nota.App/Nota.App.csproj \
               --source ${nugetDeps}/share/nuget/source
             dotnet publish src/managed/Nota.App/Nota.App.csproj \
               -c Release \
               --no-restore \
-              -o $out/lib/nota
+              -o "$TMPDIR/publish"
 
             runHook postBuild
           '';
@@ -102,10 +104,7 @@
             runHook preInstall
 
             mkdir -p $out/bin $out/lib/nota
-            find src/native/nota.engine/build -name "*.so" -exec cp {} $out/lib/nota/ \;
-            if [ -f src/native/nota.engine/build/nota-scanworker ]; then
-              cp src/native/nota.engine/build/nota-scanworker $out/lib/nota/
-            fi
+            cp -r "$TMPDIR/publish/." $out/lib/nota/
 
             makeWrapper ${dotnetRuntime}/bin/dotnet $out/bin/nota \
               --add-flags "$out/lib/nota/Nota.App.dll" \
@@ -169,13 +168,28 @@
       {
         packages.default = notaPackage;
 
+        # `nix run github:nota-daw/nota`: the package above, built once and cached (#596).
         apps.default = flake-utils.lib.mkApp {
+          drv = notaPackage;
+        };
+        # `nix run .#dev` in a checkout: builds the working tree and runs it (developers).
+        apps.dev = flake-utils.lib.mkApp {
           drv = runScript;
         };
 
+        # The same shell as `devenv shell` (devenv.nix). devenv keeps its state under the
+        # project root: the working directory with `nix develop --impure`, else a temp dir,
+        # so the flake still evaluates purely (`nix flake show` / `check`).
         devShells.default = devenv.lib.mkShell {
           inherit inputs pkgs;
-          modules = [ ./devenv.nix ];
+          modules = [
+            ./devenv.nix
+            {
+              devenv.root =
+                let pwd = builtins.getEnv "PWD";
+                in if pwd != "" then pwd else "/tmp/nota-devenv";
+            }
+          ];
         };
       });
 }

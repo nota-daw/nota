@@ -119,6 +119,7 @@ Download the file for your system from the
 | **Windows 11** on ARM | `Nota-Setup-<version>-arm64.exe` | |
 | **Linux**, most PCs | `Nota-<version>-x86_64.AppImage` | |
 | **Linux** on ARM | `Nota-<version>-aarch64.AppImage` | |
+| **NixOS** (or Nix on Linux) | `nix run github:nota-daw/nota` | builds once, then cached |
 
 ### First launch
 
@@ -205,7 +206,7 @@ JUCE-free.
 git clone https://github.com/nota-daw/nota.git
 cd nota
 scripts/build.sh            # Build on macOS.
-scripts/build-linux.sh      # Build on Linux.
+scripts/build-linux.sh      # Build on Linux (on NixOS: `nix develop` first).
 scripts/build-win.ps1       # Build on Windows.
 dotnet run --project src/managed/Nota.App
 ```
