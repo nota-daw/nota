@@ -30,6 +30,10 @@ cmake_install.cmake
 *.nota/
 dist/
 
+# Devenv
+.devenv/
+.devenv.*
+
 # Nota Remote phone page: Vite output of src/web/remote, rebuilt by the Nota.Remote build
 src/managed/Nota.Remote/wwwroot/
 
