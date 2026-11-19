@@ -3010,6 +3010,81 @@ NOTA_API NotaResult  nota_midi_apply(NotaEngine* engine);
  * {kind, channel, number, value}; returns the event count written (<= max). */
 NOTA_API int32_t     nota_midi_poll_control_events(NotaEngine* engine, int32_t* out, int32_t max);
 
+/* ---- MIDI control surfaces (specs/051) -----------------------------------
+ * Controllers recognised by a profile claim some of their messages: a claimed message is
+ * delivered to the app through the surface queue below and never reaches an instrument (nor
+ * the MIDI-learn copy above, except while learn listens). Unclaimed messages are routed
+ * exactly as before. Claims are published as one immutable table for all sources and swapped
+ * atomically; the MIDI thread only reads it. `source` is the 0..15 index an input tags its
+ * events with (nota_midi_port_source). All calls: message thread unless noted. */
+
+/* Bumped whenever MIDI sources / destinations appear or disappear (hot-plug). Poll it on the
+ * UI tick; on a change call nota_midi_apply to connect the new set, then re-read the ports.
+ * On RtMidi the lists are compared at most once a second. Any thread. */
+NOTA_API uint32_t    nota_midi_ports_generation(void);
+
+/* Connected (enabled) inputs as the MIDI thread numbers them, then test ports. count re-reads
+ * the list; the strings are engine-owned and valid until the next count call. NULL / -1 if
+ * out of range. */
+NOTA_API int32_t     nota_midi_port_count(NotaEngine* engine);
+NOTA_API int32_t     nota_midi_port_source(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_midi_port_uid(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_midi_port_name(const NotaEngine* engine, int32_t index);
+/* The output of the same device (CoreMIDI: same entity; RtMidi: same name). "" when none. */
+NOTA_API const char* nota_midi_port_output_uid(const NotaEngine* engine, int32_t index);
+
+/* Claim table. whole_port = 1 claims every channel message of that source (MCU / HUI / the
+ * setup wizard's capture) and ignores status/channel/data1. status: 0x80 note (on and off),
+ * 0xB0 CC, 0xD0 channel pressure, 0xE0 pitch bend; data1 = note / CC number (ignored for
+ * pressure / bend). Replaces the previous table; count 0 clears all claims.
+ * NOTA_OK, or NOTA_ERR_INVALID_ARG on a malformed entry (table unchanged). */
+typedef struct NotaMidiClaim {
+    int32_t source;
+    int32_t whole_port;
+    int32_t status;
+    int32_t channel; /* 0..15 */
+    int32_t data1;   /* 0..127 */
+} NotaMidiClaim;
+NOTA_API NotaResult  nota_midi_set_claims(NotaEngine* engine, const NotaMidiClaim* claims, int32_t count);
+
+/* While MIDI Learn waits for a message, claimed CC / note-on are ALSO copied to the MIDI-learn
+ * queue (nota_midi_poll_control_events), so a control a profile owns can still be learned.
+ * They keep going to the surface queue, never to instruments. */
+NOTA_API void        nota_midi_set_learn_listening(NotaEngine* engine, int32_t listening);
+
+/* Drain claimed channel messages: int32 quints {source, status, channel, data1, data2}
+ * (status high nibble; note-on with velocity 0 reported as 0x80). Returns the count written
+ * (<= max). Lossy when the 1024-entry queue overflows (counted by nota_midi_surface_dropped). */
+NOTA_API int32_t     nota_midi_poll_surface_events(NotaEngine* engine, int32_t* out, int32_t max);
+NOTA_API uint32_t    nota_midi_surface_dropped(const NotaEngine* engine);
+
+/* Drain one complete SysEx message (F0 … F7 inclusive, <= 512 bytes) received from a source
+ * that has a claim, or from a source within 2 s of an Identity Request (F0 7E 7F 06 01 F7)
+ * sent with nota_midi_send to its paired output. Returns the byte length copied (0 = none
+ * pending, -n = a message of n bytes did not fit in cap and is dropped); *out_source gets
+ * the source. */
+NOTA_API int32_t     nota_midi_poll_sysex(NotaEngine* engine, int32_t* out_source, uint8_t* out, int32_t cap);
+
+/* Send complete MIDI messages (SysEx allowed) to the output `output_uid`, opened on first
+ * use. Never from the audio thread. NOTA_OK, NOTA_ERR_INVALID_ARG (bad args / malformed
+ * bytes), NOTA_ERR_UNKNOWN (no such output, or the send failed). */
+NOTA_API NotaResult  nota_midi_send(NotaEngine* engine, const char* output_uid, const uint8_t* bytes, int32_t len);
+
+/* Deterministic self-test, no hardware: claimed → surface queue and not instruments,
+ * unclaimed → as before, whole-port claims and the learn copy, SysEx reassembly across
+ * packets and its gating, the 512-byte cap, output loopback. 0 = pass, else the first failed
+ * check. */
+NOTA_API int32_t     nota_midi_surface_selftest(void);
+
+/* Test ports (MCP controller_inject; the app gates them behind NOTA_CONTROLLER_TEST=1).
+ * add: a virtual input + loopback output named `name` (uid and output uid "test:<name>");
+ * returns its source or -1. inject: raw bytes through the same parser and claim path as a
+ * real input. take_sent: bytes sent to its output (64 KiB ring), oldest first; returns the
+ * count. */
+NOTA_API int32_t     nota_midi_test_port_add(NotaEngine* engine, const char* name);
+NOTA_API NotaResult  nota_midi_test_inject(NotaEngine* engine, int32_t source, const uint8_t* bytes, int32_t len);
+NOTA_API int32_t     nota_midi_test_take_sent(NotaEngine* engine, int32_t source, uint8_t* out, int32_t cap);
+
 /* --- Gamepad input (live note source) ---------------------------------------
  * A gamepad is polled on its own thread; button edges queue internally and are
  * drained into `out` with nota_gamepad_poll_events(). The UI then maps each

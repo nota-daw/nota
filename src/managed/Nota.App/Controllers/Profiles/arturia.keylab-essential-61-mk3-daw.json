@@ -1,0 +1,256 @@
+{
+  "format": 1,
+  "id": "arturia.keylab-essential-61-mk3-daw",
+  "name": "Arturia KeyLab Essential 61 mk3 (DAW)",
+  "protocol": "generic",
+  "source": "Read off the real device (2026-11-19, DAW program, MIDI Control Center defaults): its \"MIDI\" port sends the encoders as absolute CC 96-104 and the faders as CC 105-113 on channel 1, Play CC 21, Stop CC 20, Record CC 22, Loop CC 24, Rewind CC 25, Forward CC 26, track left / right CC 44 / 45 (buttons 127 / 0), the main encoder CC 116 relative around 64 (push CC 117: in the Session it launches / stops the selected clip, the wheel and the track buttons walk the slots); Undo CC 42, Redo CC 43, Metro CC 27, Save CC 40, Quantize CC 41, Tap CC 23; the \"MCU/HUI\" port stays silent in this setup (see arturia.keylab-essential-61-mk3 for the MCU transport mode). Only the \"MIDI\" port answers the identity request (00 20 6B / 02 00 / 05 74), so the profile matches by identity; keys and pads on that port stay plain MIDI.",
+  "match": {
+    "identity": {
+      "manufacturer": "00 20 6B",
+      "family": "02 00",
+      "model": "05 74"
+    }
+  },
+  "pickup": true,
+  "controls": [
+    {
+      "role": "knob",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 96
+    },
+    {
+      "role": "knob",
+      "index": 2,
+      "message": "cc",
+      "channel": 1,
+      "number": 97
+    },
+    {
+      "role": "knob",
+      "index": 3,
+      "message": "cc",
+      "channel": 1,
+      "number": 98
+    },
+    {
+      "role": "knob",
+      "index": 4,
+      "message": "cc",
+      "channel": 1,
+      "number": 99
+    },
+    {
+      "role": "knob",
+      "index": 5,
+      "message": "cc",
+      "channel": 1,
+      "number": 100
+    },
+    {
+      "role": "knob",
+      "index": 6,
+      "message": "cc",
+      "channel": 1,
+      "number": 101
+    },
+    {
+      "role": "knob",
+      "index": 7,
+      "message": "cc",
+      "channel": 1,
+      "number": 102
+    },
+    {
+      "role": "knob",
+      "index": 8,
+      "message": "cc",
+      "channel": 1,
+      "number": 103
+    },
+    {
+      "role": "knob",
+      "index": 9,
+      "message": "cc",
+      "channel": 1,
+      "number": 104
+    },
+    {
+      "role": "fader",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 105
+    },
+    {
+      "role": "fader",
+      "index": 2,
+      "message": "cc",
+      "channel": 1,
+      "number": 106
+    },
+    {
+      "role": "fader",
+      "index": 3,
+      "message": "cc",
+      "channel": 1,
+      "number": 107
+    },
+    {
+      "role": "fader",
+      "index": 4,
+      "message": "cc",
+      "channel": 1,
+      "number": 108
+    },
+    {
+      "role": "fader",
+      "index": 5,
+      "message": "cc",
+      "channel": 1,
+      "number": 109
+    },
+    {
+      "role": "fader",
+      "index": 6,
+      "message": "cc",
+      "channel": 1,
+      "number": 110
+    },
+    {
+      "role": "fader",
+      "index": 7,
+      "message": "cc",
+      "channel": 1,
+      "number": 111
+    },
+    {
+      "role": "fader",
+      "index": 8,
+      "message": "cc",
+      "channel": 1,
+      "number": 112
+    },
+    {
+      "role": "master-fader",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 113
+    },
+    {
+      "role": "play",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 21
+    },
+    {
+      "role": "stop",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 20
+    },
+    {
+      "role": "loop",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 24
+    },
+    {
+      "role": "record",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 22
+    },
+    {
+      "role": "rewind",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 25
+    },
+    {
+      "role": "forward",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 26
+    },
+    {
+      "role": "track-prev",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 44
+    },
+    {
+      "role": "track-next",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 45
+    },
+    {
+      "role": "jog",
+      "index": 1,
+      "message": "cc",
+      "channel": 1,
+      "number": 116,
+      "encoder": "relative-offset"
+    },
+    {
+      "role": "command",
+      "command": "edit.undo",
+      "message": "cc",
+      "channel": 1,
+      "number": 42
+    },
+    {
+      "role": "command",
+      "command": "edit.redo",
+      "message": "cc",
+      "channel": 1,
+      "number": 43
+    },
+    {
+      "role": "command",
+      "command": "transport.metronome",
+      "message": "cc",
+      "channel": 1,
+      "number": 27
+    },
+    {
+      "role": "command",
+      "command": "file.save",
+      "message": "cc",
+      "channel": 1,
+      "number": 40
+    },
+    {
+      "role": "command",
+      "command": "roll.quantize",
+      "message": "cc",
+      "channel": 1,
+      "number": 41
+    },
+    {
+      "role": "command",
+      "command": "transport.tapTempo",
+      "message": "cc",
+      "channel": 1,
+      "number": 23
+    },
+    {
+      "role": "command",
+      "command": "session.toggleSlot",
+      "message": "cc",
+      "channel": 1,
+      "number": 117
+    }
+  ]
+}

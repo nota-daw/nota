@@ -39,8 +39,8 @@ public sealed class Knob : Control
     private static readonly IBrush PointerOff = NotaPalette.TextDisabled;
     private static readonly IBrush MarkerInk = NotaPalette.TextSecondary;   // a live reading on the track
 
-    private const double StartDeg = 135.0;   // down-left
-    private const double SweepDeg = 270.0;   // clockwise to down-right
+    internal const double StartDeg = 135.0;   // down-left
+    internal const double SweepDeg = 270.0;   // clockwise to down-right
     private const double Stroke = 2.4, PointerW = 1.6;
     // The modulation mark: the value arc in short dashes (in stroke widths).
     private static readonly DashStyle ModDash = new(new double[] { 1.1, 0.7 }, 0);

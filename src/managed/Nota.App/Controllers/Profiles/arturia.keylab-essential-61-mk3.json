@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "id": "arturia.keylab-essential-61-mk3",
+  "name": "Arturia KeyLab Essential 61 mk3",
+  "protocol": "mcu",
+  "source": "Arturia KeyLab Essential mk3 User Manual (DAW program; transport mode MCU in MIDI Control Center) and Arturia support 'KeyLab Essential mk3 - DAW Integration'. Its \"MCU/HUI\" port speaks Mackie Control (driven by Nota's MCU support; its faders have no motors, so they pick up): transport notes 91-95 and 86, faders as pitch bend on channels 1-9, encoders CC 16-23 sign-bit relative, bank / channel notes 46-49. Port names read off the device (macOS: \"KL Essential 61 mk3 MCU/HUI\"); only its \"MIDI\" port answers the identity request (00 20 6B / 02 00 / 05 74), so the profile matches by port name.",
+  "match": {
+    "portNames": [
+      "^(kl|keylab) essential 61 mk3 mcu/hui$"
+    ]
+  },
+  "pickup": true
+}

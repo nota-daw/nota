@@ -210,6 +210,7 @@ public sealed partial class DeviceChainView : UserControl
             do { _rebuildAgain = false; RebuildRow(); } while (_rebuildAgain);
         }
         finally { _rebuilding = false; }
+        RaiseControllerFocus();
     }
 
     private void RebuildRow()

@@ -93,6 +93,8 @@ public static class CommandCatalog
         C("transport.loop", Loc.T("commands.toggle_loop"), Loc.T("common.transport"), Shortcut.Cmd('L'), "cycle repeat"),
         C("transport.metronome", Loc.T("common.metronome"), Loc.T("common.transport"), Shortcut.Cmd('M'), "click"),
         C("transport.loopRecordMode", Loc.T("commands.loop_record_overdub_replace"), Loc.T("common.transport"), Shortcut.CmdShift('R'), "overdub replace take pass loop record"),
+        C("transport.tempoDown", Loc.T("commands.tempo_down"), Loc.T("common.transport"), "", ""),
+        C("transport.tempoUp", Loc.T("commands.tempo_up"), Loc.T("common.transport"), "", ""),
         C("transport.tapTempo", Loc.T("commands.tap_tempo"), Loc.T("common.transport"), "", "bpm beat tap"),
 
         // ---- Track ------------------------------------------------------------------------
@@ -107,6 +109,13 @@ public static class CommandCatalog
         C("session.launchScene", Loc.T("commands.launch_scene"), Loc.T("commands.session"), "", "play row", view: "Session"),
         C("session.stopAll", Loc.T("commands.stop_all_clips"), Loc.T("commands.session"), "", "halt", view: "Session"),
         C("session.insertScene", Loc.T("commands.insert_scene"), Loc.T("commands.session"), Shortcut.Cmd('I'), "add scene row", view: "Session"),
+        // For controller buttons (specs/051): the arrows' walk and the selected slot, without the keyboard.
+        C("session.selectUp", Loc.T("commands.session_select_up"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectDown", Loc.T("commands.session_select_down"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectLeft", Loc.T("commands.session_select_left"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectRight", Loc.T("commands.session_select_right"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.toggleSlot", Loc.T("commands.session_toggle_slot"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.stopTrack", Loc.T("commands.session_stop_track"), Loc.T("commands.session"), "", "", view: "Session"),
 
         // ---- Piano roll -------------------------------------------------------------------
         C("roll.quantize", Loc.T("commands.quantize_notes"), Loc.T("common.piano_roll"), "", "quantise grid snap align"),

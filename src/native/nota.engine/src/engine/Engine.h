@@ -22,7 +22,10 @@
 #include "Graph.h"
 #include "audio_io/MidiConfig.h"
 #include "audio_io/MidiInput.h"
+#include "audio_io/MidiOutput.h"
+#include "audio_io/MidiParser.h"
 #include "audio_io/MpeInput.h"
+#include "engine/MidiSurface.h"
 #include "audio_io/GamepadInput.h"
 #include "media/SampleBuffer.h"
 #include "Transport.h"
@@ -136,6 +139,26 @@ class Engine {
     // MIDI-learn: drain up to `max` incoming CC/note-on events captured since the
     // last call into `out`. Returns the count written. Called from the UI tick.
     int32_t pollControlEvents(ControlEvent* out, int32_t max);
+
+    // --- control surfaces (specs/051) ---
+    // Connected inputs (real, then test ports) with their paired outputs. Rebuilt on every
+    // call; the strings stay valid until the next one. Message thread.
+    const std::vector<MidiInput::PortInfo>& midiPorts();
+    const std::vector<MidiInput::PortInfo>& midiPortRows() const { return midiPortRows_; } // last midiPorts()
+    bool setMidiClaims(const MidiClaimEntry* claims, int32_t count) { return midiSurface_.setClaims(claims, count); }
+    void setMidiLearnListening(bool on) { midiSurface_.setLearnListening(on); }
+    int32_t pollSurfaceEvents(SurfaceEvent* out, int32_t max) { return midiSurface_.pollEvents(out, max); }
+    uint32_t surfaceDropped() const { return midiSurface_.dropped(); }
+    int32_t pollMidiSysex(int32_t* outSource, uint8_t* out, int32_t cap) {
+        return midiSurface_.pollSysex(outSource, out, cap);
+    }
+    // Sends to the output with `outputUid` (opened on first use); an identity request opens
+    // the SysEx window of every input paired with that output. Message thread.
+    bool midiSend(const std::string& outputUid, const uint8_t* data, int32_t len);
+    // Test ports (MCP controller_inject): a virtual input + loopback output. Message thread.
+    int32_t addTestMidiPort(const std::string& name);
+    bool injectTestMidi(int32_t source, const uint8_t* data, int32_t len);
+    int32_t takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap);
 
     // --- gamepad input (live note source) ---
     // The pad runs on its own IOKit thread and queues button edges; the UI
@@ -1767,9 +1790,22 @@ class Engine {
         void mpeController(int32_t ctl, float value) override { e->controller(ctl, value, source, channel); }
     };
     std::array<MpeSink, MidiInput::kMaxSources> mpeSinks_;
-    void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2); // MIDI thread
     std::vector<std::string> midiSourceUids_; // source index -> uid of the connected input (message thread)
     std::array<MpeInput, MidiInput::kMaxSources> mpeInputs_;
+    // Every channel message / complete SysEx from any input (MIDI thread, or the message
+    // thread for test ports) comes through here: claimed → surface, else instruments.
+    void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2);
+    void onMidiSysex(int32_t source, const uint8_t* data, int32_t len);
+    MidiSurface midiSurface_;
+    std::map<std::string, std::unique_ptr<MidiOutput>> midiOutputs_; // by output uid (message thread)
+    struct TestMidiPort {
+        std::string name;
+        int32_t source = 0;
+        MidiParser parser;
+        MidiLoopback sent;
+    };
+    std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_;
+    std::vector<MidiInput::PortInfo> midiPortRows_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
     std::unique_ptr<AudioBackend> backend_;

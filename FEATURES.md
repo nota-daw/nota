@@ -802,6 +802,33 @@ own window — see
     toggle target once on press, and holds a continuous one at the top of its range until
     released. A stick or trigger drives a continuous target over its whole travel, and
     fires a toggle target once as it crosses the half-way point.
+- **Controller auto-mapping** (#100) — a recognised controller works on plug-in, with no
+  MIDI Learn: a profile (port name and MIDI identity) maps its transport buttons, faders (a bank
+  of eight tracks, marked in the Arrangement and the Mixer, shifted by its bank / track
+  buttons) and LEDs; extra buttons can run any Nota command (undo, redo, save, metronome, tap
+  tempo, quantize); a control's right-click menu shows which hardware control drives it and
+  can unbind it or bind another one by name; in the Session the jog wheel / buttons walk the clips
+  and launch or stop the selected one; keys and pads keep playing; an explicit MIDI Learn
+  mapping wins. Profiles
+  ship for the Arturia KeyLab Essential 61 mk3, the Novation Launchkey MK3, the Behringer
+  X-Touch Mini and any Mackie Control surface; your own JSON profiles live in the
+  `controllers` data folder, or **Set up…** learns one control by control (encoder type,
+  14-bit and NRPN detected).
+  - **Knobs follow the selected device** (else the track's instrument, else its first
+    device), page by page — pages for every built-in device, rack macros, devices inside
+    racks, plug-in parameters in order; the card numbers the knobs and shows the page.
+    **Edit controller pages…** on a device edits a type's pages (kept for you and in the
+    project). Knob modes Device / Volume / Pan / Send A, B, … from the controller or the chip in
+    the top bar.
+  - **Pickup** (soft takeover, per controller): a control takes over a value only when it
+    reaches it; a rail under the control shows where the hardware is until then.
+  - **Mackie Control and HUI** surfaces: strips (motor fader with touch, V-pot and ring,
+    Rec / Solo / Mute / Select, names on the scribble strips, meters), master fader, transport,
+    bank / channel, jog and the time display, with feedback by difference. Any port can be
+    forced to Mackie Control or HUI in Preferences → MIDI → Controllers.
+  - MCP: `list_controllers`, `set_controller`, `list_controller_profiles`,
+    `reload_controller_profiles`, `get_controller_focus` (and `controller_inject` /
+    `controller_sent` with `NOTA_CONTROLLER_TEST=1`).
 
 ---
 

@@ -47,6 +47,10 @@ std::string midiUidForEndpoint(uint32_t endpoint) {
     return std::to_string(uid);
 }
 
+std::string midiEndpointName(uint32_t endpoint) {
+    return endpointDisplayName(static_cast<MIDIEndpointRef>(endpoint));
+}
+
 std::vector<MidiDeviceInfo> enumerateMidiInputs() {
     std::vector<MidiDeviceInfo> out;
     const ItemCount n = MIDIGetNumberOfSources();

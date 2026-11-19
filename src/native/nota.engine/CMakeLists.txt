@@ -141,6 +141,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Modulation.cpp
     src/engine/MidiClip.cpp
     src/engine/MidiController.cpp
+    src/engine/MidiSurface.cpp  # control-surface claims / queue (specs/051)
     src/engine/NoteExpression.cpp
     src/devices/effects/Eq.cpp
     src/devices/effects/Eq3.cpp
@@ -217,6 +218,7 @@ if(APPLE)
         src/audio_io/macos/CoreAudioInput.mm
         src/audio_io/macos/AudioConfig.mm
         src/audio_io/macos/MidiInput.mm
+        src/audio_io/macos/MidiOutput.mm
         src/audio_io/macos/MidiConfig.mm
         src/audio_io/macos/GamepadInput.mm
     )
@@ -227,6 +229,7 @@ elseif(WIN32 OR (UNIX AND NOT APPLE))
         src/audio_io/desktop/MiniaudioInput.cpp
         src/audio_io/desktop/AudioConfig_miniaudio.cpp
         src/audio_io/desktop/MidiInput_rtmidi.cpp
+        src/audio_io/desktop/MidiOutput_rtmidi.cpp
         src/audio_io/desktop/MidiConfig_rtmidi.cpp
         src/audio_io/desktop/GamepadInput_stub.cpp     # v1: macOS-only; reports zero pads
         ${rtmidi_SOURCE_DIR}/RtMidi.cpp

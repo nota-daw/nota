@@ -25,6 +25,8 @@ std::string midiUidForEndpoint(uint32_t endpoint) {
     return {};
 }
 
+std::string midiEndpointName(uint32_t endpoint) { return midiUidForEndpoint(endpoint); } // UID == name
+
 std::vector<MidiDeviceInfo> enumerateMidiInputs() {
     std::vector<MidiDeviceInfo> out;
     try {

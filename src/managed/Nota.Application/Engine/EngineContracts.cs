@@ -578,6 +578,24 @@ public enum AudioDeviceEvent { None = 0, ResetRequested = 1, DriverFailed = 2 }
 /// <summary>A MIDI input source: a stable UID (persistence key) and a display name (M7-2).</summary>
 public readonly record struct MidiDevice(string Uid, string Name);
 
+/// <summary>A connected MIDI input as the engine's MIDI thread numbers it (specs/051): the
+/// source index its events carry, a stable uid, the display name, and the output of the same
+/// device ("" when it has none). Test ports have uids "test:&lt;name&gt;".</summary>
+public readonly record struct MidiPortInfo(string Uid, string Name, int Source, string OutputUid);
+
+/// <summary>One claimed message (specs/051), blittable and matching NotaMidiClaim. A claimed
+/// message goes to the surface queue instead of the instruments. Status 0x80 note (on and
+/// off), 0xB0 CC, 0xD0 channel pressure, 0xE0 pitch bend; WholePort = 1 claims every channel
+/// message of the source.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct MidiClaim(int Source, int WholePort, int Status, int Channel, int Data1)
+{
+    public static MidiClaim Whole(int source) => new(source, 1, 0, 0, 0);
+    public static MidiClaim Cc(int source, int channel, int cc) => new(source, 0, 0xB0, channel, cc);
+    public static MidiClaim Note(int source, int channel, int note) => new(source, 0, 0x80, channel, note);
+    public static MidiClaim PitchBend(int source, int channel) => new(source, 0, 0xE0, channel, 0);
+}
+
 /// <summary>A game controller usable as a live note source (macOS v1). The UID is
 /// the stable IORegistryEntryID stringified; the name is the HID product string.</summary>
 public readonly record struct GamepadDevice(string Uid, string Name);
