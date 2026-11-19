@@ -502,8 +502,10 @@ public sealed partial class SessionView
     {
         if (!_engine.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take)) return;
         var (items, label) = TakeLengthChoices(take);
-        rows.Children.Add(Row(Loc.T("session.inspector.take_length"), Chip(label, take.TakeMode != SlotTakeMode.Global,
-            a => Pick(a, items, v => SameTake(v, take), v => SetTakeLength(c, scene, v)))));
+        // `take` follows the Bars · beats numbers below, so the chip and its checked pick do too.
+        var chip = Chip(label, take.TakeMode != SlotTakeMode.Global,
+            a => Pick(a, items, v => SameTake(v, take), v => SetTakeLength(c, scene, v)));
+        rows.Children.Add(Row(Loc.T("session.inspector.take_length"), chip));
 
         var hint = new TextBlock
         {
@@ -518,9 +520,10 @@ public sealed partial class SessionView
         if (take.TakeMode == SlotTakeMode.Fixed)
         {
             // Bars and beats of the meter shown; the engine refuses 0 + 0 and anything past 64 bars,
-            // which the hint then says in the warning ink.
+            // which the hint then says in the warning ink. Beats saved under a longer meter (6 of
+            // 7/8, now in 4/4) show as saved, so editing the bars never drops them.
             int bpb = Math.Max(1, Meter.BeatsPerBar);
-            int bars = take.Bars, beats = Math.Min(take.Beats, bpb - 1);
+            int bars = take.Bars, beats = take.Beats;
             DragNumber Num(int value, int max, Action<int> set)
             {
                 var dn = new DragNumber(value, 0, max, 0.25, "0", 10) { Width = 40, Height = 22 };
@@ -532,10 +535,13 @@ public sealed partial class SessionView
             {
                 bool ok = _engine.SetSessionSlotTakeLength(c.TrackId, scene, new NotaSlotTakeLength(SlotTakeMode.Fixed, bars, beats));
                 hint.Foreground = ok ? NotaPalette.TextTertiary : NotaPalette.Warning;
-                if (ok) RefreshSlot(c.TrackId, scene, inspector: false);
+                if (!ok) return;
+                take = new NotaSlotTakeLength(SlotTakeMode.Fixed, bars, beats);
+                chip.Content = Mono(TakeLengthText(take), 10, NotaPalette.TextOnAccent);
+                RefreshSlot(c.TrackId, scene, inspector: false);
             }
             var barsDn = Num(bars, NotaSlotTakeLength.MaxBars, v => { bars = v; Apply(); });
-            var beatsDn = Num(beats, bpb - 1, v => { beats = v; Apply(); });
+            var beatsDn = Num(beats, Math.Max(bpb - 1, beats), v => { beats = v; Apply(); });
             Control Boxed(Control child) => new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = child };
             var pair = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Boxed(barsDn), Mono(".", 10, NotaPalette.TextTertiary), Boxed(beatsDn) } };
             ((TextBlock)pair.Children[1]).VerticalAlignment = VerticalAlignment.Center;

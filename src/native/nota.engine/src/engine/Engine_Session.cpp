@@ -603,18 +603,22 @@ void Engine::finalizeSessionRecord(bool relaunch) {
             return;
         }
     }
-    // Stopped while still waiting for its launch boundary (#503): no slot of the MIDI take has
-    // started recording, so drop the take — its clip and its history steps, the slots back as
-    // they were (a slot's next-take length included) — and the launches it queued.
+    // Stopped while still waiting for its launch boundary (#503): every slot of the MIDI take
+    // still has its own launch queued and was never seen recording, so drop the take — its clip
+    // and its history steps, the slots back as they were (a slot's next-take length included) —
+    // and those launches. A slot that started and was stopped since (Back to Arrangement) is
+    // not waiting: its take is kept.
     if (!recordSessionAudio_ && recordSessionScene_ >= 0 && takeAttempt_.active && takeAttempt_.session) {
         std::vector<std::pair<int32_t, int32_t>> queued; // (track, scene) of each slot's launch
-        bool started = false;
+        bool waiting = true;
         for (const auto& l : midiLanes_) {
             if (l.trackId < 0 || l.scene < 0 || !l.player) continue;
-            if (l.player->playing.load(std::memory_order_relaxed) == l.scene) started = true;
+            if (l.started || l.player->playing.load(std::memory_order_relaxed) == l.scene ||
+                l.player->pendingSlot() != l.scene)
+                waiting = false;
             queued.emplace_back(l.trackId, l.scene);
         }
-        if (!started && !queued.empty()) {
+        if (waiting && !queued.empty()) {
             discardTake();
             // Withdraw only the take's own launches (#480): a stop queued since stays, and what
             // the track plays carries on.
@@ -1191,9 +1195,9 @@ int32_t Engine::landBlockInSession(const std::vector<BlockClip>& items, int32_t 
         auto nt = cloneTrack(*old);
         if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
             nt->sessionSlots.resize(authoring_->sceneCount);
-        for (int32_t i = 0; i < static_cast<int32_t>(v.size()); ++i)
-            nt->sessionSlots[first + i] =
-                v[i]->kind == 1 ? slotFromMidiClip(v[i]->midi) : slotFromAudioClip(v[i]->audio);
+        for (int32_t i = 0; i < static_cast<int32_t>(v.size()); ++i) // the slots keep their next-take length (#503)
+            replaceSlotContent(nt->sessionSlots[first + i],
+                v[i]->kind == 1 ? slotFromMidiClip(v[i]->midi) : slotFromAudioClip(v[i]->audio));
         republishWithTrack(tid, nt);
     }
     endUndoGroup();
@@ -1427,6 +1431,9 @@ void Engine::serviceSessionFollow() {
     if (sessionRecordTarget(nullptr, nullptr, &el)) {
         std::vector<int32_t> done;
         if (!recordSessionAudio_) {
+            for (auto& l : midiLanes_) // a slot seen recording has started: a stop keeps its take
+                if (l.scene >= 0 && l.player && l.player->playing.load(std::memory_order_relaxed) == l.scene)
+                    l.started = true;
             for (const auto& l : midiLanes_)
                 if (l.trackId >= 0 && l.scene >= 0 && l.lenBeats > 0.0 && l.player &&
                     l.player->playing.load(std::memory_order_relaxed) == l.scene &&

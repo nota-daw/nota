@@ -2180,6 +2180,7 @@ class Engine {
         bool growing = false; // a fresh take with no fixed length: cut to whole quanta at its stop
         double lenBeats = 0.0; // its slot's resolved take length, beats; 0 = until stopped (#503)
         bool ownLen = false;   // that length is the slot's own: stopped by hand before it, it is cut
+        bool started = false;  // its slot has been seen recording (poll) — a stop no longer drops it
         std::shared_ptr<SessionPlayer> player;
         std::vector<TakeNote> takeNotes;
         std::array<CtlFold, kCtlCount> ctlFold{};

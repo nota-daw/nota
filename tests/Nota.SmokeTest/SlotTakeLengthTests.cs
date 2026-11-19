@@ -38,6 +38,7 @@ internal static class SlotTakeLengthTests
         foreach (var r in CancelledCountIn()) yield return r;
         foreach (var r in StoppedWhileWaiting()) yield return r;
         foreach (var r in StoppedEarly()) yield return r;
+        foreach (var r in StoppedAfterBackToArrangement()) yield return r;
         foreach (var r in AudioStoppedEarly()) yield return r;
         foreach (var r in KeptUndoRedo()) yield return r;
         foreach (var r in BelongsToTheSlot()) yield return r;
@@ -252,6 +253,27 @@ internal static class SlotTakeLengthTests
         }
     }
 
+    // A take that recorded, then its track went back to the Arrangement (the slot stopped playing):
+    // stopping the take now keeps what it recorded — it had started, it is not a waiting take.
+    private static IEnumerable<(bool, string)> StoppedAfterBackToArrangement()
+    {
+        using var e = Armed(out int t);
+        e.SetSessionSlotTakeLength(t, 0, Bars(4));
+        Rolling(e);
+        e.RecordSessionSlot(t, 0);                    // from beat 4
+        Beats(e, 4.0);                                // ~beat 4.5
+        e.NoteOn(60, 0.8f); Beats(e, 0.5); e.NoteOff(60);
+        Beats(e, 0.5);
+        e.TrackBackToArrangement(t);
+        Beats(e, 0.5);
+        e.StopSessionRecord();
+        Beats(e, 0.1);
+        var notes = e.GetSessionNotes(t, 0);
+        yield return (e.SessionSlotState(t, 0) != 0 && notes.Any(n => n.Pitch == 60),
+            $"a take stopped after Back to Arrangement keeps what it recorded (state {e.SessionSlotState(t, 0)}, {notes.Length} notes)");
+        e.StopTransport();
+    }
+
     // Stopped by hand before its length: a slot's own length is cut to whole bars of what was
     // recorded; a Global (Fixed) take keeps its length as before.
     private static IEnumerable<(bool, string)> StoppedEarly()
@@ -350,6 +372,14 @@ internal static class SlotTakeLengthTests
         e.SetSessionSlotTakeLength(t, 2, Open);
         e.ArrangementClipToSession(t, clip, 2);
         yield return (e.SessionSlotState(t, 2) != 0 && Same(Get(e, t, 2), Open), "an Arrangement clip dropped into a prepared slot keeps its value");
+
+        // Copy to Session / Arrangement paste land a block of clips over a row of slots.
+        e.SetSessionSlotTakeLength(t, 3, Bars(6));
+        int clip2 = e.AddMidiClip(t, 8, 4);
+        int row = e.ArrangementClipsToSession(new[] { (t, clip2) }, 3);
+        bool landed = row == 3 && e.SessionSlotState(t, 3) != 0;
+        e.ClearSessionSlot(t, 3);
+        yield return (landed && Same(Get(e, t, 3), Bars(6)), $"Copy to Session over a prepared slot keeps its value ({Show(Get(e, t, 3))})");
     }
 
     // Scene moves and duplicates carry the value with the row; delete drops it; a new row is Global.
