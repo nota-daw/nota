@@ -59,6 +59,7 @@ scenarios=(
     "audio 1 rt" "audio 8 rt" "audio 32 rt"
     "inst 8 rt" "inst 32 rt"
     "audio 64 rt 128" "audio 128 rt 64" "audio 192 rt 64"
+    "keyed 8 offline" "keyed 32 offline" "keyed 16 export" "keyed 8 rt" "keyed 32 rt"
 )
 
 {

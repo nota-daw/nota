@@ -7,11 +7,13 @@
 // exports — keep it to long-standing ABI).
 //
 //   engine-bench idle
-//   engine-bench <audio|inst> <tracks> <offline|rt|export> <clip.wav> [block]
+//   engine-bench <audio|inst|keyed> <tracks> <offline|rt|export> <clip.wav> [block]
 //
 // idle     — engine created, nothing playing: process CPU over 5 s (% of one core).
 // audio    — <tracks> audio tracks, each a WAV clip + Reverb.
 // inst     — <tracks> instrument tracks (Nota Synth), each a MIDI clip of chords.
+// keyed    — audio tracks as above; every track after the first also gets a Compressor keyed
+//            off the first (sidechain pumping: the keyed tracks render after their key, #676).
 // offline  — 10 s rendered back-to-back in <block>-frame blocks (default 512; a bounce).
 // rt       — the same blocks paced like a <block> @ 48 kHz device callback, through
 //            nota_engine_render_device_block when the build exports it (the callback's
@@ -46,7 +48,7 @@ double processCpuSeconds() {
 }
 
 int usage() {
-    std::fprintf(stderr, "usage: engine-bench idle | engine-bench <audio|inst> <tracks> <offline|rt> <clip.wav> [block]\n");
+    std::fprintf(stderr, "usage: engine-bench idle | engine-bench <audio|inst|keyed> <tracks> <offline|rt> <clip.wav> [block]\n");
     return 2;
 }
 
@@ -75,15 +77,20 @@ int main(int argc, char** argv) {
     const int tracks = std::atoi(argv[2]);
     const std::string mode = argv[3];
     const char* clip = argv[4];
-    if ((scenario != "audio" && scenario != "inst") || (mode != "offline" && mode != "rt" && mode != "export") ||
+    if ((scenario != "audio" && scenario != "inst" && scenario != "keyed") || (mode != "offline" && mode != "rt" && mode != "export") ||
         tracks <= 0)
         return usage();
 
+    int32_t key = -1; // keyed: the first track
     for (int i = 0; i < tracks; ++i) {
-        if (scenario == "audio") {
+        if (scenario == "audio" || scenario == "keyed") {
             const int32_t t = nota_engine_add_audio_track(e);
             nota_track_add_audio_clip(e, t, clip, 0.0);
             nota_track_add_builtin_device(e, t, 2); // Reverb
+            if (scenario == "keyed") {
+                if (i == 0) key = t;
+                else nota_device_set_sidechain_source(e, t, nota_track_add_builtin_device(e, t, 1), key); // Compressor
+            }
         } else {
             const int32_t t = nota_engine_add_instrument_track(e);
             const int32_t c = nota_track_add_midi_clip(e, t, 0.0, 32.0);
