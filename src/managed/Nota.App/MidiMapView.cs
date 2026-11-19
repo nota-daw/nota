@@ -33,6 +33,14 @@ public sealed partial class MidiMapView : UserControl
         Rebuild();
     }
 
+    // Launch labels carry track and scene names, which can change without the table changing;
+    // redraw when the tab is shown so they are current.
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        Rebuild();
+    }
+
     private void Rebuild()
     {
         _rows.Children.Clear();
