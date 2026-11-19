@@ -477,6 +477,28 @@ public sealed partial class SessionView : UserControl
     /// <summary>Stops every playing clip, as the toolbar's Stop All does.</summary>
     internal void StopAll() { _engine.StopAllSession(); UpdateStates(); }
 
+    /// <summary>The arrows' walk, for a controller's buttons and encoder (specs/051).</summary>
+    internal void MoveSelection(Key key) => Move(key, NavCols);
+
+    /// <summary>A controller's launch button: the selected clip starts — or, playing or queued, its
+    /// track stops; a scene row launches; an empty slot launches (stops the track or records, as a click).</summary>
+    internal void ToggleSelection()
+    {
+        if (_sel.Kind == SelKind.Slot && ColumnFor(_sel.TrackId) is { Kind: ColKind.Track } c)
+        {
+            int state = _engine.SessionSlotState(c.TrackId, _sel.Scene);
+            if (state == 2) { CancelSlotLaunch(c.TrackId, _sel.Scene); return; }   // queued: withdraw it
+            if (state == 3) { StopColumn(c); UpdateStates(); return; }
+        }
+        LaunchSelection();
+    }
+
+    /// <summary>Stop what plays in the selected slot's track (or group).</summary>
+    internal void StopSelectedTrack()
+    {
+        if (_sel.Kind == SelKind.Slot && ColumnFor(_sel.TrackId) is { } c) { StopColumn(c); UpdateStates(); }
+    }
+
     public void LaunchSelection()
     {
         if (_sel.Kind == SelKind.Scene) { LaunchSceneRow(_sel.Scene); return; }

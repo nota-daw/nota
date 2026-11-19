@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "generic.mackie-control",
+  "name": "Mackie Control",
+  "protocol": "mcu",
+  "source": "Mackie Control / Logic Control protocol as documented for Logic Pro (Apple, \"Logic Pro Control Surfaces Support\", Mackie Control chapter: channel strips, transport, bank / channel, jog, scribble strips, time display, meters). Mackie publishes no wire specification; protocol facts only, no mapping data copied.",
+  "match": {
+    "portNames": [
+      "\\bmcu\\b",
+      "mackie control",
+      "^x-touch(?![ -]?mini)",
+      "^icon\\b",
+      "platform m"
+    ]
+  },
+  "pickup": false
+}

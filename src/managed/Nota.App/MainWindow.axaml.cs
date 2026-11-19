@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     private MidiLearnService? _learn;
     /// <summary>The MIDI-learn service, so secondary windows can host their own learn glass.</summary>
     internal MidiLearnService? LearnService => _learn;
+    private Nota.App.Controllers.ControllerService? _controllers;
 
     // Bottom detail panel (Devices chain / Clip piano roll / Mixer).
     private DeviceChainView? _deviceChain;
@@ -182,6 +183,24 @@ public partial class MainWindow : Window
         _vm = vm;
 
         _learn = App.Services.GetRequiredService<MidiLearnService>();
+        // Hardware values land through one applier (specs/051): a Select button picks the track
+        // like a header click, and Rewind / Forward step the arrangement's bar.
+        var applier = App.Services.GetRequiredService<Nota.App.Controllers.ControlApplier>();
+        applier.TrackSelectRequested += id => Timeline.SelectTrackFromOutside(id);
+        applier.BeatsPerBar = () => Timeline.BeatsPerBar;
+        applier.ToggleLoop = () => vm.Transport.LoopOn = !vm.Transport.LoopOn;
+        _controllers = App.Services.GetRequiredService<Nota.App.Controllers.ControllerService>();
+        _controllers.AttachLearn(_learn);
+        _controllers.BankChanged += () =>
+        {
+            var bank = _controllers.TracksUnderBanks();
+            Timeline.SetControllerBank(bank);
+            _mixer?.SetControllerBank(bank);
+        };
+        _controllers.Connected += c =>
+        {
+            if (_vm is not null) _vm.StatusText = Loc.F("controllers.connected_notice", c.Name, c.Profile?.Name);
+        };
         LearnOverlay.Service = _learn;
         _learn.PendingChanged += () => LearnOverlay.Refresh();
         Browser.SetMidiLearn(_learn);
@@ -305,6 +324,7 @@ public partial class MainWindow : Window
         int cpuShown = -1;   // the CPU read-out's last percentage, so an unchanged one isn't re-laid-out
         vm.PlayheadUpdated += beats =>
         {
+            _controllers?.Tick();    // connected controllers' roles (specs/051) — before Learn, which may take the message
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message
             SyncSceneTempo();        // a launched scene set tempo / signature
             EnsurePlayheadFrames();
@@ -479,6 +499,11 @@ public partial class MainWindow : Window
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
+        // A controller's knobs follow the selected device (specs/051, FR-016): the Devices panel's
+        // selection on its track, else the selected track's instrument / first device.
+        Timeline.TrackSelected += id => _controllers?.SetSelectedTrack(id);
+        _deviceChain.ControllerFocusChanged += (track, device) => _controllers?.SetPanelFocus(track, device);
+        InitControllerUi();
         Timeline.TrackDevicesRequested += id => ShowDevices(id);   // header double-click (#308)
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.ClipsSplit += SyncTrackModeClips;   // a split re-indexes the track's later clips

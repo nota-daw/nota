@@ -1,0 +1,176 @@
+{
+  "format": 1,
+  "id": "novation.launchkey-mk3",
+  "name": "Novation Launchkey MK3",
+  "protocol": "generic",
+  "source": "Novation Launchkey [MK3] Programmer's Reference Guide v1 — DAW mode on the DAW In/Out port (enter 9F 0C 7F, leave 9F 0C 00); pots CC 21-28, faders CC 53-60 and 61 (49/61/88), Play / Stop / Record / Loop CC 115-118, Track left / right CC 102 / 103, all on channel 16; pot mode CC 9 (2 = Device) (https://fael-downloads-prod.focusrite.com/customer/prod/downloads/launchkey_mk3_programmer_s_reference_guide_v1_en.pdf)",
+  "match": {
+    "portNames": [
+      "^launchkey mk3 (25|37|49|61|88) (lkmk3 )?daw"
+    ]
+  },
+  "init": [
+    "9F 0C 7F",
+    "BF 09 02"
+  ],
+  "release": [
+    "9F 0C 00"
+  ],
+  "pickup": true,
+  "controls": [
+    {
+      "role": "knob",
+      "index": 1,
+      "message": "cc",
+      "channel": 16,
+      "number": 21
+    },
+    {
+      "role": "knob",
+      "index": 2,
+      "message": "cc",
+      "channel": 16,
+      "number": 22
+    },
+    {
+      "role": "knob",
+      "index": 3,
+      "message": "cc",
+      "channel": 16,
+      "number": 23
+    },
+    {
+      "role": "knob",
+      "index": 4,
+      "message": "cc",
+      "channel": 16,
+      "number": 24
+    },
+    {
+      "role": "knob",
+      "index": 5,
+      "message": "cc",
+      "channel": 16,
+      "number": 25
+    },
+    {
+      "role": "knob",
+      "index": 6,
+      "message": "cc",
+      "channel": 16,
+      "number": 26
+    },
+    {
+      "role": "knob",
+      "index": 7,
+      "message": "cc",
+      "channel": 16,
+      "number": 27
+    },
+    {
+      "role": "knob",
+      "index": 8,
+      "message": "cc",
+      "channel": 16,
+      "number": 28
+    },
+    {
+      "role": "fader",
+      "index": 1,
+      "message": "cc",
+      "channel": 16,
+      "number": 53
+    },
+    {
+      "role": "fader",
+      "index": 2,
+      "message": "cc",
+      "channel": 16,
+      "number": 54
+    },
+    {
+      "role": "fader",
+      "index": 3,
+      "message": "cc",
+      "channel": 16,
+      "number": 55
+    },
+    {
+      "role": "fader",
+      "index": 4,
+      "message": "cc",
+      "channel": 16,
+      "number": 56
+    },
+    {
+      "role": "fader",
+      "index": 5,
+      "message": "cc",
+      "channel": 16,
+      "number": 57
+    },
+    {
+      "role": "fader",
+      "index": 6,
+      "message": "cc",
+      "channel": 16,
+      "number": 58
+    },
+    {
+      "role": "fader",
+      "index": 7,
+      "message": "cc",
+      "channel": 16,
+      "number": 59
+    },
+    {
+      "role": "fader",
+      "index": 8,
+      "message": "cc",
+      "channel": 16,
+      "number": 60
+    },
+    {
+      "role": "master-fader",
+      "message": "cc",
+      "channel": 16,
+      "number": 61
+    },
+    {
+      "role": "play",
+      "message": "cc",
+      "channel": 16,
+      "number": 115
+    },
+    {
+      "role": "stop",
+      "message": "cc",
+      "channel": 16,
+      "number": 116
+    },
+    {
+      "role": "record",
+      "message": "cc",
+      "channel": 16,
+      "number": 117
+    },
+    {
+      "role": "loop",
+      "message": "cc",
+      "channel": 16,
+      "number": 118
+    },
+    {
+      "role": "track-prev",
+      "message": "cc",
+      "channel": 16,
+      "number": 102
+    },
+    {
+      "role": "track-next",
+      "message": "cc",
+      "channel": 16,
+      "number": 103
+    }
+  ]
+}

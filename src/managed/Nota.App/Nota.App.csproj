@@ -63,6 +63,13 @@
     <EmbeddedResource Include="Theme\token-roles.json" LogicalName="Nota.Themes.token-roles.json" />
   </ItemGroup>
 
+  <!-- Shipped controller profiles (specs/051): one JSON file per controller. User profiles
+       live in <DataDir>/controllers and take precedence. -->
+  <ItemGroup>
+    <!-- WithCulture="false": a name like behringer.x-touch-mini.json would otherwise be taken for an "x-touch-mini" culture and moved into a satellite assembly. -->
+    <EmbeddedResource Include="Controllers\Profiles\*.json" LogicalName="Nota.Controllers.%(Filename)%(Extension)" WithCulture="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Nota.Presentation\Nota.Presentation.csproj" />
     <ProjectReference Include="..\Nota.Infrastructure\Nota.Infrastructure.csproj" />

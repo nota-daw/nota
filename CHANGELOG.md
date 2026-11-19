@@ -23,6 +23,57 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Controller auto-mapping** (#100, specs/051): plug in a controller and it works — no MIDI
+  Learn needed.
+  - **Recognised on plug-in**: Nota knows a controller by a profile (port name and its MIDI
+    identity). Transport buttons drive Play, Stop, Record, Loop, Rewind and Forward; the faders
+    move a bank of eight tracks (bank / track buttons shift it; the tracks under it are marked in
+    the Arrangement and the Mixer); transport LEDs follow. Keys and pads keep playing. A fader
+    move is one undo step and writes automation like the on-screen fader. Profiles ship for the
+    Arturia KeyLab Essential 61 mk3 (its DAW program, or its MCU/HUI port in MCU mode), the
+    Novation Launchkey MK3 (DAW mode) and the Behringer X-Touch Mini. A control you map with MIDI
+    Learn keeps your mapping. Extra buttons can run Nota commands: on the KeyLab, Undo, Redo,
+    Metro, Save, Quantize and Tap do what their labels say.
+  - **Rebind from a control's menu**: right-click a device knob, a mixer fader or pan, or a
+    transport button — **Controller** names the hardware control that drives it, **Unbind**
+    removes just this parameter, **Bind to ▸** picks another knob, fader or button by name (a
+    pinned control drives it whatever the bank), **Back to default** undoes it. Device changes
+    are saved as its pages; track changes with the project; transport / master changes globally.
+  - **Session from the controller**: in the Session view the jog wheel walks the clips, the track
+    buttons the tracks, and a launch button starts or stops the selected clip (the KeyLab's encoder
+    push); buttons for up / down / left / right, stop track, launch scene and stop all can be set up.
+  - **Set up… shows each control**: a picture of the knob, fader, button or wheel each step wants,
+    what the controller sends as it arrives, the next step by itself once a control is learned,
+    "No more knobs" to skip a group, Back, and steps for Session, Undo / Redo / Metronome / Save /
+    Tap tempo and the jog wheel; a strip of groups to jump between and the learned controls as
+    chips to redo.
+  - **Pairs as an encoder or two buttons**: previous / next track, bank and page, rewind / forward,
+    the Session's up / down and left / right, undo / redo and the new Tempo − / + can each be one
+    encoder (right and left) or two buttons; Set up… asks for a pair in one step.
+  - **Knobs follow the selected device**: the eight knobs control the selected device — else
+    the selected track's instrument, else its first device — page by page. Every built-in
+    instrument, effect and MIDI effect has pages of the parameters you play first; racks show
+    their macros, devices inside racks work too, and a plug-in gets its parameters in order,
+    eight per page. The device card numbers the eight controls of the current page and shows
+    the page. Knob modes **Device**, **Volume**, **Pan** and **Send A, B, …** (for the bank's
+    tracks) switch from the controller's mode buttons or the controller chip next to **MIDI**
+    in the top bar.
+  - **No jumps**: a knob or fader that is not where the value is picks it up when it gets
+    there (pickup); until then a small rail under the control shows where the hardware is.
+    Switch it off per controller in Preferences.
+  - **Mackie Control and HUI surfaces**: channel strips (motor fader, V-pot and its ring,
+    Rec / Solo / Mute / Select, track names on the scribble strips, meters), master fader,
+    transport, bank / channel and jog, with feedback whenever anything changes in Nota.
+    Touching a motor fader is the movement — for automation and undo — and Nota leaves it
+    alone while you hold it. Any port can be driven as Mackie Control or HUI from Preferences.
+  - **Make it yours**: **Edit controller pages…** in a device's menu picks the parameters of
+    each page for every device of that kind (saved for you and in the project, so it opens the
+    same elsewhere). **Set up…** in Preferences walks an unknown controller through its knobs,
+    faders and buttons and saves a profile for it. Your own profile files go in the
+    `controllers` folder of Nota's data directory (**Open profiles folder**, **Reload
+    profiles**); Preferences lists any problem in them.
+  - MCP: `list_controllers`, `set_controller`, `list_controller_profiles`,
+    `reload_controller_profiles`, `get_controller_focus`.
 - **Session: a take length per empty slot** (#503, specs/106). An empty slot's inspector has a
   **Take length**: **Global** (follow **Fixed** in the toolbar, as before — every slot starts
   here), **Open** (record until stopped, whatever Fixed says), or a length of its own from

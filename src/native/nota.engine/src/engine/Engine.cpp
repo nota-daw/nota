@@ -151,7 +151,8 @@ void Engine::propagateSampleRate(double sr) {
 
 // Connect hardware MIDI controllers (honouring the user's disabled set). Each source has
 // its own MPE decoder (channel state is per controller); notes and expression go into the
-// live queue, CC + note-on also to MIDI learn.
+// live queue, CC + note-on also to MIDI learn — unless a control surface claims the message
+// (specs/051), which sends it to the surface queue instead.
 void Engine::openMidiInput() {
     for (int32_t i = 0; i < MidiInput::kMaxSources; ++i) {
         mpeSinks_[static_cast<size_t>(i)].e = this;
@@ -160,6 +161,7 @@ void Engine::openMidiInput() {
     for (auto& m : mpeInputs_) m.configure(midiConfig_.mpe, midiConfig_.mpeBendRange);
     midiInput_->open([this](int32_t source, int32_t status, int32_t channel, int32_t d1,
                          int32_t d2) { onMidiMessage(source, status, channel, d1, d2); },
+        [this](int32_t source, const uint8_t* data, int32_t len) { onMidiSysex(source, data, len); },
         midiConfig_.disabledInputUids);
     midiSourceUids_ = midiInput_->sourceUids(); // tracks filter by source index (specs/086)
     // Indices move when inputs come and go: every track picks its input up again by uid.
@@ -169,16 +171,18 @@ void Engine::openMidiInput() {
 }
 
 void Engine::onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
-    const size_t s = static_cast<size_t>(std::clamp(source, 0, MidiInput::kMaxSources - 1));
-    mpeSinks_[s].e = this; // also before the inputs were ever opened (tests, offline engines)
-    mpeSinks_[s].source = static_cast<int32_t>(s);
-    mpeSinks_[s].channel = std::clamp(channel, 0, 15);
-    mpeInputs_[s].message(status, channel, d1, d2, mpeSinks_[s]);
-    // Surface CC + note-on to the UI for MIDI-learn (drop silently if the queue
-    // is full — learn is best-effort and must never block the MIDI thread).
-    if (status == 0xB0) midiControl_.push({0, channel, d1, d2});
-    else if (status == 0x90 && d2 > 0)
-        midiControl_.push({1, channel, d1, d2});
+    midiSurface_.route(
+        source, status, channel, d1, d2,
+        [&] {
+            const size_t s = static_cast<size_t>(std::clamp(source, 0, MidiInput::kMaxSources - 1));
+            mpeSinks_[s].e = this; // also before the inputs were ever opened (tests, offline engines)
+            mpeSinks_[s].source = static_cast<int32_t>(s);
+            mpeSinks_[s].channel = std::clamp(channel, 0, 15);
+            mpeInputs_[s].message(status, channel, d1, d2, mpeSinks_[s]);
+        },
+        // Surface CC + note-on to the UI for MIDI-learn (drop silently if the queue is full —
+        // learn is best-effort and must never block the MIDI thread).
+        [&](int32_t kind, int32_t ch, int32_t number, int32_t value) { midiControl_.push({kind, ch, number, value}); });
 }
 
 int32_t Engine::midiSourceOfUid(const std::string& uid) const {
@@ -186,6 +190,78 @@ int32_t Engine::midiSourceOfUid(const std::string& uid) const {
     for (size_t i = 0; i < midiSourceUids_.size(); ++i)
         if (midiSourceUids_[i] == uid) return static_cast<int32_t>(i);
     return -1;
+}
+
+void Engine::onMidiSysex(int32_t source, const uint8_t* data, int32_t len) { midiSurface_.pushSysex(source, data, len); }
+
+const std::vector<MidiInput::PortInfo>& Engine::midiPorts() {
+    midiPortRows_ = midiInput_ ? midiInput_->ports() : std::vector<MidiInput::PortInfo>{};
+    for (const auto& t : testMidiPorts_) midiPortRows_.push_back({t->source, "test:" + t->name, t->name, "test:" + t->name});
+    return midiPortRows_;
+}
+
+bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t len) {
+    if (!data || len <= 0) return false;
+    // An Identity Request (F0 7E <id> 06 01 F7) lets the reply in from every input paired
+    // with this output, claimed or not (specs/051 research R5).
+    for (int32_t i = 0; i + 5 < len; ++i)
+        if (data[i] == 0xF0 && data[i + 1] == 0x7E && data[i + 3] == 0x06 && data[i + 4] == 0x01 && data[i + 5] == 0xF7)
+            for (const auto& p : midiPorts())
+                if (p.outputUid == outputUid) midiSurface_.armIdentity(p.source);
+    if (outputUid.rfind("test:", 0) == 0) {
+        for (auto& t : testMidiPorts_)
+            if ("test:" + t->name == outputUid) {
+                t->sent.write(data, static_cast<size_t>(len));
+                return true;
+            }
+        return false;
+    }
+    auto it = midiOutputs_.find(outputUid);
+    if (it == midiOutputs_.end()) {
+        auto out = std::make_unique<MidiOutput>();
+        if (!out->open(outputUid)) return false;
+        it = midiOutputs_.emplace(outputUid, std::move(out)).first;
+    }
+    if (it->second->send(data, len)) return true;
+    midiOutputs_.erase(it); // unplugged: reopen on the next send
+    return false;
+}
+
+int32_t Engine::addTestMidiPort(const std::string& name) {
+    if (name.empty()) return -1;
+    for (const auto& t : testMidiPorts_)
+        if (t->name == name) return t->source;
+    // Take the highest source index no real or test port uses.
+    std::array<bool, MidiInput::kMaxSources> used{};
+    for (const auto& p : midiPorts()) used[static_cast<size_t>(std::clamp(p.source, 0, MidiInput::kMaxSources - 1))] = true;
+    for (int32_t s = MidiInput::kMaxSources - 1; s >= 0; --s) {
+        if (used[static_cast<size_t>(s)]) continue;
+        auto t = std::make_unique<TestMidiPort>();
+        t->name = name;
+        t->source = s;
+        testMidiPorts_.push_back(std::move(t));
+        return s;
+    }
+    return -1;
+}
+
+bool Engine::injectTestMidi(int32_t source, const uint8_t* data, int32_t len) {
+    if (!data || len <= 0) return false;
+    for (auto& t : testMidiPorts_)
+        if (t->source == source) {
+            t->parser.feed(
+                data, static_cast<size_t>(len),
+                [&](int status, int channel, int d1, int d2) { onMidiMessage(source, status, channel, d1, d2); },
+                [&](const uint8_t* sx, int32_t n) { onMidiSysex(source, sx, n); });
+            return true;
+        }
+    return false;
+}
+
+int32_t Engine::takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap) {
+    for (auto& t : testMidiPorts_)
+        if (t->source == source) return t->sent.take(out, cap);
+    return 0;
 }
 
 int32_t Engine::pollControlEvents(ControlEvent* out, int32_t max) {
@@ -222,6 +298,7 @@ int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const 
 
 void Engine::stop() {
     if (midiInput_) midiInput_->close();
+    midiOutputs_.clear();
     setPluginAudioWorkgroup(nullptr); // before the device (and its workgroup) goes
     if (pool_) pool_->setWorkgroup(nullptr, 0.0);
     if (backend_) backend_->stop();

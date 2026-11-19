@@ -1,0 +1,207 @@
+{
+  "format": 1,
+  "notes": "Nota's shipped controller pages (specs/051, FR-014): up to eight parameters per page, the ones you play first, named exactly as the engine reports them. Same format as the user's pages.json (contracts/device-pages.md). Every built-in kind needs an entry; the smoke test checks that each name resolves.",
+  "types": {
+    "builtin:inst:synth": [
+      {"name": "Main", "params": ["Cutoff", "Resonance", "Env →Cutoff", "Glide", "Attack", "Decay", "Sustain", "Release"]},
+      {"name": "Osc", "params": ["Wave", "Pulse Width", "Detune", "Octave", "Unison", "Spread", "Gain", "Pan"]}
+    ],
+    "builtin:inst:sampler": [
+      {"name": "Main", "params": ["Filter Cutoff", "Filter Resonance", "Filter Env Amount", "Pitch Transpose", "Env Attack", "Env Decay", "Env Sustain", "Env Release"]},
+      {"name": "Sample", "params": ["Sample Start", "Sample End", "Loop Start", "Loop End", "Loop Crossfade", "Pitch Detune", "Sample Gain", "Out Volume"]}
+    ],
+    "builtin:inst:physical": [
+      {"name": "Main", "params": ["Mallet Stiffness", "Mallet Color", "Res1 Decay", "Res1 Material", "Res1 Bright", "Res1 Inharm", "Res Mix", "Volume"]},
+      {"name": "Noise", "params": ["Noise Volume", "Noise Freq", "Noise Reso", "Noise Attack", "Noise Decay", "Noise Sustain", "Noise Release", "Mallet Noise"]},
+      {"name": "Res 2", "params": ["Res2 Decay", "Res2 Material", "Res2 Bright", "Res2 Inharm", "Res2 Ratio", "Res2 Tune", "Tune", "Fine"]}
+    ],
+    "builtin:inst:aurora": [
+      {"name": "Main", "params": ["Cutoff", "Resonance", "Osc1 Position", "Osc2 Position", "Attack", "Decay", "Sustain", "Release"]},
+      {"name": "Osc", "params": ["Osc1 Warp", "Osc2 Warp", "Osc1 Level", "Osc2 Level", "Sub Level", "Unison", "Unison Detune", "Gain"]},
+      {"name": "Mod", "params": ["Env2 Attack", "Env2 Decay", "Env2 Sustain", "Env2 Release", "LFO1 Rate", "LFO1 Depth", "LFO2 Rate", "LFO2 Depth"]},
+      {"name": "Tone", "params": ["Drive", "Chorus", "Chorus Rate", "Reverb", "Filter 1 Env", "Filter 1 LFO", "Filter 1 Key", "Mod Wheel"]}
+    ],
+    "builtin:inst:volt": [
+      {"name": "Main", "params": ["Filter 1 Freq", "Filter 1 Reso", "Filter 1 Env", "Drive", "Attack", "Decay", "Sustain", "Release"]},
+      {"name": "Osc", "params": ["Osc1 Wave", "Osc2 Wave", "Osc1 Level", "Osc2 Level", "Osc2 Detune", "Noise", "Unison", "Glide"]},
+      {"name": "Filter", "params": ["Filter Attack", "Filter Decay", "Filter Sustain", "Filter Release", "Filter 2 Freq", "Filter 2 Reso", "Vel→Filter", "Vel→Amp"]},
+      {"name": "LFO", "params": ["LFO1 Rate", "LFO1 Depth", "LFO2 Rate", "LFO2 Depth", "Vibrato Rate", "Vibrato", "Filter 1 LFO", "Volume"]}
+    ],
+    "builtin:inst:bass": [
+      {"name": "Main", "params": ["Filter Freq", "Filter Reso", "Filter Env", "Filter Drive", "Attack", "Decay", "Sustain", "Release"]},
+      {"name": "Tone", "params": ["Osc Shape", "Pulse Width", "Sub Level", "Osc Level", "Filter Attack", "Filter Decay", "Filter Sustain", "Glide"]}
+    ],
+    "builtin:inst:pendulum": [
+      {"name": "Main", "params": ["Motion Rate", "Balls Count", "Spread Rate", "Voice Tone", "Voice Bright", "Voice FM", "Voice Decay", "Volume"]},
+      {"name": "Voice", "params": ["Voice Wave", "Voice Length", "Voice Attack", "Voice Release", "Spread Detune", "Spread Pan", "Spread Humanize", "Motion Curve"]}
+    ],
+    "builtin:inst:operator": [
+      {"name": "Main", "params": ["Algorithm", "Feedback", "FM Depth", "Filter Freq", "Filter Reso", "Glide", "Vel to FM", "Volume"]},
+      {"name": "Operators", "params": ["A Level", "B Level", "C Level", "D Level", "A Coarse", "B Coarse", "C Coarse", "D Coarse"]},
+      {"name": "Env A · B", "params": ["A Attack", "A Decay", "A Sustain", "A Release", "B Attack", "B Decay", "B Sustain", "B Release"]},
+      {"name": "Env C · D", "params": ["C Attack", "C Decay", "C Sustain", "C Release", "D Attack", "D Decay", "D Sustain", "D Release"]}
+    ],
+    "builtin:inst:grain": [
+      {"name": "Main", "params": ["Position", "Scan", "Spray", "Grain Size", "Density", "Filter Freq", "Filter Reso", "Dry/Wet"]},
+      {"name": "Pitch · Env", "params": ["Coarse", "Fine", "Spread", "Pos Rand", "Attack", "Decay", "Sustain", "Release"]}
+    ],
+    "builtin:inst:flux": [
+      {"name": "Main", "params": ["Vector X", "Vector Y", "Motion", "Motion Rate", "Filter", "Env", "Space", "Gain"]},
+      {"name": "More", "params": ["Listen", "Target", "Age", "Glide", "Tune"]}
+    ],
+    "builtin:inst:rhythm": [
+      {"name": "Levels", "params": ["Kick Level", "Snare Level", "Clap Level", "Rim Level", "Closed Hat Level", "Open Hat Level", "Tom Level", "Perc Level"]},
+      {"name": "Tune", "params": ["Kick Tune", "Snare Tune", "Clap Tune", "Rim Tune", "Closed Hat Tune", "Open Hat Tune", "Tom Tune", "Perc Tune"]},
+      {"name": "Decay", "params": ["Kick Decay", "Snare Decay", "Clap Decay", "Rim Decay", "Closed Hat Decay", "Open Hat Decay", "Tom Decay", "Perc Decay"]},
+      {"name": "Perform", "params": ["Perform Swing", "Perform Humanize", "Perform Accent", "Master Volume", "Kick Punch", "Snare Punch", "Kick Drive", "Snare Drive"]}
+    ],
+    "builtin:inst:monolith": [
+      {"name": "Main", "params": ["Filter Cutoff", "Filter Emphasis", "Filter Contour", "Glide Time", "Filter-Env Attack", "Filter-Env Decay", "Filter-Env Sustain", "Output Volume"]},
+      {"name": "Mixer", "params": ["Mixer Osc1 Level", "Mixer Osc2 Level", "Mixer Osc3 Level", "Mixer Noise Level", "Osc2 Tune", "Osc3 Tune", "Amp-Env Attack", "Amp-Env Decay"]}
+    ],
+    "builtin:inst:pentad": [
+      {"name": "Main", "params": ["Filter Cutoff", "Filter Resonance", "Filter Env-Amount", "Glide Time", "Amp-Env Attack", "Amp-Env Decay", "Amp-Env Sustain", "Amp-Env Release"]},
+      {"name": "Filter", "params": ["Filter-Env Attack", "Filter-Env Decay", "Filter-Env Sustain", "Filter-Env Release", "Mixer Osc-A Level", "Mixer Osc-B Level", "Mixer Noise Level", "LFO Rate"]}
+    ],
+    "builtin:inst:consort": [
+      {"name": "Main", "params": ["Filter Cutoff", "Filter Resonance", "Filter Env-Amount", "Mixer Drive", "Amp-Env Attack", "Amp-Env Decay", "Amp-Env Sustain", "Amp-Env Release"]},
+      {"name": "Mixer", "params": ["Mixer Osc-1", "Mixer Osc-2", "Mixer Osc-3", "Mixer Osc-4", "Filter-Env Attack", "Filter-Env Decay", "Filter-Env Sustain", "Filter-Env Release"]},
+      {"name": "Effects", "params": ["LFO Rate", "LFO Cutoff", "Delay Time", "Delay Feedback", "Delay Mix", "Output Volume", "Voice Glide-Time", "Voice Drift"]}
+    ],
+    "builtin:inst:keys": [
+      {"name": "Main", "params": ["Hammer Hardness", "Resonator Decay", "Resonator Bright", "Pickup Distance", "Preamp Drive", "Tremolo Rate", "Tremolo Depth", "Output Volume"]},
+      {"name": "Tone", "params": ["Preamp Bass", "Preamp Treble", "Phaser Rate", "Phaser Depth", "Chorus Mix", "Damper Amount", "Play Age", "Hammer Noise"]}
+    ],
+    "builtin:inst:mosaic": [
+      {"name": "Main", "params": ["Filter Cutoff", "Filter Resonance", "Filter Env Amount", "Pitch Transpose", "Env Attack", "Env Decay", "Env Sustain", "Env Release"]},
+      {"name": "Voice", "params": ["Pitch Detune", "Voice Glide", "Out Volume", "Out Pan", "Release Volume", "Release Length", "Voice Velocity", "Filter Keytrack"]}
+    ],
+    "builtin:inst:twin": [
+      {"name": "Main", "params": ["Lower · Morph", "Pad X", "Pad Y", "Pad Z", "Lower · Macros Macro1", "Lower · Macros Macro2", "Lower · Macros Macro3", "Lower · Macros Macro4"]},
+      {"name": "Macros", "params": ["Lower · Macros Macro5", "Lower · Macros Macro6", "Lower · Macros Macro7", "Lower · Macros Macro8", "Lower · Out Volume", "Lower · Voice Glide", "Arp Gate", "Sequencer Rate"]},
+      {"name": "Lower A", "params": ["Lower A · Multimode Cutoff", "Lower A · Multimode Resonance", "Lower A · Ladder Cutoff", "Lower A · Ladder Resonance", "Lower A · AmpEnv Attack", "Lower A · AmpEnv Decay", "Lower A · AmpEnv Sustain", "Lower A · AmpEnv Release"]}
+    ],
+    "builtin:fx:eq-8": [
+      {"name": "Bands 1–4", "params": ["1 Freq", "1 Gain", "2 Freq", "2 Gain", "3 Freq", "3 Gain", "4 Freq", "4 Gain"]},
+      {"name": "Bands 5–8", "params": ["5 Freq", "5 Gain", "6 Freq", "6 Gain", "7 Freq", "7 Gain", "8 Freq", "8 Gain"]},
+      {"name": "Q", "params": ["1 Q", "2 Q", "3 Q", "4 Q", "5 Q", "6 Q", "7 Q", "8 Q"]}
+    ],
+    "builtin:fx:compressor": [
+      {"name": "Main", "params": ["Thresh", "Ratio", "Attack", "Release", "Makeup", "Knee", "Mix", "Range"]},
+      {"name": "Sidechain", "params": ["SC HP", "SC LP", "SC Gain", "SC Q", "Hold", "Lookahead"]}
+    ],
+    "builtin:fx:reverb": [
+      {"name": "Main", "params": ["Decay", "Size", "Pre-Delay", "HF Damp", "Low Cut", "High Cut", "Width", "Dry/Wet"]},
+      {"name": "More", "params": ["Diffusion", "Mod Rate", "Mod Depth", "Early Refl", "Dry Level", "Output"]}
+    ],
+    "builtin:fx:delay": [
+      {"name": "Main", "params": ["Time L", "Time R", "Feedback", "Dry/Wet", "Low Cut", "High Cut", "Wow Depth", "Width"]},
+      {"name": "More", "params": ["Div L", "Div R", "Spread", "Wow Rate", "Diffuse", "Dry Level", "Output"]}
+    ],
+    "builtin:fx:utility": [
+      {"name": "Main", "params": ["Gain", "Balance", "Width", "Mono Freq", "Mono Slope", "TP Ceiling"]}
+    ],
+    "builtin:fx:valve": [
+      {"name": "Main", "params": ["Gain", "Bass", "Middle", "Treble", "Presence", "Mix", "Output", "Gate"]},
+      {"name": "Cabinet", "params": ["Mid Freq", "Mic Distance", "Mic Position", "Low Cut", "High Cut"]}
+    ],
+    "builtin:fx:auto-filter": [
+      {"name": "Main", "params": ["Freq", "Res", "Morph", "Drive", "Env Amt", "LFO Amt", "LFO Rate", "Dry/Wet"]},
+      {"name": "Mod", "params": ["Env Attack", "Env Release", "LFO Offset", "Mod Smooth", "Gain"]}
+    ],
+    "builtin:fx:vintage": [
+      {"name": "Main", "params": ["Drive", "Tone", "Wow", "Flutter", "Noise", "Crackle", "Wear", "Mix"]},
+      {"name": "More", "params": ["Wow Rate", "Flutter Rate", "Tone Low", "Tone High", "Stereo Drift", "Output"]}
+    ],
+    "builtin:fx:orbit": [
+      {"name": "Main", "params": ["Rate", "Amount", "Shape", "Phase", "Mix"]}
+    ],
+    "builtin:fx:auto-shift": [
+      {"name": "Main", "params": ["Amount", "Speed", "Shift", "Mix", "Formant", "Fine", "Human", "Formant Shift"]}
+    ],
+    "builtin:fx:beat-repeat": [
+      {"name": "Main", "params": ["Interval", "Offset", "Grid", "Variation", "Chance", "Gate", "Decay", "Mix"]},
+      {"name": "Pitch · Filter", "params": ["Pitch", "Pitch Decay", "Volume", "Filter Freq", "Filter Width"]}
+    ],
+    "builtin:fx:crush": [
+      {"name": "Main", "params": ["Bits", "Rate", "Drive", "Jitter", "Post Filter", "Noise Floor", "Dry/Wet", "Output"]}
+    ],
+    "builtin:fx:dynamic-eq-8": [
+      {"name": "Bands 1–2", "params": ["1 Freq", "1 Gain", "1 Thr", "1 Rng", "2 Freq", "2 Gain", "2 Thr", "2 Rng"]},
+      {"name": "Bands 3–4", "params": ["3 Freq", "3 Gain", "3 Thr", "3 Rng", "4 Freq", "4 Gain", "4 Thr", "4 Rng"]},
+      {"name": "Bands 5–6", "params": ["5 Freq", "5 Gain", "5 Thr", "5 Rng", "6 Freq", "6 Gain", "6 Thr", "6 Rng"]},
+      {"name": "Bands 7–8", "params": ["7 Freq", "7 Gain", "7 Thr", "7 Rng", "8 Freq", "8 Gain", "8 Thr", "8 Rng"]}
+    ],
+    "builtin:fx:ceiling": [
+      {"name": "Main", "params": ["Ceiling", "Gain", "Release", "Lookahead", "SC HP"]}
+    ],
+    "builtin:fx:strata": [
+      {"name": "Main", "params": ["Feedback", "InputGain", "Speed"]}
+    ],
+    "builtin:fx:eq-3": [
+      {"name": "Main", "params": ["Low", "Mid", "High", "Low Freq", "High Freq", "Gain"]}
+    ],
+    "builtin:fx:forge": [
+      {"name": "Main", "params": ["Amount", "Tone", "Bias", "Width", "Wet", "Output", "LFO Drive", "LFO Rate"]},
+      {"name": "Stages", "params": ["S1 Drive", "S2 Drive", "S3 Drive", "S1 Out", "S2 Out", "S3 Out", "Env Tone"]}
+    ],
+    "builtin:fx:level": [
+      {"name": "Main", "params": ["Target", "Trim", "Max Gain", "Ceiling"]}
+    ],
+    "builtin:fx:shutter": [
+      {"name": "Main", "params": ["Threshold", "Return", "Attack", "Hold", "Release", "Floor", "Pattern Depth", "Pattern Rate"]},
+      {"name": "Pattern", "params": ["Pattern Smooth", "Pattern Swing", "Pattern Complexity", "Det HP", "Det LP", "Lookahead"]}
+    ],
+    "builtin:fx:chamber": [
+      {"name": "Main", "params": ["Blend", "Algo Decay", "Algo Size", "Algo Predelay", "Algo Damping", "Shimmer Amount", "Width", "Dry/Wet"]},
+      {"name": "More", "params": ["IR Decay", "IR Size", "Conv Predelay", "Mod Rate", "Mod Depth", "EQ Low Cut", "EQ High Cut", "Duck Amount"]}
+    ],
+    "builtin:fx:prism": [
+      {"name": "Main", "params": ["Amount", "Mix", "Output", "Crossover Low", "Crossover High", "Low Gain", "Mid Gain", "High Gain"]},
+      {"name": "Thresholds", "params": ["Low Above Thresh", "Mid Above Thresh", "High Above Thresh", "Low Above Ratio", "Mid Above Ratio", "High Above Ratio", "Low Below Thresh", "Mid Below Thresh"]}
+    ],
+    "builtin:fx:lens": [
+      {"name": "Display", "params": ["Spectrum Tilt", "Spectrum Smooth", "Scale Top", "Scale Range", "Scope Time/Div", "Scope Volt/Div", "Waterfall Gain", "Waterfall Speed"]}
+    ],
+    "builtin:fx:flanger": [
+      {"name": "Main", "params": ["Rate", "Delay", "Depth", "Feedback", "Mix", "Stereo"]}
+    ],
+    "builtin:fx:phaser": [
+      {"name": "Main", "params": ["Rate", "Center", "Depth", "Feedback", "Mix", "Stereo", "Stages"]}
+    ],
+    "builtin:fx:chorus": [
+      {"name": "Main", "params": ["Rate", "Amount", "Feedback", "Width", "Warmth", "Offset", "HPF", "Mix"]}
+    ],
+    "builtin:fx:vocoder": [
+      {"name": "Main", "params": ["Formant", "Q", "Attack", "Release", "Tilt", "Pitch", "Unvoiced", "Mix"]},
+      {"name": "Bands", "params": ["Bands", "Low", "High", "Mod gain", "Gain"]}
+    ],
+    "builtin:midi:arp": [
+      {"name": "Main", "params": ["Rate", "Gate", "Octaves", "Swing", "Transpose", "FreeRate"]}
+    ],
+    "builtin:midi:chord": [
+      {"name": "Main", "params": ["Voice 1", "Voice 2", "Voice 3", "Voice 4", "Voice 5", "Voice 6", "Strum", "Spread"]}
+    ],
+    "builtin:midi:scale": [
+      {"name": "Main", "params": ["Root", "Scale", "Transpose", "Range Low", "Range High"]}
+    ],
+    "builtin:midi:length": [
+      {"name": "Main", "params": ["Gate", "Ms", "Percent", "Vel to Len", "Key to Len", "Random"]}
+    ],
+    "builtin:midi:velocity": [
+      {"name": "Main", "params": ["Drive", "Fixed", "Out Low", "Out High", "Random"]}
+    ],
+    "builtin:midi:random": [
+      {"name": "Main", "params": ["Chance", "Note Range", "Vel Amt", "Time Amt", "Oct Amt", "Skip", "Rate", "Dist"]}
+    ],
+    "rack:inst": [
+      {"name": "Macros", "params": ["macro:1", "macro:2", "macro:3", "macro:4", "macro:5", "macro:6", "macro:7", "macro:8"]}
+    ],
+    "rack:audio": [
+      {"name": "Macros", "params": ["macro:1", "macro:2", "macro:3", "macro:4", "macro:5", "macro:6", "macro:7", "macro:8"]}
+    ],
+    "rack:midi": [
+      {"name": "Macros", "params": ["macro:1", "macro:2", "macro:3", "macro:4", "macro:5", "macro:6", "macro:7", "macro:8"]}
+    ]
+  }
+}

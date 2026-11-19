@@ -1434,6 +1434,26 @@ public interface IAudioEngine : IDisposable
     // --- MIDI learn: drain incoming CC/note-on events (4 int32 per event) ---
     int PollMidiControlEvents(int[] quadBuffer);
 
+    // --- control surfaces (specs/051) ----------------------------------------
+    /// <summary>Bumped when MIDI ports appear / disappear; on a change, <see cref="ApplyMidi"/>
+    /// connects the new set and <see cref="MidiPorts"/> lists it.</summary>
+    uint MidiPortsGeneration { get; }
+    IReadOnlyList<MidiPortInfo> MidiPorts();
+    /// <summary>Replaces the whole claim table; false (table unchanged) on a malformed entry.</summary>
+    bool SetMidiClaims(ReadOnlySpan<MidiClaim> claims);
+    /// <summary>While on, claimed CC / note-on are also copied to <see cref="PollMidiControlEvents"/>.</summary>
+    void SetMidiLearnListening(bool listening);
+    /// <summary>Drains claimed messages, 5 int32 each {source, status, channel, data1, data2}.</summary>
+    int PollMidiSurfaceEvents(int[] quintBuffer);
+    uint MidiSurfaceDropped { get; }
+    /// <summary>One complete SysEx into <paramref name="buffer"/>; 0 none, -n did not fit.</summary>
+    int PollMidiSysex(out int source, byte[] buffer);
+    bool MidiSend(string outputUid, ReadOnlySpan<byte> bytes);
+    /// <summary>Test ports (MCP controller_inject): a virtual input + loopback output.</summary>
+    int MidiTestPortAdd(string name);
+    bool MidiTestInject(int source, ReadOnlySpan<byte> bytes);
+    int MidiTestTakeSent(int source, byte[] buffer);
+
     // --- gamepad input (live note source) ----------------------------------
     // Poll-driven: the UI ticks PollGamepadEvents and turns each edge into
     // NoteOn/NoteOff — the same entry points the computer keyboard uses, so

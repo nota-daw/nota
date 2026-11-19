@@ -142,6 +142,10 @@ public sealed class Settings
     /// up/down live-shifts this)</summary>
     public int GamepadOctave { get; set; }
 
+    /// <summary>Controller auto-mapping choices (specs/051), keyed by MIDI port uid: which
+    /// profile (automatic by default), whether Nota drives the controller, and pickup.</summary>
+    public Dictionary<string, ControllerChoice> Controllers { get; set; } = new();
+
     // --- snap grid (specs/003-adaptive-snap-grid) ------------------------------
     // App-wide, one per editor, never written to project files: opening a project
     // doesn't change how the user likes to snap.
@@ -302,6 +306,15 @@ public enum SampleFolderOutcome { Added, AlreadyPresent, Inside, Contains, NotAD
 public readonly record struct SampleFolderResult(SampleFolderOutcome Outcome, int Other = -1)
 {
     public bool Ok => Outcome == SampleFolderOutcome.Added;
+}
+
+/// <summary>The user's choice for one controller port (specs/051). <see cref="ProfileId"/>
+/// null = pick the profile automatically; "none" = plain MIDI; otherwise a profile id.</summary>
+public sealed class ControllerChoice
+{
+    public string? ProfileId { get; set; }
+    public bool Enabled { get; set; } = true;
+    public bool PickupOn { get; set; } = true;
 }
 
 public interface ISettingsService

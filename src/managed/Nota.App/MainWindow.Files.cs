@@ -196,6 +196,8 @@ public partial class MainWindow
         _projectPath = null;
         if (_vm is not null) _vm.Browser.OpenProjectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
+        _devicePages?.LoadProject(null);   // a new project has no pages of its own
+        _controllers?.Overrides?.LoadProject(null, _controllers.TrackIdAt);   // …nor rebinds (Story 7)
         Timeline.ResetTrackView();  // …at the default track sizes
         Nota.Infrastructure.ProjectTemplate.ApplyDefault(Engine);   // instrument, audio, Reverb + Delay returns
         RefreshAfterLoad();
@@ -283,6 +285,8 @@ public partial class MainWindow
             _panLawLegacy = result.Transport.PanLawLegacy;
             _projectPath = dir;
             _learn?.LoadMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
+            _devicePages?.LoadProject(dir);   // the project's copy of edited controller pages (specs/051)
+            _controllers?.Overrides?.LoadProject(dir, _controllers.TrackIdAt);   // its controller rebinds (Story 7)
             _modular?.LoadLayout(dir);   // modular-editor node/island positions (sidecar)
             Timeline.LoadTrackView(dir); // track heights + track-list width (sidecar)
             LoadFreezeLinks(dir);        // live-freeze links (v1.1) — re-sleep linked sources
@@ -352,6 +356,8 @@ public partial class MainWindow
             if (previousPath is null || !SamePath(previousPath, dir)) DropReplacedHistory(dir);
             var warnings = _projects.Save(Engine, TransportSnapshot(), dir);
             _learn?.SaveMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
+            _devicePages?.SaveProject(dir, Nota.Application.Controllers.FocusedDevice.TypeKeysIn(Engine));   // FR-018a
+            _controllers?.Overrides?.SaveProject(dir, _controllers.TrackIndexOf);   // FR-034
             _modular?.SaveLayout(dir);   // modular-editor node/island positions (sidecar)
             Timeline.SaveTrackView(dir); // track heights + track-list width (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
@@ -450,6 +456,7 @@ public partial class MainWindow
     // per-clip editor state and rebuild every view (cf. RefreshAfterUndoRedo).
     private void RefreshAfterLoad()
     {
+        _controllers?.ResetSessionState();   // first bank / page again (specs/051)
         _importEpoch++;                  // imports still running belong to the old graph
         Timeline.ClearPendingImports();
         Timeline.ForgetAutoTargets();    // lane targets are per-project track/device indices

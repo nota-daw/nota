@@ -78,7 +78,16 @@ public partial class App : Avalonia.Application
         services.AddSingleton<RecoveryService>();
         services.AddSingleton<IRecoveryStore>(sp => sp.GetRequiredService<RecoveryService>());
         // MIDI Learn service (shared by the UI overlay and the MCP MIDI tools).
+        services.AddSingleton<Nota.App.Controllers.ControlApplier>();
         services.AddSingleton<MidiLearnService>();
+        // Controller auto-mapping (specs/051): recognises connected controllers by profile.
+        services.AddSingleton(_ => new Nota.Application.Controllers.DevicePagesStore(
+            System.IO.Path.Combine(NotaPaths.SubDir("controllers"), "pages.json")));
+        services.AddSingleton(_ => new Nota.Application.Controllers.ControllerOverrides(
+            System.IO.Path.Combine(NotaPaths.SubDir("controllers"), "overrides.json")));
+        services.AddSingleton(sp => new Nota.App.Controllers.ControllerService(
+            sp.GetRequiredService<IAudioEngine>(), sp.GetRequiredService<Nota.App.Controllers.ControlApplier>(),
+            sp.GetRequiredService<ISettingsService>(), NotaPaths.SubDir("controllers"), sp.GetService<ILogSink>()));
         // MCP server (AI drives the app) — off unless enabled in Preferences.
         services.AddSingleton<Nota.Mcp.IEngineDispatch, AvaloniaEngineDispatch>();
         services.AddSingleton<ArrangementRefresh>();

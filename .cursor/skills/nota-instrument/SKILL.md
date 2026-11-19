@@ -116,6 +116,16 @@ in the engine's MIDI-device factory + `MidiDeviceCardFactory` `[kind]` + a `Midi
 entry with its descriptor in `BuiltinDeviceCatalog.cs` (and its category in `DeviceCategories.cs`). Params/persist/clone are generic like audio effects. Cards sit
 **before** the instrument in the chain.
 
+### Every kind: controller pages (specs/051)
+
+A hardware controller's eight knobs follow the selected device page by page. Give the new
+kind a slug in `Nota.Application/Controllers/DevicePageCatalog.cs` (`Kinds`) and its pages in
+`Nota.Application/Controllers/DevicePages.json` (`builtin:inst:<slug>` / `builtin:fx:<slug>` /
+`builtin:midi:<slug>`: up to eight parameter **names** per page, exactly as the engine reports
+them, the ones you play first). The smoke test (`--controllers`, "device pages") fails naming a
+kind without pages and any name that does not resolve on a fresh device. Racks need nothing
+(their macros).
+
 ## 3. Editor card architecture
 
 Cards are **strategy classes under `src/managed/Nota.App/DeviceCards/`**, resolved by

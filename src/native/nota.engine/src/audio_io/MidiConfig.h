@@ -35,6 +35,8 @@ std::vector<MidiDeviceInfo> enumerateMidiInputs();
 // Stable uid of a CoreMIDI endpoint (a MIDIEndpointRef, carried as uint32_t so
 // this header stays free of CoreMIDI types). Empty if it has no unique id.
 std::string midiUidForEndpoint(uint32_t endpoint);
+// Display name of a CoreMIDI endpoint (empty if none). macOS only; "" elsewhere.
+std::string midiEndpointName(uint32_t endpoint);
 
 // Persistence: ~/Library/Application Support/Nota/midi.json (atomic write).
 MidiConfig loadMidiConfig();

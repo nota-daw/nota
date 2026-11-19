@@ -236,4 +236,78 @@ public sealed partial class NotaEngine
         if (quadBuffer is null || quadBuffer.Length < 4) return 0;
         return NativeMethods.MidiPollControlEvents(_handle, quadBuffer, quadBuffer.Length / 4);
     }
+
+    // --- control surfaces (specs/051) ---
+
+    public uint MidiPortsGeneration => NativeMethods.MidiPortsGeneration();
+
+    public IReadOnlyList<MidiPortInfo> MidiPorts()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.MidiPortCount(_handle);
+        var list = new List<MidiPortInfo>(n);
+        for (int i = 0; i < n; i++)
+            list.Add(new MidiPortInfo(
+                Marshal.PtrToStringUTF8(NativeMethods.MidiPortUid(_handle, i)) ?? "",
+                Marshal.PtrToStringUTF8(NativeMethods.MidiPortName(_handle, i)) ?? "",
+                NativeMethods.MidiPortSource(_handle, i),
+                Marshal.PtrToStringUTF8(NativeMethods.MidiPortOutputUid(_handle, i)) ?? ""));
+        return list;
+    }
+
+    public unsafe bool SetMidiClaims(ReadOnlySpan<MidiClaim> claims)
+    {
+        ThrowIfDisposed();
+        fixed (MidiClaim* p = claims)
+            return NativeMethods.MidiSetClaims(_handle, p, claims.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    public void SetMidiLearnListening(bool listening)
+    { ThrowIfDisposed(); NativeMethods.MidiSetLearnListening(_handle, listening ? 1 : 0); }
+
+    public int PollMidiSurfaceEvents(int[] quintBuffer)
+    {
+        ThrowIfDisposed();
+        if (quintBuffer is null || quintBuffer.Length < 5) return 0;
+        return NativeMethods.MidiPollSurfaceEvents(_handle, quintBuffer, quintBuffer.Length / 5);
+    }
+
+    public uint MidiSurfaceDropped
+    { get { ThrowIfDisposed(); return NativeMethods.MidiSurfaceDropped(_handle); } }
+
+    public int PollMidiSysex(out int source, byte[] buffer)
+    {
+        ThrowIfDisposed();
+        source = -1;
+        if (buffer is null) return 0;
+        return NativeMethods.MidiPollSysex(_handle, out source, buffer, buffer.Length);
+    }
+
+    public unsafe bool MidiSend(string outputUid, ReadOnlySpan<byte> bytes)
+    {
+        ThrowIfDisposed();
+        if (string.IsNullOrEmpty(outputUid) || bytes.IsEmpty) return false;
+        fixed (byte* p = bytes)
+            return NativeMethods.MidiSend(_handle, outputUid, p, bytes.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>The control-surface layer's self-test (claims, SysEx, loopback): 0 = pass.</summary>
+    public static int MidiSurfaceSelfTest() => NativeMethods.MidiSurfaceSelfTest();
+
+    public int MidiTestPortAdd(string name)
+    { ThrowIfDisposed(); return NativeMethods.MidiTestPortAdd(_handle, name ?? ""); }
+
+    public unsafe bool MidiTestInject(int source, ReadOnlySpan<byte> bytes)
+    {
+        ThrowIfDisposed();
+        if (bytes.IsEmpty) return false;
+        fixed (byte* p = bytes)
+            return NativeMethods.MidiTestInject(_handle, source, p, bytes.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    public int MidiTestTakeSent(int source, byte[] buffer)
+    {
+        ThrowIfDisposed();
+        return buffer is null ? 0 : NativeMethods.MidiTestTakeSent(_handle, source, buffer, buffer.Length);
+    }
 }

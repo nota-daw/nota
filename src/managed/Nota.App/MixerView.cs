@@ -149,6 +149,7 @@ public sealed partial class MixerView : UserControl
         public string Name = "";
         public Border Strip = null!;
         public Border Outline = null!;
+        public IBrush? BaseBorder;                  // the strip's own border, under the controller-bank accent
         public Action<bool>? PaintFold;             // group strips: the triangle
         public Control? SoloDot, ArmDot, ClipDot;   // group strips: hidden-member state, when folded
         public int[] HiddenIds = Array.Empty<int>();       // a group's descendants (ids)
@@ -361,6 +362,8 @@ public sealed partial class MixerView : UserControl
         body.Child = null;   // detach before re-parenting
         body.Child = new Panel { Children = { inner, e.Outline } };
         e.Strip = body;
+        e.BaseBorder = body.BorderBrush;
+        PaintBank(e);
         // A press anywhere on the strip — its name, fader, buttons — selects its track, as a
         // click on its arrangement header does, so the Detail panel can follow from the Mixer (#538).
         body.AddHandler(PointerPressedEvent, (_, pe) =>
@@ -616,6 +619,19 @@ public sealed partial class MixerView : UserControl
             CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col,
         };
     }
+
+    // The strips under a hardware controller's bank of eight (specs/051) get an orange outline:
+    // move a fader there and these tracks follow.
+    private HashSet<int> _bankTracks = new();
+
+    public void SetControllerBank(HashSet<int> trackIds)
+    {
+        _bankTracks = trackIds;
+        foreach (var e in _strips) PaintBank(e);
+    }
+
+    // A quiet orange line (the selection outline keeps the full accent).
+    private void PaintBank(StripEntry e) => e.Strip.BorderBrush = _bankTracks.Contains(e.Id) ? NotaPalette.AccentEdge : e.BaseBorder;
 
     private Border MasterStrip()
     {

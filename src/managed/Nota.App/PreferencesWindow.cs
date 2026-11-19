@@ -710,7 +710,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             items.Add(Table(rows));
         }
         items.Add(Caption(Loc.T("preferences.switch_a_controller_off_to")));
-        return Sections(Section(Loc.T("preferences.midi_inputs"), 8, items.ToArray()), MpeSection(engine));
+        return Sections(Section(Loc.T("preferences.midi_inputs"), 8, items.ToArray()), ControllersSection(), MpeSection(engine));
     }
 
     private static readonly int[] MpeBendRanges = [12, 24, 48, 96];
