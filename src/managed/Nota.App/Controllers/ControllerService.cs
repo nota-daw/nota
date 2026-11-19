@@ -749,9 +749,10 @@ public sealed class ControllerService
             var c = _controllers.Values.FirstOrDefault(x => x.Source == source && x.Stage == ControllerStage.Active);
             if (c?.Profile is not { } profile) continue;
 
-            // A learned control on a port the profile owns whole: MIDI Learn takes it.
-            if (_learn is not null && (status == 0xB0 || status == 0x90)
-                && _learn.DispatchFromController(status == 0x90, channel, d1, d2)) continue;
+            // A learned control on a port the profile owns whole: MIDI Learn takes it — a note's
+            // release too (0x80 here, also for a note-on at velocity 0), as value 0 (#601).
+            if (_learn is not null && (status is 0xB0 or 0x90 or 0x80)
+                && _learn.DispatchFromController(status != 0xB0, channel, d1, status == 0x80 ? 0 : d2)) continue;
 
             if (c.Surface is { } surface)
             {

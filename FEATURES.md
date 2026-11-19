@@ -802,6 +802,13 @@ own window — see
   and filter included), track volume/pan/mute/solo, the master, the transport, rack
   macros, and chain and Drum Rack pad mute/solo. The **Map** tab in the browser exposes
   range, inversion and deletion. Saved with the project.
+  - **Session launch buttons** (#601, specs/108) — each slot's launch button (an empty slot's
+    stop / record button) and each scene's launch button are learnable, so a pad or a button
+    launches that clip or scene with the Session view showing or not. A pad does what a click
+    does: the clip launches with the pad's velocity (scaled by the clip's velocity amount) and
+    letting go stops a Gate / Repeat clip; an empty slot records on an armed track or stops the
+    track; a recording slot stops its take. A mapping keeps its grid position (track and row);
+    the Map tab names it *Launch · track · scene*.
   - Sources are a **CC**, a **MIDI note**, or a **gamepad button, stick or trigger**
     (macOS) — all of them share one mapping table. A button is momentary: it fires a
     toggle target once on press, and holds a continuous one at the top of its range until

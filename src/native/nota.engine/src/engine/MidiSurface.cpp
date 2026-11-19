@@ -183,6 +183,20 @@ int32_t MidiSurface::selfTest() {
     send(3, 0xB0, 0, 20, 1);
     send(2, 0x90, 0, 60, 100);
     if (instruments != 4 || learned != 4 || s.pollEvents(ev, 8) != 0) return 2;
+    // A note's release reaches the learn copy as value 0, whether a note-off or a note-on at
+    // velocity 0 (#601).
+    {
+        int kind = -1, value = -1, offs = 0;
+        auto release = [&](int32_t status) {
+            s.route(
+                2, status, 0, 60, status == 0x80 ? 64 : 0, [&] { ++instruments; },
+                [&](int k, int, int, int v) { kind = k; value = v; ++offs; });
+        };
+        release(0x80);
+        if (offs != 1 || kind != 1 || value != 0) return 2;
+        release(0x90);
+        if (offs != 2 || kind != 1 || value != 0 || instruments != 6) return 2;
+    }
 
     // 3. whole port: every channel message, note-off velocity 0 reported as 0x80; learn copy
     // only while MIDI Learn listens.

@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **MIDI Learn launches Session clips and scenes** (#601, specs/108): in MIDI Learn the Session
+  grid's launch buttons light up — each slot's (an empty slot's stop / record button) and each
+  scene's — and a click plus a pad, key or button maps it. The pad then does what a click on that
+  button does, with the Session view showing or not: a clip launches at its quantum with the
+  pad's velocity (scaled by the clip's velocity amount), and letting go stops a Gate or Repeat
+  clip; an empty slot records on an armed track, else stops the track; a slot that is recording
+  stops its take; a scene launches its row. Mappings are saved with the project and keep their
+  place in the grid (track and row); the **Map** tab lists them as *Launch · Bass · Scene 2*.
 - **Controller auto-mapping** (#100, specs/051): plug in a controller and it works — no MIDI
   Learn needed.
   - **Recognised on plug-in**: Nota knows a controller by a profile (port name and its MIDI
@@ -130,6 +138,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     Stop beside its name). Each phone keeps its own choice.
 
 ### Fixed
+- **A MIDI note mapped to a button fires on every press** (#601). A note learned onto Mute, Solo,
+  Play or another button toggled it the first time only: MIDI Learn never heard the note's
+  release, so the button never let go. Note-offs reach MIDI Learn now; a note mapped to a knob
+  or fader still keeps the last note's velocity.
 - **Stopping a Session take before it starts leaves the slot empty** (#503). Stopping a fresh
   MIDI take while it still waited for its launch boundary used to leave an empty clip in the
   slot (as long as **Fixed**), which then played. Now nothing was recorded, so nothing stays:

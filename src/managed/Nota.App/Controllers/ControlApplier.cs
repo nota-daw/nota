@@ -10,6 +10,7 @@
 using System;
 using System.Collections.Generic;
 using Nota.Application;
+using Nota.Application.Controllers;
 using Nota.Application.Editing;
 
 namespace Nota.App.Controllers;
@@ -248,8 +249,9 @@ public sealed class ControlApplier(IAudioEngine engine)
         }
     }
 
-    /// <summary>Fire a button target once (toggle, transport step, select).</summary>
-    public void Trigger(MidiTarget t)
+    /// <summary>Fire a button target once (toggle, transport step, select, launch). <paramref name="velocity"/>
+    /// (0..1, a pad's) only reaches a Session clip launch.</summary>
+    public void Trigger(MidiTarget t, float velocity = 1f)
     {
         switch (t.Kind)
         {
@@ -286,6 +288,9 @@ public sealed class ControlApplier(IAudioEngine engine)
                 break;
             case MidiTargetKind.TrackArm: engine.SetTrackArmed(t.TrackId, !(TrackInfo(t.TrackId)?.Armed > 0)); break;
             case MidiTargetKind.TrackSelect: TrackSelectRequested?.Invoke(t.TrackId); break;
+            // A Session launch button (#601): what a click on it does, the Session view showing or not.
+            case MidiTargetKind.SessionSlotLaunch: SessionLaunch.Press(engine, t.TrackId, t.ParamIndex, velocity); break;
+            case MidiTargetKind.SessionSceneLaunch: SessionLaunch.Scene(engine, t.ParamIndex); break;
             case MidiTargetKind.RackChainMute when t.DeviceIndex <= MidiTarget.MidiRackBase:
             {
                 int mi = MidiTarget.MidiRackBase - t.DeviceIndex;
@@ -307,6 +312,13 @@ public sealed class ControlApplier(IAudioEngine engine)
                 else engine.RackDevSetChainSolo(t.TrackId, t.DeviceIndex, t.ParamIndex, !engine.RackDevChainSolo(t.TrackId, t.DeviceIndex, t.ParamIndex));
                 break;
         }
+    }
+
+    /// <summary>A button target was let go. Only a Session clip launch answers: a Gate / Repeat clip
+    /// stops, as when its on-screen button is released (#601).</summary>
+    public void Release(MidiTarget t)
+    {
+        if (t.Kind == MidiTargetKind.SessionSlotLaunch) SessionLaunch.Release(engine, t.TrackId, t.ParamIndex);
     }
 
     private (float Min, float Max) ChainParamRange(MidiTarget t, int chain, int slot)

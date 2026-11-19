@@ -1831,7 +1831,7 @@ class Engine {
     std::map<std::pair<int32_t, double>, NoteExpr> pendingExpr_;
     void collectRecordedExpr();
     void attachRecordedExpr(Note& n, int32_t pitch, double startBeat);
-    ControlEventQueue midiControl_; // incoming CC/note-on for MIDI-learn (AR-6)
+    ControlEventQueue midiControl_; // incoming CC/notes for MIDI-learn (AR-6)
     Transport transport_;
 
     std::shared_ptr<Graph> authoring_;
