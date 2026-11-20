@@ -23,6 +23,7 @@ using Nota.App.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 using Nota.Application.Localization;
 
@@ -43,13 +44,17 @@ public sealed partial class SessionView : UserControl
 
     private readonly IAudioEngine _engine;
 
-    // Three horizontally aligned strips (same column widths + spacing) so a column's header,
-    // cells and mixer line up: headers pin to the top, the cells scroll vertically in the
-    // middle, the stop row + mixer pin to the bottom. All three scroll sideways together.
+    // Three aligned strips (same column widths + spacing) so a column's header, cells and mixer
+    // line up: headers pin to the top, the cells scroll vertically in the middle, the stop row +
+    // mixer pin to the bottom, all three scroll sideways together. Scenes across (specs/108)
+    // turns them: headers pin left, cells scroll sideways, stop + mixer pin right.
     private readonly StackPanel _headerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, GridPad, GridPad, 0) };
     private readonly StackPanel _cellsRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, Gap, GridPad, 0) };
     private readonly StackPanel _footerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, Gap, GridPad, GridPad) };
     private readonly Border _inspectorHost = new() { Width = InspectorW };
+    private readonly ScrollViewer _cellScroll = new();
+    private readonly ScrollViewer _outerScroll = new();
+    private readonly Grid _inner = new();
 
     // Whether the inspector column shows (Settings.SessionInspectorOpen, remembered per machine).
     private static bool InspectorOpen =>
@@ -142,28 +147,24 @@ public sealed partial class SessionView : UserControl
         // The inspector's buttons name their keys (specs/096): redraw them when a key changes.
         AttachedToVisualTree += (_, _) => Nota.App.Input.Keys.Bindings.Changed += RebuildInspectorKeys;
         DetachedFromVisualTree += (_, _) => Nota.App.Input.Keys.Bindings.Changed -= RebuildInspectorKeys;
+        // Preferences → Session grid turns the view at once (specs/108).
+        AttachedToVisualTree += (_, _) => { if (SettingsSvc is { } st) st.Changed += OnSettingsChanged; if (AcrossSetting != _across) Refresh(); };
+        DetachedFromVisualTree += (_, _) => { if (SettingsSvc is { } st) st.Changed -= OnSettingsChanged; };
         Focusable = true;
         FocusAdorner = null;
 
-        var vScroll = new ScrollViewer
-        {
-            Content = _cellsRow,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-        };
-        var inner = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        inner.Children.Add(_headerRow);
-        Grid.SetRow(vScroll, 1); inner.Children.Add(vScroll);
-        Grid.SetRow(_footerRow, 2); inner.Children.Add(_footerRow);
-        var hScroll = new ScrollViewer
-        {
-            Content = inner,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-        };
-        var gridArea = new Border { Background = NotaPalette.BgSunken, Child = hScroll, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent };
-        // A Browser drop on the empty part of the grid — right of the last column, under the
-        // scenes — starts a new track (#313); cells and headers take their own drops first.
+        // The cells scroll along the scenes' axis between the pinned strips; the whole grid scrolls
+        // the other way (SessionView.Axis.cs lays them out per orientation, specs/108).
+        _cellScroll.Content = _cellsRow;
+        _inner.Children.Add(_headerRow);
+        _inner.Children.Add(_cellScroll);
+        _inner.Children.Add(_footerRow);
+        _outerScroll.Content = _inner;
+        ApplyAxis();
+        var gridArea = new Border { Background = NotaPalette.BgSunken, Child = _outerScroll, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent };
+        // A Browser drop on the empty part of the grid — past the last column (the last row when
+        // the grid is turned), beyond the scenes — starts a new track (#313); cells and headers
+        // take their own drops first.
         DragDrop.SetAllowDrop(gridArea, true);
         DragDrop.AddDragOverHandler(gridArea, (_, e) =>
         {
@@ -246,6 +247,7 @@ public sealed partial class SessionView : UserControl
         _cols.Clear();
         _sceneCells.Clear();
         _sceneCount = _engine.SceneCount;
+        ApplyAxis();
 
         BuildColumns();
         AddSceneRail();
@@ -485,8 +487,9 @@ public sealed partial class SessionView : UserControl
     /// <summary>Stops every playing clip, as the toolbar's Stop All does.</summary>
     internal void StopAll() { _engine.StopAllSession(); UpdateStates(); }
 
-    /// <summary>The arrows' walk, for a controller's buttons and encoder (specs/051).</summary>
-    internal void MoveSelection(Key key) => Move(key, NavCols);
+    /// <summary>A step by scene or by track, for the Session commands — a controller's buttons and
+    /// encoder (specs/051) — whichever way the grid is turned (specs/108).</summary>
+    internal void MoveSelection(SessionStep step) => Move(step, NavCols);
 
     /// <summary>A controller's launch button: the selected clip starts — or, playing or queued, its
     /// track stops; a scene row launches; an empty slot launches (stops the track or records, as a click).</summary>
@@ -704,9 +707,11 @@ public sealed partial class SessionView : UserControl
         if (e.Source is TextBox || Keys.Capturing) return false;
         bool plain = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
         // The arrows walk the selection — fixed list navigation (specs/096 FR-011).
+        // Turned by the grid's orientation: they follow what is on screen (specs/108).
         if (plain && e.Key is Key.Up or Key.Down or Key.Left or Key.Right)
         {
-            Move(e.Key, NavCols);
+            var arrow = e.Key switch { Key.Up => GridArrow.Up, Key.Down => GridArrow.Down, Key.Left => GridArrow.Left, _ => GridArrow.Right };
+            Move(SessionGridNav.FromArrow(arrow, _across), NavCols);
             return true;
         }
         // The rest are bindings: the Session's own and the shared editing actions, which act on
@@ -726,38 +731,26 @@ public sealed partial class SessionView : UserControl
         };
     }
 
-    private void Move(Key key, List<Column> nav)
+    // A selection step by grid meaning (specs/108): the arrows arrive here already turned for the
+    // orientation, the Session commands (and controllers) as scene / track steps. The rules live
+    // in SessionGridNav; this maps the selection to positions and back.
+    private void Move(SessionStep step, List<Column> nav)
     {
-        int s = _sel.Scene, last = Math.Max(0, _sceneCount - 1);
-        if (_sel.Kind == SelKind.Scene)
-        {
-            if (key == Key.Up) Select(_sel with { Scene = Math.Max(0, s - 1) });
-            else if (key == Key.Down) Select(_sel with { Scene = Math.Min(last, s + 1) });
-            else if (key == Key.Right && nav.Count > 0) Select(new Selection(SelKind.Slot, nav[0].TrackId, s));
-            return;
-        }
-        // Return / Master columns (#314) have no slots: ← / → walk them in column order, back
-        // into the last track column on the left; ↑ / ↓ have nowhere to go.
         var buses = _cols.Where(c => c.Kind is ColKind.Return or ColKind.Master).ToList();
-        if (_sel.Kind == SelKind.Bus)
+        var at = _sel.Kind switch
         {
-            int b = buses.FindIndex(c => BusId(c) == _sel.TrackId);
-            if (key == Key.Left)
-            {
-                if (b > 0) Select(new Selection(SelKind.Bus, BusId(buses[b - 1]), s));
-                else if (nav.Count > 0) Select(new Selection(SelKind.Slot, nav[^1].TrackId, s));
-                else Select(new Selection(SelKind.Scene, 0, s));
-            }
-            else if (key == Key.Right && b >= 0 && b < buses.Count - 1) Select(new Selection(SelKind.Bus, BusId(buses[b + 1]), s));
-            return;
+            SelKind.Scene => new GridPos(GridSelKind.Scene, 0, _sel.Scene),
+            SelKind.Bus => new GridPos(GridSelKind.Bus, buses.FindIndex(c => BusId(c) == _sel.TrackId), _sel.Scene),
+            _ => new GridPos(GridSelKind.Slot, Math.Max(0, nav.FindIndex(c => c.TrackId == _sel.TrackId)), _sel.Scene),
+        };
+        var to = SessionGridNav.Step(at, step, nav.Count, buses.Count, _sceneCount);
+        if (to == at && _sel.Kind != SelKind.Slot) return;
+        switch (to.Kind)
+        {
+            case GridSelKind.Scene: Select(new Selection(SelKind.Scene, 0, to.Scene)); break;
+            case GridSelKind.Bus: Select(new Selection(SelKind.Bus, BusId(buses[to.Index]), to.Scene)); break;
+            default: if (nav.Count > 0) Select(new Selection(SelKind.Slot, nav[to.Index].TrackId, to.Scene)); break;
         }
-        int i = Math.Max(0, nav.FindIndex(c => c.TrackId == _sel.TrackId));
-        if (key == Key.Right && i == nav.Count - 1 && buses.Count > 0) { Select(new Selection(SelKind.Bus, BusId(buses[0]), s)); return; }
-        if (key == Key.Up) s = Math.Max(0, s - 1);
-        if (key == Key.Down) s = Math.Min(last, s + 1);
-        if (key == Key.Left) { if (i == 0) { Select(new Selection(SelKind.Scene, 0, s)); return; } i--; }
-        if (key == Key.Right) i = Math.Min(nav.Count - 1, i + 1);
-        if (nav.Count > 0) Select(new Selection(SelKind.Slot, nav[i].TrackId, s));
     }
 
     // ---- shared paint helpers -------------------------------------------------------

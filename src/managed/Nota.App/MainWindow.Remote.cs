@@ -178,6 +178,10 @@ public partial class MainWindow : IRemoteHost
         }
     }
 
+    // specs/108: the desktop's Session grid orientation, for remotes set to "As in Nota".
+    bool IRemoteHost.SessionAcross => Nota.Application.Editing.SessionGridNav.IsAcross(
+        (App.Services?.GetService(typeof(ISettingsService)) as ISettingsService)?.Current.SessionGrid);
+
     RemoteControllerFocus? IRemoteHost.ControllerFocus
     {
         get

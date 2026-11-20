@@ -138,10 +138,10 @@ public partial class MainWindow
         B("session.launchScene", () => _session?.LaunchSelectedScene(), c => Need(c.View == "Session", Loc.T("main.commands.open_the_session_view_first")));
         B("session.stopAll", () => _session?.StopAll());
         Availability InSession(PaletteContext c) => Need(c.View == "Session" && _session is not null, Loc.T("main.commands.open_the_session_view_first"));
-        B("session.selectUp", () => _session?.MoveSelection(Avalonia.Input.Key.Up), InSession);
-        B("session.selectDown", () => _session?.MoveSelection(Avalonia.Input.Key.Down), InSession);
-        B("session.selectLeft", () => _session?.MoveSelection(Avalonia.Input.Key.Left), InSession);
-        B("session.selectRight", () => _session?.MoveSelection(Avalonia.Input.Key.Right), InSession);
+        B("session.selectUp", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.PrevScene), InSession);
+        B("session.selectDown", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.NextScene), InSession);
+        B("session.selectLeft", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.PrevTrack), InSession);
+        B("session.selectRight", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.NextTrack), InSession);
         B("session.toggleSlot", () => _session?.ToggleSelection(), InSession);
         B("session.stopTrack", () => _session?.StopSelectedTrack(), InSession);
         B("session.insertScene", () => OnMenuInsertScene(this, e), c => Need(c.View == "Session", Loc.T("main.commands.scenes_live_in_the_session")));

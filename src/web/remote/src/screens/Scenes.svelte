@@ -20,7 +20,7 @@
   import { look } from '../lib/theme.svelte';
   import { tap } from '../lib/tap';
   import { bars } from '../lib/fmt';
-  import { lanes as laneList, groupSlot, type Lane } from '../lib/grid';
+  import { lanes as laneList, groupSlot, effectiveAcross, type Lane } from '../lib/grid';
   import ClipPreview from '../components/ClipPreview.svelte';
   import { slotSelected, rowSelected } from '../lib/focus';
 
@@ -29,7 +29,7 @@
   const tracks = $derived(new Map((app.proj?.tracks ?? []).map((t) => [t.id, t])));
   const open = $derived(new Set(app.prefs.groupsOpen));
   const lanes = $derived(s ? laneList(app.proj?.tracks ?? [], s, open) : []);
-  const across = $derived(app.prefs.sessionAxis === 'across');
+  const across = $derived(effectiveAcross(app.prefs.sessionGrid, s));   // specs/108: own choice or Nota's
   const scenes = $derived(Array.from({ length: s?.n ?? 0 }, (_, i) => i));
   const colMin = $derived(form === 'phone' ? 104 : form === 'phoneLand' ? 112 : 140);
   const rowH = $derived(form === 'phone' ? 62 : form === 'phoneLand' ? 54 : 84);

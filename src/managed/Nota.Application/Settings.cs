@@ -52,6 +52,11 @@ public sealed class Settings
     /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
     /// folding it gives the clip grid its width back on small windows.</summary>
     public bool SessionInspectorOpen { get; set; } = true;
+    /// <summary>Which way the Session grid runs (specs/108, Settings → Editing → Session, or the
+    /// Session toolbar): "down" — a scene per row, a track per column (the default) — or
+    /// "across" — a scene per column, a track per row. Anything else reads as "down". An app
+    /// setting on this computer, never in the project; Nota Remote / Nota NX can follow it.</summary>
+    public string SessionGrid { get; set; } = "down";
     /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.
     /// Since spec 092 a mirror of the default <see cref="SampleFolders"/> entry, rewritten on
     /// every save: older versions and Nota Mosaic's <c>samples:</c> refs read it.</summary>

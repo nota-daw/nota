@@ -61,3 +61,23 @@ export function groupSlot(members: number[], ses: Session, scene: number): Group
   const bars = members.map((id) => rows.get(id)?.c[scene]?.[0] ?? 0);
   return { has: bars.filter((s) => s !== 0).length, of: bars.length, playing: bars.includes(3), bars };
 }
+
+// ---- orientation (specs/108) ---------------------------------------------------------------
+
+/** The phone's Scenes grid choice: follow Nota's Session grid, or keep its own. */
+export type SessionGrid = 'nota' | 'down' | 'across';
+
+/** The stored choice, from saved prefs. Before specs/108 the phone kept `sessionAxis` ('down' |
+ *  'across') and saved it even when never picked, so only an explicit 'across' is kept; every
+ *  other phone starts on "As in Nota", which looks the same until Nota's grid is turned. */
+export function migrateSessionGrid(saved: { sessionGrid?: unknown; sessionAxis?: unknown }): SessionGrid {
+  const g = saved.sessionGrid;
+  if (g === 'nota' || g === 'down' || g === 'across') return g;
+  return saved.sessionAxis === 'across' ? 'across' : 'nota';
+}
+
+/** Whether the Scenes grid runs scenes across: the phone's own choice, or Nota's (`ses.ax`,
+ *  absent from an older Nota or a grid running scenes down). */
+export function effectiveAcross(grid: SessionGrid, ses: Pick<Session, 'ax'> | null | undefined): boolean {
+  return grid === 'across' || (grid === 'nota' && ses?.ax === 'across');
+}

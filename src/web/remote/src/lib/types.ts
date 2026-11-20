@@ -127,6 +127,8 @@ export interface Session {
   q?: number[];
   /** Nota's Session selection (specs/107): a slot, a scene row, or nothing. Older Nota: absent. */
   sel?: { id: number; i: number } | { row: number } | null;
+  /** Nota's Session grid runs scenes across (specs/108); absent: scenes down, or an older Nota. */
+  ax?: 'across';
 }
 
 /** What a hardware controller's knobs are on in Nota (specs/107, contracts/remote-focus.md). */

@@ -58,7 +58,8 @@ public sealed partial class SessionView
             },
         });
 
-        var mid = new StackPanel { Width = SceneRailW, Spacing = Gap };
+        // The scenes: the rail down the left (Scenes down) or a row of column heads (Scenes across).
+        var mid = LaneStack(_across ? HeaderH : SceneRailW);
         for (int s = 0; s < _sceneCount; s++)
         {
             var cell = new SceneCell(this, s);
@@ -67,22 +68,40 @@ public sealed partial class SessionView
         }
         _cellsRow.Children.Add(mid);
 
-        var addScene = new Button { Content = Loc.T("session.grid.scene"), Classes = { "ghost" }, Height = SpacerH, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
+        var addScene = new Button { Content = Loc.T("session.grid.scene"), Classes = { "ghost" }, FontSize = 9, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         ToolTip.SetTip(addScene, Loc.T("session.grid.add_a_scene_at_the"));
         addScene.Click += (_, _) => { int s = _engine.InsertScene(_engine.SceneCount); Refresh(); if (s >= 0) Select(new Selection(SelKind.Scene, 0, s)); };
 
-        var stopAll = new Button
-        {
-            Height = StopRowH, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0),
-            Content = new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("session.grid.stop_all_clips"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
-            },
-        };
+        var stopAll = new Button { HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         ToolTip.SetTip(stopAll, Loc.T("session.stop_every_session_clip"));
         stopAll.Click += (_, _) => { _engine.StopAllSession(); UpdateStates(); };
 
+        if (_across)
+        {
+            // "+ Scene" closes the row of scenes; Stop All heads the Stop strip at the right,
+            // followed by the mixer sections' titles.
+            addScene.Width = TrackColW; addScene.Height = HeaderH;
+            mid.Children.Add(addScene);
+            stopAll.Width = StopColW; stopAll.Height = HeaderH;
+            stopAll.Content = new StackPanel
+            {
+                Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
+                Children = { new Glyph(GlyphKind.Stop, 7) { HorizontalAlignment = HorizontalAlignment.Center }, new TextBlock { Text = Loc.T("session.grid.all"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
+            };
+            var head = LaneStack(HeaderH);
+            head.Children.Add(stopAll);
+            head.Children.Add(MixerRailLabels());
+            _footerRow.Children.Add(head);
+            return;
+        }
+
+        addScene.Height = SpacerH; addScene.HorizontalAlignment = HorizontalAlignment.Stretch;
+        stopAll.Height = StopRowH; stopAll.HorizontalAlignment = HorizontalAlignment.Stretch;
+        stopAll.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 7,
+            Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("session.grid.stop_all_clips"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
+        };
         var foot = new StackPanel { Width = SceneRailW, Spacing = Gap, Children = { addScene, stopAll } };
         foot.Children.Add(MixerRailLabels());
         _footerRow.Children.Add(foot);
@@ -90,35 +109,37 @@ public sealed partial class SessionView
 
     // ---- columns ------------------------------------------------------------------
 
+    // A track, group, Return or Master: a column (Scenes down) or a lane (Scenes across).
     private void AddColumn(Column c)
     {
         c.Header = new ColumnHeader(this, c);
         _headerRow.Children.Add(c.Header);
 
-        var mid = new StackPanel { Width = c.Width, Spacing = Gap };
+        var mid = LaneStack(_across ? _laneH : c.Width);
         for (int s = 0; s < _sceneCount; s++)
         {
             Control cell = c.Kind switch
             {
                 ColKind.Track => new SlotCell(this, c, s),
                 ColKind.Group => new GroupCell(this, c, s),
-                _ => new BlankCell(c.Width),
+                _ => new BlankCell(SlotW(c), SlotH),
             };
             c.Cells.Add(cell);
             mid.Children.Add(cell);
         }
         _cellsRow.Children.Add(mid);
 
-        var foot = new StackPanel { Width = c.Width, Spacing = Gap };
-        foot.Children.Add(new Border { Height = SpacerH });
+        var foot = LaneStack(_across ? _laneH : c.Width);
+        if (!_across) foot.Children.Add(new Border { Height = SpacerH });
+        double stopW = _across ? StopColW : double.NaN, stopH = _across ? _laneH : StopRowH;
         if (c.Kind is ColKind.Track or ColKind.Group)
         {
-            var stop = new Button { Height = StopRowH, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0), Content = new Glyph(GlyphKind.Stop, 7) };
+            var stop = new Button { Width = stopW, Height = stopH, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0), Content = new Glyph(GlyphKind.Stop, 7) };
             ToolTip.SetTip(stop, c.Kind == ColKind.Group ? Loc.T("session.grid.stop_every_track_in_this") : Loc.T("session.grid.stop_this_track"));
             stop.Click += (_, _) => { StopColumn(c); UpdateStates(); };
             foot.Children.Add(stop);
         }
-        else foot.Children.Add(new Border { Height = StopRowH });
+        else foot.Children.Add(new Border { Width = stopW, Height = stopH });
         c.Mixer = BuildMixer(c);
         foot.Children.Add(c.Mixer.Root);
         _footerRow.Children.Add(foot);
@@ -221,7 +242,7 @@ public sealed partial class SessionView
         public ColumnHeader(SessionView o, Column c)
         {
             _o = o; _c = c;
-            Width = c.Width; Height = HeaderH;
+            Width = o.HeaderW(c); Height = o.HeaderHt;
             CornerRadius = NotaRadius.Cell;
             BorderThickness = new Thickness(1);
             ClipToBounds = true;
@@ -232,6 +253,7 @@ public sealed partial class SessionView
                 Text = c.Name, FontSize = 11, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = c.Kind == ColKind.Return ? NotaPalette.TextSecondary : NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center,
             };
+            ToolTip.SetTip(name, c.Name);   // a long name is cut with an ellipsis; the whole of it on hover
             var top = new DockPanel { LastChildFill = true };
             if (c.Kind == ColKind.Group)
             {
@@ -323,7 +345,7 @@ public sealed partial class SessionView
 
     private sealed class BlankCell : Control
     {
-        public BlankCell(double w) { Width = w; Height = CellH; }
+        public BlankCell(double w, double h) { Width = w; Height = h; }
         public override void Render(DrawingContext ctx) => FillCell(ctx, new Rect(Bounds.Size), NotaPalette.SurfaceDeep, null);
     }
 
@@ -353,7 +375,7 @@ public sealed partial class SessionView
         public SlotCell(SessionView o, Column c, int scene)
         {
             _o = o; _c = c; _scene = scene;
-            Width = c.Width; Height = CellH;
+            Width = o.SlotW(c); Height = o.SlotH;
             var eng = o._engine;
             _filled = eng.SessionSlotState(c.TrackId, scene) != 0;
             _brush = _filled ? o.ClipBrush(c, scene) : c.Brush;
@@ -696,7 +718,7 @@ public sealed partial class SessionView
         public GroupCell(SessionView o, Column g, int scene)
         {
             _o = o; _g = g; _scene = scene;
-            Width = g.Width; Height = CellH;
+            Width = o.SlotW(g); Height = o.SlotH;
             foreach (int id in g.Children)
                 _kids.Add((id, o._engine.SessionSlotState(id, scene) != 0, ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(o._engine, id))));
         }
@@ -769,8 +791,14 @@ public sealed partial class SessionView
     private int SceneAt(Point p)
     {
         for (int s = 0; s < _sceneCells.Count; s++)
-            if (this.TranslatePoint(p, _sceneCells[s]) is { } q && q.Y >= -Gap && q.Y < _sceneCells[s].Bounds.Height) return s;
-        return p.Y < 0 ? 0 : _sceneCells.Count - 1;
+        {
+            // Along the scenes' axis: down the rail (Scenes down) or across the head row (specs/108).
+            if (this.TranslatePoint(p, _sceneCells[s]) is not { } q) continue;
+            double along = _across ? q.X : q.Y, size = _across ? _sceneCells[s].Bounds.Width : _sceneCells[s].Bounds.Height;
+            if (along >= -Gap && along < size) return s;
+        }
+        if (_sceneCells.Count == 0 || this.TranslatePoint(p, _sceneCells[0]) is not { } first) return 0;
+        return (_across ? first.X : first.Y) < 0 ? 0 : _sceneCells.Count - 1;
     }
 
     private sealed class SceneCell : Control
@@ -782,11 +810,12 @@ public sealed partial class SessionView
         private readonly IBrush _color;
         private readonly string _badge;
         private bool _hoverLaunch;
+        private string? _cutName;   // the full name, when the cell cuts it short (shown on hover, specs/108)
 
         public SceneCell(SessionView o, int scene)
         {
             _o = o; _scene = scene;
-            Width = SceneRailW; Height = CellH;
+            Width = o.SceneW; Height = o.SceneH;
             string n = o._engine.GetSceneName(scene);
             _named = n.Length > 0;
             _name = _named ? n : Loc.F("session.scene", scene + 1);
@@ -798,7 +827,7 @@ public sealed partial class SessionView
             _badge = string.Join(" · ", parts);
         }
 
-        private static readonly Rect LaunchBox = new(8, (CellH - 22) / 2, 22, 22);
+        private Rect LaunchBox => new(8, (Height - 22) / 2, 22, 22);
         private int _lastSig = -1;
         private bool _pressed, _dragging;
         private Point _pressAt;
@@ -825,13 +854,13 @@ public sealed partial class SessionView
             var p = e.GetPosition(this);
             bool h = LaunchBox.Contains(p);
             if (h != _hoverLaunch) { _hoverLaunch = h; Cursor = h ? new Cursor(StandardCursorType.Hand) : Cursor.Default; InvalidateVisual(); }
-            bool queuedTip = h && _o.SceneQueued(_scene);
-            if (queuedTip != (ToolTip.GetTip(this) is not null)) ToolTip.SetTip(this, queuedTip ? Loc.T("session.grid.queued_alt_click_to_cancel") : null);
-            // Drag a scene up or down the rail to reorder it.
-            if (_pressed && !_dragging && Math.Abs(p.Y - _pressAt.Y) > 5) _dragging = true;
+            string? tip = h && _o.SceneQueued(_scene) ? Loc.T("session.grid.queued_alt_click_to_cancel") : _cutName;
+            if (!Equals(ToolTip.GetTip(this), tip)) ToolTip.SetTip(this, tip);
+            // Drag a scene along the rail (up / down, or sideways when the grid is turned) to reorder it.
+            if (_pressed && !_dragging && Math.Abs(_o._across ? p.X - _pressAt.X : p.Y - _pressAt.Y) > 5) _dragging = true;
             if (_dragging)
             {
-                Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
+                Cursor = new Cursor(_o._across ? StandardCursorType.SizeWestEast : StandardCursorType.SizeNorthSouth);
                 int t = _o.SceneAt(e.GetPosition(_o));
                 int? target = t == _scene ? null : t;
                 if (target != _o._sceneDragTarget) { _o._sceneDragTarget = target; _o.InvalidateAll(); }
@@ -911,7 +940,9 @@ public sealed partial class SessionView
                 right = box.X - 6;
             }
             var idx = Ft((_scene + 1).ToString("00", CultureInfo.CurrentCulture), NotaFonts.Measure, 9, NotaPalette.TextDisabled);
-            var name = Ft(_name, NotaFonts.SansSemiBold, 12, _named ? NotaPalette.TextPrimary : NotaPalette.TextTertiary, Math.Max(10, right - x - idx.Width - 6));
+            double nameW = Math.Max(10, right - x - idx.Width - 6);
+            var name = Ft(_name, NotaFonts.SansSemiBold, 12, _named ? NotaPalette.TextPrimary : NotaPalette.TextTertiary, nameW);
+            _cutName = Ft(_name, NotaFonts.SansSemiBold, 12, NotaPalette.TextPrimary).Width > nameW ? _name : null;   // a narrow scene head (Scenes across)
             ctx.DrawText(name, new Point(x, (r.Height - name.Height) / 2));
             ctx.DrawText(idx, new Point(x + name.Width + 6, (r.Height - name.Height) / 2 + (name.Baseline - idx.Baseline)));
             if (selected) DrawSelection(ctx, r);

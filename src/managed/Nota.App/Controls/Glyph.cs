@@ -40,6 +40,7 @@ internal enum GlyphKind
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
     Expand, Shrink,                // a panel filling the window, and back to its split
+    TurnGrid,                      // the Session toolbar's key that turns the grid: scenes down ↔ across (specs/108)
     Home, Drive, AudioFile,        // the Files browse view: home folder, a drive, an audio file (spec 092)
     Menu,                          // the transport bar's Menu key: the whole app menu on Windows / Linux (#518)
     More,                          // the transport bar's overflow key: what the bar had no room for (#520)
@@ -553,6 +554,8 @@ internal sealed class Glyph : Control
         // Two arrows out to opposite corners (fill the window), and the same arrows turned in.
         [GlyphKind.Expand] = ("M14 4 H20 V10 M20 4 L14 10 M10 20 H4 V14 M4 20 L10 14", null),
         [GlyphKind.Shrink] = ("M20 4 L14 10 M14 5 V10 H19 M4 20 L10 14 M5 14 H10 V19", null),
+        // A row turning into a column (specs/108): a bar across the top, a bar down the left, an arc between.
+        [GlyphKind.TurnGrid] = ("M3.5 3.5 h17 v4 h-17 z M3.5 11 v9.5 h4 v-9.5 z M12 12 A6 6 0 0 1 18 18 M15.5 16.5 L18 19 L20.5 16.5", null),
         [GlyphKind.ChainLink] = ("M4.066 8.428 L9.399 13.763 A3.085 3.085 0 0 0 13.763 9.399 L8.428 4.066 A3.085 3.085 0 0 0 4.066 8.428 ZM10.238 14.601 L15.572 19.933 A3.085 3.085 0 0 0 19.933 15.572 L14.601 10.238 A3.085 3.085 0 0 0 10.238 14.601 Z", null),
     };
 

@@ -4,7 +4,7 @@
 // slot summary and an older Nota that sends no groups. Run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lanes, groupSlot } from '../src/lib/grid.ts';
+import { lanes, groupSlot, migrateSessionGrid, effectiveAcross } from '../src/lib/grid.ts';
 import type { Session, Track } from '../src/lib/types.ts';
 
 const t = (id: number, kind: Track['kind'], grp = 0): Track => ({ id, name: `T${id}`, color: '', kind, dev: '', grp });
@@ -51,3 +51,21 @@ test('an older Nota without groups: every track shows, none folds', () => {
   const ls = lanes(tracks.filter((x) => x.kind !== 'group'), old, new Set());
   assert.deepEqual(ls.map((l) => [l.id, l.depth, l.group]), [[1, 0, false], [3, 0, false], [5, 0, false]]);
 });
+
+// specs/108: the phone follows Nota's Session grid ("As in Nota") or keeps its own.
+test('session grid: old prefs migrate, an explicit across is kept', () => {
+  assert.equal(migrateSessionGrid({ sessionAxis: 'across' }), 'across');
+  assert.equal(migrateSessionGrid({ sessionAxis: 'down' }), 'nota');
+  assert.equal(migrateSessionGrid({}), 'nota');
+  assert.equal(migrateSessionGrid({ sessionGrid: 'down', sessionAxis: 'across' }), 'down');
+  assert.equal(migrateSessionGrid({ sessionGrid: 'sideways' }), 'nota');
+});
+
+test('session grid: "As in Nota" follows ax, a fixed choice does not', () => {
+  assert.equal(effectiveAcross('nota', { ax: 'across' }), true);
+  assert.equal(effectiveAcross('nota', {}), false);
+  assert.equal(effectiveAcross('nota', null), false);
+  assert.equal(effectiveAcross('down', { ax: 'across' }), false);
+  assert.equal(effectiveAcross('across', {}), true);
+});
+

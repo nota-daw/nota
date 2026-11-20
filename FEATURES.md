@@ -231,7 +231,11 @@ own window — see
   It counts bars, so it follows the time signature, and it follows every colour theme.
 - **Session View** — a clip grid (tracks × scenes) with an inspector that the toolbar's
   **Inspector** key (the sidebar icon) shows or hides (remembered); on a narrow window the least-used
-  toolbar controls fold into a **⋯** menu. Named, coloured clips with note / waveform
+  toolbar controls fold into a **⋯** menu. The grid turns either way (**Settings → Editing →
+  Session grid**, or the toolbar's turn key): **Scenes down** (a scene per row) or **Scenes
+  across** (a scene per column, a track per row with its Stop and mixer sections at the right
+  end); the arrow keys follow the screen, the scene / track selection commands keep their
+  meaning. Named, coloured clips with note / waveform
   previews and a progress pie on the clip's own clock; selection apart from launching,
   keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag between slots;
   launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato, one-shot,
@@ -637,7 +641,8 @@ own window — see
   grid's edges while the clips scroll. Group tracks appear as on the desktop: tap the name to
   fold or unfold (shared with the Mixer); a group's slot reads "n of m" with a bar per
   track and launches them all, and its Stop stops them all. ⋯ → **Session grid** turns the
-  grid: **Scenes down** (as in Nota) or **Scenes across**, kept per phone. Press and hold a
+  grid: **As in Nota** (the default — it turns with the desktop's Session grid), **Scenes down**
+  or **Scenes across**, kept per phone (Nota NX on the Switch has the same choice). Press and hold a
   queued clip, group slot or scene to cancel its launch; a queued scene blinks like a queued clip.
   The slot or scene selected in Nota (by the mouse or a hardware controller) is outlined, and
   the header shows what a controller's knobs are on; a phone following Nota's selection turns

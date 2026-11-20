@@ -9050,6 +9050,39 @@ engine.StopTransport();
 engine.RemoveTrack(scSrcT);
 engine.RemoveTrack(scDstT);
 
+// -- specs/108: walking the Session grid by meaning, either way round --
+Console.WriteLine("-- 108 grid nav --");
+{
+    bool Maps(bool across, Nota.Application.Editing.GridArrow a, Nota.Application.Editing.SessionStep st)
+        => Nota.Application.Editing.SessionGridNav.FromArrow(a, across) == st;
+    Check(Maps(false, Nota.Application.Editing.GridArrow.Up, Nota.Application.Editing.SessionStep.PrevScene)
+        && Maps(false, Nota.Application.Editing.GridArrow.Down, Nota.Application.Editing.SessionStep.NextScene)
+        && Maps(false, Nota.Application.Editing.GridArrow.Left, Nota.Application.Editing.SessionStep.PrevTrack)
+        && Maps(false, Nota.Application.Editing.GridArrow.Right, Nota.Application.Editing.SessionStep.NextTrack),
+        "Scenes down: up/down step scenes, left/right step tracks");
+    Check(Maps(true, Nota.Application.Editing.GridArrow.Left, Nota.Application.Editing.SessionStep.PrevScene)
+        && Maps(true, Nota.Application.Editing.GridArrow.Right, Nota.Application.Editing.SessionStep.NextScene)
+        && Maps(true, Nota.Application.Editing.GridArrow.Up, Nota.Application.Editing.SessionStep.PrevTrack)
+        && Maps(true, Nota.Application.Editing.GridArrow.Down, Nota.Application.Editing.SessionStep.NextTrack),
+        "Scenes across: left/right step scenes, up/down step tracks");
+    var K = Nota.Application.Editing.GridSelKind.Slot;
+    Nota.Application.Editing.GridPos P(Nota.Application.Editing.GridSelKind k, int i, int s) => new(k, i, s);
+    Nota.Application.Editing.GridPos Step(Nota.Application.Editing.GridPos at, Nota.Application.Editing.SessionStep st)
+        => Nota.Application.Editing.SessionGridNav.Step(at, st, tracks: 3, buses: 2, scenes: 4);
+    var scene = Nota.Application.Editing.GridSelKind.Scene; var bus = Nota.Application.Editing.GridSelKind.Bus;
+    Check(Step(P(K, 0, 1), Nota.Application.Editing.SessionStep.PrevTrack) == P(scene, 0, 1), "previous track off the first track selects the scene");
+    Check(Step(P(scene, 0, 1), Nota.Application.Editing.SessionStep.NextTrack) == P(K, 0, 1), "next track from the scene selects the first track");
+    Check(Step(P(K, 2, 1), Nota.Application.Editing.SessionStep.NextTrack) == P(bus, 0, 1), "next track past the last track reaches the first Return");
+    Check(Step(P(bus, 0, 1), Nota.Application.Editing.SessionStep.PrevTrack) == P(K, 2, 1), "previous track off the first Return goes back to the last track");
+    Check(Step(P(bus, 1, 1), Nota.Application.Editing.SessionStep.NextScene) == P(bus, 1, 1), "scene steps do nothing on a Return / Master");
+    Check(Step(P(K, 1, 3), Nota.Application.Editing.SessionStep.NextScene) == P(K, 1, 3), "next scene stops at the last scene");
+    Check(Step(P(K, 1, 0), Nota.Application.Editing.SessionStep.PrevScene) == P(K, 1, 0), "previous scene stops at the first scene");
+    Check(Step(P(K, 1, 2), Nota.Application.Editing.SessionStep.NextScene) == P(K, 1, 3), "next scene keeps the track");
+    Check(Nota.Application.Editing.SessionGridNav.IsAcross("across") && !Nota.Application.Editing.SessionGridNav.IsAcross("down")
+        && !Nota.Application.Editing.SessionGridNav.IsAcross(null) && !Nota.Application.Editing.SessionGridNav.IsAcross("sideways"),
+        "Session grid setting: only \"across\" turns the grid");
+}
+
 // -- M5: Session view launch --
 Console.WriteLine("-- M5 --");
 int sesT = engine.AddInstrumentTrack();
