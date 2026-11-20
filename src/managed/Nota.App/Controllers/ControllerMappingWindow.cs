@@ -725,12 +725,14 @@ internal sealed class ControllerMappingWindow : NotaWindow
         {
             if (ev.Status is 0x80 || ev.Status == 0x90 && ev.D2 == 0) continue;   // a release says nothing new
             // NRPN: 99 / 98 pick the parameter on the channel, 6 / 38 / 96 / 97 move it.
-            // A plain CC control declared on 98 / 99 is that control, not an NRPN selection.
-            if (ev.Status == 0xB0 && ev.D1 is 99 or 98 && _map.Find(ev.Status, ev.Channel, ev.D1) is null)
+            // 99 / 98 always keep the channel's NRPN number up to date. They are a plain CC control
+            // of their own only when one is declared there and no NRPN control shares the channel.
+            if (ev.Status == 0xB0 && ev.D1 is 99 or 98)
             {
                 var n = _nrpn.TryGetValue(ev.Channel, out var had) ? had : (Msb: -1, Lsb: -1);
                 _nrpn[ev.Channel] = ev.D1 == 99 ? (ev.D2, n.Lsb) : (n.Msb, ev.D2);
-                continue;
+                bool nrpnHere = _map.Entries.Any(x => x.Decl is { Message: ControlMessage.Nrpn } d && d.Channel == ev.Channel);
+                if (nrpnHere || _map.Find(ev.Status, ev.Channel, ev.D1) is null) continue;
             }
             MappingEntry? nrpn = null;
             if (ev.Status == 0xB0 && ev.D1 is 6 or 38 or 96 or 97 && _nrpn.TryGetValue(ev.Channel, out var sel) && sel.Msb >= 0 && sel.Lsb >= 0)
