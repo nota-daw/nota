@@ -58,8 +58,8 @@ expectations), [`BUILD.md`](../../BUILD.md), [`DESIGN.md`](../../DESIGN.md),
 
 A producer wants a filter cutoff at exactly 1.2 kHz, a send at −6 dB, a pan at 30 L. They
 double-click the knob, fader or slider (or its read-out), a small text box opens over the
-read-out with the current value selected, they type the value in the units shown and
-press Enter. The control lands on that value exactly as the read-out would show it.
+read-out with all of its text selected, unit included, they type the value in the units shown
+and press Enter. The control lands on that value exactly as the read-out would show it.
 
 **Why this priority**: Knobs, faders and sliders are the bulk of the parameter controls in
 Nota and the most common reason a user needs an exact value. This alone closes most of
@@ -230,7 +230,7 @@ type each value it sets, and check the graph and the paired controls.
 - **FR-013**: Envelope graph editors that have no adjacent numeric controls for their stages MUST show compact editable A/D/S/R (or the editor's own stage) read-outs next to the graph.
 - **FR-014**: Modulation matrix cells MUST open typed entry for their amount (−100…+100 %) on ⌥/Alt-click; clearing a cell MUST be on double-click and a "Clear" context-menu item, and undoable.
 - **FR-015**: Graph controls whose handles set numeric parameters (filter / compressor / EQ curves, XY pads, value / pan / mix bars) MUST open typed entry on ⌥/Alt-click of a handle, cycling with Tab through the values that handle sets; existing double-click actions on empty graph space MUST be kept.
-- **FR-016**: The text box MUST look the same on every control and in every colour theme: a flat box over (or beside) the read-out, Studio tokens, mono figures, current value pre-selected; it MUST stay inside the window.
+- **FR-016**: The text box MUST look the same on every control and in every colour theme: a flat box over (or beside) the read-out, Studio tokens, mono figures, the whole read-out pre-selected, unit included, so typing replaces the unit too (#661); it MUST stay inside the window.
 - **FR-017**: The feature MUST ship with an audit list of every numeric control type and every place that builds one outside the shared kits, each item checked off as converted (or recorded as exempt with a reason).
 - **FR-018**: The Shortcuts pane, the user docs (EN + RU) and FEATURES.md MUST describe the gestures (⌥/Alt-click or a double-click on the read-out = type, double-click = reset / clear, Enter / Tab / Esc in the box), and CHANGELOG `[Unreleased]` MUST note them.
 

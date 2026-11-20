@@ -9,10 +9,10 @@
 //   ⌥/Alt-click    (and a double-click on the read-out) turns the read-out itself editable
 //                  (a field marked AltResets keeps ⌥-click on the control as a reset) —
 //                  a borderless text box in its place (an adorner, so it works whatever panel
-//                  the read-out sits in) with a 1px accent line under it and the number
-//                  selected; Enter or a click away commits, Escape cancels, Tab / Shift+Tab
-//                  commit and move to the next / previous value on the same card (the nearest
-//                  Scope), wrapping
+//                  the read-out sits in) with a 1px accent line under it and the whole
+//                  read-out selected, unit included (#661); Enter or a click away commits,
+//                  Escape cancels, Tab / Shift+Tab commit and move to the next / previous
+//                  value on the same card (the nearest Scope), wrapping
 //   right-click    a parameter menu — Type value…, Reset to default / Clear — unless the
 //                  control has its own menu, which then adds MenuItems itself
 //
@@ -50,9 +50,6 @@ internal interface IInlineReadout
 
 internal static partial class ValueEntry
 {
-    [System.Text.RegularExpressions.GeneratedRegex(@"[+\-−]?(?:\d+(?:[.,]\d*)?|[.,]\d+|∞)")]
-    private static partial System.Text.RegularExpressions.Regex Number();
-
     // ---- attaching -----------------------------------------------------------------------
 
     // What Tab needs to find a control's values again: the fields and where each one's box goes.
@@ -426,9 +423,11 @@ internal static partial class ValueEntry
         {
             if (done) return;
             box.Focus();
-            // Select the number and leave its unit: typing "12" into "10.0 ms" reads 12 ms.
-            if (Number().Match(was) is { Success: true } m) { box.SelectionStart = m.Index; box.SelectionEnd = m.Index + m.Length; }
-            else box.SelectAll();
+            // Select the whole read-out, unit included, so typing replaces all of it (#661): a bare
+            // number then takes the unit shown when it fits, else the unit that fits (ValueText.Pick)
+            // — "500" over "2.00 kHz" reads 500 Hz, "12" over "10.0 ms" still reads 12 ms. Leaving
+            // the unit in place turned "500" into "500 kHz", clamped to the top of the range.
+            box.SelectAll();
         });
     }
 
