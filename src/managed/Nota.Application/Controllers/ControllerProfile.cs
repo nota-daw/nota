@@ -216,6 +216,10 @@ public static class ProfileLoader
         }
     }
 
+    /// <summary>One control entry on its own (the mapping editor pairs each declaration with its
+    /// JSON, specs/110); null when the loader would skip it.</summary>
+    public static ControlDecl? ParseControl(JsonElement c) => Control(c, 0, _ => { });
+
     private static ControlDecl? Control(JsonElement c, int i, Action<string> warn)
     {
         if (c.ValueKind != JsonValueKind.Object) { warn(Loc.F("controllers.profile.control_not_object", i)); return null; }

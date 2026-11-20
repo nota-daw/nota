@@ -13,6 +13,11 @@
 // jittery knob can't take the next step) and moving it says so. Every step can be skipped, a whole
 // group too ("no faders"), and Back redoes the step before. Finish writes a profile into the user
 // profiles folder and reloads profiles, so the controller works at once.
+//
+// Learn everything again (specs/110 FR-016): opened from the mapping editor with the profile as a
+// seed, each step starts with the function's current control — Next (or Enter) keeps it, a new
+// movement replaces it, a skip clears it — and Finish hands the result back to the editor, which
+// saves it keeping everything the wizard doesn't learn.
 
 using System;
 using System.Collections.Generic;
@@ -28,26 +33,11 @@ namespace Nota.App.Controllers;
 
 public sealed class ControllerSetupWindow : NotaWindow
 {
-    private enum Group { Knobs, Faders, Transport, Navigation, Session, Extra }
-
-    // One half of a pair (previous / next, − / +, undo / redo): its button prompt, name and icon,
-    // and the role or command it is.
-    private sealed record Half(string Prompt, string Name, ControlRoleKind Role, string? Command = null, GlyphKind? Icon = null, string? Word = null);
-
-    private sealed record Step(Group Group, ControlRoleKind Role, int Index, string Prompt, string Name,
-        PictogramKind Picture, GlyphKind? Icon = null, string? Word = null, string? Command = null,
-        Half? Left = null, Half? Right = null)
-    {
-        public bool Button => Picture == PictogramKind.Button;
-        /// <summary>A pair: an encoder (both halves at once) or two buttons, left half first.</summary>
-        public bool IsPair => Left is not null && Right is not null;
-    }
-
-    private const long KnobStillMs = 600, StillMs = 350, AdvanceMs = 550;
+    private const long AdvanceMs = 550;
 
     private readonly ControllerService _service;
     private readonly ConnectedController _port;
-    private readonly List<Step> _steps = new();
+    private readonly List<SetupFunction> _steps = SetupFunctions.Build();
     // By (step, half): half 0 is the step's control (a pair's encoder, or its left button), 1 a
     // pair's right button.
     private readonly Dictionary<(int Step, int Half), LearnedControl> _learned = new();
@@ -58,6 +48,16 @@ public sealed class ControllerSetupWindow : NotaWindow
     private long _advanceAt;   // > 0: the step was learned, the next one comes at this time
     private int _step;
     private ClassifiedControl? _found;
+    // Learn everything again: the controls the profile had, not yet kept or replaced.
+    private readonly ProfileMapping? _seed;
+    private readonly HashSet<(int Step, int Half)> _seeded = new();
+
+    /// <summary>A seeded run's result once Finish was pressed (null: cancelled or not seeded): every
+    /// function learned or kept, as (function, its left half for a two-way control, control).</summary>
+    public List<(FunctionKey Right, FunctionKey? Left, ClassifiedControl Control)>? Result { get; private set; }
+
+    /// <summary>The functions the wizard covers: what a seeded result replaces.</summary>
+    public IEnumerable<FunctionKey> Scope => _steps.SelectMany(s => s.Keys);
 
     private readonly ControlPictogram _picture = new() { Width = 96, Height = 96, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _counter = new() { Classes = { "SectionLabel" } };
@@ -76,10 +76,11 @@ public sealed class ControllerSetupWindow : NotaWindow
     private readonly Button _skipGroup = new() { Classes = { "ghost" } };
     private readonly Button _back = new() { Classes = { "ghost" } };
 
-    public ControllerSetupWindow(ControllerService service, ConnectedController port)
+    public ControllerSetupWindow(ControllerService service, ConnectedController port, ProfileMapping? seed = null)
     {
         _service = service;
         _port = port;
+        _seed = seed;
         Title = Loc.F("controllers.setup.title", port.Name);
         Width = 600;
         SizeToContent = SizeToContent.Height;
@@ -87,7 +88,7 @@ public sealed class ControllerSetupWindow : NotaWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = NotaPalette.BgApp;
 
-        BuildSteps();
+        if (seed is not null) Prefill(seed);
 
         foreach (var key in new[] { "controllers.setup.enc_absolute", "controllers.setup.enc_twos", "controllers.setup.enc_signbit", "controllers.setup.enc_offset" })
             _encoder.Items.Add(EncoderName(key));
@@ -96,12 +97,12 @@ public sealed class ControllerSetupWindow : NotaWindow
         _next.Content = Loc.T("controllers.setup.next");
         _next.Click += (_, _) => Accept();
         var skip = new Button { Content = Loc.T("controllers.setup.skip"), Classes = { "ghost" } };
-        skip.Click += (_, _) => Advance();
+        skip.Click += (_, _) => { DropStep(_step); Advance(); };
         _skipGroup.Click += (_, _) => SkipGroup();
         _back.Content = Loc.T("controllers.setup.back");
         _back.Click += (_, _) => Back();
         var again = new Button { Content = Loc.T("controllers.setup.again"), Classes = { "ghost" } };
-        again.Click += (_, _) => ResetStep();
+        again.Click += (_, _) => { DropStep(_step); ResetStep(); };
         var finish = new Button { Content = Loc.T("controllers.setup.finish"), Classes = { "ghost" } };
         finish.Click += (_, _) => Finish();
         var cancel = new Button { Content = Loc.T("common.cancel"), Classes = { "ghost" } };
@@ -177,6 +178,10 @@ public sealed class ControllerSetupWindow : NotaWindow
         _poll.Tick += (_, _) => Poll();
         _poll.Start();
         Closed += (_, _) => { _poll.Stop(); _service.Capture(null); };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter && _next.IsVisible) { Accept(); e.Handled = true; }
+        };
         ShowStep();
     }
 
@@ -188,85 +193,66 @@ public sealed class ControllerSetupWindow : NotaWindow
         _ => Loc.T("controllers.setup.enc_absolute"),
     };
 
-    private void BuildSteps()
+    // The profile's controls as already learned steps (Learn everything again).
+    private void Prefill(ProfileMapping seed)
     {
-        for (int i = 0; i < 8; i++)
-            _steps.Add(new Step(Group.Knobs, ControlRoleKind.Knob, i, Loc.F("controllers.setup.knob", i + 1), ControllerService.KnobLabel(i), PictogramKind.Knob));
-        for (int i = 0; i < 8; i++)
-            _steps.Add(new Step(Group.Faders, ControlRoleKind.Fader, i, Loc.F("controllers.setup.fader", i + 1), Loc.F("controllers.control.fader", i + 1), PictogramKind.Fader));
-        _steps.Add(new Step(Group.Faders, ControlRoleKind.MasterFader, 0, Loc.T("controllers.setup.master"), Loc.T("controllers.control.master_fader"), PictogramKind.Fader));
+        for (int i = 0; i < _steps.Count; i++)
+        {
+            var s = _steps[i];
+            if (s.IsPair)
+            {
+                var right = seed.EntryFor(s.Right!.Key);
+                if (right?.Decl is { } rd && right.Left == s.Left!.Key)
+                    Seed(i, 0, new LearnedControl(s.Right.Role, 0, Classified(rd), s.Right.Command,
+                        s.Left.Role == ControlRoleKind.Command ? s.Left.Command : null,
+                        s.Left.Role == ControlRoleKind.Command ? null : s.Left.Role));
+                else
+                {
+                    if (seed.ControlOf(s.Left!.Key) is { } ld && seed.EntryFor(s.Left.Key)!.Left is null)
+                        Seed(i, 0, new LearnedControl(s.Left.Role, 0, Classified(ld), s.Left.Command));
+                    if (right?.Decl is { } rb && right.Left is null)
+                        Seed(i, 1, new LearnedControl(s.Right.Role, 0, Classified(rb), s.Right.Command));
+                }
+            }
+            else if (seed.EntryFor(s.Key) is { Decl: { } d, Left: null })
+                Seed(i, 0, new LearnedControl(s.Role, s.Index, Classified(d), s.Command));
+        }
 
-        void Btn(Group g, ControlRoleKind role, string prompt, string name, GlyphKind? icon = null, string? word = null, string? command = null)
-            => _steps.Add(new Step(g, role, 0, prompt, name, PictogramKind.Button, icon, word, command));
-        Btn(Group.Transport, ControlRoleKind.Play, Loc.T("controllers.setup.play"), Loc.T("controllers.control.play"), GlyphKind.Play);
-        Btn(Group.Transport, ControlRoleKind.Stop, Loc.T("controllers.setup.stop"), Loc.T("controllers.control.stop"), GlyphKind.Stop);
-        Btn(Group.Transport, ControlRoleKind.Record, Loc.T("controllers.setup.record"), Loc.T("controllers.control.record"), GlyphKind.Record);
-        Btn(Group.Transport, ControlRoleKind.Loop, Loc.T("controllers.setup.loop"), Loc.T("controllers.control.loop"), GlyphKind.Loop);
-        void Pair(Group g, string prompt, string name, Half left, Half right)
-            => _steps.Add(new Step(g, right.Role, 0, prompt, name, PictogramKind.Pair, Command: right.Command, Left: left, Right: right));
-        Pair(Group.Transport, Loc.T("controllers.setup.pair_wind"), Loc.T("controllers.setup.pair_wind_name"),
-            new Half(Loc.T("controllers.setup.rewind"), Loc.T("controllers.control.rewind"), ControlRoleKind.Rewind, Icon: GlyphKind.StepLeft),
-            new Half(Loc.T("controllers.setup.forward"), Loc.T("controllers.control.forward"), ControlRoleKind.Forward, Icon: GlyphKind.StepRight));
-
-        Pair(Group.Navigation, Loc.T("controllers.setup.pair_tracks"), Loc.T("controllers.setup.pair_tracks_name"),
-            new Half(Loc.T("controllers.setup.track_prev"), Loc.T("controllers.control.track_prev"), ControlRoleKind.TrackPrev, Icon: GlyphKind.ChevronLeft),
-            new Half(Loc.T("controllers.setup.track_next"), Loc.T("controllers.control.track_next"), ControlRoleKind.TrackNext, Icon: GlyphKind.ChevronRight));
-        Pair(Group.Navigation, Loc.T("controllers.setup.pair_banks"), Loc.T("controllers.setup.pair_banks_name"),
-            new Half(Loc.T("controllers.setup.bank_prev"), Loc.T("controllers.control.bank_prev"), ControlRoleKind.BankPrev, Word: Loc.T("controllers.setup.bank_prev_word")),
-            new Half(Loc.T("controllers.setup.bank_next"), Loc.T("controllers.control.bank_next"), ControlRoleKind.BankNext, Word: Loc.T("controllers.setup.bank_next_word")));
-        Pair(Group.Navigation, Loc.T("controllers.setup.pair_pages"), Loc.T("controllers.setup.pair_pages_name"),
-            new Half(Loc.T("controllers.setup.page_prev"), Loc.T("controllers.control.page_prev"), ControlRoleKind.PagePrev, Word: Loc.T("controllers.setup.page_prev_word")),
-            new Half(Loc.T("controllers.setup.page_next"), Loc.T("controllers.control.page_next"), ControlRoleKind.PageNext, Word: Loc.T("controllers.setup.page_next_word")));
-        // specs/107: step the knobs along the track's chain.
-        Pair(Group.Navigation, Loc.T("controllers.setup.pair_devices"), Loc.T("controllers.setup.pair_devices_name"),
-            new Half(Loc.T("controllers.setup.device_prev"), Loc.T("commands.device_focus_previous"), ControlRoleKind.Command, "device.focusPrevious", Word: Loc.T("controllers.setup.device_prev_word")),
-            new Half(Loc.T("controllers.setup.device_next"), Loc.T("commands.device_focus_next"), ControlRoleKind.Command, "device.focusNext", Word: Loc.T("controllers.setup.device_next_word")));
-
-        void Cmd(Group g, string id, string prompt, string name, GlyphKind? icon = null, string? word = null)
-            => Btn(g, ControlRoleKind.Command, prompt, name, icon, word, id);
-        Pair(Group.Session, Loc.T("controllers.setup.pair_clips"), Loc.T("controllers.setup.pair_clips_name"),
-            new Half(Loc.T("controllers.setup.prev_scene"), Loc.T("commands.session_select_prev_scene"), ControlRoleKind.Command, "session.selectUp", GlyphKind.ChevronUp),
-            new Half(Loc.T("controllers.setup.next_scene"), Loc.T("commands.session_select_next_scene"), ControlRoleKind.Command, "session.selectDown", GlyphKind.ChevronDown));
-        Pair(Group.Session, Loc.T("controllers.setup.pair_session_tracks"), Loc.T("controllers.setup.pair_session_tracks_name"),
-            new Half(Loc.T("controllers.setup.prev_track"), Loc.T("commands.session_select_prev_track"), ControlRoleKind.Command, "session.selectLeft", GlyphKind.ChevronLeft),
-            new Half(Loc.T("controllers.setup.next_track"), Loc.T("commands.session_select_next_track"), ControlRoleKind.Command, "session.selectRight", GlyphKind.ChevronRight));
-        Cmd(Group.Session, "session.toggleSlot", Loc.T("controllers.setup.slot_launch"), Loc.T("commands.session_toggle_slot"), GlyphKind.Play);
-        Cmd(Group.Session, "session.stopTrack", Loc.T("controllers.setup.slot_stop"), Loc.T("commands.session_stop_track"), GlyphKind.Stop);
-        Cmd(Group.Session, "session.launchScene", Loc.T("controllers.setup.scene_launch"), Loc.T("commands.launch_scene"), GlyphKind.Session);
-        Cmd(Group.Session, "session.stopAll", Loc.T("controllers.setup.stop_all"), Loc.T("commands.stop_all_clips"), word: Loc.T("controllers.setup.stop_all_word"));
-
-        Pair(Group.Extra, Loc.T("controllers.setup.pair_undo"), Loc.T("controllers.setup.pair_undo_name"),
-            new Half(Loc.T("controllers.setup.undo"), Loc.T("common.undo"), ControlRoleKind.Command, "edit.undo", Word: Loc.T("common.undo")),
-            new Half(Loc.T("controllers.setup.redo"), Loc.T("commands.redo"), ControlRoleKind.Command, "edit.redo", Word: Loc.T("commands.redo")));
-        Pair(Group.Extra, Loc.T("controllers.setup.pair_tempo"), Loc.T("controllers.setup.pair_tempo_name"),
-            new Half(Loc.T("controllers.setup.tempo_down"), Loc.T("commands.tempo_down"), ControlRoleKind.Command, "transport.tempoDown", Word: Loc.T("controllers.setup.tempo_down_word")),
-            new Half(Loc.T("controllers.setup.tempo_up"), Loc.T("commands.tempo_up"), ControlRoleKind.Command, "transport.tempoUp", Word: Loc.T("controllers.setup.tempo_up_word")));
-        Cmd(Group.Extra, "transport.metronome", Loc.T("controllers.setup.metronome"), Loc.T("controllers.setup.metronome_name"), GlyphKind.Metronome);
-        Cmd(Group.Extra, "file.save", Loc.T("controllers.setup.save"), Loc.T("commands.save_project"), GlyphKind.Save);
-        Cmd(Group.Extra, "transport.tapTempo", Loc.T("controllers.setup.tap"), Loc.T("controllers.setup.tap_name"), word: Loc.T("controllers.setup.tap_name"));
-        _steps.Add(new Step(Group.Extra, ControlRoleKind.Jog, 0, Loc.T("controllers.setup.jog"), Loc.T("controllers.control.jog"), PictogramKind.Jog));
+        void Seed(int step, int half, LearnedControl l) { _learned[(step, half)] = l; _seeded.Add((step, half)); }
+        static ClassifiedControl Classified(ControlDecl d) => new(d.Message, d.Channel, d.Number, d.Encoder);
     }
 
-    private static string GroupName(Group g) => g switch
+    private bool SeededHere => _seeded.Contains((_step, 0)) || _seeded.Contains((_step, 1));
+
+    // The step learns nothing: skipped, or redone.
+    private void DropStep(int step)
     {
-        Group.Knobs => Loc.T("controllers.setup.group_knobs"),
-        Group.Faders => Loc.T("controllers.setup.group_faders"),
-        Group.Transport => Loc.T("controllers.setup.group_transport"),
-        Group.Navigation => Loc.T("controllers.setup.group_navigation"),
-        Group.Session => Loc.T("controllers.setup.group_session"),
-        _ => Loc.T("controllers.setup.group_extra"),
-    };
+        _learned.Remove((step, 0)); _learned.Remove((step, 1));
+        _seeded.Remove((step, 0)); _seeded.Remove((step, 1));
+    }
+
+    // A control the profile had on a later step, learned here: it moves to this step.
+    private void TakeFromLater(ClassifiedControl c)
+    {
+        foreach (var k in _seeded.Where(k => k.Step > _step && _learned.TryGetValue(k, out var l) && Same(l.Control, c)).ToList())
+        {
+            _learned.Remove(k);
+            _seeded.Remove(k);
+        }
+    }
+
+    private static bool Same(ClassifiedControl a, ClassifiedControl b) => a.Message == b.Message && a.Channel == b.Channel && a.Number == b.Number;
 
     private void ShowStep()
     {
         var s = _steps[_step];
         var inGroup = _steps.Where(x => x.Group == s.Group).ToList();
-        _counter.Text = Loc.F("controllers.setup.group_step", GroupTitle(s.Group), inGroup.IndexOf(s) + 1, inGroup.Count, _step + 1, _steps.Count);
+        _counter.Text = Loc.F("controllers.setup.group_step", SetupFunctions.GroupTitle(s.Group), inGroup.IndexOf(s) + 1, inGroup.Count, _step + 1, _steps.Count);
         _half = 0;
         _prompt.Text = s.Prompt;
         if (s.IsPair) _picture.ShowPair(s.Left!.Icon, s.Left.Word, s.Right!.Icon, s.Right.Word);
         else _picture.Show(s.Picture, s.Icon, s.Word);
-        _skipGroup.Content = Loc.F("controllers.setup.skip_group", GroupName(s.Group));
+        _skipGroup.Content = Loc.F("controllers.setup.skip_group", SetupFunctions.GroupName(s.Group));
         _skipGroup.IsVisible = inGroup.IndexOf(s) < inGroup.Count - 1;
         _back.IsEnabled = _step > 0;
         ResetStep();
@@ -285,8 +271,18 @@ public sealed class ControllerSetupWindow : NotaWindow
         _detected.Foreground = NotaPalette.TextSecondary;
         _encoder.IsVisible = false;
         _next.IsVisible = false;
+        _next.Content = Loc.T("controllers.setup.next");
         _picture.Learned = false;
-        if (_half == 0) { _learned.Remove((_step, 0)); _learned.Remove((_step, 1)); }   // redoing it
+        if (_half == 0 && SeededHere)
+        {
+            // Learn everything again: the control it is on now — keep it, or move another one.
+            var now = string.Join(" · ", new[] { 0, 1 }.Where(h => _learned.ContainsKey((_step, h))).Select(h => ControlCatcher.Short(_learned[(_step, h)].Control)));
+            _detected.Text = Loc.F("controllers.setup.current", now);
+            _next.Content = Loc.T("controllers.setup.keep");
+            _next.IsVisible = true;
+            _picture.Learned = true;
+        }
+        else if (_half == 0) { _learned.Remove((_step, 0)); _learned.Remove((_step, 1)); }   // redoing it
         else _learned.Remove((_step, 1));
         ShowSummary();
     }
@@ -307,12 +303,18 @@ public sealed class ControllerSetupWindow : NotaWindow
         if (got.Count > 0)
         {
             var last = got[^1];
-            _hearing.Text = Raw(last);
+            _hearing.Text = ControlCatcher.Raw(last);
             _activity.Fill = NotaPalette.Success;   // like the MIDI light: something arrived
             _activityMs = now;
             foreach (var ev in got)
             {
-                if (LearnedFor(ev) is { } other)
+                var learnedFor = LearnedFor(ev);
+                if (learnedFor == _step && SeededHere && _half == 0)
+                {
+                    KeepSeeded();   // Learn everything again: the control it already has — kept
+                    return;
+                }
+                if (learnedFor is { } other)
                 {
                     // An already learned control: say so, but don't let it take this step.
                     _detected.Text = Loc.F("controllers.setup.already", _steps[other].Name);
@@ -325,12 +327,14 @@ public sealed class ControllerSetupWindow : NotaWindow
         }
         if (_events.Count == 0 || _found is not null) return;
         var s = _steps[_step];
-        bool pressed = (s.Button || s.IsPair) && PressedAndReleased(_events);
-        long still = s.Picture is PictogramKind.Knob or PictogramKind.Encoder or PictogramKind.Jog or PictogramKind.Pair ? KnobStillMs : StillMs;
+        bool pressed = (s.Button || s.IsPair) && ControlCatcher.PressedAndReleased(_events);
+        long still = s.Picture is PictogramKind.Knob or PictogramKind.Encoder or PictogramKind.Jog or PictogramKind.Pair ? ControlCatcher.KnobStillMs : ControlCatcher.StillMs;
         if (!pressed && now - _lastEventMs < still) return;
         var c = ControlClassifier.Classify(_events);
         if (c is not { } found) { _events.Clear(); return; }
-        if (s.IsPair && (_half == 1 || !LooksLikeEncoder(found, _events)))
+        if (_half == 0 && SeededHere) DropStep(_step);   // a new control replaces the one it had
+        TakeFromLater(found);
+        if (s.IsPair && (_half == 1 || !ControlCatcher.LooksLikeEncoder(found, _events)))
         {
             LearnHalf(found);   // a button: this half now, the other one next
             return;
@@ -347,25 +351,13 @@ public sealed class ControllerSetupWindow : NotaWindow
         Learn(found);
     }
 
-    // A pair's control: an encoder (or knob) turns — relative steps, or an absolute run of values;
-    // a button sends a note, or a CC that only goes up and back to 0.
-    private static bool LooksLikeEncoder(ClassifiedControl c, List<(int Status, int Channel, int D1, int D2)> ev)
-    {
-        if (c.Message == ControlMessage.Note) return false;
-        if (c.Encoder != EncoderMode.Absolute || c.Ambiguous) return true;
-        if (c.Message != ControlMessage.Cc) return true;
-        var values = ev.Where(e => e.Status == 0xB0 && e.D1 == c.Number).Select(e => e.D2).Distinct().ToList();
-        bool button = values.Count <= 2 && values.Contains(0);
-        return !button && values.Count >= 3;
-    }
-
     // A pair learned as buttons: the left one first, then the right one.
     private void LearnHalf(ClassifiedControl c)
     {
         var s = _steps[_step];
         var half = _half == 0 ? s.Left! : s.Right!;
         _learned[(_step, _half)] = new LearnedControl(half.Role, 0, c, half.Command);
-        _detected.Text = Loc.F("controllers.setup.learned", half.Name, Describe(c));
+        _detected.Text = Loc.F("controllers.setup.learned", half.Name, ControlCatcher.Describe(c));
         _detected.Foreground = NotaPalette.Success;
         ShowSummary();
         if (_half == 0)
@@ -384,33 +376,12 @@ public sealed class ControllerSetupWindow : NotaWindow
         ShowProgress();
     }
 
-    // A button's press and release: a note-on then its note-off, or a CC up then down.
-    private static bool PressedAndReleased(List<(int Status, int Channel, int D1, int D2)> ev)
-    {
-        bool down = false;
-        foreach (var e in ev)
-        {
-            if (e.Status == 0x90 && e.D2 > 0) down = true;
-            else if ((e.Status == 0x80 || (e.Status == 0x90 && e.D2 == 0)) && down) return true;
-            else if (e.Status == 0xB0 && e.D2 >= 64) down = true;
-            else if (e.Status == 0xB0 && e.D2 < 64 && down) return true;
-        }
-        return false;
-    }
-
-    private static string Raw((int Status, int Channel, int D1, int D2) e) => e.Status switch
-    {
-        0x90 or 0x80 => Loc.F("controllers.setup.raw_note", e.D1, e.Channel + 1, e.D2),
-        0xE0 => Loc.F("controllers.setup.raw_bend", e.Channel + 1),
-        0xB0 => Loc.F("controllers.setup.raw_cc", e.D1, e.Channel + 1, e.D2),
-        _ => Loc.F("controllers.setup.raw_other", e.Status.ToString("X2", System.Globalization.CultureInfo.CurrentCulture), e.Channel + 1),
-    };
-
     // The step an incoming message's control was already learned for, or null.
     private int? LearnedFor((int Status, int Channel, int D1, int D2) e)
     {
-        foreach (var ((step, _), l) in _learned)
+        foreach (var ((step, half), l) in _learned)
         {
+            if (step > _step && _seeded.Contains((step, half))) continue;   // a later step's old control: free to take
             var c = l.Control;
             if (c.Channel != e.Channel) continue;
             bool hit = c.Message switch
@@ -426,29 +397,10 @@ public sealed class ControllerSetupWindow : NotaWindow
         return null;
     }
 
-    private static string Describe(ClassifiedControl c)
-    {
-        string what = c.Message switch
-        {
-            ControlMessage.Note => Loc.F("controllers.setup.is_note", c.Number),
-            ControlMessage.PitchBend => Loc.T("controllers.setup.is_bend"),
-            ControlMessage.Nrpn => Loc.F("controllers.setup.is_nrpn", c.Number),
-            ControlMessage.Cc14 => Loc.F("controllers.setup.is_cc14", c.Number),
-            _ => Loc.F("controllers.setup.is_cc", c.Number),
-        };
-        string enc = c.Encoder switch
-        {
-            EncoderMode.RelativeTwos => Loc.T("controllers.setup.enc_twos"),
-            EncoderMode.RelativeSignBit => Loc.T("controllers.setup.enc_signbit"),
-            EncoderMode.RelativeOffset => Loc.T("controllers.setup.enc_offset"),
-            _ => Loc.T("controllers.setup.enc_absolute"),
-        };
-        return Loc.F("controllers.setup.found", what, c.Channel + 1, enc);
-    }
-
     // The Next button: only for an encoder whose encoding the user picks.
     private void Accept()
     {
+        if (_found is null && _half == 0 && SeededHere) { KeepSeeded(); return; }
         if (_found is not { } c) return;
         c = c with
         {
@@ -462,6 +414,13 @@ public sealed class ControllerSetupWindow : NotaWindow
         Advance();
     }
 
+    // Learn everything again: the step keeps the control it had.
+    private void KeepSeeded()
+    {
+        _seeded.Remove((_step, 0)); _seeded.Remove((_step, 1));
+        Advance();
+    }
+
     private void Learn(ClassifiedControl c)
     {
         var s = _steps[_step];
@@ -472,7 +431,7 @@ public sealed class ControllerSetupWindow : NotaWindow
                 s.Left.Role == ControlRoleKind.Command ? null : s.Left.Role)   // an encoder: both halves
             : new LearnedControl(s.Role, s.Index, c, s.Command);
         _found = c;
-        _detected.Text = Loc.F("controllers.setup.learned", s.Name, Describe(c));
+        _detected.Text = Loc.F("controllers.setup.learned", s.Name, ControlCatcher.Describe(c));
         _detected.Foreground = NotaPalette.Success;
         _encoder.IsVisible = false;
         _next.IsVisible = false;
@@ -503,7 +462,7 @@ public sealed class ControllerSetupWindow : NotaWindow
                     Children =
                     {
                         new TextBlock { Text = chipName, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = Short(l.Control), Classes = { "Mono" }, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = ControlCatcher.Short(l.Control), Classes = { "Mono" }, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
             };
@@ -513,21 +472,12 @@ public sealed class ControllerSetupWindow : NotaWindow
         }
     }
 
-    private static string Short(ClassifiedControl c) => c.Message switch
-    {
-        ControlMessage.Note => Loc.F("controllers.setup.is_note", c.Number),
-        ControlMessage.PitchBend => Loc.T("controllers.setup.is_bend"),
-        ControlMessage.Nrpn => Loc.F("controllers.setup.is_nrpn", c.Number),
-        ControlMessage.Cc14 => Loc.F("controllers.setup.is_cc14", c.Number),
-        _ => Loc.F("controllers.setup.is_cc", c.Number),
-    };
-
     // The group strip: done groups ticked, the current one picked (soft tint), the rest quiet.
     private void ShowGroups()
     {
         _groups.Children.Clear();
         var current = _steps[_step].Group;
-        foreach (var g in Enum.GetValues<Group>())
+        foreach (var g in Enum.GetValues<SetupGroup>())
         {
             int first = _steps.FindIndex(x => x.Group == g);
             if (first < 0) continue;
@@ -535,7 +485,7 @@ public sealed class ControllerSetupWindow : NotaWindow
             int learned = _learned.Keys.Count(k => _steps[k.Step].Group == g);
             var label = new TextBlock
             {
-                Text = GroupTitle(g) + (learned > 0 ? "  " + learned.ToString(System.Globalization.CultureInfo.CurrentCulture) : ""),
+                Text = SetupFunctions.GroupTitle(g) + (learned > 0 ? "  " + learned.ToString(System.Globalization.CultureInfo.CurrentCulture) : ""),
                 FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
                 Foreground = here ? NotaPalette.AccentBright : done ? NotaPalette.TextSecondary : NotaPalette.TextTertiary,
                 FontWeight = here ? Avalonia.Media.FontWeight.SemiBold : Avalonia.Media.FontWeight.Normal,
@@ -555,17 +505,6 @@ public sealed class ControllerSetupWindow : NotaWindow
         }
     }
 
-    // The strip's short names.
-    private static string GroupTitle(Group g) => g switch
-    {
-        Group.Knobs => Loc.T("controllers.setup.tab_knobs"),
-        Group.Faders => Loc.T("controllers.setup.tab_faders"),
-        Group.Transport => Loc.T("controllers.setup.tab_transport"),
-        Group.Navigation => Loc.T("controllers.setup.tab_navigation"),
-        Group.Session => Loc.T("controllers.setup.tab_session"),
-        _ => Loc.T("controllers.setup.tab_extra"),
-    };
-
     private void ShowProgress()
     {
         double w = _progressTrack.Bounds.Width;
@@ -583,6 +522,7 @@ public sealed class ControllerSetupWindow : NotaWindow
     private void SkipGroup()
     {
         var g = _steps[_step].Group;
+        for (int i = _step; i < _steps.Count && _steps[i].Group == g; i++) DropStep(i);   // "no more knobs"
         int next = _steps.FindIndex(_step, x => x.Group != g);
         if (next < 0) { Finish(); return; }
         _step = next;
@@ -600,6 +540,18 @@ public sealed class ControllerSetupWindow : NotaWindow
     private void Finish()
     {
         _advanceAt = 0;
+        if (_seed is not null)
+        {
+            Result = _learned.OrderBy(l => l.Key).Select(l =>
+            {
+                var v = l.Value;
+                var right = v.Role == ControlRoleKind.Command ? FunctionKey.OfCommand(v.Command!) : FunctionKey.Of(v.Role, v.Index);
+                FunctionKey? left = v.LeftRole is { } lr ? FunctionKey.Of(lr) : v.CommandLeft is { } cl ? FunctionKey.OfCommand(cl) : null;
+                return (right, left, v.Control);
+            }).ToList();
+            Close();
+            return;
+        }
         if (_learned.Count > 0)
         {
             string json = ProfileWriter.Write(_port.Name, _port.Identity, _learned.OrderBy(l => l.Key).Select(l => l.Value).ToList());

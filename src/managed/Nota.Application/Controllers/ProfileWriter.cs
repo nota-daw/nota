@@ -50,32 +50,44 @@ public static class ProfileWriter
             }
             w.WriteEndObject();
             w.WriteStartArray("controls");
-            foreach (var c in controls)
-            {
-                w.WriteStartObject();
-                w.WriteString("role", RoleName(c.Role));
-                if (ControlRole.IsIndexed(c.Role)) w.WriteNumber("index", c.Index + 1);
-                if (c.Role == ControlRoleKind.Command && c.Command is { Length: > 0 } cmd) w.WriteString("command", cmd);
-                if (c.Role == ControlRoleKind.Command && c.CommandLeft is { Length: > 0 } cmdLeft) w.WriteString("commandLeft", cmdLeft);
-                if (c.LeftRole is { } leftRole) w.WriteString("roleLeft", RoleName(leftRole));
-                w.WriteString("message", c.Control.Message switch
-                {
-                    ControlMessage.Cc14 => "cc14", ControlMessage.Nrpn => "nrpn", ControlMessage.Note => "note",
-                    ControlMessage.PitchBend => "pitchbend", _ => "cc",
-                });
-                w.WriteNumber("channel", c.Control.Channel + 1);
-                if (c.Control.Message != ControlMessage.PitchBend) w.WriteNumber("number", c.Control.Number);
-                if (c.Control.Encoder != EncoderMode.Absolute)
-                    w.WriteString("encoder", c.Control.Encoder switch
-                    {
-                        EncoderMode.RelativeTwos => "relative-twos", EncoderMode.RelativeSignBit => "relative-signbit", _ => "relative-offset",
-                    });
-                w.WriteEndObject();
-            }
+            foreach (var c in controls) WriteControl(w, c);
             w.WriteEndArray();
             w.WriteEndObject();
         }
         return Encoding.UTF8.GetString(ms.ToArray()) + "\n";
+    }
+
+    /// <summary>One control entry as the profile format writes it (shared with the mapping editor,
+    /// specs/110, which writes only the entries it changed).</summary>
+    public static void WriteControl(Utf8JsonWriter w, LearnedControl c)
+    {
+        w.WriteStartObject();
+        w.WriteString("role", RoleName(c.Role));
+        if (ControlRole.IsIndexed(c.Role)) w.WriteNumber("index", c.Index + 1);
+        if (c.Role == ControlRoleKind.Command && c.Command is { Length: > 0 } cmd) w.WriteString("command", cmd);
+        if (c.Role == ControlRoleKind.Command && c.CommandLeft is { Length: > 0 } cmdLeft) w.WriteString("commandLeft", cmdLeft);
+        if (c.LeftRole is { } leftRole) w.WriteString("roleLeft", RoleName(leftRole));
+        w.WriteString("message", c.Control.Message switch
+        {
+            ControlMessage.Cc14 => "cc14", ControlMessage.Nrpn => "nrpn", ControlMessage.Note => "note",
+            ControlMessage.PitchBend => "pitchbend", _ => "cc",
+        });
+        w.WriteNumber("channel", c.Control.Channel + 1);
+        if (c.Control.Message != ControlMessage.PitchBend) w.WriteNumber("number", c.Control.Number);
+        if (c.Control.Encoder != EncoderMode.Absolute)
+            w.WriteString("encoder", c.Control.Encoder switch
+            {
+                EncoderMode.RelativeTwos => "relative-twos", EncoderMode.RelativeSignBit => "relative-signbit", _ => "relative-offset",
+            });
+        w.WriteEndObject();
+    }
+
+    /// <summary>One control entry as a JSON object.</summary>
+    public static System.Text.Json.Nodes.JsonObject ControlObject(LearnedControl c)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new Utf8JsonWriter(ms)) WriteControl(w, c);
+        return System.Text.Json.Nodes.JsonNode.Parse(ms.ToArray())!.AsObject();
     }
 
     private static string Hex(byte[] b) => string.Join(' ', b.Select(x => x.ToString("X2", System.Globalization.CultureInfo.InvariantCulture)));

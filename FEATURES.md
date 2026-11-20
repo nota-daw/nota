@@ -827,6 +827,14 @@ own window — see
   X-Touch Mini and any Mackie Control surface; your own JSON profiles live in the
   `controllers` data folder, or **Set up…** learns one control by control (encoder type,
   14-bit and NRPN detected).
+  - **Edit mapping…** (#973) on a controller with a profile lists every function by group with
+    the control it is on: click one (or Enter), press a control, Finish. A control another
+    function has is moved only after **Move here**; a function can be cleared or put back;
+    **+ Command…** puts any palette command on a spare button; moving a control while nothing
+    listens highlights what it does; *Unassigned only* walks the gaps. Changes to a shipped
+    profile are saved as your own copy (init and LEDs kept) — **Back to shipped profile**
+    removes it; **Learn everything again** runs the step-by-step walk pre-filled with the
+    current controls.
   - **Knobs follow the selected device** (else the track's instrument, else its first
     device), page by page — pages for every built-in device, rack macros, devices inside
     racks, plug-in parameters in order; the card numbers the knobs and shows the page.

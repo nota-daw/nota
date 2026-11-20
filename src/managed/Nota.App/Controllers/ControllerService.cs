@@ -745,6 +745,56 @@ public sealed class ControllerService
         return path;
     }
 
+    // ---- the mapping editor (specs/110) ---------------------------------------------------------
+
+    private const string ShippedPrefix = "Nota.Controllers.";
+
+    /// <summary>A profile's file as written — the embedded resource for a shipped one, the file for
+    /// the user's — so the editor can change its controls and keep everything else; null when gone.</summary>
+    public string? ProfileJson(ControllerProfile p)
+    {
+        try
+        {
+            if (p.Origin == ProfileOrigin.User)
+            {
+                string path = Path.Combine(_userDir, p.FileName);
+                return File.Exists(path) ? File.ReadAllText(path) : null;
+            }
+            using var s = typeof(ControllerService).Assembly.GetManifestResourceStream(ShippedPrefix + p.FileName);
+            if (s is null) return null;
+            using var r = new StreamReader(s);
+            return r.ReadToEnd();
+        }
+        catch (IOException) { return null; }
+    }
+
+    /// <summary>The file name of the shipped profile with this id, or null — a user profile with
+    /// that id is the user's copy of a shipped one.</summary>
+    public string? ShippedFileName(string id)
+    {
+        var asm = typeof(ControllerService).Assembly;
+        foreach (var res in asm.GetManifestResourceNames().Where(n => n.StartsWith(ShippedPrefix, StringComparison.Ordinal)))
+        {
+            using var s = asm.GetManifestResourceStream(res);
+            if (s is null) continue;
+            using var r = new StreamReader(s);
+            var (p, _) = ProfileLoader.Load(r.ReadToEnd(), res[ShippedPrefix.Length..], ProfileOrigin.Shipped);
+            if (p?.Id == id) return res[ShippedPrefix.Length..];
+        }
+        return null;
+    }
+
+    /// <summary>The profile in use for this id (after a save or a reload).</summary>
+    public ControllerProfile? ProfileById(string id) => _profiles.FirstOrDefault(p => p.Id == id);
+
+    /// <summary>Remove a user profile (Back to shipped profile) and re-match.</summary>
+    public void RemoveUserProfile(string fileName)
+    {
+        try { File.Delete(Path.Combine(_userDir, fileName)); }
+        catch (IOException ex) { _log?.Info($"Controller profiles: {fileName} can't be removed: {ex.Message}"); }
+        ReloadProfiles();
+    }
+
     // One table for every active controller, without the controls MIDI Learn owns.
     private void PublishClaims()
     {
