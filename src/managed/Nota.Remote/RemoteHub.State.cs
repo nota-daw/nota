@@ -530,6 +530,8 @@ public sealed partial class RemoteHub
         {
             w.WriteString("t", "ses");
             w.WriteNumber("n", scenes);
+            // specs/108: the desktop's grid orientation — present only for Scenes across.
+            if (host.SessionAcross) w.WriteString("ax", "across");
             // specs/107: Nota's Session selection (moved by the mouse or a controller), outlined on the grid.
             if (sel.Slot && _tracks.Any(r => r.Id == sel.TrackId && r.Kind != "return"))
             {

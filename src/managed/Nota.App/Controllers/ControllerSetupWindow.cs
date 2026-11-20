@@ -225,11 +225,11 @@ public sealed class ControllerSetupWindow : NotaWindow
         void Cmd(Group g, string id, string prompt, string name, GlyphKind? icon = null, string? word = null)
             => Btn(g, ControlRoleKind.Command, prompt, name, icon, word, id);
         Pair(Group.Session, Loc.T("controllers.setup.pair_clips"), Loc.T("controllers.setup.pair_clips_name"),
-            new Half(Loc.T("controllers.setup.slot_up"), Loc.T("commands.session_select_up"), ControlRoleKind.Command, "session.selectUp", GlyphKind.ChevronUp),
-            new Half(Loc.T("controllers.setup.slot_down"), Loc.T("commands.session_select_down"), ControlRoleKind.Command, "session.selectDown", GlyphKind.ChevronDown));
+            new Half(Loc.T("controllers.setup.prev_scene"), Loc.T("commands.session_select_prev_scene"), ControlRoleKind.Command, "session.selectUp", GlyphKind.ChevronUp),
+            new Half(Loc.T("controllers.setup.next_scene"), Loc.T("commands.session_select_next_scene"), ControlRoleKind.Command, "session.selectDown", GlyphKind.ChevronDown));
         Pair(Group.Session, Loc.T("controllers.setup.pair_session_tracks"), Loc.T("controllers.setup.pair_session_tracks_name"),
-            new Half(Loc.T("controllers.setup.slot_left"), Loc.T("commands.session_select_left"), ControlRoleKind.Command, "session.selectLeft", GlyphKind.ChevronLeft),
-            new Half(Loc.T("controllers.setup.slot_right"), Loc.T("commands.session_select_right"), ControlRoleKind.Command, "session.selectRight", GlyphKind.ChevronRight));
+            new Half(Loc.T("controllers.setup.prev_track"), Loc.T("commands.session_select_prev_track"), ControlRoleKind.Command, "session.selectLeft", GlyphKind.ChevronLeft),
+            new Half(Loc.T("controllers.setup.next_track"), Loc.T("commands.session_select_next_track"), ControlRoleKind.Command, "session.selectRight", GlyphKind.ChevronRight));
         Cmd(Group.Session, "session.toggleSlot", Loc.T("controllers.setup.slot_launch"), Loc.T("commands.session_toggle_slot"), GlyphKind.Play);
         Cmd(Group.Session, "session.stopTrack", Loc.T("controllers.setup.slot_stop"), Loc.T("commands.session_stop_track"), GlyphKind.Stop);
         Cmd(Group.Session, "session.launchScene", Loc.T("controllers.setup.scene_launch"), Loc.T("commands.launch_scene"), GlyphKind.Session);

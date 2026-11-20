@@ -23,6 +23,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Session: turn the grid — scenes across, tracks down** (#968, specs/108).
+  - **Settings → Editing → Session → Session grid**: *Scenes down* (a scene per row, a track per
+    column — as before) or *Scenes across* (a scene per column, a track per row); the turn button
+    in the Session toolbar switches it too. The open Session view turns at once; the choice is
+    kept on this computer, not in the project.
+  - **Scenes across**: scene names and launch buttons run across the top (+ Scene at the end),
+    track headers sit at the left, each track's Stop and its I/O · Sends · Mixer sections sit at
+    the right end of its row, Stop All above them. Clips, groups, Returns / Master, clip and
+    scene drags, Browser drops and the inspector work as before, turned.
+  - **Arrow keys follow the screen** (← / → scenes and ↑ / ↓ tracks when turned). The Session
+    selection commands are now named by what they do — *Select the previous / next scene*,
+    *Select the previous / next track* — and keep their meaning either way round, so controller
+    buttons and shortcuts bound to them step by scene and by track as before.
+  - **Nota Remote and Nota NX** have a *Session grid* choice too: **As in Nota** (the default —
+    the Scenes grid turns with the desktop), *Scenes down* or *Scenes across*. A phone that had
+    picked Scenes across keeps it. Nota NX draws the turned grid with scene launch pinned at
+    the top and track names + Stop at the left.
 - **Controllers: see what the knobs are on, and step through a track's devices** (#929,
   specs/107).
   - **Always in view**: the controller chip next to **MIDI** in the top bar reads

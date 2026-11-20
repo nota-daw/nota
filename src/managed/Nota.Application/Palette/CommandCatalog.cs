@@ -114,10 +114,10 @@ public static class CommandCatalog
         C("session.stopAll", Loc.T("commands.stop_all_clips"), Loc.T("commands.session"), "", "halt", view: "Session"),
         C("session.insertScene", Loc.T("commands.insert_scene"), Loc.T("commands.session"), Shortcut.Cmd('I'), "add scene row", view: "Session"),
         // For controller buttons (specs/051): the arrows' walk and the selected slot, without the keyboard.
-        C("session.selectUp", Loc.T("commands.session_select_up"), Loc.T("commands.session"), "", "", view: "Session"),
-        C("session.selectDown", Loc.T("commands.session_select_down"), Loc.T("commands.session"), "", "", view: "Session"),
-        C("session.selectLeft", Loc.T("commands.session_select_left"), Loc.T("commands.session"), "", "", view: "Session"),
-        C("session.selectRight", Loc.T("commands.session_select_right"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectUp", Loc.T("commands.session_select_prev_scene"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectDown", Loc.T("commands.session_select_next_scene"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectLeft", Loc.T("commands.session_select_prev_track"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.selectRight", Loc.T("commands.session_select_next_track"), Loc.T("commands.session"), "", "", view: "Session"),
         C("session.toggleSlot", Loc.T("commands.session_toggle_slot"), Loc.T("commands.session"), "", "", view: "Session"),
         C("session.stopTrack", Loc.T("commands.session_stop_track"), Loc.T("commands.session"), "", "", view: "Session"),
 

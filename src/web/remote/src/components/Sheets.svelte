@@ -5,10 +5,17 @@
   import type { Form } from '../lib/device.svelte';
   import { NN } from '../lib/music';
   import { look } from '../lib/theme.svelte';
+  import { effectiveAcross } from '../lib/grid';
 
   let { form }: { form: Form } = $props();
   const portrait = $derived(form === 'phone');
   let nameInput = $state('');
+  // specs/108: what the Session grid choice shows now — "As in Nota" names Nota's current layout.
+  const gridCaption = $derived.by(() => {
+    const across = effectiveAcross(app.prefs.sessionGrid, app.ses);
+    const layout = across ? 'A scene per column, a track per row' : 'A scene per row, a track per column';
+    return app.prefs.sessionGrid === 'nota' ? `${layout}, as Nota shows it` : layout;
+  });
   $effect(() => { if (app.sheet === 'menu') nameInput = app.name; });
 
   function close() {
@@ -68,10 +75,11 @@
     <div class="block">
       <span class="label">Session grid</span>
       <div class="seg">
-        <button class:on={app.prefs.sessionAxis !== 'across'} onclick={() => (app.prefs.sessionAxis = 'down')}>Scenes down</button>
-        <button class:on={app.prefs.sessionAxis === 'across'} onclick={() => (app.prefs.sessionAxis = 'across')}>Scenes across</button>
+        <button class:on={app.prefs.sessionGrid === 'nota'} onclick={() => (app.prefs.sessionGrid = 'nota')}>As in Nota</button>
+        <button class:on={app.prefs.sessionGrid === 'down'} onclick={() => (app.prefs.sessionGrid = 'down')}>Scenes down</button>
+        <button class:on={app.prefs.sessionGrid === 'across'} onclick={() => (app.prefs.sessionGrid = 'across')}>Scenes across</button>
       </div>
-      <span class="d2">{app.prefs.sessionAxis === 'across' ? 'A scene per column, a track per row' : 'A scene per row, a track per column, as in Nota'}</span>
+      <span class="d2">{gridCaption}</span>
     </div>
     <button class="toggle" onclick={() => (app.prefs.haptics = !app.prefs.haptics)}>
       <span class="switch" class:on={app.prefs.haptics}></span><span class="n2">Haptics on pads</span>

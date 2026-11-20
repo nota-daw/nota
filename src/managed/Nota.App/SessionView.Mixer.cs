@@ -51,6 +51,25 @@ public sealed partial class SessionView
 
     private Control MixerRailLabels()
     {
+        // Scenes across (specs/108): the sections sit side by side, so the corner names the
+        // sections; each control's row name moves to its tooltip (Named below).
+        if (_across)
+        {
+            var titles = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Gap };
+            Border Title(string text) => new()
+            {
+                Width = TrackColW, Height = HeaderH,
+                Child = new TextBlock
+                {
+                    Text = text, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextDisabled,
+                    Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+                },
+            };
+            if (_showIO) titles.Children.Add(Title("I/O"));
+            if (_showSends && ReturnRows > 0) titles.Children.Add(Title(Loc.T("common.sends")));
+            if (_showMixer) titles.Children.Add(Title(Loc.T("common.mixer")));
+            return titles;
+        }
         var stack = new StackPanel { Spacing = Gap };
         TextBlock Label(string text) => new()
         {
@@ -70,9 +89,13 @@ public sealed partial class SessionView
         return stack;
     }
 
-    private static StackPanel Section(params Control[] rows)
+    // One mixer section: below the cells (Scenes down), or a column of its own beside the next
+    // section at the right of the lane (Scenes across, specs/108).
+    private StackPanel Section(params Control[] rows)
     {
-        var s = new StackPanel { Spacing = Gap, Margin = new Thickness(0, SectionTop, 0, 0) };
+        var s = _across
+            ? new StackPanel { Spacing = Gap, Width = TrackColW, VerticalAlignment = VerticalAlignment.Center }
+            : new StackPanel { Spacing = Gap, Margin = new Thickness(0, SectionTop, 0, 0) };
         foreach (var r in rows) s.Children.Add(r);
         return s;
     }
@@ -99,7 +122,7 @@ public sealed partial class SessionView
 
     private MixerParts BuildMixer(Column c)
     {
-        var root = new StackPanel { Spacing = Gap };
+        var root = new StackPanel { Spacing = Gap, Orientation = _across ? Orientation.Horizontal : Orientation.Vertical };
         bool hasTrack = c.Kind != ColKind.Master;
         NotaTrackInfo ti = default;
         if (hasTrack)
@@ -107,7 +130,7 @@ public sealed partial class SessionView
                 if (_engine.TryGetTrackInfo(i, out var t) && t.Id == c.TrackId) { ti = t; break; }
         if (c.Kind == ColKind.Track && ti.Armed != 0) _armed.Add(c.TrackId); else _armed.Remove(c.TrackId);
 
-        if (_showIO) root.Children.Add(Section(InputRow(c), MonitorRow(c), OutputRow(c)));
+        if (_showIO) root.Children.Add(Section(Named(InputRow(c), Loc.T("common.input")), Named(MonitorRow(c), Loc.T("session.mixer.monitor")), Named(OutputRow(c), Loc.T("common.output"))));
 
         // Send faders follow changes made elsewhere — the Devices panel's Sends card, the
         // Mixer window, automation (#138) — on the same tick as the meters.
@@ -115,6 +138,8 @@ public sealed partial class SessionView
         if (_showSends && ReturnRows > 0)
         {
             var rows = new List<Control>();
+            // Scenes across names each send row in its tooltip (the rail's labels are gone).
+            var sendNames = _across ? Returns().Select(r => r.Name).Concat(Enumerable.Repeat("", ReturnRows)).ToList() : null;
             for (int b = 0; b < ReturnRows; b++)
             {
                 if (c.Kind is ColKind.Track or ColKind.Group)
@@ -131,7 +156,7 @@ public sealed partial class SessionView
                         double v = _engine.GetTrackSend(id, bus);
                         if (Math.Abs(v - f.Value) > 1e-3) f.Value = v;
                     });
-                    rows.Add(FaderRow(f, null));
+                    rows.Add(_across ? Named(FaderRow(f, null), Loc.F("session.mixer.send_n", (char)('A' + b), sendNames![b])) : FaderRow(f, null));
                 }
                 else rows.Add(new Border { Height = FaderRowH });
             }
@@ -155,7 +180,7 @@ public sealed partial class SessionView
                 pan.PanChanged += p => panUndo.Change(p, setPan);
                 ValueEntry.Attach(pan, pan.EntryField(Loc.T("common.pan")));
                 follow.Add(t => { if (!pan.Dragging && Math.Abs(pan.Pan - t.Pan) > 1e-3) pan.Pan = t.Pan; });
-                panRow = FaderRow(pan, null);
+                panRow = Named(FaderRow(pan, null), Loc.T("common.pan"));
             }
             else panRow = new Border { Height = FaderRowH };
 
@@ -227,7 +252,7 @@ public sealed partial class SessionView
                     follow.Add(_ => { bool v = _engine.GetTrackEditLink(id); if (v != linkOn) { linkOn = v; ArrangementView.PaintLinkChip(key, glyph, v); } });
                 }
             }
-            root.Children.Add(Section(panRow, FaderRow(vol, null), meters, btns));
+            root.Children.Add(Section(panRow, Named(FaderRow(vol, null), Loc.T("common.volume")), meters, btns));
         }
         if (sendSyncs.Count > 0)
         {
@@ -245,6 +270,13 @@ public sealed partial class SessionView
             };
         }
         return new MixerParts { Root = root, UpdateMeter = meter };
+    }
+
+    // Scenes across has no row labels (the rail carried them), so a row's name is its tooltip.
+    private Control Named(Control row, string name)
+    {
+        if (_across && ToolTip.GetTip(row) is null) ToolTip.SetTip(row, name);
+        return row;
     }
 
     private static TextBlock ReadoutText()

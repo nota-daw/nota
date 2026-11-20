@@ -74,6 +74,9 @@ public interface IRemoteHost
     int SelectedTrackId { get; }
     /// <summary>The Session view's selection (specs/107).</summary>
     RemoteSessionSelection SessionSelection { get; }
+    /// <summary>Whether Nota's Session grid runs Scenes across (specs/108) — a phone or a Switch
+    /// set to "As in Nota" turns its own Scenes grid to match.</summary>
+    bool SessionAcross => false;
     /// <summary>The lead controller's focus, or null when no controller with knobs is active (specs/107).</summary>
     RemoteControllerFocus? ControllerFocus { get; }
     /// <summary>The project key as a <c>MusicalKey.Code</c>, −1 = none.</summary>

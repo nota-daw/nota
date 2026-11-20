@@ -27,6 +27,8 @@ if (!existsSync(join(root, 'index.html'))) {
 }
 const themesDir = join(here, '../../../managed/Nota.App/Theme/Themes');
 const port = Number(process.env.PORT ?? 7790);
+// specs/108: MOCK_AX=across plays a Nota whose Session grid runs scenes across.
+const across = process.env.MOCK_AX === 'across';
 
 // ---- themes -------------------------------------------------------------------------
 
@@ -144,7 +146,7 @@ const more = (four) => Array.from({ length: SCENES }, (_, i) => (i < 4 ? four[i]
 function ses() {
   const prog = (((Date.now() - state.started) / 1000) % 8) / 8;
   return {
-    t: 'ses', n: SCENES, sel: state.sel,
+    t: 'ses', n: SCENES, sel: state.sel, ...(across ? { ax: 'across' } : {}),
     // A group (Pads) sends its tracks' ids and no slots of its own (contracts/session-message.md).
     tr: [
       { id: 1, c: more([[3, 16, prog], [1, 16, 0], [1, 8, 0], [0, 0, 0]]) },

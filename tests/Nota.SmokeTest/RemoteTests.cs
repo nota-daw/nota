@@ -219,6 +219,7 @@ internal static class RemoteTests
         public string ClipColor(int trackId, int scene) => "#4FA3E0";
         public int SelectedTrackId { get; set; }
         public RemoteSessionSelection SessionSelection { get; set; }
+        public bool SessionAcross { get; set; }
         public RemoteControllerFocus? ControllerFocus { get; set; }
         public int ProjectKeyCode => -1;
         public IReadOnlyList<(string Name, double StartBeat)> Sections => new[] { ("Intro", 0.0), ("Drop", 16.0) };
@@ -478,7 +479,13 @@ internal static class RemoteTests
         var sRow = Wait("ses", 3000, m => SelIs(m, sv => sv.ValueKind == JsonValueKind.Object && sv.TryGetProperty("row", out var sr) && sr.GetInt32() == 0));
         host.SessionSelection = RemoteSessionSelection.None;
         var sNone = Wait("ses", 3000, m => SelIs(m, sv => sv.ValueKind == JsonValueKind.Null));
+        // specs/108: the desktop's Session grid orientation rides in `ses` as `ax`.
+        host.SessionAcross = true;
+        var sAx = Wait("ses", 3000, m => m.TryGetProperty("ax", out var ax) && ax.GetString() == "across");
+        host.SessionAcross = false;
+        var sNoAx = Wait("ses", 3000, m => !m.TryGetProperty("ax", out _));
         yield return (sSlot is not null && sRow is not null && sNone is not null, "Scenes gets Nota's selection: a slot, a scene row, then none");
+        yield return (sAx is not null && sNoAx is not null, "Scenes gets Nota's grid orientation: ax = across, then none (specs/108)");
 
         // The controller's focus as `foc`, sent on change only.
         void Drain(string t) { lock (inbox) inbox.RemoveAll(m => m.GetProperty("t").GetString() == t); }

@@ -6,6 +6,7 @@
 
 import type { Project, Transport, Mixer, Xy, Macros, Session, Focus, ClipPreview, ClipsMessage, Learn, LinkState, Screen, Track } from './types';
 import { look } from './theme.svelte';
+import { migrateSessionGrid, type SessionGrid } from './grid';
 
 const LS = 'nota-remote:';
 const store = {
@@ -28,14 +29,21 @@ export interface Prefs {
   xyHold: boolean;
   bank: number;
   groupsOpen: number[];
-  /** Scenes grid: scenes as rows ('down', tracks across) or as columns ('across', tracks down). */
-  sessionAxis: 'down' | 'across';
+  /** Scenes grid: as Nota's Session grid runs ('nota', specs/108), scenes as rows ('down', tracks
+   *  across) or as columns ('across', tracks down). */
+  sessionGrid: SessionGrid;
 }
 
 const defaultPrefs: Prefs = {
   theme: 'nota', haptics: true, countIn: true, fullVel: false, keysMode: 'Scale', expressive: false, octave: 3, key: null,
-  xyHold: true, bank: 0, groupsOpen: [], sessionAxis: 'down',
+  xyHold: true, bank: 0, groupsOpen: [], sessionGrid: 'nota',
 };
+
+/** Saved prefs over the defaults; the old `sessionAxis` becomes `sessionGrid` (specs/108). */
+function loadPrefs(saved: Record<string, unknown>): Prefs {
+  const { sessionAxis: _old, ...rest } = saved;
+  return { ...defaultPrefs, ...(rest as Partial<Prefs>), sessionGrid: migrateSessionGrid(saved) };
+}
 
 function guessName(): string {
   const ua = navigator.userAgent;
@@ -80,7 +88,7 @@ export class App {
   toast = $state<string | null>(null);
   countIn = $state<number | null>(null);
   name = $state(store.get('name', guessName()));
-  prefs = $state<Prefs>({ ...defaultPrefs, ...JSON.parse(store.get('prefs', '{}') || '{}') });
+  prefs = $state<Prefs>(loadPrefs(JSON.parse(store.get('prefs', '{}') || '{}')));
   /** Position estimate between transport messages, for a smooth readout. */
   posAt = 0;
   posBase = 0;
