@@ -264,19 +264,55 @@ public partial class MainWindow
     // Selecting a Session slot selects its track everywhere (devices below, the arrangement
     // header); a slot holding a clip opens it in the Clip tab, and the tab follows the
     // selection from clip to clip (#334). A Pattern grid stays a Pattern grid on a Drum Rack.
+    // The docked panel keeps the tab that is open: on Devices, picking a clip (or another
+    // track) leaves Devices up — the clip's editor waits behind the Clip tab; on the Clip tab,
+    // a slot without a clip keeps the tab, empty, instead of dropping to Devices.
     private void OnSessionSlotSelected(int trackId, int scene) => FollowOnly(() => FollowSessionSlot(trackId, scene));
 
     private void FollowSessionSlot(int trackId, int scene)
     {
+        bool docked = !DetailFloating && DetailPanel.IsVisible;
+        bool onDevices = docked && DetailDevicesBtn.IsChecked == true;
+        bool onClip = docked && (DetailClipBtn.IsChecked == true || DetailPatternBtn.IsChecked == true);
         if (scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0)
         {
-            bool pattern = !DetailFloating && DetailPanel.IsVisible && DetailBody.Content is DrumPatternView;
-            ShowSessionSlot(trackId, scene);
+            bool pattern = docked && DetailBody.Content is DrumPatternView;
+            if (onDevices)
+            {
+                if (!SessionAudioEditorOn(trackId, scene) && !SessionMidiEditorOpen(trackId, scene))
+                    OpenSessionClipEditor(trackId, scene, show: false);
+                SyncClipTab();
+            }
+            else ShowSessionSlot(trackId, scene);
             if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
             if (pattern && DetailPatternBtn.IsEnabled) OnDetailPattern(this, new RoutedEventArgs());
         }
-        else if (Timeline.SelectedTrackId != trackId)
-            Timeline.Select(trackId, -1);
+        else
+        {
+            if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
+            if (onClip) ShowEmptyClipTab();
+        }
+    }
+
+    // The Clip tab stays up with nothing to edit: the selected slot is empty.
+    private void ShowEmptyClipTab()
+    {
+        SetHost(DetailBody, new Border
+        {
+            Child = new TextBlock
+            {
+                Text = Loc.T("main.detail.empty_slot"),
+                FontSize = NotaType.Body,
+                Foreground = NotaPalette.TextTertiary,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        });
+        DetailClipBtn.IsEnabled = true;
+        DetailClipBtn.IsChecked = true;
+        DetailDevicesBtn.IsChecked = false;
+        DetailPatternBtn.IsChecked = false;
+        ShowDetail(250, honorPersist: true);
     }
 
     private void ShowSessionSlot(int trackId, int scene)
@@ -1442,7 +1478,8 @@ public partial class MainWindow
         row.Height = new GridLength(0);
     }
 
-    private void OpenSessionClipEditor(int trackId, int scene)
+    // show: false builds the editor behind the Devices tab without switching to it.
+    private void OpenSessionClipEditor(int trackId, int scene, bool show = true)
     {
         if (_vm is null) return;
 
@@ -1455,7 +1492,8 @@ public partial class MainWindow
             _editorTrackId = -1; _editorClipIndex = -1;
             BuildAudioClipEditor(trackId, SessionClip.Index(scene));
             SyncClipTab();
-            ShowAudioClipPanel();
+            if (show) ShowAudioClipPanel();
+            else { _lastClipEditor = _audioEditor; if (DetailFloating) SetHost(ClipDetailHost, _audioEditor); }
             return;
         }
 
@@ -1505,10 +1543,11 @@ public partial class MainWindow
         _editorClipIndex = -1;
         _clipEditor = new ClipEditorView(roll, Loc.F("main.detail.track_scene", trackId, scene + 1), 0);
         _lastClipEditor = _clipEditor;
-        SetHost(ClipDetailHost, _clipEditor);
+        if (show || DetailFloating) SetHost(ClipDetailHost, _clipEditor);   // docked, hosting it is the switch to Clip
         SetDetailChip(trackId);
         if (DetailFloating) return;   // floating: top pane only
         DetailClipBtn.IsEnabled = true;   // a clip is now available to edit
+        if (!show) return;
         DetailClipBtn.IsChecked = true;
         DetailDevicesBtn.IsChecked = false;
         DetailPatternBtn.IsChecked = false;
