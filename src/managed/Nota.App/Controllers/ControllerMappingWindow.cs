@@ -581,7 +581,8 @@ internal sealed class ControllerMappingWindow : NotaWindow
     private void Listen(Row r, int? half = null)
     {
         if (r.Other is not null) return;
-        StopListening();   // a pair left half-way goes back first
+        StopListening();   // a pair left half-way goes back first — and the rows are rebuilt
+        r = _rows.FirstOrDefault(x => SameRow(x, r)) ?? r;
         if (_gone) { _selected = r; return; }
         _beforeListen = _map.Snapshot();
         _listening = _selected = r;
@@ -724,7 +725,8 @@ internal sealed class ControllerMappingWindow : NotaWindow
         {
             if (ev.Status is 0x80 || ev.Status == 0x90 && ev.D2 == 0) continue;   // a release says nothing new
             // NRPN: 99 / 98 pick the parameter on the channel, 6 / 38 / 96 / 97 move it.
-            if (ev.Status == 0xB0 && ev.D1 is 99 or 98)
+            // A plain CC control declared on 98 / 99 is that control, not an NRPN selection.
+            if (ev.Status == 0xB0 && ev.D1 is 99 or 98 && _map.Find(ev.Status, ev.Channel, ev.D1) is null)
             {
                 var n = _nrpn.TryGetValue(ev.Channel, out var had) ? had : (Msb: -1, Lsb: -1);
                 _nrpn[ev.Channel] = ev.D1 == 99 ? (ev.D2, n.Lsb) : (n.Msb, ev.D2);
@@ -833,11 +835,11 @@ internal sealed class ControllerMappingWindow : NotaWindow
 
     private void Move(int by)
     {
+        StopListening();   // may rebuild the rows: count on the new ones
         var rows = _rows.Where(Visible).ToList();
         if (rows.Count == 0) return;
         int at = _selected is null ? (by > 0 ? -1 : rows.Count) : rows.IndexOf(_selected);
         at = Math.Clamp(at + by, 0, rows.Count - 1);
-        StopListening();
         _selected = rows[at];
         Render();
         Dispatcher.UIThread.Post(() => _selected?.View?.BringIntoView());
@@ -873,12 +875,12 @@ internal sealed class ControllerMappingWindow : NotaWindow
         if (!await new ConfirmWindow(Loc.T("controllers.edit.back_to_shipped"), Loc.F("controllers.edit.back_to_shipped_message", _profile.Name),
                 Loc.T("controllers.edit.back_to_shipped_confirm"), Loc.T("common.cancel")).ShowDialog<bool>(this))
             return;
+        StopListening();   // a pair left half-way goes back into the mapping it came from, not the shipped one
         string id = _profile.Id;
         _service.RemoveUserProfile(_profile.FileName);
         if (_service.ProfileById(id) is not { } shipped || _service.ProfileJson(shipped) is not { } json) { _closing = true; Close(); return; }
         _profile = shipped;
         _map = new ProfileMapping(shipped, json);
-        StopListening();
         BuildRows();
         _status.Text = Loc.T("controllers.edit.status_shipped_back");
         Render();

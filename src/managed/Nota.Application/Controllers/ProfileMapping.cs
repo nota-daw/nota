@@ -265,11 +265,27 @@ public sealed class ProfileMapping
         sb.Append(_entries.Count == 0 ? "" : closing).Append(']');
         return Text(0, span.Start) + sb + Text(span.End + 1, _text.Length);
 
+        // The separator between two elements may come after a comment (`a /* note */, b`): drop
+        // the first comma outside comments, keep the comments where they were.
         static string StripComma(string gap)
         {
-            int i = 0;
-            while (i < gap.Length && char.IsWhiteSpace(gap[i])) i++;
-            return i < gap.Length && gap[i] == ',' ? gap[(i + 1)..] : gap;
+            for (int i = 0; i < gap.Length; i++)
+            {
+                if (gap[i] == '/' && i + 1 < gap.Length && gap[i + 1] == '/')
+                {
+                    int nl = gap.IndexOf('\n', i);
+                    if (nl < 0) return gap;
+                    i = nl;
+                }
+                else if (gap[i] == '/' && i + 1 < gap.Length && gap[i + 1] == '*')
+                {
+                    int close = gap.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                    if (close < 0) return gap;
+                    i = close + 1;
+                }
+                else if (gap[i] == ',') return gap.Remove(i, 1);
+            }
+            return gap;
         }
         static string IndentOf(string gap)
         {

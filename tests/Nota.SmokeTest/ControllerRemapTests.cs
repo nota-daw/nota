@@ -178,6 +178,16 @@ internal static class ControllerRemapTests
         yield return (saved.Contains("// hand-written note: the pads stay on channel 10") && saved.Contains("// Stop is the square button")
                       && ProfileLoader.Load(saved, "acme.keys.json", ProfileOrigin.User).Profile!.Controls.Any(c => c.Role.Command == "transport.metronome" && c.Number == 50),
             "remap: comments in the profile survive an edit, and the new entry loads");
+        // A comment before the separator (`entry /* note */, entry`) stays, and the comma isn't doubled.
+        string inline = Profile.Replace("\"channel\": 1, \"number\": 93 },", "\"channel\": 1, \"number\": 93 } /* the square one */,");
+        var (ip, _) = ProfileLoader.Load(inline, "acme.keys.json", ProfileOrigin.Shipped);
+        var im = new ProfileMapping(ip!, inline);
+        im.Assign(Metronome, Cc(51));
+        string isaved = im.ToJson();
+        var (ireload, iwarn) = ProfileLoader.Load(isaved, "acme.keys.json", ProfileOrigin.User);
+        yield return (inline != Profile && isaved.Contains("/* the square one */") && ireload is { Controls.Count: 9 } && iwarn.Count == 0,
+            $"remap: a comment before a separating comma survives an edit and the file still loads{(iwarn.Count > 0 ? " — " + iwarn[0] : "")}");
+
         var snap = Open();
         var before2 = snap.Snapshot();
         snap.Assign(Undo, Note(70));
