@@ -1643,6 +1643,7 @@ public sealed partial class ArrangementView
         {
             public NotaNote[] Notes = Array.Empty<NotaNote>();
             public double Len, MaxNoteLen;
+            public (int lo, int hi)? Pitches; // from every note, so scrolling doesn't rescale the visible ones
             public bool Loop;
             public string Name = "";
             public float[]? Peaks;
@@ -1692,7 +1693,7 @@ public sealed partial class ArrangementView
                         IsMidi = true, Name = slot.Name,
                         Notes = UnrollPassNotes(slot.Notes, slot.Len, slot.Loop, slot.MaxNoteLen, s, visLo, visHi),
                     };
-                    DrawClipBody(ctx, t.ColorIndex, t.Name, c, y, rh, false);
+                    DrawClipBody(ctx, t.ColorIndex, t.Name, c, y, rh, false, pitches: slot.Pitches);
                     continue;
                 }
                 // Audio: one clip per repetition, as the take will write it, each with the slot's
@@ -1721,6 +1722,7 @@ public sealed partial class ArrangementView
                 slot.Notes = eng.GetSessionNotes(s.TrackId, s.Slot);
                 slot.MaxNoteLen = 0;
                 foreach (var nn in slot.Notes) slot.MaxNoteLen = Math.Max(slot.MaxNoteLen, nn.LengthBeats);
+                slot.Pitches = TrackPitchRange(new[] { new ClipVM { ClipIndex = -1, IsMidi = true, LengthBeats = slot.Len, Notes = slot.Notes } });
             }
             else
             {
