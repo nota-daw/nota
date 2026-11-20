@@ -100,12 +100,19 @@ internal static class SessionToArrangementTests
         clk.To(1);
         e.LaunchSlot(a, 0);  // → beat 4
         clk.To(13);
+        // While the take runs the Arrangement draws what has played so far: one open span on a.
+        var live = new NotaPassSpan[8];
+        int nLive = e.SessionPassSpans(live);
+        bool liveOk = nLive == 1 && live[0].TrackId == a && live[0].Slot == 0 && Near(live[0].StartBeat, 4)
+            && live[0].Open == 1 && Near(live[0].EndBeat, clk.Beat, 0.05);
         e.LaunchSlot(b, 0);  // → beat 16
         clk.To(29);
         e.StopSlot(b);       // → beat 32
         clk.To(48);
         e.SetRecording(false);
         e.StopTransport();
+        yield return (liveOk, $"mid-take, the playing slot is reported for drawing ({nLive}: {(nLive > 0 ? $"{live[0].StartBeat}..{live[0].EndBeat:0.##} open {live[0].Open}" : "")})");
+        yield return (e.SessionPassSpans(live) == 0, "after the take nothing is reported");
         var ca = Clips(e, a).Where(x => x.IsMidi).ToList();
         var cb = Clips(e, b).Where(x => x.IsMidi).ToList();
         yield return (ca.Count == 1 && Near(ca[0].StartBeat, 4) && Near(ca[0].LengthBeats, 44),

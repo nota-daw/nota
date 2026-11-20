@@ -29,7 +29,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - Each Session clip that plays during the take lands on its track's Arrangement lane where it
     really played — from the beat it started (after launch quantize) to the beat it stopped —
     whether it was launched by hand, by a scene, by a follow action, from Nota Remote or a
-    controller. A looping slot is repeated for as long as it played: an instrument slot as one
+    controller. While the take runs, the Arrangement already shows them, growing with the
+    playhead. A looping slot is repeated for as long as it played: an instrument slot as one
     clip, an audio slot as one clip per repetition. Legato launches and clips already playing
     when Record starts are written from where they were.
   - Only what was played is replaced: a track's own clips stay before the launch and after the

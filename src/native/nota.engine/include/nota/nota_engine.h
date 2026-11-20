@@ -1070,6 +1070,20 @@ NOTA_API int32_t    nota_engine_retry_take(NotaEngine* engine);
  * records the Session performance alone (#971). Every Arrangement take also writes the Session
  * clips that play during it onto the Arrangement when it stops. */
 NOTA_API int32_t    nota_engine_record_start_status(const NotaEngine* engine);
+/* What the running take has heard of the Session so far (#971): one span per Session clip that
+ * played, in the order they started. A span still playing ends at the playhead (open = 1). The
+ * Arrangement draws them while recording; the clips themselves are written when the take stops.
+ * Fills up to `cap` spans and returns how many there are (0 when no take runs). Message thread. */
+typedef struct NotaPassSpan {
+    int32_t trackId;
+    int32_t slot;      /* the Session slot (scene index) that played */
+    double  startBeat;
+    double  endBeat;
+    double  slotPos;   /* the slot's loop position at startBeat */
+    int32_t open;      /* 1 = still playing */
+    int32_t reserved;
+} NotaPassSpan;
+NOTA_API int32_t    nota_engine_session_pass_spans(const NotaEngine* engine, NotaPassSpan* out, int32_t cap);
 /* Live audio-capture geometry for drawing a growing take: the armed track id
  * (0 when not capturing) and the beat where the current take began. */
 NOTA_API int32_t    nota_engine_audio_record_track(const NotaEngine* engine);

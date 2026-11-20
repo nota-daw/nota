@@ -1247,6 +1247,9 @@ public interface IAudioEngine : IDisposable
     /// 3 ok — a performance-only pass: nothing armed while the Session plays, so the take records the
     /// Session performance into the Arrangement alone (#971).</summary>
     int RecordStartStatus { get; }
+    /// <summary>The Session clips the running take has heard so far (#971), into <paramref name="buf"/>;
+    /// returns how many there are (may exceed the buffer). 0 when no take runs.</summary>
+    int SessionPassSpans(NotaPassSpan[] buf);
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }
     /// <summary>Beat where the in-progress audio take began.</summary>

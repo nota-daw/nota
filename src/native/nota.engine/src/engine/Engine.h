@@ -565,6 +565,8 @@ class Engine {
     void stopSessionRecord();                               // stop recording; the slot keeps playing
     // M5-6: move clips between Session and Arrangement (MIDI, instrument tracks).
     int32_t sessionSlotToArrangement(int32_t trackId, int32_t scene, double startBeat); // -> new clip index or -1
+    // The running take's Session spans so far, for the Arrangement to draw (#971); count, fills up to cap.
+    int32_t sessionPassSpans(NotaPassSpan* out, int32_t cap) const;
     bool arrangementClipToSession(int32_t trackId, int32_t clipIndex, int32_t scene);
     bool arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, int32_t scene); // audio clip -> session slot
     int32_t sceneCount() const;

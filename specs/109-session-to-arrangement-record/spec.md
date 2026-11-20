@@ -303,8 +303,10 @@ from bar 1 changes tempo at bar 5.
 - **FR-012**: With loop on, each loop pass MUST replace what the previous loop pass wrote on
   the tracks it plays.
 - **FR-013**: A launch cancelled before its boundary MUST write nothing.
-- **FR-014**: Written clips MUST appear on the Arrangement when the pass ends, named after
-  their slots. Showing them grow while the pass runs is out of scope for this change.
+- **FR-014**: While the pass runs, the Arrangement MUST show each Session clip heard so far
+  where it will be written — the slot's name, colour and notes, growing with the playhead, over
+  the clips it replaces. The clips themselves are written when the pass ends (undo and retry are
+  unchanged). (Review of #972: "while recording, the Arrangement shows nothing".)
 - **FR-015**: Record with nothing armed MUST start a performance-only pass (Session clips
   and automation written, no input recorded, nothing auto-armed) while a Session clip is
   playing or queued; with no Session clip playing or queued it MUST auto-arm the record

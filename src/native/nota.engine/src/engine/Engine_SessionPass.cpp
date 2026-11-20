@@ -23,6 +23,27 @@ bool Engine::sessionPlayingOrQueued() const {
     return false;
 }
 
+int32_t Engine::sessionPassSpans(NotaPassSpan* out, int32_t cap) const {
+    if (!sessionPass_.active) return 0;
+    const double now = transport_.uiPositionBeats();
+    int32_t n = 0;
+    for (const auto& s : sessionPass_.spans) {
+        if (out && n < cap) {
+            NotaPassSpan& o = out[n];
+            o.trackId = s.trackId;
+            o.slot = s.slot;
+            o.startBeat = s.start;
+            // A loop wrap not drained yet can put the playhead before the span: hold it at its start.
+            o.endBeat = s.open() ? std::max(s.start, now) : s.end;
+            o.slotPos = s.slotPos;
+            o.open = s.open() ? 1 : 0;
+            o.reserved = 0;
+        }
+        ++n;
+    }
+    return n;
+}
+
 void Engine::beginSessionPass(bool performanceOnly) {
     LaunchEvent e;
     while (launchEvents_.pop(e)) {} // an earlier pass's late reports

@@ -701,8 +701,9 @@ own window — see
 - **Session performance into the Arrangement**: every Arrangement take also writes the Session
   clips that play during it onto their tracks, from the beat each really started (after launch
   quantize) to the beat it stopped — launched by hand, a scene, a follow action, Nota Remote or a
-  controller. A looping slot repeats for as long as it played (an instrument slot as one clip,
-  an audio slot as one clip per repetition); only the played spans replace a track's clips.
+  controller — and shows them on the Arrangement as they grow. A looping slot repeats for as
+  long as it played (an instrument slot as one clip, an audio slot as one clip per repetition);
+  only the played spans replace a track's clips.
   Notes played on an armed instrument track over its slot join that clip; a scene tempo goes to
   the master Tempo lane when the project has none. The take is one undo step, and ⌘. drops it.
   Record with nothing armed while a Session clip plays records the performance alone.

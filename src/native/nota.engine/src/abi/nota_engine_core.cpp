@@ -331,6 +331,9 @@ int32_t nota_engine_is_recording(const NotaEngine* e) {
 int32_t nota_engine_retry_take(NotaEngine* e) {
     return e ? ENG(e)->retryTake() : 0;
 }
+int32_t nota_engine_session_pass_spans(const NotaEngine* e, NotaPassSpan* out, int32_t cap) {
+    return e ? CENG(e)->sessionPassSpans(out, cap) : 0;
+}
 int32_t nota_engine_record_start_status(const NotaEngine* e) {
     return e ? CENG(e)->recordStartStatus() : 0;
 }

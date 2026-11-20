@@ -139,6 +139,10 @@ description: "Tasks: Record a Session Performance into the Arrangement (#971)"
 - [X] T048 [P] RU string for `transport.recording_session_performance` in the translations repo (as for earlier features) *(../nota-translations-971, stacked on ru/session-grid-orientation-968)*
 - [ ] T049 Perf: run the perf instruction gate locally if the render-loop change is visible (memory: nota-perf-gate-local). The event push must stay behind the `rtPassActive_` branch *(open)*
 
+### Review follow-up (#972)
+
+- [X] T056 Show the pass while it records (FR-014): `nota_engine_session_pass_spans` (open spans end at the playhead) → `IAudioEngine.SessionPassSpans`; `ArrangementView.LaneControl.DrawPassSpans` draws each span as the clip it will write (slot name, colour, notes unrolled) on a lane-coloured base. Smoke: the mid-take readout in `TwoTracks`; headless shot in /private/tmp/n971harness
+
 ### Nota closing tasks
 
 - [X] T050 Run `scripts/build.sh` until native + managed + smoke test are green

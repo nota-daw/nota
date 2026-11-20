@@ -1321,6 +1321,10 @@ public sealed partial class ArrangementView
                     }
             }
 
+            // The Session performance the take records (#971): its clips are written when the take
+            // stops, so draw what has played so far, growing with the playhead, over what it replaces.
+            if (_o._engine is { } pe) DrawPassSpans(ctx, pe, rLo, rHi, w);
+
             // Automation overlay (M9-A3): scrim + envelope + target pill per row.
             if (_o._automationMode) _auto.DrawAutomation(ctx, w);
 
@@ -1630,6 +1634,69 @@ public sealed partial class ArrangementView
                 var (fill, border, _, _) = ClipColors(m.ColorIndex);
                 ctx.DrawRectangle(fill, border, new Rect(x0, y + padTop, Math.Max(2, x1 - x0), innerH), NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
             }
+        }
+
+        private readonly NotaPassSpan[] _passSpans = new NotaPassSpan[256];
+        // The slots a running take has played, read once per take: notes, loop length, loop, name.
+        private readonly Dictionary<(int track, int slot), (NotaNote[] notes, double len, bool loop, string name)> _passSlots = new();
+
+        // #971: each Session clip the running take has heard, drawn as the clip it will write — the
+        // slot's name, colour and notes repeated over the span — on a lane-coloured base, so the
+        // Arrangement clips it replaces don't show through. Nothing here is in the project yet.
+        private void DrawPassSpans(DrawingContext ctx, IAudioEngine eng, int rLo, int rHi, double w)
+        {
+            int n = eng.IsRecording ? Math.Min(eng.SessionPassSpans(_passSpans), _passSpans.Length) : 0;
+            if (n == 0) { _passSlots.Clear(); return; }
+            for (int k = 0; k < n; k++)
+            {
+                var s = _passSpans[k];
+                if (s.EndBeat <= s.StartBeat) continue;
+                int row = -1;
+                for (int i = rLo; i <= rHi; i++)
+                    if (_o._tracks[i].Id == s.TrackId) { row = i; break; }
+                if (row < 0) continue;
+                var t = _o._tracks[row];
+                if (!_passSlots.TryGetValue((s.TrackId, s.Slot), out var slot))
+                {
+                    double len = eng.SessionSlotLength(s.TrackId, s.Slot);
+                    bool loop = !eng.TryGetSessionClipProps(s.TrackId, s.Slot, out var props) || props.Loop != 0;
+                    slot = (t.IsInstrument ? eng.GetSessionNotes(s.TrackId, s.Slot) : Array.Empty<NotaNote>(),
+                        len > 0 ? len : 4.0, loop, eng.GetSessionClipName(s.TrackId, s.Slot));
+                    _passSlots[(s.TrackId, s.Slot)] = slot;
+                }
+                var c = new ClipVM
+                {
+                    ClipIndex = -1, StartBeat = s.StartBeat, LengthBeats = s.EndBeat - s.StartBeat,
+                    IsMidi = t.IsInstrument, Name = slot.name,
+                    Notes = t.IsInstrument ? UnrollPassNotes(slot.notes, slot.len, slot.loop, s) : null,
+                };
+                var (x0, x1) = _o.ClipScreenEdges(c);
+                if (x1 < 0 || x0 > w) continue;
+                double y = RowTop(row), rh = RowH(row);
+                ctx.FillRectangle(_o.IsSlimRowAt(row) ? GroupLaneBg : (row & 1) == 0 ? LaneBgA : LaneBgB,
+                    new Rect(x0, y + 1, Math.Max(1, x1 - x0), Math.Max(0, rh - 2)));
+                DrawClipBody(ctx, t.ColorIndex, t.Name, c, y, rh, false);
+            }
+        }
+
+        // The slot's notes as they sounded over the span (clip-relative): repeated every loop length
+        // from the slot position at the span start, only those already started, cut at the span end
+        // — the engine writes the same (unrollSlotMidi).
+        private static NotaNote[] UnrollPassNotes(NotaNote[] notes, double len, bool loop, in NotaPassSpan s)
+        {
+            if (notes.Length == 0 || len <= 0) return notes;
+            var outp = new List<NotaNote>();
+            double origin = s.StartBeat - s.SlotPos, span = s.EndBeat - s.StartBeat;
+            long k0 = (long)Math.Floor(s.SlotPos / len + 1e-9), k1 = loop ? long.MaxValue : 0;
+            for (long k = loop ? k0 : 0; k <= k1 && origin + k * len < s.EndBeat - 1e-9; k++)
+                foreach (var n in notes)
+                {
+                    if (n.StartBeat < 0 || n.StartBeat >= len) continue;
+                    double on = origin + k * len + n.StartBeat - s.StartBeat;
+                    if (on < -1e-9 || on >= span - 1e-9) continue;
+                    outp.Add(n with { StartBeat = Math.Max(0, on), LengthBeats = Math.Min(n.LengthBeats, span - Math.Max(0, on)) });
+                }
+            return outp.ToArray();
         }
 
         private void DrawClipBody(DrawingContext ctx, int colorIndex, string label, ClipVM c, double y,

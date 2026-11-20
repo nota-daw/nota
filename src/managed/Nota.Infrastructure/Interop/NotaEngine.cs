@@ -187,6 +187,7 @@ public sealed partial class NotaEngine : IAudioEngine
     public int RecordStartStatus { get { ThrowIfDisposed(); return NativeMethods.RecordStartStatus(_handle); } }
     /// <summary>Device-free self-test of Session-performance recording (#971): spans and MIDI unroll; 0 = pass.</summary>
     public int SessionPassSelfTest() { ThrowIfDisposed(); return NativeMethods.SessionPassSelfTest(_handle); }
+    public int SessionPassSpans(NotaPassSpan[] buf) { ThrowIfDisposed(); return NativeMethods.SessionPassSpans(_handle, buf, buf.Length); }
     /// <summary>Track id of the in-progress audio take (0 when not capturing), for drawing a growing clip.</summary>
     public int AudioRecordTrackId { get { ThrowIfDisposed(); return NativeMethods.AudioRecordTrack(_handle); } }
     /// <summary>Beat where the in-progress audio take began.</summary>
