@@ -91,19 +91,23 @@ public sealed partial class PreferencesWindow
                 }
                 combo.SelectionChanged += (_, _) => Apply();
                 sw.Changed += _ => Apply();
-                // Learn it (FR-030): a controller Nota doesn't know, or again to redo your own profile
-                // or replace a shipped one (yours wins). A Mackie / HUI surface speaks its protocol.
-                bool yours = c.Profile?.Origin == Application.Controllers.ProfileOrigin.User;
-                var setup = Btn(yours ? Loc.T("preferences.controllers.set_up_again") : Loc.T("preferences.controllers.set_up"));
-                setup.IsVisible = c.Profile is null or { Protocol: Application.Controllers.ControllerProtocol.Generic };
-                ToolTip.SetTip(setup, c.Profile is null ? Loc.T("preferences.controllers.set_up_tip")
-                    : yours ? Loc.T("preferences.controllers.set_up_again_tip") : Loc.T("preferences.controllers.set_up_replace_tip"));
+                // Learn it (FR-030): a controller Nota doesn't know gets the step-by-step wizard; one
+                // with a profile — shipped or the user's — opens the mapping editor on it (specs/110),
+                // which can still walk everything again. A Mackie / HUI surface speaks its protocol.
+                bool editable = c.Profile is { Protocol: Application.Controllers.ControllerProtocol.Generic };
+                var setup = Btn(editable ? Loc.T("preferences.controllers.edit_mapping") : Loc.T("preferences.controllers.set_up"));
+                setup.IsVisible = c.Profile is null || editable;
+                ToolTip.SetTip(setup, editable ? Loc.T("preferences.controllers.edit_mapping_tip") : Loc.T("preferences.controllers.set_up_tip"));
                 setup.VerticalAlignment = VerticalAlignment.Center;
                 setup.Click += async (_, _) =>
                 {
-                    await new ControllerSetupWindow(service, c).ShowDialog(this);
+                    // The editor works on the profile's file; one that vanished from disk is learned anew.
+                    if (c.Profile is { Protocol: Application.Controllers.ControllerProtocol.Generic } p && service.ProfileJson(p) is not null)
+                        await new ControllerMappingWindow(service, c).ShowDialog(this);
+                    else
+                        await new ControllerSetupWindow(service, c).ShowDialog(this);
                     FillWarnings();
-                    Dispatcher.UIThread.Post(() => Select(_selected));   // the row now shows the new profile and "Set up again…"
+                    Dispatcher.UIThread.Post(() => Select(_selected));   // the row now shows the new profile and "Edit mapping…"
                 };
                 rows.Add(ListRow(40, "Auto,*,Auto,Auto,Auto,Auto", dot, name, setup, combo, pickupBox, sw));
             }

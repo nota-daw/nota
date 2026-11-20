@@ -519,7 +519,7 @@ public partial class MainWindow : Window
             GetTempo = () => ((double)vm.Transport.Bpm, vm.Transport.TimeSigNumerator, vm.Transport.TimeSigDenominator),
             RecordPreview = _recordPreview,
         };
-        _session.SlotEditRequested += OpenSessionClipEditor;
+        _session.SlotEditRequested += (t, s) => OpenSessionClipEditor(t, s);
         _session.ShowInModularRequested += id => ShowInModular(id);   // specs/095
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
         HookSessionDeviceMoves(_session);                             // a device card dropped on a column (specs/043)

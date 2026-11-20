@@ -23,6 +23,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Controllers: remap one function without redoing the setup** (#973, specs/110).
+  - Preferences → MIDI → a controller with a profile → **Edit mapping…** opens on its current
+    mapping: every function grouped as in the setup wizard (knobs, faders, transport, track /
+    bank / page, Session, extras) with the control it is on, or "—". Click a function (or
+    Enter), press or move a control — learned as the wizard does (note / CC / 14-bit / NRPN,
+    encoder type, one encoder or two buttons for a pair) — and Finish; nothing else changes.
+  - A control that already does something else is named in the row; **Move here** takes it
+    over, Cancel leaves both. A function can be cleared (×) or put back (↺).
+  - **+ Command…** in Extras puts any command from the command palette on a spare button.
+  - Moving a control while nothing listens highlights the function it does; *Unassigned only*
+    shows the gaps and goes on to the next one after each learn. ↑ / ↓, Enter, Delete, Esc,
+    Cmd/Ctrl+Enter work in the window.
+  - Editing a shipped profile saves your own copy in the controllers folder that replaces it,
+    keeping its init messages and LED feedback; **Back to shipped profile** removes the copy.
+  - **Learn everything again** runs the step-by-step wizard with each step already on the
+    current control — Keep (Enter) keeps it, a new control replaces it.
 - **Recording: the Session performance goes into the Arrangement** (#971, specs/109). Every
   Arrangement take now also records what you play in the Session, as Arrangement Record does in
   other DAWs.

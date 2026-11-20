@@ -825,6 +825,14 @@ if (args.Length >= 1 && args[0] == "--sidechain-parts")
     Console.WriteLine(failures == 0 ? "SIDECHAIN PARTS PASSED" : $"SIDECHAIN PARTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Controller mapping editor alone: `--controller-remap` (specs/110). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-remap")
+{
+    Console.WriteLine("-- controller remap --");
+    foreach (var (ok, label) in ControllerRemapTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER REMAP PASSED" : $"CONTROLLER REMAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Controller auto-mapping alone: `--controllers` (specs/051). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--controllers")
 {
@@ -16414,6 +16422,7 @@ foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- controllers --");
 foreach (var (ok, label) in ControllerTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ControllerRemapTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
