@@ -1696,6 +1696,14 @@ void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns
     audioOverwriteRange(clips, ns, ne, spb, transport_.sampleRate(), tempoMap());
 }
 
+void Engine::overwriteMidiClipsInRange(std::vector<MidiClip>& clips, double ns, double ne) {
+    midiOverwriteRange(clips, ns, ne);
+}
+
+AudioClip Engine::sliceAudioClip(const AudioClip& c, double ns, double ne) const {
+    return audioSlice(c, ns, ne, authoringSamplesPerBeat(), transport_.sampleRate(), tempoMap());
+}
+
 int32_t Engine::pasteAudioFrames(
     int32_t trackId, const float* interleaved, int64_t frames, double startBeat, const std::string& name) {
     if (!interleaved || frames <= 0) return -1;

@@ -295,6 +295,20 @@ public enum SessionFollowAction { None = 0, Stop, Again, Previous, Next, First, 
 /// Color is a track-palette index (-1 = the track's colour); QuantBeats &lt; 0 = global;
 /// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass. FollowBypass 1 holds
 /// the clip's follow actions without changing them (#499).</summary>
+/// <summary>One Session clip the running take has heard so far (#971): what the Arrangement draws
+/// while recording, before the clips are written at stop. Matches native NotaPassSpan.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaPassSpan
+{
+    public int TrackId;
+    public int Slot;
+    public double StartBeat;
+    public double EndBeat;
+    public double SlotPos;
+    public int Open;
+    public int Warped;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionClipProps
 {

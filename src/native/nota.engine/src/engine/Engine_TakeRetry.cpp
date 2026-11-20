@@ -119,6 +119,7 @@ void Engine::discardTake() {
     finishAllWrites();
     recording_.store(false, std::memory_order_relaxed);
     abortAudioRecording();
+    abandonSessionPass(); // #971: nothing of the performance is written; a retry starts a new pass
     {
         RecordedNote n;
         while (recorded_.pop(n)) {}
