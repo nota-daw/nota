@@ -1073,7 +1073,8 @@ NOTA_API int32_t    nota_engine_record_start_status(const NotaEngine* engine);
 /* What the running take has heard of the Session so far (#971): one span per Session clip that
  * played, in the order they started. A span still playing ends at the playhead (open = 1). The
  * Arrangement draws them while recording; the clips themselves are written when the take stops.
- * Fills up to `cap` spans and returns how many there are (0 when no take runs). Message thread. */
+ * An armed audio track's spans are left out (its input take wins there). Fills up to `cap`
+ * spans and returns how many there are (0 when no take runs). Message thread. */
 typedef struct NotaPassSpan {
     int32_t trackId;
     int32_t slot;      /* the Session slot (scene index) that played */
@@ -1081,7 +1082,7 @@ typedef struct NotaPassSpan {
     double  endBeat;
     double  slotPos;   /* the slot's loop position at startBeat */
     int32_t open;      /* 1 = still playing */
-    int32_t reserved;
+    int32_t warped;    /* 1 = an audio slot that is warped (its waveform follows the tempo map) */
 } NotaPassSpan;
 NOTA_API int32_t    nota_engine_session_pass_spans(const NotaEngine* engine, NotaPassSpan* out, int32_t cap);
 /* Live audio-capture geometry for drawing a growing take: the armed track id

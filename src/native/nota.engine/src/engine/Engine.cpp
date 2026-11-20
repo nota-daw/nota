@@ -1040,8 +1040,10 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
 }
 
-void Engine::pushUndo() {
-    if (!authoring_) return;
+void Engine::pushUndo() { pushUndo(authoring_); }
+
+void Engine::pushUndo(std::shared_ptr<Graph> snapshot) {
+    if (!authoring_ || !snapshot) return;
     // Inside an undo group only the first snapshot counts (endUndoGroup keeps the pre-group
     // graph), so later ones aren't stacked: a gesture of many edits (a kit filling a Drum
     // Rack's pads) would otherwise push the older history off the depth limit.
@@ -1055,12 +1057,13 @@ void Engine::pushUndo() {
     }
     // authoring_ is immutable after publish. A take's own checkpoint is marked so a retry can
     // take it out without touching the user's edits made meanwhile (specs/078).
-    undoStack_.push_back({authoring_, {}, takePushing_ && takeAttempt_.active});
+    undoStack_.push_back({std::move(snapshot), {}, takePushing_ && takeAttempt_.active});
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_; // keep the group's anchor
         if (takeAttempt_.active && takeAttempt_.undoBase > 0) --takeAttempt_.undoBase; // specs/078
+        if (sessionPass_.active && passUndoBase_ > 0) --passUndoBase_;                 // #971: the pass's anchor
     }
     redoStack_.clear(); // a new edit invalidates the redo branch
 }

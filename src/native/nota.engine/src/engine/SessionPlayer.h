@@ -70,8 +70,12 @@ class SessionPlayer {
     // Where the last applied request took effect on the timeline (#971): the quantum boundary inside
     // the block for a quantized request, else the block start. applyCount counts applied requests;
     // a running take reports the ones it has not seen yet (reportedCount) after each render segment.
-    double appliedBeat = 0.0;
+    // appliedPos is the slot position there (0, or the Legato carry), saved at the apply because a
+    // monitored or frozen track does not run its slot clock. reportedPlaying is the slot the take
+    // last reported, so a one-shot that runs out (no request applied) is reported too.
+    double appliedBeat = 0.0, appliedPos = 0.0;
     uint32_t applyCount = 0, reportedCount = 0;
+    int32_t reportedPlaying = -1;
     ArticulationReleaseState articulationReleases; // pending latching keys, timed by rendered frames
     float gain = 1.0f;       // launch-velocity gain of the playing slot
     // Follow bypass (#499): the follow check counts playedBeats - followBase. followHeld is set

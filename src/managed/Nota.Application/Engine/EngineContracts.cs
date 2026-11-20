@@ -306,7 +306,7 @@ public struct NotaPassSpan
     public double EndBeat;
     public double SlotPos;
     public int Open;
-    public int Reserved;
+    public int Warped;
 }
 
 [StructLayout(LayoutKind.Sequential)]

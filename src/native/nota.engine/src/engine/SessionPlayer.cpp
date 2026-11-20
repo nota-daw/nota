@@ -62,6 +62,7 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
             pendingLegato.load(std::memory_order_relaxed) && playing.load(std::memory_order_relaxed) >= 0;
         playing.store(p, std::memory_order_relaxed);
         if (!legato) localBeats = 0.0;
+        appliedPos = localBeats;
         gain = pendingGain.load(std::memory_order_relaxed);
         resetFollowCount();
     }

@@ -34,6 +34,13 @@ internal static class SessionToArrangementTests
         foreach (var r in LoopPass()) yield return r;
         foreach (var r in StopEndsSession()) yield return r;
         foreach (var r in ShortAndMuted()) yield return r;
+        foreach (var r in OneShotEnds()) yield return r;
+        foreach (var r in HeldNoteAtRecord()) yield return r;
+        foreach (var r in DisarmKeepsTake()) yield return r;
+        foreach (var r in TakeControllers()) yield return r;
+        foreach (var r in TransportStopWrites()) yield return r;
+        foreach (var r in FullUndoHistory(0)) yield return r;
+        foreach (var r in FullUndoHistory(140)) yield return r;
     }
 
     // A clock that renders to absolute beats from where the transport was started.
@@ -466,5 +473,135 @@ internal static class SessionToArrangementTests
         yield return (ca.Count == 1 && Near(ca[0].StartBeat, on, 0.02) && Near(ca[0].LengthBeats, off - on, 0.02),
             $"a half-beat play is written at its length ({string.Join(",", ca.Select(x => $"{x.StartBeat:0.###}+{x.LengthBeats:0.###}"))})");
         yield return (Clips(e, b).Count(x => x.IsMidi) == 1, "a muted track's slot is written too");
+    }
+
+    // Review (#972): a one-shot that runs out ends its span there; the Arrangement after it stays.
+    private static IEnumerable<(bool, string)> OneShotEnds()
+    {
+        using var e = Project(out int a, out int b, out int c);
+        int ma = e.AddMidiClip(a, 0, 32);
+        e.SetClipNotes(a, ma, Enumerable.Range(0, 32).Select(i => new NotaNote(72, i, 0.5, 0.7f)).ToArray());
+        e.TryGetSessionClipProps(a, 0, out var p);
+        p.Loop = 0;
+        e.SetSessionClipProps(a, 0, p);
+        e.SetTrackArmed(c, true);
+        var clk = new Clock(e);
+        e.SetRecording(true);
+        clk.To(1);
+        e.LaunchSlot(a, 0); // → 4, an 8-beat one-shot: ends at 12
+        clk.To(24);
+        e.SetRecording(false);
+        e.StopTransport();
+        var ca = Clips(e, a).Where(x => x.IsMidi).OrderBy(x => x.StartBeat).ToList();
+        var written = ca.FirstOrDefault(x => Near(x.StartBeat, 4));
+        bool keptAfter = ca.Any(x => x.StartBeat >= 12 - 0.02 && Near(x.StartBeat + x.LengthBeats, 32));
+        yield return (Near(written.LengthBeats, 8, 0.02) && keptAfter,
+            $"a one-shot is written where it played (4-12) and the clip after it stays ({string.Join(",", ca.Select(x => $"{x.StartBeat:0.###}+{x.LengthBeats:0.###}"))})");
+    }
+
+    // Review (#972): a slot note still sounding when Record is pressed keeps its remaining part.
+    private static IEnumerable<(bool, string)> HeldNoteAtRecord()
+    {
+        using var e = Project(out int a, out int b, out int c);
+        e.SetSessionNotes(a, 0, new[] { new NotaNote(55, 0.0, 6.0, 0.8f) });
+        e.Play();
+        var clk = new Clock(e);
+        e.LaunchSlot(a, 0); // plays from 0
+        clk.To(2);
+        double recAt = clk.Beat;
+        e.SetRecording(true); // nothing armed: a performance-only pass
+        clk.To(13);
+        e.StopSlot(a); // → 16
+        clk.To(17);
+        e.SetRecording(false);
+        e.StopTransport();
+        var notes = Clips(e, a).Count == 1 ? e.GetClipNotes(a, 0) : Array.Empty<NotaNote>();
+        var held = notes.FirstOrDefault(n => n.Pitch == 55 && Near(n.StartBeat, 0));
+        yield return (held.Pitch == 55 && Near(held.LengthBeats, 6 - recAt, 0.02) && notes.Count(n => n.Pitch == 55) == 2,
+            $"the held note is written from the take start for its remaining length ({string.Join(",", notes.Select(n => $"{n.Pitch}@{n.StartBeat:0.###}+{n.LengthBeats:0.###}"))})");
+    }
+
+    // Review (#972): disarming a track mid-pass keeps its played notes in the written clip.
+    private static IEnumerable<(bool, string)> DisarmKeepsTake()
+    {
+        using var e = Project(out int a, out int b, out int c);
+        e.SetTrackArmed(a, true);
+        e.SetTrackArmed(c, true);
+        var clk = new Clock(e);
+        e.SetRecording(true);
+        clk.To(1);
+        e.LaunchSlot(a, 0); // → 4
+        clk.To(6);
+        e.NoteOn(72, 0.8f); clk.To(6.5); e.NoteOff(72);
+        clk.To(8);
+        e.SetTrackArmed(a, false);
+        clk.To(12);
+        e.SetRecording(false);
+        e.StopTransport();
+        var all = new List<int>();
+        for (int k = 0; e.TryGetClipInfo(a, k, out var ci); k++)
+            if (ci.IsMidi) all.AddRange(e.GetClipNotes(a, k).Select(n => n.Pitch));
+        yield return (all.Contains(72) && all.Contains(48), $"a note played before the disarm stays ({string.Join(",", all)})");
+    }
+
+    // Review (#972): an armed track's controller moves over a span join the written clip.
+    private static IEnumerable<(bool, string)> TakeControllers()
+    {
+        using var e = Project(out int a, out int b, out int c);
+        e.SetTrackArmed(a, true);
+        var clk = new Clock(e);
+        e.SetRecording(true);
+        clk.To(1);
+        e.LaunchSlot(a, 0); // → 4
+        clk.To(6);
+        for (int k = 0; k <= 10; k++) { e.SendController(MidiController.ModWheel, k / 10f); clk.To(6 + 0.2 * (k + 1)); }
+        clk.To(12);
+        e.SetRecording(false);
+        e.StopTransport();
+        int span = -1;
+        for (int k = 0; e.TryGetClipInfo(a, k, out var ci); k++)
+            if (ci.IsMidi && Near(ci.StartBeat, 4)) span = k;
+        var mod = span >= 0 ? e.GetMidiClipController(a, span, MidiController.ModWheel) : Array.Empty<AutomationPoint>();
+        yield return (mod.Length >= 2 && mod.Max(x => x.Value) > 0.9f,
+            $"the mod-wheel moves are in the written clip ({mod.Length} points, max {(mod.Length > 0 ? mod.Max(x => x.Value) : 0):0.##})");
+    }
+
+    // Review (#972): a plain transport Stop (MCP, API) ends a performance-only pass and writes it.
+    private static IEnumerable<(bool, string)> TransportStopWrites()
+    {
+        using var e = Project(out int a, out int b, out int c);
+        e.Play();
+        var clk = new Clock(e);
+        e.LaunchSlot(a, 0);
+        clk.To(4);
+        e.SetRecording(true);
+        clk.To(10);
+        e.StopTransport();
+        e.RenderOffline(new float[Chunk * 2], Chunk, Sr);
+        e.Poll();
+        yield return (!e.IsRecording && Clips(e, a).Count(x => x.IsMidi) == 1,
+            $"Stop writes the performance and ends the take (recording {e.IsRecording}, clips {Clips(e, a).Count})");
+    }
+
+    // Review (#972): with the undo history full, the pass is still one step.
+    private static IEnumerable<(bool, string)> FullUndoHistory(int edits)
+    {
+        using var e = Project(out int a, out int b, out int c);
+        int mc = e.AddMidiClip(c, 0, 4);
+        for (int i = 0; i < edits; i++) e.SetClipNotes(c, mc, new[] { new NotaNote(60 + i % 12, 0, 0.5, 0.7f) });
+        e.SetTrackArmed(c, true);
+        var clk = new Clock(e);
+        e.SetRecording(true);
+        clk.To(2);
+        e.NoteOn(66, 0.8f); clk.To(2.5); e.NoteOff(66);
+        e.LaunchSlot(a, 0); // → 4
+        clk.To(10);
+        e.SetRecording(false);
+        e.StopTransport();
+        int cAfter = Clips(e, c).Count;
+        e.Undo();
+        bool takeGone = !Enumerable.Range(0, Clips(e, c).Count).Any(k => e.GetClipNotes(c, k).Any(n => n.Pitch == 66));
+        yield return (Clips(e, a).Count == 0 && takeGone,
+            $"{edits} edits before: one Undo takes the written clips and the take together (a {Clips(e, a).Count}, c {cAfter}→{Clips(e, c).Count}, take gone {takeGone})");
     }
 }

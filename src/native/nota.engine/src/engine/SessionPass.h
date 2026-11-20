@@ -49,6 +49,7 @@ class SessionPass {
     double tempoBefore = 0.0;
     std::vector<std::pair<double, double>> tempoSteps; // (beat, bpm): scene tempos applied in the pass
     int32_t dropped = 0;                                // reports lost to a full ring
+    bool stopped = false;                               // the transport stopped under the pass
     // Spans in the order they started: applied in that order, so a later loop pass replaces an
     // earlier one over the same range.
     std::vector<PlayedSpan> spans;
@@ -67,7 +68,9 @@ class SessionPass {
 // position at the span start, cut to the span (a one-shot slot plays its content once). Notes start
 // inside each repetition exactly as the Session player starts them, keep their length across a
 // repetition seam (the player does) and are cut at the span end (the stop flushed them); launch
-// gain scales their velocity. Controllers and clip envelopes repeat with the content.
+// gain scales their velocity; a note still sounding at the span start keeps its remaining part
+// (its expression re-based, stored by the writer: exprId 0). Controllers repeat with the content;
+// the clip envelopes do not (Session playback ignores them).
 MidiClip unrollSlotMidi(const MidiClip& slot, double L, bool loop, const PlayedSpan& span);
 
 // The start beats of each repetition of a slot of length `L` that overlaps the span (an audio slot

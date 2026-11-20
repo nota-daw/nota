@@ -1735,6 +1735,7 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    void pushUndo(std::shared_ptr<Graph> snapshot); // the same with a given (earlier) graph
     // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
     // set `sections`, and publish it as one undo step.
     void remapTimeline(double lo, double hi, const std::vector<TimeRegion>& regions, std::vector<Section> sections);
@@ -1835,10 +1836,13 @@ class Engine {
     std::atomic<uint32_t> passSerial_{0};
     std::atomic<int32_t> passDropped_{0};
     uint32_t rtPassSerial_ = 0; // audio thread
+    double rtPassEndBeat_ = 0.0; // audio thread: where the last reported segment ended (a Stop ends the spans there)
     uint32_t passSerialNext_ = 0;
     SessionPass sessionPass_;                       // message thread
     std::vector<std::shared_ptr<Track>> passBase_;  // the tracks when the pass began (take notes)
     size_t passUndoBase_ = 0;                       // undoStack_ size when the pass began
+    std::shared_ptr<Graph> passGraph_;              // authoring_ when the pass began (its undo state)
+    std::vector<int32_t> passArmed_;                // tracks armed when the pass began (their input records)
     mutable std::mutex exprMx_; // the expression store
     std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
     int32_t nextExprId_ = 1;
@@ -1979,6 +1983,7 @@ class Engine {
     void pushPassEvent(const LaunchEvent& e) { // audio thread
         if (!launchEvents_.push(e)) passDropped_.fetch_add(1, std::memory_order_relaxed);
     }
+    bool passRecordsInput(const Track& t) const; // #971: a track whose input the pass's take records
     void writePassTrack(int32_t trackId, const std::vector<const PlayedSpan*>& spans);
     void reportPassEvents(Graph* g, double segBeat, double segBeats); // audio thread, after a segment
     void writePassTempo();

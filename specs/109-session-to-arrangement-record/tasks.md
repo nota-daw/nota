@@ -144,6 +144,7 @@ description: "Tasks: Record a Session Performance into the Arrangement (#971)"
 - [X] T056 Show the pass while it records (FR-014): `nota_engine_session_pass_spans` (open spans end at the playhead) → `IAudioEngine.SessionPassSpans`; `ArrangementView.LaneControl.DrawPassSpans` draws each span as the clip it will write (slot name, colour, notes unrolled) on a lane-coloured base. Smoke: the mid-take readout in `TwoTracks`; headless shot in /private/tmp/n971harness
 
 - [X] T057 Audio spans while recording show the slot's waveform, one piece per repetition (`PassAudioPieces`, slot peaks via `GetSessionSlotPeaks`); smoke `WarpedAudioSlot` covers a warped slot written and rendered like the performance
+- [X] T058 Review fixes (PR #972): one-shot end reported, held notes kept, controller ramps and take controllers, envelopes not copied, disarm keeps the take, undo anchor with a full history and the pre-pass checkpoint, transport Stop ends the pass, launch position saved at apply; live view reads every span, builds only visible repetitions, refreshes slot data, skips armed audio spans, draws warped slots warped. Smoke: `OneShotEnds`, `HeldNoteAtRecord`, `DisarmKeepsTake`, `TakeControllers`, `TransportStopWrites`, `FullUndoHistory`; self-test checks 13–18
 
 ### Nota closing tasks
 

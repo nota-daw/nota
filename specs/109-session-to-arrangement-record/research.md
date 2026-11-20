@@ -41,8 +41,11 @@ its loop. Arrangement `MidiClip` has `startBeat` + `lengthBeats` and notes relat
 
 - **Instrument slot** → one `MidiClip` from `a` to `b`. Its notes, controller curves,
   articulations and per-note expression are the slot's, unrolled: repetition *k* adds the
-  content shifted by `k·L − p`, cut to `[0, b − a)`. A note crossing a repetition seam or the
-  span end is cut there, as the slot playback cuts it.
+  content shifted by `k·L − p`, cut to `[0, b − a)`. A note keeps its length across a repetition
+  seam (the player lets it ring) and is cut at the span end; a note still sounding at the span
+  start keeps its remaining part, its expression re-based. Each repetition's controller curve
+  keeps its end value and steps back to its start value at the next repetition. The slot's
+  velocity and volume envelopes are not copied: Session playback does not apply them (review).
 - **Audio slot** → one `AudioClip` per repetition, back to back: the slot's clip placed at
   `a − p + k·L`, then `audioSlice`d to `[a, b)`. This reuses the tested warp/offset slicing and
   sounds exactly like the loop.
@@ -73,8 +76,10 @@ opens one there (`startArrangementTake`); notes arrive through `recorded_` and a
 that clip in `poll()` (`foldMidiLane`); `takeNotes_` keeps the take's notes for loop replace.
 
 **Decision**: The take records as today. At the end of the pass, before the span replace, the
-notes (and controller points) the take recorded inside a span are lifted out of the take clip
-and merged into that span's written clip at the same timeline beats. Notes outside the spans
+notes and controller points the take recorded inside a span are lifted out of the take clip
+and merged into that span's written clip at the same timeline beats (a moved controller follows
+the take from its first move on). A track counts as recording if it was armed when the pass
+began or is armed at its end, so disarming mid-pass keeps its notes. Notes outside the spans
 stay in the take clip. Notes that existed before the pass are not take notes and are replaced
 with the rest of the span (FR-004).
 
