@@ -49,6 +49,7 @@ public sealed class RemoteClient
     internal string? SentTheme;
     internal string? SentProject;
     internal string? SentFocus;      // the last controller focus (specs/107)
+    internal bool FollowedMacro;     // the controller moved Macros while another screen showed (specs/107)
     internal string? SentWho;
     internal string? SentTransport;
     internal string? SentLit;

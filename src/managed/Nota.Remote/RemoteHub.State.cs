@@ -516,7 +516,8 @@ public sealed partial class RemoteHub
         int at = devs.FindIndex(d => d.DeviceIndex == md);
         if (at < 0 || at == c.MacroDevice) return;
         c.MacroDevice = at;
-        if (c.Screen == "Macros") c.SentScreenState = null;   // the new device's knobs at once
+        if (c.Screen == "Macros") c.SentScreenState = null;   // the new device's knobs at once (the phone takes `di`)
+        else c.FollowedMacro = true;                          // kept when the phone opens Macros
     }
 
     // ---- session --------------------------------------------------------------------------------

@@ -905,8 +905,11 @@ public sealed class ControllerService
     // least amount that keeps it inside.
     private void StepTrack(ConnectedController c, int delta, List<int> trackIds)
     {
-        var rows = ArrangementView.HierarchyOrder(_engine).Select(r => (r.Id, r.ParentGroupId));
-        var order = ControllerTrackStep.Order(rows, id => GroupCollapsed?.Invoke(id) == true);
+        // The order on screen: the Session's own columns while it shows (it folds groups on its
+        // own), else the track list with the Arrangement's folds.
+        var order = VisibleTrackOrder?.Invoke()
+                    ?? ControllerTrackStep.Order(ArrangementView.HierarchyOrder(_engine).Select(r => (r.Id, r.ParentGroupId)),
+                                                 id => GroupCollapsed?.Invoke(id) == true);
         if (ControllerTrackStep.Step(order, _selectedTrack, delta) is not { } to) return;
         SelectTrack?.Invoke(to);
         if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
@@ -914,6 +917,9 @@ public sealed class ControllerService
 
     /// <summary>Select a track as a header click would (wired by the main window; specs/107).</summary>
     public Action<int>? SelectTrack { get; set; }
+    /// <summary>The tracks Track ◀ / ▶ walk when a view has its own order (the Session's columns),
+    /// else null for the track list.</summary>
+    public Func<List<int>?>? VisibleTrackOrder { get; set; }
     /// <summary>Whether a group is collapsed in the track list (its members aren't stepped to).</summary>
     public Func<int, bool>? GroupCollapsed { get; set; }
     /// <summary>Next / Previous device (wired by the main window, specs/107): MCP steps through it.</summary>

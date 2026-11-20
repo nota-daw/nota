@@ -272,7 +272,9 @@ export class App {
       case 'who': this.who = m.p; break;
       case 'mix': delete m.t; this.mix = m; break;
       case 'xy': delete m.t; this.xy = m; break;
-      case 'mac': delete m.t; this.mac = m; break;
+      // Nota's device choice is ours too (a controller may have moved it, specs/107), so the next
+      // screen switch doesn't send back a stale pick.
+      case 'mac': delete m.t; this.mac = m; this.macroDevice = m.di; break;
       case 'ses': delete m.t; this.ses = m; break;
       case 'foc': delete m.t; this.foc = m.on ? m : null; break;
       case 'clips': {

@@ -43,6 +43,10 @@ track is the phone's track and `md` is not null, Nota switches the phone's Macro
 (the phone receives the usual `mac` with the new `di`). A manual pick on the phone stays until
 the focus changes again.
 
+- A phone takes `mac.di` as its own device choice (so a later `sub` doesn't send a stale one).
+- If the focus moved while another screen showed, the `sub` that opens Macros keeps Nota's
+  device and ignores the phone's `i`; a `sub` while Macros already shows is a pick and wins.
+
 ## Phone → Nota
 
 No new commands.

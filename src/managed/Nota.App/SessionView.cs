@@ -382,6 +382,10 @@ public sealed partial class SessionView : UserControl
     /// controller's track step keeps the row, Remote outlines it).</summary>
     internal Selection CurrentSelection => _sel;
 
+    /// <summary>The track and group columns in order, as shown — a group folded here hides its
+    /// tracks (the Session keeps its own folds): what Track ◀ / ▶ walk while the Session shows.</summary>
+    internal List<int> ColumnTrackIds() => NavCols.Select(c => c.TrackId).ToList();
+
     /// <summary>Selects the slot at (<paramref name="trackId"/>, <paramref name="scene"/>) — e.g. where a browser drop landed.</summary>
     internal void SelectSlot(int trackId, int scene)
     {

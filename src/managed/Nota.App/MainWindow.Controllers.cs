@@ -64,6 +64,7 @@ public partial class MainWindow
             Timeline.RevealTrack(id);
         };
         _controllers.GroupCollapsed = id => Timeline.IsGroupCollapsed(id);
+        _controllers.VisibleTrackOrder = () => _session is { IsEffectivelyVisible: true } s ? s.ColumnTrackIds() : null;
         _controllers.StepDevice = StepControllerDevice;
         _controllers.SessionSelection = () =>
         {
@@ -142,7 +143,9 @@ public partial class MainWindow
     {
         if (a.TrackId <= 0) return;
         ShowDevices(a.TrackId);
-        if (a.Rack is null) _deviceChain?.SelectAddress(a);
+        // A device inside a rack: showing the panel drops the rack's inner selection, so select and
+        // reveal the rack itself — the knobs then follow the rack card the user can see.
+        _deviceChain?.SelectAddress(a.Rack is null ? a : ChainOrder.TopLevel(a));
     }
 
     private void ShowKnobModeMenu()

@@ -512,6 +512,18 @@ internal static class RemoteTests
         Thread.Sleep(100); hub.Tick();
         var mStay = Wait("mac", 300, m => m.GetProperty("di").GetInt32() != 0);
         yield return (mFol is not null && mPick is not null && mStay is null, "Macros turn to the controller's device; a pick on the phone stays until the focus moves");
+        // Moved while Scenes showed: opening Macros keeps the controller's device, though the
+        // phone sends its old pick (review of #930).
+        Send(new { t = "sub", s = "Scenes" });
+        WaitFor(() => false, 200);
+        host.ControllerFocus = new RemoteControllerFocus("KeyLab", "device", 0, inst, "Bass", e.DeviceName(inst, eq3), eq3, 0, 2, "", 0, 0);
+        Wait("foc", 3000, m => m.GetProperty("on").GetBoolean() && m.GetProperty("md").GetInt32() == eq3);
+        Drain("mac");
+        Send(new { t = "sub", s = "Macros", i = 0 });
+        var mOpen = Wait("mac", 3000);
+        yield return (mOpen is { } mo && mo.GetProperty("di").GetInt32() > 0
+                && mo.GetProperty("devs")[mo.GetProperty("di").GetInt32()].GetString()!.StartsWith(e.DeviceName(inst, eq3)),
+            "Macros opened after the controller moved keep the controller's device");
         host.ControllerFocus = null;
         Send(new { t = "follow", on = false });
         Send(new { t = "sub", s = "Scenes" });

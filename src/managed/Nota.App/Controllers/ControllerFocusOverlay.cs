@@ -174,7 +174,8 @@ public sealed class ControllerFocusOverlay : Control
         ctx.DrawLine(new Pen(NotaPalette.Accent, 2), new Point(card.Left + 4, card.Top + 1), new Point(card.Right - 4, card.Top + 1));
         var ft = Text(Loc.T("controllers.card_tag"), NotaPalette.AccentBright);
         var box = new Rect(Math.Max(card.Left + 4, card.Right - ft.Width - 18), card.Top - ft.Height / 2 - 1, ft.Width + 10, ft.Height + 2);
-        ctx.DrawRectangle(NotaPalette.Panel, new Pen(NotaPalette.AccentEdge, 1), box, 3, 3);
+        double rad = NotaSkin.MapRadius(3);   // the skin's roundness (DESIGN.md)
+        ctx.DrawRectangle(NotaPalette.Panel, new Pen(NotaPalette.AccentEdge, 1), box, rad, rad);
         ctx.DrawText(ft, new Point(box.Left + 5, box.Top + 1));
     }
 
