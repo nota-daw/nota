@@ -114,8 +114,8 @@ internal static class ControllerRemapTests
         // Pairs.
         var pr = Open();
         pr.Assign(TrackNext, Note(20));
-        yield return (pr.ControlOf(TrackNext) is { Number: 20 } && pr.ControlOf(TrackPrev) is { Number: 60 } && Reload(pr).Controls.Single(c => c.Number == 60).Role.TwoWay == false,
-            "remap: one half of an encoder pair onto a button — the encoder keeps the other half");
+        yield return (pr.ControlOf(TrackNext) is { Number: 20 } && pr.ControlOf(TrackPrev) is null && !Reload(pr).Controls.Any(c => c.Number == 60),
+            "remap: one half of an encoder pair onto a button — the encoder leaves both halves (it can't turn one way only)");
         var pe = Open();
         pe.Assign(Redo, Cc(70, EncoderMode.RelativeTwos), Undo);
         var pep = Reload(pe);
@@ -133,7 +133,10 @@ internal static class ControllerRemapTests
         yield return (!cl.HasChanges && cl.ToJson() == Open().ToJson(), "remap: Revert brings Play's control back, the document as it was");
         var cl2 = Open();
         cl2.Clear(TrackPrev);
-        yield return (cl2.ControlOf(TrackNext) is { Number: 60 } && cl2.ControlOf(TrackPrev) is null, "remap: clearing one half of an encoder pair keeps the other");
+        yield return (cl2.ControlOf(TrackNext) is null && cl2.ControlOf(TrackPrev) is null, "remap: clearing one half of an encoder pair clears the encoder");
+        cl2.Revert(TrackPrev);
+        yield return (cl2.ControlOf(TrackNext) is { Number: 60 } && cl2.ControlOf(TrackPrev) is { Number: 60 } && !cl2.HasChanges,
+            "remap: reverting a half brings the encoder back for both");
         var rv = Open();
         rv.Assign(Stop, Note(94));
         var inWay = rv.Revert(Play);
@@ -165,9 +168,29 @@ internal static class ControllerRemapTests
         yield return (wz2.ControlOf(Stop) is null && wz2.Entries.Any(e => e.Decl?.Role.Kind == ControlRoleKind.Pad),
             "remap: a step the wizard skipped is cleared; controls outside the wizard (a pad) stay");
 
+        // Comments in the file survive a save; a pair abandoned half-way goes back.
+        string withNotes = Profile.Replace("{ \"role\": \"stop\"", "// Stop is the square button\n        { \"role\": \"stop\"");
+        var (np, _) = ProfileLoader.Load(withNotes, "acme.keys.json", ProfileOrigin.Shipped);
+        var notes = new ProfileMapping(np!, withNotes);
+        yield return (notes.ToJson() == withNotes, "remap: nothing changed writes the file back byte for byte");
+        notes.Assign(Metronome, Cc(50));
+        string saved = notes.ToJson();
+        yield return (saved.Contains("// hand-written note: the pads stay on channel 10") && saved.Contains("// Stop is the square button")
+                      && ProfileLoader.Load(saved, "acme.keys.json", ProfileOrigin.User).Profile!.Controls.Any(c => c.Role.Command == "transport.metronome" && c.Number == 50),
+            "remap: comments in the profile survive an edit, and the new entry loads");
+        var snap = Open();
+        var before2 = snap.Snapshot();
+        snap.Assign(Undo, Note(70));
+        snap.Restore(before2);
+        yield return (!snap.HasChanges, "remap: a snapshot puts back a pair whose second button never came");
+
         // Find by touch.
         var f = Open();
         yield return (f.Find(0x90, 0, 94)?.Right == Play && f.Find(0xB0, 0, 60)?.Left == TrackPrev && f.Find(0xB0, 0, 99) is null,
             "remap: a message finds the function its control does; an unmapped one finds nothing");
+        const string nrpnProfile = """{ "format": 1, "id": "acme.n", "name": "N", "match": { "portNames": ["^N$"] }, "controls": [ { "role": "knob", "index": 1, "message": "nrpn", "channel": 1, "number": 300 } ] }""";
+        var nm = new ProfileMapping(ProfileLoader.Load(nrpnProfile, "acme.n.json", ProfileOrigin.User).Profile!, nrpnProfile);
+        yield return (nm.FindNrpn(0, 300)?.Right == FunctionKey.Of(ControlRoleKind.Knob, 0) && nm.FindNrpn(0, 301) is null,
+            "remap: an NRPN control is found by its parameter number");
     }
 }

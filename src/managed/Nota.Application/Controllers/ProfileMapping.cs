@@ -6,9 +6,12 @@
 // function, move a control that another function had, clear, revert. Saving rebuilds only the
 // `controls` array of the original document, so the profile's match rules, init / release
 // messages, LED feedback, `source` and anything the user wrote by hand stay exactly as they were;
-// an entry the editor didn't touch is written back verbatim, and a re-learned control keeps the
+// an entry the editor didn't touch is written back verbatim — with the comments around it, as
+// the rest of the file is text-patched, not re-serialised — and a re-learned control keeps the
 // LED feedback of the physical control it is on (the light belongs to the button, not to the
-// function). UI-free, so the smoke test drives it directly.
+// function). A two-way encoder does both halves of a pair or none: a profile role can't be
+// limited to one turning direction, so taking one half off it takes the encoder off both.
+// UI-free, so the smoke test drives it directly.
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -54,6 +57,12 @@ public sealed class MappingEntry
 public sealed class ProfileMapping
 {
     private readonly JsonNode _root;
+    private readonly byte[] _text;
+    // The `controls` array in the original text: where it starts and ends, and for each element its
+    // own text and what came before it (whitespace, comments) — so an untouched entry is written
+    // back exactly as it was. Null when the file has no such array (then the document is rebuilt).
+    private readonly (int Start, int End)? _array;
+    private readonly List<(int Start, int End, int GapStart)> _spans = new();
     private readonly List<MappingEntry> _original;
     private readonly List<MappingEntry> _entries;
 
@@ -65,6 +74,8 @@ public sealed class ProfileMapping
         Profile = profile;
         _root = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true })
                 ?? new JsonObject();
+        _text = System.Text.Encoding.UTF8.GetBytes(json);
+        _array = FindControls(_text, _spans);
         _original = new List<MappingEntry>();
         if (_root["controls"] is JsonArray arr)
             foreach (var node in arr)
@@ -84,6 +95,10 @@ public sealed class ProfileMapping
     public ControlDecl? ControlOf(FunctionKey k) => EntryFor(k)?.Decl;
 
     public bool HasChanges => !_entries.SequenceEqual(_original);
+
+    /// <summary>The working state, to go back to (a pair whose second button never came).</summary>
+    public IReadOnlyList<MappingEntry> Snapshot() => _entries.ToList();
+    public void Restore(IReadOnlyList<MappingEntry> snapshot) { _entries.Clear(); _entries.AddRange(snapshot); }
 
     /// <summary>Whether the function is on another control than when the editor opened.</summary>
     public bool IsChanged(FunctionKey k)
@@ -109,8 +124,12 @@ public sealed class ProfileMapping
             ControlMessage.PitchBend => status == 0xE0,
             ControlMessage.Cc => status == 0xB0 && d1 == d.Number,
             ControlMessage.Cc14 => status == 0xB0 && (d1 == d.Number || d1 == d.Number + 32),
-            _ => false,   // NRPN: 99 / 98 / 6 / 38 are shared by every NRPN control
+            _ => false,   // NRPN: 99 / 98 / 6 / 38 are shared by every NRPN control — see FindNrpn
         });
+
+    /// <summary>The entry of an NRPN control: the parameter number its 99 / 98 messages selected.</summary>
+    public MappingEntry? FindNrpn(int channel, int number)
+        => _entries.FirstOrDefault(e => e.Decl is { Message: ControlMessage.Nrpn } d && d.Channel == channel && d.Number == number);
 
     // ---- editing ----------------------------------------------------------------------------
 
@@ -132,14 +151,13 @@ public sealed class ProfileMapping
         foreach (var x in ConflictsFor(c, right, left).ToList()) _entries.Remove(x);
         Release(right);
         if (left is { } l) Release(l);
-        // An encoder that did a pair and now does one half as a button: the other half goes too.
         _entries.RemoveAll(x => x.Decl is { } d && Same(d, c));
         var fresh = Fresh(new ControlDecl(right.Role(left), c.Message, c.Channel, c.Number, c.Encoder, false, null));
         int at = _entries.IndexOf(marker);
         if (at >= 0) _entries[at] = fresh; else _entries.Add(fresh);
     }
 
-    /// <summary>No control does this function any more (a two-way encoder keeps the other half).</summary>
+    /// <summary>No control does this function any more (a two-way encoder leaves both halves).</summary>
     public void Clear(FunctionKey k) => Release(k);
 
     /// <summary>Back to the control the function had when the editor opened. Refused — the
@@ -169,19 +187,9 @@ public sealed class ProfileMapping
         foreach (var (r, l, c) in list) Assign(r, c, l);
     }
 
-    // Take the function off whatever entry does it; a two-way entry keeps its other half.
-    private void Release(FunctionKey k)
-    {
-        foreach (var e in _entries.Where(e => e.Covers(k)).ToList())
-        {
-            int at = _entries.IndexOf(e);
-            _entries.RemoveAt(at);
-            var d = e.Decl!;
-            FunctionKey? other = e.Left is null ? null : e.Right == k ? e.Left : e.Right;
-            if (other is { } o)
-                _entries.Insert(at, Fresh(d with { Role = o.Role() }));
-        }
-    }
+    // Take the function off whatever entry does it. A two-way encoder goes as a whole: kept for
+    // one half only, it would run that half whichever way it turned.
+    private void Release(FunctionKey k) => _entries.RemoveAll(e => e.Covers(k));
 
     // A new entry for a declaration: written as the wizard writes it, with the LED feedback and
     // motor flag of the original entry on the same physical control.
@@ -216,11 +224,89 @@ public sealed class ProfileMapping
     /// <summary>The profile document with its controls as edited; everything else verbatim.</summary>
     public string ToJson()
     {
+        if (_array is { } span && _spans.Count == _original.Count) return Patched(span);
         var root = _root.DeepClone();
         var arr = new JsonArray();
         foreach (var e in _entries) arr.Add(e.Json?.DeepClone());
         if (root is JsonObject o) o["controls"] = arr;
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) + "\n";
+    }
+
+    // The original text with only the `controls` array replaced: entries kept from the file come
+    // back as they were written, with what preceded them (comments too); new ones are indented
+    // like the first entry.
+    private string Patched((int Start, int End) span)
+    {
+        string Text(int from, int to) => System.Text.Encoding.UTF8.GetString(_text, from, to - from);
+        string indent = _spans.Count > 0 ? IndentOf(Text(_spans[0].GapStart, _spans[0].Start)) : "    ";
+        var sb = new System.Text.StringBuilder();
+        sb.Append('[');
+        bool first = true;
+        foreach (var e in _entries)
+        {
+            if (!first) sb.Append(',');
+            first = false;
+            int oi = _original.IndexOf(e);
+            if (oi >= 0)
+            {
+                var (start, end, gap) = _spans[oi];
+                sb.Append(StripComma(Text(gap, start))).Append(Text(start, end));
+            }
+            else
+            {
+                string obj = e.Json!.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+                sb.Append('\n').Append(indent).Append(obj.Replace("\n", "\n" + indent));
+            }
+        }
+        int tail = _spans.Count > 0 ? _spans[^1].End : span.Start + 1;
+        string closing = StripComma(Text(tail, span.End));
+        if (_entries.Count > 0 && closing.Trim().Length == 0 && !closing.Contains('\n'))
+            closing = "\n" + indent[..Math.Max(0, indent.Length - 2)];
+        sb.Append(_entries.Count == 0 ? "" : closing).Append(']');
+        return Text(0, span.Start) + sb + Text(span.End + 1, _text.Length);
+
+        static string StripComma(string gap)
+        {
+            int i = 0;
+            while (i < gap.Length && char.IsWhiteSpace(gap[i])) i++;
+            return i < gap.Length && gap[i] == ',' ? gap[(i + 1)..] : gap;
+        }
+        static string IndentOf(string gap)
+        {
+            int nl = gap.LastIndexOf('\n');
+            string line = nl >= 0 ? gap[(nl + 1)..] : gap;
+            return line.Trim().Length == 0 && line.Length > 0 ? line : "    ";
+        }
+    }
+
+    // The root-level `controls` array: its [ and ] offsets, and each element's start, end and the
+    // offset where the text before it begins (after the previous element or the [).
+    private static (int Start, int End)? FindControls(byte[] text, List<(int, int, int)> spans)
+    {
+        try
+        {
+            var r = new Utf8JsonReader(text, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Allow, AllowTrailingCommas = true });
+            bool next = false;
+            while (r.Read())
+            {
+                if (r.CurrentDepth == 1 && r.TokenType == JsonTokenType.PropertyName) { next = r.ValueTextEquals("controls"); continue; }
+                if (!(next && r.CurrentDepth == 1 && r.TokenType == JsonTokenType.StartArray)) { if (r.CurrentDepth <= 1 && r.TokenType != JsonTokenType.Comment) next = false; continue; }
+                int start = (int)r.TokenStartIndex, gap = start + 1;
+                while (r.Read())
+                {
+                    if (r.CurrentDepth == 1 && r.TokenType == JsonTokenType.EndArray) return (start, (int)r.TokenStartIndex);
+                    if (r.TokenType == JsonTokenType.Comment) continue;
+                    int s = (int)r.TokenStartIndex;
+                    if (r.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray) r.Skip();
+                    int e = (int)r.BytesConsumed;
+                    spans.Add((s, e, gap));
+                    gap = e;
+                }
+                return null;
+            }
+        }
+        catch (JsonException) { spans.Clear(); }
+        return null;
     }
 
     // ---- physical controls --------------------------------------------------------------------

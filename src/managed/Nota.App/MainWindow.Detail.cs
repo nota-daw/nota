@@ -313,7 +313,14 @@ public partial class MainWindow
         else
         {
             if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
-            if (onClip) ShowEmptyClipTab(Loc.T("main.detail.empty_slot"));
+            if (onClip)
+            {
+                // Nothing of the previous slot stays behind the empty tab: the Clip tab can't
+                // bring its editor back, and Pattern doesn't target it any more.
+                ResetClipEditor();
+                SyncClipTab();
+                ShowEmptyClipTab(Loc.T("main.detail.empty_slot"));
+            }
         }
     }
 
@@ -662,10 +669,11 @@ public partial class MainWindow
     {
         if (_session?.IsVisible == true || _vm is null) return;
         // The Clip tab left empty by a track change: the first clip picked opens in it.
+        // Several clips selected at once go on to the multi-clip editor below.
         if (ClipTabOpen && DetailBody.Content is not (ClipEditorView or AudioClipEditorView or DrumPatternView))
         {
-            if (SelectedClip(out _, out _, out _)) OnDetailClip(this, new RoutedEventArgs());
-            return;
+            if (!SelectedClip(out _, out _, out _)) return;
+            OnDetailClip(this, new RoutedEventArgs());
         }
         bool shown = DetailFloating
             ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
@@ -1218,12 +1226,14 @@ public partial class MainWindow
             if (SelectedSessionClip(out int st, out int ss)) ShowSessionSlot(st, ss);
             else if (_clipEditor is not null) ShowClipPanel();
             else if (SessionAudioEditorOpen) ShowAudioClipPanel();
+            else if (_session.SelectedSlot is { TrackId: > 0, Scene: >= 0 }) ShowEmptyClipTab(Loc.T("main.detail.empty_slot"));   // stays on the empty slot
             else RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
             return;
         }
         if (!SelectedClip(out int tid, out int ci, out bool isMidi))
         {
-            RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
+            if (ClipTabOpen) ShowEmptyClipTab(Loc.T("main.detail.no_clip_selected"));   // the tab left empty stays empty
+            else RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
             return;
         }
         if (isMidi)

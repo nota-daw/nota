@@ -38,6 +38,7 @@ internal sealed class ControllerMappingWindow : NotaWindow
         public SetupFunction? F { get; init; }
         public MappingEntry? Other { get; init; }
         public bool Added { get; init; }   // a + Command… row added in this window
+        public bool Custom { get; init; }  // a command row the wizard doesn't list (added here or in the profile)
         public SetupGroup? Group => F?.Group;
         public IEnumerable<FunctionKey> Keys => F?.Keys ?? Array.Empty<FunctionKey>();
         public Border? View { get; set; }
@@ -60,6 +61,8 @@ internal sealed class ControllerMappingWindow : NotaWindow
     private readonly DispatcherTimer _poll;
     private long _activityMs, _foundMs;
     private (int, int, int)? _lastFound;
+    private IReadOnlyList<MappingEntry>? _beforeListen;
+    private readonly Dictionary<int, (int Msb, int Lsb)> _nrpn = new();   // find by touch: the NRPN number each channel selected
 
     private readonly TextBlock _profileLine = new() { Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap };
     private readonly Button _backToShipped = new() { Classes = { "ghost" } };
@@ -159,7 +162,8 @@ internal sealed class ControllerMappingWindow : NotaWindow
 
     private void BuildRows()
     {
-        var added = _rows.Where(r => r.Added).ToList();
+        // Command rows survive a rebuild even once their control is gone, so a cleared one stays "—".
+        var added = _rows.Where(r => r.Custom).ToList();
         _rows.Clear();
         var known = new HashSet<FunctionKey>();
         foreach (var f in SetupFunctions.Build())
@@ -174,21 +178,36 @@ internal sealed class ControllerMappingWindow : NotaWindow
             .Select(e => e.Right!.Value.Command!).Distinct().ToList();
         foreach (var id in commands.Concat(added.Select(a => a.F!.Command!)).Distinct())
         {
-            _rows.Insert(extraEnd++, new Row { F = SetupFunctions.ForCommand(id), Added = added.Any(a => a.F!.Command == id) });
+            _rows.Insert(extraEnd++, new Row { F = SetupFunctions.ForCommand(id), Added = added.Any(a => a.Added && a.F!.Command == id), Custom = true });
             known.Add(FunctionKey.OfCommand(id));
         }
         // Everything else the profile has: shown, not edited (pads, extra buttons, more knobs).
         foreach (var e in _map.Entries.Where(e => e.Decl is not null && !(e.Right is { } r && known.Contains(r)) && !(e.Left is { } l && known.Contains(l))))
             _rows.Add(new Row { Other = e });
         if (_selected is not null) _selected = _rows.FirstOrDefault(r => SameRow(r, _selected));
+        if (_listening is not null) _listening = _rows.FirstOrDefault(r => SameRow(r, _listening));
     }
 
     private static bool SameRow(Row a, Row b) => a.F is not null && b.F is not null ? a.F.Keys.SequenceEqual(b.F.Keys) : ReferenceEquals(a.Other, b.Other);
 
-    private bool Assigned(Row r) => r.Other is not null || r.Keys.Any(k => _map.ControlOf(k) is not null);
+    // Complete: every half has a control (what "Unassigned only" and the strip count); any: something to clear.
+    private bool Assigned(Row r) => r.Other is not null || r.Keys.All(k => _map.ControlOf(k) is not null);
+    private bool AnyAssigned(Row r) => r.Other is not null || r.Keys.Any(k => _map.ControlOf(k) is not null);
     private bool Changed(Row r) => r.Keys.Any(k => _map.IsChanged(k));
 
     private bool Visible(Row r) => !_unassignedOnly || r.Other is null && (!Assigned(r) || ReferenceEquals(r, _listening) || Changed(r));
+
+    private string NameOfKey(FunctionKey k)
+    {
+        foreach (var r in _rows)
+        {
+            if (r.F is not { } f) continue;
+            if (f.IsPair && f.Left!.Key == k) return f.Left.Name;
+            if (f.IsPair && f.Right!.Key == k) return f.Right.Name;
+            if (!f.IsPair && f.Key == k) return f.Name;
+        }
+        return k.Command ?? k.Kind.ToString();
+    }
 
     private string NameOf(MappingEntry e)
     {
@@ -384,12 +403,7 @@ internal sealed class ControllerMappingWindow : NotaWindow
         }
         var left = _map.EntryFor(f.Left!.Key);
         var right = _map.EntryFor(f.Right!.Key);
-        if (left is not null && ReferenceEquals(left, right))
-        {
-            // One encoder does both halves.
-            panel.Children.Add(Chip(ControlCatcher.Chip(left.Decl!), Loc.T("controllers.edit.both_ways")));
-            return panel;
-        }
+        // One encoder doing both halves shows on both; a click on a half still learns that half alone.
         panel.Children.Add(HalfChip(r, 0, f.Left.Name, left));
         panel.Children.Add(HalfChip(r, 1, f.Right.Name, right));
         return panel;
@@ -433,10 +447,10 @@ internal sealed class ControllerMappingWindow : NotaWindow
         if (r.F is null) return panel;
         if (Changed(r))
             panel.Children.Add(Action(GlyphKind.History, Loc.T("controllers.edit.revert_tip"), () => Revert(r)));
-        if (Assigned(r))
+        if (AnyAssigned(r))
             panel.Children.Add(Action(GlyphKind.Close, Loc.T("controllers.edit.clear_tip"), () => Clear(r)));
         if (r.Added)
-            panel.Children.Add(Action(GlyphKind.Trash, Loc.T("controllers.edit.remove_tip"), () => { Clear(r); _rows.Remove(r); if (ReferenceEquals(_selected, r)) _selected = null; Render(); }));
+            panel.Children.Add(Action(GlyphKind.Trash, Loc.T("controllers.edit.remove_tip"), () => { if (ReferenceEquals(r, _listening)) StopListening(); foreach (var k in r.Keys) _map.Clear(k); _rows.Remove(r); if (ReferenceEquals(_selected, r)) _selected = null; BuildRows(); Render(); }));
         return panel;
     }
 
@@ -554,7 +568,7 @@ internal sealed class ControllerMappingWindow : NotaWindow
     // A picked command: its row in Extra buttons, listening at once.
     private void AddCommand(string id)
     {
-        var row = new Row { F = SetupFunctions.ForCommand(id), Added = true };
+        var row = new Row { F = SetupFunctions.ForCommand(id), Added = true, Custom = true };
         int at = _rows.FindLastIndex(r => r.Group == SetupGroup.Extra) + 1;
         _rows.Insert(at, row);
         Listen(row);
@@ -567,7 +581,9 @@ internal sealed class ControllerMappingWindow : NotaWindow
     private void Listen(Row r, int? half = null)
     {
         if (r.Other is not null) return;
+        StopListening();   // a pair left half-way goes back first
         if (_gone) { _selected = r; return; }
+        _beforeListen = _map.Snapshot();
         _listening = _selected = r;
         _halfOnly = half;
         _half = 0;
@@ -578,8 +594,16 @@ internal sealed class ControllerMappingWindow : NotaWindow
         _status.Text = Loc.T("controllers.edit.status_listening");
     }
 
+    // Stopped before a pair got its second button: the first one goes back too, as if never
+    // learned (nothing of a cancelled learn stays).
     private void StopListening()
     {
+        if (_half == 1 && _beforeListen is { } before)
+        {
+            _map.Restore(before);
+            BuildRows();
+        }
+        _beforeListen = null;
         _listening = null;
         _halfOnly = null;
         _half = 0;
@@ -662,9 +686,13 @@ internal sealed class ControllerMappingWindow : NotaWindow
 
     private void Commit(FunctionKey key, FunctionKey? left, ClassifiedControl c)
     {
+        // An encoder that did both halves of a pair leaves both when one half moves (it can't turn
+        // one way only): say which function that left without a control.
+        var shared = left is null && _map.EntryFor(key) is { Left: not null } se ? se : null;
         _map.Assign(key, c, left);
         _conflict = null;
         _catcher.Reset();
+        BuildRows();   // a moved control may have been a row of its own (Other controls)
         var row = _listening!;
         if (row.F!.IsPair && _halfOnly is null && left is null && _half == 0)
         {
@@ -674,6 +702,9 @@ internal sealed class ControllerMappingWindow : NotaWindow
             return;
         }
         _status.Text = Loc.F("controllers.edit.status_learned", row.F.Name, ControlCatcher.Describe(c));
+        if (shared is { Right: { } sr, Left: { } sl } && (sr == key ? sl : sr) is var other && _map.ControlOf(other) is null)
+            _status.Text = Loc.F("controllers.edit.status_encoder_left", NameOfKey(other));
+        _half = 0;   // complete: nothing to put back
         StopListening();
         _selected = row;
         // FR-006a: with "unassigned only" on, straight on to the next one without a control.
@@ -692,10 +723,20 @@ internal sealed class ControllerMappingWindow : NotaWindow
         foreach (var ev in got)
         {
             if (ev.Status is 0x80 || ev.Status == 0x90 && ev.D2 == 0) continue;   // a release says nothing new
-            var key = (ev.Status, ev.Channel, ev.D1);
+            // NRPN: 99 / 98 pick the parameter on the channel, 6 / 38 / 96 / 97 move it.
+            if (ev.Status == 0xB0 && ev.D1 is 99 or 98)
+            {
+                var n = _nrpn.TryGetValue(ev.Channel, out var had) ? had : (Msb: -1, Lsb: -1);
+                _nrpn[ev.Channel] = ev.D1 == 99 ? (ev.D2, n.Lsb) : (n.Msb, ev.D2);
+                continue;
+            }
+            MappingEntry? nrpn = null;
+            if (ev.Status == 0xB0 && ev.D1 is 6 or 38 or 96 or 97 && _nrpn.TryGetValue(ev.Channel, out var sel) && sel.Msb >= 0 && sel.Lsb >= 0)
+                nrpn = _map.FindNrpn(ev.Channel, (sel.Msb << 7) | sel.Lsb);
+            var key = nrpn is not null ? (0x1000, ev.Channel, nrpn.Decl!.Number) : (ev.Status, ev.Channel, ev.D1);
             if (_lastFound == key && now - _foundMs < 400) continue;
             _lastFound = key; _foundMs = now;
-            if (_map.Find(ev.Status, ev.Channel, ev.D1) is { } e)
+            if ((nrpn ?? _map.Find(ev.Status, ev.Channel, ev.D1)) is { } e)
             {
                 var row = _rows.FirstOrDefault(r => r.F is not null && (e.Right is { } k && r.Keys.Contains(k) || e.Left is { } l && r.Keys.Contains(l)))
                           ?? _rows.FirstOrDefault(r => ReferenceEquals(r.Other, e));
@@ -721,6 +762,7 @@ internal sealed class ControllerMappingWindow : NotaWindow
         if (ReferenceEquals(r, _listening)) StopListening();
         foreach (var k in r.Keys) _map.Clear(k);
         _status.Text = Loc.F("controllers.edit.status_cleared", r.F!.Name);
+        BuildRows();
         Render();
     }
 
@@ -738,6 +780,7 @@ internal sealed class ControllerMappingWindow : NotaWindow
             }
         }
         _status.Text = Loc.F("controllers.edit.status_reverted", r.F!.Name);
+        BuildRows();
         Render();
     }
 
@@ -747,6 +790,11 @@ internal sealed class ControllerMappingWindow : NotaWindow
     {
         if (e.Source is TextBox) return;
         var cmd = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
+        // A focused button, menu or list keeps Enter / Space / arrows (Finish stays Finish, the
+        // encoding menu keeps its arrows); the window's shortcuts apply everywhere else.
+        bool onControl = e.Source is Visual sv && (sv.FindAncestorOfType<Button>(true) is not null
+                         || sv.FindAncestorOfType<ComboBox>(true) is not null || sv.FindAncestorOfType<ListBox>(true) is not null);
+        if (onControl && e.Key is Key.Enter or Key.Space or Key.Up or Key.Down && !e.KeyModifiers.HasFlag(cmd)) return;
         switch (e.Key)
         {
             case Key.Enter when e.KeyModifiers.HasFlag(cmd):

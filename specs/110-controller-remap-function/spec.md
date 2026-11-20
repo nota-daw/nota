@@ -221,7 +221,9 @@ Finish replaces the profile as the wizard does today.
 - **Pair functions** (previous / next track, bank, page, device, clips, Session tracks, undo /
   redo, tempo −/+, rewind / forward): one row per pair. Learning works as in the wizard — turn an
   encoder and both halves are set; press a button and it is the first half, then the editor asks
-  for the second button in the same row. Each half can also be reassigned on its own.
+  for the second button in the same row; leaving before the second button changes nothing.
+  Each half can also be reassigned on its own; an encoder that did both halves then leaves both
+  (it can't be limited to one turning direction), and the editor says which function lost it.
 - **Ambiguous encoder** (the wizard asks for Next): the editor asks the same way, inside the row.
 - **Learning the control a function already has**: no conflict, no change.
 - **Two controls send the same message** (rare hardware): the editor can't tell them apart — the

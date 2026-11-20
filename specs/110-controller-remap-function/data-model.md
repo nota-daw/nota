@@ -37,13 +37,13 @@ Working copy of a profile's controls.
 | `IsChanged(key)` | current control for key differs from the original |
 | `Try(key, learned)` → `Conflict?` | entries other than the key's own that use the same physical control |
 | `Assign(key, learned, leftKey?)` | removes the key's (and leftKey's) current entries, removes any conflicting entries, adds a new entry; two-way when `leftKey` given |
-| `AssignHalf(key, learned)` | a pair half as a button; if the pair was one encoder, the encoder keeps the other half only |
-| `Clear(key)` | removes the key's entry (a two-way encoder keeps the other half) |
+| `Clear(key)` | removes the key's entry — a two-way encoder leaves both halves (a role can't be limited to one turning direction) |
 | `Revert(key)` → `Conflict?` | restores the original entry for key; refuses (returns conflict) when its control is now used elsewhere |
 | `ReplaceAll(IEnumerable<LearnedControl>, keys)` | the seeded wizard's result: drop entries for all `keys`, add the learned ones |
 | `HasChanges` | any difference from original |
-| `ToJson(string originalJson)` | original document with `controls` rebuilt (R1) |
-| `Find(status, ch, d1, d2)` | entry an incoming raw message belongs to (FR-010) |
+| `ToJson()` | the original text with only the `controls` array patched: kept entries and the comments around them verbatim (R1) |
+| `Find(status, ch, d1)` / `FindNrpn(ch, number)` | entry an incoming raw message belongs to (FR-010); NRPN by the number its 99 / 98 selected |
+| `Snapshot()` / `Restore()` | the state before a learn, put back when a pair is left after its first button |
 
 ### Rules
 
