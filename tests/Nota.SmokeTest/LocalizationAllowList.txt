@@ -1348,6 +1348,7 @@ Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	nothing	# data: device 
 Nota.App/DeviceCards/Instruments/MosaicInstrumentCard.cs	trig rel	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	 Coarse	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	 Fine	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	 Semi	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	$"Vel → FM  {NotaNum.Pct(G("	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	$"{OperatorTopo.Names[envOp]} ENV"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Instruments/OperatorInstrumentCard.cs	Algorithm	# data: device parameter, port and value names and live readouts of their values (FR-004)

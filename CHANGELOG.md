@@ -128,6 +128,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - **Orientation**: ⋯ → **Session grid** chooses **Scenes down** (a scene per row, as in
     Nota, the default) or **Scenes across** (a scene per column, a track per row with its
     Stop beside its name). Each phone keeps its own choice.
+- **A Semitones knob on every Operator** (#589). Each of the four operators gains a SEMI
+  knob between CRS and FINE: a whole-semitone offset from that operator's coarse ratio, ±12
+  st, 0 at centre. CRS stays the ratio and FINE the cents, so a ×1 operator at +7 sounds the
+  1.5 fifth the 16-ratio table cannot reach, and a modulator can be placed at any interval
+  without transposing the clip. Each row's WAVE is now four drawn waveforms in a 2 × 2 block
+  rather than four words, so the table keeps its LEVEL slider and the card its 700 × 260 size.
+  Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
 - **Stopping a Session take before it starts leaves the slot empty** (#503). Stopping a fresh

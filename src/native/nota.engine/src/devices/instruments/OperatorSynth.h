@@ -3,8 +3,8 @@
 //
 // Nota Operator — the built-in 4-operator FM synth (kind 9), in the spirit of classic 4-operator FM synths
 // Operator: four operators (A B C D), each a phase-modulated oscillator with its own
-// coarse/fine frequency ratio, output level, waveform and ADSR envelope. Eight feed-
-// forward algorithms route who modulates whom (chains, stacks, parallel/additive), with
+// coarse ratio, semitone offset and fine detune, output level, waveform and ADSR envelope.
+// Eight feed-forward algorithms route who modulates whom (chains, stacks, parallel/additive), with
 // self-feedback on operator A. The summed carriers pass a subtractive TPT filter
 // (LP/HP/BP, with optional keyboard tracking) before the master volume — FM timbre +
 // classic filter sculpting in one. Two performance wheels ride on top: pitch bend (range
@@ -101,7 +101,9 @@ class OperatorSynth final : public Instrument {
         // --- appended (#531): each operator's envelope shape — 0.5 = straight, Exp off ---
         // Per op: Decay Curve, Release Curve, Env Exp (A, B, C, D).
         ShapeBase,
-        kNumParams = ShapeBase + 4 * 3
+        // --- appended: the Semitones knob — per op offset from its ratio, 0.5 = 0 st ---
+        SemisBase = ShapeBase + 4 * 3,
+        kNumParams = SemisBase + 4
     };
     static constexpr int kNumAlgos = 11;
     // Field offsets within an op block (op base = ACoarse + op*8).
@@ -175,6 +177,10 @@ class OperatorSynth final : public Instrument {
         {4, 4, 4, 4}, // 10: all parallel (additive / organ)
     };
     static constexpr double kRatio[16] = {0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16};
+    // The Semitones knob's travel: ±12 st in whole steps. Coarse already spans the octaves,
+    // so this is the interval dial between a ratio and its detune — 1.5 (a fifth) on a ×1
+    // operator is +7, which the ratio table alone cannot reach.
+    static constexpr int kSemisRange = 12;
 
     enum class Stage { Attack, Decay, Sustain, Release, Off };
     struct Voice {
