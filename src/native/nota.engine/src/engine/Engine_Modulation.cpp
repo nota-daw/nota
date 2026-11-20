@@ -130,7 +130,7 @@ static bool targetValid(Track& t, int32_t kind, int32_t dev, int32_t param, uint
     if (kind == static_cast<int32_t>(CvTargetKind::Instrument))
         return o.instrument && param < o.instrument->pluginParamCount();
     if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) return o.midi && param < o.midi->paramCount();
-    return o.device && param < o.device->paramCount();
+    return o.device && param < o.device->paramCount() && !o.device->paramRequiresStop(param);
 }
 // Current value + range of a target (instrument params are normalized 0..1). Call after targetValid.
 static float targetGet(Track& t, int32_t kind, int32_t dev, int32_t param, float& mn, float& mx, uint64_t uid = 0,
@@ -158,7 +158,7 @@ static void targetSet(Track& t, int32_t kind, int32_t dev, int32_t param, float 
     } else if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) {
         if (o.midi) o.midi->setParam(param, v);
     } else if (o.device)
-        o.device->setParam(param, v);
+        o.device->setLiveParam(param, v);
 }
 
 // Generalized link creation. Source: modulator or param. Target: device / instrument / MIDI-FX.
@@ -168,6 +168,7 @@ int32_t Engine::addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId
     if (!old) return -1;
     if (sourceKind == static_cast<int32_t>(CvSourceKind::Param)) {
         if (srcDev < 0 || srcDev >= static_cast<int32_t>(old->devices.size())) return -1;
+        if (const auto* source = old->devices[srcDev].get(); source && source->paramRequiresStop(srcParam)) return -1;
     } else if (modulatorKind(trackId, modId) < 0)
         return -1;
     const int32_t tgt = targetTrack < 0 ? trackId : targetTrack;
@@ -213,6 +214,10 @@ int32_t Engine::addNestedCvLink(int32_t trackId, int32_t sourceKind, int32_t mod
     if (sourceKind == static_cast<int32_t>(CvSourceKind::Param) && !su
         && (srcDev < 0 || srcDev >= static_cast<int32_t>(old->devices.size())))
         return -1;
+    if (sourceKind == static_cast<int32_t>(CvSourceKind::Param)) {
+        const auto source = targetOwner(*old, 0, srcDev, su, srcSlot);
+        if (source.device && source.device->paramRequiresStop(srcParam)) return -1;
+    }
     if (!targetValid(*tgtTrack, targetKind, targetDevice, targetParam, tu, tgtSlot)) return -1;
     auto nt = cloneTrack(*old);
     CvLink l;

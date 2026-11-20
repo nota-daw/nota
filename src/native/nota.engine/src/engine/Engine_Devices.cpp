@@ -1623,15 +1623,29 @@ float Engine::deviceGetParam(int32_t trackId, int32_t deviceIndex, int32_t param
     return d ? d->getParam(paramIndex) : 0.0f;
 }
 void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float value) {
-    // A modulated param's UI edit sets the stored base (the atomic is driven by the
-    // modulation each block); set the atomic too for immediate feedback.
-    routeCvBaseEdit(0, trackId, deviceIndex, paramIndex, value);
     if (auto* d = deviceAt(trackId, deviceIndex)) {
+        if (d->paramRequiresStop(paramIndex)) {
+            setStoppedDeviceParam(*d, paramIndex, value);
+            return;
+        }
+        // Keep the CV base and the immediately visible value in step.
+        routeCvBaseEdit(0, trackId, deviceIndex, paramIndex, value);
         // A param can change the device's latency (the Compressor's look-ahead): keep PDC in step.
         const int32_t latBefore = d->latencySamples();
         d->setParam(paramIndex, value);
         if (d->latencySamples() != latBefore) recomputePdc();
     }
+}
+
+void Engine::setStoppedDeviceParam(Device& device, int32_t param, float value) {
+    // After reset, the render thread drains Stop before using the replacement graph.
+    // Until then the transport mirror can still describe the old project.
+    if (isRecording()) return;
+    if (!configuringResetGraph_ && (pendingTransportStarts_.load(std::memory_order_acquire) != 0 ||
+        countInRunning_.load(std::memory_order_acquire) || isPlaying())) return;
+    const auto oldLatency = device.latencySamples();
+    device.setParam(param, value);
+    if (device.latencySamples() != oldLatency) recomputePdc(true);
 }
 float Engine::deviceGainReduction(int32_t trackId, int32_t deviceIndex) const {
     auto* d = deviceAt(trackId, deviceIndex);
@@ -2085,11 +2099,11 @@ int32_t Engine::trackLatencySamples(int32_t trackId) const {
 }
 
 // Delay every track by (maxLatency - itsOwnLatency) so all outputs stay aligned.
-void Engine::recomputePdc() {
+void Engine::recomputePdc(bool resetChangedDelays) {
     int32_t maxLat = 0;
     for (auto& t : authoring_->tracks) maxLat = std::max(maxLat, trackLatency(*t));
     for (auto& t : authoring_->tracks)
-        if (t->pdc) t->pdc->setDelay(maxLat - trackLatency(*t));
+        if (t->pdc) t->pdc->setDelay(maxLat - trackLatency(*t), resetChangedDelays);
 }
 
 } // namespace nota

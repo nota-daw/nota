@@ -1547,7 +1547,11 @@ matches anything.
 
 ## Accepted exceptions
 
-- **Nota Chroma spectrum** uses soft vertical spectral lines in the accent and blue, with brightness representing signal magnitude. This is signal content rather than device chrome.
+- **Nota Chroma spectrum** draws Dry and Tuned as one-physical-pixel vertical
+  lines with a one-pixel gap and a smooth vertical fade. Brightness follows signal magnitude. Dry
+  uses the active theme's `Accent`. Tuned uses the exact RGB inverse
+  (`255 − R`, `255 − G`, `255 − B`). The traces and their legend markers
+  follow live theme changes. Both hues represent signal content.
 
 Places where a screen's needs override a general rule, kept on purpose:
 

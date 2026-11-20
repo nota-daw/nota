@@ -15,14 +15,25 @@ mode behavior described in the earlier iterations below.
   attenuation, in-scale resonance and attack protection. The selected lower
   note wins ties. Empty and full masks pass delay-aligned dry audio.
 - FR-027: Keep the card layout and independent Amount, Resonance and Decay.
-  Keep stereo-linked Morph and Gate on the shifted components. Latency is
-  fixed at 1024 samples and both controls default off.
+  Keep stereo-linked Morph and Gate on the shifted components. Both controls
+  default off. The default latency is 1024 samples (see FR-035).
 - FR-028: Remove Polyphonic and its selector. Keep kind 27, parameter indices
   0–23, automation, default values, scope shape and all six preset identities.
   Load former Polyphonic sessions using the retained values in HQ.
 - FR-029: Verify routing, resonance, stereo, attacks, automation, latency and
   real-time behavior. Supply level-matched comparisons with the previous
   prototype. Evaluate timbre, attacks and decay separately in listening comparisons.
+
+## Card sizes and sideband mute
+
+- FR-030: Provide a compact S card with the spectrum, band handles, both
+  sideband switches, Amount, Resonance and Mix. Keep the full L card as the
+  default. Both sizes share the same device, settings and preset.
+- FR-031: Mute frequencies below Low or above High independently in the wet
+  signal. Mutes work with any note mask and at any Amount. Mix at zero
+  plays the full time-aligned dry signal.
+- FR-032: Draw Dry and Tuned as thin, distinct spectral lines. Dry follows the
+  theme accent. Tuned uses its RGB inverse and follows live theme changes.
 
 ## Earlier iterations
 
@@ -116,3 +127,32 @@ baseline. Evaluate audible artifacts and timbre by listening.
 
 The approved local-prototype scope continues. The user selected real-time track
 processing, Chroma's own scale selector and its existing latency.
+
+## Selectable processing FFT
+
+- FR-033: Chroma offers 512, 1024 and 2048 sample FFT windows. New devices and
+  older projects use 1024. Both card sizes show a quiet FFT menu and its
+  latency in milliseconds between the two sideband switches.
+- FR-034: FFT is a per-device project setting retained on duplication. Sound
+  presets, A/B, automation, MIDI Learn, CV and rack macros leave it alone.
+  Explicit changes are accepted only with transport stopped, before playback,
+  count-in or recording starts.
+- FR-035: Report and compensate the selected window's processing latency.
+  Preserve the 1024-sample default sound and the existing 1026-float scope
+  contract, including the independent long bass and short full-band analysis.
+- Acceptance covers all three sizes and sample rates (44.1, 48 and 96 kHz),
+  delay-aligned audio, zero render allocations, callback timings at 64 and
+  256 frames, persistence and the cards at both display scales.
+
+## MIDI note source
+
+- FR-036: The S and L Chroma cards select Manual or another instrument track.
+  The MIDI source follows Arrangement clips and live notes after track MIDI
+  effects. The keyboard displays the resulting pitch classes. Selecting
+  Manual restores the stored root, scale and custom notes.
+- FR-037: MIDI drives regular inserts and devices in their Audio Effect Racks,
+  including project render. Save the route as a project sidechain reference.
+  Unkeyed projects use Manual. A missing source or empty chord fades out
+  correction while retaining the selected latency.
+- FR-038: Respect event offsets and overlapping notes, keep transitions short,
+  and uphold the existing allocation-free audio and idle behaviour.

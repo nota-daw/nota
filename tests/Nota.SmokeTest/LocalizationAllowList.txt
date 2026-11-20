@@ -2158,6 +2158,7 @@ Nota.Application/Engine/EngineContracts.cs	Pressure	# data: device parameter and
 Nota.Application/Engine/EngineContracts.cs	Tune	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/EngineContracts.cs	Volume	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/SectionNames.cs	Section 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/DeviceView.cs	FFT size	# data: the engine's Chroma configuration identifier, independent of the localized selector
 Nota.Application/Instruments/DeviceView.cs	View	# data: the engine's param name for an effect's card size, never shown
 Nota.Application/Instruments/KeysModel.cs	 pickup	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/KeysModel.cs	 voices	# data: device parameter, port and value names and live readouts of their values (FR-004)

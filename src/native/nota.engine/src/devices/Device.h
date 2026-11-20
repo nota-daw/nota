@@ -22,6 +22,16 @@
 namespace nota {
 
 struct MidiEv;
+struct MidiKeyNotes;
+
+// Borrowed render data, valid until the device finishes the current block.
+struct MidiKeyBlock {
+    int32_t sourceTrack = -1;
+    const MidiEv* events = nullptr;
+    int32_t count = 0;
+    const MidiKeyNotes* start = nullptr;
+    int endMask = 0; // pitch classes held after the last event
+};
 
 class RackCore;
 
@@ -112,6 +122,11 @@ class Device {
     virtual void setParam(int32_t index, float value) {
         (void)index;
         (void)value;
+    }
+    virtual bool paramRequiresStop(int32_t) const { return false; }
+    // Continuous controls can write during playback. Configuration changes go through Engine.
+    void setLiveParam(int32_t index, float value) {
+        if (!paramRequiresStop(index)) setParam(index, value);
     }
 
     // Hosted-plugin parameter automation (M9-B). Distinct from the built-in
@@ -229,7 +244,12 @@ class Device {
     // returns true; the engine then hands it the sidechain source track's post-FX note
     // events for the block (offsets within the block) right before process(). Audio thread.
     virtual bool wantsMidiKey() const { return false; }
+    // A note display can consume its MIDI key even when its audio chain is skipped.
+    virtual bool wantsMidiKeyWhenSilent() const { return false; }
     virtual void setMidiKey(const MidiEv* /*evs*/, int32_t /*n*/) {}
+    virtual void setMidiKeyBlock(const MidiKeyBlock& block) {
+        if (block.events) setMidiKey(block.events, block.count);
+    }
     // With no sidechain source routed, a device that returns true here gets its own track's
     // notes through setMidiKey instead (Nota Shutter's pattern retrigger).
     virtual bool wantsOwnMidiKey() const { return false; }

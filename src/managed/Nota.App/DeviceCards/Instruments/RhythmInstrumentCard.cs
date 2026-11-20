@@ -788,7 +788,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 for (int p = 0; p < e.RhythmVoiceDeviceParamCount(track, v0, d0); p++)
                 {
                     int pp = p;
-                    var mi = new MenuItem { Header = e.RhythmVoiceDeviceParamName(track, v0, d0, p) };
+                    string name = e.RhythmVoiceDeviceParamName(track, v0, d0, p);
+                    if (!DeviceView.IsSoundParam(name)) continue;
+                    var mi = new MenuItem { Header = name };
                     mi.Click += (_, _) =>
                     {
                         foreach (var (v, d) in holders)
@@ -823,9 +825,13 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                     if (dpc <= 0) continue;
                     var dev = new MenuItem { Header = e.RhythmVoiceDeviceName(track, v, d) };
                     for (int p = 0; p < dpc; p++)
-                        dev.Items.Add(MacroPanel.Target(this, e.RhythmVoiceDeviceParamName(track, v, d, p), macro, v, d, p,
+                    {
+                        string name = e.RhythmVoiceDeviceParamName(track, v, d, p);
+                        if (!DeviceView.IsSoundParam(name)) continue;
+                        dev.Items.Add(MacroPanel.Target(this, name, macro, v, d, p,
                             e.RhythmVoiceDeviceParamMin(track, v, d, p), e.RhythmVoiceDeviceParamMax(track, v, d, p), changed,
                             MacroPanel.IsMapped(this, macro, v, d, p)));
+                    }
                     voice.Items.Add(dev);
                 }
                 menu.Items.Add(voice);

@@ -417,7 +417,7 @@ static void applyCcRoute(Track& t, const MidiDevice& md) {
     if (!d || pi >= d->paramCount()) return;
     const float mn = d->paramMin(pi), mx = d->paramMax(pi);
     const float mod = std::clamp(md.ccValue() * md.ccDepth(), 0.0f, 1.0f);
-    d->setParam(pi, mn + (mx - mn) * mod);
+    d->setLiveParam(pi, mn + (mx - mn) * mod);
 }
 
 void Engine::applyMidiCcRouting(Track& t) {
@@ -1045,6 +1045,7 @@ void Engine::endCountIn() {
     countInActive_ = false;
     uiCountIn_.store(0.0, std::memory_order_relaxed);
     captureGate_.store(true, std::memory_order_relaxed);
+    countInRunning_.store(false, std::memory_order_release);
 }
 
 // A Session take counted in (#158): its slot starts as the transport rolls, on that sample,
@@ -1063,6 +1064,7 @@ void Engine::drainCommands() {
         case CommandType::TransportPlay:
             if (c.i0 > 0 && !transport_.isPlaying()) { // count-in first (i0 = bars)
                 countInActive_ = true;
+                countInRunning_.store(true, std::memory_order_relaxed);
                 countInPos_ = 0.0;
                 countInTotal_ = static_cast<double>(c.i0) * std::max(1, transport_.beatsPerBar());
                 lastCountInBeat_ = -1;
@@ -1075,6 +1077,7 @@ void Engine::drainCommands() {
                 transport_.play();
                 launchCountInSlot(); // Play pressed during a Session take's count-in
             }
+            pendingTransportStarts_.fetch_sub(1, std::memory_order_release);
             break;
         case CommandType::TransportStop:
             endCountIn();
@@ -1726,14 +1729,16 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
 void Engine::computeBlockMidi(
     Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive) {
     const size_t nt = g ? g->tracks.size() : 0;
-    // AR-6: never allocate here — publishRaw pre-sizes all four vectors (and
+    // AR-6: never allocate here — publishRaw pre-sizes the vectors (and
     // every inner buffer) for each graph swap before it goes live. The guard
     // below is unreachable in practice; it neutralizes counts so no stale
     // MIDI can replay instead of growing.
-    const size_t have = std::min({rs_->blockMidi.size(), rs_->blockMidiN.size(), rs_->blockExpr.size(), rs_->blockExprN.size()});
+    const size_t have = std::min({rs_->blockMidi.size(), rs_->blockMidiN.size(), rs_->blockMidiStart.size(),
+        rs_->blockExpr.size(), rs_->blockExprN.size()});
     if (have < nt) {
         for (size_t i = 0; i < have; ++i) {
             rs_->blockMidiN[i] = 0;
+            rs_->blockMidiStart[i] = {};
             rs_->blockExprN[i] = 0;
         }
         return;
@@ -1742,36 +1747,54 @@ void Engine::computeBlockMidi(
         rs_->blockMidiN[i] = 0;
         rs_->blockExprN[i] = 0;
         Track& t = *g->tracks[i];
+        auto& held = t.liveHeld->midiKey;
+        const bool timeline = playing && arrangementActive;
+        if (t.liveHeld->midiKeyArrangement && !timeline) held = {};
+        t.liveHeld->midiKeyArrangement = timeline;
         // Session-active tracks feed via renderSessionSlotRaw (their own clock), so skip here.
         const bool sessionActive = t.sessionPlayer && t.sessionPlayer->playing.load(std::memory_order_relaxed) >= 0;
-        if (t.type() != TrackType::Instrument || !t.instrument || sessionActive) continue;
+        if (t.type() != TrackType::Instrument || !t.instrument || sessionActive) {
+            if (held.mask) held = {};
+            if (rs_->blockMidiStart[i].mask) rs_->blockMidiStart[i] = {};
+            continue;
+        }
         auto& buf = rs_->blockMidi[i];
         if (buf.size() < 1024) {
-            rs_->blockMidiN[i] = 0;
-            rs_->blockExprN[i] = 0;
+            rs_->blockMidiStart[i] = {};
             continue;
         } // unreachable: pre-sized
         auto& xbuf = rs_->blockExpr[i];
         if (xbuf.size() < static_cast<size_t>(kMaxBlockExpr)) {
-            rs_->blockMidiN[i] = 0;
-            rs_->blockExprN[i] = 0;
+            rs_->blockMidiStart[i] = {};
             continue;
         }
         rs_->blockMidiN[i] = computeInstrumentMidi(
             t, buf.data(), frames, blockStart, spb, playing, arrangementActive, xbuf.data(), &rs_->blockExprN[i]);
+        // Frozen source audio is a recording and does not expose its former MIDI.
+        if (t.frozen() && t.frozenBuf) {
+            held = {};
+            rs_->blockMidiStart[i] = {};
+        } else {
+            if (held.mask || rs_->blockMidiStart[i].mask) rs_->blockMidiStart[i] = held;
+            for (int k = 0; k < rs_->blockMidiN[i]; ++k) held.apply(buf[k]);
+        }
     }
 }
 
-// A device that takes a MIDI key (Nota Auto Shift's MIDI target) gets its source track's
-// post-FX notes for this block, from the pre-pass (rs_->blockMidi). Audio thread.
+// Read the source's MIDI pre-pass results while rendering the consumer. A keyed
+// device receives events and the notes that were held before their first offset.
 void Engine::feedMidiKey(Graph* g, Device& d, int32_t srcTrackId) {
     if (!g) return;
     const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
     for (size_t j = 0; j < nt; ++j)
         if (g->tracks[j] && g->tracks[j]->id() == srcTrackId) {
-            d.setMidiKey(rs_->blockMidi[j].data(), rs_->blockMidiN[j]);
+            const auto& source = *g->tracks[j];
+            const bool playable = source.type() == TrackType::Instrument && !(source.frozen() && source.frozenBuf);
+            d.setMidiKeyBlock({srcTrackId, rs_->blockMidi[j].data(), rs_->blockMidiN[j],
+                playable ? &rs_->blockMidiStart[j] : nullptr, playable ? source.liveHeld->midiKey.mask : 0});
             return;
         }
+    d.setMidiKeyBlock({srcTrackId});
 }
 
 // Renders the instrument's dry stereo (pre-fader) into `dst` (zeroed here) from this block's
@@ -2343,6 +2366,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         if (g)
             for (auto& tptr : g->tracks)
                 if (tptr->instrument && !sessionActiveOf(*tptr)) {
+                    tptr->liveHeld->midiKey = {};
                     tptr->instrument->allNotesOff();
                     releaseHeldControllers(*tptr->instrument); // a clip's pedal / wheel (specs/020)
                     for (auto& md : tptr->midiEffects)
@@ -2360,6 +2384,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         for (int32_t k = 0; k < notesOffCount_; ++k)
             for (auto& tptr : g->tracks)
                 if (tptr->id() == notesOffTracks_[k]) {
+                    tptr->liveHeld->midiKey = {};
                     if (tptr->instrument) {
                         tptr->instrument->allNotesOff();
                         releaseHeldControllers(*tptr->instrument);
@@ -2449,8 +2474,8 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         transport_.advanceBy(seg);
         done += seg;
         if (countInDone) {
-            endCountIn();
             transport_.play();
+            endCountIn();
             launchCountInSlot();
             // Let the metronome click the beat we launch on (not when starting mid-beat).
             const double b = transport_.positionBeats() * transport_.timeSigDenom() / 4.0;
@@ -2952,6 +2977,17 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // MIDI pre-pass: each instrument track's post-FX output for this block, so the render
         // below can feed instruments their own notes plus any routed-in source's notes.
         computeBlockMidi(g, frames, blockStart, spb, playing, arrangementActive);
+        const auto feedSilentMidiKeys = [&](Track& t) {
+            const auto feed = [&](Device& d) {
+                const int32_t source = d.sidechainSourceTrackId();
+                if (source >= 0 && d.wantsMidiKeyWhenSilent() && !d.bypassed()) feedMidiKey(g, d, source);
+            };
+            for (auto& d : t.devices)
+                if (d && !d->bypassed()) {
+                    feed(*d);
+                    if (auto* rack = d->asRack()) rack->forEachChildDevice(feed);
+                }
+        };
 
         // Pass 1: leaf tracks -> parent group bus (or master), tapping post-fader sends.
         //
@@ -3035,6 +3071,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     sessionPostRender(t, frames / spb);
                 }
                 t.tailQuiet() = -1; // muted: its tail is gone, not saved for the unmute
+                if (!frozenActive) feedSilentMidiKeys(t);
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -3073,6 +3110,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 w.path = LeafPath::Tail; // its effects ring out on silence (#449)
             } else {
                 t.tailQuiet() = -1;
+                feedSilentMidiKeys(t);
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;

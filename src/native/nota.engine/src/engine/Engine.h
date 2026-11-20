@@ -353,7 +353,7 @@ class Engine {
 
     // --- transport (M1) ---
     void transportPlay();
-    void transportStop();
+    bool transportStop();
     // Count-in: N bars of clicks before the transport rolls (0 = off). Only a user Play
     // (transportPlayCountIn) and a Record from stop use it — exports / freezes / session
     // launches roll immediately. The clicks sound whether or not the metronome is on.
@@ -835,6 +835,7 @@ class Engine {
     bool rhythmRemoveVoiceDevice(int32_t trackId, int32_t voice, int32_t dev);
     bool rhythmMoveVoiceDevice(int32_t trackId, int32_t voice, int32_t from, int32_t to);
     Device* rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) const;
+    void rhythmVoiceDeviceParamSet(int32_t trackId, int32_t voice, int32_t dev, int32_t param, float value);
     std::string rhythmKitName(int32_t trackId) const;
     void setRhythmKitName(int32_t trackId, const std::string& name);
     // Nota Rhythm macros: names + mappings (the values are the macro1..8 plugin params).
@@ -1707,7 +1708,8 @@ class Engine {
     std::vector<ClipEntry> clipMany_;
     int32_t insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, int32_t atIndex);
     int32_t insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevice> md, int32_t atIndex); // ... or of the copied MIDI effect (one of the two at a time)
-    void recomputePdc(); // message thread: realign all tracks
+    void recomputePdc(bool resetChangedDelays = false); // message thread: realign all tracks
+    void setStoppedDeviceParam(Device& device, int32_t param, float value);
     Device* deviceAt(int32_t trackId, int32_t deviceIndex) const;
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;
     void openMidiInput(); // (re)connect MIDI sources per midiConfig_
@@ -2042,11 +2044,15 @@ class Engine {
     // disarmed): fold what is still queued or held back into it now, while its target is known.
     void flushCtlTake();
     std::atomic<double> uiCountIn_{0.0}; // beats of count-in left (UI mirror)
+    std::atomic<bool> countInRunning_{false}; // includes the boundary between count-in and Play
     // False while a count-in runs: takes started from stop don't capture the clicks-only
     // pre-roll (the hardware tap and the internal-resampling tap both honour it).
     std::atomic<bool> captureGate_{true};
     bool recordCountIn_ = false; // setRecording → startAudioRecording: count-in pending
     void playClock();            // push a TransportPlay command without touching arrangementActive_
+    bool enqueueTransportStart(int32_t countInBars);
+    std::atomic<uint32_t> pendingTransportStarts_{0};
+    bool configuringResetGraph_ = false; // authoring thread, until the next queued Play
     // Click `bars` of count-in, then roll the clock (arrangementActive_ untouched). Message thread.
     void startCountIn(int32_t bars);
     // A Session take started from stop counts in first (#158). sessionCountIn_: this take
@@ -2686,6 +2692,7 @@ class Engine {
         // MIDI FX (arp) drive the destination too.
         std::vector<std::vector<MidiEv>> blockMidi;
         std::vector<int> blockMidiN;
+        std::vector<MidiKeyNotes> blockMidiStart;
         // Clip-note expression replayed per block (computeBlockMidi fills, the render pass
         // merges).
         std::vector<std::vector<ExprEv>> blockExpr;

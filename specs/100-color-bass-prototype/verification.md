@@ -169,3 +169,105 @@ Replaced stepped opacity tiles with continuous theme-aware gradients and narrow 
   at 48 kHz and 256-frame blocks was 57–76 ms for the baseline and 247–252 ms
   for HQ across the six scenes. The HQ 99th-percentile block time was
   0.34–0.38 ms. Both benchmarks used the same harness and matching source WAVs.
+
+## Card sizes and sideband mute
+
+- The native harness passes 64 checks. It covers low/high/both switches
+  at Mix 0%, 50% and 100%, Amount 0%, inactive note masks, an active
+  transposition, live mute ramps, variable block sizes and zero render
+  allocations. Mix 0% reproduces delayed full-band dry.
+- The focused C ABI run passes all 18 Chroma checks. Project save/load
+  and cloning keep both mutes and the chosen card size. Legacy 21-, 24-
+  and 25-slot states open in L with both mutes off. The retired Mode
+  automation remains inactive. Presets carry the mutes and leave the
+  selected card size in place.
+- Both cards were checked headlessly at 1× and 2× in Studio Dark, Studio
+  Light, Ember Graphite and Ember Paper. Each preview verified the
+  layout, live theme switching and the exact RGB complement in the
+  Tuned brush and gradient. In the final layout the spectrum is 91 px
+  high in L and 143 px in S.
+- Regenerated the two card shots in both Studio themes and updated the
+  bilingual manual and design guide. The manual builds 340 pages and
+  its checker reports zero errors.
+- The final full build compiles the universal native engine and managed
+  app. The full smoke run passes the Chroma tests and fails only the
+  pre-existing render-pool burst check (T017), with 15 late blocks in a
+  50 ms window against a limit of 4. All three remaining scanner checks
+  pass when run separately.
+
+## Selectable processing FFT
+
+- The DSP suite exercises 512, 1024 and 2048 samples at 44.1, 48 and 96 kHz.
+  Dry and wet crossover impulses land at the reported delay. Corrected tones
+  retain their expected pitch and stereo polarity, Morph and Gate respond,
+  and a size change starts with fresh delay history. The allocation guard
+  covers rendering and switching sizes.
+- C ABI tests use two opposite-polarity tracks to check PDC at each setting,
+  directly and with Chroma inside an Audio Effect Rack. They also cover the
+  transport guard, project and preset compatibility and continuous-control
+  exclusions. Replacing a playing project restores its saved FFT before
+  the stop acknowledgement from the previous graph arrives.
+- Headless cards were exercised in S and L at 1× and 2× in Studio Dark,
+  Studio Light, Ember Graphite and Ember Paper. The focusable FFT button
+  opens with Space, all three selections update the readout at 48 kHz, and
+  playback disables the selector. Both sideband switches stay clear of the
+  selector and latency. The bilingual manual's four screenshots were
+  regenerated and the documentation built with zero check errors.
+- At the 1024 default, `cmp` found bit-identical audio against the prior
+  prototype for both stereo polarities at 44.1, 48 and 96 kHz, and for the
+  separate active and all-notes fixtures at 48 kHz with 64- and 256-frame
+  blocks.
+- The native test suite passes 129 checks with both Accelerate and the portable
+  FFT. The focused managed run passes 33 Chroma checks.
+
+On Apple M2 at 48 kHz, the active correction fixture with Morph and
+resonance gave the following callback times. Values are medians across
+11 four-second runs following a warm-up.
+
+| Processing FFT | Mean, 64 frames | P99, 64 frames | Mean, 256 frames | P99, 256 frames |
+|---:|---:|---:|---:|---:|
+| 1024 baseline | 118.4 µs | 386.3 µs | 465.3 µs | 583.9 µs |
+| 512 | 112.9 µs | 226.0 µs | 454.0 µs | 575.8 µs |
+| 1024 | 112.5 µs | 376.1 µs | 446.5 µs | 556.3 µs |
+| 2048 | 105.1 µs | 615.6 µs | 418.9 µs | 791.3 µs |
+
+Raw captures, fixtures and timings are in `build/color-prototype/fft-size/`.
+
+## MIDI note source
+
+- All 153 native checks pass with Accelerate and the portable FFT. C and D
+  alternate every sixteenth at 120 BPM. At 512, 1024 and 2048 samples,
+  the changes start at the delayed event boundary, block partitions produce
+  identical samples, and the signal returns to aligned dry after release.
+  MIDI updates the keyboard without waking silent DSP or allocating.
+- All 47 focused Chroma integration checks pass. The direct and rack paths
+  cover project save and reopen, overlapping octaves, live input with
+  transport stopped, armed MIDI input, the post-Arp stream, source deletion,
+  Stop, seek and loop chase. The callback and offline render match sample for
+  sample. The sidechain-parts, MIDI-controller, racks and device-group suites
+  also pass.
+- In Manual, 18 comparison buffers at 44.1, 48 and 96 kHz match byte for
+  byte with the portable FFT. Accelerate matches in 17 cases. The 44.1 kHz
+  in-phase render at FFT 512 has a peak difference of −109.1 dBFS. FFT 1024
+  matches in all six comparisons on both backends.
+- On Apple M2, after three seconds of digital silence, the mean cost of
+  Chroma with a held MIDI chord was 0.123 µs at 48 kHz and 0.112 µs at
+  96 kHz for 64 frames. Before the change, Manual measured 0.113 and
+  0.112 µs in the same probe. The keyed path remained idle in all tests
+  at 64 and 256 frames. These values time a single device.
+- Headless checks exercise S and L at 1× and 2× in the four Nota themes.
+  They open the source menu by keyboard, select an instrument track,
+  verify lit notes and their release, and restore Manual. Four shots
+  were regenerated for the EN/RU manual. The documentation build and
+  checker passed with zero errors.
+
+The MIDI phase converges against FR-036–038. The earlier listening comparison
+and global render-pool timing gate remain tracked separately by T035 and T017.
+
+The universal engine, Release app and scanner self-test built and ran. The
+full smoke run finished with two deadline failures in the existing overloaded
+render-pool scenario (124 of 4125 late blocks and a burst of 7 in 50 ms). The
+same Reverb-only scenario previously failed both checks on the baseline
+engine (126 late blocks and a burst of 7). The three scanner checks that
+follow the full smoke run pass individually. FR-033 through FR-035 and
+T039 through T042 are verified. The shared T017 render-pool gate remains open.

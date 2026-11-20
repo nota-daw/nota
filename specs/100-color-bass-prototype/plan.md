@@ -18,6 +18,22 @@
   repeatable baseline/current renders. Assess tone, attacks and decay by
   comparing renders with matched input, time alignment and playback level.
 
+## Card sizes and sideband mute
+
+Use the shared S/L header and persisted View parameter. Add the mute switches
+on both sizes. Keep the old Mode index inactive and append the new parameters.
+Filter unnamed slots out of parameter pickers and preset capture.
+
+Delay the low and high outputs independently and ramp their mute gains over
+10 ms. With an empty or full note mask, fade the wet contribution into the
+phase-consistent crossover reconstruction while a mute engages. With both
+mutes off, the inactive mask uses the full delayed dry.
+
+Aggregate both spectra separately on a two-pixel grid. Draw one physical
+pixel and leave one clear between columns. Keep the smooth vertical fade.
+Update the inverse accent brush and gradient on theme changes and use the
+same hue in the legend.
+
 ## Earlier iterations
 
 ### Summary
@@ -85,3 +101,33 @@ aligned dry, reset spectral synthesis state at a frame boundary, allow the new
 overlap buffers to fill, and fade it back in. Integrate the selector using Chroma's
 existing card controls, localization and generic parameter persistence. Existing
 presets use the default mode. No new ABI, dependency, or project-key routing.
+
+## Selectable processing FFT
+
+Append a project-only normalized parameter at index 28 (0 / 0.5 / 1).
+Prepare all processing FFTs, windows and frame coefficients at sample-rate
+setup. Keep storage large enough for 2048 samples and apply the selected
+configuration at block entry. Use an N/4 hop and N-sample matched dry delay.
+Keep scope analysis at the existing two window lengths and cadence.
+
+Guard explicit edits in the engine before changing the setting, accounting
+for queued starts. Route configuration writes for inserts and rack children
+through the same latency refresh. Keep preset and continuous-control paths
+away from the configuration parameter. Use the existing ABI and serialized
+parameter arrays.
+
+Place a keyboard-accessible menu and millisecond readout between both
+sideband toggles on both cards. Use live scope metadata for the readout.
+
+## MIDI note source
+
+Use Auto Shift's whole-track MIDI key and sidechain project reference. Add
+the post-MIDI-FX held notes at the beginning of the block to the existing
+event feed, so a consumer can resume after skipped render blocks. Follow the
+Arrangement transport's existing note flush and chase.
+
+Keep pitch-class selection and timed dual-path transitions in Chroma. Prime
+the inactive path for one FFT window, crossfade for one hop, and coalesce
+pending updates to the latest mask. Append the MIDI mask to optional scope
+telemetry after the existing 1026 values. Use the shared S/L keyboard with a
+compact source menu.

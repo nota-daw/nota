@@ -128,6 +128,7 @@ int32_t Engine::presetModified(int32_t trackId, int32_t surface, int32_t index) 
         if (hosted) {
             name = pluginParamId(trackId, index, p);
         } else if (surface == 0) {
+            if (const auto* device = deviceAt(trackId, index); device && device->paramRequiresStop(p)) continue;
             const char* nm = deviceParamName(trackId, index, p);
             name = nm ? nm : "";
             lo = deviceParamMin(trackId, index, p);

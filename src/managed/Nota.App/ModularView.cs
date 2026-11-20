@@ -747,7 +747,8 @@ public sealed partial class ModularView : UserControl
         };
         n.CvInputLabels = CvInputsFor(0, index);
         PopulateParams(n, _engine.DeviceParamCount(_trackId, index),
-            p => _engine.DeviceParamModulated(_trackId, index, p), p => DeviceParam(index, p));
+            p => _engine.DeviceParamModulated(_trackId, index, p), p => DeviceParam(index, p),
+            p => DeviceView.IsSoundParam(_engine.DeviceParamName(_trackId, index, p)));
         BuildNodeView(n);
         return n;
     }
@@ -795,11 +796,12 @@ public sealed partial class ModularView : UserControl
     // params, so the card reflects what's being modulated; expanded (↕), it shows every
     // param with the patched ones kept on top. Records HiddenParamCount so the header knows
     // whether the expand affordance would actually reveal anything.
-    private void PopulateParams(GNode n, int count, Func<int, bool> modulated, Func<int, Control> cell)
+    private void PopulateParams(GNode n, int count, Func<int, bool> modulated, Func<int, Control> cell, Func<int, bool>? include = null)
     {
         var patched = new List<int>();
         var rest = new List<int>();
-        for (int p = 0; p < count; p++) (modulated(p) ? patched : rest).Add(p);
+        for (int p = 0; p < count; p++)
+            if (include?.Invoke(p) ?? true) (modulated(p) ? patched : rest).Add(p);
         foreach (int p in patched) n.Params.Add(cell(p));   // patched knobs first (at the top)
         bool expanded = _expanded.Contains(n.Id);
         if (expanded) foreach (int p in rest) n.Params.Add(cell(p));
@@ -1869,11 +1871,12 @@ public sealed partial class ModularView : UserControl
             string pn = kind == 2 ? _engine.MidiEffectParamName(t, di, prm)
                       : kind == 1 ? _engine.PluginParamName(t, -1, prm)
                                   : _engine.DeviceParamName(t, di, prm);
+            if (kind == 0 && !DeviceView.IsSoundParam(pn)) continue;
             var mi = new MenuItem { Header = pn };
             mi.Click += (_, _) => { _engine.CvLinkAddToTarget(t, modId, kind, -1, di, prm); Rebuild(); Changed?.Invoke(); };
             flyout.Items.Add(mi);
         }
-        if (pc == 0) flyout.Items.Add(new MenuItem { Header = Loc.T("modular.no_parameters"), IsEnabled = false });
+        if (flyout.Items.Count == 0) flyout.Items.Add(new MenuItem { Header = Loc.T("modular.no_parameters"), IsEnabled = false });
         flyout.ShowAt(node.View, showAtPointer: true);
     }
 
@@ -1896,11 +1899,12 @@ public sealed partial class ModularView : UserControl
                 string pn = kind == 2 ? e.MidiEffectParamName(targetTrackId, di, prm)
                           : kind == 1 ? e.PluginParamName(targetTrackId, -1, prm)
                                       : e.DeviceParamName(targetTrackId, di, prm);
+                if (kind == 0 && !DeviceView.IsSoundParam(pn)) continue;
                 var mi = new MenuItem { Header = pn };
                 mi.Click += (_, _) => { e.CvLinkAddToTarget(_trackId, modId, kind, targetTrackId, di, prm); Rebuild(); Changed?.Invoke(); };
                 sub.Items.Add(mi);
             }
-            flyout.Items.Add(sub);
+            if (sub.Items.Count > 0) flyout.Items.Add(sub);
         }
 
         bool inst = e.TryGetTrackInfo(TrackIndex(targetTrackId), out var ti) && ti.IsInstrument;

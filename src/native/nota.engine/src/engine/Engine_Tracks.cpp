@@ -974,6 +974,13 @@ Device* Engine::rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) c
     auto* rh = rhythmOf(findTrackAuthoring(trackId));
     return rh ? rh->voiceDevice(voice, dev) : nullptr;
 }
+
+void Engine::rhythmVoiceDeviceParamSet(int32_t trackId, int32_t voice, int32_t dev, int32_t param, float value) {
+    if (auto* device = rhythmVoiceDevice(trackId, voice, dev)) {
+        if (device->paramRequiresStop(param)) setStoppedDeviceParam(*device, param, value);
+        else device->setParam(param, value);
+    }
+}
 std::string Engine::rhythmKitName(int32_t trackId) const {
     auto* rh = rhythmOf(findTrackAuthoring(trackId));
     return rh ? rh->kitName() : std::string{};

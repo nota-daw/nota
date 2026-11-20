@@ -67,3 +67,23 @@ pre-existing global smoke gate and must be reassessed after the full build.
 - [x] T033 Run native, C ABI and full build verification and record the results. The shared render-pool timing gate remains tracked by T017.
 - [x] T034 Update the bilingual manual, capture the card and generate baseline/HQ comparisons.
 - [ ] T035 Complete the external listening comparison with matched inputs and playback levels.
+
+## Card sizes and sideband mute
+
+- [x] T036 Add the S/L card, two automatable wet-sideband mutes and legacy parameter handling.
+- [x] T037 Draw one-pixel spectral traces with a theme-derived Tuned color.
+- [x] T038 Verify sideband audio, legacy state, both card sizes and live theme changes. Update the manual and design guide. The shared render-pool timing gate stays tracked by T017.
+
+## Selectable processing FFT
+
+- [x] T039 Prepare the three FFT configurations, activate at block entry, and preserve the two scope analyses.
+- [x] T040 Enforce stopped-transport edits and update PDC for inserts and rack children. Exclude FFT from presets and continuous control.
+- [x] T041 Add the shared S/L FFT selector and adjacent latency readout.
+- [x] T042 Verify the native and C ABI paths, waveform equality, allocation and callback cost. Verify headless cards and update the bilingual manual and changelog.
+
+## MIDI note source
+
+- [x] T043 Extend the existing MIDI key feed with the pre-block held notes and verify Arrangement routing.
+- [x] T044 Implement Chroma pitch classes, aligned transitions, scope and sleep coverage.
+- [x] T045 Add the shared S/L MIDI source menu and live keyboard, with project and rack coverage.
+- [x] T046 Verify realtime and offline audio, update user docs and feature lists, and record convergence.

@@ -13,9 +13,14 @@ namespace Nota.Application;
 public static class DeviceView
 {
     public const string ParamName = "View";
+    public const string FftSizeParamName = "FFT size";
 
     /// <summary>True for the param name that holds the card size.</summary>
     public static bool IsViewParam(string name) => name == ParamName;
+    public static bool IsConfigurationParam(string name) => name == FftSizeParamName;
+
+    /// <summary>True for a named sound parameter. An empty slot can hold a retired index.</summary>
+    public static bool IsSoundParam(string name) => !string.IsNullOrEmpty(name) && !IsViewParam(name) && !IsConfigurationParam(name);
 
     /// <summary>The index of the device's View param, or -1 when it has only one size.</summary>
     public static int Index(IAudioEngine engine, int trackId, int deviceIndex)

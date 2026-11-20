@@ -92,6 +92,8 @@ double level(const Audio& audio, double hz, double sr, double from = .65, double
 }
 double noteHz(int note) { return 440 * std::exp2((note - 69) / 12.); }
 using Fx = nota::Chroma;
+// Keep the harness buildable against older sources for --listen-only comparisons.
+constexpr int retiredMode = 24, muteLow = 25, muteHigh = 26, fftSize = 28;
 void mask(Fx& fx, unsigned classes) {
     fx.setParam(Fx::Scale, 1);
     for (int i = 0; i < 12; ++i) fx.setParam(Fx::NoteC + i, (classes >> i) & 1);
@@ -103,6 +105,81 @@ void onlyC(Fx& fx) {
 bool finite(const Audio& audio, double bound = 64.) {
     return std::all_of(audio.begin(), audio.end(), [=](float x) { return std::isfinite(x) && std::abs(x) <= bound; });
 }
+
+void bassSpectrumTests() {
+    constexpr int bins = 512;
+    using Scope = std::array<float, 2 + 2 * bins>;
+    const auto band = [](double hz) { return int(bins * std::log(hz / 40) / std::log(500.)); };
+    const auto peak = [&](const float* line, double low, double high) {
+        return *std::max_element(line + band(low), line + band(high) + 1);
+    };
+    for (int sr : {44100, 48000, 96000}) {
+        const auto suffix = " at " + std::to_string(sr) + " Hz";
+        Scope mono{}, opposed{};
+        for (bool antiphase : {false, true}) {
+            Fx fx;
+            mask(fx, (1 << 8) | (1 << 3)); // Shift A and E down to G# and D#.
+            fx.setParam(Fx::Low, 0);
+            fx.setParam(Fx::Resonance, 0);
+            fx.setSampleRate(sr, 256);
+            auto audio = tone(55, sr, 1., .12);
+            const auto second = tone(82, sr, 1., .12);
+            for (size_t i = 0; i < audio.size(); ++i) {
+                audio[i] += second[i];
+                if (antiphase && i % 2 != 0) audio[i] = -audio[i];
+            }
+            for (int i = 0; i < sr; i += 256) {
+                countAllocations.store(true);
+                fx.process(audio.data() + 2 * i, std::min(256, sr - i));
+                countAllocations.store(false);
+            }
+            auto& scope = antiphase ? opposed : mono;
+            const int count = fx.scopeRead(scope.data(), int(scope.size()));
+            const float* dry = scope.data() + 2;
+            const float* tuned = dry + bins;
+            const std::string phase = antiphase ? " (antiphase)" : " (in phase)";
+            check(count == int(scope.size()) && scope[0] == sr && scope[1] == 1024 &&
+                    std::min(peak(dry, 51, 59), peak(dry, 78, 86)) > peak(dry, 66, 70) + .15f,
+                "Dry resolves 55 Hz and 82 Hz with fixed scope layout" + suffix + phase);
+            const float* valleyFirst = tuned + band(62);
+            const float* valleyLast = tuned + band(69) + 1;
+            check(std::min(peak(tuned, 49, 59), peak(tuned, 74, 87)) >
+                    *std::min_element(valleyFirst, valleyLast) + .035f,
+                "Tuned resolves both shifted bass components" + suffix + phase);
+        }
+        check(std::equal(mono.begin() + 2, mono.begin() + 2 + band(250), opposed.begin() + 2),
+            "Dry bass power is invariant to stereo polarity" + suffix);
+    }
+
+    constexpr int sr = 48000;
+    constexpr int publication = 1024; // Four 256-sample hops at 48 kHz.
+    Fx fx;
+    fx.setSampleRate(sr, publication);
+    auto audio = tone(82, sr, 3. * publication / sr);
+    const auto treble = tone(2000, sr, 3. * publication / sr);
+    for (size_t i = 0; i < audio.size(); ++i) audio[i] += treble[i];
+    const auto read = [&](int start) {
+        Scope scope{};
+        fx.process(audio.data() + 2 * start, publication);
+        fx.scopeRead(scope.data(), int(scope.size()));
+        return scope;
+    };
+    const auto first = read(0);
+    const auto second = read(publication);
+    const auto third = read(2 * publication);
+    check(first[2 + band(82)] == second[2 + band(82)] && third[2 + band(82)] > second[2 + band(82)] &&
+            second[2 + band(2000)] > first[2 + band(2000)],
+        "bass refreshes on alternate publications while treble refreshes every time");
+
+    // A strong tone that would fold onto 82 Hz without filtering.
+    auto aliasInput = tone(sr / 9. - 82, sr, .45, .85);
+    fx.setSampleRate(sr, int(aliasInput.size() / 2));
+    fx.process(aliasInput.data(), int(aliasInput.size() / 2));
+    Scope scope{};
+    fx.scopeRead(scope.data(), int(scope.size()));
+    check(peak(scope.data() + 2, 75, 89) < .025f, "bass decimation rejects a tone at the alias frequency");
+}
+
 void delayAndRoutingTests() {
     for (double sr : {44100., 48000., 88200., 96000.}) {
         const auto suffix = " at " + std::to_string(int(sr)) + " Hz";
@@ -132,6 +209,74 @@ void delayAndRoutingTests() {
     auto diatonic = render(tone(noteHz(61), sr, 1.2), sr, [](auto& fx) { onlyC(fx); fx.setParam(Fx::Scale, 0); });
     check(level(diatonic, source * 242 / 256, sr) > .01 && level(diatonic, source * 271 / 256, sr) < .005,
           "major scale routes its sources through the downward branch only");
+}
+
+void fftSizeTests() {
+    for (int sr : {44100, 48000, 96000}) {
+        for (int size : {512, 1024, 2048}) {
+            const float choice = size == 512 ? 0.f : size == 1024 ? .5f : 1.f;
+            const auto suffix = " (" + std::to_string(size) + " at " + std::to_string(sr) + " Hz)";
+            Audio impulse(8192 * 2);
+            impulse[0] = impulse[1] = .5f;
+            const auto dry = render(impulse, sr, [=](auto& fx) {
+                fx.setParam(Fx::Mix, 0);
+                fx.setParam(fftSize, choice);
+            }, {64, 256});
+            Audio expected(impulse.size());
+            expected[2 * size] = expected[2 * size + 1] = .5f;
+            check(dry == expected, "FFT matches delay in dry path" + suffix);
+            const auto wet = render(impulse, sr, [=](auto& fx) {
+                onlyC(fx);
+                fx.setParam(Fx::Amount, 0); // The wet crossover remains active without the shifter's pre-ringing.
+                fx.setParam(fftSize, choice);
+            });
+            const auto first = std::find_if(wet.begin(), wet.end(), [](float x) { return std::abs(x) > 1e-7f; });
+            check(first == wet.begin() + 2 * size, "FFT matches delay in wet path" + suffix);
+
+            constexpr double source = 554.3652619537442, target = source * 242 / 256;
+            auto input = tone(source, sr, 1.2);
+            for (size_t i = 1; i < input.size(); i += 2) input[i] = -input[i];
+            const auto renderMode = [&](float morph, float gate) {
+                return render(input, sr, [&](auto& fx) {
+                    onlyC(fx);
+                    fx.setParam(fftSize, choice);
+                    fx.setParam(Fx::Morph, morph);
+                    fx.setParam(Fx::Gate, gate);
+                    fx.setParam(Fx::GateThreshold, 1);
+                });
+            };
+            const auto shifted = renderMode(0, 0);
+            const auto gated = renderMode(0, 1);
+            const auto morphed = renderMode(1, 0);
+            const double tuned = level(shifted, target, sr);
+            check(finite(shifted) && tuned > .008 && level(shifted, source, sr) < tuned,
+                "FFT retains semitone correction" + suffix);
+            check(level(gated, target, sr) < .1 * tuned && finite(morphed) && morphed != shifted,
+                "FFT supports Gate and Morph" + suffix);
+            double stereoDifference = 0;
+            for (size_t i = 0; i < morphed.size(); i += 2)
+                stereoDifference = std::max(stereoDifference, std::abs(double(morphed[i] + morphed[i + 1])));
+            check(stereoDifference < 1e-5, "FFT preserves stereo phase" + suffix);
+        }
+    }
+
+    Fx fx;
+    fx.setParam(Fx::Mix, 0);
+    auto fill = tone(300, 48000, .15);
+    fx.process(fill.data(), int(fill.size() / 2));
+    for (const auto& [choice, size] : {std::pair{0.f, 512}, std::pair{1.f, 2048}, std::pair{.5f, 1024}}) {
+        fx.setParam(fftSize, choice);
+        Audio impulse(8192, 0);
+        impulse[0] = impulse[1] = .5f;
+        countAllocations.store(true);
+        fx.process(impulse.data(), int(impulse.size() / 2));
+        countAllocations.store(false);
+        std::array<float, 1026> telemetry{};
+        const int count = fx.scopeRead(telemetry.data(), int(telemetry.size()));
+        check(fx.latencySamples() == size && count == int(telemetry.size()) && telemetry[1] == size &&
+                std::count(impulse.begin(), impulse.end(), 0.f) == int(impulse.size()) - 2 && impulse[2 * size] == .5f,
+            "FFT change resets old history and reports the configured latency " + std::to_string(size));
+    }
 }
 
 void resonanceAndBandTests() {
@@ -177,6 +322,101 @@ void resonanceAndBandTests() {
     check(first - split.begin() == 2048, "crossover mid and side bands start at the reported delay");
 }
 
+void sidebandMuteTests() {
+    constexpr double sr = 48000;
+    constexpr std::array frequencies{35., 523.2511306012, 18000.};
+    Audio input = tone(frequencies[0], sr, 1.2, .06);
+    for (double hz : {frequencies[1], frequencies[2]}) {
+        const auto component = tone(hz, sr, 1.2, .06);
+        for (size_t i = 0; i < input.size(); ++i) input[i] += component[i];
+    }
+
+    for (unsigned notes : {1u, 0u, 4095u}) {
+        const auto variant = [&](int mutes, float mix) {
+            return render(input, sr, [&](auto& fx) {
+                mask(fx, notes);
+                fx.setParam(Fx::Amount, 0);
+                fx.setParam(muteLow, (mutes & 1) != 0);
+                fx.setParam(muteHigh, (mutes & 2) != 0);
+                fx.setParam(Fx::Mix, mix);
+            }, {1, 64, 511, 1024});
+        };
+        const auto open = variant(0, 1);
+        const auto dry = variant(3, 0);
+        const std::string suffix = " (note mask " + std::to_string(notes) + ")";
+        check(std::equal(dry.begin() + 2048, dry.end(), input.begin()), "Mix zero keeps exact delayed full-band dry" + suffix);
+        for (int mutes : {1, 2, 3}) {
+            const auto muted = variant(mutes, 1);
+            const double low = level(muted, frequencies[0], sr) / level(open, frequencies[0], sr);
+            const double mid = level(muted, frequencies[1], sr) / level(open, frequencies[1], sr);
+            const double high = level(muted, frequencies[2], sr) / level(open, frequencies[2], sr);
+            const auto bandMatches = [mutes](int bit, double ratio) {
+                return (mutes & bit) ? ratio < .1 : std::abs(ratio - 1.) < .05;
+            };
+            check(bandMatches(1, low) && std::abs(mid - 1.) < .05 && bandMatches(2, high),
+                  "sideband selection " + std::to_string(mutes) + " preserves the other bands" + suffix);
+        }
+        const auto half = variant(3, .5);
+        const auto wet = variant(3, 1);
+        double error = 0;
+        for (size_t i = 0; i < half.size(); ++i)
+            error = std::max(error, std::abs(double(half[i]) - .5 * (double(wet[i]) + dry[i])));
+        check(error < 1e-6, "Mix at 50% blends the muted wet with full-band dry" + suffix);
+    }
+
+    const double source = noteHz(61), target = source * 242 / 256;
+    const auto sourceTone = tone(source, sr, 1.2);
+    const auto openCorrection = render(sourceTone, sr, onlyC);
+    const auto mutedCorrection = render(sourceTone, sr, [](auto& fx) {
+        onlyC(fx);
+        fx.setParam(muteLow, 1);
+        fx.setParam(muteHigh, 1);
+    });
+    check(std::abs(level(mutedCorrection, target, sr) / level(openCorrection, target, sr) - 1.) < .05,
+          "both sideband mutes retain the in-band pitch correction");
+
+    // Change each mute at a fixed stream position while the other one keeps its state.
+    const auto automated = [&](const std::vector<int>& blocks) {
+        Fx fx;
+        mask(fx, 0);
+        fx.setSampleRate(sr, 1024);
+        auto audio = input;
+        int offset = 0, block = 0;
+        for (int end : {24000, 33600, 43200, 57600}) {
+            while (offset < end) {
+                int n = std::min(end - offset, blocks[block++ % blocks.size()]);
+                countAllocations = true;
+                fx.process(audio.data() + 2 * offset, n);
+                countAllocations = false;
+                offset += n;
+            }
+            if (end == 24000) fx.setParam(muteLow, 1);
+            if (end == 33600) fx.setParam(muteHigh, 1);
+            if (end == 43200) fx.setParam(muteLow, 0);
+        }
+        return audio;
+    };
+    const auto regular = automated({256});
+    check(regular == automated({1, 64, 511, 1024}), "mute transitions are invariant across block partitions");
+    check(level(regular, 35, sr, .57, .67) < .006 && level(regular, 18000, sr, .57, .67) > .05 &&
+          level(regular, 18000, sr, .78, .88) < .006 && level(regular, 35, sr, 1., 1.1) > .05,
+          "sideband switches can close and reopen individually during playback");
+
+    Fx fx;
+    mask(fx, 0);
+    fx.setSampleRate(sr, 1024);
+    auto unmuted = tone(35, sr, .5);
+    auto transition = unmuted;
+    fx.process(transition.data(), 12000);
+    fx.setParam(muteLow, 1);
+    fx.process(transition.data() + 24000, 12000);
+    unmuted = render(unmuted, sr, [](auto& device) { mask(device, 0); });
+    double removalStep = 0;
+    for (size_t i = 24000; i < 25200; i += 2)
+        removalStep = std::max(removalStep, std::abs(double(transition[i] - unmuted[i]) - (transition[i - 2] - unmuted[i - 2])));
+    check(removalStep < .001, "muting a sustained sideband ramps instead of making a discontinuity");
+}
+
 void shapeAndStereoTests() {
     constexpr double sr = 48000, source = 277.1826309768721, target = source * 242 / 256;
     const auto input = tone(source, sr, 1.2);
@@ -210,8 +450,9 @@ void shapeAndStereoTests() {
     Fx fx;
     onlyC(fx);
     fx.setParam(Fx::Resonance, std::numeric_limits<float>::quiet_NaN());
-    fx.setParam(24, 1);
-    check(fx.getParam(Fx::Resonance) == 0 && fx.getParam(24) == 0 && fx.paramCount() == 24,
+    fx.setParam(retiredMode, 1);
+    fx.setParam(fftSize, std::numeric_limits<float>::infinity());
+    check(fx.getParam(Fx::Resonance) == 0 && fx.getParam(retiredMode) == 0 && fx.getParam(fftSize) == .5f,
           "non-finite parameters and retired Mode are ignored");
 }
 
@@ -262,6 +503,130 @@ void automationAndScopeTests() {
     fx.process(wake.data(), int(wake.size() / 2));
     check(!fx.isIdle() && energy(wake, 7000, 12000) > .0001, "audio wakes after silence");
 }
+
+void sleepTests() {
+    constexpr int sr = 48000;
+    constexpr int prefix = 37;
+    const auto configure = [](Fx& fx) {
+        mask(fx, 1);
+        fx.setParam(Fx::Resonance, .8f);
+        fx.setParam(Fx::Decay, .6f);
+    };
+    for (const auto& [choice, latency] : {std::pair{0.f, 512}, std::pair{.5f, 1024}, std::pair{1.f, 2048}}) {
+        const auto suffix = " (FFT " + std::to_string(latency) + ")";
+        Fx fx;
+        configure(fx);
+        fx.setSampleRate(sr, 256);
+        check(fx.isIdle(), "Chroma starts idle with empty history" + suffix);
+        const auto process = [&](Audio& audio) {
+            countAllocations.store(true);
+            fx.process(audio.data(), int(audio.size() / 2));
+            countAllocations.store(false);
+        };
+        auto input = tone(noteHz(60), sr, .8);
+        process(input);
+        Audio tail(2 * 2400);
+        process(tail);
+        check(!fx.isIdle() && energy(tail, 1200, 2400) > 1e-8, "Chroma renders its resonant tail before sleeping" + suffix);
+
+        Audio silence(2 * 3 * sr);
+        process(silence);
+        std::array<float, 1026> scope{};
+        fx.scopeRead(scope.data(), int(scope.size()));
+        Audio idleBlock(2 * 256);
+        process(idleBlock);
+        check(fx.isIdle() && energy(idleBlock, 0, 256) == 0 && energy(idleBlock, 0, 256, 1) == 0 &&
+                std::all_of(scope.begin() + 2, scope.end(), [](float v) { return v == 0; }),
+            "Chroma stays silent with empty telemetry while asleep" + suffix);
+
+        fx.setParam(fftSize, choice);
+        fx.setParam(Fx::Mix, 0);
+        process(idleBlock);
+        fx.scopeRead(scope.data(), int(scope.size()));
+        check(fx.isIdle() && scope[1] == latency, "Chroma accepts FFT configuration while asleep" + suffix);
+
+        Audio quietInput(2 * (prefix + latency + sr / 2));
+        for (int i = 0; i < sr / 2; ++i) quietInput[2 * (prefix + i) + 1] = 1e-6f;
+        Audio expected(quietInput.size());
+        std::copy(quietInput.begin(), quietInput.end() - 2 * latency, expected.begin() + 2 * latency);
+        process(quietInput);
+        check(!fx.isIdle() && quietInput == expected, "Chroma wakes on quiet right-only audio at the exact delay" + suffix);
+    }
+
+    const auto phrase = tone(noteHz(61), sr, .24);
+    Audio separated = phrase;
+    separated.resize(separated.size() + 2 * (sr + prefix));
+    separated.insert(separated.end(), phrase.begin(), phrase.end());
+    check(render(separated, sr, onlyC, {64}) == render(separated, sr, onlyC, {511, 17, 256}),
+        "Chroma sleep and wake are invariant across block partitions");
+}
+
+void midiKeyTests() {
+    constexpr int sr = 48000, onset = 6000, next = 12000, release = 18000, sourceTrack = 7;
+    const std::array events{
+        nota::MidiEv{onset, true, 60, 1}, nota::MidiEv{onset, true, 72, 1},
+        nota::MidiEv{onset + 2000, false, 60, 0}, nota::MidiEv{next, false, 72, 0},
+        nota::MidiEv{next, true, 62, 1}, nota::MidiEv{release, false, 62, 0},
+    };
+    const auto input = tone(noteHz(61), sr, .55);
+    for (const auto& [choice, latency] : {std::pair{0.f, 512}, std::pair{.5f, 1024}, std::pair{1.f, 2048}}) {
+        const auto suffix = " (FFT " + std::to_string(latency) + ")";
+        auto run = [&](const std::vector<int>& blocks) {
+            Fx fx;
+            onlyC(fx);
+            fx.setParam(fftSize, choice);
+            fx.setSampleRate(sr, 1024);
+            fx.setSidechainSourceTrackId(sourceTrack);
+            nota::MidiKeyNotes held;
+            Audio output = input;
+            size_t index = 0;
+            for (int start = 0, block = 0; start < int(output.size() / 2); ++block) {
+                const int frames = std::min(blocks[block % blocks.size()], int(output.size() / 2) - start);
+                std::array<nota::MidiEv, events.size()> pending{};
+                int count = 0;
+                while (index < events.size() && events[index].off < start + frames) {
+                    pending[count] = events[index++];
+                    pending[count++].off -= start;
+                }
+                countAllocations = true;
+                fx.setMidiKeyBlock({sourceTrack, pending.data(), count, &held});
+                fx.process(output.data() + 2 * start, frames);
+                countAllocations = false;
+                for (int i = 0; i < count; ++i) held.apply(pending[i]);
+                start += frames;
+            }
+            return output;
+        };
+        const auto output = run({256});
+        const auto dry = [&](int frame) { return input[2 * (frame - latency)]; };
+        bool aligned = output[2 * latency] == input[0];
+        for (int i = latency; i < onset + latency; ++i) aligned &= std::abs(output[2 * i] - dry(i)) < 1e-9f;
+        for (int i = release + latency + latency / 4; i < int(output.size() / 2); ++i)
+            aligned &= std::abs(output[2 * i] - dry(i)) < 1e-9f;
+        check(aligned && output == run({257, 17, 511, 64}), "MIDI correction follows delayed offsets across block partitions" + suffix);
+        auto at = [&](double hz, int begin) { return level(output, hz, sr, (begin + latency + 2600.) / sr, (begin + latency + 5800.) / sr); };
+        const double down = noteHz(61) * 242 / 256, up = noteHz(61) * 271 / 256;
+        check(at(down, onset) > 2 * at(up, onset) && at(up, next) > 2 * at(down, next),
+            "MIDI changes the audible target every sixteenth and keeps an overlapping octave" + suffix);
+    }
+
+    Fx idle;
+    idle.setSidechainSourceTrackId(sourceTrack);
+    nota::MidiKeyNotes held;
+    const std::array chord{nota::MidiEv{18, true, 60, 1}, nota::MidiEv{63, true, 64, 1}};
+    std::array<float, 512> zero{};
+    idle.setMidiKeyBlock({sourceTrack, chord.data(), int(chord.size()), &held, 17});
+    idle.process(zero.data(), int(zero.size() / 2));
+    std::array<float, 1027> scope{};
+    check(idle.isIdle() && idle.scopeRead(scope.data(), int(scope.size())) == int(scope.size()) && scope.back() == 17
+            && std::all_of(zero.begin(), zero.end(), [](float v) { return v == 0; }),
+        "MIDI updates the note display without waking silent audio DSP");
+    idle.setMidiKeyBlock({sourceTrack});
+    idle.process(zero.data(), int(zero.size() / 2));
+    idle.scopeRead(scope.data(), int(scope.size()));
+    check(idle.isIdle() && scope.back() == 0, "A missing MIDI source clears the displayed notes");
+}
+
 void writeWav(const std::filesystem::path& path, const Audio& audio, double sr) {
     std::ofstream f(path, std::ios::binary);
     auto u16 = [&](uint16_t n) { f.put(char(n)); f.put(char(n >> 8)); };
@@ -383,8 +748,13 @@ int main(int argc, char** argv) {
     if (mode != "--listen-only") {
         delayAndRoutingTests();
         resonanceAndBandTests();
+        sidebandMuteTests();
         shapeAndStereoTests();
         automationAndScopeTests();
+        bassSpectrumTests();
+        fftSizeTests();
+        sleepTests();
+        midiKeyTests();
         attackTest();
         check(allocations.load() == 0, "all guarded renders allocate nothing");
     }

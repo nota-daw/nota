@@ -288,8 +288,10 @@ int32_t RhythmMachine::addMacroMapping(int macro, int voice, int device, int par
     if (macro < 0 || macro >= kMacros) return -1;
     if (device < 0) {
         if (param < 0 || param >= Macro0) return -1;
-    } else if (!voiceDevice(voice, device) || param < 0 || param >= voiceDevice(voice, device)->paramCount())
-        return -1;
+    } else {
+        const auto* effect = voiceDevice(voice, device);
+        if (!effect || param < 0 || param >= effect->paramCount() || effect->paramRequiresStop(param)) return -1;
+    }
     auto ns = copyFx();
     ns->maps.push_back({macro, device < 0 ? paramVoice(param) : voice, device, param, lo, hi, 0});
     const int32_t idx = static_cast<int32_t>(ns->maps.size()) - 1;
@@ -837,7 +839,7 @@ void RhythmMachine::applyMacro(int m, float value) {
             if (mp.param >= 0 && mp.param < Macro0)
                 pn_[mp.param].store(std::clamp(t, 0.0f, 1.0f), std::memory_order_relaxed);
         } else if (mp.voice >= 0 && mp.voice < kVoices && mp.device < static_cast<int>(fx->chain[mp.voice].size())) {
-            if (auto& d = fx->chain[mp.voice][mp.device]) d->setParam(mp.param, t);
+            if (auto& d = fx->chain[mp.voice][mp.device]) d->setLiveParam(mp.param, t);
         }
     }
 }

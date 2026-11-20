@@ -17,6 +17,7 @@ namespace Nota.SmokeTest;
 internal static class SidechainPartTests
 {
     private const int CompKind = 1, Thresh = 0, Ratio = 1, Attack = 2, Release = 3;
+    private const int AutoShiftKind = 10, ChromaKind = 27;
     private const int KickNote = 36, HatNote = 42;
 
     public static IEnumerable<(bool ok, string label)> Run()
@@ -37,7 +38,7 @@ internal static class SidechainPartTests
         foreach (var r in FreshRhythm()) yield return r;
         foreach (var r in RhythmSampleEditKeepsKeys()) yield return r;
         foreach (var r in MissingPadIsSilent()) yield return r;
-        foreach (var r in AutoShiftWholeTrackOnly()) yield return r;
+        foreach (var r in MidiWholeTrackOnly()) yield return r;
         foreach (var r in RackChildPart()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
@@ -333,7 +334,11 @@ internal static class SidechainPartTests
         {
             int d = e.AddBuiltinDevice(host, kind);
             if (d < 0) continue;
-            if (!e.DeviceAcceptsSidechain(host, d) || kind == 10) { e.RemoveDevice(host, d); continue; }   // Auto Shift keys on MIDI
+            if (!e.DeviceAcceptsSidechain(host, d) || kind is AutoShiftKind or ChromaKind)
+            {
+                e.RemoveDevice(host, d);
+                continue;
+            }
             if (e.SetDeviceSidechainKey(host, d, rig.Drums, kick) == 0 && e.DeviceSidechainKey(host, d) == new SidechainKey(rig.Drums, kick))
                 kinds.Add(kind);
             else
@@ -557,15 +562,19 @@ internal static class SidechainPartTests
             $"sc parts: with its pad deleted the key stays silent (own input {own:F1} dB, keyed {keyed:F2}, pad gone {missing:F2})");
     }
 
-    // Auto Shift follows the source's notes, so it takes whole tracks only.
-    private static IEnumerable<(bool, string)> AutoShiftWholeTrackOnly()
+    // MIDI keys are whole-track note streams.
+    private static IEnumerable<(bool, string)> MidiWholeTrackOnly()
     {
         using var rig = new Rig();
         var e = rig.E;
-        int d = e.AddBuiltinDevice(rig.Bass, 10);
-        yield return (d >= 0 && e.SetDeviceSidechainKey(rig.Bass, d, rig.Drums, rig.Chain("Kick")) == -1
-                      && e.SetDeviceSidechainKey(rig.Bass, d, rig.Drums, -1) == 0,
-            "sc parts: Auto Shift refuses a pad and takes the whole track");
+        foreach (int kind in new[] { AutoShiftKind, ChromaKind })
+        {
+            int d = e.AddBuiltinDevice(rig.Bass, kind);
+            yield return (d >= 0 && e.DeviceAcceptsSidechain(rig.Bass, d) &&
+                e.SetDeviceSidechainKey(rig.Bass, d, rig.Drums, rig.Chain("Kick")) == -1 &&
+                e.SetDeviceSidechainKey(rig.Bass, d, rig.Drums, SidechainKey.WholeTrack) == 0,
+                $"sc parts: {e.DeviceName(rig.Bass, d)} refuses a pad and takes the whole MIDI track");
+        }
     }
 
     // A keyed Compressor grouped into a rack keeps its pad (the rack-child part calls), and so

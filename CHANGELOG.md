@@ -26,7 +26,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Nota Chroma** (specs/100) shapes color bass with high-quality semitone shifts,
   tuned resonance and attack protection. Pick a scale or custom notes, set the
   processing band, and see the input and shifted components on the live spectrum.
-  Morph and Gate shape the shifted components. Latency is 1024 samples.
+  Morph and Gate shape the shifted components. The card has S and L sizes, and
+  Mute low and Mute high independently silence the sidebands in the wet signal.
+  Latency is 1024 samples.
+- **Nota Chroma** can follow another track's Arrangement notes and live MIDI after
+  its MIDI effects. The keyboard shows the active notes and correction fades
+  out when they are released.
 - **Default VST3 scan folders** (#622, specs/099): Settings → Plug-ins now lists the
   OS-standard VST3 locations as `Default` folders next to Nota's own install folder —
   always shown, even when a folder doesn't exist on disk. They are removable, and
@@ -56,9 +61,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Changed
 - **Nota Chroma** uses a single HQ engine. Older prototype sessions keep their
   control values and load into HQ, including sessions saved in Polyphonic mode.
+- **Nota Chroma** offers a 512, 1024 or 2048 sample processing FFT when transport
+  is stopped. Both card sizes show the selector and its latency below the spectrum.
+  Existing projects open with the default 1024-sample window.
 
 ### Fixed
-- **Nota Chroma** spectrum uses smooth fading lines without horizontal bands or tiled edges.
+- **Nota Chroma** sleeps after its resonant tail fades, reducing DSP usage during silence.
+- **Nota Chroma** draws each spectrum line one pixel wide. Tuned uses the inverse
+  of the active accent and follows theme changes. Spectrum lines stay evenly
+  spaced on wide and high-density displays. Dry and Tuned show nearby bass tones
+  as separate peaks, including with opposite stereo polarity.
 - **Delete acts on what you clicked last** (#646): with notes selected in the piano roll,
   clicking a clip in the Arrangement and pressing Delete (or ⌘X / ⌘C, or Edit → Delete) now
   acts on the clip, not on the roll's notes. A click outside the clip editor lets its note grid

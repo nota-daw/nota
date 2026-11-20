@@ -27,7 +27,9 @@ internal static class DeviceParamControls
     {
         int pc = ctx.Engine.DeviceParamCount(ctx.TrackId, index);
         var body = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
-        for (int p = 0; p < pc; p++) body.Children.Add(ParamRow(ctx, index, p));
+        for (int p = 0; p < pc; p++)
+            if (DeviceView.IsSoundParam(ctx.Engine.DeviceParamName(ctx.TrackId, index, p)))
+                body.Children.Add(ParamRow(ctx, index, p));
         return body;
     }
 

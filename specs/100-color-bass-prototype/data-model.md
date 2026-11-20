@@ -3,8 +3,9 @@ Device kind 27. Append-only normalized parameter layout: Root (0..11), Scale (Ma
 
 Append-only additions: Morph (21, default 0), Gate (22, off/on, default off), Gate threshold (23, −80..0 dBFS, default −60). Spectral shaping shares gains between stereo channels.
 
-The HQ instance prepares mid/full/side delay lines, two independent mask paths
+The HQ instance prepares mid/full and separate low/high delay lines, two independent mask paths
 with fixed-capacity IIR banks, two HQ shifters per path, and spectral-analysis
 scratch. Filter history, detector state and scope data reset on sample-rate
-preparation and are transient. The device exposes 24 parameters. Slot 24 was
-Mode in a past prototype and old values are ignored.
+preparation and are transient. Slots 0–23 retain their audio parameters. Slot 24 was
+Mode in a past prototype and old values are ignored. Slots 25 and 26 hold
+the sideband mutes. Slot 27 holds the editor View (L = 0, S = 1).

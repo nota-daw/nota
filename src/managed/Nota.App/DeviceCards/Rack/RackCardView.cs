@@ -472,7 +472,10 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private void OpenChainDeviceParams(IRackAccess a, int sc, int d, Control anchor)
     {
         string dnm = a.ChainDeviceName(sc, d);
-        OpenParamWindow(anchor, dnm, a.ChainDeviceParamCount(sc, d), p => RackDeviceParamRow(a, sc, d, p), () => DeviceStatus(a, sc, d), ChainDeviceBypass(a, sc, d));
+        int[] parameters = Enumerable.Range(0, a.ChainDeviceParamCount(sc, d))
+            .Where(p => DeviceView.IsSoundParam(a.ChainDeviceParamName(sc, d, p))).ToArray();
+        OpenParamWindow(anchor, dnm, parameters.Length, p => RackDeviceParamRow(a, sc, d, parameters[p]),
+            () => DeviceStatus(a, sc, d), ChainDeviceBypass(a, sc, d));
     }
 
     private void ShowAddChainMenu(IRackAccess a, Control anchor)
@@ -644,9 +647,11 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                 int dpc = a.ChainDeviceParamCount(c, d);
                 for (int p = 0; p < dpc; p++)
                 {
+                    string name = a.ChainDeviceParamName(c, d, p);
+                    if (!DeviceView.IsSoundParam(name)) continue;
                     int cc = c, dd = d, pp = p;
                     float lo = a.ChainDeviceParamMin(c, d, p), hi = a.ChainDeviceParamMax(c, d, p);
-                    var pit = new MenuItem { Header = a.ChainDeviceParamName(c, d, p) };
+                    var pit = new MenuItem { Header = name };
                     pit.Click += (_, _) => { RcAddMapping(m, cc, dd, pp, lo, hi); _ctx.RequestRebuild(); };
                     dItem.Items.Add(pit);
                 }

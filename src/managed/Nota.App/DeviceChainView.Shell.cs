@@ -136,13 +136,15 @@ public sealed partial class DeviceChainView
         int n = Math.Min(p.Length, ParamCount(k, di));
         int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId)
             : k == ChainKind.Effect ? Nota.Application.DeviceView.Index(_engine, _trackId, di) : -1;   // A/B keeps the card size
+        bool ApplyIndex(int i) => i != view && (k != ChainKind.Effect ||
+            !DeviceView.IsConfigurationParam(_engine.DeviceParamName(_trackId, di, i)));
         // One undo step for the whole switch (specs/016).
         var targets = new List<MixTarget>(n);
         for (int i = 0; i < n; i++)
-            if (i != view)
+            if (ApplyIndex(i))
                 targets.Add(k == ChainKind.Instrument ? MixTarget.PluginParam(_trackId, -1, i)
                     : k == ChainKind.Midi ? MixTarget.MidiDeviceParam(_trackId, di, i) : MixTarget.DeviceParam(_trackId, di, i));
-        Nota.Application.Editing.MixEdit.Step(_engine, () => { for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]); }, targets.ToArray());
+        Nota.Application.Editing.MixEdit.Step(_engine, () => { for (int i = 0; i < n; i++) if (ApplyIndex(i)) SetPr(k, di, i, p[i]); }, targets.ToArray());
     }
 
     private static PresetSurface SurfaceOf(ChainKind k)

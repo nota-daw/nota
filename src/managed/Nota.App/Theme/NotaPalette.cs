@@ -469,19 +469,37 @@ internal static class NotaPalette
         (Wash(DeviceSection, 0xDB), 0), (Wash(DeviceSection, 0x9E), 0.5), (Wash(DeviceSection, 0xE6), 1));
 
     // Chroma's spectral content fades smoothly at the vertical edges (DESIGN exception).
+    public static readonly SolidColorBrush ChromaTunedInk = Derived(() =>
+    {
+        var accent = Accent.Color;
+        return Color.FromArgb(accent.A, (byte)(255 - accent.R), (byte)(255 - accent.G), (byte)(255 - accent.B));
+    });
     public static readonly IBrush ChromaDrySpectrum = SpectralLine(Accent);
-    public static readonly IBrush ChromaTunedSpectrum = SpectralLine(Steel);
+    public static readonly IBrush ChromaTunedSpectrum = SpectralLine(ChromaTunedInk);
 
     private static IBrush SpectralLine(SolidColorBrush ink)
     {
-        var stops = new (SolidColorBrush Slot, double Offset)[17];
-        for (int i = 0; i < stops.Length; i++)
+        var brush = new LinearGradientBrush
         {
-            double y = i / 16.0;
-            double envelope = Math.Pow(Math.Sin(Math.PI * y), 2);
-            stops[i] = (Wash(ink, (byte)Math.Round(255 * envelope)), y);
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        };
+        for (int i = 0; i <= 16; i++)
+            brush.GradientStops.Add(new GradientStop(default, i / 16.0));
+
+        void Tint()
+        {
+            var colour = ink.Color;
+            foreach (var stop in brush.GradientStops)
+            {
+                double opacity = Math.Pow(Math.Sin(Math.PI * stop.Offset), 2);
+                stop.Color = Color.FromArgb((byte)Math.Round(colour.A * opacity), colour.R, colour.G, colour.B);
+            }
         }
-        return VGradient(stops);
+
+        Tint();
+        Changed += Tint; // Derivations such as the inverted ink are already up to date here.
+        return brush;
     }
 
     // ---- Lookup by XAML key ------------------------------------------------
