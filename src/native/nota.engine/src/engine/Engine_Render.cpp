@@ -2659,6 +2659,10 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         if (chase) articulationChaseStart_ = transport_.hasTempoMap() ? segStart : musicalStart;
         cueSeg_ = cue ? cue + done * 2 : nullptr; // this segment of the Cue bus (specs/089)
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, musicalStart, segStart, playing, localSpb);
+        // #971: a running take reports the Session launches this segment applied — outside the
+        // track loop, so the render path pays one load when no take runs.
+        if (g && playing && localSpb > 0.0 && passSerial_.load(std::memory_order_relaxed) != 0)
+            reportPassEvents(g, musicalStart / localSpb, seg / localSpb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
@@ -3181,12 +3185,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                                 rs_->leafWork.size() >= ntracks;
         const int32_t capTrackId = freezeCaptureTrackId_.load(std::memory_order_relaxed);
         const bool recArmed = recording_.load(std::memory_order_relaxed);
-        // #971: a running pass reports Session launches; the first rolling block of a pass (or of
-        // its retry) reports what already plays.
-        const uint32_t passSerial = passSerial_.load(std::memory_order_acquire);
-        const bool passOn = passSerial != 0 && playing && spb > 0.0;
-        const bool passOpening = passOn && rtPassSerial_ != passSerial;
-        if (passOpening) rtPassSerial_ = passSerial;
         for (size_t li = 0; li < ntracks; ++li) {
             Track& t = *g->tracks[li];
             LeafWork& w = rs_->leafWork[li];
@@ -3235,14 +3233,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     if (t.liveHeld) t.liveHeld->forgetRouted(); // #504: the voices are gone
                     for (auto& md : t.midiEffects)
                         if (md) md->reset(); // clock switch → flush arp
-                    if (passOn && !passOpening)
-                        pushPassEvent({LaunchEvent::Launch, t.id(), sp->playing.load(std::memory_order_relaxed),
-                            sp->appliedBeat, sp->localBeats, sp->gain, passSerial});
-                }
-                if (passOpening) {
-                    const int32_t now = sp->playing.load(std::memory_order_relaxed);
-                    if (now >= 0)
-                        pushPassEvent({LaunchEvent::Launch, t.id(), now, blockStart / spb, sp->localBeats, sp->gain, passSerial});
                 }
                 sessionActive =
                     !frozenActive && !capturing && !monitoring && sp->playing.load(std::memory_order_relaxed) >= 0;

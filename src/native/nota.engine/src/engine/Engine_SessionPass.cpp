@@ -8,6 +8,7 @@
 // what was heard. Everything a pass writes is one undo step. Message thread.
 
 #include "Engine.h"
+#include "dsp/core/RtAttributes.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +16,32 @@
 #include <tuple>
 
 namespace nota {
+
+// Audio thread, after each rolling render segment while a take runs: what each Session player
+// applied in it (a launch or stop, at its beat), or — the first segment of a pass or of its retry —
+// what already plays. Positions are read back from the end of the segment (the player has advanced
+// its clock by the segment, or from the launch's block start). No allocation: a fixed-size push.
+NOTA_NOINLINE void Engine::reportPassEvents(Graph* g, double segBeat, double segBeats) {
+    const uint32_t ps = passSerial_.load(std::memory_order_acquire);
+    if (ps == 0) return;
+    const bool opening = rtPassSerial_ != ps;
+    rtPassSerial_ = ps;
+    for (auto& tp : g->tracks) {
+        SessionPlayer* sp = tp->sessionPlayer.get();
+        if (!sp) continue;
+        const bool applied = sp->applyCount != sp->reportedCount;
+        sp->reportedCount = sp->applyCount;
+        const int32_t now = sp->playing.load(std::memory_order_relaxed);
+        if (opening) {
+            if (now >= 0) pushPassEvent({LaunchEvent::Launch, tp->id(), now, segBeat, sp->localBeats - segBeats, sp->gain, ps});
+        } else if (applied) {
+            // The slot clock restarted (or carried on, Legato) at the segment start and has run the
+            // segment; that start position is the slot's position on the launch beat (a quantized
+            // launch is written on its grid beat, the slot's beat 0 there).
+            pushPassEvent({LaunchEvent::Launch, tp->id(), now, sp->appliedBeat, sp->localBeats - segBeats, sp->gain, ps});
+        }
+    }
+}
 
 bool Engine::sessionPlayingOrQueued() const {
     for (const auto& t : authoring_->tracks)

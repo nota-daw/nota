@@ -1980,6 +1980,7 @@ class Engine {
         if (!launchEvents_.push(e)) passDropped_.fetch_add(1, std::memory_order_relaxed);
     }
     void writePassTrack(int32_t trackId, const std::vector<const PlayedSpan*>& spans);
+    void reportPassEvents(Graph* g, double segBeat, double segBeats); // audio thread, after a segment
     void writePassTempo();
 
     // Loop region mirror (see loopEnabled()/loopStart()/loopEnd()).
