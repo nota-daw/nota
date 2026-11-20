@@ -1735,7 +1735,6 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
-    void pushUndo(std::shared_ptr<Graph> snapshot); // the same with a given (earlier) graph
     // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
     // set `sections`, and publish it as one undo step.
     void remapTimeline(double lo, double hi, const std::vector<TimeRegion>& regions, std::vector<Section> sections);

@@ -139,8 +139,9 @@ bool Engine::finishSessionPass(double stopBeat) {
         // When nothing in the pass pushed a step yet, the checkpoint is the project as the pass
         // found it: an overdub into an existing clip grows it without a step of its own.
         passUndoBase_ = std::min(passUndoBase_, undoStack_.size()); // history cleared mid-pass
-        if (undoStack_.size() == passUndoBase_ && passGraph_) pushUndo(passGraph_);
-        else pushUndo();
+        const bool fromStart = undoStack_.size() == passUndoBase_ && passGraph_ && undoGroupDepth_ == 0;
+        pushUndo();
+        if (fromStart && !undoStack_.empty()) undoStack_.back().graph = passGraph_;
         std::vector<int32_t> order;
         for (const auto& s : sessionPass_.spans)
             if (std::find(order.begin(), order.end(), s.trackId) == order.end()) order.push_back(s.trackId);
