@@ -2548,6 +2548,7 @@
     "main.detail.the_clip_editor_is_in": "The clip editor is in its own window",
     "main.detail.track_clip": "Track {0} clip",
     "main.detail.track_scene": "Track {0} · Scene {1}",
+    "main.detail.no_clip_selected": "No clip selected on this track — click one to edit it here",
     "main.detail.empty_slot": "This slot is empty — select a clip to edit it here",
     "main.detail_window.select_a_clip_in_the": "Select a clip in the arrangement to edit it here",
     "main.device_moves.cant_take": "“{0}” can't take {1}.",

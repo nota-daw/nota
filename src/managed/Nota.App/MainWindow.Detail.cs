@@ -192,19 +192,42 @@ public partial class MainWindow
         // the Clip tab over to Devices, so refresh the chain underneath and re-point the Clip
         // tab at the newly selected clip. With no clip to show, Devices takes the panel as before.
         // In Session the clip is the slot the editor already holds (OnSessionSlotSelected).
-        bool keepClipTab = !DetailFloating && DetailPanel.IsVisible
-                           && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView
-                           && (session ? SessionEditorTrack == trackId : SelectedClip(out _, out _, out _));
+        // The docked panel keeps the tab that is open when the track changes: Devices stays
+        // Devices (the chain follows the track); the Clip / Pattern tab stays too — on the new
+        // track's selected clip, its clips in Track mode, or empty until a clip is picked.
+        bool clipTabOpen = ClipTabOpen;
+        bool keepClipTab = clipTabOpen && (session ? SessionEditorTrack == trackId : SelectedClip(out _, out _, out _));
         bool wasPattern = keepClipTab && DetailBody.Content is DrumPatternView;
 
-        ShowDevices(trackId, takeOverPanel: !keepClipTab);
+        ShowDevices(trackId, takeOverPanel: !clipTabOpen);
         if (_modular?.IsVisible == true) _modular.Show(trackId);   // keep the graph on the selected track
         SyncClipTab();
         // The new clip may be on a track with no Drum Rack, so a pattern user falls back to
         // the piano roll rather than to Devices.
         if (wasPattern && DetailPatternBtn.IsEnabled) OnDetailPattern(this, new RoutedEventArgs());
         else if (keepClipTab) OnDetailClip(this, new RoutedEventArgs());
+        else if (clipTabOpen && !session && EditorOnScreenFor(trackId)) { }   // its own clip stays open
+        else if (clipTabOpen && session) ShowEmptyClipTab(Loc.T("main.detail.empty_slot"));   // the slot may still bring a clip (FollowSessionSlot)
+        else if (clipTabOpen && ClipTrackMode && MidiClipsOf(trackId) is { Count: > 0 } clips)
+        {
+            BuildClipEditor(clips[0].TrackId, clips[0].ClipIndex);
+            ShowClipPanel();
+        }
+        else if (clipTabOpen) ShowEmptyClipTab(Loc.T("main.detail.no_clip_selected"));
     }
+
+    // The docked Clip / Pattern tab already shows an arrangement clip of this track.
+    private bool EditorOnScreenFor(int trackId) => DetailBody.Content switch
+    {
+        ClipEditorView => _editorTrackId == trackId,
+        AudioClipEditorView => _audioEditorTrackId == trackId,
+        DrumPatternView => _patternTrackId == trackId,
+        _ => false,
+    };
+
+    // The docked panel shows the Clip or Pattern tab (a clip editor, or the tab left empty).
+    private bool ClipTabOpen => !DetailFloating && DetailPanel.IsVisible
+                                && (DetailClipBtn.IsChecked == true || DetailPatternBtn.IsChecked == true);
 
     // Clear all clip-editor state and blank the clip pane (placeholder while floating, so the
     // popped-out window shows "select a clip" instead of the previous track's editor).
@@ -273,7 +296,7 @@ public partial class MainWindow
     {
         bool docked = !DetailFloating && DetailPanel.IsVisible;
         bool onDevices = docked && DetailDevicesBtn.IsChecked == true;
-        bool onClip = docked && (DetailClipBtn.IsChecked == true || DetailPatternBtn.IsChecked == true);
+        bool onClip = ClipTabOpen;
         if (scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0)
         {
             bool pattern = docked && DetailBody.Content is DrumPatternView;
@@ -290,18 +313,18 @@ public partial class MainWindow
         else
         {
             if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
-            if (onClip) ShowEmptyClipTab();
+            if (onClip) ShowEmptyClipTab(Loc.T("main.detail.empty_slot"));
         }
     }
 
-    // The Clip tab stays up with nothing to edit: the selected slot is empty.
-    private void ShowEmptyClipTab()
+    // The Clip tab stays up with nothing to edit (an empty slot, a track with no clip picked).
+    private void ShowEmptyClipTab(string message)
     {
         SetHost(DetailBody, new Border
         {
             Child = new TextBlock
             {
-                Text = Loc.T("main.detail.empty_slot"),
+                Text = message,
                 FontSize = NotaType.Body,
                 Foreground = NotaPalette.TextTertiary,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -638,6 +661,12 @@ public partial class MainWindow
     private void FollowClips()
     {
         if (_session?.IsVisible == true || _vm is null) return;
+        // The Clip tab left empty by a track change: the first clip picked opens in it.
+        if (ClipTabOpen && DetailBody.Content is not (ClipEditorView or AudioClipEditorView or DrumPatternView))
+        {
+            if (SelectedClip(out _, out _, out _)) OnDetailClip(this, new RoutedEventArgs());
+            return;
+        }
         bool shown = DetailFloating
             ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
             : DetailPanel.IsVisible && DetailBody.Content is ClipEditorView;
