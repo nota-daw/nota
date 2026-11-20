@@ -304,7 +304,8 @@ from bar 1 changes tempo at bar 5.
   the tracks it plays.
 - **FR-013**: A launch cancelled before its boundary MUST write nothing.
 - **FR-014**: While the pass runs, the Arrangement MUST show each Session clip heard so far
-  where it will be written — the slot's name, colour and notes, growing with the playhead, over
+  where it will be written — the slot's name, colour and notes (or waveform, one piece per
+  repetition for audio), growing with the playhead, over
   the clips it replaces. The clips themselves are written when the pass ends (undo and retry are
   unchanged). (Review of #972: "while recording, the Arrangement shows nothing".)
 - **FR-015**: Record with nothing armed MUST start a performance-only pass (Session clips

@@ -1638,7 +1638,7 @@ public sealed partial class ArrangementView
 
         private readonly NotaPassSpan[] _passSpans = new NotaPassSpan[256];
         // The slots a running take has played, read once per take: notes, loop length, loop, name.
-        private readonly Dictionary<(int track, int slot), (NotaNote[] notes, double len, bool loop, string name)> _passSlots = new();
+        private readonly Dictionary<(int track, int slot), (NotaNote[] notes, double len, bool loop, string name, float[]? peaks, int peakCount, float gain)> _passSlots = new();
 
         // #971: each Session clip the running take has heard, drawn as the clip it will write — the
         // slot's name, colour and notes repeated over the span — on a lane-coloured base, so the
@@ -1660,22 +1660,68 @@ public sealed partial class ArrangementView
                 {
                     double len = eng.SessionSlotLength(s.TrackId, s.Slot);
                     bool loop = !eng.TryGetSessionClipProps(s.TrackId, s.Slot, out var props) || props.Loop != 0;
+                    float[]? peaks = null;
+                    int peakCount = 0;
+                    if (!t.IsInstrument)
+                    {
+                        peaks = new float[PassPeakBuckets * 2];
+                        peakCount = Math.Max(0, eng.GetSessionSlotPeaks(s.TrackId, s.Slot, peaks, PassPeakBuckets));
+                    }
                     slot = (t.IsInstrument ? eng.GetSessionNotes(s.TrackId, s.Slot) : Array.Empty<NotaNote>(),
-                        len > 0 ? len : 4.0, loop, eng.GetSessionClipName(s.TrackId, s.Slot));
+                        len > 0 ? len : 4.0, loop, eng.GetSessionClipName(s.TrackId, s.Slot), peaks, peakCount,
+                        t.IsInstrument ? 1f : eng.SessionSlotGain(s.TrackId, s.Slot));
                     _passSlots[(s.TrackId, s.Slot)] = slot;
                 }
-                var c = new ClipVM
-                {
-                    ClipIndex = -1, StartBeat = s.StartBeat, LengthBeats = s.EndBeat - s.StartBeat,
-                    IsMidi = t.IsInstrument, Name = slot.name,
-                    Notes = t.IsInstrument ? UnrollPassNotes(slot.notes, slot.len, slot.loop, s) : null,
-                };
-                var (x0, x1) = _o.ClipScreenEdges(c);
-                if (x1 < 0 || x0 > w) continue;
                 double y = RowTop(row), rh = RowH(row);
+                double sx0 = _o.BeatToX(s.StartBeat), sx1 = _o.BeatToX(s.EndBeat);
+                if (sx1 < 0 || sx0 > w) continue;
                 ctx.FillRectangle(_o.IsSlimRowAt(row) ? GroupLaneBg : (row & 1) == 0 ? LaneBgA : LaneBgB,
-                    new Rect(x0, y + 1, Math.Max(1, x1 - x0), Math.Max(0, rh - 2)));
-                DrawClipBody(ctx, t.ColorIndex, t.Name, c, y, rh, false);
+                    new Rect(sx0, y + 1, Math.Max(1, sx1 - sx0), Math.Max(0, rh - 2)));
+                if (t.IsInstrument)
+                {
+                    var c = new ClipVM
+                    {
+                        ClipIndex = -1, StartBeat = s.StartBeat, LengthBeats = s.EndBeat - s.StartBeat,
+                        IsMidi = true, Name = slot.name, Notes = UnrollPassNotes(slot.notes, slot.len, slot.loop, s),
+                    };
+                    DrawClipBody(ctx, t.ColorIndex, t.Name, c, y, rh, false);
+                    continue;
+                }
+                // Audio: one clip per repetition, as the take will write it, each with the slot's
+                // waveform cut to the part of the loop it plays.
+                foreach (var piece in PassAudioPieces(slot.peaks, slot.peakCount, slot.len, slot.loop, s))
+                {
+                    piece.Name = slot.name;
+                    piece.Gain = slot.gain;
+                    DrawClipBody(ctx, t.ColorIndex, t.Name, piece, y, rh, false);
+                }
+            }
+        }
+
+        private const int PassPeakBuckets = 1024;
+
+        // The repetitions of an audio slot over a span, as clips carrying the matching slice of the
+        // slot's peaks (buckets spread evenly over the loop, as GetSessionSlotPeaks returns them).
+        private static IEnumerable<ClipVM> PassAudioPieces(float[]? peaks, int count, double len, bool loop, NotaPassSpan s)
+        {
+            if (len <= 0) yield break;
+            double origin = s.StartBeat - s.SlotPos;
+            long k0 = loop ? (long)Math.Floor(s.SlotPos / len + 1e-9) : 0;
+            for (long k = k0; origin + k * len < s.EndBeat - 1e-9 && (loop || k == 0); k++)
+            {
+                double r = origin + k * len, a = Math.Max(r, s.StartBeat), b = Math.Min(r + len, s.EndBeat);
+                if (b <= a + 1e-9) continue;
+                var c = new ClipVM { ClipIndex = -1, StartBeat = a, LengthBeats = b - a, IsMidi = false };
+                if (peaks is not null && count > 0)
+                {
+                    int i0 = Math.Clamp((int)Math.Floor((a - r) / len * count), 0, count - 1);
+                    int i1 = Math.Clamp((int)Math.Ceiling((b - r) / len * count), i0 + 1, count);
+                    var slice = new float[(i1 - i0) * 2];
+                    Array.Copy(peaks, i0 * 2, slice, 0, slice.Length);
+                    c.Peaks = slice;
+                    c.PeakCount = i1 - i0;
+                }
+                yield return c;
             }
         }
 

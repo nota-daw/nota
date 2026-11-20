@@ -25,6 +25,7 @@ internal static class SessionToArrangementTests
         foreach (var r in ReplaceOnlyPlayed()) yield return r;
         foreach (var r in MidPlayAndScene()) yield return r;
         foreach (var r in AudioSlotAndRender()) yield return r;
+        foreach (var r in WarpedAudioSlot()) yield return r;
         foreach (var r in ArmedMerge()) yield return r;
         foreach (var r in UndoRedo()) yield return r;
         foreach (var r in Retry()) yield return r;
@@ -189,8 +190,15 @@ internal static class SessionToArrangementTests
 
     // US1 s9 + SC-001: an audio slot is one clip per repetition; the Arrangement then renders as
     // the performance did.
-    private static IEnumerable<(bool, string)> AudioSlotAndRender()
+    private static IEnumerable<(bool, string)> AudioSlotAndRender() => AudioSlotAndRender(false);
+
+    // The same with a warped slot: each written piece needs its stretch cache, or it plays silence
+    // and draws no waveform until a background build catches up.
+    private static IEnumerable<(bool, string)> WarpedAudioSlot() => AudioSlotAndRender(true);
+
+    private static IEnumerable<(bool, string)> AudioSlotAndRender(bool warped)
     {
+        string tag = warped ? " (warped slot)" : "";
         using var e = new NotaEngine();
         e.SetBpm(120);
         e.SetMetronome(false);
@@ -205,6 +213,7 @@ internal static class SessionToArrangementTests
         var pcm = new float[frames * 2];
         for (int i = 0; i < frames; i++) { float v = (float)(0.5 * Math.Sin(i * 2 * Math.PI * 220 / Sr) * Math.Exp(-i / Sr)); pcm[2 * i] = v; pcm[2 * i + 1] = v; }
         int ci = e.PasteAudioFrames(t, pcm, frames, 200.0, "Tone");
+        if (warped && ci >= 0) { e.SetClipWarp(t, ci, true, 0); e.SetClipWarpLength(t, ci, 4.0); }
         bool made = ci >= 0 && e.ArrangementAudioClipToSession(t, ci, 0);
         if (made) e.DeleteClip(t, ci);
         e.StopTransport();
@@ -226,7 +235,7 @@ internal static class SessionToArrangementTests
         bool backToBack = cl.Count >= 3 && Near(cl[0].StartBeat, 4);
         for (int k = 1; k < cl.Count; k++) backToBack &= Near(cl[k].StartBeat, cl[k - 1].StartBeat + cl[k - 1].LengthBeats, 1e-3);
         yield return (made && backToBack && Near(cl[^1].StartBeat + cl[^1].LengthBeats, 16, 0.05),
-            $"an audio slot is written as one clip per repetition ({string.Join(",", cl.Select(x => $"{x.StartBeat:0.###}+{x.LengthBeats:0.###}"))})");
+            $"an audio slot is written as one clip per repetition{tag} ({string.Join(",", cl.Select(x => $"{x.StartBeat:0.###}+{x.LengthBeats:0.###}"))})");
         // Back to the timeline, from beat 4: the same 12 beats.
         e.BackToArrangement();
         e.Seek(4);
@@ -243,7 +252,7 @@ internal static class SessionToArrangementTests
             detail.Add($"{l:0.0000}/{r:0.0000}");
             if (l < 1e-4 || Math.Abs(20 * Math.Log10(r / l)) > 0.5) same = false;
         }
-        yield return (same, $"the Arrangement renders as the performance did, bar by bar ({string.Join(" ", detail)})");
+        yield return (same, $"the Arrangement renders as the performance did, bar by bar{tag} ({string.Join(" ", detail)})");
     }
 
     // US3 s2: an armed instrument track playing a slot keeps the played notes inside the written clip.
