@@ -83,6 +83,18 @@ public sealed partial class PreferencesWindow
             };
             strip.Children.Add(segs[i]);
         }
-        return new Border { Classes = { "segmented" }, Child = strip, HorizontalAlignment = HorizontalAlignment.Left };
+        var box = new Border { Classes = { "segmented" }, Child = strip, HorizontalAlignment = HorizontalAlignment.Left };
+        // The Session toolbar's turn key writes the same setting: follow it while the page shows.
+        void Follow()
+        {
+            cur = SessionGridNav.IsAcross(settings?.Current.SessionGrid) ? 1 : 0;
+            for (int k = 0; k < segs.Length; k++) segs[k].IsChecked = k == cur;
+        }
+        if (settings is not null)
+        {
+            box.AttachedToVisualTree += (_, _) => { settings.Changed += Follow; Follow(); };
+            box.DetachedFromVisualTree += (_, _) => settings.Changed -= Follow;
+        }
+        return box;
     }
 }

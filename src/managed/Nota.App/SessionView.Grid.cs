@@ -931,9 +931,12 @@ public sealed partial class SessionView
             ctx.DrawRectangle(_color, null, new Rect(x, r.Height / 2 - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
             x += 14;
             double right = r.Width - 8;
-            if (_badge.Length > 0)
+            // The tempo / signature badge only while it leaves the name room: a scene head in a
+            // turned grid (specs/108) is a track column wide, too narrow for both.
+            var badge = _badge.Length > 0 ? Ft(_badge, NotaFonts.Measure, 9, NotaPalette.TextSecondary) : null;
+            if (badge is not null && right - x - (badge.Width + 14) < 48) badge = null;
+            if (badge is { } b)
             {
-                var b = Ft(_badge, NotaFonts.Measure, 9, NotaPalette.TextSecondary);
                 var box = new Rect(right - b.Width - 8, r.Height / 2 - 8, b.Width + 8, 16);
                 ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), box.Deflate(0.5), NotaRadius.CellValue, NotaRadius.CellValue);
                 ctx.DrawText(b, new Point(box.X + 4, box.Y + (16 - b.Height) / 2));
@@ -942,7 +945,10 @@ public sealed partial class SessionView
             var idx = Ft((_scene + 1).ToString("00", CultureInfo.CurrentCulture), NotaFonts.Measure, 9, NotaPalette.TextDisabled);
             double nameW = Math.Max(10, right - x - idx.Width - 6);
             var name = Ft(_name, NotaFonts.SansSemiBold, 12, _named ? NotaPalette.TextPrimary : NotaPalette.TextTertiary, nameW);
-            _cutName = Ft(_name, NotaFonts.SansSemiBold, 12, NotaPalette.TextPrimary).Width > nameW ? _name : null;   // a narrow scene head (Scenes across)
+            // A narrow scene head (Scenes across) shows on hover what it had no room for.
+            bool cut = Ft(_name, NotaFonts.SansSemiBold, 12, NotaPalette.TextPrimary).Width > nameW;
+            bool badgeHidden = _badge.Length > 0 && badge is null;
+            _cutName = cut || badgeHidden ? (badgeHidden ? $"{_name} · {_badge}" : _name) : null;
             ctx.DrawText(name, new Point(x, (r.Height - name.Height) / 2));
             ctx.DrawText(idx, new Point(x + name.Width + 6, (r.Height - name.Height) / 2 + (name.Baseline - idx.Baseline)));
             if (selected) DrawSelection(ctx, r);
