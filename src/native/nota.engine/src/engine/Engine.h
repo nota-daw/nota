@@ -17,6 +17,7 @@
 #include "CommandQueue.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
+#include "engine/SessionPass.h"
 #include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
 #include "Graph.h"
@@ -564,6 +565,8 @@ class Engine {
     void stopSessionRecord();                               // stop recording; the slot keeps playing
     // M5-6: move clips between Session and Arrangement (MIDI, instrument tracks).
     int32_t sessionSlotToArrangement(int32_t trackId, int32_t scene, double startBeat); // -> new clip index or -1
+    // The running take's Session spans so far, for the Arrangement to draw (#971); count, fills up to cap.
+    int32_t sessionPassSpans(NotaPassSpan* out, int32_t cap) const;
     bool arrangementClipToSession(int32_t trackId, int32_t clipIndex, int32_t scene);
     bool arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, int32_t scene); // audio clip -> session slot
     int32_t sceneCount() const;
@@ -1824,6 +1827,21 @@ class Engine {
     RecordedQueue recorded_;
     RecordedExprQueue recordedExpr_;
     RecordedCtlQueue recordedCtl_;
+    // Session performance → Arrangement (#971, specs/109): the audio thread reports each launch,
+    // stop, loop seam and transport stop of a running pass; poll() folds them into sessionPass_.
+    // passSerial_ names the running pass (0 = none): the audio thread opens a pass once per serial
+    // (rtPassSerial_), so a retry's new serial re-reports what plays, and stale reports are dropped.
+    SpscRingBuffer<LaunchEvent, 1024> launchEvents_;
+    std::atomic<uint32_t> passSerial_{0};
+    std::atomic<int32_t> passDropped_{0};
+    uint32_t rtPassSerial_ = 0; // audio thread
+    double rtPassEndBeat_ = 0.0; // audio thread: where the last reported segment ended (a Stop ends the spans there)
+    uint32_t passSerialNext_ = 0;
+    SessionPass sessionPass_;                       // message thread
+    std::vector<std::shared_ptr<Track>> passBase_;  // the tracks when the pass began (take notes)
+    size_t passUndoBase_ = 0;                       // undoStack_ size when the pass began
+    std::shared_ptr<Graph> passGraph_;              // authoring_ when the pass began (its undo state)
+    std::vector<int32_t> passArmed_;                // tracks armed when the pass began (their input records)
     mutable std::mutex exprMx_; // the expression store
     std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
     int32_t nextExprId_ = 1;
@@ -1951,6 +1969,23 @@ class Engine {
     // Carve [ns, ne) out of a track's audio clips (overwrite/comp on record + drag).
     // `spb` is the samples-per-beat the caller used to measure `ns` and `ne`.
     void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb);
+    // The same for MIDI clips, and an audio clip cut to the timeline range [ns, ne) (#971).
+    static void overwriteMidiClipsInRange(std::vector<MidiClip>& clips, double ns, double ne);
+    AudioClip sliceAudioClip(const AudioClip& c, double ns, double ne) const;
+
+    // Session performance → Arrangement (#971, specs/109). Message thread unless noted.
+    void beginSessionPass(bool performanceOnly);
+    void drainSessionPass();               // poll(): reports → spans
+    bool finishSessionPass(double stopBeat); // write the spans as clips; true if anything was written
+    void abandonSessionPass();             // a discarded take: forget what the pass heard
+    bool sessionPlayingOrQueued() const;   // a Session clip plays or waits to launch on some track
+    void pushPassEvent(const LaunchEvent& e) { // audio thread
+        if (!launchEvents_.push(e)) passDropped_.fetch_add(1, std::memory_order_relaxed);
+    }
+    bool passRecordsInput(const Track& t) const; // #971: a track whose input the pass's take records
+    void writePassTrack(int32_t trackId, const std::vector<const PlayedSpan*>& spans);
+    void reportPassEvents(Graph* g, double segBeat, double segBeats); // audio thread, after a segment
+    void writePassTempo();
 
     // Loop region mirror (see loopEnabled()/loopStart()/loopEnd()).
     bool loopEnabled_ = false;

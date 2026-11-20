@@ -180,6 +180,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     // skipped and why (specs/086).
     private string RecordingMessage()
     {
+        // Nothing armed while the Session plays: the take records the performance alone (#971).
+        if (_engine.RecordStartStatus == 3) return Loc.T("transport.recording_session_performance");
         int n = _engine.RecordingTracks().Length;
         var skipped = _engine.RecordSkipped();
         if (n <= 1 && skipped.Length == 0) return Loc.T("transport.recording");

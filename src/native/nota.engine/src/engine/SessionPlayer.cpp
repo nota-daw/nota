@@ -3,6 +3,8 @@
 
 #include "SessionPlayer.h"
 
+#include <algorithm>
+
 namespace nota {
 
 void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float g, int32_t gen) {
@@ -30,7 +32,8 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     const double pq = pendingQuant.load(std::memory_order_relaxed);
     const double quant = (p == kStop || p == kStopNow || pq < 0.0) ? globalQuant : pq;
     bool boundary;
-    if (p == kStopNow || quant <= 0.0 || loopSeam) {
+    const bool immediate = p == kStopNow || quant <= 0.0 || loopSeam;
+    if (immediate) {
         boundary = true;
     } else {
         const double b1 = blockStartBeats + blockBeats;
@@ -48,6 +51,10 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     // The caller flushes instrument voices when a launch/stop applies. Discard releases from
     // the outgoing slot so they cannot cut a newly launched slot's switch on the same key.
     articulationReleases.count = 0;
+    appliedBeat = immediate || blockStartBeats <= 1e-9
+                      ? blockStartBeats
+                      : std::min(std::ceil(blockStartBeats / quant - 1e-9) * quant, blockStartBeats + blockBeats);
+    ++applyCount;
     if (p == kStop || p == kStopNow) {
         playing.store(-1, std::memory_order_relaxed);
     } else {
@@ -55,6 +62,7 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
             pendingLegato.load(std::memory_order_relaxed) && playing.load(std::memory_order_relaxed) >= 0;
         playing.store(p, std::memory_order_relaxed);
         if (!legato) localBeats = 0.0;
+        appliedPos = localBeats;
         gain = pendingGain.load(std::memory_order_relaxed);
         resetFollowCount();
     }

@@ -1243,7 +1243,13 @@ public interface IAudioEngine : IDisposable
     /// started and counts in again if the take did; a Session slot records again from the next
     /// launch quantum while everything else keeps playing.</summary>
     RetryTakeResult RetryTake();
+    /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed,
+    /// 3 ok — a performance-only pass: nothing armed while the Session plays, so the take records the
+    /// Session performance into the Arrangement alone (#971).</summary>
     int RecordStartStatus { get; }
+    /// <summary>The Session clips the running take has heard so far (#971), into <paramref name="buf"/>;
+    /// returns how many there are (may exceed the buffer). 0 when no take runs.</summary>
+    int SessionPassSpans(NotaPassSpan[] buf);
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }
     /// <summary>Beat where the in-progress audio take began.</summary>

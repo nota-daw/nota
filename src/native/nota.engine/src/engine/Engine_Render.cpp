@@ -474,6 +474,19 @@ void Engine::applyMidiCcRouting(Track& t) {
 
 void Engine::poll() {
     if (audioRecording_) drainInputQueue(); // keep the capture buffer flowing while recording
+    if (sessionPass_.active) { // #971: Session launches heard in the pass
+        drainSessionPass();
+        // The transport stopped under it (an MCP / API stop; the app ends the take first): the
+        // pass ends there and is written. A performance-only pass is the whole take: it ends too.
+        if (sessionPass_.stopped) {
+            if (sessionPass_.performanceOnly) {
+                setRecording(false); // as Record off: writes the pass, closes the take
+            } else {
+                foldRecordedTake();
+                finishSessionPass(transport_.uiPositionBeats());
+            }
+        }
+    }
     serviceSessionFollow();                 // scene follow + fixed-length session capture
 
     // Automation write/record (M9-C). Message thread: a transport stop ends any
@@ -2411,6 +2424,9 @@ static inline bool sessionActiveOf(const Track& t) {
 // to the loop start whole). A Session slot take times notes on its own loop clock: untouched.
 void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     const double jump = loopStartBeat - loopEndBeat;
+    if (rtPassSerial_ != 0) // #971: what plays ends at the loop end and goes on from its start
+        if (const uint32_t ps = passSerial_.load(std::memory_order_acquire); ps == rtPassSerial_)
+            pushPassEvent({LaunchEvent::Seam, 0, -1, loopEndBeat, loopStartBeat, 1.0f, ps});
     if (g)
         for (auto& tptr : g->tracks)
             if (tptr && tptr->instrument && !sessionActiveOf(*tptr)) {
@@ -2551,6 +2567,13 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     const bool seeked = seekedThisBlock_, seekedRolling = seekedWhileRolling_;
     seekedThisBlock_ = seekedWhileRolling_ = false;
     if ((!playing && renderWasPlaying_) || (playing && renderWasPlaying_ && seekedRolling)) flushArrangementVoices();
+    // #971: the transport stopped under a running pass — what played ends here; a new roll
+    // re-reports what plays then.
+    if (!playing && renderWasPlaying_ && rtPassSerial_ != 0) {
+        if (const uint32_t ps = passSerial_.load(std::memory_order_acquire); ps == rtPassSerial_)
+            pushPassEvent({LaunchEvent::Stop, 0, -1, rtPassEndBeat_, 0.0, 1.0f, ps});
+        rtPassSerial_ = 0;
+    }
     // A device moved between tracks (specs/043): the moved instrument's held notes, or the
     // voices an arp drove on the track it left, stop here, on the thread that owns them.
     if (g)
@@ -2648,6 +2671,10 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         if (chase) articulationChaseStart_ = transport_.hasTempoMap() ? segStart : musicalStart;
         cueSeg_ = cue ? cue + done * 2 : nullptr; // this segment of the Cue bus (specs/089)
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, musicalStart, segStart, playing, localSpb);
+        // #971: a running take reports the Session launches this segment applied — outside the
+        // track loop, so the render path pays one load when no take runs.
+        if (g && playing && localSpb > 0.0 && passSerial_.load(std::memory_order_relaxed) != 0)
+            reportPassEvents(g, musicalStart / localSpb, seg / localSpb);
         chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);

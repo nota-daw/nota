@@ -58,6 +58,8 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
         recordTrackRt_.store(-1, std::memory_order_relaxed);
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
+        // The last armed track left: the take ends here, and so does the performance (#971).
+        if (sessionPass_.active && !isRecording()) finishSessionPass(transport_.uiPositionBeats());
     }
     // Its take is kept (specs/078): with nothing else recording the attempt ends; otherwise a
     // retry goes on covering the capture still running, without this track.
@@ -959,6 +961,12 @@ void Engine::setRecording(bool on) {
         }
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling
+        // The Session performance last (#971): after the takes are in place, so an armed
+        // instrument track's played notes can join the clip its slot wrote.
+        if (sessionPass_.active) {
+            foldRecordedTake();
+            finishSessionPass(transport_.uiPositionBeats());
+        }
         if (!takeAttempt_.session) closeTakeAttempt(); // the take is kept: nothing to put back
         // If the take started the transport, stop it and rewind to where the
         // take began so re-recording lands in the same place (no drift).
@@ -993,11 +1001,17 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
     }
     const bool haveAudio = !audioIds.empty();
     const bool haveMidi = !instTs.empty();
-    if (!haveAudio && !haveMidi) {
+    // Nothing armed but the Session is playing (or about to): record the performance alone
+    // (#971, clarification Q2). With the Session silent, the caller auto-arms as before.
+    const bool performanceOnly = !haveAudio && !haveMidi && sessionPlayingOrQueued();
+    if (!haveAudio && !haveMidi && !performanceOnly) {
         recording_.store(false, std::memory_order_relaxed);
         recordStartStatus_ = 1;
         return false;
     }
+    // Every Arrangement take also records the Session performance (#971). Before anything is
+    // written, so the pass's history starts here.
+    beginSessionPass(performanceOnly);
 
     // A take started from stop gets the count-in (if one is set); the capture taps stay
     // gated until it runs out, so the clicks-only pre-roll isn't recorded.
@@ -1057,6 +1071,7 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
         recording_.store(true, std::memory_order_relaxed);
     }
 
+    if (performanceOnly) recording_.store(true, std::memory_order_relaxed);
     // Unified transport/rewind bookkeeping (the sub-calls above may have set per-call
     // values; make them consistent for the combined take).
     if (!recordSessionAudio_) {
@@ -1073,8 +1088,11 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
             transportPlay();
     }
     recordCountIn_ = false;
-    recordStartStatus_ = (haveAudio && !audioOk && !haveMidi) ? 2 : 0;
-    if (!isRecording()) closeTakeAttempt(); // nothing started: nothing to retry
+    recordStartStatus_ = (haveAudio && !audioOk && !haveMidi) ? 2 : performanceOnly ? 3 : 0;
+    if (!isRecording()) { // nothing started: nothing to retry, no performance to write
+        abandonSessionPass();
+        closeTakeAttempt();
+    }
     return isRecording();
 }
 

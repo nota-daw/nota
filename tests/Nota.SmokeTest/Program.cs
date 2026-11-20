@@ -1071,6 +1071,14 @@ if (args.Length >= 1 && args[0] == "--retry-take")
     Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Session performance → Arrangement alone (fast iteration): `--session-to-arrangement`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--session-to-arrangement")
+{
+    Console.WriteLine("-- session to arrangement --");
+    foreach (var (ok, label) in SessionToArrangementTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SESSION TO ARRANGEMENT PASSED" : $"SESSION TO ARRANGEMENT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // A Session slot's next-take length alone (fast iteration): `--slot-take-length`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--slot-take-length")
 {
@@ -16253,6 +16261,8 @@ Console.WriteLine("-- retry take --");
 foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- slot take length --");
 foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
+Console.WriteLine("-- session to arrangement --");
+foreach (var (ok, label) in SessionToArrangementTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");

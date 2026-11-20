@@ -39,6 +39,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     keeping its init messages and LED feedback; **Back to shipped profile** removes the copy.
   - **Learn everything again** runs the step-by-step wizard with each step already on the
     current control — Keep (Enter) keeps it, a new control replaces it.
+- **Recording: the Session performance goes into the Arrangement** (#971, specs/109). Every
+  Arrangement take now also records what you play in the Session, as Arrangement Record does in
+  other DAWs.
+  - Each Session clip that plays during the take lands on its track's Arrangement lane where it
+    really played — from the beat it started (after launch quantize) to the beat it stopped —
+    whether it was launched by hand, by a scene, by a follow action, from Nota Remote or a
+    controller. While the take runs, the Arrangement already shows them, growing with the
+    playhead. A looping slot is repeated for as long as it played: an instrument slot as one
+    clip, an audio slot as one clip per repetition. Legato launches and clips already playing
+    when Record starts are written from where they were.
+  - Only what was played is replaced: a track's own clips stay before the launch and after the
+    stop, and tracks that played no Session clip keep their Arrangement as it was.
+  - Notes you play on an armed instrument track over a playing slot join the clip it writes.
+    An armed audio track records its input as before.
+  - A scene with its own tempo writes the change to the master Tempo lane when the project has
+    no Tempo automation yet.
+  - The whole take — Session clips, input takes, automation — is one undo step, and
+    **Discard and retry take** (⌘.) drops all of it.
+  - **Record with nothing armed** while a Session clip plays (or waits to start) now records the
+    performance alone ("Recording the Session performance…") instead of arming the selected
+    track; with the Session silent it arms the selected track as before.
 - **Session: turn the grid — scenes across, tracks down** (#968, specs/108).
   - **Settings → Editing → Session → Session grid**: *Scenes down* (a scene per row, a track per
     column — as before) or *Scenes across* (a scene per column, a track per row); the turn button

@@ -1061,6 +1061,7 @@ void Engine::pushUndo() {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_; // keep the group's anchor
         if (takeAttempt_.active && takeAttempt_.undoBase > 0) --takeAttempt_.undoBase; // specs/078
+        if (sessionPass_.active && passUndoBase_ > 0) --passUndoBase_;                 // #971: the pass's anchor
     }
     redoStack_.clear(); // a new edit invalidates the redo branch
 }
@@ -1532,6 +1533,7 @@ void Engine::reset() {
     wb_ = {}; // abandon any in-flight warp-cache build (its clip pointer is about to dangle)
     seekBeats(0.0);
     recording_.store(false, std::memory_order_relaxed);
+    abandonSessionPass(); // #971: the old project's performance is not written into the new one
     if (audioRecording_) stopAudioRecording();
     stopPreview();
     // Drop automation write/override state: its lane indices belong to the old project.
