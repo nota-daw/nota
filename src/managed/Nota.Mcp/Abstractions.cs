@@ -67,7 +67,15 @@ public interface IControllerAccess
     /// <summary>The device a controller's knobs follow (the first active one with knobs when
     /// <paramref name="portUid"/> is null), or null when nothing is focused.</summary>
     ControllerFocusInfo? Focus(string? portUid);
+    /// <summary>Next (+1) / previous (−1) device on the focused track, as the command (specs/107).
+    /// False at an end of the chain or with no track.</summary>
+    bool StepDevice(int direction);
+    /// <summary>The Session view's selection (specs/107).</summary>
+    SessionSelectionInfo SessionSelection();
 }
+
+/// <summary>What the Session view has selected: kind "none" | "slot" | "scene" (specs/107, contracts/mcp.md).</summary>
+public readonly record struct SessionSelectionInfo(string Kind, int? Track, int? Scene);
 
 /// <summary>One knob of the focused page: its parameter (null name = empty knob) and value 0..1.</summary>
 public readonly record struct ControllerKnobInfo(int Knob, string? Name, double? Value);

@@ -56,6 +56,52 @@ internal static class ControllerTests
         foreach (var r in Hui()) yield return r;
         foreach (var r in Classifier()) yield return r;
         foreach (var r in PagesStore()) yield return r;
+        foreach (var r in FocusStepping()) yield return r;
+    }
+
+    // specs/107: Track ◀ / ▶ select tracks (the bank follows), Next / Previous device walk the chain.
+    private static IEnumerable<(bool, string)> FocusStepping()
+    {
+        // The walk order: groups before their members, a collapsed group's members left out.
+        var rows = new[] { (1, -1), (2, -1), (3, 2), (4, 2), (5, -1) };
+        var open = ControllerTrackStep.Order(rows, _ => false);
+        var folded = ControllerTrackStep.Order(rows, g => g == 2);
+        yield return (open.SequenceEqual(new[] { 1, 2, 3, 4, 5 }) && folded.SequenceEqual(new[] { 1, 2, 5 }),
+            "track step: the order is the track list, a collapsed group's members skipped");
+        yield return (ControllerTrackStep.Step(open, 3, 1) == 4 && ControllerTrackStep.Step(open, 3, -1) == 2
+                      && ControllerTrackStep.Step(open, 5, 1) is null && ControllerTrackStep.Step(open, 1, -1) is null
+                      && ControllerTrackStep.Step(open, 99, 1) == 1 && ControllerTrackStep.Step(new List<int>(), 1, 1) is null,
+            "track step: neighbours, ends stop, no selection starts at the first track");
+
+        var st = new ControllerState();
+        bool inside = !st.BankFollow(7, 20) && st.BankOrigin == 0;
+        bool past = st.BankFollow(8, 20) && st.BankOrigin == 1;
+        bool back = st.BankFollow(0, 20) && st.BankOrigin == 0;
+        bool far = st.BankFollow(15, 20) && st.BankOrigin == 8;
+        yield return (inside && past && back && far && !st.BankFollow(-1, 20) && !st.BankFollow(20, 20),
+            "track step: the bank moves the least amount that keeps the selected track inside it");
+
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 6);   // Volt
+        int arp = e.AddMidiEffect(t, 0);
+        int comp = e.AddBuiltinDevice(t, 1);
+        int eq = e.AddBuiltinDevice(t, 16);
+        var order = ChainOrder.Of(e, t);
+        var m0 = new DeviceAddress(t, FocusSection.Midi, arp);
+        var inst = DeviceAddress.Instrument(t);
+        var c1 = new DeviceAddress(t, FocusSection.Audio, comp);
+        var e2 = new DeviceAddress(t, FocusSection.Audio, eq);
+        yield return (order.SequenceEqual(new[] { m0, inst, c1, e2 }),
+            "device step: chain order is MIDI effects, instrument, audio effects");
+        yield return (ChainOrder.Step(order, m0, 1) == inst && ChainOrder.Step(order, inst, 1) == c1 && ChainOrder.Step(order, e2, -1) == c1
+                      && ChainOrder.Step(order, e2, 1) is null && ChainOrder.Step(order, m0, -1) is null
+                      && ChainOrder.Step(order, new DeviceAddress(t, FocusSection.Audio, 9), 1) == m0
+                      && ChainOrder.Step(order, null, 1) == m0,
+            "device step: neighbours, ends stop, a missing device starts at the first");
+        yield return (ChainOrder.Step(order, new DeviceAddress(t, FocusSection.Audio, comp, new RackPath(0, 1)), 1) == e2
+                      && ChainOrder.Of(e, e.AddAudioTrack()).Count == 0,
+            "device step: a device inside a rack steps from its rack; an empty chain has none");
     }
 
     // US5 (T069): the setup wizard's classifier.
@@ -725,8 +771,8 @@ internal static class ControllerTests
         var trackWheel = new ControlDecl(new ControlRole(ControlRoleKind.TrackNext, LeftKind: ControlRoleKind.TrackPrev), ControlMessage.Cc, 0, 50, EncoderMode.RelativeTwos, false, null);
         var tw1 = r.Route(trackWheel, ControlValue.Relative(3), st, tracks);
         var tw2 = r.Route(trackWheel, ControlValue.Relative(-1), st, tracks);
-        yield return (tw1.Count == 3 && tw1.All(x => x is { Kind: ControllerActionKind.BankStep, Index: 1 }) && tw2 is [{ Kind: ControllerActionKind.BankStep, Index: -1 }],
-            "route: an encoder for next / previous track steps the bank one track per click, either way");
+        yield return (tw1.Count == 3 && tw1.All(x => x is { Kind: ControllerActionKind.TrackStep, Index: 1 }) && tw2 is [{ Kind: ControllerActionKind.TrackStep, Index: -1 }],
+            "route: an encoder for next / previous track selects one track per click, either way (specs/107)");
 
         // The wizard's profile keeps a two-way role and a two-way command; a wrong pair is refused.
         var learnedPair = new List<LearnedControl>

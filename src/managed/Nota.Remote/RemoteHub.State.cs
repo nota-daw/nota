@@ -24,7 +24,7 @@ public sealed partial class RemoteHub
 
     private sealed class Snapshot(RemoteHub hub, IRemoteHost host)
     {
-        private string? _transport, _mixer, _session, _learn;
+        private string? _transport, _mixer, _session, _learn, _focus;
         private readonly Dictionary<int, string> _lit = new();
         private readonly Dictionary<int, NotaNote[]> _clipNotes = new();
         public readonly double Pos = hub._engine.PositionBeats;
@@ -32,7 +32,9 @@ public sealed partial class RemoteHub
 
         public string Transport => _transport ??= hub.BuildTransport(host);
         public string Mixer => _mixer ??= hub.BuildMixer(host);
-        public string Session => _session ??= hub.BuildSession(this);
+        public string Session => _session ??= hub.BuildSession(this, host);
+        public RemoteControllerFocus? FocusValue { get; private set; }
+        public string Focus => _focus ??= RemoteHub.BuildFocus(FocusValue = host.ControllerFocus);
         public string Learn => _learn ??= Json(w =>
         {
             w.WriteString("t", "learn");
@@ -64,6 +66,12 @@ public sealed partial class RemoteHub
 
         if (snap.Transport != c.SentTransport) { c.Send(snap.Transport); c.SentTransport = snap.Transport; }
         if (snap.Learn != c.SentLearn) { c.Send(snap.Learn); c.SentLearn = snap.Learn; }
+        if (snap.Focus != c.SentFocus)
+        {
+            c.Send(snap.Focus);
+            c.SentFocus = snap.Focus;
+            FollowFocus(c, snap.FocusValue);
+        }
 
         string screen = c.Screen;
         if (screen is "Pads" or "Keys" && c.TrackId > 0)
@@ -476,15 +484,67 @@ public sealed partial class RemoteHub
         });
     }
 
+    // ---- controller focus (specs/107, contracts/remote-focus.md) ------------------------------------
+
+    private static string BuildFocus(RemoteControllerFocus? f) => Json(w =>
+    {
+        w.WriteString("t", "foc");
+        w.WriteBoolean("on", f is not null);
+        if (f is null) return;
+        w.WriteString("ctl", f.Controller);
+        w.WriteString("mode", f.Mode);
+        if (f.Mode == "send") w.WriteNumber("send", f.Send);
+        w.WriteNumber("id", f.TrackId);
+        w.WriteString("tn", f.TrackName);
+        if (f.Device is { } d) w.WriteString("dev", d); else w.WriteNull("dev");
+        if (f.MacroIndex is { } md) w.WriteNumber("md", md); else w.WriteNull("md");
+        w.WriteNumber("pg", f.Page);
+        w.WriteNumber("pn", f.PageCount);
+        w.WriteString("pgn", f.PageName);
+        w.WriteStartArray("bank");
+        w.WriteNumberValue(f.BankFirst);
+        w.WriteNumberValue(f.BankLast);
+        w.WriteEndArray();
+    });
+
+    // A phone that follows Nota's selection turns its Macros screen to the device the controller
+    // went to — only when the focus changes, so a pick on the phone stays until the next move.
+    private void FollowFocus(RemoteClient c, RemoteControllerFocus? f)
+    {
+        if (!c.Follow || f is not { MacroIndex: { } md } || f.TrackId != c.TrackId) return;
+        var devs = MacroDevicesFor(c.TrackId);
+        int at = devs.FindIndex(d => d.DeviceIndex == md);
+        if (at < 0 || at == c.MacroDevice) return;
+        c.MacroDevice = at;
+        if (c.Screen == "Macros") c.SentScreenState = null;   // the new device's knobs at once (the phone takes `di`)
+        else c.FollowedMacro = true;                          // kept when the phone opens Macros
+    }
+
     // ---- session --------------------------------------------------------------------------------
 
-    private string BuildSession(Snapshot snap)
+    private string BuildSession(Snapshot snap, IRemoteHost host)
     {
         int scenes = _engine.SceneCount;
+        var sel = host.SessionSelection;
         return Json(w =>
         {
             w.WriteString("t", "ses");
             w.WriteNumber("n", scenes);
+            // specs/107: Nota's Session selection (moved by the mouse or a controller), outlined on the grid.
+            if (sel.Slot && _tracks.Any(r => r.Id == sel.TrackId && r.Kind != "return"))
+            {
+                w.WriteStartObject("sel");
+                w.WriteNumber("id", sel.TrackId);
+                w.WriteNumber("i", sel.Scene);
+                w.WriteEndObject();
+            }
+            else if (sel.Row && sel.Scene >= 0 && sel.Scene < scenes)
+            {
+                w.WriteStartObject("sel");
+                w.WriteNumber("row", sel.Scene);
+                w.WriteEndObject();
+            }
+            else w.WriteNull("sel");
             // #480: rows with a launch waiting (a row that queued only stops, or restarts of playing
             // slots, shows no slot in state 2) — the phone's hold-to-cancel asks this, not the slots.
             w.WriteStartArray("q");

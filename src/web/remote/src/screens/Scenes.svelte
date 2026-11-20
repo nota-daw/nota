@@ -11,7 +11,9 @@
      the launch point; a playing one fills with its colour and shows a play mark and a progress
      line; a recording one is red and shows its take growing. Every button takes its own finger
      (use:tap), so several clips launch at once. Press and hold a queued clip, group slot or scene
-     to cancel its launch before the launch point (issue 480); a tap never cancels. -->
+     to cancel its launch before the launch point (issue 480); a tap never cancels. The slot or
+     scene selected in Nota (by the mouse or a hardware controller) is outlined in the text
+     colour, as on the desktop (specs/107). -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
@@ -20,6 +22,7 @@
   import { bars } from '../lib/fmt';
   import { lanes as laneList, groupSlot, type Lane } from '../lib/grid';
   import ClipPreview from '../components/ClipPreview.svelte';
+  import { slotSelected, rowSelected } from '../lib/focus';
 
   let { form }: { form: Form } = $props();
   const s = $derived(app.ses);
@@ -94,7 +97,7 @@
 {/snippet}
 
 {#snippet sceneButton(i: number)}
-  <button class="scene" class:queued={sceneQueued(i)}
+  <button class="scene" class:queued={sceneQueued(i)} class:sel={rowSelected(s, i)}
     use:tap={{ tap: () => guard() && app.send({ t: 'scene', i }), hold: holdCancelScene(i) }}
     aria-label="Launch scene {i + 1}{sceneQueued(i) ? ' — queued, hold to cancel' : ''}">
     <span class="tri"></span>Scene {i + 1}
@@ -129,7 +132,7 @@
         {#each scenes as i (i)}
           {#if l.group}
             {@const g = groupSlot(l.members, s, i)}
-            <div class="c" style:grid-area={at(j, i)}>
+            <div class="c" class:sel={slotSelected(s, l.id, i)} style:grid-area={at(j, i)}>
               {#if g.has === 0}
                 <div class="clip empty"></div>
               {:else}
@@ -150,7 +153,7 @@
             {@const col = pv?.col ?? t?.color}
             {@const rec = st === 4 || st === 5}
             {@const [bn, bu] = bars(pv?.len ?? len)}
-            <div class="c" style:grid-area={at(j, i)}>
+            <div class="c" class:sel={slotSelected(s, l.id, i)} style:grid-area={at(j, i)}>
               {#if st === 0}
                 <div class="clip empty"></div>
               {:else}
@@ -186,6 +189,9 @@
      the gap too and the clips slide under it unseen. */
   .c { padding: 2px; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .c > :global(*) { flex: 1; min-height: 0; }
+  /* Nota's selection: an outline in the text colour around the slot (the desktop's SelPen). */
+  .c.sel > :global(*) { outline: 1.5px solid var(--text-primary); outline-offset: -1.5px; }
+  .scene.sel { outline: 1.5px solid var(--text-primary); outline-offset: -1.5px; }
   .pin { position: sticky; z-index: 2; background: var(--bg-app); }
   .pin-t { top: 0; }
   .pin-l { left: 0; }

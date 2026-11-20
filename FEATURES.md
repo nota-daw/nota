@@ -639,6 +639,9 @@ own window — see
   track and launches them all, and its Stop stops them all. ⋯ → **Session grid** turns the
   grid: **Scenes down** (as in Nota) or **Scenes across**, kept per phone. Press and hold a
   queued clip, group slot or scene to cancel its launch; a queued scene blinks like a queued clip.
+  The slot or scene selected in Nota (by the mouse or a hardware controller) is outlined, and
+  the header shows what a controller's knobs are on; a phone following Nota's selection turns
+  its Macros screen to the controller's device (#929).
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
@@ -809,8 +812,8 @@ own window — see
     fires a toggle target once as it crosses the half-way point.
 - **Controller auto-mapping** (#100) — a recognised controller works on plug-in, with no
   MIDI Learn: a profile (port name and MIDI identity) maps its transport buttons, faders (a bank
-  of eight tracks, marked in the Arrangement and the Mixer, shifted by its bank / track
-  buttons) and LEDs; extra buttons can run any Nota command (undo, redo, save, metronome, tap
+  of eight tracks, marked in the Arrangement and the Mixer, shifted by its bank buttons) and
+  LEDs; its track buttons select the previous / next track in every view (the bank follows); extra buttons can run any Nota command (undo, redo, save, metronome, tap
   tempo, quantize); a control's right-click menu shows which hardware control drives it and
   can unbind it or bind another one by name; in the Session the jog wheel / buttons walk the clips
   and launch or stop the selected one; keys and pads keep playing; an explicit MIDI Learn
@@ -825,6 +828,11 @@ own window — see
     **Edit controller pages…** on a device edits a type's pages (kept for you and in the
     project). Knob modes Device / Volume / Pan / Send A, B, … from the controller or the chip in
     the top bar.
+  - **The focus in view** (#929): the controller chip in the top bar reads *track · device ·
+    page* (or the mode and its bank of tracks) in every view, the focused device's card carries
+    a **Controller** tag, and **Show device** on the chip opens it. **Next / Previous device**
+    (commands, controller buttons, keys) walk the track's chain — MIDI effects, instrument,
+    audio effects, a rack as one device.
   - **Pickup** (soft takeover, per controller): a control takes over a value only when it
     reaches it; a rail under the control shows where the hardware is until then.
   - **Mackie Control and HUI** surfaces: strips (motor fader with touch, V-pot and ring,
@@ -832,7 +840,8 @@ own window — see
     bank / channel, jog and the time display, with feedback by difference. Any port can be
     forced to Mackie Control or HUI in Preferences → MIDI → Controllers.
   - MCP: `list_controllers`, `set_controller`, `list_controller_profiles`,
-    `reload_controller_profiles`, `get_controller_focus` (and `controller_inject` /
+    `reload_controller_profiles`, `get_controller_focus`, `step_controller_device`,
+    `get_session_selection` (and `controller_inject` /
     `controller_sent` with `NOTA_CONTROLLER_TEST=1`).
 
 ---

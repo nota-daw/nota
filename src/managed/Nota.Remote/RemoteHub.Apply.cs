@@ -45,8 +45,11 @@ public sealed partial class RemoteHub
                 _devicesDirty = true;
                 break;
             case "sub":
+                // Opening Macros after the controller moved it (specs/107) keeps that device: the
+                // phone's index is its last pick. A sub on the screen already shown is a pick.
+                if (!(cmd.S != c.Screen && c.FollowedMacro)) c.MacroDevice = Math.Max(0, cmd.I);
+                if (cmd.S == "Macros") c.FollowedMacro = false;
                 c.Screen = cmd.S;
-                c.MacroDevice = Math.Max(0, cmd.I);
                 c.SentScreenState = null;
                 _devicesDirty = true;
                 break;

@@ -63,6 +63,10 @@ public static class CommandCatalog
         C("view.toggleDetail", Loc.T("commands.toggle_detail_panel"), Loc.T("commands.view"), "", "devices clip"),
         C("view.maximizeDetail", Loc.T("commands.clip_editor_fills_the_window"), Loc.T("commands.view"), Shortcut.CmdShift('F'), "maximize maximise full detail panel piano roll restore split"),
         C("view.showDevices", Loc.T("commands.show_devices"), Loc.T("commands.view"), "", "chain detail"),
+        // A hardware controller's knobs (and the Devices panel selection) step along the track's
+        // chain — MIDI effects, instrument, audio effects (specs/107). No default key.
+        C("device.focusNext", Loc.T("commands.device_focus_next"), Loc.T("commands.view"), "", ""),
+        C("device.focusPrevious", Loc.T("commands.device_focus_previous"), Loc.T("commands.view"), "", ""),
         C("view.popOutDetail", Loc.T("commands.open_devices_in_a_window"), Loc.T("commands.view"), "", "detach float pop out"),
         C("view.toggleOverview", Loc.T("commands.toggle_overview"), Loc.T("commands.view"), "", "minimap", view: "Arrangement"),
         C("view.toggleSections", Loc.T("commands.toggle_sections"), Loc.T("commands.view"), "", "markers locators", view: "Arrangement"),

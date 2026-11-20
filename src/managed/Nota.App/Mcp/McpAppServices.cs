@@ -180,6 +180,19 @@ public sealed class ControllerAccess(Nota.App.Controllers.ControllerService svc,
     public void ReloadProfiles() => svc.ReloadProfiles();
     public void Rescan() => svc.RescanNow();
 
+    public bool StepDevice(int direction) => svc.StepDevice?.Invoke(Math.Sign(direction)) == true;
+
+    public SessionSelectionInfo SessionSelection()
+    {
+        var (kind, track, scene) = svc.SessionSelection?.Invoke() ?? ("none", 0, 0);
+        return kind switch
+        {
+            "slot" => new SessionSelectionInfo(kind, track, scene),
+            "scene" => new SessionSelectionInfo(kind, null, scene),
+            _ => new SessionSelectionInfo("none", null, null),
+        };
+    }
+
     public ControllerFocusInfo? Focus(string? portUid)
     {
         if (svc.Focused is not { } f) return null;

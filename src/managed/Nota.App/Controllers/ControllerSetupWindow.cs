@@ -217,6 +217,10 @@ public sealed class ControllerSetupWindow : NotaWindow
         Pair(Group.Navigation, Loc.T("controllers.setup.pair_pages"), Loc.T("controllers.setup.pair_pages_name"),
             new Half(Loc.T("controllers.setup.page_prev"), Loc.T("controllers.control.page_prev"), ControlRoleKind.PagePrev, Word: Loc.T("controllers.setup.page_prev_word")),
             new Half(Loc.T("controllers.setup.page_next"), Loc.T("controllers.control.page_next"), ControlRoleKind.PageNext, Word: Loc.T("controllers.setup.page_next_word")));
+        // specs/107: step the knobs along the track's chain.
+        Pair(Group.Navigation, Loc.T("controllers.setup.pair_devices"), Loc.T("controllers.setup.pair_devices_name"),
+            new Half(Loc.T("controllers.setup.device_prev"), Loc.T("commands.device_focus_previous"), ControlRoleKind.Command, "device.focusPrevious", Word: Loc.T("controllers.setup.device_prev_word")),
+            new Half(Loc.T("controllers.setup.device_next"), Loc.T("commands.device_focus_next"), ControlRoleKind.Command, "device.focusNext", Word: Loc.T("controllers.setup.device_next_word")));
 
         void Cmd(Group g, string id, string prompt, string name, GlyphKind? icon = null, string? word = null)
             => Btn(g, ControlRoleKind.Command, prompt, name, icon, word, id);

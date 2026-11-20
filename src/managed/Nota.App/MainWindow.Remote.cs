@@ -161,6 +161,47 @@ public partial class MainWindow : IRemoteHost
     }
 
     int IRemoteHost.SelectedTrackId => Timeline.SelectedTrackId;
+
+    // specs/107: what the phone outlines on its Scenes grid and shows as the controller's focus.
+    RemoteSessionSelection IRemoteHost.SessionSelection
+    {
+        get
+        {
+            if (_session is not { IsEffectivelyVisible: true } s) return RemoteSessionSelection.None;
+            var sel = s.CurrentSelection;
+            return sel.Kind switch
+            {
+                SessionView.SelKind.Slot when sel.TrackId > 0 => new RemoteSessionSelection(true, false, sel.TrackId, sel.Scene),
+                SessionView.SelKind.Scene => new RemoteSessionSelection(false, true, 0, sel.Scene),
+                _ => RemoteSessionSelection.None,
+            };
+        }
+    }
+
+    RemoteControllerFocus? IRemoteHost.ControllerFocus
+    {
+        get
+        {
+            if (_controllers?.CurrentSummary is not { } f) return null;
+            string mode = f.Mode.Kind switch
+            {
+                Nota.Application.Controllers.KnobModeKind.Volume => "volume",
+                Nota.Application.Controllers.KnobModeKind.Pan => "pan",
+                Nota.Application.Controllers.KnobModeKind.Send => "send",
+                _ => "device",
+            };
+            // The phone's Macros list for a track: the instrument (or rack) at −1, then the audio effects.
+            // A device inside a rack shows as its rack (the same index); MIDI effects aren't on the phone.
+            int? md = f.Address?.Section switch
+            {
+                Nota.Application.Controllers.FocusSection.Instrument => -1,
+                Nota.Application.Controllers.FocusSection.Audio => f.Address.Index,
+                _ => null,
+            };
+            return new RemoteControllerFocus(f.Controller, mode, f.Mode.Send, f.TrackId, f.TrackName, f.Device, md,
+                f.Page, f.PageCount, f.PageName, f.BankFirst, f.BankLast);
+        }
+    }
     int IRemoteHost.ProjectKeyCode => _vm?.Transport.KeyCode ?? -1;
 
     IReadOnlyList<(string Name, double StartBeat)> IRemoteHost.Sections =>

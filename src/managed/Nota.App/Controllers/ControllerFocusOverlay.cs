@@ -6,7 +6,8 @@
 // orange underline, and the first of them carries the page ("2 / 3 · Filter"). FR-020: a control
 // whose hardware knob or fader has not picked up yet shows where the hardware is — on a knob a
 // hollow dot on its own arc (the knob's pointer shows the value), on a fader or slider a rail
-// beside it with the hardware and the value — so it is clear which way to turn.
+// beside it with the hardware and the value — so it is clear which way to turn. specs/107: the
+// focused device's card itself carries an orange top line and a "Controller" tag.
 //
 // Like the MIDI Learn glass it finds controls by their MidiLearn binding, so no card needs code
 // of its own: a control a knob drives is one MIDI Learn could map.
@@ -19,6 +20,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Nota.Application.Controllers;
 using Nota.Application.Localization;
 
 namespace Nota.App.Controllers;
@@ -29,6 +31,14 @@ public sealed class ControllerFocusOverlay : Control
     private readonly DispatcherTimer _tick;   // follows cards that rebuild, scroll or reflow
     private readonly Dictionary<MidiTarget, int> _knobOf = new();
     private string _pageText = "";
+    private DeviceAddress? _focusCard;   // the top-level card the knobs are on (specs/107)
+
+    /// <summary>Which top-level device a Devices-panel card is (set by the chain on each card it
+    /// builds): the overlay marks the focused one, so no card needs code of its own (specs/107 FR-004).</summary>
+    public static readonly AttachedProperty<DeviceAddress?> CardAddressProperty =
+        AvaloniaProperty.RegisterAttached<ControllerFocusOverlay, Control, DeviceAddress?>("CardAddress");
+    public static void SetCardAddress(Control c, DeviceAddress? a) => c.SetValue(CardAddressProperty, a);
+    public static DeviceAddress? GetCardAddress(Control c) => c.GetValue(CardAddressProperty);
 
     /// <summary>Where to look for bound controls (the Devices panel, the Mixer).</summary>
     public Func<IEnumerable<Visual?>>? Roots { get; set; }
@@ -76,8 +86,11 @@ public sealed class ControllerFocusOverlay : Control
     {
         _knobOf.Clear();
         _pageText = "";
+        _focusCard = null;
         if (_service?.KnobFocus() is { } kf && _service.Focused is { } f)
         {
+            var a = f.Address;
+            _focusCard = new DeviceAddress(a.TrackId, a.Section, a.Section == FocusSection.Instrument ? -1 : a.Index);   // a rack's inner device: its rack's card
             for (int k = 0; k < kf.Knobs.Count; k++)
                 if (kf.Knobs[k].Target is { } t) _knobOf.TryAdd(t, k);
             string name = f.PageName(kf.Page);
@@ -85,7 +98,7 @@ public sealed class ControllerFocusOverlay : Control
                 ? Loc.F("controllers.page_named", kf.Page + 1, Math.Max(1, f.PageCount), name)
                 : Loc.F("controllers.page", kf.Page + 1, Math.Max(1, f.PageCount));
         }
-        bool any = (_knobOf.Count > 0 || _service?.PickupGhosts.Count > 0) && this.IsAttachedToVisualTree();
+        bool any = (_knobOf.Count > 0 || _focusCard is not null || _service?.PickupGhosts.Count > 0) && this.IsAttachedToVisualTree();
         if (any) { if (!_tick.IsEnabled) _tick.Start(); }
         else if (_tick.IsEnabled) _tick.Stop();
         InvalidateVisual();
@@ -95,7 +108,7 @@ public sealed class ControllerFocusOverlay : Control
     {
         if (_service is null || Roots is null) return;
         var ghosts = _service.PickupGhosts;
-        if (_knobOf.Count == 0 && ghosts.Count == 0) return;
+        if (_knobOf.Count == 0 && ghosts.Count == 0 && _focusCard is null) return;
 
         Rect? first = null;
         foreach (var root in Roots())
@@ -104,6 +117,9 @@ public sealed class ControllerFocusOverlay : Control
             foreach (var v in root.GetVisualDescendants())
             {
                 if (v is not Control c || !c.IsEffectivelyVisible || c.Bounds.Width <= 0) continue;
+                if (_focusCard is not null && GetCardAddress(c) is { } ca && ca == _focusCard
+                    && c.TranslatePoint(new Point(0, 0), this) is { } ctl)
+                    DrawCardMark(ctx, new Rect(ctl, c.Bounds.Size));
                 if (MidiLearn.GetBinding(c) is not { } b) continue;
                 bool knob = _knobOf.TryGetValue(b.Target, out int k);
                 bool ghost = ghosts.TryGetValue(b.Target, out double physical);
@@ -149,6 +165,18 @@ public sealed class ControllerFocusOverlay : Control
             : new Rect(Math.Max(0, r.Left - bw - 2), r.Top - 1, bw, bh);
         ctx.DrawRectangle(NotaPalette.Panel, new Pen(NotaPalette.AccentEdge, 1), box, 3, 3);
         ctx.DrawText(ft, new Point(box.Left + 3, box.Top + 1));
+    }
+
+    // The focused card (specs/107 FR-004): an orange line along its top edge and a small tag at its
+    // right end — the orange-lines strength the knob numbers use, so it reads as "the knobs are here".
+    private void DrawCardMark(DrawingContext ctx, Rect card)
+    {
+        ctx.DrawLine(new Pen(NotaPalette.Accent, 2), new Point(card.Left + 4, card.Top + 1), new Point(card.Right - 4, card.Top + 1));
+        var ft = Text(Loc.T("controllers.card_tag"), NotaPalette.AccentBright);
+        var box = new Rect(Math.Max(card.Left + 4, card.Right - ft.Width - 18), card.Top - ft.Height / 2 - 1, ft.Width + 10, ft.Height + 2);
+        double rad = NotaSkin.MapRadius(3);   // the skin's roundness (DESIGN.md)
+        ctx.DrawRectangle(NotaPalette.Panel, new Pen(NotaPalette.AccentEdge, 1), box, rad, rad);
+        ctx.DrawText(ft, new Point(box.Left + 5, box.Top + 1));
     }
 
     private void DrawPage(DrawingContext ctx, Rect r)

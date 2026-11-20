@@ -92,7 +92,16 @@ const state = {
   you: 1,
   follow: false,
   started: Date.now(),
+  // specs/107: Nota's Session selection (the phone's last tap moves it, as the controller would)
+  // and a controller whose knobs walk Bass's chain every few seconds.
+  sel: { id: 2, i: 1 },
+  focStep: 0,
 };
+const focChain = [['Nota Volt', -1, 3], ['Auto Filter', 0, 2], ['Reverb', 1, 1]];
+function foc() {
+  const [dev, md, pn] = focChain[Math.floor(state.focStep / 2) % focChain.length];
+  return { t: 'foc', on: true, ctl: 'KeyLab Essential 61 mk3', mode: 'device', id: 2, tn: 'Bass', dev, md, pg: (state.focStep % 2) % pn, pn, pgn: '', bank: [0, 0] };
+}
 
 function proj() {
   return {
@@ -135,7 +144,7 @@ const more = (four) => Array.from({ length: SCENES }, (_, i) => (i < 4 ? four[i]
 function ses() {
   const prog = (((Date.now() - state.started) / 1000) % 8) / 8;
   return {
-    t: 'ses', n: SCENES,
+    t: 'ses', n: SCENES, sel: state.sel,
     // A group (Pads) sends its tracks' ids and no slots of its own (contracts/session-message.md).
     tr: [
       { id: 1, c: more([[3, 16, prog], [1, 16, 0], [1, 8, 0], [0, 0, 0]]) },
@@ -230,6 +239,7 @@ function welcome(c, m) {
   c.send({ t: 'tp', ...state.tp });
   c.send({ t: 'who', p: { 3: ['Anna'] } });
   c.send({ t: 'learn', on: false, pend: null });
+  c.send(foc());
   sendScreen(c);
   if (c.screen === 'Scenes') c.send(clips(true));
 }
@@ -254,7 +264,9 @@ function onMessage(c, m) {
     case 'mvol': state.master = m.v; break;
     case 'on': c.send({ t: 'lit', n: [m.p] }); break;
     case 'off': c.send({ t: 'lit', n: [] }); break;
-    case 'launch': case 'stopSlot': case 'scene': case 'stopAll': console.log('session', JSON.stringify(m)); break;
+    case 'launch': state.sel = { id: m.id, i: m.i }; console.log('session', JSON.stringify(m)); break;
+    case 'scene': state.sel = { row: m.i }; console.log('session', JSON.stringify(m)); break;
+    case 'stopSlot': case 'stopAll': console.log('session', JSON.stringify(m)); break;
   }
 }
 
@@ -270,6 +282,9 @@ setInterval(() => {
   for (const c of clients) if (c.paired && (c.screen === 'Mixer' || c.screen === 'Scenes')) sendScreen(c);
   for (const c of clients) if (c.paired && c.screen === 'Scenes') c.send(clips(false));
 }, 250);
+
+// The controller moves on: a page, then the next device.
+setInterval(() => { state.focStep++; broadcast(foc()); }, 4000);
 
 // ---- HTTP -----------------------------------------------------------------------------
 

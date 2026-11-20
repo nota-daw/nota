@@ -53,6 +53,17 @@ public sealed class ControllerTools(
     [McpServerTool(Name = "get_controller_focus"), Description("The device a controller's knobs follow (the selected device, else the selected track's instrument, else its first device), its type key, the current page and the eight knobs' parameters with their values (0..1). portUid from list_controllers; omit it for the first active controller with knobs.")]
     public Task<ControllerFocusInfo?> GetControllerFocus(string? portUid = null) => Read(() => controllers.Focus(portUid));
 
+    [McpServerTool(Name = "step_controller_device"), Description("Move the controller's knobs to the next (direction 1) or previous (-1) device on the focused track, as the Next / Previous device command: MIDI effects, then the instrument, then the audio effects, a rack as one device; it stops at the ends. Returns the focus after the step (unchanged at an end). portUid as for get_controller_focus.")]
+    public Task<ControllerFocusInfo?> StepControllerDevice(int direction, string? portUid = null) => Mutate(() =>
+    {
+        if (direction is not (1 or -1)) throw new InvalidOperationException("direction must be 1 (next) or -1 (previous).");
+        controllers.StepDevice(direction);
+        return controllers.Focus(portUid);
+    });
+
+    [McpServerTool(Name = "get_session_selection"), Description("What the Session view has selected — what a controller's launch button acts on: kind \"slot\" (track, scene), \"scene\" (a scene row) or \"none\" (the Session isn't showing).")]
+    public Task<SessionSelectionInfo> GetSessionSelection() => Read(() => controllers.SessionSelection());
+
     [McpServerTool(Name = "controller_inject"), Description("Test only (NOTA_CONTROLLER_TEST=1): send raw MIDI bytes (hex, e.g. \"90 5E 7F\") as if from a controller port named portName — a virtual port is created on first use and recognised like a real one. Returns the port's uid.")]
     public Task<string> ControllerInject(string portName, string bytes) => Mutate(() =>
     {
