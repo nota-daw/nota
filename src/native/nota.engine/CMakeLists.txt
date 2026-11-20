@@ -139,6 +139,8 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Track.cpp
     src/engine/Transport.cpp
     src/engine/SessionPlayer.cpp
+    src/engine/SessionPass.cpp
+    src/engine/Engine_SessionPass.cpp
     src/engine/Automation.cpp
     src/engine/Modulation.cpp
     src/engine/MidiClip.cpp

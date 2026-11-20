@@ -474,6 +474,7 @@ void Engine::applyMidiCcRouting(Track& t) {
 
 void Engine::poll() {
     if (audioRecording_) drainInputQueue(); // keep the capture buffer flowing while recording
+    if (sessionPass_.active) drainSessionPass(); // #971: Session launches heard in the pass
     serviceSessionFollow();                 // scene follow + fixed-length session capture
 
     // Automation write/record (M9-C). Message thread: a transport stop ends any
@@ -2411,6 +2412,9 @@ static inline bool sessionActiveOf(const Track& t) {
 // to the loop start whole). A Session slot take times notes on its own loop clock: untouched.
 void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     const double jump = loopStartBeat - loopEndBeat;
+    if (rtPassSerial_ != 0) // #971: what plays ends at the loop end and goes on from its start
+        if (const uint32_t ps = passSerial_.load(std::memory_order_acquire); ps == rtPassSerial_)
+            pushPassEvent({LaunchEvent::Seam, 0, -1, loopEndBeat, loopStartBeat, 1.0f, ps});
     if (g)
         for (auto& tptr : g->tracks)
             if (tptr && tptr->instrument && !sessionActiveOf(*tptr)) {
@@ -2551,6 +2555,13 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     const bool seeked = seekedThisBlock_, seekedRolling = seekedWhileRolling_;
     seekedThisBlock_ = seekedWhileRolling_ = false;
     if ((!playing && renderWasPlaying_) || (playing && renderWasPlaying_ && seekedRolling)) flushArrangementVoices();
+    // #971: the transport stopped under a running pass — what played ends here; a new roll
+    // re-reports what plays then.
+    if (!playing && renderWasPlaying_ && rtPassSerial_ != 0) {
+        if (const uint32_t ps = passSerial_.load(std::memory_order_acquire); ps == rtPassSerial_)
+            pushPassEvent({LaunchEvent::Stop, 0, -1, transport_.positionBeats(), 0.0, 1.0f, ps});
+        rtPassSerial_ = 0;
+    }
     // A device moved between tracks (specs/043): the moved instrument's held notes, or the
     // voices an arp drove on the track it left, stop here, on the thread that owns them.
     if (g)
@@ -3170,6 +3181,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                                 rs_->leafWork.size() >= ntracks;
         const int32_t capTrackId = freezeCaptureTrackId_.load(std::memory_order_relaxed);
         const bool recArmed = recording_.load(std::memory_order_relaxed);
+        // #971: a running pass reports Session launches; the first rolling block of a pass (or of
+        // its retry) reports what already plays.
+        const uint32_t passSerial = passSerial_.load(std::memory_order_acquire);
+        const bool passOn = passSerial != 0 && playing && spb > 0.0;
+        const bool passOpening = passOn && rtPassSerial_ != passSerial;
+        if (passOpening) rtPassSerial_ = passSerial;
         for (size_t li = 0; li < ntracks; ++li) {
             Track& t = *g->tracks[li];
             LeafWork& w = rs_->leafWork[li];
@@ -3218,6 +3235,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     if (t.liveHeld) t.liveHeld->forgetRouted(); // #504: the voices are gone
                     for (auto& md : t.midiEffects)
                         if (md) md->reset(); // clock switch → flush arp
+                    if (passOn && !passOpening)
+                        pushPassEvent({LaunchEvent::Launch, t.id(), sp->playing.load(std::memory_order_relaxed),
+                            sp->appliedBeat, sp->localBeats, sp->gain, passSerial});
+                }
+                if (passOpening) {
+                    const int32_t now = sp->playing.load(std::memory_order_relaxed);
+                    if (now >= 0)
+                        pushPassEvent({LaunchEvent::Launch, t.id(), now, blockStart / spb, sp->localBeats, sp->gain, passSerial});
                 }
                 sessionActive =
                     !frozenActive && !capturing && !monitoring && sp->playing.load(std::memory_order_relaxed) >= 0;

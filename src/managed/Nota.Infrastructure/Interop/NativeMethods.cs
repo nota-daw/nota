@@ -196,6 +196,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_record_start_status")]
     internal static partial int RecordStartStatus(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_session_pass_selftest")]
+    internal static partial int SessionPassSelfTest(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_audio_record_track")]
     internal static partial int AudioRecordTrack(IntPtr engine);
 

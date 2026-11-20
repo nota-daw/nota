@@ -1532,6 +1532,7 @@ void Engine::reset() {
     wb_ = {}; // abandon any in-flight warp-cache build (its clip pointer is about to dangle)
     seekBeats(0.0);
     recording_.store(false, std::memory_order_relaxed);
+    abandonSessionPass(); // #971: the old project's performance is not written into the new one
     if (audioRecording_) stopAudioRecording();
     stopPreview();
     // Drop automation write/override state: its lane indices belong to the old project.

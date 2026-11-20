@@ -1414,6 +1414,10 @@ bool Engine::takeSceneTempoChange(double* bpm, int32_t* num, int32_t* den) {
 void Engine::applySceneTempo() {
     sceneTempoPending_ = false;
     sceneTempoApplied_ = true; // the UI's transport picks the new values up (takeSceneTempoChange)
+    // #971: a scene tempo heard in a pass goes to the Tempo lane when the pass ends — only while
+    // no Tempo lane leads (then setBpm below is refused and nothing changed).
+    if (sessionPass_.active && sceneTempo_ > 0.0 && !tempoMap())
+        sessionPass_.tempoSteps.emplace_back(sceneTempoAt_, sceneTempo_);
     if (sceneTempo_ > 0.0) setBpm(sceneTempo_);
     if (sceneSigNum_ > 0 && sceneSigDen_ > 0) setTimeSignature(sceneSigNum_, sceneSigDen_);
 }

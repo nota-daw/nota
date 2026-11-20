@@ -3,6 +3,8 @@
 
 #include "SessionPlayer.h"
 
+#include <algorithm>
+
 namespace nota {
 
 void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float g, int32_t gen) {
@@ -30,11 +32,13 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     const double pq = pendingQuant.load(std::memory_order_relaxed);
     const double quant = (p == kStop || p == kStopNow || pq < 0.0) ? globalQuant : pq;
     bool boundary;
+    double at = blockStartBeats;
     if (p == kStopNow || quant <= 0.0 || loopSeam) {
         boundary = true;
     } else {
         const double b1 = blockStartBeats + blockBeats;
         boundary = blockStartBeats <= 1e-9 || std::floor(blockStartBeats / quant) != std::floor(b1 / quant);
+        if (boundary && blockStartBeats > 1e-9) at = std::min(std::ceil(blockStartBeats / quant - 1e-9) * quant, b1);
     }
     if (!boundary) return false;
 
@@ -48,6 +52,7 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     // The caller flushes instrument voices when a launch/stop applies. Discard releases from
     // the outgoing slot so they cannot cut a newly launched slot's switch on the same key.
     articulationReleases.count = 0;
+    appliedBeat = at;
     if (p == kStop || p == kStopNow) {
         playing.store(-1, std::memory_order_relaxed);
     } else {

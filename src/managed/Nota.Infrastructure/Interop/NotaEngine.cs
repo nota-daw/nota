@@ -182,8 +182,11 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }
     public RetryTakeResult RetryTake() { ThrowIfDisposed(); return (RetryTakeResult)NativeMethods.RetryTake(_handle); }
-    /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.</summary>
+    /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed,
+    /// 3 ok — a performance-only pass (nothing armed, the Session performance alone, #971).</summary>
     public int RecordStartStatus { get { ThrowIfDisposed(); return NativeMethods.RecordStartStatus(_handle); } }
+    /// <summary>Device-free self-test of Session-performance recording (#971): spans and MIDI unroll; 0 = pass.</summary>
+    public int SessionPassSelfTest() { ThrowIfDisposed(); return NativeMethods.SessionPassSelfTest(_handle); }
     /// <summary>Track id of the in-progress audio take (0 when not capturing), for drawing a growing clip.</summary>
     public int AudioRecordTrackId { get { ThrowIfDisposed(); return NativeMethods.AudioRecordTrack(_handle); } }
     /// <summary>Beat where the in-progress audio take began.</summary>

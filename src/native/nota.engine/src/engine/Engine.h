@@ -17,6 +17,7 @@
 #include "CommandQueue.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
+#include "engine/SessionPass.h"
 #include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
 #include "Graph.h"
@@ -1824,6 +1825,18 @@ class Engine {
     RecordedQueue recorded_;
     RecordedExprQueue recordedExpr_;
     RecordedCtlQueue recordedCtl_;
+    // Session performance → Arrangement (#971, specs/109): the audio thread reports each launch,
+    // stop, loop seam and transport stop of a running pass; poll() folds them into sessionPass_.
+    // passSerial_ names the running pass (0 = none): the audio thread opens a pass once per serial
+    // (rtPassSerial_), so a retry's new serial re-reports what plays, and stale reports are dropped.
+    SpscRingBuffer<LaunchEvent, 1024> launchEvents_;
+    std::atomic<uint32_t> passSerial_{0};
+    std::atomic<int32_t> passDropped_{0};
+    uint32_t rtPassSerial_ = 0; // audio thread
+    uint32_t passSerialNext_ = 0;
+    SessionPass sessionPass_;                       // message thread
+    std::vector<std::shared_ptr<Track>> passBase_;  // the tracks when the pass began (take notes)
+    size_t passUndoBase_ = 0;                       // undoStack_ size when the pass began
     mutable std::mutex exprMx_; // the expression store
     std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
     int32_t nextExprId_ = 1;
@@ -1951,6 +1964,21 @@ class Engine {
     // Carve [ns, ne) out of a track's audio clips (overwrite/comp on record + drag).
     // `spb` is the samples-per-beat the caller used to measure `ns` and `ne`.
     void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb);
+    // The same for MIDI clips, and an audio clip cut to the timeline range [ns, ne) (#971).
+    static void overwriteMidiClipsInRange(std::vector<MidiClip>& clips, double ns, double ne);
+    AudioClip sliceAudioClip(const AudioClip& c, double ns, double ne) const;
+
+    // Session performance → Arrangement (#971, specs/109). Message thread unless noted.
+    void beginSessionPass(bool performanceOnly);
+    void drainSessionPass();               // poll(): reports → spans
+    bool finishSessionPass(double stopBeat); // write the spans as clips; true if anything was written
+    void abandonSessionPass();             // a discarded take: forget what the pass heard
+    bool sessionPlayingOrQueued() const;   // a Session clip plays or waits to launch on some track
+    void pushPassEvent(const LaunchEvent& e) { // audio thread
+        if (!launchEvents_.push(e)) passDropped_.fetch_add(1, std::memory_order_relaxed);
+    }
+    void writePassTrack(int32_t trackId, const std::vector<const PlayedSpan*>& spans);
+    void writePassTempo();
 
     // Loop region mirror (see loopEnabled()/loopStart()/loopEnd()).
     bool loopEnabled_ = false;

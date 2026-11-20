@@ -197,6 +197,7 @@ int32_t nota_engine_tempo_automated(const NotaEngine* e) {
 int32_t nota_engine_tempo_lane_selftest(NotaEngine* e) {
     return e ? ENG(e)->tempoLaneSelfTest() : -1;
 }
+int32_t nota_engine_session_pass_selftest(NotaEngine* e) { return e ? nota::sessionPassSelfTest() : -1; }
 NotaResult nota_transport_set_time_signature(NotaEngine* e, int32_t num, int32_t denom) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     if (num <= 0 || denom <= 0) return NOTA_ERR_INVALID_ARG;

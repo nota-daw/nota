@@ -67,6 +67,9 @@ class SessionPlayer {
 
     // Audio-thread-only.
     double localBeats = 0.0; // absolute position within the loop clock
+    // Where the last applied request took effect on the timeline (#971): the quantum boundary inside
+    // the block for a quantized request, else the block start. Read right after maybeApply.
+    double appliedBeat = 0.0;
     ArticulationReleaseState articulationReleases; // pending latching keys, timed by rendered frames
     float gain = 1.0f;       // launch-velocity gain of the playing slot
     // Follow bypass (#499): the follow check counts playedBeats - followBase. followHeld is set

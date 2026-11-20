@@ -575,6 +575,9 @@ NOTA_API int32_t nota_engine_tempo_automated(const NotaEngine* engine);
  * clamping, live edits, undo/redo, unwarped clip reprojection, lane removal).
  * 0 = pass, else the number of the failed check. */
 NOTA_API int32_t nota_engine_tempo_lane_selftest(NotaEngine* engine);
+/* Device-free check of the Session-performance recording rules (#971): launch reports → played
+ * spans, and a slot's MIDI unrolled over a span. 0 = pass, else the failed check. */
+NOTA_API int32_t nota_engine_session_pass_selftest(NotaEngine* engine);
 NOTA_API double nota_tempo_beat_to_seconds(const NotaEngine* engine, double beat);
 NOTA_API double nota_tempo_seconds_to_beat(const NotaEngine* engine, double seconds);
 NOTA_API double nota_tempo_bpm_at(const NotaEngine* engine, double beat);
@@ -1062,7 +1065,10 @@ NOTA_API int32_t    nota_engine_is_recording(const NotaEngine* engine);
  * take retried, -1 discarded but recording could not start again (see
  * nota_engine_record_start_status). Message thread. */
 NOTA_API int32_t    nota_engine_retry_take(NotaEngine* engine);
-/* Why the last set_recording(1) did (not) start: 0 ok, 1 no armed track, 2 audio input failed. */
+/* Why the last set_recording(1) did (not) start: 0 ok, 1 no armed track, 2 audio input failed,
+ * 3 ok — a performance-only pass: nothing armed while a Session clip plays or waits, so the take
+ * records the Session performance alone (#971). Every Arrangement take also writes the Session
+ * clips that play during it onto the Arrangement when it stops. */
 NOTA_API int32_t    nota_engine_record_start_status(const NotaEngine* engine);
 /* Live audio-capture geometry for drawing a growing take: the armed track id
  * (0 when not capturing) and the beat where the current take began. */

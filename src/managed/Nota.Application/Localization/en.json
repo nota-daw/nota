@@ -4426,6 +4426,7 @@
     "transport.no_take_to_discard": "Nothing is recording — no take to discard.",
     "transport.paused_play_carries_on_from": "Paused · Play carries on from here",
     "transport.recording": "● Recording…",
+    "transport.recording_session_performance": "● Recording the Session performance…",
     "transport.recording_didnt_start": "Recording didn't start.",
     "transport.recording_n_tracks": { "one": "● Recording {0} track…", "other": "● Recording {0} tracks…" },
     "transport.recording_with_skipped": "{0} Not recording: {1}.",
