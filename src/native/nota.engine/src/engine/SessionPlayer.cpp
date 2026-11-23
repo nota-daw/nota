@@ -30,7 +30,8 @@ bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double
     if (p == kNone) return false;
 
     const double pq = pendingQuant.load(std::memory_order_relaxed);
-    const double quant = (p == kStop || p == kStopNow || pq < 0.0) ? globalQuant : pq;
+    // A stop carries its quantum too (requestStop sets it; < 0 = the global one, #481).
+    const double quant = (p == kStopNow || pq < 0.0) ? globalQuant : pq;
     bool boundary;
     const bool immediate = p == kStopNow || quant <= 0.0 || loopSeam;
     if (immediate) {

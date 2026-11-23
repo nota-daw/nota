@@ -419,6 +419,7 @@ public sealed partial class SessionView : UserControl
         var panel = (Panel)_sceneCells[scene].Parent!;
         panel.Children[panel.Children.IndexOf(_sceneCells[scene])] = cell;
         _sceneCells[scene] = cell;
+        foreach (var c in _cols) foreach (var slot in c.Cells) slot.InvalidateVisual(); // landing marks name scenes (#481)
         RebuildInspector();
     }
 

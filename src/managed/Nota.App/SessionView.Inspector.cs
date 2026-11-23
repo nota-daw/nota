@@ -446,6 +446,7 @@ public sealed partial class SessionView
             FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
         if (!rec) TakeLengthRows(rows, c, scene);
+        if (!rec) LandingRows(rows, c, scene);
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
         if (c.IsInstrument) actions.Add((Loc.T("session.insert_midi_clip"), "", () => InsertMidiClip(c.TrackId, scene)));
@@ -548,6 +549,82 @@ public sealed partial class SessionView
             rows.Children.Add(Row(Loc.T("session.inspector.bars_beats"), pair));
         }
         rows.Children.Add(hint);
+    }
+
+    // The slot's landing rule (#481): once a fresh take recorded here is ready to play, launch the
+    // next scene or a chosen one, on the global launch quantum or one of its own — once per take.
+    private List<(NotaSlotLandingRule Value, string Label)> LandingTargets(NotaSlotLandingRule cur)
+    {
+        var items = new List<(NotaSlotLandingRule, string)>
+        {
+            (NotaSlotLandingRule.Off, Loc.T("session.landing.off")),
+            (new NotaSlotLandingRule(SlotLandingAction.NextScene, 0, cur.QuantBeats), Loc.T("session.landing.next_scene")),
+        };
+        for (int s = 0; s < _engine.SceneCount; s++)
+            items.Add((new NotaSlotLandingRule(SlotLandingAction.Scene, s, cur.QuantBeats), Loc.F("session.landing.scene", SceneName(s))));
+        return items;
+    }
+
+    private string LandingTargetText(NotaSlotLandingRule r) => r.LandingAction switch
+    {
+        SlotLandingAction.NextScene => Loc.T("session.landing.next_scene"),
+        SlotLandingAction.Scene => Loc.F("session.landing.scene", SceneName(r.Scene)),
+        _ => Loc.T("session.landing.off"),
+    };
+
+    private List<(double Value, string Label)> LandingQuants()
+    {
+        var items = new List<(double, string)> { (-1.0, Loc.F("session.landing.global", QuantLabel(_engine.LaunchQuant))) };
+        foreach (var (b, label) in QuantSteps) items.Add((b, label));
+        return items;
+    }
+
+    private static bool SameLanding(NotaSlotLandingRule a, NotaSlotLandingRule b)
+        => a.Action == b.Action && a.Scene == b.Scene && (a.IsGlobalQuant ? b.IsGlobalQuant : Math.Abs(a.QuantBeats - b.QuantBeats) < 1e-9);
+
+    private void SetLanding(Column c, int scene, NotaSlotLandingRule v)
+    {
+        _engine.SetSessionSlotLandingRule(c.TrackId, scene, v);
+        RefreshSlot(c.TrackId, scene);
+    }
+
+    // "When the take lands ▸" in an empty slot's right-click menu: the targets, on the rule's quantum.
+    private MenuItem? LandingSubmenu(Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotLandingRule(c.TrackId, scene, out var rule)) return null;
+        var sub = MenuKit.ValueItem(Loc.T("session.inspector.landing"), GlyphKind.Follow, LandingTargetText(rule));
+        foreach (var (value, label) in LandingTargets(rule))
+        {
+            var v = value;
+            var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = v.Action == rule.Action && v.Scene == rule.Scene };
+            mi.Click += (_, _) => SetLanding(c, scene, v);
+            sub.Items.Add(mi);
+        }
+        return sub;
+    }
+
+    private void LandingRows(StackPanel rows, Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotLandingRule(c.TrackId, scene, out var rule)) return;
+        rows.Children.Add(Row(Loc.T("session.inspector.landing"), Chip(LandingTargetText(rule), rule.LandingAction != SlotLandingAction.Off,
+            a => Pick(a, LandingTargets(rule), v => v.Action == rule.Action && v.Scene == rule.Scene, v => SetLanding(c, scene, v)))));
+        if (rule.LandingAction == SlotLandingAction.Off) return;
+        var quants = LandingQuants();
+        string quantText = rule.IsGlobalQuant ? quants[0].Label : QuantLabel(rule.QuantBeats);
+        rows.Children.Add(Row(Loc.T("session.inspector.landing_on"), Chip(quantText, !rule.IsGlobalQuant,
+            a => Pick(a, quants, q => SameLanding(new NotaSlotLandingRule(rule.LandingAction, rule.Scene, q), rule),
+                q => SetLanding(c, scene, new NotaSlotLandingRule(rule.LandingAction, rule.Scene, q))))));
+        int target = rule.LandingAction == SlotLandingAction.NextScene ? (scene + 1) % Math.Max(1, _engine.SceneCount) : rule.Scene;
+        double q = rule.IsGlobalQuant ? _engine.LaunchQuant : rule.QuantBeats;
+        rows.Children.Add(new TextBlock
+        {
+            Text = _engine.SessionFollow
+                ? (q > 0 ? Loc.F("session.inspector.landing_hint", SceneName(target), QuantLabel(q))
+                         : Loc.F("session.inspector.landing_hint_now", SceneName(target)))
+                : Loc.T("session.inspector.landing_off_globally"),
+            FontSize = 10, LineHeight = 16, TextWrapping = TextWrapping.Wrap,
+            Foreground = _engine.SessionFollow ? NotaPalette.TextTertiary : NotaPalette.Warning,
+        });
     }
 
     // A Return / Master column (#314): no slots to launch; its devices are in the panel below.

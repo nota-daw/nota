@@ -364,6 +364,9 @@ public sealed partial class SessionView
         private readonly bool _stopButton;
         private readonly bool _followHeld;   // follow actions configured but bypassed (#499)
         private readonly string _prepared = ""; // an empty slot's own next-take length (#503)
+        // The scene an empty slot's landing rule launches (#481): -1 none, -2 the next scene. Its name
+        // is read when drawn, so a renamed scene shows at once.
+        private readonly int _landingTarget = -1;
         private readonly List<(double Start, double Len, int Pitch)> _notes = new();
         private int _minPitch, _maxPitch;
         private readonly float[]? _peaks;
@@ -382,6 +385,8 @@ public sealed partial class SessionView
             _stopButton = eng.GetSessionSlotStopButton(c.TrackId, scene);
             if (!_filled && eng.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take))
                 _prepared = TakeLengthText(take);
+            if (!_filled && eng.TryGetSessionSlotLandingRule(c.TrackId, scene, out var landing) && landing.LandingAction != SlotLandingAction.Off)
+                _landingTarget = landing.LandingAction == SlotLandingAction.NextScene ? -2 : landing.Scene;
             if (_filled)
             {
                 _name = o.ClipName(c, scene);
@@ -551,6 +556,13 @@ public sealed partial class SessionView
                     // The next take's own length (#503), where a clip shows its length — muted, no name.
                     var prepFt = Ft(_prepared, NotaFonts.Measure, 10, NotaPalette.TextMuted, r.Width - 12);
                     ctx.DrawText(prepFt, new Point(r.Width - 6 - prepFt.Width, (TopRowH - prepFt.Height) / 2));
+                }
+                if (_landingTarget != -1)
+                {
+                    // Where a fresh take landing here goes next (#481): muted, along the bottom edge.
+                    string landing = "→ " + (_landingTarget == -2 ? Loc.T("session.landing.next_scene") : _o.SceneName(_landingTarget));
+                    var landFt = Ft(landing, NotaFonts.Measure, 10, NotaPalette.TextMuted, r.Width - 12);
+                    ctx.DrawText(landFt, new Point(6, r.Height - 4 - landFt.Height));
                 }
                 if (selected) DrawSelection(ctx, r);
                 return;
@@ -1013,6 +1025,7 @@ public sealed partial class SessionView
             bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
             create.Add(MenuKit.Item(stop ? Loc.T("session.grid.remove_stop_button") : Loc.T("session.grid.add_stop_button"), GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
             if (TakeLengthSubmenu(c, scene) is { } takeLength) create.Add(takeLength);
+            if (LandingSubmenu(c, scene) is { } landing) create.Add(landing);
             MenuKit.AddGroups(f.Items, create,
                 new Control[] { MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste) },
                 new Control[] { AddTrackSubmenu(c.TrackId) });
