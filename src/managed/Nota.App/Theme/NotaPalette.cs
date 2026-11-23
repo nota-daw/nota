@@ -468,6 +468,40 @@ internal static class NotaPalette
     public static readonly LinearGradientBrush PluginPreviewWash = VGradient(
         (Wash(DeviceSection, 0xDB), 0), (Wash(DeviceSection, 0x9E), 0.5), (Wash(DeviceSection, 0xE6), 1));
 
+    // Color's spectral content fades smoothly at the vertical edges (DESIGN exception).
+    public static readonly SolidColorBrush ColorTunedInk = Derived(() =>
+    {
+        var accent = Accent.Color;
+        return Color.FromArgb(accent.A, (byte)(255 - accent.R), (byte)(255 - accent.G), (byte)(255 - accent.B));
+    });
+    public static readonly IBrush ColorDrySpectrum = SpectralLine(Accent);
+    public static readonly IBrush ColorTunedSpectrum = SpectralLine(ColorTunedInk);
+
+    private static IBrush SpectralLine(SolidColorBrush ink)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        };
+        for (int i = 0; i <= 16; i++)
+            brush.GradientStops.Add(new GradientStop(default, i / 16.0));
+
+        void Tint()
+        {
+            var colour = ink.Color;
+            foreach (var stop in brush.GradientStops)
+            {
+                double opacity = Math.Pow(Math.Sin(Math.PI * stop.Offset), 2);
+                stop.Color = Color.FromArgb((byte)Math.Round(colour.A * opacity), colour.R, colour.G, colour.B);
+            }
+        }
+
+        Tint();
+        Changed += Tint; // Derivations such as the inverted ink are already up to date here.
+        return brush;
+    }
+
     // ---- Lookup by XAML key ------------------------------------------------
 
     // Code-built views that read a token by its XAML key resolve it here instead of

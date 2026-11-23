@@ -140,7 +140,7 @@ int32_t Engine::presetModified(int32_t trackId, int32_t surface, int32_t index) 
         } else {
             name = pluginParamId(trackId, -1, p);
         }
-        if (isViewParam(name)) continue;
+        if (isViewParam(name) || (!hosted && dev && !dev->isPresetParam(p))) continue;
         const float span = std::max(1e-6f, std::fabs(hi - lo));
         if (std::fabs(now[i] - tag->base[i]) > kTolerance * span) return 1;
     }

@@ -1547,6 +1547,14 @@ matches anything.
 
 ## Accepted exceptions
 
+- **Nota Color spectrum** draws Dry and Tuned as vertical lines one logical
+  pixel wide with a gap of the same width and a smooth vertical fade. Line
+  edges snap to physical pixels to keep gaps clear at every scale. Brightness
+  follows signal magnitude. Dry
+  uses the active theme's `Accent`. Tuned uses the exact RGB inverse
+  (`255 − R`, `255 − G`, `255 − B`). The traces and their legend markers
+  follow live theme changes. Both hues represent signal content.
+
 Places where a screen's needs override a general rule, kept on purpose:
 
 - **The round wheels keep their 0.56.1 look** inside device cards and never sit in a

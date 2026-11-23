@@ -324,6 +324,9 @@ public sealed class MidiLearnService
     private void ApplyNormalized(MidiMapping m, double norm)
     {
         var t = m.Target;
+        if (t.Kind == MidiTargetKind.DeviceParam &&
+            DeviceView.IsConfigurationParam(_engine.DeviceParamName(t.TrackId, t.DeviceIndex, t.ParamIndex),
+                _engine.TrackDeviceBuiltinKind(t.TrackId, t.DeviceIndex))) return;
         if (t.IsButton)
         {
             // Crossing the half-way point. Latch on the edge: a swept CC or a squeezed

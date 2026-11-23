@@ -339,12 +339,16 @@ public sealed class RhythmTools(IAudioEngine engine, IEngineDispatch dispatch, I
         for (int d = 0; d < n; d++)
         {
             int pc = E.RhythmVoiceDeviceParamCount(trackId, v, d);
-            var ps = new FxParam[pc];
+            var ps = new List<FxParam>(pc);
             for (int p = 0; p < pc; p++)
-                ps[p] = new FxParam(E.RhythmVoiceDeviceParamName(trackId, v, d, p), E.RhythmVoiceDeviceParamGet(trackId, v, d, p),
-                    E.RhythmVoiceDeviceParamMin(trackId, v, d, p), E.RhythmVoiceDeviceParamMax(trackId, v, d, p));
+            {
+                string name = E.RhythmVoiceDeviceParamName(trackId, v, d, p);
+                if (name.Length == 0) continue;
+                ps.Add(new FxParam(name, E.RhythmVoiceDeviceParamGet(trackId, v, d, p),
+                    E.RhythmVoiceDeviceParamMin(trackId, v, d, p), E.RhythmVoiceDeviceParamMax(trackId, v, d, p)));
+            }
             list[d] = new FxDeviceInfo(d, E.RhythmVoiceDeviceName(trackId, v, d), E.RhythmVoiceDeviceBuiltinKind(trackId, v, d),
-                E.RhythmVoiceDeviceBypassed(trackId, v, d), ps);
+                E.RhythmVoiceDeviceBypassed(trackId, v, d), ps.ToArray());
         }
         return list;
     });
