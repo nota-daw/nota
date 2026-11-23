@@ -61,9 +61,12 @@ publishes guidance on affected artifacts, check it.
 
 ## Behaviour for existing installs
 
-The installed runtime's marker holds the old archive sha256, so it reads as not installed. The
-next AI feature use offers to download the runtime (MainWindow.Stems), which installs the
-mirrored one. No migration code.
+A runtime installed before this fix has a marker holding the old archive's sha256. Each
+platform's runtime lists that sha256 as `Legacy` (`ModelAsset.Legacy`), and `ModelStore`
+counts such a folder as installed without requiring the new license extras. The installed
+library is the same 1.23.2 build. This matters because Manual search has no prompt to fetch a
+missing runtime: without it, meaning-based search would silently stop after the update (found
+in PR review). New installs come from the mirror.
 
 ## Prerequisite outside this repository
 

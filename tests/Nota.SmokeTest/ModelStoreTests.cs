@@ -94,6 +94,18 @@ internal static class ModelStoreTests
                       && store.IsInstalled("model-a"),
             "…and a download that doesn't match the pin is refused, the old files untouched");
 
+        // The runtime moved to another source (#969): an install from the old pin, listed as
+        // Legacy, still counts — Manual search has no prompt to fetch it again.
+        var movedAsset = runtime.Asset with { Sha256 = new string('1', 64), Extra = [new ModelFile(rtArchive, Sha(rtArchive), 1, "license.txt")] };
+        var moved = new ModelStore(root, [a, b], runtime with { Asset = movedAsset with { Legacy = [runtime.Asset.Sha256] } });
+        yield return (moved.IsInstalled(AiModels.Runtime) && moved.RuntimePath is not null && moved.DownloadSize("model-b") == b.Asset.Size,
+            "a runtime installed from an earlier (Legacy) pin stays installed and isn't downloaded again");
+        yield return (!new ModelStore(root, [a, b], runtime with { Asset = movedAsset }).IsInstalled(AiModels.Runtime),
+            "…while without the Legacy entry it reads as not installed");
+        string[] rids = ["osx-arm64", "osx-x86_64", "win-x64", "win-arm64", "linux-x64", "linux-aarch64"];
+        yield return (rids.All(r => ModelCatalog.RuntimeFor(r)!.Asset.LegacySha256.Count == 1),
+            "every platform's runtime accepts the install from microsoft/onnxruntime's archive");
+
         var badKeep = new CatalogModel(runtime.Info, runtime.Asset with { Keep = ["ort-1/lib/missing.so"], Entry = "missing.so" });
         var fresh = new ModelStore(Path.Combine(tmp, "fresh"), [a], badKeep);
         yield return (Throws(() => fresh.InstallAsync("model-a").GetAwaiter().GetResult()) && !fresh.IsInstalled(AiModels.Runtime) && !fresh.IsInstalled("model-a"),

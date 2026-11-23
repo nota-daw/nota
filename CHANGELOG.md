@@ -215,8 +215,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Runtime 1.23.2 from is gone. The runtime now comes from Nota's own mirror on
   `nota-daw/nota-models`, taken from Microsoft's signed NuGet package and pinned to a size and
   sha256 as before. Only the library and its license files are downloaded now, not the whole
-  release archive (on Windows 14 MB instead of 78 MB). Where the runtime is already installed,
-  the next AI feature asks to download it once more.
+  release archive (on Windows 14 MB instead of 78 MB). A runtime already installed from the
+  old source keeps working and isn't downloaded again.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
