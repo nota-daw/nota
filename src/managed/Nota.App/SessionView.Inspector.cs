@@ -619,7 +619,8 @@ public sealed partial class SessionView
         rows.Children.Add(new TextBlock
         {
             Text = _engine.SessionFollow
-                ? Loc.F("session.inspector.landing_hint", SceneName(target), q > 0 ? QuantLabel(q) : Loc.T("session.landing.launch_boundary"))
+                ? (q > 0 ? Loc.F("session.inspector.landing_hint", SceneName(target), QuantLabel(q))
+                         : Loc.F("session.inspector.landing_hint_now", SceneName(target)))
                 : Loc.T("session.inspector.landing_off_globally"),
             FontSize = 10, LineHeight = 16, TextWrapping = TextWrapping.Wrap,
             Foreground = _engine.SessionFollow ? NotaPalette.TextTertiary : NotaPalette.Warning,
