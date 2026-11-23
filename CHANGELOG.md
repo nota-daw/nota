@@ -210,6 +210,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
+- **Play starts at once with a count-in set** (#988). The count-in also ran before plain Play
+  (the button, Space and ⇧Space), so Play lit up while the transport stood still for the
+  count-in bars — and with the clicks routed to Cue only, nothing seemed to happen at all. The
+  count-in is now for Record only: Record from stop (Arrangement or a Session slot) still
+  clicks it out first, Play rolls immediately.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is

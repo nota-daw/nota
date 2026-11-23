@@ -16292,6 +16292,8 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- play vs count-in (#988) --");
+foreach (var (ok, label) in PlayCountInTests.Run()) Check(ok, label);
 using (var tempoLane = new NotaEngine())
 {
     int failed = tempoLane.TempoLaneSelfTest();
