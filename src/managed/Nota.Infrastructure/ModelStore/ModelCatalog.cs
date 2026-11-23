@@ -4,9 +4,12 @@
 // The AI models Nota can download, pinned in code: there are only a few, and each goes with
 // the C# that runs it (StemSeparator, PitchTranscriber), so a new model ships with a new Nota
 // rather than through a registry index. Every asset is fixed to a URL, size and sha256.
-//   ONNX Runtime 1.23.2 — microsoft/onnxruntime's own release archives. 1.23 is the last
-//     release with builds for all six targets (Intel Macs included); only the library and its
-//     license files are kept out of each archive.
+//   ONNX Runtime 1.23.2 — the native library alone, mirrored on nota-daw/nota-models releases
+//     (tag onnxruntime-1.23.2) with its LICENSE and ThirdPartyNotices: microsoft/onnxruntime,
+//     which hosted the release archives, is gone (#969). The files come from Microsoft's signed
+//     NuGet package Microsoft.ML.OnnxRuntime 1.23.2 (runtimes/<rid>/native), byte for byte the
+//     library sizes the old archives carried. 1.23 is the last release with builds for all six
+//     targets (Intel Macs included).
 //   htdemucs — Demucs v4 (Meta, MIT) exported to ONNX without its STFT by
 //     nota-daw/nota-models/scripts/export_htdemucs.py, published on that repo's releases.
 //   basic-pitch — nmp.onnx straight from spotify/basic-pitch at the v0.4.0 tag.
@@ -38,7 +41,11 @@ public sealed record CatalogModel(StoreModel Info, ModelAsset Asset);
 public static class ModelCatalog
 {
     private const string OrtVersion = "1.23.2";
-    private const string OrtRelease = "https://github.com/microsoft/onnxruntime/releases/download/v" + OrtVersion + "/";
+    private const string OrtRelease = "https://github.com/nota-daw/nota-models/releases/download/onnxruntime-" + OrtVersion + "/";
+    private const string OrtLicenseSha = "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674";
+    private const long OrtLicenseSize = 1094;
+    private const string OrtNoticesSha = "e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6";
+    private const long OrtNoticesSize = 333022;
 
     /// <summary>The models and this computer's runtime (null when ONNX Runtime has no build for it).</summary>
     public static (IReadOnlyList<CatalogModel> Models, CatalogModel? Runtime) ForThisPlatform()
@@ -86,25 +93,26 @@ public static class ModelCatalog
 
     public static CatalogModel? RuntimeFor(string rid)
     {
-        (string Sha, long Size, string Lib, long LibSize)? a = rid switch
+        // The mirrored file's sha256 and size, and the name it is installed under.
+        (string Sha, long Size, string Ext, string Lib)? a = rid switch
         {
-            "osx-arm64" => ("b4d513ab2b26f088c66891dbbc1408166708773d7cc4163de7bdca0e9bbb7856", 9999931, "lib/libonnxruntime.1.23.2.dylib", 35138784),
-            "osx-x86_64" => ("d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6", 11676322, "lib/libonnxruntime.1.23.2.dylib", 39742608),
-            "win-x64" => ("0b38df9af21834e41e73d602d90db5cb06dbd1ca618948b8f1d66d607ac9f3cd", 78127794, "lib/onnxruntime.dll", 14186016),
-            "win-arm64" => ("1cfe88b6435df3b5fb0e9f6bd7d6f5df1e887b6174de7f6e2a47bab956f3f168", 78932411, "lib/onnxruntime.dll", 14868512),
-            "linux-x64" => ("1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b", 8309231, "lib/libonnxruntime.so.1.23.2", 22326072),
-            "linux-aarch64" => ("7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c", 7254068, "lib/libonnxruntime.so.1.23.2", 18693384),
+            "osx-arm64" => ("d306d2bc768540766c7ed8a1e0ff05d2870c77a934ebeee4a7bafa1b732ef299", 35138784, ".dylib", "libonnxruntime.1.23.2.dylib"),
+            "osx-x86_64" => ("8c9c78de65ea3786f987c0d980e9c1b13a3a5fbc6b3e2965ba05b450e6e4c054", 39742608, ".dylib", "libonnxruntime.1.23.2.dylib"),
+            "win-x64" => ("dec964ab1ee36cc9b0ae247d13b376627992fc57dec0454354017ab8fd84f1ea", 14186016, ".dll", "onnxruntime.dll"),
+            "win-arm64" => ("99a11bb077f723a81d100fd98099f332e4178bbb7025ac10fd40699a0b82c2f0", 14868512, ".dll", "onnxruntime.dll"),
+            "linux-x64" => ("13ab8084954fa4a47c777880180b90810d6020f021441395712b48a75b74c68b", 22326072, ".so", "libonnxruntime.so.1.23.2"),
+            "linux-aarch64" => ("648ffa64fbe027ae27139109410900cf776a030dec2dbbac51053318cc44c286", 18693384, ".so", "libonnxruntime.so.1.23.2"),
             _ => null,
         };
         if (a is not { } r) return null;
-        bool win = rid.StartsWith("win", StringComparison.Ordinal);
-        string dir = $"onnxruntime-{rid}-{OrtVersion}/";
-        string file = $"onnxruntime-{rid}-{OrtVersion}" + (win ? ".zip" : ".tgz");
+        string prefix = OrtRelease + "onnxruntime-" + OrtVersion + "-";
+        var asset = new ModelAsset(prefix + rid + r.Ext, r.Sha, r.Size, "file", [], r.Lib,
+            [new ModelFile(prefix + "LICENSE.txt", OrtLicenseSha, OrtLicenseSize, "license.txt"),
+             new ModelFile(prefix + "ThirdPartyNotices.txt", OrtNoticesSha, OrtNoticesSize, "third-party-notices.txt")]);
         return new(new StoreModel(AiModels.Runtime, "ONNX Runtime", Loc.T("model_store.model_catalog.ai_runtime"),
                 Loc.T("model_store.model_catalog.the_library_notas_ai_models"),
-                "Microsoft", "MIT", "https://github.com/microsoft/onnxruntime",
-                r.Size, r.LibSize + 340_000),
-            new ModelAsset(OrtRelease + file, r.Sha, r.Size, win ? "zip" : "tar",
-                [dir + r.Lib, dir + "LICENSE", dir + "ThirdPartyNotices.txt"], Path.GetFileName(r.Lib)));
+                "Microsoft", "MIT", "https://onnxruntime.ai",
+                asset.TotalSize, asset.TotalSize),
+            asset);
     }
 }

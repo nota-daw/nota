@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // AI models (IModelStore): install / uninstall end to end against local assets — a plain model
-// file and a runtime in a tar.gz, as ONNX Runtime ships — including the runtime coming with
+// file and a runtime in a tar.gz (archive assets stay supported) — including the runtime coming with
 // the first model and going with the last, checksum and archive-content refusals, cancellation,
 // and a pinned version change. Also runnable alone: `--models`.
 
@@ -17,13 +17,21 @@ internal static class ModelStoreTests
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         yield return (ModelCatalog.RuntimeFor("osx-arm64") is { Asset.Entry: "libonnxruntime.1.23.2.dylib" }
-                      && ModelCatalog.RuntimeFor("win-x64") is { Asset.Archive: "zip", Asset.Entry: "onnxruntime.dll" }
+                      && ModelCatalog.RuntimeFor("win-x64") is { Asset.Archive: "file", Asset.Entry: "onnxruntime.dll" }
                       && ModelCatalog.RuntimeFor("linux-aarch64") is { Asset.Entry: "libonnxruntime.so.1.23.2" }
                       && ModelCatalog.RuntimeFor("freebsd-x64") is null,
             "every platform Nota ships on has a runtime; others have none");
         yield return (ModelCatalog.RuntimeFor(ModelCatalog.Rid()) is not null, $"…including this one ({ModelCatalog.Rid()})");
         yield return (ModelCatalog.Models.All(m => m.Asset.Sha256.Length == 64 && m.Asset.Size > 0 && m.Asset.Url.StartsWith("https://")),
             "every model is pinned to an https URL, size and sha256");
+        string[] rids = ["osx-arm64", "osx-x86_64", "win-x64", "win-arm64", "linux-x64", "linux-aarch64"];
+        yield return (rids.Select(ModelCatalog.RuntimeFor).All(r => r is { Asset: var a }
+                          && a.Url.StartsWith("https://github.com/nota-daw/nota-models/releases/download/onnxruntime-1.23.2/")
+                          && a.Sha256.Length == 64 && a.Size > 0
+                          && a.Extras.Select(e => e.Name).SequenceEqual(["license.txt", "third-party-notices.txt"])
+                          && a.Extras.All(e => e.Url.StartsWith("https://github.com/nota-daw/nota-models/") && e.Sha256.Length == 64))
+                      && rids.Select(r => ModelCatalog.RuntimeFor(r)!.Asset.Url).Distinct().Count() == rids.Length,
+            "the runtime comes from Nota's own mirror, one library per platform, with its license and notices (#969)");
 
         var tmp = Directory.CreateTempSubdirectory("nota-models-test-").FullName;
         try
