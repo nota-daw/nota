@@ -27,7 +27,10 @@ class Transport {
 
     // --- control (applied on the audio thread) ---
     void play() {
-        if (!playing_) ++presentationEpoch_;
+        if (!playing_) {
+            ++presentationEpoch_;
+            updatePastLoopEnd(); // Play from past the loop plays on (#981)
+        }
         playing_ = true;
         publish();
     }
@@ -77,6 +80,7 @@ class Transport {
         ++presentationEpoch_;
         playheadSamples_ = samplesAtBeat(beat);
         startAnchorSamples_ = playheadSamples_;
+        updatePastLoopEnd();
         publish();
     }
 
@@ -99,6 +103,10 @@ class Transport {
     }
 
     bool isLooping() const { return loopEnabled_; }
+    // The loop wraps the playhead only when it rolls into the loop end. Launched (or seeked,
+    // or the loop moved) to at or past the loop end, it plays on past it (#981) — the loop
+    // takes over again once a seek puts the playhead before its end.
+    bool wrapsAtLoopEnd() const { return loopEnabled_ && !pastLoopEnd_; }
     double loopStartSamples() const { return samplesAtBeat(loopStartBeat_); }
     double loopEndSamples() const { return samplesAtBeat(loopEndBeat_); }
     int timeSigDenom() const { return tsDenom_; }
@@ -121,6 +129,7 @@ class Transport {
 
   private:
     void publish();
+    void updatePastLoopEnd() { pastLoopEnd_ = loopEnabled_ && playheadSamples_ >= loopEndSamples() - 0.5; }
     // Keep map searches out of these small fixed-clock accessors, so callers can
     // inline the ordinary arithmetic without pulling in the compiled-map lookup.
     double mappedBpm() const;
@@ -137,6 +146,7 @@ class Transport {
     double playheadSamples_ = 0.0;
     double startAnchorSamples_ = 0.0; // launch position Stop rewinds to (insert marker)
     bool loopEnabled_ = false;
+    bool pastLoopEnd_ = false; // the playhead got past the loop end without rolling into it
     double loopStartBeat_ = 0.0, loopEndBeat_ = 0.0;
     bool metronome_ = false;
 

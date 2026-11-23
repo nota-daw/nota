@@ -210,6 +210,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
+- **Play from past the loop plays on** (#981). With the loop on, Play from a playhead after
+  the loop's end jumped straight to the loop start. Now the loop only wraps a playhead that
+  plays into its end: launched (or seeked) past it, playback carries on, and switching the
+  loop on or moving it behind the playhead lets it carry on too. Seek back before the loop
+  end and it loops again.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
