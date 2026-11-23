@@ -210,6 +210,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
+- **Nota starts in seconds on Linux with the MCP server on** (#966). Launched from the app
+  menu, startup took 25–40 s: the MCP server's web host used the current folder — the home
+  folder — as its content root and watched all of it for a settings file, one inotify watch
+  per folder. It uses the app's own folder now.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
