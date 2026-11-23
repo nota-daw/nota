@@ -173,6 +173,8 @@ set(NOTA_ENGINE_SOURCES
     src/devices/effects/Crush.cpp
     src/devices/effects/Forge.cpp
     src/devices/effects/AutoShift.cpp
+    src/devices/effects/Color.cpp
+    src/devices/effects/Color.h
     src/devices/effects/Vocoder.cpp
     src/devices/instruments/Synth.cpp
     src/devices/instruments/VoltSynth.cpp

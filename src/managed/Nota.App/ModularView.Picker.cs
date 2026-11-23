@@ -38,10 +38,12 @@ public sealed partial class ModularView
          : kind == 1 ? _engine.PluginParamCount(track, -1)
                      : _engine.DeviceParamCount(track, device);
 
-    // The card-size param is editor state, not sound: never offered as a CV target.
-    private bool IsSizeParam(int track, int kind, int device, int param)
+    // Built-in effects also reserve slots for configuration and retired parameters.
+    private bool IsExcludedParam(int track, int kind, int device, int param)
         => kind == 1 ? InstrumentView.IsViewParam(_engine.PluginParamId(track, -1, param))
          : kind == 2 ? _engine.MidiEffectParamName(track, device, param) == DeviceView.ParamName
+         : _engine.TrackDeviceBuiltinKind(track, device) is var builtinKind && builtinKind >= 0
+                     ? !DeviceView.IsSoundParam(_engine.DeviceParamName(track, device, param), builtinKind)
                      : _engine.DeviceParamName(track, device, param) == DeviceView.ParamName;
 
     // One device's parameters as picker entries (optionally under a heading named after it).
@@ -52,7 +54,7 @@ public sealed partial class ModularView
         bool headed = false;
         for (int p = 0; p < pc; p++)
         {
-            if (IsSizeParam(track, kind, device, p)) continue;
+            if (IsExcludedParam(track, kind, device, p)) continue;
             if (group is not null && !headed) { into.Add(ParamPickerEntry.Heading(group)); headed = true; }
             string label = ParamPickerModel.Label(ParamName(track, kind, device, p), p, seen, n => Loc.F("modular.picker_param_fallback", n));
             into.Add(ParamPickerEntry.Item(label, new TargetRef(kind, device, p), group));
@@ -229,7 +231,7 @@ public sealed partial class ModularView
             MidiTargetKind.MidiDeviceParam when kind == 2 && tg.DeviceIndex == di => new TargetRef(2, di, tg.ParamIndex),
             _ => null,
         };
-        if (r is { } rr && (rr.Param < 0 || IsSizeParam(_trackId, rr.Kind, rr.Device, rr.Param))) return null;
+        if (r is { } rr && (rr.Param < 0 || IsExcludedParam(_trackId, rr.Kind, rr.Device, rr.Param))) return null;
         return r;
     }
 

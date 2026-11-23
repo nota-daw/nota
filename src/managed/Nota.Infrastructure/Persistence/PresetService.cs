@@ -78,7 +78,7 @@ public static class PresetService
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             doc.NamedParams = new Dictionary<string, float>(pc);
             for (int i = 0; i < pc; i++)
-                if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))   // the card size is editor state (#531)
+                if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && DeviceView.IsSoundParam(pn))
                     doc.NamedParams[pn] = engine.DeviceGetParam(trackId, deviceIndex, i);
             if (bk == EqKind) doc.BandText = CaptureBandText(engine, trackId, deviceIndex);
             return doc;
@@ -215,6 +215,20 @@ public static class PresetService
         return moved;
     }
 
+    private static void ApplyEffectPositional(PresetDocument doc, IAudioEngine engine, int track, int device, int count)
+    {
+        bool isColor = engine.TrackDeviceBuiltinKind(track, device) == 27;
+        for (int i = 0; i < count; i++)
+        {
+            string name = engine.DeviceParamName(track, device, i);
+            if (!DeviceView.IsSoundParam(name)) continue;
+            if (i < doc.Params.Length)
+                engine.DeviceSetParam(track, device, i, doc.Params[i]);
+            else if (isColor && name is ("Mute low" or "Mute high" or "Pre" or "Post" or DeviceView.ColorPreEnabledParamName))
+                engine.DeviceSetParam(track, device, i, engine.DeviceParamDefault(track, device, i));
+        }
+    }
+
     private static void LegacyRange(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (doc.BuiltinKind != 16 || engine.DeviceParamCount(trackId, deviceIndex) <= 10) return;
@@ -231,16 +245,16 @@ public static class PresetService
                 if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int di = engine.AddBuiltinDevice(targetTrackId, doc.BuiltinKind);
                 if (di < 0) return Loc.T("persistence.preset.failed_to_add_device");
+                int pc = engine.DeviceParamCount(targetTrackId, di);
                 if (EffectNamed(doc, doc.BuiltinKind) is { Count: > 0 } named)
                 {
-                    int pc = engine.DeviceParamCount(targetTrackId, di);
                     for (int i = 0; i < pc; i++)
-                        if (named.TryGetValue(engine.DeviceParamName(targetTrackId, di, i), out var v))
+                        if (engine.DeviceParamName(targetTrackId, di, i) is var name && DeviceView.IsSoundParam(name) &&
+                            named.TryGetValue(name, out var v))
                             engine.DeviceSetParam(targetTrackId, di, i, v);
                 }
                 else
-                    for (int i = 0; i < doc.Params.Length; i++)
-                        engine.DeviceSetParam(targetTrackId, di, i, doc.Params[i]);
+                    ApplyEffectPositional(doc, engine, targetTrackId, di, pc);
                 LegacyRange(doc, engine, targetTrackId, di);
                 if (doc.BuiltinKind == EqKind) ApplyBandText(doc.BandText, engine, targetTrackId, di);
                 return "";
@@ -450,7 +464,7 @@ public static class PresetService
         {
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             for (int i = 0; i < pc; i++)
-                if (!DeviceView.IsViewParam(engine.DeviceParamName(trackId, deviceIndex, i)))   // the card size (S / L / XL) stays
+                if (DeviceView.IsSoundParam(engine.DeviceParamName(trackId, deviceIndex, i)))
                     engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
             if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == EqKind) ApplyBandText(null, engine, trackId, deviceIndex);
         }
@@ -546,14 +560,13 @@ public static class PresetService
                     // so switching presets never inherits leftovers from the previous one.
                     // The card size (View, #531) is editor state: the card keeps its S / L size.
                     for (int i = 0; i < pc; i++)
-                        if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && !DeviceView.IsViewParam(pn))
+                        if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && DeviceView.IsSoundParam(pn))
                             engine.DeviceSetParam(trackId, deviceIndex, i,
                                 named.TryGetValue(pn, out var v) ? v : engine.DeviceParamDefault(trackId, deviceIndex, i));
                 }
                 else
                 {
-                    for (int i = 0; i < doc.Params.Length && i < pc; i++)
-                        engine.DeviceSetParam(trackId, deviceIndex, i, doc.Params[i]);
+                    ApplyEffectPositional(doc, engine, trackId, deviceIndex, pc);
                 }
                 LegacyRange(doc, engine, trackId, deviceIndex);
                 // The preset's band labels replace the device's (none for a factory preset).

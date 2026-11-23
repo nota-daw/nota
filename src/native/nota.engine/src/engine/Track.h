@@ -299,6 +299,8 @@ class Track {
         int32_t routedFrom = -1;
         uint64_t routedInstUid = 0; // the instrument those notes sound on (Instrument::uid)
         void forgetRouted() { routedBits[0] = routedBits[1] = 0; } // the voices were ended elsewhere
+        MidiKeyNotes midiKey; // post-MIDI-FX, shared across edits to the track
+        bool midiKeyArrangement = false;
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 
