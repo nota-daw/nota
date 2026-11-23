@@ -216,6 +216,22 @@ NotaResult nota_session_set_slot_take_length(NotaEngine* e, int32_t track_id, in
 double nota_session_slot_take_beats(const NotaEngine* e, int32_t track_id, int32_t scene) {
     return e ? CENG(e)->sessionSlotTakeBeats(track_id, scene) : 0.0;
 }
+int32_t nota_session_get_slot_landing_rule(const NotaEngine* e, int32_t track_id, int32_t scene,
+                                           NotaSlotLandingRule* out) {
+    nota::LandingRule v;
+    if (!e || !out || !CENG(e)->sessionSlotLandingRule(track_id, scene, v)) return 0;
+    out->action = static_cast<int32_t>(v.action);
+    out->scene = v.scene;
+    out->quant_beats = v.quantBeats;
+    return 1;
+}
+NotaResult nota_session_set_slot_landing_rule(NotaEngine* e, int32_t track_id, int32_t scene,
+                                              const NotaSlotLandingRule* in) {
+    if (!e || !in || in->action < NOTA_SLOT_LANDING_OFF || in->action > NOTA_SLOT_LANDING_SCENE)
+        return NOTA_ERR_INVALID_ARG;
+    const nota::LandingRule v{static_cast<nota::LandingAction>(in->action), in->scene, in->quant_beats};
+    return ENG(e)->setSessionSlotLandingRule(track_id, scene, v) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_session_copy_slot(NotaEngine* e, int32_t st, int32_t ss, int32_t dt, int32_t ds) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->copySessionSlot(st, ss, dt, ds) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

@@ -9,7 +9,8 @@
 //   <data>/models/<id>/      the model file (or the runtime library + its license files)
 //     .nota-model            marker holding the asset's sha256: a folder is installed only if
 //                            its marker matches the catalog, so a new pinned version reads as
-//                            not installed and is fetched again
+//                            not installed and is fetched again — unless the catalog lists the
+//                            marker's sha256 as Legacy (the same files from an earlier source)
 // An install builds the folder as <root>/.staging-<id> and swaps it in, so a failed or
 // cancelled install never leaves a half-written model behind.
 
@@ -188,8 +189,11 @@ public sealed class ModelStore : IModelStore
         try
         {
             var marker = Path.Combine(FolderOf(m), MarkerFile);
-            return File.Exists(marker) && File.ReadAllText(marker).Trim() == m.Asset.Sha256 && File.Exists(EntryPath(m))
-                   && m.Asset.Extras.All(e => File.Exists(Path.Combine(FolderOf(m), e.Name)));
+            if (!File.Exists(marker) || !File.Exists(EntryPath(m))) return false;
+            var installed = File.ReadAllText(marker).Trim();
+            // An install from an earlier pin (Legacy) holds the same files from another source.
+            if (m.Asset.LegacySha256.Contains(installed)) return true;
+            return installed == m.Asset.Sha256 && m.Asset.Extras.All(e => File.Exists(Path.Combine(FolderOf(m), e.Name)));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
