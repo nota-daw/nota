@@ -177,6 +177,12 @@ public interface IAudioEngine : IDisposable
     bool SetSessionSlotTakeLength(int trackId, int scene, NotaSlotTakeLength value);
     /// <summary>Beats a fresh take into the slot would record now; 0 = until stopped.</summary>
     double SessionSlotTakeBeats(int trackId, int scene);
+    /// <summary>A slot's landing rule (#481): what a fresh take landing in it launches. False for an
+    /// unknown track/scene. Kept, hidden, while the slot holds a clip.</summary>
+    bool TryGetSessionSlotLandingRule(int trackId, int scene, out NotaSlotLandingRule value);
+    /// <summary>One undo step; false when refused (unknown slot or action, target scene out of
+    /// range, quantum not &lt; 0 or 0..32 beats).</summary>
+    bool SetSessionSlotLandingRule(int trackId, int scene, NotaSlotLandingRule value);
     /// <summary>Copies a slot (clip + properties) onto a slot of a same-kind track.</summary>
     bool CopySessionSlot(int srcTrackId, int srcScene, int dstTrackId, int dstScene);
     bool TryGetSceneProps(int scene, out NotaSceneProps props);

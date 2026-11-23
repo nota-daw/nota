@@ -247,7 +247,10 @@ own window — see
   launch button, or **Cancel launch**) — nothing of it starts, its tempo change and follow are
   dropped, and what plays carries on unbroken; Session rec with fixed length, and a **Take
   length** per empty slot (Global — follow Fixed —, Open, or 1 beat … 64 bars of its own, shown
-  on the grid) so slots record different lengths, each stopping on its own; group columns that fold; returns +
+  on the grid) so slots record different lengths, each stopping on its own; a **When the take
+  lands** rule per slot that launches the next scene or a chosen one once the take recorded there
+  is ready to play (once per take, on the next launch boundary or a quantum of its own, never for a
+  cancelled, empty or overdub take or a global stop); group columns that fold; returns +
   master; I/O · Sends · Mixer sections; removable stop buttons; per-track Back to
   Arrangement; and moving material between Session and Arrangement — the clipboard works
   both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
@@ -1855,6 +1858,7 @@ Coverage:
   release a slot, launch and stop a scene, cancel a queued slot or scene launch
   (`cancel_slot_launch`, `cancel_scene_launch`), launch quantization, the follow switch, slot and
   scene recording with a fixed length, a slot's own take length (`set_session_slot_take_length`),
+  a slot's landing rule (`set_session_slot_landing_rule`),
   stopping one recording slot, back to arrangement, slot ↔ arrangement).
 - **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
