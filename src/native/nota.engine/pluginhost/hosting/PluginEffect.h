@@ -24,13 +24,22 @@
 namespace nota {
 namespace hosting {
 
+class LoadTicket;
+
 class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
   public:
     PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock);
+    // Unloaded (#979, specs/113): passes audio through and keeps any state handed to it until
+    // the PluginLoader has loaded `desc` and attached the instance. Message thread.
+    PluginEffect(const juce::PluginDescription& desc, double sr, int maxBlock);
     ~PluginEffect() override;
 
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
-    bool supportsParallelRender() const override { return parallelRender_; }
+    bool supportsParallelRender() const override { return parallelRender_.load(std::memory_order_relaxed); }
+
+    int32_t pluginLoadState() const override;
+    std::string pluginLoadReason() const override;
+    void pluginLoadAction(int32_t action) override;
 
     void setSampleRate(double sr, int32_t maxBlock) override;
     int32_t latencySamples() const override;
@@ -82,9 +91,17 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override {}
 
     void processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames); // frames <= maxBlock_
+    bool attach(std::unique_ptr<juce::AudioPluginInstance> p); // the loaded instance (message thread)
 
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
-    std::unique_ptr<juce::AudioPluginInstance> plugin_;
+    std::unique_ptr<juce::AudioPluginInstance> plugin_; // null until loaded; set once, message thread
+    // plugin_ is ready for the audio thread: stored (release) after attach() set everything up.
+    std::atomic<bool> live_{false};
+    juce::PluginDescription desc_;         // the catalog entry being loaded (unloaded constructor)
+    std::shared_ptr<LoadTicket> load_;     // its load, for as long as the adapter lives
+    std::vector<uint8_t> pendingState_;    // state handed over before the instance exists
+    double sr_ = 44100.0;                  // the rate to prepare a late instance for
+    int requestedBlock_ = kPluginMaxBlock; // the block size to prepare it for
     std::string name_;
     std::atomic<int32_t> lastTouched_{-1};                   // "Learn" (M9-B3)
     std::atomic<int32_t> gestureBegin_{-1}, gestureEnd_{-1}; // write gestures (M9-C)
@@ -99,7 +116,7 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     juce::MidiBuffer empty_;
     WorkgroupLink workgroup_; // the device workgroup for the plug-in's own threads (#436)
     int maxBlock_ = 0; // what the plug-in was prepared for: at most kPluginMaxBlock (#447)
-    bool parallelRender_ = false; // immutable format decision, made on the message thread
+    std::atomic<bool> parallelRender_{false}; // format decision, made on the message thread at attach
     bool stereoIn_ = true, stereoOut_ = true; // main buses have a channel 1 (see setSampleRate)
     EditorHost editor_;                       // declared last: destroyed before plugin_
 };

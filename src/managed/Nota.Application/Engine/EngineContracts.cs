@@ -398,6 +398,13 @@ public struct NotaMeter
 /// <summary>Tempo (specs/099) is valid only on the master track; its values are BPM (20–300).</summary>
 public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5, Tempo = 6 }
 
+/// <summary>How far a hosted plug-in's load got (#979, specs/113). <see cref="Loaded"/> is also
+/// every device that isn't a hosted plug-in.</summary>
+public enum PluginLoadState { Loaded = 0, Waiting = 1, Loading = 2, NotResponding = 3, Failed = 4 }
+
+/// <summary>What the device card's buttons do to a load.</summary>
+public enum PluginLoadAction { KeepWaiting = 1, GiveUp = 2, TryAgain = 3 }
+
 /// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
 /// track's instrument. Matches nota_track_transfer_device's family.</summary>
 public enum DeviceFamily { Audio = 0, Midi = 1, Instrument = 2 }

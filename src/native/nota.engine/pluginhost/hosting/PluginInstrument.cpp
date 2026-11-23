@@ -6,6 +6,7 @@
 
 #include "PluginInstrument.h"
 
+#include "PluginLoader.h"
 #include "engine/ArticulationSchedule.h"
 #include "engine/MidiController.h"
 
@@ -15,34 +16,72 @@ namespace nota {
 namespace hosting {
 
 PluginInstrument::PluginInstrument(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock)
-    : plugin_(std::move(p)), maxBlock_(juce::jmin(maxBlock, kPluginMaxBlock)) {
+    : PluginInstrument(juce::PluginDescription{}, sr, maxBlock) {
+    if (p) attach(std::move(p));
+}
+
+PluginInstrument::PluginInstrument(const juce::PluginDescription& desc, double sr, int maxBlock)
+    : desc_(desc), sr_(sr), maxBlock_(juce::jmin(maxBlock, kPluginMaxBlock)) {
     // Room reserved up front so the audio thread doesn't grow the buffers. On top of the notes' room,
     // a block's articulation MIDI (specs/085): at most kMaxBlockArt messages, 9 bytes each in a
     // MidiBuffer (sample position, size, 3 data bytes).
     constexpr int kArtBytes = nota::kMaxBlockArt * 9;
     pending_.ensureSize(8192 + kArtBytes);
     piece_.ensureSize(8192 + kArtBytes);
-    if (plugin_) name_ = plugin_->getName().toStdString(); // cache for displayName()
-    // VST3 process calls may run on audio workers. All MIDI, channel storage and
-    // playhead state belong to this instance; the engine joins before the next
-    // block and never processes an instance concurrently. Lifecycle/editor work
-    // stays on the message thread. Other formats retain the serial fallback.
-    parallelRender_ = plugin_ && plugin_->getPluginDescription().pluginFormatName == "VST3";
-    prepare(sr);
-    if (plugin_) plugin_->addListener(this); // "Learn" (M9-B3)
+    name_ = desc.name.toStdString(); // the instance's own name replaces it at attach
     // Editor-window computer keyboard -> this plugin (drained on the audio thread).
     editor_.onNoteOn = [this](int32_t pitch, float vel) { guiNotes_.push({true, pitch, vel}); };
     editor_.onNoteOff = [this](int32_t pitch) { guiNotes_.push({false, pitch, 0.0f}); };
     // The window's picture, taken each time it is hidden, goes on the card (specs/046).
     editor_.onPreview = [this](std::vector<uint8_t> jpeg) { editorPreview = nota::EditorPreview::make(std::move(jpeg)); };
+    if (desc.name.isEmpty()) return; // the instance comes from the other constructor
+    // The ticket's finish runs on the message thread in PluginLoader::service(); the destructor
+    // cancels it first, so `this` is alive whenever it runs.
+    load_ = PluginLoader::instance().request(desc_, [this](std::string& error) {
+        auto inst = createInstance(desc_, sr_, maxBlock_, &error);
+        return inst != nullptr && attach(std::move(inst));
+    });
 }
 
 PluginInstrument::~PluginInstrument() {
+    if (load_) PluginLoader::instance().cancel(load_);
     if (plugin_) plugin_->removeListener(this);
 }
 
+bool PluginInstrument::attach(std::unique_ptr<juce::AudioPluginInstance> p) {
+    if (!p || plugin_) return false;
+    plugin_ = std::move(p);
+    name_ = plugin_->getName().toStdString(); // cache for displayName()
+    prepare(sr_);
+    if (!pendingState_.empty()) {
+        writeState(plugin_.get(), pendingState_.data(), (int32_t)pendingState_.size());
+        std::vector<uint8_t>().swap(pendingState_);
+    }
+    plugin_->addListener(this); // "Learn" (M9-B3)
+    // VST3 process calls may run on audio workers. All MIDI, channel storage and
+    // playhead state belong to this instance; the engine joins before the next
+    // block and never processes an instance concurrently. Lifecycle/editor work
+    // stays on the message thread. Other formats retain the serial fallback.
+    parallelRender_.store(plugin_->getPluginDescription().pluginFormatName == "VST3", std::memory_order_relaxed);
+    live_.store(true, std::memory_order_release); // everything above is visible to the audio thread
+    return true;
+}
+
+int32_t PluginInstrument::pluginLoadState() const {
+    return load_ ? static_cast<int32_t>(load_->state()) : 0;
+}
+
+std::string PluginInstrument::pluginLoadReason() const {
+    return load_ ? load_->reason() : std::string{};
+}
+
+void PluginInstrument::pluginLoadAction(int32_t action) {
+    if (load_) PluginLoader::instance().act(load_, static_cast<LoadAction>(action));
+}
+
 void PluginInstrument::setSampleRate(double sr) {
-    prepare(sr);
+    sr_ = sr;
+    if (plugin_) prepare(sr); // else prepared at attach, for this rate
 }
 
 // Every engine-driven event goes out on chan(): channel 1, or an articulation's explicit channel
@@ -81,7 +120,13 @@ void PluginInstrument::controller(int32_t ctl, float value) {
 }
 
 void PluginInstrument::render(float* out, int32_t frames) {
-    if (frames <= 0 || plugin_ == nullptr) return;
+    if (!live_.load(std::memory_order_acquire)) { // not loaded yet (or couldn't load): silent
+        for (GuiNote g; guiNotes_.pop(g);) {
+        }
+        pending_.clear();
+        return;
+    }
+    if (frames <= 0) return;
     // Drain computer-keyboard notes from the editor window (message thread) into
     // this block's MIDI buffer — audio thread only touches pending_ here.
     for (GuiNote g; guiNotes_.pop(g);)
@@ -129,23 +174,26 @@ void PluginInstrument::closeEditor() {
 }
 
 std::vector<uint8_t> PluginInstrument::getState() const {
-    return readState(plugin_.get());
+    // Before the instance exists the saved state is kept as it came (saved back byte for byte).
+    return plugin_ ? readState(plugin_.get()) : pendingState_;
 }
 
 void PluginInstrument::setState(const uint8_t* data, int32_t size) {
-    writeState(plugin_.get(), data, size);
+    if (plugin_) writeState(plugin_.get(), data, size);
+    else if (data != nullptr && size > 0) pendingState_.assign(data, data + size);
 }
 
 std::string PluginInstrument::pluginIdentifier() const {
-    return plugin_ ? plugin_->getPluginDescription().createIdentifierString().toStdString() : std::string{};
+    if (plugin_) return plugin_->getPluginDescription().createIdentifierString().toStdString();
+    return desc_.name.isNotEmpty() ? desc_.createIdentifierString().toStdString() : std::string{};
 }
 
 int32_t PluginInstrument::latencySamples() const {
-    return plugin_ ? plugin_->getLatencySamples() : 0;
+    return live_.load(std::memory_order_acquire) ? plugin_->getLatencySamples() : 0;
 }
 
 bool PluginInstrument::hasTail() const {
-    return plugin_ != nullptr && plugin_->getTailLengthSeconds() > 0.0;
+    return live_.load(std::memory_order_acquire) && plugin_->getTailLengthSeconds() > 0.0;
 }
 
 int32_t PluginInstrument::pluginParamCount() const {
@@ -163,11 +211,12 @@ std::string PluginInstrument::pluginParamText(int32_t i) const {
 float PluginInstrument::pluginParamDefault(int32_t i) const {
     return paramDefaultImpl(plugin_.get(), i);
 }
+// Get / set also run block-rate on the audio thread (automation): only once the instance is live.
 float PluginInstrument::pluginParamGet(int32_t i) const {
-    return paramGetImpl(plugin_.get(), i);
+    return live_.load(std::memory_order_acquire) ? paramGetImpl(plugin_.get(), i) : 0.0f;
 }
 void PluginInstrument::pluginParamSet(int32_t i, float v) {
-    paramSetImpl(plugin_.get(), i, v);
+    if (live_.load(std::memory_order_acquire)) paramSetImpl(plugin_.get(), i, v);
 }
 int32_t PluginInstrument::pluginParamIndexOfId(const std::string& id) const {
     return paramIndexOfIdImpl(plugin_.get(), id);
@@ -183,11 +232,17 @@ int32_t PluginInstrument::takePluginGestureEnd() {
 }
 
 std::shared_ptr<nota::Instrument> PluginInstrument::clone() const {
-    if (!plugin_) return nullptr;
-    double sr = plugin_->getSampleRate() > 0 ? plugin_->getSampleRate() : 44100.0;
-    auto inst = cloneInstance(*plugin_, sr, maxBlock_);
-    if (!inst) return nullptr;
-    return std::make_shared<PluginInstrument>(std::move(inst), sr, maxBlock_);
+    // The copy loads like any insert (specs/113): unloaded, with this one's state to apply.
+    // The catalog entry that loaded this one is the description to load again (#454).
+    juce::PluginDescription desc = desc_;
+    if (desc.name.isEmpty()) {
+        if (!plugin_) return nullptr;
+        desc = catalogDescriptionOf(*plugin_);
+    }
+    auto c = std::make_shared<PluginInstrument>(desc, sr_, maxBlock_);
+    const auto st = getState();
+    if (!st.empty()) c->setState(st.data(), (int32_t)st.size());
+    return c;
 }
 
 void PluginInstrument::audioProcessorParameterChanged(juce::AudioProcessor*, int index, float) {

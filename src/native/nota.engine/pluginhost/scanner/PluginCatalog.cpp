@@ -87,6 +87,11 @@ const char* const kFormatsWithDefaults[] = {"VST3"};
 
 } // namespace
 
+std::string supportDirPath() {
+    const juce::File dir = supportDir();
+    return dir == juce::File{} ? std::string{} : dir.getFullPathName().toStdString();
+}
+
 juce::AudioPluginFormatManager& sharedFormatManager() {
     static juce::AudioPluginFormatManager fm;
     static const bool once = [] {

@@ -1387,6 +1387,13 @@ audio effects after it keep running and keep their settings; saved with the proj
 ## Plugin hosting
 
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
+- **Loading in the background**: an inserted plugin (and every plugin in a project being
+  opened, a preset or a copy) is in the chain at once — an effect passes audio through, an
+  instrument is silent — while its binary loads off the UI thread, so a plugin that hangs while
+  it loads can't freeze Nota. After 30 seconds the card offers **Keep waiting** / **Give up**;
+  one that couldn't load keeps its saved settings and offers **Try again**. A plugin Nota stopped
+  while loading is named at the next start and comes up as "couldn't load" in projects until
+  tried again.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
   paths in Preferences — the system's standard VST3 folders listed as removable `Default`
   entries, with **Restore defaults** — and Rescan. Four plugins load at a time, each with a time limit

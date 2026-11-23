@@ -59,6 +59,10 @@ internal static class PluginCard
 
     public static Control Build(DeviceCardContext ctx, int di, PluginInfo info, ViewState state)
     {
+        // Still loading, not responding or couldn't load (#979, specs/113): say so in place of the
+        // card's body, with what can be done about it.
+        if (LoadState(ctx.Engine, ctx.TrackId, di) is var ls && ls != PluginLoadState.Loaded)
+            return Section(LoadColumn(ctx, di, info, ls));
         if (state.Mini) return new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: true), filled: false) } };
 
         var e = ctx.Engine; int t = ctx.TrackId;
@@ -83,6 +87,82 @@ internal static class PluginCard
         var b = new PluginPreviewBackdrop(ctx.Engine, ctx.TrackId, di);
         ctx.AddDeviceRefresher(b.Sync);
         return b;
+    }
+
+    // ---- a plug-in that hasn't loaded (yet) --------------------------------------
+
+    private static PluginLoadState LoadState(IAudioEngine e, int t, int di)
+    {
+        try { return e.DevicePluginLoadState(t, di); }
+        catch { return PluginLoadState.Loaded; }   // the device is gone (the card is about to rebuild)
+    }
+
+    private static Control LoadColumn(DeviceCardContext ctx, int di, PluginInfo info, PluginLoadState shown)
+    {
+        var e = ctx.Engine; int t = ctx.TrackId;
+        var name = new TextBlock
+        {
+            Text = info.Name, FontSize = NotaType.Heading, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        ToolTip.SetTip(name, info.Name);
+        bool trouble = shown is PluginLoadState.NotResponding or PluginLoadState.Failed;
+        var title = new TextBlock
+        {
+            Text = shown switch
+            {
+                PluginLoadState.Waiting => Loc.T("device.plugin.load.waiting"),
+                PluginLoadState.Loading => Loc.T("device.plugin.load.loading"),
+                PluginLoadState.NotResponding => Loc.T("device.plugin.load.not_responding"),
+                _ => Loc.T("device.plugin.load.failed"),
+            },
+            FontSize = NotaType.Body, FontWeight = FontWeight.Medium, Margin = new Thickness(0, 6, 0, 0),
+            Foreground = trouble ? NotaPalette.Warning : TextSecondary,
+        };
+        string reason = "";
+        try { reason = e.DevicePluginLoadReason(t, di); } catch { }
+        var detail = new TextBlock
+        {
+            Text = reason.Length > 0 ? reason : shown == PluginLoadState.Failed ? ""
+                : info.IsInstrument ? Loc.T("device.plugin.load.silent") : Loc.T("device.plugin.load.passes_through"),
+            FontSize = NotaType.Body, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0),
+        };
+        var top = new StackPanel { Spacing = 1, Children = { name, title, detail } };
+
+        var actions = new StackPanel { Spacing = 5 };
+        void Act(PluginLoadAction a)
+        {
+            try { e.DevicePluginLoadAction(t, di, a); e.ServicePluginLoads(); }
+            catch (Exception ex) { ctx.Status(ex.Message); }
+            ctx.RequestRebuild();
+        }
+        if (shown == PluginLoadState.NotResponding)
+        {
+            var wait = ActionButton(Loc.T("device.plugin.load.keep_waiting"), GlyphKind.History, primary: true);
+            wait.Click += (_, _) => Act(PluginLoadAction.KeepWaiting);
+            var giveUp = ActionButton(Loc.T("device.plugin.load.give_up"), GlyphKind.Close, primary: false);
+            ToolTip.SetTip(giveUp, Loc.T("device.plugin.load.give_up_tip"));
+            giveUp.Click += (_, _) => Act(PluginLoadAction.GiveUp);
+            actions.Children.Add(wait); actions.Children.Add(giveUp);
+        }
+        else if (shown == PluginLoadState.Failed)
+        {
+            var retry = ActionButton(Loc.T("device.plugin.load.try_again"), GlyphKind.Cycle, primary: true);
+            retry.Click += (_, _) => Act(PluginLoadAction.TryAgain);
+            actions.Children.Add(retry);
+        }
+
+        // The load moves on without the card: rebuild once its state does (loaded → the real card).
+        ctx.AddDeviceRefresher(() =>
+        {
+            if (LoadState(e, t, di) != shown) ctx.RequestRebuild();
+        });
+
+        var col = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(actions, Dock.Bottom);
+        col.Children.Add(actions);
+        col.Children.Add(top);
+        return col;
     }
 
     // ---- who it is + the two actions ------------------------------------------

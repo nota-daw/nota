@@ -209,6 +209,7 @@ if (Environment.GetEnvironmentVariable("NOTA_MODULAR_BIG_PLUGIN") is { Length: >
     if (ci >= 0)
     {
         int pt = engine.AddPluginInstrumentTrack(ci);
+        engine.WaitPluginLoads(60000); // plug-ins load after they are inserted (specs/113)
         int pl = engine.ModulatorAdd(pt, 0);
         int pc = engine.PluginParamCount(pt, -1);
         var bsw = Stopwatch.StartNew();

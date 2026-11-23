@@ -89,6 +89,13 @@ class Device {
     // Message thread only.
     virtual std::string pluginIdentifier() const { return {}; }
 
+    // A hosted plug-in loads after it is inserted (#979, specs/113): 0 loaded (or not a hosted
+    // plug-in), 1 waiting for another plug-in, 2 loading, 3 not responding, 4 couldn't load;
+    // the reason says why. Actions: 1 keep waiting, 2 give up, 3 try again. Message thread.
+    virtual int32_t pluginLoadState() const { return 0; }
+    virtual std::string pluginLoadReason() const { return {}; }
+    virtual void pluginLoadAction(int32_t /*action*/) {}
+
     // Built-in parameter interface (M4-4/5). Params are plain floats in
     // [min,max]; get/set is atomic and lock-free (UI thread <-> audio thread).
     // Hosted plugins keep the defaults (0 params) — they use their own editor.

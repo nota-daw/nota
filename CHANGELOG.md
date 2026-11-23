@@ -232,6 +232,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
+- **A plug-in that hangs while it loads no longer freezes Nota** (#979, specs/113). SSL / Slate
+  Digital plug-ins (VST3 and AU) froze Nota on macOS as soon as they were inserted: a plug-in's
+  binary loaded on the main thread, and a copy-protection wrapper (PACE / iLok) that waits for the
+  main run loop while it loads waited forever.
+  - The binary now loads in the background. The device is in the chain at once — an effect passes
+    audio through, an instrument is silent — and becomes the plug-in when it is ready. Nota keeps
+    playing and editing meanwhile, for an insert, a project open, a preset or a duplicate alike.
+  - After 30 seconds the card says the plug-in isn't responding, with **Keep waiting** and
+    **Give up**. A plug-in that couldn't load stays in the chain with its settings, which a save
+    keeps, and **Try again** on its card.
+  - If Nota still stops while loading a plug-in, the next start names it, and projects bring it up
+    as "couldn't load" instead of loading it again, until you try it again.
 - **AI models install again** (#969). Every AI model (Separate Stems, Convert to MIDI, Manual
   search) failed with "Couldn't download ONNX runtime (404)": the repository Nota fetched ONNX
   Runtime 1.23.2 from is gone. The runtime now comes from Nota's own mirror on

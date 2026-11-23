@@ -9,6 +9,7 @@
 #include "nota_engine_internal.h"
 
 #include "engine/EditorKeys.h"
+#include "bridge/PluginHostBridge.h"
 
 #include "dsp/primitives/CompensationDelay.h"
 #include "dsp/primitives/SpectrumAnalyzer.h"
@@ -43,6 +44,35 @@ NotaResult nota_track_set_builtin_instrument(NotaEngine* e, int32_t track_id, in
 }
 int32_t nota_track_add_effect_plugin(NotaEngine* e, int32_t track_id, int32_t catalog_index) {
     return e ? ENG(e)->addTrackEffectPlugin(track_id, catalog_index) : -1;
+}
+
+// ---- hosted plug-ins load after they are inserted (#979, specs/113) -----------
+int32_t nota_engine_plugin_loads_service(NotaEngine* e) {
+    return e ? ENG(e)->servicePluginLoads() : 0;
+}
+int32_t nota_engine_plugin_loads_wait(NotaEngine* e, int32_t timeout_ms) {
+    return e ? ENG(e)->waitPluginLoads(timeout_ms) : 0;
+}
+int32_t nota_device_plugin_load_state(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? CENG(e)->devicePluginLoadState(track_id, device_index, nullptr) : 0;
+}
+const char* nota_device_plugin_load_reason(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    static std::string s; // owned by the engine, valid until the next call
+    s.clear();
+    if (e) CENG(e)->devicePluginLoadState(track_id, device_index, &s);
+    return s.c_str();
+}
+NotaResult nota_device_plugin_load_action(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t action) {
+    if (!e || action < 1 || action > 3) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->devicePluginLoadAction(track_id, device_index, action) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+void nota_pluginhost_autoload_scope(int32_t on) {
+    nota::setPluginAutoloadScope(on != 0);
+}
+const char* nota_pluginhost_frozen_notice(void) {
+    static std::string s; // valid until the next call
+    s = nota::takeFrozenPluginNotice();
+    return s.c_str();
 }
 int32_t nota_clip_audio_mono(
     const NotaEngine* e, int32_t track_id, int32_t clip_index, float* out, int32_t max_frames, double* out_sr) {

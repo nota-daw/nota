@@ -1957,8 +1957,48 @@ NOTA_API NotaResult nota_track_set_instrument_plugin(NotaEngine* engine, int32_t
 NOTA_API NotaResult nota_track_set_builtin_instrument(NotaEngine* engine, int32_t track_id, int32_t kind);
 
 /* Append catalog plugin `catalog_index` as an insert effect on the track's
- * device chain. Returns the new device index (>=0), or <0 on failure. */
+ * device chain. Returns the new device index (>=0), or <0 on failure. The device is
+ * there at once but its plug-in is still loading (see nota_device_plugin_load_state). */
 NOTA_API int32_t nota_track_add_effect_plugin(NotaEngine* engine, int32_t track_id, int32_t catalog_index);
+
+/* ---- hosted plug-ins load after they are inserted (#979, specs/113) ------------------
+ * Every way a hosted plug-in gets into a project (insert, instrument, rack chain, project
+ * open, preset, duplicate) puts its device in place at once: an effect passes audio
+ * through, an instrument is silent, and state handed to it is kept until it loads. Its
+ * binary loads on a background thread, so a plug-in that blocks while loading (a copy-
+ * protection wrapper waiting for the main run loop) can't freeze the app; the app's UI
+ * timer then calls nota_engine_plugin_loads_service to attach the instances. All of these
+ * are message-thread calls. */
+
+/* Attaches plug-ins whose binary has loaded, marks loads past their deadline (30 s;
+ * NOTA_PLUGIN_LOAD_TIMEOUT_MS overrides it) "not responding". Returns how many devices'
+ * load state changed (the UI refreshes their cards). */
+NOTA_API int32_t nota_engine_plugin_loads_service(NotaEngine* engine);
+
+/* Services until no plug-in is loading or `timeout_ms` passed; returns how many still
+ * load. For tests and tools that need the plug-in right away — it blocks the caller. */
+NOTA_API int32_t nota_engine_plugin_loads_wait(NotaEngine* engine, int32_t timeout_ms);
+
+/* A device's load state (device_index -1 = the track's instrument): 0 loaded (or not a
+ * hosted plug-in), 1 waiting for another plug-in to load, 2 loading, 3 not responding,
+ * 4 couldn't load. */
+NOTA_API int32_t nota_device_plugin_load_state(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* Why: "Waiting for X to load", "X isn't responding while it loads", the reason it couldn't
+ * load. Empty when there is nothing to say. Valid until the next call. */
+NOTA_API const char* nota_device_plugin_load_reason(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* 1 keep waiting (a not-responding load gets another deadline), 2 give up (it becomes
+ * "couldn't load"; plug-ins queued behind a load that never returns can't load until a
+ * restart), 3 try again (a load that couldn't). */
+NOTA_API NotaResult nota_device_plugin_load_action(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t action);
+
+/* Project open: between on=1 and on=0, a plug-in that froze the app while loading last time
+ * (it was loading when the app ended) is put in place as "couldn't load" instead of loaded. */
+NOTA_API void nota_pluginhost_autoload_scope(int32_t on);
+
+/* The name of the plug-in that was loading when the app last ended — once, then empty. */
+NOTA_API const char* nota_pluginhost_frozen_notice(void);
 
 /* Number of insert effects on the track's device chain. */
 NOTA_API int32_t nota_track_device_count(const NotaEngine* engine, int32_t track_id);

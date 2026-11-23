@@ -915,6 +915,15 @@ class Engine {
     bool setTrackInstrumentPlugin(int32_t trackId, int32_t catalogIndex);
     bool setTrackBuiltinInstrument(int32_t trackId, int32_t kind);       // replace with a built-in synth
     int32_t addTrackEffectPlugin(int32_t trackId, int32_t catalogIndex); // returns device index or -1
+    // Hosted plug-ins load after they are inserted (#979, specs/113). Message thread.
+    // servicePluginLoads attaches loaded plug-ins (then realigns PDC and resolves plug-in-param
+    // lanes made while they loaded) and returns how many devices' load state changed;
+    // waitPluginLoads services until nothing is loading or `timeoutMs` passed, returning how
+    // many still load. deviceIndex -1 is the track's instrument.
+    int32_t servicePluginLoads();
+    int32_t waitPluginLoads(int32_t timeoutMs);
+    int32_t devicePluginLoadState(int32_t trackId, int32_t deviceIndex, std::string* reason) const;
+    bool devicePluginLoadAction(int32_t trackId, int32_t deviceIndex, int32_t action);
     int32_t trackDeviceCount(int32_t trackId) const;
     // Offline analysis (audio→MIDI): an audio clip's played region, mono. out==null → frame count.
     int32_t clipAudioMono(int32_t trackId, int32_t clipIndex, float* out, int32_t maxFrames, double* outSr) const;
@@ -1739,6 +1748,7 @@ class Engine {
     void propagateSampleRate(double sr); // re-prepare every instrument/device/MIDI-FX (incl. master) at sr
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
+    void resolveLoadedPluginLanes(); // plug-in-param lanes made while their plug-in loaded (specs/113)
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
     // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
     // set `sections`, and publish it as one undo step.

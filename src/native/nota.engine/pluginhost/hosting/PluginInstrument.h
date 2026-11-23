@@ -25,14 +25,23 @@
 namespace nota {
 namespace hosting {
 
+class LoadTicket;
+
 class PluginInstrument : public nota::Instrument, private juce::AudioProcessorListener {
   public:
     PluginInstrument(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock);
+    // Unloaded (#979, specs/113): silent, keeping any state handed to it, until the PluginLoader
+    // has loaded `desc` and attached the instance. Message thread.
+    PluginInstrument(const juce::PluginDescription& desc, double sr, int maxBlock);
     ~PluginInstrument() override;
 
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
     bool handlesSustain() const override { return true; } // the plug-in gets CC64 itself
-    bool supportsParallelRender() const override { return parallelRender_; }
+    bool supportsParallelRender() const override { return parallelRender_.load(std::memory_order_relaxed); }
+
+    int32_t pluginLoadState() const override;
+    std::string pluginLoadReason() const override;
+    void pluginLoadAction(int32_t action) override;
     bool takesTimedEvents() const override { return true; } // one processBlock per block (#436)
 
     void setSampleRate(double sr) override;
@@ -97,9 +106,16 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
 
     void prepare(double sr);
     void renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi); // frames <= maxBlock_
+    bool attach(std::unique_ptr<juce::AudioPluginInstance> p); // the loaded instance (message thread)
 
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
-    std::unique_ptr<juce::AudioPluginInstance> plugin_;
+    std::unique_ptr<juce::AudioPluginInstance> plugin_; // null until loaded; set once, message thread
+    // plugin_ is ready for the audio thread: stored (release) after attach() set everything up.
+    std::atomic<bool> live_{false};
+    juce::PluginDescription desc_;      // the catalog entry being loaded (unloaded constructor)
+    std::shared_ptr<LoadTicket> load_;  // its load, for as long as the adapter lives
+    std::vector<uint8_t> pendingState_; // state handed over before the instance exists
+    double sr_ = 44100.0;               // the rate to prepare a late instance for
     uint32_t usedChannels_ = 1u; // bit c-1 = channel c has been sent on (chan()); audio thread only
     juce::AudioBuffer<float> storage_;
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
@@ -110,7 +126,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     int maxBlock_; // what the plug-in was prepared for: at most kPluginMaxBlock (#447)
     bool stereoOut_ = true;                                  // main output bus has a channel 1 (see prepare)
     std::string name_;                                       // cached plugin name for displayName()
-    bool parallelRender_ = false; // immutable format decision, made on the message thread
+    std::atomic<bool> parallelRender_{false}; // format decision, made on the message thread at attach
     std::atomic<int32_t> lastTouched_{-1};                   // "Learn" (M9-B3)
     std::atomic<int32_t> gestureBegin_{-1}, gestureEnd_{-1}; // write gestures (M9-C)
     GuiNoteQueue guiNotes_; // editor-window computer keyboard -> render() (message->audio)
