@@ -33,9 +33,15 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         [property: Description("Beats the next take into this slot would record now (0 = until stopped).")] double ResolvedBeats);
     public sealed record SessionSnapshot(int SceneCount, double LaunchQuantBeats, bool FollowActions, double RecordLengthBeats,
         Scene[] Scenes, Slot[] FilledSlots, TrackState[] Playing, SlotRef[] NoStopButton,
-        [property: Description("Empty slots with a next-take length of their own (the rest follow RecordLengthBeats).")] PreparedSlot[] PreparedSlots);
+        [property: Description("Empty slots with a next-take length of their own (the rest follow RecordLengthBeats).")] PreparedSlot[] PreparedSlots,
+        [property: Description("Slots with a landing rule: what launches once a fresh take recorded into the slot is ready to play.")] LandingRule[] LandingRules);
+    public sealed record LandingRule(int TrackId, int Scene,
+        [property: Description("\"next_scene\" (wraps to the first) or \"scene\".")] string Action,
+        [property: Description("The scene launched when Action is \"scene\".")] int TargetScene,
+        [property: Description("Launch quantum in beats; -1 = the global launch quantization, 0 = at once.")] double QuantBeats);
 
     private static readonly string[] TakeModes = { "global", "open", "fixed" };
+    private static readonly string[] LandingActions = { "off", "next_scene", "scene" };
 
     private static readonly string[] Modes = { "trigger", "gate", "toggle", "repeat" };
     private static readonly string[] Actions = { "none", "stop", "again", "previous", "next", "first", "last", "any", "other", "jump" };
@@ -57,7 +63,8 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         + "the launch quantum, the global follow-action switch, the fixed record length, every non-empty slot "
         + "(track id, scene, state, loop length in beats, name, colour, launch mode, quantum, legato, loop, velocity "
         + "amount, follow actions A/B with chances and time), which scene each track is playing (with its position "
-        + "in the loop), empty slots whose stop button was removed, and empty slots with a next-take length of their own. "
+        + "in the loop), empty slots whose stop button was removed, empty slots with a next-take length of their own, "
+        + "and slots with a landing rule (the scene a freshly recorded take launches once it is ready to play). "
         + "Call before launching or filling slots.")]
     public Task<SessionSnapshot> GetSession() => Read(() =>
     {
@@ -66,6 +73,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
         var playing = new List<TrackState>();
         var noStop = new List<SlotRef>();
         var prepared = new List<PreparedSlot>();
+        var landings = new List<LandingRule>();
         for (int i = 0; i < n; i++)
         {
             if (!E.TryGetTrackInfo(i, out var ti) || ti.IsReturn || ti.IsGroup) continue;
@@ -73,6 +81,8 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
             if (p >= 0) playing.Add(new TrackState(ti.Id, p, Math.Round(E.SessionSlotPosition(ti.Id), 3)));
             for (int s = 0; s < scenes; s++)
             {
+                if (E.TryGetSessionSlotLandingRule(ti.Id, s, out var lr) && lr.LandingAction != SlotLandingAction.Off)
+                    landings.Add(new LandingRule(ti.Id, s, LandingActions[lr.Action], lr.Scene, lr.IsGlobalQuant ? -1 : lr.QuantBeats));
                 int st = E.SessionSlotState(ti.Id, s);
                 if (st == 0)
                 {
@@ -96,7 +106,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
                 p.SigNum > 0 && p.SigDen > 0 ? $"{p.SigNum}/{p.SigDen}" : null, p.Follow != 0 ? p.FollowBeats : null));
         }
         return new SessionSnapshot(scenes, E.LaunchQuant, E.SessionFollow, E.SessionRecordLength,
-            sceneList.ToArray(), slots.ToArray(), playing.ToArray(), noStop.ToArray(), prepared.ToArray());
+            sceneList.ToArray(), slots.ToArray(), playing.ToArray(), noStop.ToArray(), prepared.ToArray(), landings.ToArray());
     });
 
     // ---- slots -------------------------------------------------------------------------------
@@ -197,6 +207,24 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
             throw new ArgumentException(m == SlotTakeMode.Fixed
                 ? "A fixed take length is 1 beat to 64 bars: bars 0-64, beats 0-31 (keep them below one bar of the meter)."
                 : $"No track {trackId}.");
+    });
+
+    [McpServerTool(Name = "set_session_slot_landing_rule"), Description(
+        "Set what happens once a take recorded into a Session slot is ready to play (#481): action \"next_scene\" launches "
+        + "the scene below (wrapping to the first), \"scene\" launches targetScene, \"off\" removes the rule. It fires once "
+        + "per take, on the next launch boundary — the global launch quantization (quantBeats -1, default) or quantBeats "
+        + "(0 = at once, up to 32). Only a fresh take into an empty slot fires it, never a cancelled, discarded or empty "
+        + "take, a global stop, or with follow actions off. The rule stays with the slot.")]
+    public Task SetSessionSlotLandingRule(int trackId, int scene, string action, int targetScene = 0, double quantBeats = -1) => Mutate(() =>
+    {
+        var a = (SlotLandingAction)Parse(action, LandingActions, "landing action");
+        if (scene < 0 || scene >= E.SceneCount) throw new ArgumentException($"No scene {scene}.");
+        if (a == SlotLandingAction.Scene && (targetScene < 0 || targetScene >= E.SceneCount))
+            throw new ArgumentException($"No scene {targetScene} to launch (scenes 0-{E.SceneCount - 1}).");
+        if (double.IsNaN(quantBeats) || quantBeats > NotaSlotLandingRule.MaxQuantBeats)
+            throw new ArgumentException("quantBeats is -1 (global launch quantization), 0 (at once) or up to 32 beats.");
+        if (!E.SetSessionSlotLandingRule(trackId, scene, new NotaSlotLandingRule(a, targetScene, quantBeats)))
+            throw new ArgumentException($"No track {trackId} with Session slots.");
     });
 
     // ---- scenes ------------------------------------------------------------------------------

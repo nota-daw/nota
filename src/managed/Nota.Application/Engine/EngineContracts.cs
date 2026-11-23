@@ -345,6 +345,27 @@ public struct NotaSlotTakeLength
     public const int MaxBars = 64;
 }
 
+/// <summary>What a fresh take landing in a Session slot launches (#481).</summary>
+public enum SlotLandingAction { Off = 0, NextScene = 1, Scene = 2 }
+
+/// <summary>A Session slot's landing rule (#481). Matches native NotaSlotLandingRule. Scene is the
+/// target for <see cref="SlotLandingAction.Scene"/>; QuantBeats &lt; 0 = the global launch quantum,
+/// 0 = at once, else up to <see cref="MaxQuantBeats"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSlotLandingRule
+{
+    public int Action;
+    public int Scene;
+    public double QuantBeats;
+
+    public NotaSlotLandingRule(SlotLandingAction action, int scene = 0, double quantBeats = -1.0)
+    { Action = (int)action; Scene = scene; QuantBeats = quantBeats; }
+    public readonly SlotLandingAction LandingAction => (SlotLandingAction)Action;
+    public readonly bool IsGlobalQuant => QuantBeats < 0;
+    public const double MaxQuantBeats = 32.0;
+    public static readonly NotaSlotLandingRule Off = new(SlotLandingAction.Off);
+}
+
 /// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a
 /// track-palette index (-1 = neutral); Tempo / SigNum+SigDen &gt; 0 apply on launch.</summary>
 [StructLayout(LayoutKind.Sequential)]

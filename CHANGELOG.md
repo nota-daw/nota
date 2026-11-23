@@ -23,6 +23,28 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Session: play the grid from the keyboard, and buttons you can hit** (#364, specs/112).
+  - With the arrows on a slot, **Return** does what a click does: launches the clip, starts
+    recording in an armed track's empty slot, and on a recording slot ends the take.
+  - **⇧Return** stops the selected track (a group: all its tracks), **⌘Return** (Ctrl+Return)
+    launches the selected scene row, **⌘⇧Return** (Ctrl+Shift+Return) stops every clip. All
+    four are rebindable in Settings → Shortcuts; outside the Session, Return is still Stop.
+  - The record circle and stop square in empty slots are almost twice as big, with a bigger
+    click area; the stop buttons under the tracks and Stop All got a larger glyph too.
+  - A controller's launch button records into an armed empty slot as well.
+- **Session: a slot can launch a scene once its recorded take is ready to play** (#481, specs/111).
+  - An empty slot's inspector (and its right-click menu) has **When the take lands**: Off, Next
+    scene, or Launch *a scene*, and **On**: the global launch quantization or a quantum of its own.
+    The grid shows "→ scene" on the slot.
+  - It fires once per take, when the take has become a playable clip — not when Stop is pressed,
+    and not waiting for the project to be saved. The scene launches on the next boundary after
+    that, like any scene launch: it shows as queued, can be cancelled, and a later launch replaces it.
+  - Nothing fires for a take stopped in its count-in or before its boundary, a discarded attempt,
+    an empty MIDI take, an overdub, Stop / Stop all clips, or while follow actions are off. Undoing
+    the take before its boundary withdraws the launch; Undo, Redo and reopening a project never fire it.
+  - The rule belongs to the slot: it stays under the clip, travels with its scene row, follows the
+    scene it names (Off if that scene is deleted), and is saved with the project.
+  - MCP: `set_session_slot_landing_rule`; `get_session` lists the rules.
 - **Controllers: remap one function without redoing the setup** (#973, specs/110).
   - Preferences → MIDI → a controller with a profile → **Edit mapping…** opens on its current
     mapping: every function grouped as in the setup wizard (knobs, faders, transport, track /
@@ -215,6 +237,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   count-in bars — and with the clicks routed to Cue only, nothing seemed to happen at all. The
   count-in is now for Record only: Record from stop (Arrangement or a Session slot) still
   clicks it out first, Play rolls immediately.
+- **AI models install again** (#969). Every AI model (Separate Stems, Convert to MIDI, Manual
+  search) failed with "Couldn't download ONNX runtime (404)": the repository Nota fetched ONNX
+  Runtime 1.23.2 from is gone. The runtime now comes from Nota's own mirror on
+  `nota-daw/nota-models`, taken from Microsoft's signed NuGet package and pinned to a size and
+  sha256 as before. Only the library and its license files are downloaded now, not the whole
+  release archive (on Windows 14 MB instead of 78 MB). A runtime already installed from the
+  old source keeps working and isn't downloaded again.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
