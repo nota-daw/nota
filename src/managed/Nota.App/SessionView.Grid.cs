@@ -364,7 +364,9 @@ public sealed partial class SessionView
         private readonly bool _stopButton;
         private readonly bool _followHeld;   // follow actions configured but bypassed (#499)
         private readonly string _prepared = ""; // an empty slot's own next-take length (#503)
-        private readonly string _landing = "";  // the scene an empty slot's landing rule launches (#481)
+        // The scene an empty slot's landing rule launches (#481): -1 none, -2 the next scene. Its name
+        // is read when drawn, so a renamed scene shows at once.
+        private readonly int _landingTarget = -1;
         private readonly List<(double Start, double Len, int Pitch)> _notes = new();
         private int _minPitch, _maxPitch;
         private readonly float[]? _peaks;
@@ -384,9 +386,7 @@ public sealed partial class SessionView
             if (!_filled && eng.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take))
                 _prepared = TakeLengthText(take);
             if (!_filled && eng.TryGetSessionSlotLandingRule(c.TrackId, scene, out var landing) && landing.LandingAction != SlotLandingAction.Off)
-                _landing = "→ " + (landing.LandingAction == SlotLandingAction.NextScene
-                    ? Loc.T("session.landing.next_scene")
-                    : o.SceneName(landing.Scene));
+                _landingTarget = landing.LandingAction == SlotLandingAction.NextScene ? -2 : landing.Scene;
             if (_filled)
             {
                 _name = o.ClipName(c, scene);
@@ -554,10 +554,11 @@ public sealed partial class SessionView
                     var prepFt = Ft(_prepared, NotaFonts.Measure, 10, NotaPalette.TextMuted, r.Width - 12);
                     ctx.DrawText(prepFt, new Point(r.Width - 6 - prepFt.Width, (TopRowH - prepFt.Height) / 2));
                 }
-                if (_landing.Length > 0)
+                if (_landingTarget != -1)
                 {
                     // Where a fresh take landing here goes next (#481): muted, along the bottom edge.
-                    var landFt = Ft(_landing, NotaFonts.Measure, 10, NotaPalette.TextMuted, r.Width - 12);
+                    string landing = "→ " + (_landingTarget == -2 ? Loc.T("session.landing.next_scene") : _o.SceneName(_landingTarget));
+                    var landFt = Ft(landing, NotaFonts.Measure, 10, NotaPalette.TextMuted, r.Width - 12);
                     ctx.DrawText(landFt, new Point(6, r.Height - 4 - landFt.Height));
                 }
                 if (selected) DrawSelection(ctx, r);

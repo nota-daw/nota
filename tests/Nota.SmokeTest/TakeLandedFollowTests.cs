@@ -38,6 +38,80 @@ internal static class TakeLandedFollowTests
         foreach (var r in OncePerTake()) yield return r;
         foreach (var r in SceneEdits()) yield return r;
         foreach (var r in SaveAndReopen()) yield return r;
+        foreach (var r in ReviewFollowUps()) yield return r;
+    }
+
+    // Review of PR #990: Stop all before the landing is served, a row inserted while the launch
+    // waits (or before the landing is served), and a note captured just before the stop.
+    private static IEnumerable<(bool, string)> ReviewFollowUps()
+    {
+        {
+            using var e = Armed(out int t, out int other);
+            e.SessionRecordLength = 0;
+            e.SetSessionSlotLandingRule(t, 0, ToScene(1));
+            Rolling(e);
+            e.RecordSessionSlot(t, 0);
+            Beats(e, 3.6);
+            PlayNote(e);
+            Beats(e, 2.0);
+            e.StopSessionRecord();                  // lands; not served until the next poll
+            e.StopAllSession();
+            Beats(e, 6.0);
+            yield return (!e.SessionSceneQueued(1) && e.SessionPlayingSlot(other) != 1,
+                "Stop all clips right after a take lands drops its rule's launch");
+            Done(e);
+        }
+        {
+            using var e = Armed(out int t, out int other);
+            e.SetSessionSlotTakeLength(t, 0, OneBar);
+            e.SetSessionSlotLandingRule(t, 0, ToScene(1));
+            Rolling(e);
+            e.RecordSessionSlot(t, 0);
+            Beats(e, 3.6);
+            PlayNote(e);
+            Beats(e, 3.6);                          // ~8.2: landed, Chorus queued for 12
+            e.InsertScene(0);                       // the take moves to row 1, Chorus to row 2
+            Beats(e, 0.2);
+            bool stillQueued = e.SessionSceneQueued(2);
+            Beats(e, 4.0);                          // ~12.4
+            yield return (stillQueued && e.SessionPlayingSlot(other) == 2,
+                $"a row inserted above while the launch waits keeps it (queued {stillQueued}, playing {e.SessionPlayingSlot(other)})");
+            Done(e);
+        }
+        {
+            using var e = Armed(out int t, out int other);
+            e.SessionRecordLength = 0;
+            e.SetSessionSlotLandingRule(t, 0, ToScene(1));
+            Rolling(e);
+            e.RecordSessionSlot(t, 0);
+            Beats(e, 3.6);
+            PlayNote(e);
+            Beats(e, 2.0);
+            e.StopSessionRecord();                  // landed, not served yet
+            e.InsertScene(0);                       // before it is served: the take is now row 1
+            Beats(e, 0.1);
+            bool queued = e.SessionSceneQueued(2) && !e.SessionSceneQueued(1);
+            yield return (queued, "a row inserted before the landing is served: the take's own rule still fires, for the moved Chorus");
+            Done(e);
+        }
+        {
+            using var e = Armed(out int t, out int other);
+            e.SessionRecordLength = 0;
+            e.SetSessionSlotLandingRule(t, 0, ToScene(1));
+            Rolling(e);
+            e.RecordSessionSlot(t, 0);
+            Beats(e, 4.6);                          // ~5.1, recording, nothing played yet
+            var b = new float[Chunk * 2];
+            e.NoteOn(60, 0.8f);
+            for (int i = 0; i < 8; i++) e.RenderOffline(b, Chunk, Sr); // no poll from here on
+            e.NoteOff(60);
+            for (int i = 0; i < 4; i++) e.RenderOffline(b, Chunk, Sr);
+            e.StopSessionRecord();
+            Beats(e, 0.1);
+            yield return (e.GetSessionNotes(t, 0).Length > 0 && e.SessionSceneQueued(1),
+                $"a note captured just before the stop counts: the take is not empty and fires (notes {e.GetSessionNotes(t, 0).Length})");
+            Done(e);
+        }
     }
 
     private static NotaSlotLandingRule Get(NotaEngine e, int t, int s)

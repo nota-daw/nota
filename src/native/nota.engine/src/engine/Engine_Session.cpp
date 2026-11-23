@@ -294,6 +294,8 @@ void Engine::stopAllSession() {
     waitSceneGen_ = 0;
     waitScene_ = -1;
     stopSessionRecord();
+    landedTakes_.clear(); // takes that landed just before: everything stops, nothing launches (#481)
+    ruleWait_ = RuleWait{};
 }
 
 bool Engine::sessionSlotLaunchQueued(int32_t trackId, int32_t scene) const {
@@ -644,7 +646,10 @@ void Engine::finalizeSessionRecord(bool relaunch) {
         if (relaunch)
             for (auto [tid, sc] : slots) launchSlot(tid, sc);
     }
-    // The take's last controller points (held back for thinning) go in before the target does.
+    // Notes still queued go into the take first (a note-off since the last poll()), so a take with
+    // notes is never taken for an empty one when it lands (#481). Then the take's last controller
+    // points (held back for thinning) go in before the target does.
+    if (recordSessionScene_ >= 0 && !recordSessionAudio_) foldRecordedTake();
     if (recordSessionScene_ >= 0 && !recordSessionAudio_) flushCtlTake();
     // A fresh MIDI take that ran open-ended: cut to whole launch quanta, every slot of the take.
     if (recordSessionScene_ >= 0 && !recordSessionAudio_)
@@ -1415,6 +1420,20 @@ void Engine::remapPlayers(const std::function<int32_t(int32_t)>& map) {
     if (sceneFollowScene_ >= 0) sceneFollowScene_ = map(sceneFollowScene_);
     if (prevFollowScene_ >= 0) prevFollowScene_ = map(prevFollowScene_);
     if (waitScene_ >= 0) waitScene_ = map(waitScene_);
+    // Landings not served yet and the rule's launch still waiting follow their take's row (#481);
+    // a take whose row was deleted is gone: it fires nothing, and its waiting launch is withdrawn.
+    std::erase_if(landedTakes_, [&](auto& lt) {
+        const int32_t n = map(lt.second);
+        lt.second = n;
+        return n < 0;
+    });
+    if (ruleWait_.gen != 0 && ruleWait_.scene >= 0) {
+        ruleWait_.scene = map(ruleWait_.scene);
+        if (ruleWait_.scene < 0) {
+            if (waitSceneGen_ == ruleWait_.gen) cancelSceneLaunch(waitScene_);
+            ruleWait_ = RuleWait{};
+        }
+    }
 }
 
 // Insert a row at `at`: empty, a copy of row `copyFrom` (old index), or each track's
