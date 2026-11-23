@@ -82,6 +82,7 @@ public static class DevicePageCatalog
         new(FocusSection.Audio, 24, "phaser"),
         new(FocusSection.Audio, 25, "chorus"),
         new(FocusSection.Audio, 26, "vocoder"),
+        new(FocusSection.Audio, 27, "color"),
         new(FocusSection.Midi, 0, "arp"),
         new(FocusSection.Midi, 1, "chord"),
         new(FocusSection.Midi, 2, "scale"),
