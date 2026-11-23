@@ -16292,6 +16292,8 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- non-ASCII sample paths (#974) --");
+foreach (var (ok, label) in UnicodeSamplePathTests.Run()) Check(ok, label);
 using (var tempoLane = new NotaEngine())
 {
     int failed = tempoLane.TempoLaneSelfTest();

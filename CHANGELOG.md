@@ -210,6 +210,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
+- **Samples in folders with accented names play on Windows** (#974). A WAV, FLAC or MP3
+  whose folder or file name had a character outside plain English — `Música`, `Canción`,
+  `ñ`, Cyrillic, CJK — couldn't be opened on Windows: it didn't sound, didn't show its
+  waveform and read as unsupported. Nota now opens these paths as Unicode.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
