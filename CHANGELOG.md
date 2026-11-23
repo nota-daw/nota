@@ -210,6 +210,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Saved projects and factory presets read 0 st and are unchanged.
 
 ### Fixed
+- **An armed audio track's meter shows its input again** (#987). When the audio input
+  didn't open the moment a track was armed or set to monitor (on macOS, while the
+  microphone permission was still being asked, or the interface not ready yet), Nota never
+  tried again for the meter: takes still recorded, but the track's meter stayed at zero and
+  monitoring was silent. Any later successful open of the input — a take starting —
+  now brings the input meter and monitoring back.
 - **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
   ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
   kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is

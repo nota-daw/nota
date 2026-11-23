@@ -202,6 +202,16 @@ bool Engine::trackMonitor(int32_t trackId) const {
 // tap flag, so starting a take while monitoring doesn't reopen (or drop) the stream.
 bool Engine::ensureAudioInput() {
     if (inputTestMode_) return true;
+    const bool ok = openAudioInput();
+    // The monitor / input-meter tap waits for an open device (#987): when monitoring or an
+    // armed track wanted the input but it didn't open then (a macOS permission prompt still
+    // pending, the interface not ready), updateMonitorInput doesn't retry — so the next open
+    // that succeeds (a take starting) switches the tap on, and the meter and monitoring work.
+    if (ok && hwMonitorWanted_) hwMonitorTap_.store(true, std::memory_order_relaxed);
+    return ok;
+}
+
+bool Engine::openAudioInput() {
     if (input_ && input_->isRunning()) return true;
     if (!input_) input_ = createAudioInput(activeSystem_); // ASIO: the running driver's inputs
     // In the ASIO → WASAPI fallback the output runs on the system default; so does capture.
