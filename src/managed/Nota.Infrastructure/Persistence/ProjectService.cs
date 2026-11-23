@@ -293,6 +293,11 @@ public sealed class ProjectService
                     {
                         Scene = s, Mode = take.Mode, Bars = take.Bars, Beats = take.Beats,
                     });
+                if (engine.TryGetSessionSlotLandingRule(ti.Id, s, out var landing) && landing.LandingAction != SlotLandingAction.Off)
+                    (t.SessionLandingRules ??= new List<SlotLandingRuleDto>()).Add(new SlotLandingRuleDto
+                    {
+                        Scene = s, Action = landing.Action, TargetScene = landing.Scene, QuantBeats = landing.QuantBeats,
+                    });
                 // Persist any slot that holds a clip — skip only truly empty ones. (A slot
                 // that's playing/queued/recording is state 2-4, not 1, but still has content;
                 // gating on == 1 dropped it when saving mid-jam.)
@@ -970,6 +975,12 @@ public sealed class ProjectService
                 foreach (var tl in takeLens)
                     if (!engine.SetSessionSlotTakeLength(id, tl.Scene, new NotaSlotTakeLength((SlotTakeMode)tl.Mode, tl.Bars, tl.Beats)))
                         warnings.Add($"Scene {tl.Scene + 1}: a Session slot's take length couldn't be restored.");
+            // Landing rules (#481): configuration only — restoring them never fires anything.
+            if (t.SessionLandingRules is { } landings)
+                foreach (var lr in landings)
+                    if (!engine.SetSessionSlotLandingRule(id, lr.Scene,
+                            new NotaSlotLandingRule((SlotLandingAction)lr.Action, lr.TargetScene, lr.QuantBeats)))
+                        warnings.Add($"Scene {lr.Scene + 1}: a Session slot's landing rule couldn't be restored.");
 
             // Automation lanes (M9-A4). Devices are already rebuilt above.
             ApplyLanes(engine, id, t.Automation, warnings);
