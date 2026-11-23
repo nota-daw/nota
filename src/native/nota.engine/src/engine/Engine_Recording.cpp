@@ -1195,8 +1195,8 @@ double Engine::audioRecordLengthBeats(int32_t trackId) const {
 
 void Engine::drainInputQueue() {
     // Loop enabled after recording began → switch to loop punch from here.
-    if (audioRecording_ && !recordSessionAudio_ && !captureLoop_ && loopWrapsFrom(transport_.uiPositionBeats()))
-        activateLoopPunch(transport_.uiPositionBeats());
+    if (audioRecording_ && !recordSessionAudio_ && !captureLoop_ && loopWrapsFrom(takeTransportBeats()))
+        activateLoopPunch(takeTransportBeats());
 
     for (auto& l : captureLanes_) l.scratch.clear();
     auto clearScratch = [&] {

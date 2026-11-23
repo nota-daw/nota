@@ -471,6 +471,9 @@ bool Engine::takeRecordTestImpl(int32_t trackId, const float* interleaved, int32
     audioRecording_ = true;
     constexpr int32_t kChunk = 1024; // well inside the capture ring, drained like poll() would
     for (int32_t at = 0; at < frames; at += kChunk) {
+        // The take's playhead as a rolling transport would have it (the loop-on-mid-take check).
+        const double spb = transport_.samplesPerBeat();
+        takeBeatOverride_ = spb > 0.0 ? startBeat + at / spb : startBeat;
         pushInputFramesForTestN(interleaved + static_cast<size_t>(at) * static_cast<size_t>(channels),
             std::min(kChunk, frames - at), channels);
         drainInputQueue();
@@ -508,10 +511,14 @@ int32_t Engine::takeRecordTestArmed(const float* interleaved, int32_t channels, 
             setTrackArmed(disarmTrackId, false);
             disarmAtFrame = -1;
         }
+        // The take's playhead as a rolling transport would have it (the loop-on-mid-take check).
+        const double spb = transport_.samplesPerBeat();
+        takeBeatOverride_ = spb > 0.0 ? startBeat + at / spb : startBeat;
         pushInputFramesForTestN(interleaved + static_cast<size_t>(at) * static_cast<size_t>(channels),
             std::min(kChunk, frames - at), channels);
         drainInputQueue();
     }
+    takeBeatOverride_ = std::numeric_limits<double>::quiet_NaN();
     stopAudioRecording();
     return lanes;
 }

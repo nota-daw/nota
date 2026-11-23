@@ -2383,6 +2383,10 @@ class Engine {
     bool startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn);
     double takeStartOverride_ = std::numeric_limits<double>::quiet_NaN(); // startAudioRecording
     int takePlayingOverride_ = -1;                                         // -1 = read the transport
+    double takeBeatOverride_ = std::numeric_limits<double>::quiet_NaN();  // tests: the take's playhead
+    double takeTransportBeats() const {
+        return std::isnan(takeBeatOverride_) ? transport_.uiPositionBeats() : takeBeatOverride_;
+    }
     double takePlayhead() const;
     bool takeTransportPlaying() const;
     // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
