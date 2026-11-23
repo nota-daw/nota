@@ -2725,6 +2725,9 @@ class Engine {
                               double sampleRate);
     void beginCaptureLayout();             // decide linear vs loop capture at take start
     void activateLoopPunch(double atBeat); // switch capture to loop punch (start or mid-take)
+    // The loop will wrap a take at `beat`: it is on and `beat` is before its end. Past the end
+    // the transport plays on (#981), so the take records straight through, where it is heard.
+    bool loopWrapsFrom(double beat) const { return loopEnabled_ && loopEnd_ > loopStart_ && beat < loopEnd_ - 1e-6; }
     bool audioRecording_ = false;
     int32_t audioRecordTrackId_ = 0;
     double audioRecordStartBeat_ = 0.0;

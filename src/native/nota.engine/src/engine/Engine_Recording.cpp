@@ -1119,7 +1119,7 @@ void Engine::beginCaptureLayout() {
         l.buf.clear();
         l.passes.clear();
     }
-    if (!recordSessionAudio_ && loopEnabled_ && loopEnd_ > loopStart_) activateLoopPunch(audioRecordStartBeat_);
+    if (!recordSessionAudio_ && loopWrapsFrom(audioRecordStartBeat_)) activateLoopPunch(audioRecordStartBeat_);
 }
 
 // Switch capture into loop punch: a fixed loop-region buffer per lane whose shared cursor
@@ -1195,7 +1195,7 @@ double Engine::audioRecordLengthBeats(int32_t trackId) const {
 
 void Engine::drainInputQueue() {
     // Loop enabled after recording began → switch to loop punch from here.
-    if (audioRecording_ && !recordSessionAudio_ && !captureLoop_ && loopEnabled_ && loopEnd_ > loopStart_)
+    if (audioRecording_ && !recordSessionAudio_ && !captureLoop_ && loopWrapsFrom(transport_.uiPositionBeats()))
         activateLoopPunch(transport_.uiPositionBeats());
 
     for (auto& l : captureLanes_) l.scratch.clear();

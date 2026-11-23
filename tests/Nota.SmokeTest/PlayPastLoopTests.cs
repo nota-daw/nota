@@ -45,7 +45,32 @@ internal static class PlayPastLoopTests
         e.Play(); Render(e, 24000);             // ~3
         e.SetLoop(true, 0.0, 1.0); Render(e, 24000);
         yield return (e.PositionBeats > 3.5, $"#981: a loop moved behind the playhead lets it play on ({e.PositionBeats:F2})");
-        e.StopTransport(); e.SetLoop(false, 0, 0); Apply(e);
+        e.StopTransport(); Apply(e);
+
+        // A slower tempo keeps the sample position, so beat 6 at 120 BPM is beat ~3 at 60: back
+        // before the loop end, the loop takes the playhead again.
+        e.SetLoop(true, 0.0, 4.0); e.Seek(6.0); Apply(e);
+        e.Play(); Apply(e);
+        e.SetBpm(60); Apply(e);                  // ~3.0
+        Render(e, 72000);                        // 1.5 beats at 60: 3 → 4 → wrap → ~0.5
+        yield return (e.PositionBeats < 2.0, $"#981: a tempo change that brings the playhead back into the loop wraps again ({e.PositionBeats:F2})");
+        e.StopTransport(); e.SetBpm(120); e.SetLoop(false, 0, 0); Apply(e);
+
+        // Recording from past the loop end records straight through, where it is heard — not
+        // folded into the loop as passes.
+        using var r = new NotaEngine();
+        r.SetTestInputDevice(2);
+        r.RenderOffline(new float[512 * 2], 512, Sr);
+        int t = r.AddAudioTrack();
+        r.SetTrackArmed(t, true);
+        r.SetLoop(true, 0.0, 1.0);
+        int frames = 24000 * 3;                   // three beats at 120 BPM
+        var dev = new float[frames * 2];
+        for (int i = 0; i < dev.Length; i++) dev[i] = 0.25f;
+        int lanes = r.TakeRecordTestArmed(dev, 2, frames, 4.0);
+        bool one = r.TryGetAudioClipInfo(t, 0, out var clip) && !r.TryGetAudioClipInfo(t, 1, out _);
+        yield return (lanes == 1 && one && Math.Abs(clip.StartBeat - 4.0) < 1e-6 && r.TakeCount(t) <= 1,
+            $"#981: a take from past the loop end records straight through (start {clip.StartBeat:F2}, takes {r.TakeCount(t)})");
     }
 
     private static void Render(NotaEngine e, int frames)

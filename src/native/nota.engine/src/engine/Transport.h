@@ -48,6 +48,7 @@ class Transport {
             bpm_ = bpm;
             fixedSpb_ = sampleRate_ * 60.0 / bpm_;
             ++presentationEpoch_;
+            rejoinLoop();
         }
         publish();
     }
@@ -59,7 +60,10 @@ class Transport {
         const bool changed = lastMap_ != map;
         map_ = map;
         lastMap_ = map;
-        if (changed) ++presentationEpoch_;
+        if (changed) {
+            ++presentationEpoch_;
+            rejoinLoop();
+        }
         return changed;
     }
     void detachTempoMap() { map_ = nullptr; }
@@ -130,6 +134,12 @@ class Transport {
   private:
     void publish();
     void updatePastLoopEnd() { pastLoopEnd_ = loopEnabled_ && playheadSamples_ >= loopEndSamples() - 0.5; }
+    // A tempo (or tempo map, or rate) change keeps the sample position, so it can put a
+    // playhead that played on past the loop back before its end: the loop takes it again.
+    // Only ever cleared here, never set — a playhead that rolled into the end still wraps.
+    void rejoinLoop() {
+        if (pastLoopEnd_ && playheadSamples_ < loopEndSamples() - 0.5) pastLoopEnd_ = false;
+    }
     // Keep map searches out of these small fixed-clock accessors, so callers can
     // inline the ordinary arithmetic without pulling in the compiled-map lookup.
     double mappedBpm() const;

@@ -236,7 +236,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the loop's end jumped straight to the loop start. Now the loop only wraps a playhead that
   plays into its end: launched (or seeked) past it, playback carries on, and switching the
   loop on or moving it behind the playhead lets it carry on too. Seek back before the loop
-  end and it loops again.
+  end (or slow the tempo so the playhead lands before it) and it loops again. Recording from
+  past the loop records straight through, where you hear it, not into the loop.
 - **AI models install again** (#969). Every AI model (Separate Stems, Convert to MIDI, Manual
   search) failed with "Couldn't download ONNX runtime (404)": the repository Nota fetched ONNX
   Runtime 1.23.2 from is gone. The runtime now comes from Nota's own mirror on
