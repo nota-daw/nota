@@ -79,6 +79,7 @@ public sealed class Knob : Control
     /// depth when its mode switches). Inside a device every value arc is orange, so a marked
     /// knob keeps orange but draws its value arc dashed — the modulation mark (DESIGN.md
     /// § Modulation), the same dash the graphs use for a modulated curve.</summary>
+    public IBrush? ValueArcBrush { get; set; }
     public IBrush? ArcColor { get => _arc; set { if (ReferenceEquals(_arc, value)) return; _arc = value; InvalidateVisual(); } }
     private IBrush? _arc;
 
@@ -248,7 +249,7 @@ public sealed class Knob : Control
         bool live = on && (_drag || _hover);
 
         var arcBrush = !on ? OffArc
-            : _flat ? (live ? LiveArc : GreyArc) : Accent || live || ArcColor is not null ? DeviceArc : GreyArc;
+            : _flat ? (live ? LiveArc : GreyArc) : Accent || live || ArcColor is not null ? ValueArcBrush ?? DeviceArc : GreyArc;
         var pointer = !on ? PointerOff : PointerOn;
 
         // The track, then the value arc over it — round ends. A bipolar value grows from the top.

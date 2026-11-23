@@ -44,6 +44,7 @@ internal sealed class DeviceCardFactory
         [24] = new PhaserDeviceBody(),
         [25] = new ChorusDeviceBody(),
         [26] = new VocoderDeviceBody(),
+        [27] = new ColorDeviceBody(),
     };
 
     /// <summary>Resolve the body for a built-in device: its mapped body, or the generic

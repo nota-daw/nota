@@ -16,6 +16,7 @@ public static class PresetDescriptors
     private static readonly Dictionary<string, SemanticDescriptor> Folders = new(StringComparer.Ordinal)
     {
         ["mix & bus"] = new() { Source = ["bus"], Task = ["glue"] },
+        ["color bass"] = new() { Sound = ["bass"], Character = ["bright"], Genre = ["dubstep"] },
         ["sub"] = new() { Sound = ["bass"], Character = ["deep"] },
         ["analog"] = new() { Character = ["vintage", "warm"] },
         ["acid"] = new() { Sound = ["bass"], Character = ["gritty"], Genre = ["acid", "techno"] },

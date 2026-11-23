@@ -134,10 +134,14 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     public Task<Param[]> GetDeviceParams(int trackId, int deviceIndex) => Read(() =>
     {
         int pc = E.DeviceParamCount(trackId, deviceIndex);
-        var ps = new Param[pc];
+        var ps = new List<Param>(pc);
         for (int i = 0; i < pc; i++)
-            ps[i] = new Param(i, E.DeviceParamName(trackId, deviceIndex, i), E.DeviceParamMin(trackId, deviceIndex, i), E.DeviceParamMax(trackId, deviceIndex, i), E.DeviceGetParam(trackId, deviceIndex, i));
-        return ps;
+        {
+            string name = E.DeviceParamName(trackId, deviceIndex, i);
+            if (name.Length == 0) continue;
+            ps.Add(new Param(i, name, E.DeviceParamMin(trackId, deviceIndex, i), E.DeviceParamMax(trackId, deviceIndex, i), E.DeviceGetParam(trackId, deviceIndex, i)));
+        }
+        return ps.ToArray();
     });
 
     [McpServerTool(Name = "set_device_param"), Description("Set a device parameter by index (value is in the param's own min..max range from get_device_params).")]
