@@ -77,7 +77,8 @@ They replace Inter, which came in through the `Avalonia.Fonts.Inter` package.
 
 **6 — The AI models and their runtime are downloaded, not shipped.**
 Only ONNX Runtime's managed API (MIT) is in the installer. The native ONNX Runtime library
-(from Microsoft's own release archives, with its `LICENSE` and `ThirdPartyNotices.txt`),
+(Microsoft's build from the signed `Microsoft.ML.OnnxRuntime` NuGet package, mirrored on
+`nota-daw/nota-models` releases with its `LICENSE` and `ThirdPartyNotices.txt`),
 htdemucs (MIT; exported to ONNX by `nota-daw/nota-models`) and basic-pitch (Apache-2.0,
 from Spotify's repository) are fetched by Settings → Downloads → AI Models into Nota's data
 folder, each pinned to a size and sha256 in `ModelCatalog.cs`. All three licenses permit
