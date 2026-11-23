@@ -269,6 +269,8 @@ if (args.Length >= 1 && args[0] == "--shortcuts")
     foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
     Console.WriteLine("-- custom shortcuts --");
     foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
+    Console.WriteLine("-- clip launch keys --");
+    foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -1085,6 +1087,14 @@ if (args.Length >= 1 && args[0] == "--slot-take-length")
     Console.WriteLine("-- slot take length --");
     foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SLOT TAKE LENGTH PASSED" : $"SLOT TAKE LENGTH FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// A slot's landing rule alone (fast iteration): `--take-landed`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--take-landed")
+{
+    Console.WriteLine("-- take landed follow --");
+    foreach (var (ok, label) in TakeLandedFollowTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAKE LANDED PASSED" : $"TAKE LANDED FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
@@ -15279,6 +15289,20 @@ Console.WriteLine("-- MCP tools --");
         mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "global").Wait();
         Check(!Array.Exists(mcpSession.GetSession().Result.PreparedSlots, x => x.TrackId == mcpT && x.Scene == emptyScene),
             "MCP: a slot set back to global leaves PreparedSlots");
+
+        // A slot's landing rule over MCP (#481): set, listed by get_session, refused when unknown, removed by "off".
+        mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "scene", 0, 8).Wait();
+        var landSnap = mcpSession.GetSession().Result;
+        var land = Array.Find(landSnap.LandingRules, x => x.TrackId == mcpT && x.Scene == emptyScene);
+        Check(land is { Action: "scene", TargetScene: 0 } && Math.Abs(land.QuantBeats - 8) < 1e-9,
+            $"MCP set_session_slot_landing_rule shows in get_session ({land?.Action} {land?.TargetScene} q{land?.QuantBeats})");
+        Check(McpRefused(() => mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "sometimes"))
+              && McpRefused(() => mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "scene", landSnap.SceneCount))
+              && McpRefused(() => mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "next_scene", 0, 64)),
+            "MCP set_session_slot_landing_rule refuses an unknown action, a missing scene and a 64-beat quantum");
+        mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "off").Wait();
+        Check(!Array.Exists(mcpSession.GetSession().Result.LandingRules, x => x.TrackId == mcpT && x.Scene == emptyScene),
+            "MCP: a rule set to off leaves LandingRules");
     }
 
     // Rack: build an Instrument Rack, add a chain, drive a macro + trigger note.
@@ -16261,6 +16285,8 @@ Console.WriteLine("-- retry take --");
 foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- slot take length --");
 foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
+Console.WriteLine("-- take landed follow --");
+foreach (var (ok, label) in TakeLandedFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- session to arrangement --");
 foreach (var (ok, label) in SessionToArrangementTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
@@ -16282,6 +16308,8 @@ foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- MIDI In switch --");
 foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
 foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
+Console.WriteLine("-- clip launch keys --");
+foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);
 Console.WriteLine("-- cue output --");
 foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");

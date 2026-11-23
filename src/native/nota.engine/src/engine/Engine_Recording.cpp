@@ -784,6 +784,7 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     l.growing = growing;
     l.lenBeats = len;
     l.ownLen = ownTakeLength(slot);
+    l.fresh = !hasClip; // its landing fires the slot's rule (#481)
     l.player = t->sessionPlayer;
     const size_t k = midiLanes_.size();
     midiLanes_.push_back(std::move(l));
@@ -828,6 +829,7 @@ void Engine::finishSessionMidiLane(int32_t lane) {
     MidiTakeLane& l = midiLanes_[static_cast<size_t>(lane)];
     foldSessionLane(l, lane, {}, {}, true);
     cutGrowingLane(l);
+    noteMidiLaneLanded(l); // kept as a playable clip: its slot's rule may fire (#481)
     const int32_t tid = l.trackId;
     closeMidiLane(lane);
     if (takeAttempt_.active) keepTakeTrack(tid); // landed: a retry leaves it be
@@ -1535,6 +1537,7 @@ bool Engine::addSessionAudioLane(int32_t trackId, int32_t scene) {
             scene < static_cast<int32_t>(t->sessionSlots.size()) ? &t->sessionSlots[scene] : nullptr;
         lane.lenBeats = resolveTakeBeats(sl && !sl->hasClip ? sl : nullptr);
         lane.ownLen = ownTakeLength(sl);
+        lane.fresh = !sl || !sl->hasClip; // its landing fires the slot's rule (#481)
         lane.startBeat = transport_.uiPositionBeats();
     }
     captureLanes_.push_back(std::move(lane));
@@ -1612,6 +1615,7 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
             else s.lengthBeats = lane.lenBeats;
         }
         republishWithTrack(trackId, nt);
+        if (lane.fresh) noteTakeLanded(trackId, scene); // a playable clip now: its rule may fire (#481)
         return;
     }
 

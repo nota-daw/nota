@@ -110,8 +110,8 @@ public static class CommandCatalog
         C("track.freeze", Loc.T("commands.freeze_track"), Loc.T("common.track"), "", "render bounce cpu"),
 
         // ---- Session ----------------------------------------------------------------------
-        C("session.launchScene", Loc.T("commands.launch_scene"), Loc.T("commands.session"), "", "play row", view: "Session"),
-        C("session.stopAll", Loc.T("commands.stop_all_clips"), Loc.T("commands.session"), "", "halt", view: "Session"),
+        C("session.launchScene", Loc.T("commands.launch_scene"), Loc.T("commands.session"), Shortcut.Cmd("Return"), "play row", view: "Session"),
+        C("session.stopAll", Loc.T("commands.stop_all_clips"), Loc.T("commands.session"), Shortcut.CmdShift("Return"), "halt", view: "Session"),
         C("session.insertScene", Loc.T("commands.insert_scene"), Loc.T("commands.session"), Shortcut.Cmd('I'), "add scene row", view: "Session"),
         // For controller buttons (specs/051): the arrows' walk and the selected slot, without the keyboard.
         C("session.selectUp", Loc.T("commands.session_select_prev_scene"), Loc.T("commands.session"), "", "", view: "Session"),
@@ -119,7 +119,7 @@ public static class CommandCatalog
         C("session.selectLeft", Loc.T("commands.session_select_prev_track"), Loc.T("commands.session"), "", "", view: "Session"),
         C("session.selectRight", Loc.T("commands.session_select_next_track"), Loc.T("commands.session"), "", "", view: "Session"),
         C("session.toggleSlot", Loc.T("commands.session_toggle_slot"), Loc.T("commands.session"), "", "", view: "Session"),
-        C("session.stopTrack", Loc.T("commands.session_stop_track"), Loc.T("commands.session"), "", "", view: "Session"),
+        C("session.stopTrack", Loc.T("commands.session_stop_track"), Loc.T("commands.session"), Shortcut.Shift("Return"), "", view: "Session"),
 
         // ---- Piano roll -------------------------------------------------------------------
         C("roll.quantize", Loc.T("commands.quantize_notes"), Loc.T("common.piano_roll"), "", "quantise grid snap align"),
