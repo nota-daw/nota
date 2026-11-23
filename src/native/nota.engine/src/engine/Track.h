@@ -181,6 +181,16 @@ struct NextTakeLength {
     bool operator==(const NextTakeLength&) const = default;
 };
 
+// What a fresh take landing in a slot launches (#481, specs/111): nothing, the next scene, or a
+// chosen scene — once per landed take, on the global launch quantum (quantBeats < 0) or its own.
+enum class LandingAction : int32_t { Off = 0, NextScene = 1, Scene = 2 };
+struct LandingRule {
+    LandingAction action = LandingAction::Off;
+    int32_t scene = 0;        // Scene only
+    double quantBeats = -1.0; // <0 = as a manual scene launch, 0 = at once
+    bool operator==(const LandingRule&) const = default;
+};
+
 struct SessionSlot {
     bool hasClip = false;
     MidiClip midi;            // instrument tracks: notes relative to slot start
@@ -204,6 +214,7 @@ struct SessionSlot {
     bool followBypass = false;          // hold the Follow actions without changing them (#499)
     bool stopButton = true;             // an EMPTY slot stops its track on scene launch
     NextTakeLength nextTake;            // belongs to the slot, kept (hidden) under a clip (#503)
+    LandingRule landing;                // what a fresh take landing here launches; kept like nextTake (#481)
 };
 
 // Scene metadata (Session P0). Graph-level, one per scene row; kept in step with sceneCount.

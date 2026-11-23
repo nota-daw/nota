@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // AI models (IModelStore): install / uninstall end to end against local assets — a plain model
-// file and a runtime in a tar.gz, as ONNX Runtime ships — including the runtime coming with
+// file and a runtime in a tar.gz (archive assets stay supported) — including the runtime coming with
 // the first model and going with the last, checksum and archive-content refusals, cancellation,
 // and a pinned version change. Also runnable alone: `--models`.
 
@@ -17,13 +17,21 @@ internal static class ModelStoreTests
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         yield return (ModelCatalog.RuntimeFor("osx-arm64") is { Asset.Entry: "libonnxruntime.1.23.2.dylib" }
-                      && ModelCatalog.RuntimeFor("win-x64") is { Asset.Archive: "zip", Asset.Entry: "onnxruntime.dll" }
+                      && ModelCatalog.RuntimeFor("win-x64") is { Asset.Archive: "file", Asset.Entry: "onnxruntime.dll" }
                       && ModelCatalog.RuntimeFor("linux-aarch64") is { Asset.Entry: "libonnxruntime.so.1.23.2" }
                       && ModelCatalog.RuntimeFor("freebsd-x64") is null,
             "every platform Nota ships on has a runtime; others have none");
         yield return (ModelCatalog.RuntimeFor(ModelCatalog.Rid()) is not null, $"…including this one ({ModelCatalog.Rid()})");
         yield return (ModelCatalog.Models.All(m => m.Asset.Sha256.Length == 64 && m.Asset.Size > 0 && m.Asset.Url.StartsWith("https://")),
             "every model is pinned to an https URL, size and sha256");
+        string[] rids = ["osx-arm64", "osx-x86_64", "win-x64", "win-arm64", "linux-x64", "linux-aarch64"];
+        yield return (rids.Select(ModelCatalog.RuntimeFor).All(r => r is { Asset: var a }
+                          && a.Url.StartsWith("https://github.com/nota-daw/nota-models/releases/download/onnxruntime-1.23.2/")
+                          && a.Sha256.Length == 64 && a.Size > 0
+                          && a.Extras.Select(e => e.Name).SequenceEqual(["license.txt", "third-party-notices.txt"])
+                          && a.Extras.All(e => e.Url.StartsWith("https://github.com/nota-daw/nota-models/") && e.Sha256.Length == 64))
+                      && rids.Select(r => ModelCatalog.RuntimeFor(r)!.Asset.Url).Distinct().Count() == rids.Length,
+            "the runtime comes from Nota's own mirror, one library per platform, with its license and notices (#969)");
 
         var tmp = Directory.CreateTempSubdirectory("nota-models-test-").FullName;
         try
@@ -85,6 +93,18 @@ internal static class ModelStoreTests
         yield return (Throws(() => newer.InstallAsync("model-a").GetAwaiter().GetResult()) && !newer.IsInstalled("model-a")
                       && store.IsInstalled("model-a"),
             "…and a download that doesn't match the pin is refused, the old files untouched");
+
+        // The runtime moved to another source (#969): an install from the old pin, listed as
+        // Legacy, still counts — Manual search has no prompt to fetch it again.
+        var movedAsset = runtime.Asset with { Sha256 = new string('1', 64), Extra = [new ModelFile(rtArchive, Sha(rtArchive), 1, "license.txt")] };
+        var moved = new ModelStore(root, [a, b], runtime with { Asset = movedAsset with { Legacy = [runtime.Asset.Sha256] } });
+        yield return (moved.IsInstalled(AiModels.Runtime) && moved.RuntimePath is not null && moved.DownloadSize("model-b") == b.Asset.Size,
+            "a runtime installed from an earlier (Legacy) pin stays installed and isn't downloaded again");
+        yield return (!new ModelStore(root, [a, b], runtime with { Asset = movedAsset }).IsInstalled(AiModels.Runtime),
+            "…while without the Legacy entry it reads as not installed");
+        string[] rids = ["osx-arm64", "osx-x86_64", "win-x64", "win-arm64", "linux-x64", "linux-aarch64"];
+        yield return (rids.All(r => ModelCatalog.RuntimeFor(r)!.Asset.LegacySha256.Count == 1),
+            "every platform's runtime accepts the install from microsoft/onnxruntime's archive");
 
         var badKeep = new CatalogModel(runtime.Info, runtime.Asset with { Keep = ["ort-1/lib/missing.so"], Entry = "missing.so" });
         var fresh = new ModelStore(Path.Combine(tmp, "fresh"), [a], badKeep);

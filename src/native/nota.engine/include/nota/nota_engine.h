@@ -1522,6 +1522,26 @@ NOTA_API int32_t    nota_session_get_slot_take_length(const NotaEngine* engine, 
 NOTA_API NotaResult nota_session_set_slot_take_length(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaSlotTakeLength* in);
 /* The length a fresh take into the slot would get now, in beats; 0 = open-ended. */
 NOTA_API double     nota_session_slot_take_beats(const NotaEngine* engine, int32_t track_id, int32_t scene);
+/* A slot's landing rule (#481): what happens once a fresh take recorded into the slot has landed —
+   been kept as a playable clip (not when Stop is pressed, not when capture ends, not on save).
+   action: NOTA_SLOT_LANDING_OFF, _NEXT_SCENE (wraps to the first) or _SCENE (launch `scene`).
+   quant_beats: < 0 = the global launch quantum, as a manual scene launch; >= 0 = every slot of the
+   launch waits for that quantum (0 = at once). Fires once per landed take, served by
+   nota_engine_poll; never for a cancelled, discarded, empty or overdub take, a global stop, with
+   Follow off globally, or on load / Undo / Redo. Belongs to the slot: kept, hidden, under a clip. */
+#define NOTA_SLOT_LANDING_OFF 0
+#define NOTA_SLOT_LANDING_NEXT_SCENE 1
+#define NOTA_SLOT_LANDING_SCENE 2
+typedef struct NotaSlotLandingRule {
+    int32_t action;
+    int32_t scene;      /* target, NOTA_SLOT_LANDING_SCENE only */
+    double quant_beats; /* -1 or 0..32 */
+} NotaSlotLandingRule;
+/* get: 1 and *out filled for an existing track/scene, 0 otherwise. set: one undo step;
+   NOTA_ERR_INVALID_ARG for an unknown track/scene/action, a target scene out of range or a
+   quant_beats that is not < 0 or 0..32. */
+NOTA_API int32_t    nota_session_get_slot_landing_rule(const NotaEngine* engine, int32_t track_id, int32_t scene, NotaSlotLandingRule* out);
+NOTA_API NotaResult nota_session_set_slot_landing_rule(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaSlotLandingRule* in);
 /* Copy a slot (clip + properties) onto another slot of a track of the same kind; overwrites. */
 NOTA_API NotaResult nota_session_copy_slot(NotaEngine* engine, int32_t src_track, int32_t src_scene, int32_t dst_track, int32_t dst_scene);
 /* Scene properties and name. */
