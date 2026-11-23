@@ -272,7 +272,7 @@ float nota_rhythm_voice_device_param_get(const NotaEngine* e, int32_t t, int32_t
     return dev ? dev->getParam(p) : 0.0f;
 }
 void nota_rhythm_voice_device_param_set(NotaEngine* e, int32_t t, int32_t v, int32_t d, int32_t p, float value) {
-    if (nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr) dev->setParam(p, value);
+    if (e) ENG(e)->rhythmVoiceDeviceParamSet(t, v, d, p, value);
 }
 int32_t nota_rhythm_voice_device_bypassed(const NotaEngine* e, int32_t t, int32_t v, int32_t d) {
     nota::Device* dev = e ? CENG(e)->rhythmVoiceDevice(t, v, d) : nullptr;

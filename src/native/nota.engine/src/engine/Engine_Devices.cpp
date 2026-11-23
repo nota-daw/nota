@@ -30,6 +30,7 @@
 #include "devices/effects/Phaser.h"
 #include "devices/effects/Chorus.h"
 #include "devices/effects/Vocoder.h"
+#include "devices/effects/Color.h"
 #include "devices/effects/Prism.h"
 #include "devices/effects/Ceiling.h"
 #include "devices/effects/Strata.h"
@@ -750,6 +751,8 @@ int32_t Engine::addTrackBuiltinDevice(int32_t trackId, int32_t kind) {
         dev = std::make_shared<Chorus>();
     else if (kind == 26)
         dev = std::make_shared<Vocoder>();
+    else if (kind == 27)
+        dev = std::make_shared<Color>();
     else
         return -1;
     dev->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0, kMaxBlock);
@@ -1620,15 +1623,26 @@ float Engine::deviceGetParam(int32_t trackId, int32_t deviceIndex, int32_t param
     return d ? d->getParam(paramIndex) : 0.0f;
 }
 void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramIndex, float value) {
-    // A modulated param's UI edit sets the stored base (the atomic is driven by the
-    // modulation each block); set the atomic too for immediate feedback.
-    routeCvBaseEdit(0, trackId, deviceIndex, paramIndex, value);
     if (auto* d = deviceAt(trackId, deviceIndex)) {
+        if (d->isLatencyConfigurationParam(paramIndex)) {
+            setLatencyConfigurationParam(*d, paramIndex, value);
+            return;
+        }
+        // Keep the CV base and the immediately visible value in step.
+        routeCvBaseEdit(0, trackId, deviceIndex, paramIndex, value);
         // A param can change the device's latency (the Compressor's look-ahead): keep PDC in step.
         const int32_t latBefore = d->latencySamples();
         d->setParam(paramIndex, value);
         if (d->latencySamples() != latBefore) recomputePdc();
     }
+}
+
+void Engine::setLatencyConfigurationParam(Device& device, int32_t param, float value) {
+    // The device refills its history at the next render. Clear changed compensation
+    // taps too, so they cannot play back samples from before the change.
+    const auto oldLatency = device.latencySamples();
+    device.setParam(param, value);
+    if (device.latencySamples() != oldLatency) recomputePdc(true);
 }
 float Engine::deviceGainReduction(int32_t trackId, int32_t deviceIndex) const {
     auto* d = deviceAt(trackId, deviceIndex);
@@ -2082,11 +2096,11 @@ int32_t Engine::trackLatencySamples(int32_t trackId) const {
 }
 
 // Delay every track by (maxLatency - itsOwnLatency) so all outputs stay aligned.
-void Engine::recomputePdc() {
+void Engine::recomputePdc(bool resetChangedDelays) {
     int32_t maxLat = 0;
     for (auto& t : authoring_->tracks) maxLat = std::max(maxLat, trackLatency(*t));
     for (auto& t : authoring_->tracks)
-        if (t->pdc) t->pdc->setDelay(maxLat - trackLatency(*t));
+        if (t->pdc) t->pdc->setDelay(maxLat - trackLatency(*t), resetChangedDelays);
 }
 
 } // namespace nota
