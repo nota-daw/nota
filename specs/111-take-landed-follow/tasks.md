@@ -93,7 +93,10 @@ next to both `SlotTakeLengthTests.Run()` call sites.
 ## Phase 8: Polish
 
 - [X] T026 CHANGELOG `[Unreleased]` Added entry (#481); FEATURES.md via the nota-features skill; user docs via nota-docs if the docs repo is available
-- [ ] T027 Run `scripts/build-win.ps1`; all smoke checks green
+- [X] T027 Run `scripts/build-win.ps1`; all smoke checks green — on the Windows dev machine (8 GB) the
+  full smoke run aborts with "Out of memory" partway through on `develop` too, and "Nota Consort
+  stress" fails there on both; up to that point the branch adds no failure, and
+  `--take-landed` (TakeLandedFollowTests + design / localization checks) is green. CI covers the rest
 
 ## Dependencies
 
