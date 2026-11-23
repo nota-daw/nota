@@ -511,15 +511,25 @@ public sealed partial class SessionView : UserControl
         if (_sel.Kind == SelKind.Slot && ColumnFor(_sel.TrackId) is { } c) { StopColumn(c); UpdateStates(); }
     }
 
+    /// <summary>Return (and a controller's launch button): what a click on the selected slot does —
+    /// a clip launches, an armed track's empty slot records, a recording slot ends its take (specs/112).</summary>
     public void LaunchSelection()
     {
         if (_sel.Kind == SelKind.Scene) { LaunchSceneRow(_sel.Scene); return; }
-        if (ColumnFor(_sel.TrackId) is { } c)
+        if (ColumnFor(_sel.TrackId) is not { } c) return;
+        if (c.Kind == ColKind.Group) { LaunchGroup(c, _sel.Scene); return; }
+        if (c.Kind != ColKind.Track) return;
+        switch (SessionLaunchKey.Resolve(SlotFilled(c.TrackId, _sel.Scene), _armed.Contains(c.TrackId), SlotRecording(c.TrackId, _sel.Scene)))
         {
-            if (c.Kind == ColKind.Group) LaunchGroup(c, _sel.Scene);
-            else _engine.LaunchSlot(c.TrackId, _sel.Scene);
+            case SlotLaunchAction.StopRecording: _engine.StopSessionRecordSlot(c.TrackId); Refresh(); break;
+            case SlotLaunchAction.Record: _engine.RecordSessionSlot(c.TrackId, _sel.Scene); Refresh(); break;
+            default: _engine.LaunchSlot(c.TrackId, _sel.Scene); UpdateStates(); break;
         }
     }
+
+    // The slot records: the take's own slot, or one recording along with it (specs/086) — as the cell draws it.
+    private bool SlotRecording(int trackId, int scene)
+        => (_recTrack == trackId && _recScene == scene) || (_recScene >= 0 && _engine.SessionSlotState(trackId, scene) == 4);
 
     /// <summary>⌘C on the selected slot.</summary>
     public bool CopySelection()

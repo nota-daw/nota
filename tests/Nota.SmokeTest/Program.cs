@@ -269,6 +269,8 @@ if (args.Length >= 1 && args[0] == "--shortcuts")
     foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
     Console.WriteLine("-- custom shortcuts --");
     foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
+    Console.WriteLine("-- clip launch keys --");
+    foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -16306,6 +16308,8 @@ foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- MIDI In switch --");
 foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
 foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
+Console.WriteLine("-- clip launch keys --");
+foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);
 Console.WriteLine("-- cue output --");
 foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");
