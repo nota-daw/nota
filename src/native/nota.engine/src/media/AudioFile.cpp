@@ -31,13 +31,7 @@ std::string extLower(const std::string& path) {
 }
 
 #ifdef _WIN32
-// Paths arrive as UTF-8. dr_libs open a char* path with fopen_s, which Windows reads in the
-// ANSI code page, so any file under a folder or name with an accent (Música, Canción, ñ…)
-// failed to open and the sample stayed silent (#974). Open those through the wide-path API.
-std::wstring widePath(const std::string& utf8) {
-    return std::filesystem::path(reinterpret_cast<const char8_t*>(utf8.c_str())).wstring();
-}
-
+// Paths arrive as UTF-8; on Windows every open goes through widePath (#974).
 // Read a decoder to its end in blocks (a FLAC stream may not know its length up front).
 template <typename ReadFn>
 std::vector<float> readAll(ReadFn read, int32_t channels) {
@@ -131,6 +125,14 @@ std::shared_ptr<SampleBuffer> decodeMp3(const std::string& path) {
 }
 
 } // namespace
+
+#ifdef _WIN32
+// dr_libs open a char* path with fopen_s, which Windows reads in the ANSI code page, so any
+// file under a folder or name with an accent (Música, Canción, ñ…) failed to open (#974).
+std::wstring widePath(const std::string& utf8) {
+    return std::filesystem::path(reinterpret_cast<const char8_t*>(utf8.c_str())).wstring();
+}
+#endif
 
 std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path) {
     const std::string ext = extLower(path);
