@@ -238,11 +238,11 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     private void PlayStop()
     {
         if (_engine.IsPlaying || _engine.CountInBeats > 0 || RecordOn) StopAll();
-        else _engine.PlayWithCountIn();
+        else _engine.Play();
     }
 
     [RelayCommand]
-    private void Play() => _engine.PlayWithCountIn();
+    private void Play() => _engine.Play();
 
     /// <summary>⇧Space (#51): Play / pause. Stop rewinds to where playback started (the
     /// engine's start anchor); pause leaves the playhead where it is, and the next Play
@@ -258,7 +258,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             if (!counting) _engine.Seek(here);   // a count-in hasn't moved anything yet
             Message?.Invoke(Loc.T("transport.paused_play_carries_on_from"));
         }
-        else _engine.PlayWithCountIn();
+        else _engine.Play();
     }
 
     [RelayCommand]

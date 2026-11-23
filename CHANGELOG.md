@@ -251,6 +251,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Both card sizes show the total latency below the spectrum.
 
 ### Fixed
+- **Play starts at once with a count-in set** (#988). The count-in also ran before plain Play
+  (the button, Space and ⇧Space), so Play lit up while the transport stood still for the
+  count-in bars — and with the clicks routed to Cue only, nothing seemed to happen at all. The
+  count-in is now for Record only: Record from stop (Arrangement or a Session slot) still
+  clicks it out first, Play rolls immediately.
 - **Nota Color** sleeps after its resonant tail fades, reducing DSP usage during silence.
 - **Nota Color** keeps the width and spacing of its spectrum lines consistent
   across display scales. Tuned uses the inverse of the active accent and
