@@ -176,6 +176,10 @@
       {"name": "Main", "params": ["Formant", "Q", "Attack", "Release", "Tilt", "Pitch", "Unvoiced", "Mix"]},
       {"name": "Bands", "params": ["Bands", "Low", "High", "Mod gain", "Gain"]}
     ],
+    "builtin:fx:color": [
+      {"name": "Main", "params": ["Amount", "Resonance", "Decay", "Low", "High", "Output", "Mix"]},
+      {"name": "Spectral", "params": ["Pre", "Post", "Morph", "Gate threshold", "Mute low", "Mute high"]}
+    ],
     "builtin:midi:arp": [
       {"name": "Main", "params": ["Rate", "Gate", "Octaves", "Swing", "Transpose", "FreeRate"]}
     ],

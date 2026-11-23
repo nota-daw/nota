@@ -651,7 +651,9 @@ internal sealed partial class RackCardView
             ? Enumerable.Range(0, P.Count)
             : RackKeyParams.Resolve(family, kind, P.Count, P.Name);
         var rows = new StackPanel { Spacing = 2 };
-        foreach (int p in shown) rows.Children.Add(RcParamRow(c, target, P, p));
+        foreach (int p in shown)
+            if (slot != RcSlot.Effect || DeviceView.IsSoundParam(P.Name(p), kind))
+                rows.Children.Add(RcParamRow(c, target, P, p));
         Control body = _rs.Mapping
             ? new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }
             : rows;
