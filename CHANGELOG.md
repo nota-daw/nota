@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Session: play the grid from the keyboard, and buttons you can hit** (#364, specs/112).
+  - With the arrows on a slot, **Return** does what a click does: launches the clip, starts
+    recording in an armed track's empty slot, and on a recording slot ends the take.
+  - **⇧Return** stops the selected track (a group: all its tracks), **⌘Return** (Ctrl+Return)
+    launches the selected scene row, **⌘⇧Return** (Ctrl+Shift+Return) stops every clip. All
+    four are rebindable in Settings → Shortcuts; outside the Session, Return is still Stop.
+  - The record circle and stop square in empty slots are almost twice as big, with a bigger
+    click area; the stop buttons under the tracks and Stop All got a larger glyph too.
+  - A controller's launch button records into an armed empty slot as well.
 - **Controllers: remap one function without redoing the setup** (#973, specs/110).
   - Preferences → MIDI → a controller with a profile → **Edit mapping…** opens on its current
     mapping: every function grouped as in the setup wizard (knobs, faders, transport, track /

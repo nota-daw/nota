@@ -73,6 +73,14 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
+        // ⇧Return stops the selected track, ⌘Return launches its scene row, ⌘⇧Return stops all
+        // (specs/112, #364) — here in the tunnel, so a focused button in the grid can't take Return.
+        if (SessionFocused && Keys.Which(e, "session.stopTrack", "session.launchScene", "session.stopAll") is { } launch)
+        {
+            _commands.Run(launch);
+            e.Handled = true;
+            return;
+        }
         var transport = Keys.Which(e, "transport.playStop", "transport.playPause", "transport.stop");
         if (transport is null) return;
         // A focused view that binds this key itself wins (specs/096 R3): leave it to the view.

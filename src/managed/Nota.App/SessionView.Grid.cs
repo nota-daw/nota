@@ -86,7 +86,7 @@ public sealed partial class SessionView
             stopAll.Content = new StackPanel
             {
                 Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center,
-                Children = { new Glyph(GlyphKind.Stop, 7) { HorizontalAlignment = HorizontalAlignment.Center }, new TextBlock { Text = Loc.T("session.grid.all"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 10) { HorizontalAlignment = HorizontalAlignment.Center }, new TextBlock { Text = Loc.T("session.grid.all"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
             };
             var head = LaneStack(HeaderH);
             head.Children.Add(stopAll);
@@ -100,7 +100,7 @@ public sealed partial class SessionView
         stopAll.Content = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 7,
-            Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("session.grid.stop_all_clips"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
+            Children = { new Glyph(GlyphKind.Stop, 10), new TextBlock { Text = Loc.T("session.grid.stop_all_clips"), FontSize = 9, FontWeight = FontWeight.SemiBold } },
         };
         var foot = new StackPanel { Width = SceneRailW, Spacing = Gap, Children = { addScene, stopAll } };
         foot.Children.Add(MixerRailLabels());
@@ -134,7 +134,7 @@ public sealed partial class SessionView
         double stopW = _across ? StopColW : double.NaN, stopH = _across ? _laneH : StopRowH;
         if (c.Kind is ColKind.Track or ColKind.Group)
         {
-            var stop = new Button { Width = stopW, Height = stopH, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0), Content = new Glyph(GlyphKind.Stop, 7) };
+            var stop = new Button { Width = stopW, Height = stopH, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0), Content = new Glyph(GlyphKind.Stop, 10) };
             ToolTip.SetTip(stop, c.Kind == ColKind.Group ? Loc.T("session.grid.stop_every_track_in_this") : Loc.T("session.grid.stop_this_track"));
             stop.Click += (_, _) => { StopColumn(c); UpdateStates(); };
             foot.Children.Add(stop);
@@ -416,10 +416,13 @@ public sealed partial class SessionView
         }
 
         private static readonly Rect LaunchZone = new(3, 3, 18, 18);
-        private Rect CentreZone => new(Bounds.Width / 2 - 8, Bounds.Height / 2 - 8, 16, 16);
+        // The empty slot's record circle / stop square and its click area (specs/112, #364): 24 px
+        // around the centre, clipped to a narrow slot.
+        private const double CentreHit = 24;
+        private Rect CentreZone => new Rect(Bounds.Width / 2 - CentreHit / 2, Bounds.Height / 2 - CentreHit / 2, CentreHit, CentreHit)
+            .Intersect(new Rect(Bounds.Size));
         // The take's own slot, or another slot recording along with it (specs/086).
-        private bool Recording => (_o._recTrack == _c.TrackId && _o._recScene == _scene)
-                                  || (_o._recScene >= 0 && _o._engine.SessionSlotState(_c.TrackId, _scene) == 4);
+        private bool Recording => _o.SlotRecording(_c.TrackId, _scene);
         private int _lastState = -1;
         private bool _lastArmed, _lastDrag;
 
@@ -540,9 +543,9 @@ public sealed partial class SessionView
                 FillCell(ctx, r, NotaPalette.Well, dropTarget ? NotaPalette.Accent : null);
                 var c = r.Center;
                 if (_o._armed.Contains(_c.TrackId))
-                    ctx.DrawEllipse(null, new Pen(_hoverCentre ? NotaPalette.Record : NotaPalette.TextMuted, 1.5), c, 3.25, 3.25);
+                    ctx.DrawEllipse(null, new Pen(_hoverCentre ? NotaPalette.Record : NotaPalette.TextMuted, 1.5), c, 5.75, 5.75);
                 else if (_stopButton)
-                    ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 3, c.Y - 3, 6, 6), NotaSkin.MapRadius(1), NotaSkin.MapRadius(1));
+                    ctx.DrawRectangle(_hoverCentre ? NotaPalette.TextSecondary : NotaPalette.BorderStrong, null, new Rect(c.X - 5, c.Y - 5, 10, 10), NotaSkin.MapRadius(1.5), NotaSkin.MapRadius(1.5));
                 if (_prepared.Length > 0)
                 {
                     // The next take's own length (#503), where a clip shows its length — muted, no name.
@@ -1111,7 +1114,7 @@ public sealed partial class SessionView
             new Control[] { MenuKit.Header(name.Length > 0 ? name : Loc.F("session.scene", scene + 1), null, Loc.F("session.grid.scene_n", scene + 1)) },
             new Control?[]
             {
-                MenuKit.Item(Loc.T("session.grid.launch_scene"), GlyphKind.Play, () => LaunchSceneRow(scene)),
+                MenuKit.Item(Loc.T("session.grid.launch_scene"), GlyphKind.Play, () => LaunchSceneRow(scene), MenuKit.Bound("session.launchScene")),
                 SceneQueued(scene) ? MenuKit.Item(Loc.T("session.grid.cancel_launch"), GlyphKind.Close, () => CancelSceneLaunch(scene)) : null,   // #480
                 MenuKit.Item(Loc.T("session.grid.stop_scene"), GlyphKind.Stop, () => _engine.StopScene(scene)),
                 MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),

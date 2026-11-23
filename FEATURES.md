@@ -237,7 +237,10 @@ own window — see
   end); the arrow keys follow the screen, the scene / track selection commands keep their
   meaning. Named, coloured clips with note / waveform
   previews and a progress pie on the clip's own clock; selection apart from launching,
-  keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag between slots;
+  keyboard editing (arrows, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and playing from the keys (**Return**
+  launches the selected clip, records into an armed track's empty slot and ends a take, **⇧Return**
+  stops the selected track, **⌘Return** launches its scene row, **⌘⇧Return** stops all; all
+  rebindable); drag between slots;
   launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato, one-shot,
   velocity amount and follow actions with a global switch and a per-clip bypass that holds one
   clip without changing its settings (and resumes on the next multiple of its time, never as a
