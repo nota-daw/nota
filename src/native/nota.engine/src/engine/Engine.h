@@ -545,7 +545,9 @@ class Engine {
     // --- Session view (M5) ---
     void setLaunchQuant(double beats);
     void launchSlot(int32_t trackId, int32_t scene); // quantized; empty slot = stop track
-    void launchScene(int32_t scene, bool fromFollow = false); // launch every track's slot in this row (empty = stop that track)
+    // Launch every track's slot in this row (empty = stop that track). quantOverride >= 0: every
+    // slot of this launch waits for that quantum instead of its own / the global one (#481).
+    void launchScene(int32_t scene, bool fromFollow = false, double quantOverride = -1.0);
     void stopSlot(int32_t trackId);
     void stopScene(int32_t scene); // stop tracks whose playing/queued slot is this row
     void stopAllSession();
@@ -594,6 +596,9 @@ class Engine {
     bool sessionSlotTakeLength(int32_t trackId, int32_t scene, NextTakeLength& out) const;
     bool setSessionSlotTakeLength(int32_t trackId, int32_t scene, const NextTakeLength& v);
     double sessionSlotTakeBeats(int32_t trackId, int32_t scene) const;
+    // A slot's landing rule (#481, specs/111): what a fresh take landing in it launches.
+    bool sessionSlotLandingRule(int32_t trackId, int32_t scene, LandingRule& out) const;
+    bool setSessionSlotLandingRule(int32_t trackId, int32_t scene, const LandingRule& v);
     bool copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrack, int32_t dstScene);
     bool sceneProps(int32_t scene, NotaSceneProps* out) const;
     bool setSceneProps(int32_t scene, const NotaSceneProps& p);
@@ -2178,8 +2183,27 @@ class Engine {
     // Session P0 helpers (message thread).
     int32_t insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying);
     void remapPlayers(const std::function<int32_t(int32_t)>& map); // shift players after a row insert/remove
-    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene, int32_t gen = 0);
+    // quantOverride >= 0 replaces the slot's / global launch quantum for this request (#481).
+    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene, int32_t gen = 0,
+                        double quantOverride = -1.0);
     void serviceSessionFollow(); // poll(): scene follow + fixed-length capture
+    // Landing rules (#481, specs/111). A fresh take that lands as a playable clip is noted here
+    // (message thread) and served on the next poll(): its slot's rule queues one scene launch. A
+    // global stop or a row delete lands takes with notes muted. The rule's launch still waiting is
+    // watched so an undone take (or deleted clip) withdraws it.
+    void noteTakeLanded(int32_t trackId, int32_t scene);
+    void serviceLandingRules();
+    std::vector<std::pair<int32_t, int32_t>> landedTakes_; // (track, scene) landed since the last poll
+    struct RuleWait {
+        int32_t gen = 0, trackId = 0, scene = -1;
+    } ruleWait_;
+    int32_t landingMuted_ = 0;
+    struct LandingMute {
+        Engine& e;
+        explicit LandingMute(Engine& en) : e(en) { ++e.landingMuted_; }
+        ~LandingMute() { --e.landingMuted_; }
+    };
+    void remapLandingScenes(Graph& g, const std::function<int32_t(int32_t)>& map);
     std::atomic<bool> sessionFollow_{true};
     double sessionRecordLen_ = 0.0; // fixed session record length, beats (0 = off)
     int32_t sceneFollowScene_ = -1; // last launched scene (for scene follow)
@@ -2251,6 +2275,7 @@ class Engine {
         bool growing = false; // a fresh take with no fixed length: cut to whole quanta at its stop
         double lenBeats = 0.0; // its slot's resolved take length, beats; 0 = until stopped (#503)
         bool ownLen = false;   // that length is the slot's own: stopped by hand before it, it is cut
+        bool fresh = false;    // its slot was empty when it started: landing fires its rule (#481)
         bool started = false;  // its slot has been seen recording (poll) — a stop no longer drops it
         std::shared_ptr<SessionPlayer> player;
         std::vector<TakeNote> takeNotes;
@@ -2258,6 +2283,7 @@ class Engine {
         std::vector<TakeCtl> takeCtls;
     };
     std::vector<MidiTakeLane> midiLanes_;
+    void noteMidiLaneLanded(const MidiTakeLane& l); // a fresh lane that started has landed (#481)
     // The Session lanes' slots for the audio thread: an immutable table swapped whole, kept alive
     // (with the players it names) until no render can still read it.
     struct SessionLaneSlots {
@@ -2673,6 +2699,7 @@ class Engine {
         size_t offset = 0;            // take frame where the lane joined (a Session slot launched later)
         double lenBeats = 0.0;        // a Session lane's resolved take length, beats; 0 = open (#503)
         bool ownLen = false;          // the slot's own length: stopped by hand before it, it is cut
+        bool fresh = false;           // its slot was empty when it started: landing fires its rule (#481)
         // Where a Session lane that joined the running take started recording; NaN = it counts
         // from the take's own start (a retry's boundary included).
         double startBeat = std::numeric_limits<double>::quiet_NaN();

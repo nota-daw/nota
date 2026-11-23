@@ -145,6 +145,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_session_slot_take_beats")]
     internal static partial double SessionSlotTakeBeats(IntPtr engine, int trackId, int scene);
 
+    [LibraryImport(Lib, EntryPoint = "nota_session_get_slot_landing_rule")]
+    internal static partial int SessionGetSlotLandingRule(IntPtr engine, int trackId, int scene, out NotaSlotLandingRule value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_session_set_slot_landing_rule")]
+    internal static partial NotaResult SessionSetSlotLandingRule(IntPtr engine, int trackId, int scene, in NotaSlotLandingRule value);
+
     [LibraryImport(Lib, EntryPoint = "nota_session_copy_slot")]
     internal static partial NotaResult SessionCopySlot(IntPtr engine, int srcTrack, int srcScene, int dstTrack, int dstScene);
 

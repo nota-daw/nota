@@ -78,7 +78,8 @@ public sealed partial class SessionView
             foreach (var (beats, label) in QuantSteps)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = Math.Abs(beats - cur) < 1e-6 };
-                mi.Click += (_, _) => { _engine.SetLaunchQuant(beats); SyncToolbar(); };
+                // The inspector too: a slot's landing rule shows the boundary it would use (#481).
+                mi.Click += (_, _) => { _engine.SetLaunchQuant(beats); SyncToolbar(); RebuildInspector(); };
                 f.Items.Add(mi);
             }
             f.ShowAt(quant);

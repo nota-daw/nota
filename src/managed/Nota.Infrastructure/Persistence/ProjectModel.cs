@@ -178,6 +178,9 @@ public sealed class TrackDto
     /// <summary>Slots with a next-take length of their own (#503); absent = every slot Global.
     /// Written for filled slots too: the value stays with the slot under a clip.</summary>
     public List<SlotTakeLengthDto>? SessionTakeLengths { get; set; }
+    /// <summary>Slots with a landing rule (#481); absent = every rule Off. Written for filled
+    /// slots too: the rule stays with the slot under a clip.</summary>
+    public List<SlotLandingRuleDto>? SessionLandingRules { get; set; }
     public List<AutomationLaneDto> Automation { get; set; } = new();   // M9-A4 (format v2)
     public List<ModulatorDto> Modulators { get; set; } = new();        // CV modulation sources (Phase 3)
     public List<CvLinkDto> CvLinks { get; set; } = new();              // CV modulation edges (Phase 3)
@@ -605,6 +608,16 @@ public sealed class SlotTakeLengthDto
     public int Mode { get; set; }
     public int Bars { get; set; }
     public int Beats { get; set; }
+}
+
+/// <summary>A Session slot's landing rule (#481): Action 1 = launch the next scene, 2 = launch
+/// TargetScene; QuantBeats &lt; 0 = the global launch quantum.</summary>
+public sealed class SlotLandingRuleDto
+{
+    public int Scene { get; set; }
+    public int Action { get; set; }
+    public int TargetScene { get; set; }
+    public double QuantBeats { get; set; } = -1.0;
 }
 
 public sealed class SessionSlotDto
