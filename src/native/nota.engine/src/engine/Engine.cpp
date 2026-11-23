@@ -701,7 +701,11 @@ void Engine::startCountIn(int32_t bars) {
 }
 void Engine::transportStop() {
     arrangementActive_.store(false, std::memory_order_relaxed);
-    finalizeSessionRecord(false); // don't lose an in-progress session take on a global stop
+    {
+        LandingMute mute(*this);      // a global stop never fires a landing rule (#481)
+        finalizeSessionRecord(false); // don't lose an in-progress session take on a global stop
+    }
+    landedTakes_.clear(); // takes that landed just before: the music stops, nothing launches
     // Stop means everything stops, Session clips included (#139). Immediately, not on the
     // next launch boundary: the clock halts with this command, so a quantized stop would
     // never land and the clips would stay launched (and resume on the next Play).

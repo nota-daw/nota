@@ -193,6 +193,12 @@ public sealed partial class NotaEngine
     public double SessionSlotTakeBeats(int trackId, int scene)
     { ThrowIfDisposed(); return NativeMethods.SessionSlotTakeBeats(_handle, trackId, scene); }
 
+    public bool TryGetSessionSlotLandingRule(int trackId, int scene, out NotaSlotLandingRule value)
+    { ThrowIfDisposed(); return NativeMethods.SessionGetSlotLandingRule(_handle, trackId, scene, out value) != 0; }
+
+    public bool SetSessionSlotLandingRule(int trackId, int scene, NotaSlotLandingRule value)
+    { ThrowIfDisposed(); return NativeMethods.SessionSetSlotLandingRule(_handle, trackId, scene, in value) == NativeMethods.NotaResult.Ok; }
+
     public bool CopySessionSlot(int srcTrackId, int srcScene, int dstTrackId, int dstScene)
     { ThrowIfDisposed(); return NativeMethods.SessionCopySlot(_handle, srcTrackId, srcScene, dstTrackId, dstScene) == NativeMethods.NotaResult.Ok; }
 

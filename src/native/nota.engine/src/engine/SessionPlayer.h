@@ -90,8 +90,10 @@ class SessionPlayer {
     }
 
     void requestLaunch(int32_t slot, double quant = -1.0, bool legato = false, float g = 1.0f, int32_t gen = 0);
-    void requestStop(int32_t gen = 0) {
+    // quant < 0: the global launch quantum; >= 0: a scene launch's own (a landing rule, #481).
+    void requestStop(int32_t gen = 0, double quant = -1.0) {
         repeatSlot.store(-1, std::memory_order_relaxed);
+        pendingQuant.store(quant, std::memory_order_relaxed);
         request.store(fresh(kStop, gen));
     }
     void requestStopNow() {

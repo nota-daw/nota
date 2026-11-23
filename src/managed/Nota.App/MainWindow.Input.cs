@@ -68,8 +68,17 @@ public partial class MainWindow
 
         if (Keys.Is(e, "session.launchSelection") && SessionFocused)
         {
-            // In the Session grid Return launches the selected slot or scene (design 1a).
-            _session!.LaunchSelection();
+            // In the Session grid Return launches the selected slot or scene (design 1a). Once per
+            // press: on an armed slot the auto-repeat would otherwise start a take and end it (#364).
+            if (_heldKeys.Add(e.Key)) _session!.LaunchSelection();
+            e.Handled = true;
+            return;
+        }
+        // ⇧Return stops the selected track, ⌘Return launches its scene row, ⌘⇧Return stops all
+        // (specs/112, #364) — here in the tunnel, so a focused button in the grid can't take Return.
+        if (SessionFocused && Keys.Which(e, "session.stopTrack", "session.launchScene", "session.stopAll") is { } launch)
+        {
+            if (_heldKeys.Add(e.Key)) _commands.Run(launch);   // once per press, not per auto-repeat
             e.Handled = true;
             return;
         }
