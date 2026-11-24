@@ -4,7 +4,7 @@
 // the link indicator, and Nota releases a silent phone's notes. On a drop it retries on its
 // own — the only state that needs the person is a forgotten device or an expired code.
 
-import type { Project, Transport, Mixer, Xy, Macros, Session, Focus, ClipPreview, ClipsMessage, Learn, LinkState, Screen, Track } from './types';
+import type { Project, Transport, Mixer, Xy, Macros, Led, Session, Focus, ClipPreview, ClipsMessage, Learn, LinkState, Screen, Track } from './types';
 import { look } from './theme.svelte';
 import { migrateSessionGrid, type SessionGrid } from './grid';
 
@@ -62,6 +62,8 @@ export class App {
   mix = $state<Mixer | null>(null);
   xy = $state<Xy | null>(null);
   mac = $state<Macros | null>(null);
+  /** The Macros screen's LED display (specs/113); null until Nota sends one. */
+  led = $state.raw<Led | null>(null);
   ses = $state<Session | null>(null);
   /** The controller's focus in Nota (specs/107), null when no controller is on. */
   foc = $state<Focus | null>(null);
@@ -283,6 +285,7 @@ export class App {
       // Nota's device choice is ours too (a controller may have moved it, specs/107), so the next
       // screen switch doesn't send back a stale pick.
       case 'mac': delete m.t; this.mac = m; this.macroDevice = m.di; break;
+      case 'led': this.led = decodeLed(m); break;
       case 'ses': delete m.t; this.ses = m; break;
       case 'foc': delete m.t; this.foc = m.on ? m : null; break;
       case 'clips': {
@@ -458,6 +461,12 @@ export class App {
     if (this.proj) this.proj = { ...this.proj, follow: on };
   }
 
+  /** The Macros screen's Track / Device / Page buttons (specs/113): a step (±1) or an index. */
+  nav(s: 'track' | 'device' | 'page' | 'pageAt' | 'deviceAt', i: number) {
+    if (!this.canControl) { this.showToast('Nota lets this phone play notes only.'); return; }
+    this.send({ t: 'nav', s, i });
+  }
+
   showToast(msg: string) {
     this.toast = msg;
     clearTimeout(this.toastTimer);
@@ -466,3 +475,19 @@ export class App {
 }
 
 export const app = new App();
+
+/** RLE4 → one level per dot: each byte is (count − 1) << 4 | level (contracts/remote-led.md). */
+function decodeLed(m: { id: number; di: number; pg: number; w: number; h: number; seq: number; f: string }): Led | null {
+  const n = m.w * m.h;
+  if (!(n > 0) || typeof m.f !== 'string') return null;
+  const bin = atob(m.f);
+  const dots = new Uint8Array(n);
+  let at = 0;
+  for (let i = 0; i < bin.length && at < n; i++) {
+    const b = bin.charCodeAt(i);
+    const run = (b >> 4) + 1, lv = b & 15;
+    dots.fill(lv, at, Math.min(n, at + run));
+    at += run;
+  }
+  return { id: m.id, di: m.di, pg: m.pg, w: m.w, h: m.h, seq: m.seq, dots };
+}

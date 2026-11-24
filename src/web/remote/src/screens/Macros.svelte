@@ -1,26 +1,37 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Macros: eight big knobs for one device of the track's chain — a rack's macros, a built-in
-     instrument's or effect's parameters, a plug-in's first eight (paged). A vertical swipe turns
-     a knob, as in Nota; values carry the track's colour, the knob being turned a quiet tint of it; a dot marks an automated parameter. A knob mapped with MIDI Learn
-     shows what it drives instead. -->
+<!-- Macros: a controller surface for one device of the track's chain (specs/113). Track ◀ ▶ and
+     Device ◀ ▶ step as a controller's buttons do (and move the controller with them when the
+     phone follows Nota); the LED display shows the device page Nota renders; the page buttons are
+     the controller's pages for that device; eight knobs turn that page's parameters. A vertical
+     swipe turns a knob, as in Nota; values carry the track's colour, the knob being turned a quiet
+     tint of it; a dot marks an automated parameter. A knob mapped with MIDI Learn shows what it
+     drives instead. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
   import { pct } from '../lib/fmt';
+  import Led from '../components/Led.svelte';
 
   let { form }: { form: Form } = $props();
-  const cols = $derived(form === 'phone' ? 2 : 4);
-  const size = $derived(form === 'phone' ? 64 : form === 'phoneLand' ? 52 : 112);
+  const size = $derived(form === 'tablet' ? 96 : form === 'phoneLand' ? 44 : 52);
   const m = $derived(app.mac?.id === app.proj?.you ? app.mac : null);
   const devName = $derived(m?.devs[m.di] ?? 'No devices');
+  const pages = $derived(m?.pgs ?? []);
+  const pg = $derived(m?.pg ?? 0);
   // Values carry the playing track's colour (spec 090), neutral ink without a track.
   const tc = $derived(app.track?.color ?? 'var(--viz-ink)');
+  const ledColor = $derived(app.track?.color ?? '');
+  const led = $derived(app.led && app.led.id === app.proj?.you ? app.led : null);
+  // The tracks Track ◀ ▶ walk on the phone: what can hold a device.
+  const order = $derived(app.proj?.tracks.filter((t) => t.kind !== 'group' && t.kind !== 'return').map((t) => t.id) ?? []);
+  const at = $derived(order.indexOf(app.proj?.you ?? 0));
 
   let local = $state<Record<number, number>>({});
   let mappedPos = $state<Record<number, number>>({});
   let drag: { i: number; y: number; v: number } | null = null;
   let active = $state(-1);
   let lastSend = 0;
+  let pageRow = $state<HTMLDivElement>();
 
   function down(e: PointerEvent, i: number, v: number) {
     if (!app.canControl) return app.showToast('Nota lets this phone play notes only.');
@@ -47,27 +58,55 @@
     active = -1;
     setTimeout(() => { if (active !== i) delete local[i]; }, 500);
   }
+  // Keep the current page button in view when the row scrolls (a plug-in's many pages).
+  $effect(() => {
+    void pg;
+    const b = pageRow?.querySelector<HTMLElement>('button.on');
+    b?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
   const ARC = 98.9, CIRC = 131.9;
 </script>
 
-<div class="macros" onpointermove={move} onpointerup={up} onpointercancel={up} role="group" aria-label="Macros">
-  <button class="dev" onclick={() => m && m.devs.length > 1 && (app.sheet = 'devices')}>
-    <span class="k">Device</span>
-    <span class="dn">{devName}</span>
-    {#if m && m.devs.length > 1}<span class="pos">{m.di + 1}/{m.devs.length}</span>{/if}
-    <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5 L5 6.5 L8 3.5" /></svg>
-  </button>
+<div class="macros" class:land={form === 'phoneLand'} onpointermove={move} onpointerup={up} onpointercancel={up} role="group" aria-label="Macros">
+  <div class="nav">
+    <div class="step">
+      <button aria-label="Previous track" disabled={at <= 0} onclick={() => app.nav('track', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
+      <div class="mid"><span class="k">Track</span><span class="v"><i class="sw" style:background={tc}></i>{app.track?.name ?? '—'}</span></div>
+      <button aria-label="Next track" disabled={at < 0 || at >= order.length - 1} onclick={() => app.nav('track', 1)}><svg viewBox="0 0 10 10"><path d="M3.5 2 L6.5 5 L3.5 8" /></svg></button>
+    </div>
+    <div class="step">
+      <button aria-label="Previous device" disabled={!m || m.di <= 0} onclick={() => app.nav('device', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
+      <button class="mid pick" onclick={() => m && m.devs.length > 1 && (app.sheet = 'devices')}>
+        <span class="k">{m && m.devs.length > 1 ? `Device ${m.di + 1}/${m.devs.length}` : 'Device'}</span>
+        <span class="v">{devName}</span>
+      </button>
+      <button aria-label="Next device" disabled={!m || m.di >= m.devs.length - 1} onclick={() => app.nav('device', 1)}><svg viewBox="0 0 10 10"><path d="M3.5 2 L6.5 5 L3.5 8" /></svg></button>
+    </div>
+  </div>
+
+  <div class="screen">
+    <Led {led} color={ledColor} dim={app.link !== 'ok' && app.link !== 'weak'} />
+
+    {#if pages.length > 1}
+      <div class="pages" bind:this={pageRow} role="tablist" aria-label="Pages">
+        {#each pages as name, i (i)}
+          <button role="tab" aria-selected={i === pg} class:on={i === pg} onclick={() => app.nav('pageAt', i)}>{name}</button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+
   {#if !m || m.devs.length === 0}
-    <div class="empty">{m ? 'This track has no instrument or effects to control.' : 'Loading…'}</div>
+    <div class="none">{m ? 'This track has no instrument or effects to control.' : 'Loading…'}</div>
   {:else}
-    <div class="grid" style:--tc={tc} style:grid-template-columns="repeat({cols}, minmax(0, 1fr))">
+    <div class="grid" style:--tc={tc}>
       {#each m.k as k, i (i)}
         {@const v = local[i] ?? (k.map ? mappedPos[i] ?? 0.5 : k.v ?? 0)}
         {@const on = active === i}
         {@const empty = k.n === undefined && !k.map}
         <div class="knob" class:on class:empty class:learnable={app.learn.on && !empty}
           onpointerdown={(e) => !empty && down(e, i, v)} role="slider" tabindex="0"
-          aria-label={k.map ?? k.n ?? `Macro ${i + 1}`} aria-valuenow={Math.round(v * 100)} aria-valuetext={k.map ? pct(v) : k.txt}>
+          aria-label={k.map ?? k.n ?? `Knob ${i + 1}`} aria-valuenow={Math.round(v * 100)} aria-valuetext={k.map ? pct(v) : k.txt}>
           <span class="tint"></span>
           {#if k.a && !k.map}<span class="auto"></span>{/if}
           <svg width={size} height={size} viewBox="0 0 52 52">
@@ -76,8 +115,8 @@
             <circle cx="26" cy="26" r="14" class="capc" />
             {#if !empty}<line x1="26" y1="26" x2="26" y2="14" class="ptr" transform="rotate({-135 + 270 * v} 26 26)" />{/if}
           </svg>
-          <span class="kn">{k.map ?? k.n ?? `Macro ${i + 1}`}</span>
-          <span class="kv">{empty ? '—' : k.map || on ? pct(v) : k.txt}</span>
+          <span class="kn">{k.map ?? k.n ?? '—'}</span>
+          <span class="kv">{empty ? '' : k.map || on ? pct(v) : k.txt}</span>
         </div>
       {/each}
     </div>
@@ -85,18 +124,38 @@
 </div>
 
 <style>
-  .macros { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; touch-action: none; }
-  /* The device picker reads like a dropdown: raised, a group corner. */
-  .dev { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); border-radius: min(var(--r-group), 14px); text-align: left; }
-  .k { font-size: 11px; color: var(--text-muted); }
-  .dn { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pos { font-size: 11px; color: var(--text-muted); }
-  .dev path { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
-  /* Eight knobs on one card, cells on seams. */
-  .grid { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-radius: var(--r-card); overflow: hidden; }
-  .knob { min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: var(--panel); touch-action: none; }
+  .macros { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; touch-action: none; }
+  /* A phone on its side: display and pages on the left, knobs on the right. */
+  .macros.land { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px 10px; }
+  .macros.land .nav { grid-column: 1; }
+  .macros.land .screen { grid-column: 1; grid-row: 2; }
+  .macros.land .grid, .macros.land .none { grid-column: 2; grid-row: 1 / span 2; }
+
+  .nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  /* A stepper reads like a raised key with arrows at its ends. */
+  .step { height: 44px; display: flex; align-items: stretch; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); border-radius: min(var(--r-group), 14px); overflow: hidden; }
+  .step > button:not(.mid) { width: 36px; flex: none; display: grid; place-items: center; color: var(--text-muted); }
+  .step > button:not(.mid):active { background: var(--bg-sunken); }
+  .step > button:disabled { color: var(--text-faint); opacity: .45; }
+  .step svg { width: 10px; height: 10px; }
+  .step path { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; border-inline: 1px solid var(--seam); line-height: 1.15; padding: 0 4px; }
+  .mid.pick:active { background: var(--bg-sunken); }
+  .k { font-size: 10px; color: var(--text-muted); }
+  .v { max-width: 100%; display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sw { width: 8px; height: 8px; flex: none; border-radius: var(--r-fine); }
+
+  .screen { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  /* The pages as a segment row; it scrolls sideways when there are many. */
+  .pages { display: flex; gap: 2px; padding: 2px; background: var(--bg-sunken); box-shadow: var(--sunken); border-radius: min(var(--r-group), 14px); overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+  .pages::-webkit-scrollbar { display: none; }
+  .pages > button { flex: 1 0 auto; min-width: 56px; height: 36px; padding: 0 10px; border-radius: min(var(--r-cell), 12px); color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background-color var(--ease), color var(--ease); }
+  .pages > button.on { background: var(--accent-soft); color: var(--picked-ink); }
+
+  /* Eight knobs on one card, cells on seams: four across, two rows. */
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-radius: var(--r-card); overflow: hidden; }
+  .knob { min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--panel); touch-action: none; padding: 4px 2px; }
   .knob > svg, .kn, .kv { position: relative; }
-  /* The knob being turned: a quiet tint of the track colour behind it. */
   .knob > .tint { position: absolute; inset: 0; background: var(--tc); opacity: 0; transition: opacity var(--ease); }
   .knob.on > .tint { opacity: .14; }
   .auto { position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
@@ -105,10 +164,10 @@
   .arc { fill: none; stroke: var(--tc); stroke-width: 5; stroke-linecap: round; }
   .capc { fill: var(--surface-raised); stroke: var(--seam); }
   .ptr { stroke: var(--text-primary); stroke-width: 2.4; stroke-linecap: round; }
-  .kn { font-size: 11px; color: var(--text-secondary); max-width: 92%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .kv { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .kn { font-size: 10.5px; color: var(--text-secondary); max-width: 94%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kv { font-size: 11.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; min-height: 1.2em; }
   .on .kn { color: var(--text-primary); }
-  .knob.empty .kn, .knob.empty .kv { color: var(--text-faint); }
-  .empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary); }
-  .knob.empty { flex: initial; display: flex; }
+  .knob.empty .kn { color: var(--text-faint); }
+  .none { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary); }
+  @media (prefers-reduced-motion: reduce) { .knob > .tint, .pages > button { transition: none; } }
 </style>

@@ -82,6 +82,9 @@ public sealed partial class RemoteHub
 
         if (screen != "Scenes") c.SentClips = null;
 
+        // The Macros screen's LED display at the UI clock's rate, only when the frame changed (specs/113).
+        PushLed(host, c);
+
         // A screen's live state at 15 Hz (every other UI tick); a new screen gets it at once.
         if (c.SentScreenState is not null && (_tick & 1) == 1) return;
         string? state = screen switch
@@ -442,17 +445,26 @@ public sealed partial class RemoteHub
 
     // ---- macros -----------------------------------------------------------------------------
 
-    private List<RemoteMacroDevice> MacroDevicesFor(int trackId)
+    // The track's devices with their pages (specs/113), built at most once per tick per track.
+    private readonly Dictionary<int, List<RemoteMacroDevice>> _macroCache = new();
+    private int _macroCacheTick = -1;
+
+    private List<RemoteMacroDevice> MacroDevicesFor(IRemoteHost host, int trackId)
     {
+        if (_macroCacheTick != _tick) { _macroCache.Clear(); _macroCacheTick = _tick; }
+        if (_macroCache.TryGetValue(trackId, out var cached)) return cached;
         var row = _tracks.FirstOrDefault(r => r.Id == trackId);
-        if (row is null || row.Kind is "group") return new();
-        return RemoteParams.MacroDevices(_engine, trackId, row.Kind is "drum" or "inst");
+        var list = row is null || row.Kind is "group" ? new List<RemoteMacroDevice>() : RemoteMacros.For(_engine, trackId, host.DevicePages);
+        _macroCache[trackId] = list;
+        return list;
     }
 
     private string BuildMacros(IRemoteHost host, RemoteClient c)
     {
-        var devs = MacroDevicesFor(c.TrackId);
-        if (c.MacroDevice >= devs.Count) c.MacroDevice = 0;
+        var devs = MacroDevicesFor(host, c.TrackId);
+        if (c.MacroDevice >= devs.Count || c.MacroDevice < 0) { c.MacroDevice = 0; c.MacroPage = 0; }
+        var dev = devs.Count > 0 ? devs[c.MacroDevice] : null;
+        if (dev is not null && (c.MacroPage >= dev.Pages.Count || c.MacroPage < 0)) c.MacroPage = 0;
         return Json(w =>
         {
             w.WriteString("t", "mac");
@@ -461,20 +473,24 @@ public sealed partial class RemoteHub
             w.WriteStartArray("devs");
             foreach (var d in devs) w.WriteStringValue(d.Name);
             w.WriteEndArray();
+            w.WriteNumber("pg", c.MacroPage);
+            w.WriteStartArray("pgs");
+            if (dev is not null) foreach (var p in dev.Pages) w.WriteStringValue(p.Name);
+            w.WriteEndArray();
             w.WriteStartArray("k");
-            if (devs.Count > 0)
+            if (dev is not null)
             {
-                var ps = devs[c.MacroDevice].Params;
+                var ps = dev.Pages[c.MacroPage].Knobs;
                 for (int i = 0; i < 8; i++)
                 {
                     w.WriteStartObject();
-                    if (i < ps.Count)
+                    if (i < ps.Count && ps[i] is { } p)
                     {
-                        double v = RemoteParams.Get(_engine, ps[i]);
-                        w.WriteString("n", ps[i].Name);
+                        double v = RemoteParams.Get(_engine, p);
+                        w.WriteString("n", p.Name);
                         w.WriteNumber("v", Math.Round(v, 4));
-                        w.WriteString("txt", RemoteParams.Text(_engine, ps[i], v));
-                        w.WriteBoolean("a", RemoteParams.Automated(_engine, ps[i]));
+                        w.WriteString("txt", RemoteParams.Text(_engine, p, v));
+                        w.WriteBoolean("a", RemoteParams.Automated(_engine, p));
                     }
                     WriteMap(w, "map", host.PhoneMappingName(PhoneControls.Macro1 + i, c.TrackId));
                     w.WriteEndObject();
@@ -498,6 +514,12 @@ public sealed partial class RemoteHub
         w.WriteString("tn", f.TrackName);
         if (f.Device is { } d) w.WriteString("dev", d); else w.WriteNull("dev");
         if (f.MacroIndex is { } md) w.WriteNumber("md", md); else w.WriteNull("md");
+        if (f.Address is { Rack: null } fa)
+        {
+            // specs/113: the focused device's section and index, so a MIDI-effect focus reaches the phone.
+            w.WriteString("ms", fa.Section switch { Nota.Application.Controllers.FocusSection.Midi => "midi", Nota.Application.Controllers.FocusSection.Instrument => "inst", _ => "audio" });
+            w.WriteNumber("mi", fa.Index);
+        }
         w.WriteNumber("pg", f.Page);
         w.WriteNumber("pn", f.PageCount);
         w.WriteString("pgn", f.PageName);
@@ -511,11 +533,16 @@ public sealed partial class RemoteHub
     // went to — only when the focus changes, so a pick on the phone stays until the next move.
     private void FollowFocus(RemoteClient c, RemoteControllerFocus? f)
     {
-        if (!c.Follow || f is not { MacroIndex: { } md } || f.TrackId != c.TrackId) return;
-        var devs = MacroDevicesFor(c.TrackId);
-        int at = devs.FindIndex(d => d.DeviceIndex == md);
-        if (at < 0 || at == c.MacroDevice) return;
+        if (!c.Follow || f is null || f.Mode != "device" || f.TrackId != c.TrackId || Host is not { } host) return;
+        var devs = MacroDevicesFor(host, c.TrackId);
+        int at = f.Address is { Rack: null } fa ? RemoteMacros.IndexOf(devs, fa)
+               : f.MacroIndex is { } md ? devs.FindIndex(d => d.LegacyIndex == md)
+               : -1;
+        if (at < 0) return;
+        int page = Math.Clamp(f.Page, 0, Math.Max(0, devs[at].Pages.Count - 1));
+        if (at == c.MacroDevice && page == c.MacroPage) return;
         c.MacroDevice = at;
+        c.MacroPage = page;
         if (c.Screen == "Macros") c.SentScreenState = null;   // the new device's knobs at once (the phone takes `di`)
         else c.FollowedMacro = true;                          // kept when the phone opens Macros
     }

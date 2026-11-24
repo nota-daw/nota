@@ -835,6 +835,15 @@ if (args.Length >= 1 && args[0] == "--controller-remap")
     Console.WriteLine(failures == 0 ? "CONTROLLER REMAP PASSED" : $"CONTROLLER REMAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Remote LED displays alone: `--displays` (specs/113). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--displays")
+{
+    Console.WriteLine("-- device displays --");
+    foreach (var (ok, label) in DisplayTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DISPLAYS PASSED" : $"DISPLAYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Controller auto-mapping alone: `--controllers` (specs/051). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--controllers")
 {
@@ -16451,6 +16460,9 @@ foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
 Console.WriteLine("-- controllers --");
 foreach (var (ok, label) in ControllerTests.Run()) Check(ok, label);
 foreach (var (ok, label) in ControllerRemapTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- device displays (specs/113) --");
+foreach (var (ok, label) in DisplayTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);

@@ -203,9 +203,27 @@ public partial class MainWindow : IRemoteHost
                 _ => null,
             };
             return new RemoteControllerFocus(f.Controller, mode, f.Mode.Send, f.TrackId, f.TrackName, f.Device, md,
-                f.Page, f.PageCount, f.PageName, f.BankFirst, f.BankLast);
+                f.Page, f.PageCount, f.PageName, f.BankFirst, f.BankLast) { Address = f.Address };
         }
     }
+
+    // specs/113: the phone's Macros screen walks the controller's pages and moves its focus.
+    Nota.Application.Controllers.IDevicePageSource? IRemoteHost.DevicePages => _devicePages;
+
+    bool IRemoteHost.StepTrack(int delta)
+    {
+        if (_controllers is { } svc) return svc.StepSelectedTrack(delta);
+        return false;
+    }
+
+    void IRemoteHost.FocusDevice(Nota.Application.Controllers.DeviceAddress device)
+    {
+        if (device.TrackId <= 0 || _deviceChain is null) return;
+        if (_deviceChain.TrackId != device.TrackId) ShowDevices(device.TrackId, takeOverPanel: false);
+        _deviceChain.SelectAddress(device);
+    }
+
+    void IRemoteHost.SetDevicePage(int page) => _controllers?.SetPage(page);
     int IRemoteHost.ProjectKeyCode => _vm?.Transport.KeyCode ?? -1;
 
     IReadOnlyList<(string Name, double StartBeat)> IRemoteHost.Sections =>

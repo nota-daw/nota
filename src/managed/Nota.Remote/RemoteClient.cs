@@ -39,8 +39,13 @@ public sealed class RemoteClient
     public volatile bool Follow;
     /// <summary>The screen the phone shows: what state it needs pushed.</summary>
     public volatile string Screen = "";
-    /// <summary>The Macros screen's device (index into the track's macro devices).</summary>
+    /// <summary>The Macros screen's device (index into the track's chain as the phone lists it).</summary>
     public int MacroDevice;
+    /// <summary>The Macros screen's page of that device (specs/113).</summary>
+    public int MacroPage;
+    /// <summary>The last LED frame sent (RLE4 bytes) and what it showed; null off Macros (specs/113).</summary>
+    internal byte[]? SentLed;
+    internal string? SentLedKey;
     /// <summary>Round-trip time the phone measured, ms (−1 = not yet).</summary>
     public volatile int RttMs = -1;
     public long LastActivityTicks;

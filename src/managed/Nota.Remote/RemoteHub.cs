@@ -271,6 +271,7 @@ public sealed partial class RemoteHub
 
         var clients = _clients.Values.Where(c => c.Authenticated).ToList();
         ExpireHeldFaders();
+        ExpireLedPages();
         long now = DateTime.UtcNow.Ticks;
         foreach (var c in clients)
         {

@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Remote: Macros is a controller surface with an LED display** (specs/113).
+  - **Track ◀ ▶** and **Device ◀ ▶** buttons step through the tracks and through the track's
+    devices in chain order; **page buttons** walk the device's controller pages, so the phone
+    shows the same eight knobs as a MIDI controller. With Follow Nota's selection on, a press on
+    the phone moves Nota's selection and the controller, and the controller moves the phone.
+  - A **128 × 48 LED display** above the knobs pictures the page for every built-in instrument,
+    audio effect and MIDI effect: filter response over the live spectrum, envelopes,
+    oscillators, LFOs, EQ curves, compressor and limiter curves with the live level, Reverb's
+    decay with your audio's measured tail, delay taps, chorus / flanger sweeps, phaser notches,
+    keyboards for Chord and Scale. Plug-ins and racks show their knobs as bars. While a knob
+    turns, its name and value take the top row.
+  - Nota draws the picture and sends the dots (only when they change), so every phone on the
+    same page sees the same frame.
 - **Session: play the grid from the keyboard, and buttons you can hit** (#364, specs/112).
   - With the arrows on a slot, **Return** does what a click does: launches the clip, starts
     recording in an armed track's empty slot, and on a recording slot ends the take.

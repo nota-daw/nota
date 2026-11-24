@@ -130,8 +130,26 @@ function mix() {
 }
 
 const xy = () => ({ t: 'xy', id: state.you, ok: true, auto: false, x: { n: 'Cutoff', d: 'Auto Filter', v: 0.62, txt: '2.4 kHz', map: null, tilt: null }, y: { n: 'Resonance', d: 'Auto Filter', v: 0.35, txt: '35 %', map: null, tilt: null } });
+// The Macros screen (specs/113): the device and page the phone is on, and a stand-in LED frame —
+// a filter curve that breathes, RLE4 as Nota sends it (contracts/remote-led.md).
+const macState = { di: 1, pg: 0, seq: 0 };
+function led() {
+  const W = 128, H = 48, d = new Uint8Array(W * H), t = (Date.now() - state.started) / 1000;
+  const fc = 0.45 + 0.15 * Math.sin(t * 0.8) + macState.pg * 0.08 + macState.di * 0.05;
+  for (let x = 0; x < W; x++) d[6 * W + x] = x % 2 ? 0 : 2;
+  for (let x = 0; x < W; x++) {
+    const r = (x / W) / fc, m = 1 / Math.sqrt((1 - r * r) ** 2 + (r / 3) ** 2);
+    const y = Math.max(9, Math.min(47, Math.round(9 + (18 - 20 * Math.log10(m)) / 60 * 38)));
+    for (let j = y + 1; j < 48; j++) d[j * W + x] = 2;
+    d[y * W + x] = 15;
+  }
+  const out = [];
+  for (let i = 0; i < d.length;) { let n = 1; while (i + n < d.length && d[i + n] === d[i] && n < 16) n++; out.push(((n - 1) << 4) | d[i]); i += n; }
+  return { t: 'led', id: state.you, di: macState.di, pg: macState.pg, w: W, h: H, bpp: 4, enc: 'rle4', seq: ++macState.seq, f: Buffer.from(out).toString('base64') };
+}
 const mac = () => ({
-  t: 'mac', id: state.you, di: 0, devs: ['Nota Volt', 'Auto Filter', 'Reverb'],
+  t: 'mac', id: state.you, di: macState.di, devs: ['Arp', 'Nota Volt', 'Auto Filter', 'Reverb'],
+  pg: macState.pg, pgs: [['Main'], ['Main', 'Osc', 'Filter', 'LFO'], ['Main', 'Mod'], ['Main', 'More']][macState.di],
   k: [
     { n: 'Cutoff', v: 0.64, txt: '3.1 kHz', a: true, map: null }, { n: 'Reso', v: 0.3, txt: '30 %', map: null },
     { n: 'Drive', v: 0.45, txt: '+4.5 dB', map: null }, { n: 'Env amount', v: 0.7, txt: '70 %', map: null },
@@ -251,7 +269,16 @@ function onMessage(c, m) {
   switch (m.t) {
     case 'pair': case 'hello': welcome(c, m); break;
     case 'ping': c.send({ t: 'pong', c: m.c }); break;
-    case 'sub': c.screen = m.s; sendScreen(c); if (m.s === 'Scenes') c.send(clips(true)); break;
+    case 'sub': c.screen = m.s; if (m.s === 'Macros' && typeof m.i === 'number' && m.i !== macState.di && m.i < 4) { macState.di = m.i; macState.pg = 0; } sendScreen(c); if (m.s === 'Scenes') c.send(clips(true)); break;
+    case 'nav': {
+      const pages = [1, 4, 2, 2];
+      if (m.s === 'device') macState.di = Math.max(0, Math.min(3, macState.di + m.i)), macState.pg = 0;
+      else if (m.s === 'page') macState.pg = Math.max(0, Math.min(pages[macState.di] - 1, macState.pg + m.i));
+      else if (m.s === 'pageAt') macState.pg = Math.max(0, Math.min(pages[macState.di] - 1, m.i));
+      else if (m.s === 'track') { const ids = trackDefs.map((t) => t.id); const at = ids.indexOf(state.you) + Math.sign(m.i); if (at >= 0 && at < ids.length) { state.you = ids[at]; broadcast(proj()); } }
+      sendScreen(c);
+      break;
+    }
     case 'track': state.you = m.id; broadcast(proj()); break;
     case 'follow': state.follow = m.on; broadcast(proj()); break;
     case 'play': tp.play = true; broadcast({ t: 'tp', ...tp }); break;
@@ -284,6 +311,9 @@ setInterval(() => {
   for (const c of clients) if (c.paired && (c.screen === 'Mixer' || c.screen === 'Scenes')) sendScreen(c);
   for (const c of clients) if (c.paired && c.screen === 'Scenes') c.send(clips(false));
 }, 250);
+
+// The Macros screen's LED display moves at ~15 frames a second (specs/113).
+setInterval(() => { for (const c of clients) if (c.paired && c.screen === 'Macros') c.send(led()); }, 66);
 
 // The controller moves on: a page, then the next device.
 setInterval(() => { state.focStep++; broadcast(foc()); }, 4000);

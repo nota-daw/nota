@@ -965,6 +965,34 @@ public sealed class ControllerService
         if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
     }
 
+    /// <summary>Track ◀ / ▶ from elsewhere — a phone's Macros screen (specs/113): the same step
+    /// as a controller's, every controller's bank following. False at the end of the list.</summary>
+    public bool StepSelectedTrack(int delta)
+    {
+        var order = VisibleTrackOrder?.Invoke()
+                    ?? ControllerTrackStep.Order(ArrangementView.HierarchyOrder(_engine).Select(r => (r.Id, r.ParentGroupId)),
+                                                 id => GroupCollapsed?.Invoke(id) == true);
+        if (ControllerTrackStep.Step(order, _selectedTrack, delta) is not { } to) return false;
+        SelectTrack?.Invoke(to);
+        var ids = TrackIds();
+        bool moved = false;
+        foreach (var c in _controllers.Values) moved |= c.State.BankFollow(ids.IndexOf(to), ids.Count);
+        if (moved) BankChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>Put every controller's knobs that follow a device on <paramref name="page"/> of the
+    /// focused device (a phone's page buttons, specs/113).</summary>
+    public void SetPage(int page)
+    {
+        if (_focused is null) return;
+        int p = Math.Clamp(page, 0, Math.Max(0, _focused.PageCount - 1));
+        bool changed = false;
+        foreach (var c in _controllers.Values)
+            if (c.State.KnobMode.Kind == KnobModeKind.Device && c.State.Page != p) { c.State.Page = p; changed = true; }
+        if (changed) FocusChanged?.Invoke();
+    }
+
     /// <summary>Select a track as a header click would (wired by the main window; specs/107).</summary>
     public Action<int>? SelectTrack { get; set; }
     /// <summary>The tracks Track ◀ / ▶ walk when a view has its own order (the Session's columns),

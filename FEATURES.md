@@ -653,6 +653,16 @@ own window — see
   The slot or scene selected in Nota (by the mouse or a hardware controller) is outlined, and
   the header shows what a controller's knobs are on; a phone following Nota's selection turns
   its Macros screen to the controller's device (#929).
+- **Nota Remote Macros — a controller surface with an LED display**: Track ◀ ▶ and Device ◀ ▶
+  buttons walk the tracks and each track's chain (MIDI effects, instrument, audio effects), and
+  page buttons walk the device's controller pages — the same eight knobs a MIDI controller's
+  knobs show; with "Follow Nota's selection" on, the phone and the controller move together. Above
+  the knobs a 128 × 48 dot-matrix display shows a picture of the page — filter curves over the
+  live spectrum, envelopes, oscillators, LFOs, EQ and dynamics curves, Reverb's tail with your
+  audio's measured tail, delay taps, modulation sweeps, notes for MIDI effects — for every
+  built-in device (plug-ins and racks show their knobs as bars); turning a knob puts its name
+  and value on the top row. Nota renders the dots and sends them, so every client shows the
+  same picture.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that

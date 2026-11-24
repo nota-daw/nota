@@ -52,7 +52,12 @@ public readonly record struct RemoteSessionSelection(bool Slot, bool Row, int Tr
 /// (−1 the instrument / rack, ≥0 an audio effect), null when the phone can't show it.</summary>
 public sealed record RemoteControllerFocus(
     string Controller, string Mode, int Send, int TrackId, string TrackName, string? Device,
-    int? MacroIndex, int Page, int PageCount, string PageName, int BankFirst, int BankLast);
+    int? MacroIndex, int Page, int PageCount, string PageName, int BankFirst, int BankLast)
+{
+    /// <summary>The focused device itself (specs/113), so a MIDI-effect focus reaches the phone too;
+    /// null when the host doesn't say (then <see cref="MacroIndex"/> stands for it).</summary>
+    public Nota.Application.Controllers.DeviceAddress? Address { get; init; }
+}
 
 /// <summary>The app side of Nota Remote: everything that lives above the engine (the transport
 /// view-model, MIDI Learn, the arrangement's sections, track colours, redraws). Implemented by
@@ -112,6 +117,18 @@ public interface IRemoteHost
     PhoneControlResult PhoneControl(int controlId, int trackId, double norm);
     /// <summary>The name of what a phone control is mapped to on that track, or null when it isn't.</summary>
     string? PhoneMappingName(int controlId, int trackId);
+
+    /// <summary>The user's and the project's edited controller pages (specs/051), which the phone's
+    /// Macros pages follow too (specs/113); null for the shipped pages only.</summary>
+    Nota.Application.Controllers.IDevicePageSource? DevicePages => null;
+    /// <summary>Step Nota's selected track as the controller's Track ◀ ▶ do (specs/113, a phone
+    /// that follows Nota). False when there is no neighbour.</summary>
+    bool StepTrack(int delta) => false;
+    /// <summary>Focus <paramref name="device"/> as the Devices panel's selection would, so the
+    /// controller's knobs follow it (specs/113).</summary>
+    void FocusDevice(Nota.Application.Controllers.DeviceAddress device) { }
+    /// <summary>Put the lead controller's knobs on <paramref name="page"/> of the focused device (specs/113).</summary>
+    void SetDevicePage(int page) { }
 
     /// <summary>A phone connected, left, renamed itself or switched track.</summary>
     void DevicesChanged();

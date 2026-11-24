@@ -533,7 +533,34 @@ internal static class RemoteTests
             "Macros opened after the controller moved keep the controller's device");
         host.ControllerFocus = null;
         Send(new { t = "follow", on = false });
+
+        // specs/113: Macros walks the chain one device at a time with the controller's pages, and
+        // an LED frame comes with it; nav moves device and page, at the ends it stays.
+        Drain("mac"); Drain("led");
+        Send(new { t = "nav", s = "deviceAt", i = 1 });
+        var mDev = Wait("mac", 3000, m => m.GetProperty("di").GetInt32() == 1 && m.TryGetProperty("pgs", out var pgs) && pgs.GetArrayLength() == 2);
+        Send(new { t = "nav", s = "pageAt", i = 1 });
+        var mPage = Wait("mac", 3000, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() == 1);
+        yield return (mDev is { } md2 && md2.GetProperty("devs")[1].GetString() == e.DeviceName(inst, comp)
+                && mPage is { } mp && mp.GetProperty("pgs")[1].GetString() == "Sidechain" && mp.GetProperty("k")[0].GetProperty("n").GetString() == "SC HP",
+            "Macros: one entry per device; nav picks the Compressor and its Sidechain page, its knobs follow");
+        var led = Wait("led", 3000, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() == 1);
+        var ledFrame = led is { } lf ? Nota.Application.Displays.LedFrame.FromRle4(Convert.FromBase64String(lf.GetProperty("f").GetString()!)) : null;
+        yield return (led is { } l1 && l1.GetProperty("w").GetInt32() == 128 && l1.GetProperty("h").GetInt32() == 48 && l1.GetProperty("enc").GetString() == "rle4"
+                && ledFrame is not null && ledFrame.Dots.Count(d => d > 0) > 100,
+            "Macros: an LED frame of the page arrives, 128 × 48 RLE4 that decodes to a lit picture");
+        Drain("led");
+        Thread.Sleep(120); hub.Tick(); hub.Tick();
+        var ledStill = Wait("led", 300);
+        yield return (ledStill is null, "Macros: an unchanged frame is not sent again");
+        Send(new { t = "nav", s = "page", i = 1 });   // past the last page
+        Thread.Sleep(80); hub.Tick();
+        var mPast = Wait("mac", 300, m => m.GetProperty("pg").GetInt32() != 1);
+        yield return (mPast is null, "Macros: Page ▶ on the last page stays");
         Send(new { t = "sub", s = "Scenes" });
+        Drain("led");
+        Thread.Sleep(120); hub.Tick(); hub.Tick();
+        yield return (Wait("led", 300) is null, "Macros closed: no LED frames");
         e.RemoveDevice(inst, eq3); e.RemoveDevice(inst, comp);
 
         // Holding a queued slot or scene cancels its launch (#480): launched one beat into a
