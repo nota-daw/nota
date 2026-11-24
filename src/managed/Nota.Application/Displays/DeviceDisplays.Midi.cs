@@ -63,20 +63,26 @@ public static partial class DeviceDisplays
         {
             Page("Main", (c, f) =>
             {
-                int root = c.P.Step("Root", 12);
-                if (c.P.Raw("Root") > 1.0001 || c.P.Raw("Root") == 0) root = Math.Clamp((int)Math.Round(c.P.Raw("Root")), 0, 11);
+                var (root, mask) = ScaleInEffect(c);
+                // The notes it lets through, inside its range (Range Low / High, MIDI notes).
+                double rlo = c.P.Raw("Range Low", 0), rhi = c.P.Raw("Range High", 127);
+                if (rhi <= 1.0001) { rlo = 0; rhi = 127; }
                 var allowed = new HashSet<int>();
                 for (int k = 0; k < 12; k++)
-                    if (!c.P.Has($"Mask {k}") ? new[] { 0, 2, 4, 5, 7, 9, 11 }.Contains(k) : c.P.On($"Mask {k}"))
-                        for (int o = 3; o <= 6; o++) allowed.Add(o * 12 + root + k);
+                    if ((mask >> k & 1) != 0)
+                        for (int o = 3; o <= 6; o++)
+                        {
+                            int note = o * 12 + root + k;
+                            if (note >= rlo && note <= rhi) allowed.Add(note);
+                        }
                 var (lastIn, lastOut) = c.MidiLast();
                 var lit = new HashSet<int>();
                 if (lastOut >= 0) lit.Add(lastOut);
                 var roots = new HashSet<int>(Enumerable.Range(3, 4).Select(o => o * 12 + root));
                 Widgets.Keyboard(f, 48, 2, lit, new HashSet<int>(allowed.Concat(roots)), 0, 127, LedFrame.Top + 12);
-                string line = lastIn >= 0 ? $"{Widgets.NoteName(lastIn)} > {Widgets.NoteName(lastOut)}" : Widgets.NoteName(root + 60).TrimEnd('3', '2', '1', '0', '-', '4', '5', '6', '7', '8', '9');
+                string line = lastIn >= 0 ? $"{Widgets.NoteName(lastIn)} > {Widgets.NoteName(lastOut)}" : NoteNames[root];
                 f.Text(line, 0, LedFrame.Top + 2, Widgets.Hot);
-            }, c => "ROOT " + new[] { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" }[Math.Clamp((int)Math.Round(c.P.Raw("Root")), 0, 11)]),
+            }, c => "ROOT " + NoteNames[ScaleInEffect(c).Root]),
         };
 
         d["builtin:midi:length"] = new[]
@@ -99,27 +105,35 @@ public static partial class DeviceDisplays
         {
             Page("Main", (c, f) =>
             {
-                // In (x) → out (y): the range lo..hi, the drive bending it, a fixed velocity flat.
-                double lo = c.P.N("Out Low"), hi = c.P.N("Out High", 1), drive = c.P.Bi("Drive"), rnd = c.P.N("Random");
-                bool fixedOn = c.P.N("Fixed") > 0.01 && c.P.Raw("Fixed") > 0;
+                // In (x) → out (y) as the engine shapes it (MidiVelocity::transfer): Curve bends by
+                // Drive, Compand pushes away from the middle, Fixed is flat; then the Out range.
+                double lo = c.P.N("Out Low"), hi = c.P.N("Out High", 1);
+                if (lo > hi) (lo, hi) = (hi, lo);
+                int mode = c.P.Has("Mode") ? (int)Math.Clamp(Math.Round(c.P.Raw("Mode")), 0, 2) : 0;
+                double drive = Math.Max(0.05, c.P.Raw("Drive", 1)), fixedV = c.P.N("Fixed");
+                bool random = !c.P.Has("Random On") || c.P.On("Random On");
+                double rnd = random ? c.P.N("Random") : 0;
+                double Out(double n)
+                {
+                    double shaped = mode switch
+                    {
+                        2 => fixedV,
+                        1 => Math.Clamp(0.5 + Math.Sign(2 * n - 1) * Math.Pow(Math.Abs(2 * n - 1), 1 / drive) * 0.5, 0, 1),
+                        _ => Math.Pow(n, 1 / drive),
+                    };
+                    return lo + shaped * (hi - lo);
+                }
                 int x0 = 20, x1 = 107, top = LedFrame.Top, bottom = LedFrame.Bottom;
                 f.Box(x0 - 1, top - 1, x1 - x0 + 3, bottom - top + 2, Widgets.Grid);
                 f.Line(x0, bottom, x1, top, Widgets.Grid, dotted: true);
-                double exp = Math.Pow(4, -drive);
-                f.Curve(x =>
-                {
-                    double i = (x - x0) / (double)(x1 - x0);
-                    double o = fixedOn ? c.P.N("Fixed") : lo + (hi - lo) * Math.Pow(i, exp);
-                    return bottom - o * (bottom - top);
-                }, x0, x1, Widgets.Hot);
                 if (rnd > 0.01)
                     for (int x = x0; x <= x1; x += 3)
                     {
-                        double i = (x - x0) / (double)(x1 - x0), o = lo + (hi - lo) * Math.Pow(i, exp);
+                        double o = Out((x - x0) / (double)(x1 - x0));
                         f.VLine(x, bottom - Math.Min(1, o + rnd * 0.3) * (bottom - top), bottom - Math.Max(0, o - rnd * 0.3) * (bottom - top), Widgets.Live);
                     }
-                int n = c.Scope(out var s, 64);
-                if (n >= 2) f.Rect(x0 + s[n - 2] / 127.0 * (x1 - x0) - 1, bottom - s[n - 1] / 127.0 * (bottom - top) - 1, 3, 3, Widgets.Hot);
+                f.Curve(x => bottom - Out((x - x0) / (double)(x1 - x0)) * (bottom - top), x0, x1, Widgets.Hot);
+                f.Text(mode switch { 2 => "FIXED", 1 => "COMPAND", _ => "CURVE" }, 0, top, Widgets.Dim);
             }),
         };
 
@@ -143,5 +157,26 @@ public static partial class DeviceDisplays
                 }
             }, c => "CHANCE " + PctShort(c.P.N("Chance"))),
         };
+    }
+    private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    // MidiScale.cpp's presets (bit k = k semitones above the root); 10 = Custom (the Mask params).
+    private static readonly int[] ScaleMasks = { 2741, 1453, 2477, 1709, 1451, 2773, 1717, 661, 1193, 4095 };
+
+    /// <summary>The root and 12-bit mask Nota Scale runs: the selected preset (or the Custom mask)
+    /// on the Root knob; while Follow Key or Learn moves them, what its telemetry reports
+    /// ([2] root, [3] mask) — the telemetry only updates while audio runs.</summary>
+    private static (int Root, int Mask) ScaleInEffect(DisplayContext c)
+    {
+        if (c.P.On("Follow Key") || c.P.On("Learn"))
+        {
+            int n = c.Scope(out var s, 64);
+            if (n > 3 && s[3] > 0) return (((int)Math.Round(s[2]) % 12 + 12) % 12, (int)Math.Round(s[3]) & 4095);
+        }
+        int root = Math.Clamp((int)Math.Round(c.P.Raw("Root")), 0, 11);
+        int scale = (int)Math.Round(c.P.Raw("Scale", 1));
+        if (scale >= 0 && scale < ScaleMasks.Length) return (root, ScaleMasks[scale]);
+        int mask = 0;
+        for (int k = 0; k < 12; k++) if (c.P.On($"Mask {k}")) mask |= 1 << k;
+        return (root, mask == 0 ? ScaleMasks[0] : mask);
     }
 }

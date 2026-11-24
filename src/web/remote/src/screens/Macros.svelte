@@ -26,8 +26,9 @@
   const ledColor = $derived(app.track?.color ?? '');
   const dimmed = $derived(app.link !== 'ok' && app.link !== 'weak');
   const led = $derived(app.led && app.led.id === app.proj?.you ? app.led : null);
-  // The tracks Track ◀ ▶ walk on the phone: what can hold a device.
-  const order = $derived(app.proj?.tracks.filter((t) => t.kind !== 'group' && t.kind !== 'return').map((t) => t.id) ?? []);
+  // The tracks Track ◀ ▶ walk, groups included as Nota walks them; off this list (a return) both
+  // arrows stay live and Nota decides.
+  const order = $derived(app.proj?.tracks.filter((t) => t.kind !== 'return').map((t) => t.id) ?? []);
   const at = $derived(order.indexOf(app.proj?.you ?? 0));
 
   let local = $state<Record<number, number>>({});
@@ -81,9 +82,9 @@
 <div class="macros" class:land onpointermove={move} onpointerup={up} onpointercancel={up} role="group" aria-label="Macros">
   <div class="nav">
     <div class="step">
-      <button aria-label="Previous track" disabled={at <= 0} onclick={() => app.nav('track', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
+      <button aria-label="Previous track" disabled={at === 0} onclick={() => app.nav('track', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
       <div class="mid"><span class="k">Track</span><span class="v"><i class="sw" style:background={tc}></i>{app.track?.name ?? '—'}</span></div>
-      <button aria-label="Next track" disabled={at < 0 || at >= order.length - 1} onclick={() => app.nav('track', 1)}><svg viewBox="0 0 10 10"><path d="M3.5 2 L6.5 5 L3.5 8" /></svg></button>
+      <button aria-label="Next track" disabled={at >= 0 && at >= order.length - 1} onclick={() => app.nav('track', 1)}><svg viewBox="0 0 10 10"><path d="M3.5 2 L6.5 5 L3.5 8" /></svg></button>
     </div>
     <div class="step">
       <button aria-label="Previous device" disabled={!m || m.di <= 0} onclick={() => app.nav('device', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>

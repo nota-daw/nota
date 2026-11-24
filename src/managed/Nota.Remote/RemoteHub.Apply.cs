@@ -53,9 +53,12 @@ public sealed partial class RemoteHub
             case "sub":
             {
                 // Opening Macros after the controller moved it (specs/107) keeps that device: the
-                // phone's index is its last pick. A sub on the screen already shown is a pick.
+                // phone's index is its last pick. A sub on the screen already shown is a pick. The
+                // index counts only for the track it was picked on (`id`, specs/114): a sub sent as
+                // the phone learns of a new track still carries the old track's index.
                 bool opening = cmd.S != c.Screen;
-                if (!(opening && c.FollowedMacro) && cmd.I != c.MacroDevice) { c.MacroDevice = Math.Max(0, cmd.I); c.MacroPage = 0; }
+                bool sameTrack = cmd.Id <= 0 || cmd.Id == c.TrackId;
+                if (sameTrack && !(opening && c.FollowedMacro) && cmd.I != c.MacroDevice) { c.MacroDevice = Math.Max(0, cmd.I); c.MacroPage = 0; }
                 if (cmd.S == "Macros") c.FollowedMacro = false;
                 c.Screen = cmd.S;
                 c.SentScreenState = null;
@@ -131,14 +134,23 @@ public sealed partial class RemoteHub
                 var r = host.PhoneControl(PhoneControls.Macro1 + knob, c.TrackId, cmd.V);
                 if (r == PhoneControlResult.Bound) Learned(host, c, PhoneControls.Macro1 + knob);
                 if (r != PhoneControlResult.None) break;
-                var devs = MacroDevicesFor(host, c.TrackId);
-                if (c.MacroDevice < devs.Count && c.MacroPage < devs[c.MacroDevice].Pages.Count
-                    && devs[c.MacroDevice].Pages[c.MacroPage].Knobs is var knobs && knob < knobs.Count && knobs[knob] is { } p)
+                // A touch keeps the parameter it started on (specs/114): if the controller turns the
+                // page or the device under a held knob, the drag must not land on the new slot.
+                RemoteParam? p = null;
+                if (cmd.Phase != 1 && c.DragKnob == knob) p = c.DragParam;
+                else
                 {
-                    SetParam(c, p, cmd.V, cmd.Phase);
-                    LedTurned(c, devs[c.MacroDevice], c.MacroPage, knob);
+                    var devs = MacroDevicesFor(host, c.TrackId);
+                    if (c.MacroDevice < devs.Count && c.MacroPage < devs[c.MacroDevice].Pages.Count
+                        && devs[c.MacroDevice].Pages[c.MacroPage].Knobs is var knobs && knob < knobs.Count)
+                    {
+                        p = knobs[knob];
+                        if (p is not null) LedTurned(c, devs[c.MacroDevice], c.MacroPage, knob);
+                    }
+                    if (cmd.Phase == 1) { c.DragKnob = knob; c.DragParam = p; }
                 }
-                if (cmd.Phase == 2) host.Refresh();
+                if (p is not null) SetParam(c, p, cmd.V, cmd.Phase);
+                if (cmd.Phase == 2) { c.DragKnob = -1; c.DragParam = null; host.Refresh(); }
                 break;
             }
             case "nav": Navigate(host, c, cmd.S, cmd.I); break;
@@ -177,17 +189,21 @@ public sealed partial class RemoteHub
             case "track":
             {
                 if (i == 0) return;
-                if (c.Follow || c.FollowController)
+                // Macros Follow decides both ways (specs/114): on, the step moves Nota and the
+                // controller; off, only the phone moves — and it stops following Nota's selection,
+                // as picking a track on the phone does, so the selection can't pull it back.
+                if (c.FollowController)
                 {
                     if (!host.StepTrack(Math.Sign(i))) return;
                     if (host.SelectedTrackId > 0) c.TrackId = host.SelectedTrackId;
                 }
                 else
                 {
-                    var order = _tracks.Where(r => r.Kind is not "group" and not "return").Select(r => r.Id).ToList();
+                    var order = _tracks.Where(r => r.Kind is not "return").Select(r => r.Id).ToList();
                     int at = order.IndexOf(c.TrackId), to = at + Math.Sign(i);
                     if (at < 0 || to < 0 || to >= order.Count) return;
                     c.TrackId = order[to];
+                    c.Follow = false;
                 }
                 c.MacroDevice = 0;
                 c.MacroPage = 0;

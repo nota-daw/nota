@@ -69,6 +69,10 @@ public sealed partial class RemoteHub
             c.SentLed = null;
             return;
         }
+        // A phone that hasn't drained what it was sent gets no new frame: frames are the bulk of
+        // the traffic, and queued old ones would hold back the knob values and page changes
+        // behind them. The next tick sends the newest frame once the queue is clear.
+        if (c.Backlog > 1) return;
         int di = Math.Clamp(c.MacroDevice, 0, devs.Count - 1);
         var dev = devs[di];
         int pg = Math.Clamp(c.MacroPage, 0, dev.Pages.Count - 1);

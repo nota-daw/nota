@@ -320,7 +320,8 @@ export class App {
       this.sub();
       return;
     }
-    if (t.kind === 'audio') this.bigTransport = true;
+    // Stepping tracks on Macros (its arrows, or Follow) stays on Macros (specs/114).
+    if (t.kind === 'audio' && this.screen !== 'Macros') this.bigTransport = true;
     if (!first || !this.screenChosen) {
       if (t.kind === 'drum' && (this.screen === 'Keys' || this.screen === 'Pads')) this.screen = 'Pads';
       else if (t.kind === 'inst' && (this.screen === 'Pads' || this.screen === 'Keys')) this.screen = 'Keys';
@@ -336,7 +337,9 @@ export class App {
   }
 
   sub() {
-    this.raw({ t: 'sub', s: this.screen, i: this.macroDevice });
+    // `id`: the track the Macros device index belongs to, so a sub sent as a new track arrives
+    // doesn't pick the old track's device on it (specs/114).
+    this.raw({ t: 'sub', s: this.screen, i: this.macroDevice, id: this.mac?.id ?? 0 });
   }
 
   macroDevice = 0;

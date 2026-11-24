@@ -106,7 +106,7 @@ internal static class DisplayTests
                     Write(e, tg, old < 0.5 ? 0.95 : 0.05);
                     try
                     {
-                        var after = Draw(1.0, k).Rle4();
+                        var after = Draw(1.0, -1).Rle4();   // the same Turning both times: a highlight alone must not pass
                         moved = !after.AsSpan().SequenceEqual(before);
                     }
                     catch (Exception ex) { threw.Add($"{key}/{pageName} knob {k + 1}: {ex.GetType().Name} {ex.Message}"); }

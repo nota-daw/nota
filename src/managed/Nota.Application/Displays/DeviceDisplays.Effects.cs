@@ -41,6 +41,16 @@ public static partial class DeviceDisplays
             if (c.TurningName is { } t && t.StartsWith(p, StringComparison.Ordinal)) hi = b - 1;
         }
         Widgets.EqCurve(f, bands, 18, hi);
+        if (c.PageName.Equals("Q", StringComparison.OrdinalIgnoreCase))
+            // The Q page: each band's width as a bracket under its point (narrower = higher Q).
+            for (int b = 0; b < bands.Count; b++)
+            {
+                var band = bands[b];
+                double half = 1 / (2 * Math.Max(0.1, band.Q));
+                double y = Widgets.YOfDb(band.Type is Widgets.FilterType.Peak or Widgets.FilterType.LowShelf or Widgets.FilterType.HighShelf ? Math.Clamp(band.GainDb, -18, 18) : 0, 18, -18) + 3;
+                int lv = b == hi ? Widgets.Hot : band.On ? Widgets.Mid : Widgets.Grid + 1;
+                f.HLine(Widgets.XOfHz(band.Hz / Math.Pow(2, half)), Widgets.XOfHz(band.Hz * Math.Pow(2, half)), y, lv);
+            }
         if (dynamic)
         {
             // Each dynamic band's range as a dotted tick from its gain, moving with the gain reduction.
@@ -115,6 +125,18 @@ public static partial class DeviceDisplays
             if (c.P.On("Mute high")) f.Rect(125, top, 3, bottom - top + 1, Widgets.Mark);
             f.Line(64 - 20, top + 3, 64 + 20 * Math.Sign(shift == 0 ? 1 : shift), top + 3, shift == 0 ? Widgets.Grid + 1 : Widgets.Mark);
         }
+    }
+
+    // Delay scope telemetry (Delay.h S_*): the times in effect, synced or free.
+    private const int DlMsL = 8, DlMsR = 9;
+
+    /// <summary>Delay's left and right times in seconds as the device runs them: its telemetry (which
+    /// knows Sync, the divisions and the tempo), else the free-time knobs.</summary>
+    private static (double L, double R) DelayTimes(DisplayContext c)
+    {
+        int n = c.Scope(out var s, 64);
+        if (n > DlMsR && s[DlMsL] > 0 && s[DlMsR] > 0) return (s[DlMsL] / 1000.0, s[DlMsR] / 1000.0);
+        return (c.P.Sec("Time L", 0.25), c.P.Sec("Time R", 0.375));
     }
 
     private static double RateHz(DisplayContext c, string name)
@@ -222,9 +244,9 @@ public static partial class DeviceDisplays
         {
             Page("Main", (c, f) =>
             {
-                double l = c.P.Sec("Time L", 0.25), r = c.P.Sec("Time R", 0.375);
+                var (l, r) = DelayTimes(c);
                 Widgets.Taps(f, l, r, c.P.N("Feedback"), c.Playing ? c.Time : -1, 1 - 0.5 * c.P.N("Low Cut") - 0.5 * (1 - c.P.N("High Cut", 1)));
-            }, c => SecShort(c.P.Sec("Time L", 0.25)) + " " + SecShort(c.P.Sec("Time R", 0.375))),
+            }, c => { var (l, r) = DelayTimes(c); return SecShort(l) + " " + SecShort(r); }),
             Page("More", (c, f) =>
             {
                 Widgets.Sweep(f, RateHz(c, "Wow Rate"), Math.Max(0.05, c.P.N("Wow Depth")), 0.5, c.Time);
