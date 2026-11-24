@@ -151,7 +151,7 @@ export class App {
     this.ws = ws;
     const opened = Date.now();
     ws.onopen = () => {
-      const base = { v: 1, name: this.name, model: guessName(), track: Number(store.get('track', '0')), screen: this.screen, follow: store.get('follow') === '1', fc: this.prefs.macFollow };
+      const base = { v: 1, name: this.name, model: guessName(), track: Number(store.get('track', '0')), screen: this.screen, follow: store.get('follow') === '1', fc: this.prefs.macFollow, pg: 1 };
       if (this.pairCode) this.raw({ t: 'pair', code: this.pairCode, ...base });
       else if (this.token) this.raw({ t: 'hello', token: this.token, ...base });
       else { this.link = 'expired'; this.deny = 'new'; }

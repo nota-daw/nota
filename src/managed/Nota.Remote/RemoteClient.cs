@@ -50,6 +50,10 @@ public sealed class RemoteClient
     /// <summary>The Macros knob held now and the parameter its touch started on (−1 / null: none).</summary>
     internal int DragKnob = -1;
     internal RemoteParam? DragParam;
+    internal string DragDevice = "";
+    /// <summary>The phone walks devices and pages itself (`mac.pg` / `pgs`, `nav`); an older client
+    /// gets the flat list of "Device · 1/3" entries it picks with `sub` (specs/114).</summary>
+    public bool PagedMacros;
     /// <summary>The last LED frame sent (RLE4 bytes) and what it showed; null off Macros (specs/114).</summary>
     internal byte[]? SentLed;
     internal string? SentLedKey;

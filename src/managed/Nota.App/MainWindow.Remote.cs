@@ -210,10 +210,11 @@ public partial class MainWindow : IRemoteHost
     // specs/114: the phone's Macros screen walks the controller's pages and moves its focus.
     Nota.Application.Controllers.IDevicePageSource? IRemoteHost.DevicePages => _devicePages;
 
-    bool IRemoteHost.StepTrack(int delta)
+    void IRemoteHost.SelectTrack(int trackId)
     {
-        if (_controllers is { } svc) return svc.StepSelectedTrack(delta);
-        return false;
+        if (trackId <= 0) return;
+        if (_controllers?.SelectTrack is { } select) select(trackId);   // as Track ◀ ▶ select it (specs/107)
+        else if (Timeline.SelectedTrackId != trackId) Timeline.SelectTrackFromOutside(trackId);
     }
 
     void IRemoteHost.FocusDevice(Nota.Application.Controllers.DeviceAddress device)

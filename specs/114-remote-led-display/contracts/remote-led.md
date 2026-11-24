@@ -15,7 +15,9 @@ know a field or a message ignores it.
   "k": [ { "n": "Filter 1 Freq", "v": 0.55, "txt": "890 Hz", "a": false, "map": null }, … ] }  // 8
 ```
 
-- `devs` no longer holds "Name · 1/3" page entries; paging moves to `pg` / `pgs`.
+- A phone that says `"pg": 1` in `hello` / `pair` gets one entry per device and paging in `pg` / `pgs`
+  (and `led` frames). Any other client keeps the flat list of "Name · 1/3" page entries it picks with
+  `sub`, and gets no frames.
 - An older phone that ignores `pg` / `pgs` still sees eight knobs of the current page.
 
 ## `led` (Nota → phone) — while the phone shows Macros, only when the frame changed

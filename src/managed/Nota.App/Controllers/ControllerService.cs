@@ -965,22 +965,6 @@ public sealed class ControllerService
         if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
     }
 
-    /// <summary>Track ◀ / ▶ from elsewhere — a phone's Macros screen (specs/114): the same step
-    /// as a controller's, every controller's bank following. False at the end of the list.</summary>
-    public bool StepSelectedTrack(int delta)
-    {
-        var order = VisibleTrackOrder?.Invoke()
-                    ?? ControllerTrackStep.Order(ArrangementView.HierarchyOrder(_engine).Select(r => (r.Id, r.ParentGroupId)),
-                                                 id => GroupCollapsed?.Invoke(id) == true);
-        if (ControllerTrackStep.Step(order, _selectedTrack, delta) is not { } to) return false;
-        SelectTrack?.Invoke(to);
-        var ids = TrackIds();
-        bool moved = false;
-        foreach (var c in _controllers.Values) moved |= c.State.BankFollow(ids.IndexOf(to), ids.Count);
-        if (moved) BankChanged?.Invoke();
-        return true;
-    }
-
     /// <summary>Put every controller's knobs that follow a device on <paramref name="page"/> of the
     /// focused device (a phone's page buttons, specs/114).</summary>
     public void SetPage(int page)

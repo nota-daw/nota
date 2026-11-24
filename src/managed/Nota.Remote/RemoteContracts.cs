@@ -121,9 +121,9 @@ public interface IRemoteHost
     /// <summary>The user's and the project's edited controller pages (specs/051), which the phone's
     /// Macros pages follow too (specs/114); null for the shipped pages only.</summary>
     Nota.Application.Controllers.IDevicePageSource? DevicePages => null;
-    /// <summary>Step Nota's selected track as the controller's Track ◀ ▶ do (specs/114, a phone
-    /// that follows Nota). False when there is no neighbour.</summary>
-    bool StepTrack(int delta) => false;
+    /// <summary>Select <paramref name="trackId"/> in Nota as the controller's Track ◀ ▶ do, so the
+    /// controller's knobs follow it (specs/114: a phone's Macros arrows with Follow on).</summary>
+    void SelectTrack(int trackId) { }
     /// <summary>Focus <paramref name="device"/> as the Devices panel's selection would, so the
     /// controller's knobs follow it (specs/114).</summary>
     void FocusDevice(Nota.Application.Controllers.DeviceAddress device) { }

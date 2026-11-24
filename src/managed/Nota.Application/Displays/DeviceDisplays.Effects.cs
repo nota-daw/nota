@@ -77,13 +77,37 @@ public static partial class DeviceDisplays
     };
 
     private static readonly string[] ColorNotes = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    // Color.cpp noteMask(): four presets rotated to the root; Scale step 4 = the note switches.
+    private static readonly int[] ColorScaleMasks = { 0xab5, 0x5ad, 0x295, 0x4a9 };
+
+    /// <summary>The pitch classes Nota Color tunes to, as the engine picks them (bit k = pitch class k).</summary>
+    private static int ColorNoteMask(DisplayContext c)
+    {
+        int scale = (int)Math.Round(c.P.Raw("Scale") * 4);
+        if (scale >= 4)
+        {
+            int custom = 0;
+            for (int k = 0; k < 12; k++) if (c.P.On(ColorNotes[k])) custom |= 1 << k;
+            return custom;
+        }
+        int m = ColorScaleMasks[Math.Clamp(scale, 0, 3)], root = (int)Math.Round(c.P.Raw("Root") * 11);
+        return ((m << root) | (m >> (12 - root))) & 0xfff;
+    }
+
+    /// <summary>Nota Color's processing band in Hz (Color.cpp: Low 40–2000, High 1000–20000, exponential).</summary>
+    private static (double Lo, double Hi) ColorBand(DisplayContext c)
+    {
+        double lo = 40 * Math.Pow(2000.0 / 40, c.P.Raw("Low", 0.3));
+        double hi = Math.Max(2 * lo, 1000 * Math.Pow(20000.0 / 1000, c.P.Raw("High", 0.5)));
+        return (Math.Clamp(lo, 20, 20000), Math.Clamp(hi, 20, 20000));
+    }
 
     /// <summary>Nota Color: the processing band shaded, a resonant peak on every enabled note in it
     /// (taller with Amount × Resonance, narrower with Decay). The Spectral page shows the peaks
     /// shifted by Pre / Post, the unshifted ones faint, the gate threshold and the muted sides.</summary>
     private static void ColorPeaks(DisplayContext c, LedFrame f, bool spectral)
     {
-        double lo = Math.Clamp(c.P.Hz("Low", 40), 20, 20000), hi = Math.Clamp(c.P.Hz("High", 400), lo, 20000);
+        var (lo, hi) = ColorBand(c);
         double x0 = Widgets.XOfHz(lo), x1 = Widgets.XOfHz(hi);
         int top = LedFrame.Top, bottom = LedFrame.Bottom;
         Widgets.FreqTicks(f);
@@ -92,15 +116,15 @@ public static partial class DeviceDisplays
         f.VLine(x0, top, bottom, Widgets.Mid, dotted: true);
         f.VLine(x1, top, bottom, Widgets.Mid, dotted: true);
 
-        int root = c.P.Has("Root") ? (c.P.Raw("Root") > 1.0001 ? (int)Math.Round(c.P.Raw("Root")) : c.P.Step("Root", 12)) : 0;
+        int mask = ColorNoteMask(c);
         var notes = new List<int>();
-        for (int k = 0; k < 12; k++)
-            if (!c.P.Has(ColorNotes[k]) ? new[] { 0, 2, 4, 5, 7, 9, 11 }.Contains((k - root + 12) % 12) : c.P.On(ColorNotes[k])) notes.Add(k);
+        for (int k = 0; k < 12; k++) if ((mask >> k & 1) != 0) notes.Add(k);
         double amount = c.P.N("Amount", 0.5), reso = c.P.N("Resonance", 0.5), dec = c.P.N("Decay", 0.5);
         double shift = 0;
         if (spectral)
         {
-            double Semis(string n) => c.P.Raw(n) > 1.0001 || c.P.Raw(n) < -0.0001 ? c.P.Raw(n) : c.P.Bi(n) * 12;
+            // Pre and Post move by ±100 cents (Color.cpp: (v − 0.5) × 200).
+            double Semis(string n) => (c.P.Raw(n, 0.5) - 0.5) * 2;
             shift = (c.P.Has("Pre enabled") && !c.P.On("Pre enabled") ? 0 : Semis("Pre")) + Semis("Post");
         }
         int h = (int)Math.Round(6 + 26 * amount * (0.4 + 0.6 * reso)), w = Math.Max(0, (int)Math.Round((1 - dec) * 2));
@@ -548,7 +572,7 @@ public static partial class DeviceDisplays
         // Nota Color (#977): the notes it tunes to inside its band, as resonant peaks.
         d["builtin:fx:color"] = new[]
         {
-            Page("Main", (c, f) => ColorPeaks(c, f, false), c => HzShort(c.P.Hz("Low", 40)) + "-" + HzShort(c.P.Hz("High", 400))),
+            Page("Main", (c, f) => ColorPeaks(c, f, false), c => { var (lo, hi) = ColorBand(c); return HzShort(lo) + "-" + HzShort(hi); }),
             Page("Spectral", (c, f) => ColorPeaks(c, f, true), c => "MORPH " + PctShort(c.P.N("Morph"))),
         };
 

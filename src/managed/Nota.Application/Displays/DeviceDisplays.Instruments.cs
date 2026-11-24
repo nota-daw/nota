@@ -174,7 +174,9 @@ public static partial class DeviceDisplays
                     Widgets.Hot, Widgets.Fill, c.Playing ? c.Time : -1, 0, 74);
                 f.VLine(78, LedFrame.Top, LedFrame.Bottom, Widgets.Grid);
                 double fc = c.P.Hz("Filter 2 Freq"), q = 0.5 + c.P.N("Filter 2 Reso") * 11;
-                f.Curve(x => Widgets.YOfDb(20 * Math.Log10(Math.Max(1e-5, Widgets.FilterMag(Widgets.FilterType.LowPass, Widgets.HzOfX(x, 81, 127), fc, q))), 18, -42), 81, 127, Widgets.Mark, Widgets.Fill);
+                var t2 = Widgets.FilterTypeFromName(c.P.Txt("Filter 2 Type"));
+                int poles2 = c.P.Txt("Filter 2 Slope").Contains("24") ? 4 : 2;
+                f.Curve(x => Widgets.YOfDb(20 * Math.Log10(Math.Max(1e-5, Widgets.FilterMag(t2, Widgets.HzOfX(x, 81, 127), fc, q, poles2))), 18, -42), 81, 127, Widgets.Mark, Widgets.Fill);
             }),
             Page("LFO", Lfos("LFO1 Rate", "LFO1 Depth", "LFO1 Shape", "LFO2 Rate", "LFO2 Depth", "LFO2 Shape"), c => HzShort(HzOfRate(c, "LFO1 Rate"))),
         };

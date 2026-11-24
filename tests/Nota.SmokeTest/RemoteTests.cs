@@ -362,7 +362,7 @@ internal static class RemoteTests
         Thread.Sleep(80); hub.Tick();
         yield return (e.TryGetTrackInfo(0, out var t0) && t0.Muted == 0, "nothing is accepted before pairing");
 
-        Send(new { t = "pair", code = pairing.Code, name = "Anna's iPhone", screen = "Mixer" });
+        Send(new { t = "pair", code = pairing.Code, name = "Anna's iPhone", screen = "Mixer", pg = 1 });
         var welcome = Wait("welcome");
         yield return (welcome?.GetProperty("token").GetString()?.Length > 20 && welcome?.GetProperty("host").GetString() == "Test Mac",
             "the code pairs: welcome with a token and the host's name");
@@ -707,7 +707,7 @@ internal static class RemoteTests
                 lock (inbox) inbox.Add(doc.RootElement.Clone());
             }
         });
-        Send(new { t = "hello", token, name = "Anna's iPhone", screen = "Mixer" });
+        Send(new { t = "hello", token, name = "Anna's iPhone", screen = "Mixer", pg = 1 });
         yield return (Wait("welcome") is not null && !Wait("welcome", 200).HasValue, "the token reconnects without a code");
         var mix = Wait("mix");
         yield return (mix is { } mx && mx.GetProperty("ch").GetArrayLength() == 1, "the Mixer screen gets channel state");

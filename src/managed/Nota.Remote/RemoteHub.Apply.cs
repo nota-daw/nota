@@ -58,7 +58,20 @@ public sealed partial class RemoteHub
                 // the phone learns of a new track still carries the old track's index.
                 bool opening = cmd.S != c.Screen;
                 bool sameTrack = cmd.Id <= 0 || cmd.Id == c.TrackId;
-                if (sameTrack && !(opening && c.FollowedMacro) && cmd.I != c.MacroDevice) { c.MacroDevice = Math.Max(0, cmd.I); c.MacroPage = 0; }
+                if (sameTrack && !(opening && c.FollowedMacro))
+                {
+                    if (c.PagedMacros)
+                    {
+                        if (cmd.I != c.MacroDevice) { c.MacroDevice = Math.Max(0, cmd.I); c.MacroPage = 0; }
+                    }
+                    else
+                    {
+                        // An older client picks a page of the flat list (specs/114 keeps it).
+                        var flat = FlatMacros(MacroDevicesFor(host, c.TrackId));
+                        if (cmd.I >= 0 && cmd.I < flat.Count) { c.MacroDevice = flat[cmd.I].Device; c.MacroPage = flat[cmd.I].Page; }
+                        else if (flat.Count > 0) { c.MacroDevice = 0; c.MacroPage = 0; }
+                    }
+                }
                 if (cmd.S == "Macros") c.FollowedMacro = false;
                 c.Screen = cmd.S;
                 c.SentScreenState = null;
@@ -137,7 +150,12 @@ public sealed partial class RemoteHub
                 // A touch keeps the parameter it started on (specs/114): if the controller turns the
                 // page or the device under a held knob, the drag must not land on the new slot.
                 RemoteParam? p = null;
-                if (cmd.Phase != 1 && c.DragKnob == knob) p = c.DragParam;
+                if (cmd.Phase != 1 && c.DragKnob == knob)
+                {
+                    // ...as long as that device is still there: a chain edit mid-drag ends the touch.
+                    p = c.DragParam is { } held && DeviceIdentity(held) == c.DragDevice ? held : null;
+                    if (p is null) c.DragParam = null;
+                }
                 else
                 {
                     // A touch that started on a page the phone no longer shows (the controller moved
@@ -152,7 +170,7 @@ public sealed partial class RemoteHub
                         p = knobs[knob];
                         if (p is not null) LedTurned(c, devs[c.MacroDevice], c.MacroPage, knob);
                     }
-                    if (cmd.Phase == 1) { c.DragKnob = knob; c.DragParam = p; }
+                    if (cmd.Phase == 1) { c.DragKnob = knob; c.DragParam = p; c.DragDevice = p is null ? "" : DeviceIdentity(p); }
                 }
                 if (p is not null) SetParam(c, p, cmd.V, cmd.Phase);
                 if (cmd.Phase == 2) { c.DragKnob = -1; c.DragParam = null; host.Refresh(); }
@@ -183,6 +201,21 @@ public sealed partial class RemoteHub
 
     private const int MasterFaderId = -1;
 
+    /// <summary>Which device a parameter belongs to — the device itself, not its slot in the chain
+    /// (specs/114), so a drag notices a device removed or moved under it.</summary>
+    private string DeviceIdentity(RemoteParam p)
+    {
+        int t = p.TrackId, d = p.DeviceIndex;
+        switch (p.Kind)
+        {
+            case RemoteParamKind.MidiParam:
+                return d >= 0 && d < _engine.TrackMidiEffectCount(t) ? $"m{_engine.MidiEffectKind(t, d)}:{_engine.MidiEffectName(t, d)}:{d}" : "";
+            default:
+                if (d < 0) return "i" + _engine.TrackInstrumentId(t).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return d < _engine.TrackDeviceCount(t) ? "a" + _engine.TrackDeviceId(t, d).ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+        }
+    }
+
     /// <summary>The Macros screen's Track / Device / Page buttons (specs/114, contracts/remote-led.md).
     /// The phone moves at once; a phone that follows Nota also moves Nota's selection, focused
     /// device and the lead controller's page, so the controller follows it.</summary>
@@ -197,19 +230,14 @@ public sealed partial class RemoteHub
                 // Macros Follow decides both ways (specs/114): on, the step moves Nota and the
                 // controller; off, only the phone moves — and it stops following Nota's selection,
                 // as picking a track on the phone does, so the selection can't pull it back.
-                if (c.FollowController)
-                {
-                    if (!host.StepTrack(Math.Sign(i))) return;
-                    if (host.SelectedTrackId > 0) c.TrackId = host.SelectedTrackId;
-                }
-                else
-                {
-                    var order = _tracks.Where(r => r.Kind is not "return").Select(r => r.Id).ToList();
-                    int at = order.IndexOf(c.TrackId), to = at + Math.Sign(i);
-                    if (at < 0 || to < 0 || to >= order.Count) return;
-                    c.TrackId = order[to];
-                    c.Follow = false;
-                }
+                // The step starts from the track the phone shows (not Nota's selection, which may
+                // be elsewhere), in the order the phone lists.
+                var order = _tracks.Where(r => r.Kind is not "return").Select(r => r.Id).ToList();
+                int at = order.IndexOf(c.TrackId), to = at + Math.Sign(i);
+                if (at < 0 || to < 0 || to >= order.Count) return;
+                c.TrackId = order[to];
+                if (c.FollowController) host.SelectTrack(c.TrackId);
+                else c.Follow = false;
                 c.MacroDevice = 0;
                 c.MacroPage = 0;
                 var now = MacroDevicesFor(host, c.TrackId);

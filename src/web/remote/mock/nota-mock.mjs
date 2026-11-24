@@ -273,6 +273,7 @@ function onMessage(c, m) {
     case 'nav': {
       const pages = [1, 4, 2, 2];
       if (m.s === 'device') macState.di = Math.max(0, Math.min(3, macState.di + m.i)), macState.pg = 0;
+      else if (m.s === 'deviceAt' && Number.isInteger(m.i) && m.i >= 0 && m.i < pages.length && m.i !== macState.di) { macState.di = m.i; macState.pg = 0; }
       else if (m.s === 'page') macState.pg = Math.max(0, Math.min(pages[macState.di] - 1, macState.pg + m.i));
       else if (m.s === 'pageAt') macState.pg = Math.max(0, Math.min(pages[macState.di] - 1, m.i));
       else if (m.s === 'track') { const ids = trackDefs.map((t) => t.id); const at = ids.indexOf(state.you) + Math.sign(m.i); if (at >= 0 && at < ids.length) { state.you = ids[at]; broadcast(proj()); } }

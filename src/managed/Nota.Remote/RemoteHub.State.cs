@@ -459,6 +459,18 @@ public sealed partial class RemoteHub
         return list;
     }
 
+    /// <summary>Every page of every device as one list, as phones before specs/114 pick them.</summary>
+    internal static List<(string Name, int Device, int Page)> FlatMacros(IReadOnlyList<RemoteMacroDevice> devs)
+    {
+        var list = new List<(string, int, int)>();
+        for (int d = 0; d < devs.Count; d++)
+        {
+            int n = devs[d].Pages.Count;
+            for (int p = 0; p < n; p++) list.Add((n > 1 ? $"{devs[d].Name} · {p + 1}/{n}" : devs[d].Name, d, p));
+        }
+        return list;
+    }
+
     private string BuildMacros(IRemoteHost host, RemoteClient c)
     {
         var devs = MacroDevicesFor(host, c.TrackId);
@@ -469,14 +481,26 @@ public sealed partial class RemoteHub
         {
             w.WriteString("t", "mac");
             w.WriteNumber("id", c.TrackId);
-            w.WriteNumber("di", c.MacroDevice);
-            w.WriteStartArray("devs");
-            foreach (var d in devs) w.WriteStringValue(d.Name);
-            w.WriteEndArray();
-            w.WriteNumber("pg", c.MacroPage);
-            w.WriteStartArray("pgs");
-            if (dev is not null) foreach (var p in dev.Pages) w.WriteStringValue(p.Name);
-            w.WriteEndArray();
+            if (c.PagedMacros)
+            {
+                w.WriteNumber("di", c.MacroDevice);
+                w.WriteStartArray("devs");
+                foreach (var d in devs) w.WriteStringValue(d.Name);
+                w.WriteEndArray();
+                w.WriteNumber("pg", c.MacroPage);
+                w.WriteStartArray("pgs");
+                if (dev is not null) foreach (var p in dev.Pages) w.WriteStringValue(p.Name);
+                w.WriteEndArray();
+            }
+            else
+            {
+                // An older client: one entry per page, "Device · 2/3", picked with sub (as before specs/114).
+                var flat = FlatMacros(devs);
+                w.WriteNumber("di", Math.Max(0, flat.FindIndex(e => e.Device == c.MacroDevice && e.Page == c.MacroPage)));
+                w.WriteStartArray("devs");
+                foreach (var e in flat) w.WriteStringValue(e.Name);
+                w.WriteEndArray();
+            }
             w.WriteStartArray("k");
             if (dev is not null)
             {

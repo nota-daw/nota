@@ -180,7 +180,7 @@ public static class RemoteParams
     /// <summary>Whether the parameter has an automation lane with points (the brass dot).</summary>
     public static bool Automated(IAudioEngine e, RemoteParam p)
     {
-        if (p.Kind is RemoteParamKind.RackMacro or RemoteParamKind.MidiParam) return false;
+        if (p.Kind == RemoteParamKind.RackMacro) return false;
         int n = e.AutomationLaneCount(p.TrackId);
         string pid = p.Kind == RemoteParamKind.PluginParam ? e.PluginParamId(p.TrackId, p.DeviceIndex, p.ParamIndex) : "";
         for (int i = 0; i < n; i++)
@@ -188,6 +188,7 @@ public static class RemoteParams
             var li = e.AutomationLaneInfo(p.TrackId, i);
             if (li.PointCount == 0 || li.DeviceIndex != p.DeviceIndex) continue;
             if (p.Kind == RemoteParamKind.DeviceParam && li.Target == AutomationTarget.DeviceParam && li.ParamIndex == p.ParamIndex) return true;
+            if (p.Kind == RemoteParamKind.MidiParam && li.Target == AutomationTarget.MidiDeviceParam && li.ParamIndex == p.ParamIndex) return true;
             if (p.Kind == RemoteParamKind.PluginParam && li.Target == AutomationTarget.PluginParam && e.AutomationLaneParamId(p.TrackId, i) == pid) return true;
         }
         return false;

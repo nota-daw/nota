@@ -54,7 +54,8 @@ public sealed partial class RemoteHub
     /// <summary>Send <paramref name="c"/> its Macros page's frame when it changed.</summary>
     private void PushLed(IRemoteHost host, RemoteClient c)
     {
-        if (c.Screen != "Macros") { c.SentLed = null; c.SentLedKey = null; return; }
+        // Only phones that know the display get frames (an older client would drop them).
+        if (c.Screen != "Macros" || !c.PagedMacros) { c.SentLed = null; c.SentLedKey = null; return; }
         var devs = MacroDevicesFor(host, c.TrackId);
         string key;
         string json;
