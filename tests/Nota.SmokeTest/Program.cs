@@ -16328,6 +16328,8 @@ Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- non-ASCII sample paths (#974) --");
 foreach (var (ok, label) in UnicodeSamplePathTests.Run()) Check(ok, label);
+Console.WriteLine("-- play vs count-in (#988) --");
+foreach (var (ok, label) in PlayCountInTests.Run()) Check(ok, label);
 using (var tempoLane = new NotaEngine())
 {
     int failed = tempoLane.TempoLaneSelfTest();
