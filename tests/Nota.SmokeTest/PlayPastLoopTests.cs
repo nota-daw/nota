@@ -56,6 +56,19 @@ internal static class PlayPastLoopTests
         yield return (e.PositionBeats < 2.0, $"#981: a tempo change that brings the playhead back into the loop wraps again ({e.PositionBeats:F2})");
         e.StopTransport(); e.SetBpm(120); e.SetLoop(false, 0, 0); Apply(e);
 
+        // A higher sample rate keeps the sample position too: beat 6 at 48 kHz is beat 3 at 96.
+        using (var sr = new NotaEngine())
+        {
+            sr.SetBpm(120);
+            sr.SetLoop(true, 0.0, 4.0);
+            Apply(sr);
+            sr.Seek(6.0); Apply(sr);
+            sr.Play(); Apply(sr);
+            var big = new float[Chunk * 2];
+            for (int done = 0; done < 72000; done += Chunk) sr.RenderOffline(big, Chunk, 96000.0); // 1.5 beats at 96 kHz
+            yield return (sr.PositionBeats < 2.0, $"#981: a sample-rate change that brings the playhead back into the loop wraps again ({sr.PositionBeats:F2})");
+        }
+
         // Recording from past the loop end records straight through, where it is heard — not
         // folded into the loop as passes.
         using var r = new NotaEngine();

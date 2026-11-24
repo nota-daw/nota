@@ -2644,6 +2644,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     SegAnchor* const anchors = segAnchors_;
     int32_t nAnchors = 0;
     while (done < numFrames) {
+        transport_.rejoinLoop(); // a clock change put a played-on playhead back in the loop
         if (playing && transport_.wrapsAtLoopEnd() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             // No voice flush here: clip notes crossing the loop end get note-offs in the next
             // segment (seamOffs_), so live-held keys keep sounding and tails ring out (#29).

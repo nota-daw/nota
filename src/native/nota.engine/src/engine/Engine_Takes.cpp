@@ -478,6 +478,7 @@ bool Engine::takeRecordTestImpl(int32_t trackId, const float* interleaved, int32
             std::min(kChunk, frames - at), channels);
         drainInputQueue();
     }
+    takeBeatOverride_ = std::numeric_limits<double>::quiet_NaN(); // later takes read the transport
     stopAudioRecording();
     auto nt = findTrackAuthoring(trackId);
     return nt && (nt->takes.size() > before || !nt->clips.empty());

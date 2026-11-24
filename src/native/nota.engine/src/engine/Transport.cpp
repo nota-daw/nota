@@ -48,7 +48,7 @@ TransportInfo Transport::transportInfo(double blockStartSamples) const {
     ti.timeInSamples = static_cast<int64_t>(blockStartSamples);
     ti.timeInSeconds = sampleRate_ > 0.0 ? blockStartSamples / sampleRate_ : 0.0;
     ti.isPlaying = playing_;
-    ti.isLooping = loopEnabled_;
+    ti.isLooping = wrapsAtLoopEnd(); // played on past the loop: plug-ins see a straight clock (#981)
     ti.ppqLoopStart = loopStartBeat_;
     ti.ppqLoopEnd = loopEndBeat_;
     return ti;
