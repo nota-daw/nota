@@ -2400,6 +2400,12 @@ class Engine {
     bool startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn);
     double takeStartOverride_ = std::numeric_limits<double>::quiet_NaN(); // startAudioRecording
     int takePlayingOverride_ = -1;                                         // -1 = read the transport
+    double takeBeatOverride_ = std::numeric_limits<double>::quiet_NaN();  // tests: the take's playhead
+    double takeTransportBeats() const {
+        return std::isnan(takeBeatOverride_) ? transport_.uiPositionBeats() : takeBeatOverride_;
+    }
+    // The transport plays on past the loop (#981). The take test hooks roll no transport.
+    bool takeLoopBypassed() const { return std::isnan(takeBeatOverride_) && transport_.uiPastLoopEnd(); }
     double takePlayhead() const;
     bool takeTransportPlaying() const;
     // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
@@ -2730,6 +2736,10 @@ class Engine {
     void beginTestLane(int32_t trackId, int32_t first, int32_t width);
     struct TakeGeometry;
     void materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g);
+    // Land what the running Arrangement take captured so far, as a stop would, and keep every
+    // lane recording into a fresh capture (#981: the take moved into or out of the loop).
+    void landCaptureSoFar();
+    bool captureLinearUnderLoop_ = false; // a straight capture with the loop on, past its end
     void finishCaptureLane(int32_t trackId); // one lane leaves a running take (its track disarmed)
     // Session (specs/086): another slot joins the running Session audio take as a lane of its own.
     bool addSessionAudioLane(int32_t trackId, int32_t scene);
@@ -2743,6 +2753,9 @@ class Engine {
                               double sampleRate);
     void beginCaptureLayout();             // decide linear vs loop capture at take start
     void activateLoopPunch(double atBeat); // switch capture to loop punch (start or mid-take)
+    // The loop will wrap a take at `beat`: it is on and `beat` is before its end. Past the end
+    // the transport plays on (#981), so the take records straight through, where it is heard.
+    bool loopWrapsFrom(double beat) const { return loopEnabled_ && loopEnd_ > loopStart_ && beat < loopEnd_ - 1e-6; }
     bool audioRecording_ = false;
     int32_t audioRecordTrackId_ = 0;
     double audioRecordStartBeat_ = 0.0;

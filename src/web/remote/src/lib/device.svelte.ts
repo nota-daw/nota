@@ -11,9 +11,18 @@ class Device {
   fullscreen = $state(!!fullscreenElement());
 
   constructor() {
-    const upd = () => { this.w = window.innerWidth; this.h = window.innerHeight; };
+    // The page never scrolls (the app is a fixed body). If turning the phone left the document
+    // scrolled — iOS does that when something overflowed for a moment mid-rotation — taps land
+    // beside what they aim at until a reload, so put it back, now and once the rotation settles.
+    const unscroll = () => {
+      const roots = [document.scrollingElement, document.documentElement, document.body];
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+      for (const r of roots) if (r && (r.scrollTop || r.scrollLeft)) { r.scrollTop = 0; r.scrollLeft = 0; }
+    };
+    const upd = () => { this.w = window.innerWidth; this.h = window.innerHeight; unscroll(); };
     window.addEventListener('resize', upd);
-    window.addEventListener('orientationchange', () => setTimeout(upd, 120));
+    window.addEventListener('orientationchange', () => { setTimeout(upd, 120); setTimeout(unscroll, 500); });
+    window.visualViewport?.addEventListener('resize', () => setTimeout(unscroll, 50));
     const fs = () => (this.fullscreen = !!fullscreenElement());
     document.addEventListener('fullscreenchange', fs);
     document.addEventListener('webkitfullscreenchange', fs);
