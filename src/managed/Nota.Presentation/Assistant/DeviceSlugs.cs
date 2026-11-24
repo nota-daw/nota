@@ -36,7 +36,7 @@ public static class DeviceSlugs
         "audio-effects/crush", "audio-effects/dynamic-eq", "audio-effects/ceiling", "audio-effects/strata",
         "audio-effects/eq-3", "audio-effects/forge", "audio-effects/level", "audio-effects/shutter",
         "audio-effects/chamber", "audio-effects/prism", "audio-effects/lens", "audio-effects/flanger",
-        "audio-effects/phaser", "audio-effects/chorus", "audio-effects/vocoder",
+        "audio-effects/phaser", "audio-effects/chorus", "audio-effects/vocoder", "audio-effects/color",
     ];
     private static readonly string[] MidiEffects =
     [

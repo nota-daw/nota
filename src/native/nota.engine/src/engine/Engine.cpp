@@ -667,11 +667,13 @@ void Engine::setFrequency(float hz) {
 
 // --- transport -------------------------------------------------------------
 
-void Engine::playClock() {
+bool Engine::enqueueTransportStart(int32_t countInBars) {
     Command c;
     c.type = CommandType::TransportPlay;
-    commands_.push(c);
+    c.i0 = countInBars;
+    return commands_.push(c);
 }
+void Engine::playClock() { enqueueTransportStart(0); }
 // Main Play (and arrangement record) roll the Arrangement; session launches use playClock().
 void Engine::transportPlay() {
     arrangementActive_.store(true, std::memory_order_relaxed);
@@ -694,10 +696,10 @@ void Engine::startCountIn(int32_t bars) {
     // Mirror it now so a poll before the audio thread picks the command up already sees
     // the count-in (Play pressed again = stop, not a second start).
     uiCountIn_.store(static_cast<double>(bars) * transport_.beatsPerBar(), std::memory_order_relaxed);
-    Command c;
-    c.type = CommandType::TransportPlay;
-    c.i0 = bars;
-    commands_.push(c);
+    if (!enqueueTransportStart(bars)) {
+        uiCountIn_.store(0.0, std::memory_order_relaxed);
+        captureGate_.store(true, std::memory_order_release);
+    }
 }
 void Engine::transportStop() {
     arrangementActive_.store(false, std::memory_order_relaxed);
@@ -879,6 +881,7 @@ void Engine::ensureRenderScratch(size_t tracks) {
     s->leafBuf.assign(cap * (size_t)kMaxBlock * 4, 0.0f); // two halves (dry + post) per track
     s->blockMidi.assign(cap, std::vector<MidiEv>(1024));
     s->blockMidiN.assign(cap, 0);
+    s->blockMidiStart.resize(cap);
     s->blockExpr.assign(cap, std::vector<ExprEv>(kMaxBlockExpr));
     s->blockExprN.assign(cap, 0);
     s->parIdx.assign(cap, 0);

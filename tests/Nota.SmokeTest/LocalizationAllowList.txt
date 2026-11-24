@@ -2159,6 +2159,9 @@ Nota.Application/Engine/EngineContracts.cs	Pressure	# data: device parameter and
 Nota.Application/Engine/EngineContracts.cs	Tune	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/EngineContracts.cs	Volume	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Engine/SectionNames.cs	Section 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/DeviceView.cs	FFT size	# data: the engine's Nota Color configuration identifier, independent of the localized selector
+Nota.Application/Instruments/DeviceView.cs	Gate	# data: the engine's Nota Color Gate parameter identifier
+Nota.Application/Instruments/DeviceView.cs	Pre enabled	# data: the engine's Nota Color Pre configuration identifier, independent of the localized switch
 Nota.Application/Instruments/DeviceView.cs	View	# data: the engine's param name for an effect's card size, never shown
 Nota.Application/Instruments/KeysModel.cs	 pickup	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.Application/Instruments/KeysModel.cs	 voices	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2759,3 +2762,9 @@ Nota.Application/Input/ReservedKeys.cs	Windows	# data: operating-system names (p
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unknown action '{id}'"	# data: log text for the support log, not shown
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring unreadable key '{t}' for '{id}'"	# data: log text for the support log, not shown
 Nota.Application/Input/KeyBindings.cs	$"Nota shortcuts: ignoring an empty entry for '{id}'"	# data: log text for the support log, not shown
+
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	Nota Color	# data: device identity and semantic search metadata
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	color bass spectral resonator	# data: device identity and semantic search metadata
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bright clean	# data: device identity and semantic search metadata
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	bass synth	# data: device identity and semantic search metadata
+Nota.Application/Palette/DeviceCategories.cs	Nota Color	# data: device identity and semantic search metadata
