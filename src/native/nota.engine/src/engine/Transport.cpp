@@ -23,9 +23,15 @@ double Transport::mappedBeatAtSamples(double sample) const {
 
 void Transport::setLoop(bool enabled, double startBeat, double endBeat) {
     ++presentationEpoch_;
-    loopEnabled_ = enabled && endBeat > startBeat;
+    const bool on = enabled && endBeat > startBeat;
+    const bool changed = on != loopEnabled_ || startBeat != loopStartBeat_ || endBeat != loopEndBeat_;
+    loopEnabled_ = on;
     loopStartBeat_ = startBeat;
     loopEndBeat_ = endBeat;
+    // A loop switched on or moved so that the playhead is already past its end lets it play
+    // on (#981). An unchanged resend keeps the state: the playhead may sit exactly on the end
+    // it rolled into, waiting for the wrap.
+    if (changed) updatePastLoopEnd();
 }
 
 void Transport::advanceBy(int32_t frames) {
@@ -42,13 +48,15 @@ TransportInfo Transport::transportInfo(double blockStartSamples) const {
     ti.timeInSamples = static_cast<int64_t>(blockStartSamples);
     ti.timeInSeconds = sampleRate_ > 0.0 ? blockStartSamples / sampleRate_ : 0.0;
     ti.isPlaying = playing_;
-    ti.isLooping = loopEnabled_;
+    ti.isLooping = wrapsAtLoopEnd(); // played on past the loop: plug-ins see a straight clock (#981)
     ti.ppqLoopStart = loopStartBeat_;
     ti.ppqLoopEnd = loopEndBeat_;
     return ti;
 }
 
 void Transport::publish() {
+    uiPastLoopEnd_.store(loopEnabled_ && pastLoopEnd_, std::memory_order_relaxed);
+    if (pastLoopEnd_) uiPastLoopFrom_.store(beatAtSamples(pastLoopFromSamples_), std::memory_order_relaxed);
     // The ordinary clock needs one conversion factor, without querying mapped
     // state separately for each published value.
     if (!map_ && !lastMap_) {
@@ -85,17 +93,17 @@ void Transport::publishPresentation(double startSamples, int32_t playingFrames, 
         const double loopStart = samplesAtBeat(loopStartBeat_);
         const double loopEnd = samplesAtBeat(loopEndBeat_);
         const double loopLength = loopEnd - loopStart;
-        if (loopEnabled_ && loopLength > 0 && predicted >= loopEnd)
+        if (wrapsAtLoopEnd() && loopLength > 0 && predicted >= loopEnd)
             predicted = loopStart + std::fmod(predicted - loopStart, loopLength);
         double correction = actual - predicted;
-        if (loopEnabled_ && loopLength > 0 && actual >= loopStart && predicted >= loopStart)
+        if (wrapsAtLoopEnd() && loopLength > 0 && actual >= loopStart && predicted >= loopStart)
             correction = std::remainder(correction, loopLength);
         presentationOrigin_ += correction;
     }
     presentationFrames_ += playingFrames;
     const auto span = std::min<int64_t>(presentationFrames_, std::max(windowFrames, playingFrames));
     double startBeat = beatAtSamples(presentationOrigin_ + (presentationFrames_ - span));
-    if (loopEnabled_ && startBeat >= loopEndBeat_)
+    if (wrapsAtLoopEnd() && startBeat >= loopEndBeat_)
         startBeat = loopStartBeat_ + std::fmod(startBeat - loopStartBeat_, loopEndBeat_ - loopStartBeat_);
     presentationSequence_.fetch_add(1, std::memory_order_relaxed);
     presentationStart_.store(startBeat, std::memory_order_release);
@@ -106,7 +114,7 @@ void Transport::publishPresentation(double startSamples, int32_t playingFrames, 
     presentationDuration_.store(sampleRate_ > 0 ? span / sampleRate_ : 0.0, std::memory_order_release);
     presentationDelay_.store(sampleRate_ > 0 ? leadingFrames / sampleRate_ : 0.0, std::memory_order_release);
     presentationPlaying_.store(playing_ ? 1 : 0, std::memory_order_release);
-    presentationLooping_.store(loopEnabled_ ? 1 : 0, std::memory_order_release);
+    presentationLooping_.store(wrapsAtLoopEnd() ? 1 : 0, std::memory_order_release); // past it: no fold (#981)
     presentationStamp_.store(presentationNow(), std::memory_order_release);
     presentationSequence_.fetch_add(1, std::memory_order_release);
 }
