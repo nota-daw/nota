@@ -96,15 +96,21 @@
   </div>
 
   <div class="screen">
-    <Led {led} color={ledColor} dim={dimmed} fit={land} onexpand={() => (full = true)} />
+    <Led {led} color={ledColor} dim={dimmed} fit={land} />
 
     <div class="bar">
-      <!-- Macros follows the hardware controller (its track, device, page), or stays put. -->
-      <button class="follow" class:on={app.prefs.macFollow} aria-pressed={app.prefs.macFollow}
-        aria-label="Follow the controller" onclick={() => app.setMacFollow(!app.prefs.macFollow)}>
-        <svg viewBox="0 0 14 14"><path d="M5.5 8.5 L8.5 5.5 M6 3.8 L7.3 2.5 A2.5 2.5 0 0 1 11.5 6.7 L10.2 8 M8 10.2 L6.7 11.5 A2.5 2.5 0 0 1 2.5 7.3 L3.8 6" /></svg>
-        <span>Follow</span>
-      </button>
+      <div class="keys">
+        <!-- Macros follows the hardware controller (its track, device, page), or stays put. -->
+        <button class="key follow" class:on={app.prefs.macFollow} aria-pressed={app.prefs.macFollow}
+          aria-label="Follow the controller" onclick={() => app.setMacFollow(!app.prefs.macFollow)}>
+          <svg viewBox="0 0 14 14"><path d="M5.5 8.5 L8.5 5.5 M6 3.8 L7.3 2.5 A2.5 2.5 0 0 1 11.5 6.7 L10.2 8 M8 10.2 L6.7 11.5 A2.5 2.5 0 0 1 2.5 7.3 L3.8 6" /></svg>
+          <span>Follow</span>
+        </button>
+        <!-- Off the glass, so it never covers the display's header. -->
+        <button class="key icon" aria-label="Show the display full screen" onclick={() => (full = true)}>
+          <svg viewBox="0 0 14 14"><path d="M2 5.5 V2 H5.5 M8.5 2 H12 V5.5 M12 8.5 V12 H8.5 M5.5 12 H2 V8.5" /></svg>
+        </button>
+      </div>
       {#if pages.length > 1}
         <div class="pages" bind:this={pageRow} role="tablist" aria-label="Pages">
           {#each pages as name, i (i)}
@@ -144,11 +150,12 @@
   {#if full}
     <!-- The display alone, as large as the screen allows; the pages stay reachable under it. -->
     <div class="full" role="dialog" aria-label="Device display">
-      <Led {led} color={ledColor} dim={dimmed} fit onclose={() => (full = false)} />
+      <Led {led} color={ledColor} dim={dimmed} fit />
       <div class="fullnav">
         <button class="btn" aria-label="Previous page" disabled={pg <= 0} onclick={() => app.nav('page', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
         <span class="fulltitle">{devName}{pages.length > 1 ? ` · ${pages[pg] ?? ''}` : ''}</span>
         <button class="btn" aria-label="Next page" disabled={pg >= pages.length - 1} onclick={() => app.nav('page', 1)}><svg viewBox="0 0 10 10"><path d="M3.5 2 L6.5 5 L3.5 8" /></svg></button>
+        <button class="btn" aria-label="Close the full-screen display" onclick={() => (full = false)}><svg viewBox="0 0 10 10"><path d="M2 2 L8 8 M8 2 L2 8" /></svg></button>
       </div>
     </div>
   {/if}
@@ -166,6 +173,7 @@
   .macros.land .step { height: 40px; }
   /* Beside the display the pages are a two-column grid of even keys from the top, as tall as
      they need (it scrolls when a plug-in has many), never stretched over the free height. */
+  .macros.land .keys .follow { flex: 1; }
   .macros.land .bar { grid-area: bar; flex-direction: column; align-items: stretch; justify-content: flex-start; min-height: 0; }
   .macros.land .pages { flex: 0 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 34px;
     align-content: start; min-height: 0; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; }
@@ -178,12 +186,15 @@
 
   /* Follow and the page row under the display. */
   .bar { display: flex; gap: 6px; align-items: center; }
-  .follow { flex: none; height: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  .keys { flex: none; display: flex; gap: 6px; }
+  .key { flex: none; height: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     border-radius: min(var(--r-group), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel);
     color: var(--text-secondary); font-size: 12px; font-weight: 500; transition: background-color var(--ease), color var(--ease); }
-  .follow.on { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--picked-ink); box-shadow: none; }
-  .follow svg { width: 14px; height: 14px; }
-  .follow path { fill: none; stroke: currentColor; stroke-width: 1.4; }
+  .key.on { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--picked-ink); box-shadow: none; }
+  .key.icon { width: 40px; padding: 0; color: var(--text-muted); }
+  .key:active { background: var(--bg-sunken); box-shadow: none; }
+  .key svg { width: 14px; height: 14px; }
+  .key path { fill: none; stroke: currentColor; stroke-width: 1.4; }
   .bar .pages { flex: 1; min-width: 0; }
 
   /* The display alone on the whole screen, the page steps under it. */
@@ -234,5 +245,5 @@
   .on .kn { color: var(--text-primary); }
   .knob.empty .kn { color: var(--text-faint); }
   .none { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary); }
-  @media (prefers-reduced-motion: reduce) { .knob > .tint, .pages > button, .follow { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .knob > .tint, .pages > button, .key { transition: none; } }
 </style>

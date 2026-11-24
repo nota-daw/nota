@@ -118,7 +118,9 @@ internal static class DisplayTests
                 {
                     var full = new LedFrame();
                     DisplayRenderer.Render(new DisplayContext(e, a, ps, state, 1.0, key, DisplayRenderer.ShortName(fd.DeviceName), p, pageName, knobs, -1), full, null);
-                    File.WriteAllText(Path.Combine(dump, $"{key.Replace(':', '_')}__{p + 1}_{Safe(pageName)}.txt"), full.ToAscii());
+                    string stem = Path.Combine(dump, $"{key.Replace(':', '_')}__{p + 1}_{Safe(pageName)}");
+                    File.WriteAllText(stem + ".txt", full.ToAscii());
+                    File.WriteAllText(stem + ".rle", Convert.ToBase64String(full.Rle4()));   // the wire frame, for pictures
                 }
             }
         }

@@ -226,14 +226,11 @@ public static partial class DeviceDisplays
         {
             Page("Main", (c, f) =>
             {
-                int algo = (int)Math.Round(c.P.Num("Algorithm", 1));
-                if (c.P.Has("Algorithm") && c.P.Num("Algorithm") <= 1.0001 && c.P.Raw("Algorithm") <= 1.0001 && !DisplayParams.ParseUnit(c.P.Txt("Algorithm"), out _, out _))
-                    algo = 1 + c.P.Step("Algorithm", 11);
-                OperatorAlgo(f, Math.Max(1, algo), c.P.N("Feedback"), c.P.N("FM Depth"));
+                OperatorAlgo(f, OperatorAlgoNumber(c), c.P.N("Feedback"), c.P.N("FM Depth"));
                 double fc = c.P.Hz("Filter Freq"), q = 0.5 + c.P.N("Filter Reso") * 11;
                 f.Curve(x => Widgets.YOfDb(20 * Math.Log10(Math.Max(1e-5, Widgets.FilterMag(Widgets.FilterType.LowPass, Widgets.HzOfX(x, 81, 127), fc, q))), 18, -42), 81, 127, Widgets.Mark, Widgets.Fill);
                 f.VLine(78, LedFrame.Top, LedFrame.Bottom, Widgets.Grid);
-            }, c => "ALG " + (c.P.Txt("Algorithm") is { Length: > 0 } t ? t : "")),
+            }, c => "ALG " + OperatorAlgoNumber(c).ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Page("Operators", (c, f) =>
             {
                 var values = new double?[8];
@@ -511,6 +508,14 @@ public static partial class DeviceDisplays
             f.VLine(a.X + 9, a.Y - 1, a.Y + 1, Widgets.Mid);
             f.HLine(a.X - 1, a.X + 9, a.Y - 1, (int)Math.Round(4 + feedback * 10), dotted: true);
         }
+    }
+
+    /// <summary>Operator's algorithm, 1..11: the number in its text, else its step on the knob.</summary>
+    private static int OperatorAlgoNumber(DisplayContext c)
+    {
+        if (DisplayParams.ParseUnit(c.P.Txt("Algorithm"), out double v, out _) && v >= 1) return Math.Clamp((int)Math.Round(v), 1, 11);
+        if (c.P.Raw("Algorithm") > 1.0001) return Math.Clamp((int)Math.Round(c.P.Raw("Algorithm")), 1, 11);
+        return 1 + c.P.Step("Algorithm", 11);
     }
 
     private static void TwoEnvs(DisplayContext c, LedFrame f, string op1, string op2)

@@ -3,13 +3,11 @@
      this only lights them — round dots in the track's colour on a dark bezel, unlit dots faintly
      visible, a soft glow over the lit ones. While the link is down the last frame stays, dimmed.
      `fit`: the display takes the largest size its box allows at its own aspect (landscape, full
-     screen); otherwise it fills the width. `onexpand` puts a full-screen button in its corner. -->
+     screen); otherwise it fills the width. -->
 <script lang="ts">
   import type { Led } from '../lib/types';
 
-  let { led, color, dim = false, fit = false, onexpand, onclose }: {
-    led: Led | null; color: string; dim?: boolean; fit?: boolean; onexpand?: () => void; onclose?: () => void;
-  } = $props();
+  let { led, color, dim = false, fit = false }: { led: Led | null; color: string; dim?: boolean; fit?: boolean } = $props();
 
   let box: HTMLDivElement;
   let canvas: HTMLCanvasElement;
@@ -82,16 +80,6 @@
 
 <div class="lcd" class:fit role="img" aria-label="Device display">
   <div class="screen" bind:this={box}><canvas bind:this={canvas}></canvas></div>
-  {#if onexpand}
-    <button class="corner" aria-label="Show the display full screen" onclick={onexpand}>
-      <svg viewBox="0 0 12 12"><path d="M1.5 4.5 V1.5 H4.5 M7.5 1.5 H10.5 V4.5 M10.5 7.5 V10.5 H7.5 M4.5 10.5 H1.5 V7.5" /></svg>
-    </button>
-  {/if}
-  {#if onclose}
-    <button class="corner" aria-label="Close the full-screen display" onclick={onclose}>
-      <svg viewBox="0 0 12 12"><path d="M2.5 2.5 L9.5 9.5 M9.5 2.5 L2.5 9.5" /></svg>
-    </button>
-  {/if}
 </div>
 
 <style>
@@ -105,9 +93,4 @@
   .screen { width: 100%; min-width: 0; overflow: hidden; }
   .fit .screen { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
   canvas { display: block; max-width: 100%; max-height: 100%; }
-  /* A quiet corner button over the glass; the dots stay the point. */
-  .corner { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-muted); opacity: .55; border-radius: min(var(--r-cell), 10px); }
-  .corner:active { opacity: 1; background: color-mix(in srgb, var(--text-muted) 18%, transparent); }
-  .corner svg { width: 12px; height: 12px; }
-  .corner path { fill: none; stroke: currentColor; stroke-width: 1.4; }
 </style>
