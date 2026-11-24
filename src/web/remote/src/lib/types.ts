@@ -107,7 +107,22 @@ export interface Macros {
   id: number;
   di: number;
   devs: string[];
+  /** The page of that device and the page names (specs/114); older Nota: absent. */
+  pg?: number;
+  pgs?: string[];
   k: MacroKnob[];
+}
+
+/** One LED display frame (specs/114, contracts/remote-led.md): RLE4 runs in base64. */
+export interface Led {
+  id: number;
+  di: number;
+  pg: number;
+  w: number;
+  h: number;
+  seq: number;
+  /** The dots, one level 0..15 each, decoded. */
+  dots: Uint8Array;
 }
 
 /** Per scene: [state (0 empty, 1 filled, 2 queued, 3 playing, 4 recording), length beats, progress 0..1]. */

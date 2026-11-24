@@ -641,6 +641,15 @@ public sealed class ProjectService
     /// content downgraded on load.</summary>
     public static IReadOnlyList<string> Apply(ProjectDocument doc, IAudioEngine engine, string bundleDir)
     {
+        // A plug-in that froze Nota while loading last time comes up "couldn't load" rather than
+        // freezing it again on the way in (#979, specs/113); its card offers Try again.
+        NotaEngine.PluginAutoloadScope(true);
+        try { return ApplyDocument(doc, engine, bundleDir); }
+        finally { NotaEngine.PluginAutoloadScope(false); }
+    }
+
+    private static IReadOnlyList<string> ApplyDocument(ProjectDocument doc, IAudioEngine engine, string bundleDir)
+    {
         var warnings = new List<string>();
         engine.Reset();
 
@@ -1390,6 +1399,8 @@ public sealed class ProjectService
     // Does a hosted plugin still expose a parameter with this stable id? (M9-B4)
     private static bool PluginParamExists(IAudioEngine engine, int trackId, int deviceIndex, string paramId)
     {
+        // Still loading (specs/113): its lanes resolve when it attaches; nothing to warn about yet.
+        if (engine.DevicePluginLoadState(trackId, deviceIndex) != PluginLoadState.Loaded) return true;
         int n = engine.PluginParamCount(trackId, deviceIndex);
         for (int i = 0; i < n; i++)
             if (engine.PluginParamId(trackId, deviceIndex, i) == paramId) return true;

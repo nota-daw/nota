@@ -51,9 +51,44 @@ public abstract class EngineTools(IAudioEngine engine, IEngineDispatch dispatch,
         => MixEdit.Step(E, () => E.MidiEffectSetParam(trackId, index, paramIndex, value), MixTarget.MidiDeviceParam(trackId, index, paramIndex));
 
     /// <summary>Set a normalized plug-in / instrument parameter (deviceIndex -1 = the instrument)
-    /// as an undoable value change.</summary>
+    /// as an undoable value change. A hosted plug-in that hasn't loaded has no parameters yet and
+    /// would drop the write (specs/113), so that is an error, not a silent success; tools that
+    /// write a hosted plug-in's params call <see cref="SettlePluginLoadsAsync"/> first.</summary>
     protected void PlugParam(int trackId, int deviceIndex, int paramIndex, float value)
-        => MixEdit.Step(E, () => E.PluginParamSet(trackId, deviceIndex, paramIndex, value), MixTarget.PluginParam(trackId, deviceIndex, paramIndex));
+    {
+        RequireLoaded(trackId, deviceIndex);
+        MixEdit.Step(E, () => E.PluginParamSet(trackId, deviceIndex, paramIndex, value), MixTarget.PluginParam(trackId, deviceIndex, paramIndex));
+    }
+
+    /// <summary>Throws a readable error when a hosted plug-in (deviceIndex -1 = the instrument) is
+    /// still loading or couldn't load: it has no parameters yet. Built-ins always pass. UI thread.</summary>
+    protected void RequireLoaded(int trackId, int deviceIndex)
+    {
+        var state = E.DevicePluginLoadState(trackId, deviceIndex);
+        if (state == PluginLoadState.Loaded) return;
+        throw new InvalidOperationException(state == PluginLoadState.Failed
+            ? "the plug-in couldn't load, so it has no parameters to set (Try again on its card)"
+            : "the plug-in is still loading; set its parameters once it has loaded");
+    }
+
+    /// <summary>
+    /// Hosted plug-ins load after they are inserted (specs/113). Gives the ones still loading up to
+    /// 10 s to land, one service pass per UI tick with this (MCP) thread waiting in between, so the
+    /// window stays responsive. Returns how many still load. Call it before an export (the render
+    /// holds the UI thread, so nothing attaches during it) and before writing a hosted plug-in's
+    /// parameters.
+    /// </summary>
+    protected async Task<int> SettlePluginLoadsAsync()
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        int left = await Read(() => E.WaitPluginLoads(0));
+        while (left > 0 && DateTime.UtcNow < until)
+        {
+            await Task.Delay(33);
+            left = await Read(() => E.WaitPluginLoads(0));
+        }
+        return left;
+    }
 
     /// <summary>Resolve a track id to its enumeration index (0..TrackCount-1), or -1. UI thread.</summary>
     protected int IndexOfTrack(int trackId)

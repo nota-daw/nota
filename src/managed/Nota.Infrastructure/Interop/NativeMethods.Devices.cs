@@ -21,6 +21,31 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_add_effect_plugin")]
     internal static partial int AddTrackEffectPlugin(IntPtr engine, int trackId, int catalogIndex);
 
+    // Hosted plug-ins load after they are inserted (#979, specs/113).
+    [LibraryImport(Lib, EntryPoint = "nota_engine_plugin_loads_service")]
+    internal static partial int PluginLoadsService(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_plugin_loads_wait")]
+    internal static partial int PluginLoadsWait(IntPtr engine, int timeoutMs);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_state")]
+    internal static partial int DevicePluginLoadState(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_reason_code")]
+    internal static partial int DevicePluginLoadReasonCode(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_reason_arg")]
+    internal static partial IntPtr DevicePluginLoadReasonArg(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_action")]
+    internal static partial NotaResult DevicePluginLoadAction(IntPtr engine, int trackId, int deviceIndex, int action);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_autoload_scope")]
+    internal static partial void PluginHostAutoloadScope(int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_frozen_notice")]
+    internal static partial IntPtr PluginHostFrozenNotice();
+
     [LibraryImport(Lib, EntryPoint = "nota_track_device_count")]
     internal static partial int TrackDeviceCount(IntPtr engine, int trackId);
 

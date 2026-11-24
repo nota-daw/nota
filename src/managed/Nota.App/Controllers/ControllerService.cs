@@ -965,6 +965,31 @@ public sealed class ControllerService
         if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
     }
 
+    /// <summary>Select <paramref name="trackId"/> as Track ◀ ▶ do — the selection, then the bank of
+    /// the lead controller (the one Macros follows, as FocusSummary picks it) moved the least amount
+    /// that keeps it inside; other controllers keep their banks (a phone's Macros arrows, specs/114).</summary>
+    public void SelectTrackFromRemote(int trackId)
+    {
+        SelectTrack?.Invoke(trackId);
+        var ids = TrackIds();
+        int at = ids.IndexOf(trackId);
+        if (at < 0) return;
+        var lead = _controllers.Values.FirstOrDefault(c => c.Stage == ControllerStage.Active && c.HasKnobs);
+        if (lead is not null && lead.State.BankFollow(at, ids.Count)) BankChanged?.Invoke();
+    }
+
+    /// <summary>Put every controller's knobs that follow a device on <paramref name="page"/> of the
+    /// focused device (a phone's page buttons, specs/114).</summary>
+    public void SetPage(int page)
+    {
+        if (_focused is null) return;
+        int p = Math.Clamp(page, 0, Math.Max(0, _focused.PageCount - 1));
+        bool changed = false;
+        foreach (var c in _controllers.Values)
+            if (c.State.KnobMode.Kind == KnobModeKind.Device && c.State.Page != p) { c.State.Page = p; changed = true; }
+        if (changed) FocusChanged?.Invoke();
+    }
+
     /// <summary>Select a track as a header click would (wired by the main window; specs/107).</summary>
     public Action<int>? SelectTrack { get; set; }
     /// <summary>The tracks Track ◀ / ▶ walk when a view has its own order (the Session's columns),

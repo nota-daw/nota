@@ -73,9 +73,69 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>
     /// When true, the playhead clock stops touching the engine. Set during
     /// offline export (M6-4) so the render thread has exclusive engine access
-    /// while the audio backend is stopped.
+    /// while the audio backend is stopped. While it is true no hosted plug-in attaches
+    /// (the clock services loads), so a render starts with <see cref="TryBeginRenderAsync"/>
+    /// (specs/113).
     /// </summary>
     public bool SuspendEnginePolling { get; set; }
+
+    // A render (export, freeze, bounce) holds the engine from before it settles plug-in loads
+    // until it finishes, so a second one can't start while the first still waits.
+    private bool _renderReserved;
+
+    /// <summary>
+    /// Starts a render (export, freeze, bounce): reserves the engine, settles hosted plug-ins
+    /// still loading (<see cref="SettlePluginLoadsAsync"/>), then suspends the clock. False when
+    /// another render holds the engine (it may still be waiting for plug-ins, before its
+    /// progress dialog opens); the caller then does nothing. Every true is paired with
+    /// <see cref="EndRender"/> once the render is over.
+    /// </summary>
+    public async Task<bool> TryBeginRenderAsync()
+    {
+        if (_renderReserved) return false;
+        _renderReserved = true;
+        await SettlePluginLoadsAsync();
+        SuspendEnginePolling = true;
+        return true;
+    }
+
+    /// <summary>Ends a render <see cref="TryBeginRenderAsync"/> started: the clock runs again.</summary>
+    public void EndRender()
+    {
+        SuspendEnginePolling = false;
+        _renderReserved = false;
+    }
+
+    /// <summary>
+    /// A render is about to own the engine: give hosted plug-ins still loading a bounded chance
+    /// to land (up to 10 s), so the render hears them throughout. It awaits between service
+    /// ticks, so the window keeps drawing and a plug-in's own licence dialog can be answered
+    /// meanwhile. Any that don't make it stay as they are (pass-through / silent) for the whole
+    /// render, and the status bar says so.
+    /// </summary>
+    private async Task SettlePluginLoadsAsync()
+    {
+        try
+        {
+            int left = Engine.WaitPluginLoads(0); // one service pass; usually nothing is loading
+            if (left == 0) return;
+            string before = StatusText;
+            StatusText = Loc.T("main.waiting_for_plugins_render");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (left > 0 && DateTime.UtcNow < until)
+            {
+                await Task.Delay(33);
+                left = Engine.WaitPluginLoads(0);
+            }
+            if (left > 0)
+            {
+                _log.Warn($"{left} plug-in(s) still loading when a render started");
+                StatusText = Loc.Plural("main.plugins_still_loading_render", left);
+            }
+            else if (StatusText == Loc.T("main.waiting_for_plugins_render")) StatusText = before;
+        }
+        catch (Exception ex) { _log.Error("Couldn't settle plug-in loads before a render", ex); }
+    }
 
     public MainWindowViewModel(IAudioEngine engine, TransportViewModel transport,
                                BrowserViewModel browser, ISettingsService settings,
@@ -118,6 +178,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void OnTick()
     {
         if (SuspendEnginePolling) return; // export in progress — render thread owns the engine
+        // Hosted plug-ins load their binary off the UI thread (#979, specs/113); this attaches the
+        // loaded ones and flags overdue ones. Device cards follow the state themselves.
+        try { Engine.ServicePluginLoads(); }
+        catch (Exception ex) { _log.Error("Plug-in load service failed", ex); }
         Engine.Poll(); // materialise recorded notes
         Transport.Tick();
         PlayheadUpdated?.Invoke(Engine.PositionBeats);

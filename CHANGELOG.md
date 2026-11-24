@@ -23,6 +23,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Remote: Macros is a controller surface with an LED display** (specs/114).
+  - **Track ◀ ▶** and **Device ◀ ▶** buttons step through the tracks and through the track's
+    devices in chain order; **page buttons** walk the device's controller pages, so the phone
+    shows the same eight knobs as a MIDI controller. With Follow Nota's selection on, a press on
+    the phone moves Nota's selection and the controller, and the controller moves the phone.
+  - A **128 × 48 LED display** above the knobs pictures the page for every built-in instrument,
+    audio effect and MIDI effect: filter response over the live spectrum, envelopes,
+    oscillators, LFOs, EQ curves, compressor and limiter curves with the live level, Reverb's
+    decay with your audio's measured tail, delay taps, chorus / flanger sweeps, phaser notches,
+    keyboards for Chord and Scale. Plug-ins and racks show their knobs as bars. While a knob
+    turns, its name and value take the top row.
+  - Nota draws the picture and sends the dots (only when they change), so every phone on the
+    same page sees the same frame.
+  - **Follow** (on by default, kept per phone): Macros goes where the controller goes — another
+    track, device or page — and the phone's buttons move the controller; off, the phone stays put.
+  - On its side the phone puts the eight knobs in one row so the display gets most of the screen;
+    the corner button opens the display full screen, with the page steps under it.
 - **Nota Color** (#977, specs/113) is a built-in audio effect for color bass. It combines
   semitone shifts, tuned resonance and attack protection. Pick a scale or custom notes, set the
   processing band, and see the input and shifted components on the live spectrum.
@@ -256,6 +273,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   note map played notes instead of typing, so `a w s e d f t g y h u j k` never reached the
   field. Nota now sees when the plug-in has a text caret and leaves all typing to it; with
   no text field focused, those keys play notes as before.
+- **A plug-in that hangs while it loads no longer freezes Nota** (#979, specs/113). SSL / Slate
+  Digital plug-ins (VST3 and AU) froze Nota on macOS as soon as they were inserted: a plug-in's
+  binary loaded on the main thread, and a copy-protection wrapper (PACE / iLok) that waits for the
+  main run loop while it loads waited forever.
+  - The binary now loads in the background. The device is in the chain at once — an effect passes
+    audio through, an instrument is silent — and becomes the plug-in when it is ready. Nota keeps
+    playing and editing meanwhile, for an insert, a project open, a preset or a duplicate alike.
+  - After 30 seconds the card says the plug-in isn't responding, with **Keep waiting** and
+    **Give up**. A plug-in that couldn't load stays in the chain with its settings, which a save
+    keeps, and **Try again** on its card.
+  - If Nota still stops while loading a plug-in, the next start names it, and projects bring it up
+    as "couldn't load" instead of loading it again, until you try it again.
 - **Play from past the loop plays on** (#981). With the loop on, Play from a playhead after
   the loop's end jumped straight to the loop start. Now the loop only wraps a playhead that
   plays into its end: launched (or seeked) past it, playback carries on, and switching the

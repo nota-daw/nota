@@ -35,11 +35,13 @@ internal static class HostedPluginTests
         using var e = new NotaEngine();
         int t = e.AddPluginInstrumentTrack(idx);
         int fx = e.AddTrackEffectPlugin(t, idx);
+        e.WaitPluginLoads(60000); // plug-ins load after they are inserted (specs/113)
         e.PluginParamSet(t, -1, 3, 0.123f);
         e.PluginParamSet(t, fx, 5, 0.321f);
         string id = e.TrackInstrumentPluginId(t);
 
         int[] dup = e.DuplicateTracks(new[] { t });
+        e.WaitPluginLoads(60000);
         int d = dup.Length == 1 ? dup[0] : -1;
         yield return (d > 0 && e.TrackInstrumentPluginId(d) == id,
             $"duplicate track copies the plug-in instrument (got '{(d > 0 ? e.TrackInstrumentPluginId(d) : "")}')");
@@ -50,6 +52,7 @@ internal static class HostedPluginTests
 
         bool copied = e.CopyDevice(t, fx);
         int at = copied ? e.PasteDevice(t, 1) : -1;
+        e.WaitPluginLoads(60000);
         yield return (at >= 0 && e.TrackDevicePluginId(t, at) == id && Math.Abs(e.PluginParamGet(t, at, 5) - 0.321f) < 1e-4,
             "copy + paste of a plug-in effect makes a second instance with its state");
     }
@@ -61,6 +64,7 @@ internal static class HostedPluginTests
             using var e = new NotaEngine();
             e.SetBpm(120);
             int t = e.AddPluginInstrumentTrack(idx);
+            e.WaitPluginLoads(60000);
             e.AddMidiClip(t, 0.0, 4.0);
             // Notes starting inside the long block's later pieces (beat 0.5 = 11025 frames).
             e.SetClipNotes(t, 0, new[] { new NotaNote(60, 0.0, 1.0, 0.8f), new NotaNote(67, 0.2, 0.6, 0.7f), new NotaNote(72, 0.5, 0.5, 0.9f) });

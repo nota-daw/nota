@@ -12,6 +12,7 @@
 #include "PluginCommon.h"
 #include "PluginEffect.h"
 #include "PluginInstrument.h"
+#include "PluginLoader.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -137,18 +138,39 @@ extern "C" NOTA_API int32_t nota_pluginhost_pump(void) {
 
 namespace nota {
 
+// Both return the adapter unloaded (#979, specs/113): the PluginLoader loads the plug-in's binary
+// off the main thread and servicePluginLoads() attaches the instance, so an insert never waits
+// on a plug-in that blocks while it loads.
 std::shared_ptr<Instrument> createPluginInstrument(int32_t catalogIndex, double sr, int32_t maxBlock) {
     ensureJuceGui();
-    auto inst = hosting::instantiateCatalog(catalogIndex, sr, maxBlock, /*instrumentOnly*/ true);
-    if (!inst) return nullptr;
-    return std::make_shared<hosting::PluginInstrument>(std::move(inst), sr, maxBlock);
+    juce::PluginDescription desc;
+    if (!hosting::catalogDescription(catalogIndex, /*instrumentOnly*/ true, desc)) return nullptr;
+    return std::make_shared<hosting::PluginInstrument>(desc, sr, maxBlock);
 }
 
 std::shared_ptr<Device> createPluginEffect(int32_t catalogIndex, double sr, int32_t maxBlock) {
     ensureJuceGui();
-    auto inst = hosting::instantiateCatalog(catalogIndex, sr, maxBlock, /*instrumentOnly*/ false);
-    if (!inst) return nullptr;
-    return std::make_shared<hosting::PluginEffect>(std::move(inst), sr, maxBlock);
+    juce::PluginDescription desc;
+    if (!hosting::catalogDescription(catalogIndex, /*instrumentOnly*/ false, desc)) return nullptr;
+    return std::make_shared<hosting::PluginEffect>(desc, sr, maxBlock);
+}
+
+PluginLoadsServiced servicePluginLoads() {
+    // JUCE's GUI is up already: the factories that started every pending load brought it up.
+    const auto s = hosting::PluginLoader::instance().service();
+    return {s.changed, s.attached};
+}
+
+int32_t pendingPluginLoads() {
+    return hosting::PluginLoader::instance().pending();
+}
+
+void setPluginAutoloadScope(bool on) {
+    hosting::PluginLoader::instance().setAutoloadScope(on);
+}
+
+std::string takeFrozenPluginNotice() {
+    return hosting::PluginLoader::instance().takeFrozenNotice();
 }
 
 // ---- Device workgroup hand-off (#436) ---------------------------------------
