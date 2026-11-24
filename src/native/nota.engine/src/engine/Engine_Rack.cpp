@@ -1492,6 +1492,10 @@ void Engine::rackChainDeviceParamSet(int32_t t, int32_t di, int32_t c, int32_t d
     auto* r = rackCoreAt(t, di);
     Device* dev = r ? r->chainDeviceAt(c, d) : nullptr;
     if (!dev) return;
+    if (dev->isLatencyConfigurationParam(p)) {
+        setLatencyConfigurationParam(*dev, p, v);
+        return;
+    }
     dev->setParam(p, v);
     routeNestedCvBaseEdit(t, di, c, d, p, v);   // a grouped, CV-linked device (specs/044)
 }

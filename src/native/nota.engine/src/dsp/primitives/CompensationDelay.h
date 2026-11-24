@@ -24,7 +24,7 @@ class CompensationDelay {
 
     // Message thread: set the compensation delay in samples. Allocates the ring
     // (once) the first time a positive delay is requested.
-    void setDelay(int32_t samples);
+    void setDelay(int32_t samples, bool resetIfChanged = false);
 
     int32_t delay() const { return delay_.load(std::memory_order_relaxed); }
 
@@ -39,6 +39,9 @@ class CompensationDelay {
     std::vector<float> ring_;
     int32_t cap_ = 0; // published via ready_
     int32_t pos_ = 0; // audio thread only
+    int32_t validFrames_ = 0;
+    uint32_t renderGeneration_ = 0;
+    std::atomic<uint32_t> resetGeneration_{0};
     std::atomic<int32_t> delay_{0};
     std::atomic<bool> ready_{false};
 };

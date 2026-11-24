@@ -146,7 +146,7 @@ internal static class DeviceCardKit
     // where a strip must fit a tight column; `fontSize` drops (never below 7) for a dense strip.
     // Left button picks; right-click bubbles. `sync` repaints — register it with the card.
     internal static Border Segments(string[] names, Func<int> current, Action<int> pick, out Action sync,
-        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6, double fontSize = NotaType.RowLabel)
+        bool fill = false, double minSegWidth = 0, Func<bool>? dim = null, double padX = 6, double fontSize = NotaType.RowLabel, IBrush? pickedBackground = null, IBrush? pickedForeground = null)
     {
         int n = names.Length;
         var cells = new Border[n];
@@ -184,10 +184,10 @@ internal static class DeviceCardKit
             for (int i = 0; i < n; i++)
             {
                 bool picked = i == cur, on = picked && !d;
-                cells[i].Background = on ? NotaPalette.AccentSoft : picked ? NotaPalette.SurfaceRaised : Brushes.Transparent;
+                cells[i].Background = on ? pickedBackground ?? NotaPalette.AccentSoft : picked ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 if (picked) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
                 else cells[i].BoxShadow = default;
-                texts[i].Foreground = on ? AccentBright : picked ? TextSecondary : d ? TextDisabled : TextTertiary;
+                texts[i].Foreground = on ? pickedForeground ?? AccentBright : picked ? TextSecondary : d ? TextDisabled : TextTertiary;
             }
         }
         sync = Paint;
