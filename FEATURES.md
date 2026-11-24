@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.60.4** (plus changes in development on `main`). This document describes what is
+**0.61.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -113,7 +113,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   to resize it, the brace to move it; double-click the brace to switch the loop off and on;
   right-click the ruler to clear it; saved with the project). Notes held across the
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
-  pattern going across the seam.
+  pattern going across the seam. The loop wraps only a playhead that plays into its end:
+  playback (or recording) started past the loop end carries on.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
   The click goes to Main, to Cue (past the master chain, never to the audience) or to both,
   at its own level (**Settings → Outputs**).
