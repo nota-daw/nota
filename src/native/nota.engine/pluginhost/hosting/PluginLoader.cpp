@@ -234,7 +234,10 @@ void PluginLoader::run() {
         uint32_t attempt = 0;
         {
             std::unique_lock<std::mutex> lock(mx_);
-            cv_.wait(lock, [this] { return !queue_.empty(); });
+            // Not while a loaded binary still waits for its main-thread step: creating its
+            // instance opens the library again, which takes the system's loader lock, and a next
+            // binary that hangs inside that lock would block the main thread behind it.
+            cv_.wait(lock, [this] { return !queue_.empty() && loaded_.empty() && !finishing_; });
             t = queue_.front();
             queue_.pop_front();
             attempt = t->attempt_;
@@ -311,11 +314,19 @@ PluginLoader::Serviced PluginLoader::service() {
     {
         const std::lock_guard<std::mutex> lock(mx_);
         ready.swap(loaded_);
+        finishing_ = !ready.empty();
         behind = poisonLocked();
         current = current_;
     }
     for (auto& q : behind) fail(*q, LoadReason::RestartRequired);
     for (const auto& t : ready) finishOne(t, s);
+    if (!ready.empty()) {
+        {
+            const std::lock_guard<std::mutex> lock(mx_);
+            finishing_ = false;
+        }
+        cv_.notify_one(); // the loader thread may take the next binary now
+    }
 
     const auto now = Clock::now();
     const std::string currentName = current ? current->desc.name.toStdString() : std::string{};
@@ -380,6 +391,7 @@ void PluginLoader::act(const std::shared_ptr<LoadTicket>& t, LoadAction a) {
             // that it may still come back, and service() checks again every tick.
             if (current_ == t) behind = poisonLocked();
         }
+        cv_.notify_one(); // it may have been the loaded binary the loader thread waits on
         fail(*t, a == LoadAction::Abandon ? LoadReason::Removed : LoadReason::GaveUp);
         for (auto& q : behind) fail(*q, LoadReason::RestartRequired);
         break;
@@ -407,6 +419,7 @@ void PluginLoader::cancel(const std::shared_ptr<LoadTicket>& t) {
     t->cancelled_ = true;
     queue_.erase(std::remove(queue_.begin(), queue_.end(), t), queue_.end());
     loaded_.erase(std::remove(loaded_.begin(), loaded_.end(), t), loaded_.end());
+    cv_.notify_one(); // it may have been the loaded binary the loader thread waits on
 }
 
 // ---- freeze guard (FR-008, FR-009) -------------------------------------------------------

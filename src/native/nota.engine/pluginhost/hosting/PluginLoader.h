@@ -161,6 +161,9 @@ class PluginLoader {
     std::shared_ptr<LoadTicket> current_;            // binary load in progress
     std::chrono::steady_clock::time_point currentStarted_{}; // when the loader thread took it
     std::vector<std::shared_ptr<LoadTicket>> loaded_; // binary done, waiting for service()
+    // service() is running main-thread steps for tickets it took from loaded_. While those or
+    // loaded_ are pending the loader thread takes no next binary (the loader-lock hazard).
+    bool finishing_ = false;
     bool stuck_ = false; // an abandoned load is past its deadline and hasn't returned
 
     int autoloadScope_ = 0;

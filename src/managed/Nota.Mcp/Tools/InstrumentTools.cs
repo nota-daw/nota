@@ -82,8 +82,11 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
     });
 
     [McpServerTool(Name = "set_instrument_param"), Description("Set a track instrument parameter by index to a normalized value (0..1). Use get_instrument_params for indices.")]
-    public Task SetInstrumentParam(int trackId, int paramIndex, [Description("Normalized 0..1")] float value)
-        => Mutate(() => PlugParam(trackId, -1, paramIndex, Math.Clamp(value, 0f, 1f)));
+    public async Task SetInstrumentParam(int trackId, int paramIndex, [Description("Normalized 0..1")] float value)
+    {
+        await SettlePluginLoadsAsync();   // a hosted instrument just inserted may still be loading (specs/113)
+        await Mutate(() => PlugParam(trackId, -1, paramIndex, Math.Clamp(value, 0f, 1f)));
+    }
 
     public sealed record PhysicalPartial(int Index, double Ratio, double Hz, double Amp, double RingSeconds, bool Audible);
     public sealed record PhysicalReading(string Summary, string Guide, int ActiveVoices, int MaxVoices, bool Mono,
@@ -361,15 +364,21 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
     [McpServerTool(Name = "set_instrument_param_by_id"), Description(
         "Set a track instrument parameter by its stable id (e.g. \"cutoff\", \"pmoscb\") to a normalized value (0..1). "
         + "Ids never change between versions, unlike indices. Returns false if the instrument has no such parameter.")]
-    public Task<bool> SetInstrumentParamById(int trackId, string paramId, [Description("Normalized 0..1")] float value) => Mutate(() =>
+    public async Task<bool> SetInstrumentParamById(int trackId, string paramId, [Description("Normalized 0..1")] float value)
     {
-        int pc = E.PluginParamCount(trackId, -1);
-        for (int i = 0; i < pc; i++)
+        // A hosted instrument still loading has no parameters yet: it would read "no such parameter".
+        await SettlePluginLoadsAsync();
+        return await Mutate(() =>
         {
-            if (E.PluginParamId(trackId, -1, i) != paramId) continue;
-            PlugParam(trackId, -1, i, Math.Clamp(value, 0f, 1f));
-            return true;
-        }
-        return false;
-    });
+            RequireLoaded(trackId, -1);   // not "no such parameter" for one with no parameters yet
+            int pc = E.PluginParamCount(trackId, -1);
+            for (int i = 0; i < pc; i++)
+            {
+                if (E.PluginParamId(trackId, -1, i) != paramId) continue;
+                PlugParam(trackId, -1, i, Math.Clamp(value, 0f, 1f));
+                return true;
+            }
+            return false;
+        });
+    }
 }
