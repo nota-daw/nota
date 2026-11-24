@@ -251,6 +251,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Both card sizes show the total latency below the spectrum.
 
 ### Fixed
+- **Samples in folders with accented names play on Windows** (#974). A WAV, FLAC or MP3
+  whose folder or file name had a character outside plain English — `Música`, `Canción`,
+  `ñ`, Cyrillic, CJK — couldn't be opened on Windows: it didn't sound, didn't show its
+  waveform and read as unsupported. Nota now opens these paths as Unicode.
 - **Play starts at once with a count-in set** (#988). The count-in also ran before plain Play
   (the button, Space and ⇧Space), so Play lit up while the transport stood still for the
   count-in bars — and with the clicks routed to Cue only, nothing seemed to happen at all. The
