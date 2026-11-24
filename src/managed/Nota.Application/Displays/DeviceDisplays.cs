@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Which picture each page of each device shows on the LED display (specs/113, FR-012–FR-014,
+// Which picture each page of each device shows on the LED display (specs/114, FR-012–FR-014,
 // FR-025). The pages are the controller's (DevicePages.json, specs/051); every built-in type key
 // lists its pages here in the same order, each with a drawing and an optional short readout for
 // the header's right side. A page is found by name, then — for pages the user renamed or edited —

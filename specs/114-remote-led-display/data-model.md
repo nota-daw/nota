@@ -1,4 +1,4 @@
-# Data model (spec 113)
+# Data model (spec 114)
 
 - **LedFrame** — `W = 128`, `H = 48`, `Dots: byte[6144]` (0–15). Value object; equal when the
   dots are equal. Encodes to / from RLE4.

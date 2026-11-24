@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// What the phone's Macros screen walks (specs/113): the track's devices in chain order — MIDI
+// What the phone's Macros screen walks (specs/114): the track's devices in chain order — MIDI
 // effects, the instrument (or rack), the audio effects — one entry per device, each with the
 // controller's pages for it (edited → catalog → plug-in default, specs/051), so the phone and the
 // hardware's knobs always show the same eight parameters on the same page. A page slot resolves

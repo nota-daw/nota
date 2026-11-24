@@ -1,4 +1,4 @@
-# Research: Remote Macros LED display (spec 113)
+# Research: Remote Macros LED display (spec 114)
 
 ## R1 — Where the frame is drawn
 

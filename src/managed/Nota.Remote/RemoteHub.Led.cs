@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The Macros screen's LED display (specs/113, contracts/remote-led.md). On each UI tick the hub
+// The Macros screen's LED display (specs/114, contracts/remote-led.md). On each UI tick the hub
 // renders one frame per device page some phone shows — never one for a page nobody watches —
 // and sends it, RLE4 in base64, to each phone on that page whose last frame differs. Two phones
 // on one page get the same bytes and sequence number. A knob that moves (from the phone, a

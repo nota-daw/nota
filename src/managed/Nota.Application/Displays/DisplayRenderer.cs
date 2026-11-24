@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// One frame of a device page's LED display (specs/113, FR-011): the page's picture under a
+// One frame of a device page's LED display (specs/114, FR-011): the page's picture under a
 // header row — "DEVICE PAGE" on the left, the page's short readout on the right — or, while a
 // knob turns, an inverted bar with the knob's name and value. A picture that throws (a device
 // removed mid-frame) leaves the bars instead of a broken frame.

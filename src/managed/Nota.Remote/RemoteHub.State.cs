@@ -82,7 +82,7 @@ public sealed partial class RemoteHub
 
         if (screen != "Scenes") c.SentClips = null;
 
-        // The Macros screen's LED display at the UI clock's rate, only when the frame changed (specs/113).
+        // The Macros screen's LED display at the UI clock's rate, only when the frame changed (specs/114).
         PushLed(host, c);
 
         // A screen's live state at 15 Hz (every other UI tick); a new screen gets it at once.
@@ -445,7 +445,7 @@ public sealed partial class RemoteHub
 
     // ---- macros -----------------------------------------------------------------------------
 
-    // The track's devices with their pages (specs/113), built at most once per tick per track.
+    // The track's devices with their pages (specs/114), built at most once per tick per track.
     private readonly Dictionary<int, List<RemoteMacroDevice>> _macroCache = new();
     private int _macroCacheTick = -1;
 
@@ -516,7 +516,7 @@ public sealed partial class RemoteHub
         if (f.MacroIndex is { } md) w.WriteNumber("md", md); else w.WriteNull("md");
         if (f.Address is { Rack: null } fa)
         {
-            // specs/113: the focused device's section and index, so a MIDI-effect focus reaches the phone.
+            // specs/114: the focused device's section and index, so a MIDI-effect focus reaches the phone.
             w.WriteString("ms", fa.Section switch { Nota.Application.Controllers.FocusSection.Midi => "midi", Nota.Application.Controllers.FocusSection.Instrument => "inst", _ => "audio" });
             w.WriteNumber("mi", fa.Index);
         }
@@ -529,7 +529,7 @@ public sealed partial class RemoteHub
         w.WriteEndArray();
     });
 
-    // A phone whose Macros follows the controller (specs/113, on by default) turns its Macros screen
+    // A phone whose Macros follows the controller (specs/114, on by default) turns its Macros screen
     // to the track, device and page the controller went to — only when the focus changes, so a pick
     // on the phone stays until the next move. Another track is taken only while Macros shows (the
     // track the phone plays on Pads or Keys stays the user's); opening Macros catches up

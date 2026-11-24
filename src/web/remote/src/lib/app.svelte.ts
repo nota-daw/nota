@@ -32,7 +32,7 @@ export interface Prefs {
   /** Scenes grid: as Nota's Session grid runs ('nota', specs/108), scenes as rows ('down', tracks
    *  across) or as columns ('across', tracks down). */
   sessionGrid: SessionGrid;
-  /** Macros follows the hardware controller's track, device and page, and its buttons move the controller (specs/113). */
+  /** Macros follows the hardware controller's track, device and page, and its buttons move the controller (specs/114). */
   macFollow: boolean;
 }
 
@@ -64,7 +64,7 @@ export class App {
   mix = $state<Mixer | null>(null);
   xy = $state<Xy | null>(null);
   mac = $state<Macros | null>(null);
-  /** The Macros screen's LED display (specs/113); null until Nota sends one. */
+  /** The Macros screen's LED display (specs/114); null until Nota sends one. */
   led = $state.raw<Led | null>(null);
   ses = $state<Session | null>(null);
   /** The controller's focus in Nota (specs/107), null when no controller is on. */
@@ -463,13 +463,13 @@ export class App {
     if (this.proj) this.proj = { ...this.proj, follow: on };
   }
 
-  /** Macros follows the controller, or stays where the phone puts it (specs/113). */
+  /** Macros follows the controller, or stays where the phone puts it (specs/114). */
   setMacFollow(on: boolean) {
     this.prefs.macFollow = on;
     this.send({ t: 'mfollow', on });
   }
 
-  /** The Macros screen's Track / Device / Page buttons (specs/113): a step (±1) or an index. */
+  /** The Macros screen's Track / Device / Page buttons (specs/114): a step (±1) or an index. */
   nav(s: 'track' | 'device' | 'page' | 'pageAt' | 'deviceAt', i: number) {
     if (!this.canControl) { this.showToast('Nota lets this phone play notes only.'); return; }
     this.send({ t: 'nav', s, i });

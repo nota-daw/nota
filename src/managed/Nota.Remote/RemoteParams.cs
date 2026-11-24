@@ -22,7 +22,7 @@ public enum RemoteParamKind
     PluginParam,
     /// <summary>An Instrument / Drum Rack macro (device −1) or an Effect Rack's (device ≥ 0).</summary>
     RackMacro,
-    /// <summary>A built-in MIDI effect's parameter, in its own min..max units (specs/113).</summary>
+    /// <summary>A built-in MIDI effect's parameter, in its own min..max units (specs/114).</summary>
     MidiParam,
 }
 

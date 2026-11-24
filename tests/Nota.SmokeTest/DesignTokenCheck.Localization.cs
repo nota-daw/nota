@@ -407,7 +407,7 @@ internal static partial class DesignTokenCheck
             foreach (var f in SourceFiles(Path.Combine(managed, dir), ".cs"))
             {
                 var rel = RelManaged(root, f);
-                // The LED displays (specs/113) name engine parameters to read and draw in a 3 × 5
+                // The LED displays (specs/114) name engine parameters to read and draw in a 3 × 5
                 // pixel font that has only Latin capitals — engine identifiers, not interface text.
                 if (rel.StartsWith("Nota.Application/Localization/")
                     || rel.StartsWith("Nota.App/Languages/")

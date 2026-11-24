@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The mini LED display a device page draws on (specs/113): a fixed 128 × 48 grid of dots, each
+// The mini LED display a device page draws on (specs/114): a fixed 128 × 48 grid of dots, each
 // lit at one of 16 levels (0 = off). Nota draws the picture here and sends the dots — the phone,
 // and later other clients, only light them, so every client shows the same pixels. The
 // primitives are what the device pictures need and nothing more: dots, lines, a curve joined

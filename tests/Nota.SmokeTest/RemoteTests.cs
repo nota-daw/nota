@@ -534,7 +534,7 @@ internal static class RemoteTests
         host.ControllerFocus = null;
         Send(new { t = "follow", on = false });
 
-        // specs/113: Macros walks the chain one device at a time with the controller's pages, and
+        // specs/114: Macros walks the chain one device at a time with the controller's pages, and
         // an LED frame comes with it; nav moves device and page, at the ends it stays.
         Drain("mac"); Drain("led");
         Send(new { t = "nav", s = "deviceAt", i = 1 });
@@ -555,7 +555,7 @@ internal static class RemoteTests
         yield return (ledStill is null, "Macros: an unchanged frame is not sent again");
         Send(new { t = "nav", s = "page", i = 1 });   // past the last page
         Thread.Sleep(80); hub.Tick();
-        var mPast = Wait("mac", 300, m => m.GetProperty("pg").GetInt32() != 1);
+        var mPast = Wait("mac", 300, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() != 1);   // the Compressor, another page
         yield return (mPast is null, "Macros: Page ▶ on the last page stays");
 
         // Macros follows the controller to another track (on by default), not when the phone turns

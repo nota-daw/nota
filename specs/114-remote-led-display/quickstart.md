@@ -1,4 +1,4 @@
-# Quickstart: check spec 113 by hand
+# Quickstart: check spec 114 by hand
 
 1. Build and run Nota; turn Remote on and connect a phone (or `npm run mock` in `src/web/remote`).
 2. Add a Volt track with Arp before it and Reverb after it; open Macros on the phone.

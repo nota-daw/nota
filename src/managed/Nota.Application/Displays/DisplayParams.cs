@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// A device's parameters by name, for its LED display (specs/113 research R3). Two kinds of
+// A device's parameters by name, for its LED display (specs/114 research R3). Two kinds of
 // parameter reach a display: a built-in audio or MIDI effect's, read raw in its own min..max
 // units, and an instrument's (plug-in style), read normalized with the engine's value text
 // ("1.20 kHz", "250 ms", "−6.0 dB", "45 %"). The unit helpers give a picture Hz, seconds, dB or a

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The built-in audio effects' LED pictures (specs/113), one per controller page
+// The built-in audio effects' LED pictures (specs/114), one per controller page
 // (DevicePages.json): EQ curves, dynamics transfer curves with the live level and gain
 // reduction, waveshapers, Reverb's tail with your audio's measured tail (its scope telemetry,
 // Reverb.h S_*), delay taps, modulation sweeps, a phaser's notches, a stereo field. Effects
@@ -65,6 +65,57 @@ public static partial class DeviceDisplays
         }
         return "";
     };
+
+    private static readonly string[] ColorNotes = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
+    /// <summary>Nota Color: the processing band shaded, a resonant peak on every enabled note in it
+    /// (taller with Amount × Resonance, narrower with Decay). The Spectral page shows the peaks
+    /// shifted by Pre / Post, the unshifted ones faint, the gate threshold and the muted sides.</summary>
+    private static void ColorPeaks(DisplayContext c, LedFrame f, bool spectral)
+    {
+        double lo = Math.Clamp(c.P.Hz("Low", 40), 20, 20000), hi = Math.Clamp(c.P.Hz("High", 400), lo, 20000);
+        double x0 = Widgets.XOfHz(lo), x1 = Widgets.XOfHz(hi);
+        int top = LedFrame.Top, bottom = LedFrame.Bottom;
+        Widgets.FreqTicks(f);
+        for (int x = (int)Math.Ceiling(x0); x <= x1; x += 2)
+            for (int y = top + 2; y < bottom; y += 2) f.Dot(x, y, Widgets.Grid);
+        f.VLine(x0, top, bottom, Widgets.Mid, dotted: true);
+        f.VLine(x1, top, bottom, Widgets.Mid, dotted: true);
+
+        int root = c.P.Has("Root") ? (c.P.Raw("Root") > 1.0001 ? (int)Math.Round(c.P.Raw("Root")) : c.P.Step("Root", 12)) : 0;
+        var notes = new List<int>();
+        for (int k = 0; k < 12; k++)
+            if (!c.P.Has(ColorNotes[k]) ? new[] { 0, 2, 4, 5, 7, 9, 11 }.Contains((k - root + 12) % 12) : c.P.On(ColorNotes[k])) notes.Add(k);
+        double amount = c.P.N("Amount", 0.5), reso = c.P.N("Resonance", 0.5), dec = c.P.N("Decay", 0.5);
+        double shift = 0;
+        if (spectral)
+        {
+            double Semis(string n) => c.P.Raw(n) > 1.0001 || c.P.Raw(n) < -0.0001 ? c.P.Raw(n) : c.P.Bi(n) * 12;
+            shift = (c.P.Has("Pre enabled") && !c.P.On("Pre enabled") ? 0 : Semis("Pre")) + Semis("Post");
+        }
+        int h = (int)Math.Round(6 + 26 * amount * (0.4 + 0.6 * reso)), w = Math.Max(0, (int)Math.Round((1 - dec) * 2));
+        for (int midi = 12; midi < 132; midi++)
+        {
+            if (!notes.Contains(midi % 12)) continue;
+            double hz = 440 * Math.Pow(2, (midi - 69) / 12.0);
+            if (hz < lo || hz > hi) continue;
+            double x = Widgets.XOfHz(hz);
+            if (spectral)
+            {
+                f.VLine(x, bottom - h / 2, bottom, Widgets.Live);
+                x = Widgets.XOfHz(Math.Clamp(hz * Math.Pow(2, shift / 12), 20, 20000));
+            }
+            for (int k = -w; k <= w; k++) f.VLine(x + k, bottom - h + Math.Abs(k) * 3, bottom, k == 0 ? Widgets.Hot : Widgets.Mark);
+        }
+        if (spectral)
+        {
+            if (c.P.Has("Gate threshold"))
+                f.HLine(0, 127, Math.Round(Widgets.YOfDb(Math.Clamp(c.P.Db("Gate threshold", -40), -60, 0), 0, -60)), Widgets.Dim, dotted: true);
+            if (c.P.On("Mute low")) f.Rect(0, top, 3, bottom - top + 1, Widgets.Mark);
+            if (c.P.On("Mute high")) f.Rect(125, top, 3, bottom - top + 1, Widgets.Mark);
+            f.Line(64 - 20, top + 3, 64 + 20 * Math.Sign(shift == 0 ? 1 : shift), top + 3, shift == 0 ? Widgets.Grid + 1 : Widgets.Mark);
+        }
+    }
 
     private static double RateHz(DisplayContext c, string name)
     {
@@ -470,6 +521,13 @@ public static partial class DeviceDisplays
                 int stages = st > 1.0001 ? (int)Math.Round(st) : 2 + 2 * (int)Math.Round(c.P.N("Stages") * 5);
                 Widgets.Notches(f, c.P.Hz("Center", 800), c.P.N("Depth", 0.5), stages, RateHz(c, "Rate"), c.P.N("Feedback"), c.Time);
             }, c => HzShort(RateHz(c, "Rate"))),
+        };
+
+        // Nota Color (#977): the notes it tunes to inside its band, as resonant peaks.
+        d["builtin:fx:color"] = new[]
+        {
+            Page("Main", (c, f) => ColorPeaks(c, f, false), c => HzShort(c.P.Hz("Low", 40)) + "-" + HzShort(c.P.Hz("High", 400))),
+            Page("Spectral", (c, f) => ColorPeaks(c, f, true), c => "MORPH " + PctShort(c.P.N("Morph"))),
         };
 
         d["builtin:fx:vocoder"] = new[]

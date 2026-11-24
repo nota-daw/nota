@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The built-in instruments' LED pictures (specs/113), one per controller page
+// The built-in instruments' LED pictures (specs/114), one per controller page
 // (DevicePages.json): a filter page shows the response over the instrument's live output, an
 // envelope page its envelope with a playhead, an oscillator page the waveform it makes, a
 // modulation page its LFOs, a mixer or level page bars. Parameter names are the engine's, as the

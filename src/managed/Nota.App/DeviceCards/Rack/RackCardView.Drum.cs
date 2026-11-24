@@ -1065,7 +1065,9 @@ internal sealed partial class RackCardView
                 for (int p = 0; p < a.ChainDeviceParamCount(c0, d0); p++)
                 {
                     int pp = p;
-                    var mi = new MenuItem { Header = a.ChainDeviceParamName(c0, d0, p) };
+                    string name = a.ChainDeviceParamName(c0, d0, p);
+                    if (!DeviceView.IsSoundParam(name, kind)) continue;
+                    var mi = new MenuItem { Header = name };
                     mi.Click += (_, _) =>
                     {
                         foreach (var (c, d) in holders)
@@ -1105,9 +1107,14 @@ internal sealed partial class RackCardView
                     int dpc = a.ChainDeviceParamCount(c, d);
                     if (dpc <= 0) continue;
                     var dev = new MenuItem { Header = a.ChainDeviceName(c, d) };
+                    int kind = a.ChainDeviceBuiltinKind(c, d);
                     for (int p = 0; p < dpc; p++)
-                        dev.Items.Add(MacroPanel.Target(this, a.ChainDeviceParamName(c, d, p), macro, c, d, p,
+                    {
+                        string name = a.ChainDeviceParamName(c, d, p);
+                        if (!DeviceView.IsSoundParam(name, kind)) continue;
+                        dev.Items.Add(MacroPanel.Target(this, name, macro, c, d, p,
                             a.ChainDeviceParamMin(c, d, p), a.ChainDeviceParamMax(c, d, p), changed, MacroPanel.IsMapped(this, macro, c, d, p)));
+                    }
                     pad.Items.Add(dev);
                 }
                 menu.Items.Add(pad);

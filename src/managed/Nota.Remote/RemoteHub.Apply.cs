@@ -45,7 +45,7 @@ public sealed partial class RemoteHub
                 _devicesDirty = true;
                 break;
             case "mfollow":
-                // Macros follows the hardware controller, or stays where the phone puts it (specs/113).
+                // Macros follows the hardware controller, or stays where the phone puts it (specs/114).
                 c.FollowController = cmd.On;
                 if (cmd.On && c.Screen == "Macros") FollowFocus(c, host.ControllerFocus);
                 c.SentScreenState = null;
@@ -59,7 +59,7 @@ public sealed partial class RemoteHub
                 if (cmd.S == "Macros") c.FollowedMacro = false;
                 c.Screen = cmd.S;
                 c.SentScreenState = null;
-                // Opening Macros catches up with a controller that went to another track meanwhile (specs/113).
+                // Opening Macros catches up with a controller that went to another track meanwhile (specs/114).
                 if (opening && cmd.S == "Macros") FollowFocus(c, host.ControllerFocus, trackOnly: true);
                 _devicesDirty = true;
                 break;
@@ -166,7 +166,7 @@ public sealed partial class RemoteHub
 
     private const int MasterFaderId = -1;
 
-    /// <summary>The Macros screen's Track / Device / Page buttons (specs/113, contracts/remote-led.md).
+    /// <summary>The Macros screen's Track / Device / Page buttons (specs/114, contracts/remote-led.md).
     /// The phone moves at once; a phone that follows Nota also moves Nota's selection, focused
     /// device and the lead controller's page, so the controller follows it.</summary>
     private void Navigate(IRemoteHost host, RemoteClient c, string what, int i)

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- The Macros screen's LED display (specs/113): Nota renders the picture and sends the dots;
+<!-- The Macros screen's LED display (specs/114): Nota renders the picture and sends the dots;
      this only lights them — round dots in the track's colour on a dark bezel, unlit dots faintly
      visible, a soft glow over the lit ones. While the link is down the last frame stays, dimmed.
      `fit`: the display takes the largest size its box allows at its own aspect (landscape, full

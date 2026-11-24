@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// What a device page's picture reads (specs/113): the device's parameters, the page and its
+// What a device page's picture reads (specs/114): the device's parameters, the page and its
 // knobs, the time for anything that moves, and the live measurements Nota already takes for the
 // desktop cards (research R4) — an instrument's output spectrum, a device's scope telemetry, a
 // dynamics device's gain reduction, the track's level, a MIDI effect's last note. Every tap is

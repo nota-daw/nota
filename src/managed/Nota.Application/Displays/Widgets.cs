@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The pictures device pages are built from (specs/113): each draws one kind of view the desktop
+// The pictures device pages are built from (specs/114): each draws one kind of view the desktop
 // cards show — a filter response, an envelope, an oscillator, an LFO, an EQ curve, a dynamics
 // transfer curve, a waveshaper, a reverb tail, delay taps, a phaser's notches, a keyboard, bars,
 // meters — simplified to a 128 × 48 dot matrix. Brightness carries the hierarchy, as ink weight

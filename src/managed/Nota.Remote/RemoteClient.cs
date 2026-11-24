@@ -41,13 +41,13 @@ public sealed class RemoteClient
     public volatile string Screen = "";
     /// <summary>The Macros screen's device (index into the track's chain as the phone lists it).</summary>
     public int MacroDevice;
-    /// <summary>The Macros screen's page of that device (specs/113).</summary>
+    /// <summary>The Macros screen's page of that device (specs/114).</summary>
     public int MacroPage;
     /// <summary>Macros follows the hardware controller — its track, device and page — and the
-    /// phone's Track / Device / Page buttons move the controller (specs/113). On unless the phone
+    /// phone's Track / Device / Page buttons move the controller (specs/114). On unless the phone
     /// turns it off.</summary>
     public volatile bool FollowController = true;
-    /// <summary>The last LED frame sent (RLE4 bytes) and what it showed; null off Macros (specs/113).</summary>
+    /// <summary>The last LED frame sent (RLE4 bytes) and what it showed; null off Macros (specs/114).</summary>
     internal byte[]? SentLed;
     internal string? SentLedKey;
     /// <summary>Round-trip time the phone measured, ms (−1 = not yet).</summary>

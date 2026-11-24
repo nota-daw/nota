@@ -1,4 +1,4 @@
-# Tasks: Remote Macros as a controller surface with an LED display (spec 113)
+# Tasks: Remote Macros as a controller surface with an LED display (spec 114)
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [contracts/remote-led.md](contracts/remote-led.md)
 
@@ -31,7 +31,7 @@
 ## Phase 4 — Displays for every built-in device (US2 / US3)
 
 - [x] T030 Instruments: synth, sampler, physical, aurora, volt, bass, pendulum, operator, grain, flux, rhythm, monolith, pentad, consort, keys, mosaic, twin
-- [x] T031 Audio effects: eq-8, compressor, reverb, delay, utility, valve, auto-filter, vintage, orbit, auto-shift, beat-repeat, crush, dynamic-eq-8, ceiling, strata, eq-3, forge, level, shutter, chamber, prism, lens, flanger, phaser, chorus, vocoder
+- [x] T031 Audio effects: eq-8, compressor, reverb, delay, utility, valve, auto-filter, vintage, orbit, auto-shift, beat-repeat, crush, dynamic-eq-8, ceiling, strata, eq-3, forge, level, shutter, chamber, prism, lens, flanger, phaser, chorus, vocoder, color
 - [x] T032 MIDI effects: arp, chord, scale, length, velocity, random
 - [x] T033 Test: every catalog type key and page has a registered display; each renders on a fresh device without throwing and lights dots
 - [x] T034 Smoke test: render every built-in device's pages through the C ABI

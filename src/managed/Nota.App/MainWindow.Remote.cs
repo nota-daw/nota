@@ -207,7 +207,7 @@ public partial class MainWindow : IRemoteHost
         }
     }
 
-    // specs/113: the phone's Macros screen walks the controller's pages and moves its focus.
+    // specs/114: the phone's Macros screen walks the controller's pages and moves its focus.
     Nota.Application.Controllers.IDevicePageSource? IRemoteHost.DevicePages => _devicePages;
 
     bool IRemoteHost.StepTrack(int delta)

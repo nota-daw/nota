@@ -42,7 +42,7 @@ pages once through the C ABI; the web app's `npm run check` / build.
 **Performance Goals**: ≤ 2 ms per rendered frame on the UI thread; ≤ 30 frames/s per watched page;
 idle pages send nothing; a busy page ≤ 100 KB/s per phone.
 
-**Scale/Scope**: 49 built-in devices, ~110 pages.
+**Scale/Scope**: 50 built-in devices (Nota Color joined from develop), 96 pages.
 
 ## Constitution Check
 
@@ -130,7 +130,7 @@ idle pages send nothing; a busy page ≤ 100 KB/s per phone.
 ## Project Structure
 
 ```text
-specs/113-remote-led-display/
+specs/114-remote-led-display/
 ├── spec.md, plan.md, research.md, data-model.md, quickstart.md, tasks.md
 └── contracts/remote-led.md
 

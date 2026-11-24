@@ -965,7 +965,7 @@ public sealed class ControllerService
         if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
     }
 
-    /// <summary>Track ◀ / ▶ from elsewhere — a phone's Macros screen (specs/113): the same step
+    /// <summary>Track ◀ / ▶ from elsewhere — a phone's Macros screen (specs/114): the same step
     /// as a controller's, every controller's bank following. False at the end of the list.</summary>
     public bool StepSelectedTrack(int delta)
     {
@@ -982,7 +982,7 @@ public sealed class ControllerService
     }
 
     /// <summary>Put every controller's knobs that follow a device on <paramref name="page"/> of the
-    /// focused device (a phone's page buttons, specs/113).</summary>
+    /// focused device (a phone's page buttons, specs/114).</summary>
     public void SetPage(int page)
     {
         if (_focused is null) return;

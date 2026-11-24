@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Macros: a controller surface for one device of the track's chain (specs/113). Track ◀ ▶ and
+<!-- Macros: a controller surface for one device of the track's chain (specs/114). Track ◀ ▶ and
      Device ◀ ▶ step as a controller's buttons do (and move the controller with them when the
      phone follows Nota); the LED display shows the device page Nota renders; the page buttons are
      the controller's pages for that device; eight knobs turn that page's parameters. A vertical
@@ -15,7 +15,7 @@
   let { form }: { form: Form } = $props();
   const land = $derived(form === 'phoneLand');
   const size = $derived(form === 'tablet' ? 96 : land ? 40 : 52);
-  // The display alone on the whole screen (specs/113).
+  // The display alone on the whole screen (specs/114).
   let full = $state(false);
   const m = $derived(app.mac?.id === app.proj?.you ? app.mac : null);
   const devName = $derived(m?.devs[m.di] ?? 'No devices');
@@ -66,7 +66,7 @@
   $effect(() => {
     void pg;
     const b = pageRow?.querySelector<HTMLElement>('button.on');
-    // Scroll the row only: scrollIntoView would also scroll the page itself (specs/113 review).
+    // Scroll the row only: scrollIntoView would also scroll the page itself (specs/114 review).
     const row = pageRow;
     if (!b || !row) return;
     const bl = b.offsetLeft, br = bl + b.offsetWidth, bt = b.offsetTop, bb = bt + b.offsetHeight;
@@ -163,7 +163,7 @@
 
 <style>
   .macros { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; touch-action: none; }
-  /* A phone on its side (specs/113): the display as large as the height allows on the left, the
+  /* A phone on its side (specs/114): the display as large as the height allows on the left, the
      steppers, Follow and the pages beside it, the eight knobs in one row underneath. */
   .macros.land { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 28%); grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: 'led nav' 'led bar' 'knobs knobs'; gap: 8px; }

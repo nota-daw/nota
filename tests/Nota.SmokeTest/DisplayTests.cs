@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// specs/113: the LED display Nota renders for the phone's Macros screen. The frame itself (dots,
+// specs/114: the LED display Nota renders for the phone's Macros screen. The frame itself (dots,
 // font, RLE4 on the wire), then every built-in device: each controller page has its own picture,
 // that picture draws on a fresh device through the C ABI without throwing and lights the graph
 // area, and turning a knob changes it. NOTA_DISPLAY_DUMP=<dir> writes each page as ASCII for a

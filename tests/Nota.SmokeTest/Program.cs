@@ -835,7 +835,7 @@ if (args.Length >= 1 && args[0] == "--controller-remap")
     Console.WriteLine(failures == 0 ? "CONTROLLER REMAP PASSED" : $"CONTROLLER REMAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
-// The Remote LED displays alone: `--displays` (specs/113). Also part of the full run.
+// The Remote LED displays alone: `--displays` (specs/114). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--displays")
 {
     Console.WriteLine("-- device displays --");
@@ -982,6 +982,12 @@ if (args.Length >= 1 && args[0] == "--twin")
     Console.WriteLine("-- nota twin --");
     foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Experimental color bass device, also exercised by the full run.
+if (args.Length >= 1 && args[0] == "--color")
+{
+    foreach (var (ok, label) in ColorTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
@@ -16329,6 +16335,10 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- non-ASCII sample paths (#974) --");
+foreach (var (ok, label) in UnicodeSamplePathTests.Run()) Check(ok, label);
+Console.WriteLine("-- play vs count-in (#988) --");
+foreach (var (ok, label) in PlayCountInTests.Run()) Check(ok, label);
 using (var tempoLane = new NotaEngine())
 {
     int failed = tempoLane.TempoLaneSelfTest();
@@ -16351,6 +16361,7 @@ Console.WriteLine("-- nota twin --");
 foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ColorTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- synth lfo sync --");
@@ -16461,7 +16472,7 @@ Console.WriteLine("-- controllers --");
 foreach (var (ok, label) in ControllerTests.Run()) Check(ok, label);
 foreach (var (ok, label) in ControllerRemapTests.Run()) Check(ok, label);
 
-Console.WriteLine("-- device displays (specs/113) --");
+Console.WriteLine("-- device displays (specs/114) --");
 foreach (var (ok, label) in DisplayTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");

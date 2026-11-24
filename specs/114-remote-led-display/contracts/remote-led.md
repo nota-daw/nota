@@ -1,4 +1,4 @@
-# Contract: Macros pages, LED frames and navigation (spec 113)
+# Contract: Macros pages, LED frames and navigation (spec 114)
 
 Additive to the Macros message of specs/014 / 090 and `foc` of
 [specs/107](../../107-controller-focus-display/contracts/remote-focus.md). A client that does not

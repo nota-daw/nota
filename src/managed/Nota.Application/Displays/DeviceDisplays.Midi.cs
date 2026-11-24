@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The built-in MIDI effects' LED pictures (specs/113): notes rather than sound — the
+// The built-in MIDI effects' LED pictures (specs/114): notes rather than sound — the
 // arpeggiator's pattern stepping with the song, Chord's added notes on a keyboard over the last
 // note played, Scale's allowed notes with the last note it remapped, Length's gate against the
 // grid, Velocity's in → out curve, Random's spread of what it may change.

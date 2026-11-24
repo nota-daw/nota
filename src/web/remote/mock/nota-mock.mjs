@@ -130,7 +130,7 @@ function mix() {
 }
 
 const xy = () => ({ t: 'xy', id: state.you, ok: true, auto: false, x: { n: 'Cutoff', d: 'Auto Filter', v: 0.62, txt: '2.4 kHz', map: null, tilt: null }, y: { n: 'Resonance', d: 'Auto Filter', v: 0.35, txt: '35 %', map: null, tilt: null } });
-// The Macros screen (specs/113): the device and page the phone is on, and a stand-in LED frame —
+// The Macros screen (specs/114): the device and page the phone is on, and a stand-in LED frame —
 // a filter curve that breathes, RLE4 as Nota sends it (contracts/remote-led.md).
 const macState = { di: 1, pg: 0, seq: 0 };
 function led() {
@@ -312,7 +312,7 @@ setInterval(() => {
   for (const c of clients) if (c.paired && c.screen === 'Scenes') c.send(clips(false));
 }, 250);
 
-// The Macros screen's LED display moves at ~15 frames a second (specs/113).
+// The Macros screen's LED display moves at ~15 frames a second (specs/114).
 setInterval(() => { for (const c of clients) if (c.paired && c.screen === 'Macros') c.send(led()); }, 66);
 
 // The controller moves on: a page, then the next device.

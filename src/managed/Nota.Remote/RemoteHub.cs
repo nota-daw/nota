@@ -187,7 +187,7 @@ public sealed partial class RemoteHub
         c.Model = PairingModel(Str(m, "model"));
         c.TrackId = Int(m, "track");
         c.Follow = Bool(m, "follow");
-        c.FollowController = !m.TryGetProperty("fc", out _) || Bool(m, "fc");   // specs/113; older phones: on
+        c.FollowController = !m.TryGetProperty("fc", out _) || Bool(m, "fc");   // specs/114; older phones: on
         c.Screen = Str(m, "screen");
         c.Device = dev;
         c.SentProject = c.SentWho = c.SentTransport = c.SentLit = c.SentLearn = c.SentScreenState = null;

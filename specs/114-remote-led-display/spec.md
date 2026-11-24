@@ -1,6 +1,6 @@
 # Feature Specification: Remote Macros as a controller surface with an LED display
 
-**Feature Branch**: `feat/remote-led-display`
+**Feature Branch**: `feat/remote-led-display` (spec 114)
 
 **Created**: 2026-11-24
 
@@ -255,7 +255,7 @@ client would re-implement every device view.
   it beyond the taps that already exist.
 - **FR-024**: A client that does not know the frame message MUST keep working (older phones,
   Nota NX ignore unknown messages).
-- **FR-025**: Every built-in device (the 17 instruments, 26 audio effects and 6 MIDI effects
+- **FR-025**: Every built-in device (the 17 instruments, 27 audio effects and 6 MIDI effects
   of the controller catalog) MUST have its own display for each of its pages, a picture that
   explains that page's controls (filter / EQ curves, envelopes, transfer curves, tails, delay
   taps, modulation sweeps, note views); racks and plug-ins show the bars (FR-014).

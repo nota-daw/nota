@@ -54,7 +54,7 @@ public sealed record RemoteControllerFocus(
     string Controller, string Mode, int Send, int TrackId, string TrackName, string? Device,
     int? MacroIndex, int Page, int PageCount, string PageName, int BankFirst, int BankLast)
 {
-    /// <summary>The focused device itself (specs/113), so a MIDI-effect focus reaches the phone too;
+    /// <summary>The focused device itself (specs/114), so a MIDI-effect focus reaches the phone too;
     /// null when the host doesn't say (then <see cref="MacroIndex"/> stands for it).</summary>
     public Nota.Application.Controllers.DeviceAddress? Address { get; init; }
 }
@@ -119,15 +119,15 @@ public interface IRemoteHost
     string? PhoneMappingName(int controlId, int trackId);
 
     /// <summary>The user's and the project's edited controller pages (specs/051), which the phone's
-    /// Macros pages follow too (specs/113); null for the shipped pages only.</summary>
+    /// Macros pages follow too (specs/114); null for the shipped pages only.</summary>
     Nota.Application.Controllers.IDevicePageSource? DevicePages => null;
-    /// <summary>Step Nota's selected track as the controller's Track ◀ ▶ do (specs/113, a phone
+    /// <summary>Step Nota's selected track as the controller's Track ◀ ▶ do (specs/114, a phone
     /// that follows Nota). False when there is no neighbour.</summary>
     bool StepTrack(int delta) => false;
     /// <summary>Focus <paramref name="device"/> as the Devices panel's selection would, so the
-    /// controller's knobs follow it (specs/113).</summary>
+    /// controller's knobs follow it (specs/114).</summary>
     void FocusDevice(Nota.Application.Controllers.DeviceAddress device) { }
-    /// <summary>Put the lead controller's knobs on <paramref name="page"/> of the focused device (specs/113).</summary>
+    /// <summary>Put the lead controller's knobs on <paramref name="page"/> of the focused device (specs/114).</summary>
     void SetDevicePage(int page) { }
 
     /// <summary>A phone connected, left, renamed itself or switched track.</summary>

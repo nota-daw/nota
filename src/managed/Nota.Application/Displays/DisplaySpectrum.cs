@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// An instrument's output as 64 log bands for its LED display (specs/113): the same tap the
+// An instrument's output as 64 log bands for its LED display (specs/114): the same tap the
 // desktop filter graph reads (IAudioEngine.InstrumentOutput, which keeps itself on for about a
 // second after each read), Hann-windowed, FFT'd and smoothed so it rises quickly and falls slowly.
 // Coarser than the card's (64 bands for 128 columns) — a dot matrix shows no more.

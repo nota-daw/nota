@@ -179,7 +179,7 @@ public static class ShortcutLayout
         F(Loc.T("preferences.double_click_a_track_header"), Loc.T("preferences.open_its_devices_in_the")),
         F(Loc.T("preferences.double_click_a_browser_instrument"), Loc.T("preferences.swap_it_onto_the_selected")),
         F(Loc.T("preferences.alt_double_click_a_browser"), Loc.T("preferences.always_start_a_new_track")),
-        F(Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_play_record")),
+        F(Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_record")),
         F(Loc.T("preferences.drag_an_audio_clips_adsr"), Loc.T("preferences.shape_attack_decay_sustain_release")),
         F(Loc.T("preferences.click_track_header"), Loc.T("preferences.add_the_track_to_the")),
         F(Loc.T("preferences.click_a_groups_link_key"), Loc.T("preferences.link_the_groups_tracks_arming")),

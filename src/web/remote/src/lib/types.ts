@@ -107,13 +107,13 @@ export interface Macros {
   id: number;
   di: number;
   devs: string[];
-  /** The page of that device and the page names (specs/113); older Nota: absent. */
+  /** The page of that device and the page names (specs/114); older Nota: absent. */
   pg?: number;
   pgs?: string[];
   k: MacroKnob[];
 }
 
-/** One LED display frame (specs/113, contracts/remote-led.md): RLE4 runs in base64. */
+/** One LED display frame (specs/114, contracts/remote-led.md): RLE4 runs in base64. */
 export interface Led {
   id: number;
   di: number;

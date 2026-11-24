@@ -574,6 +574,7 @@ void RackCore::macroSet(int32_t i, float v) {
 int32_t RackCore::addMacroMapping(
     int32_t macro, int32_t chain, int32_t deviceIndex, int32_t paramIndex, float rangeMin, float rangeMax) {
     if (macro < 0 || macro >= kNumMacros) return -1;
+    if (const auto* device = chainDeviceAt(chain, deviceIndex); device && device->isLatencyConfigurationParam(paramIndex)) return -1;
     auto ns = copyState();
     if (deviceIndex == kRackControl) {
         if (paramIndex < 0 || paramIndex >= kRackParams) return -1;
@@ -1014,7 +1015,7 @@ void RackCore::applyMacro(int32_t macro, float value) {
         } else if (m.deviceIndex < 0) {
             if (c.instrument) c.instrument->pluginParamSet(m.paramIndex, target);
         } else if (m.deviceIndex < static_cast<int32_t>(c.devices.size())) {
-            if (c.devices[m.deviceIndex]) c.devices[m.deviceIndex]->setParam(m.paramIndex, target);
+            if (c.devices[m.deviceIndex]) c.devices[m.deviceIndex]->setLiveParam(m.paramIndex, target);
         }
     }
 }
