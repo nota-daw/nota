@@ -89,6 +89,7 @@ internal static class PluginLoadTests
     {
         using var w = new NotaEngine();
         w.RenderOffline(new float[256], 128, 48000);
+        w.RenderOffline(new float[256], 128);   // its own entry point: the checks render while a load is out
         int t = w.AddAudioTrack();
         int d = w.AddBuiltinDevice(t, 0);
         w.ServicePluginLoads();
