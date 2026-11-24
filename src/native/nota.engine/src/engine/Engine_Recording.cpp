@@ -58,6 +58,8 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
         recordTrackRt_.store(-1, std::memory_order_relaxed);
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
+        // The last armed track left: the take ends here, and so does the performance (#971).
+        if (sessionPass_.active && !isRecording()) finishSessionPass(transport_.uiPositionBeats());
     }
     // Its take is kept (specs/078): with nothing else recording the attempt ends; otherwise a
     // retry goes on covering the capture still running, without this track.
@@ -200,6 +202,16 @@ bool Engine::trackMonitor(int32_t trackId) const {
 // tap flag, so starting a take while monitoring doesn't reopen (or drop) the stream.
 bool Engine::ensureAudioInput() {
     if (inputTestMode_) return true;
+    const bool ok = openAudioInput();
+    // The monitor / input-meter tap waits for an open device (#987): when monitoring or an
+    // armed track wanted the input but it didn't open then (a macOS permission prompt still
+    // pending, the interface not ready), updateMonitorInput doesn't retry — so the next open
+    // that succeeds (a take starting) switches the tap on, and the meter and monitoring work.
+    if (ok && hwMonitorWanted_) hwMonitorTap_.store(true, std::memory_order_relaxed);
+    return ok;
+}
+
+bool Engine::openAudioInput() {
     if (input_ && input_->isRunning()) return true;
     if (!input_) input_ = createAudioInput(activeSystem_); // ASIO: the running driver's inputs
     // In the ASIO → WASAPI fallback the output runs on the system default; so does capture.
@@ -765,10 +777,14 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     if (!t || t->type() != TrackType::Instrument || scene < 0 || scene >= authoring_->sceneCount) return false;
     noteTakeTrack(trackId);
     const bool hasClip = scene < static_cast<int32_t>(t->sessionSlots.size()) && t->sessionSlots[scene].hasClip;
-    const bool growing = !hasClip && sessionRecordLen_ <= 0.0;
+    // An empty slot's own next-take length (#503); an overdub follows the Session record length.
+    const SessionSlot* slot =
+        hasClip || scene >= static_cast<int32_t>(t->sessionSlots.size()) ? nullptr : &t->sessionSlots[scene];
+    const double len = resolveTakeBeats(slot);
+    const bool growing = !hasClip && len <= 0.0;
     if (!hasClip) {
         TakePushScope takePush(*this); // the take's own clip (specs/078)
-        addSessionMidiClip(trackId, scene, growing ? kGrowingTakeBeats : sessionRecordLen_);
+        addSessionMidiClip(trackId, scene, growing ? kGrowingTakeBeats : len);
         t = findTrackAuthoring(trackId);
         if (!t) return false;
     }
@@ -776,6 +792,9 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     l.trackId = trackId;
     l.scene = scene;
     l.growing = growing;
+    l.lenBeats = len;
+    l.ownLen = ownTakeLength(slot);
+    l.fresh = !hasClip; // its landing fires the slot's rule (#481)
     l.player = t->sessionPlayer;
     const size_t k = midiLanes_.size();
     midiLanes_.push_back(std::move(l));
@@ -789,18 +808,22 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     return true;
 }
 
-// A fresh MIDI take that ran open-ended: cut it to whole launch quanta (a bar when launching is
-// unquantized) — no undo step of its own, so undo drops the whole take.
+// A fresh MIDI take that ran open-ended — or one of its slot's own length stopped by hand before
+// that length (#503) — is cut to whole launch quanta (a bar when launching is unquantized), never
+// past its length. No undo step of its own, so undo drops the whole take.
 void Engine::cutGrowingLane(MidiTakeLane& l) {
-    if (!l.growing || l.trackId < 0 || l.scene < 0) return;
+    const bool cutShort = !l.growing && l.ownLen && !takeLengthReached_;
+    if ((!l.growing && !cutShort) || l.trackId < 0 || l.scene < 0) return;
     l.growing = false;
+    l.ownLen = false;
     double el = 0.0;
     if (l.player && l.player->playing.load(std::memory_order_relaxed) == l.scene)
         el = l.player->playedBeats.load(std::memory_order_relaxed);
     if (auto old = findTrackAuthoring(l.trackId); old && l.scene < static_cast<int32_t>(old->sessionSlots.size())) {
         auto nt = cloneTrack(*old);
         SessionSlot& sl = nt->sessionSlots[static_cast<size_t>(l.scene)];
-        const double len = roundedTakeBeats(el);
+        double len = roundedTakeBeats(el);
+        if (cutShort) len = std::min(len, l.lenBeats);
         sl.lengthBeats = len;
         sl.midi.lengthBeats = len;
         republishWithTrackRaw(l.trackId, nt);
@@ -816,6 +839,7 @@ void Engine::finishSessionMidiLane(int32_t lane) {
     MidiTakeLane& l = midiLanes_[static_cast<size_t>(lane)];
     foldSessionLane(l, lane, {}, {}, true);
     cutGrowingLane(l);
+    noteMidiLaneLanded(l); // kept as a playable clip: its slot's rule may fire (#481)
     const int32_t tid = l.trackId;
     closeMidiLane(lane);
     if (takeAttempt_.active) keepTakeTrack(tid); // landed: a retry leaves it be
@@ -825,6 +849,7 @@ void Engine::finishSessionMidiLane(int32_t lane) {
             recordSessionTrackId_ = n.trackId;
             recordSessionScene_ = n.scene;
             recordSessionGrowing_ = n.growing;
+            recordSessionLen_ = n.lenBeats;
             if (auto t = findTrackAuthoring(n.trackId); t && n.scene < static_cast<int32_t>(t->sessionSlots.size()))
                 recordSlotLen_.store(t->sessionSlots[static_cast<size_t>(n.scene)].lengthBeats, std::memory_order_relaxed);
             recordSlotHist_.publish(n.player);
@@ -948,6 +973,12 @@ void Engine::setRecording(bool on) {
         }
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling
+        // The Session performance last (#971): after the takes are in place, so an armed
+        // instrument track's played notes can join the clip its slot wrote.
+        if (sessionPass_.active) {
+            foldRecordedTake();
+            finishSessionPass(transport_.uiPositionBeats());
+        }
         if (!takeAttempt_.session) closeTakeAttempt(); // the take is kept: nothing to put back
         // If the take started the transport, stop it and rewind to where the
         // take began so re-recording lands in the same place (no drift).
@@ -982,11 +1013,17 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
     }
     const bool haveAudio = !audioIds.empty();
     const bool haveMidi = !instTs.empty();
-    if (!haveAudio && !haveMidi) {
+    // Nothing armed but the Session is playing (or about to): record the performance alone
+    // (#971, clarification Q2). With the Session silent, the caller auto-arms as before.
+    const bool performanceOnly = !haveAudio && !haveMidi && sessionPlayingOrQueued();
+    if (!haveAudio && !haveMidi && !performanceOnly) {
         recording_.store(false, std::memory_order_relaxed);
         recordStartStatus_ = 1;
         return false;
     }
+    // Every Arrangement take also records the Session performance (#971). Before anything is
+    // written, so the pass's history starts here.
+    beginSessionPass(performanceOnly);
 
     // A take started from stop gets the count-in (if one is set); the capture taps stay
     // gated until it runs out, so the clicks-only pre-roll isn't recorded.
@@ -1046,6 +1083,7 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
         recording_.store(true, std::memory_order_relaxed);
     }
 
+    if (performanceOnly) recording_.store(true, std::memory_order_relaxed);
     // Unified transport/rewind bookkeeping (the sub-calls above may have set per-call
     // values; make them consistent for the combined take).
     if (!recordSessionAudio_) {
@@ -1062,8 +1100,11 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
             transportPlay();
     }
     recordCountIn_ = false;
-    recordStartStatus_ = (haveAudio && !audioOk && !haveMidi) ? 2 : 0;
-    if (!isRecording()) closeTakeAttempt(); // nothing started: nothing to retry
+    recordStartStatus_ = (haveAudio && !audioOk && !haveMidi) ? 2 : performanceOnly ? 3 : 0;
+    if (!isRecording()) { // nothing started: nothing to retry, no performance to write
+        abandonSessionPass();
+        closeTakeAttempt();
+    }
     return isRecording();
 }
 
@@ -1088,7 +1129,8 @@ void Engine::beginCaptureLayout() {
         l.buf.clear();
         l.passes.clear();
     }
-    if (!recordSessionAudio_ && loopEnabled_ && loopEnd_ > loopStart_) activateLoopPunch(audioRecordStartBeat_);
+    captureLinearUnderLoop_ = false;
+    if (!recordSessionAudio_ && loopWrapsFrom(audioRecordStartBeat_)) activateLoopPunch(audioRecordStartBeat_);
 }
 
 // Switch capture into loop punch: a fixed loop-region buffer per lane whose shared cursor
@@ -1163,9 +1205,20 @@ double Engine::audioRecordLengthBeats(int32_t trackId) const {
 }
 
 void Engine::drainInputQueue() {
-    // Loop enabled after recording began → switch to loop punch from here.
-    if (audioRecording_ && !recordSessionAudio_ && !captureLoop_ && loopEnabled_ && loopEnd_ > loopStart_)
-        activateLoopPunch(transport_.uiPositionBeats());
+    if (audioRecording_ && !recordSessionAudio_) {
+        const double at = takeTransportBeats();
+        // (A seek past the loop end during a loop take is handled where the frames are
+        // written below: it splits this drain's frames at the seek, #981.)
+        if (!captureLoop_ && loopEnabled_ && !loopWrapsFrom(at)) captureLinearUnderLoop_ = true;
+        // Loop enabled after recording began → switch to loop punch from here, dropping the
+        // straight pre-roll. A straight take that played on past the loop and is seeked back
+        // into it keeps what it recorded instead: that lands first (#981).
+        if (!captureLoop_ && loopWrapsFrom(at)) {
+            if (captureLinearUnderLoop_ && captureWritePos_ > 0) landCaptureSoFar();
+            captureLinearUnderLoop_ = false;
+            activateLoopPunch(at);
+        }
+    }
 
     for (auto& l : captureLanes_) l.scratch.clear();
     auto clearScratch = [&] {
@@ -1222,13 +1275,28 @@ void Engine::drainInputQueue() {
     if (int64_t dropped = inputDroppedFrames_.exchange(0, std::memory_order_relaxed); dropped > 0)
         for (auto& l : captureLanes_)
             l.scratch.insert(l.scratch.end(), static_cast<size_t>(dropped) * static_cast<size_t>(l.channels), 0.0f);
-    const size_t frames = captureLanes_[0].scratch.size() / static_cast<size_t>(captureLanes_[0].channels);
+    size_t frames = captureLanes_[0].scratch.size() / static_cast<size_t>(captureLanes_[0].channels);
     if (frames == 0) return;
 
     if (captureLoop_ && captureLoopFrames_ > 0) {
+        // A seek past the loop end during a loop take (#981): the transport plays on from the
+        // seek, so the take must too. This drain's frames were captured up to now; the ones
+        // after the seek (the time the transport has played on since) start the straight take
+        // at the seek, the rest still belong to the loop — so nothing lands later than it sounded.
+        size_t toLoop = frames;
+        double from = 0.0, now = 0.0, fpb = 0.0;
+        const bool split = takeLoopBypassed();
+        if (split) {
+            from = transport_.uiPastLoopFromBeats();
+            now = takeTransportBeats();
+            const double devSR = transport_.sampleRate();
+            fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
+            const double after = std::max(0.0, (now - from) * fpb);
+            toLoop = frames - std::min(frames, static_cast<size_t>(std::llround(after)));
+        }
         // Loop punch: write into the loop-region buffers, the shared cursor wrapping at the
         // loop length so each pass overwrites the previous in place (frame-count clock → clean seams).
-        for (size_t i = 0; i < frames; ++i) {
+        for (size_t i = 0; i < toLoop; ++i) {
             for (auto& l : captureLanes_) {
                 const size_t ch = static_cast<size_t>(l.channels);
                 for (size_t c = 0; c < ch; ++c) l.buf[captureWritePos_ * ch + c] = l.scratch[i * ch + c];
@@ -1240,7 +1308,18 @@ void Engine::drainInputQueue() {
                 capturePassFrom_ = 0;
             }
         }
-        return;
+        if (!split) return;
+        landCaptureSoFar(); // the loop's passes land; every lane now records straight
+        // The straight take starts where its first frame sounded: the seek, or later if the
+        // queue holds less than the time played on since.
+        audioRecordStartBeat_ = fpb > 0.0 ? std::max(from, now - static_cast<double>(frames - toLoop) / fpb) : from;
+        captureLinearUnderLoop_ = true;
+        for (auto& l : captureLanes_) {
+            const size_t ch = static_cast<size_t>(l.channels);
+            l.scratch.erase(l.scratch.begin(), l.scratch.begin() + static_cast<std::ptrdiff_t>(std::min(l.scratch.size(), toLoop * ch)));
+        }
+        frames -= toLoop;
+        if (frames == 0) return;
     }
 
     // Linear append: every lane grows by exactly what was captured, reserved in 30 s steps so
@@ -1300,6 +1379,8 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         CaptureLane lane;
         lane.trackId = tracks[0]->id();
         lane.scene = recordSessionAudio_ ? recordSessionScene_ : -1;
+        lane.lenBeats = recordSessionAudio_ ? recordSessionLen_ : 0.0; // #503
+        lane.ownLen = recordSessionAudio_ && recordSessionOwnLen_;
         captureLanes_.push_back(std::move(lane));
         audioRecordTrackId_ = captureLanes_[0].trackId;
         audioRecordLatencyFrames_ = 0; // internal resampling has no device round trip (specs/049, R7)
@@ -1344,6 +1425,8 @@ bool Engine::startAudioRecordingLanes(const std::vector<int32_t>& trackIds) {
         lane.width = t->inputWidth();
         lane.channels = lane.width; // a mono pick is stored mono
         lane.scene = recordSessionAudio_ ? recordSessionScene_ : -1;
+        lane.lenBeats = recordSessionAudio_ ? recordSessionLen_ : 0.0; // #503
+        lane.ownLen = recordSessionAudio_ && recordSessionOwnLen_;
         captureLanes_.push_back(std::move(lane));
     }
     if (captureLanes_.empty()) {
@@ -1400,6 +1483,38 @@ struct Engine::TakeGeometry {
     size_t origin = 0, reached = 0, loopFrames = 0;
     double loopStartBeat = 0.0;
 };
+
+void Engine::landCaptureSoFar() {
+    TakeGeometry g;
+    g.loop = captureLoop_;
+    g.wrapped = captureWrapped_;
+    g.origin = captureOrigin_;
+    g.reached = captureWritePos_;
+    g.loopFrames = captureLoopFrames_;
+    g.loopStartBeat = captureLoopStartBeat_;
+    if (g.loop) finishLoopPass(g.reached);
+    beginUndoGroup();
+    for (auto& l : captureLanes_) {
+        CaptureLane landed;
+        std::swap(landed, l); // the lane's frames and passes land; its set-up records on
+        l.scratch = std::move(landed.scratch); // this drain's frames not yet written stay with it
+        l.trackId = landed.trackId;
+        l.first = landed.first;
+        l.width = landed.width;
+        l.channels = landed.channels;
+        l.scene = landed.scene;
+        l.lenBeats = landed.lenBeats;
+        l.ownLen = landed.ownLen;
+        l.fresh = landed.fresh;
+        materialiseCaptureLane(landed, g);
+    }
+    endUndoGroup();
+    captureLoop_ = false;
+    captureWrapped_ = false;
+    captureWritePos_ = 0;
+    captureOrigin_ = 0;
+    capturePassFrom_ = 0;
+}
 
 void Engine::stopAudioRecording() {
     if (!audioRecording_) return;
@@ -1497,6 +1612,14 @@ bool Engine::addSessionAudioLane(int32_t trackId, int32_t scene) {
     lane.channels = lane.width;
     lane.scene = scene;
     lane.offset = captureWritePos_;
+    { // its own slot's length (#503), counted from now: it records from here
+        const SessionSlot* sl =
+            scene < static_cast<int32_t>(t->sessionSlots.size()) ? &t->sessionSlots[scene] : nullptr;
+        lane.lenBeats = resolveTakeBeats(sl && !sl->hasClip ? sl : nullptr);
+        lane.ownLen = ownTakeLength(sl);
+        lane.fresh = !sl || !sl->hasClip; // its landing fires the slot's rule (#481)
+        lane.startBeat = transport_.uiPositionBeats();
+    }
     captureLanes_.push_back(std::move(lane));
     noteTakeTrack(trackId);
     if (takeAttempt_.active) takeAttempt_.sessionSlots.emplace_back(trackId, scene); // a retry relaunches it
@@ -1565,9 +1688,14 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
             s.lengthBeats = spb > 0 ? deviceFrames / spb : 4.0;
             if (s.lengthBeats <= 0.0) s.lengthBeats = 4.0;
             // Fixed-length capture keeps its length; an open-ended take is cut to whole quanta.
-            s.lengthBeats = sessionRecordLen_ > 0.0 ? sessionRecordLen_ : roundedTakeBeats(s.lengthBeats);
+            // A take of the slot's own length stopped by hand before it is cut the same way (#503).
+            if (lane.lenBeats <= 0.0) s.lengthBeats = roundedTakeBeats(s.lengthBeats);
+            else if (lane.ownLen && !takeLengthReached_)
+                s.lengthBeats = std::min(lane.lenBeats, roundedTakeBeats(s.lengthBeats));
+            else s.lengthBeats = lane.lenBeats;
         }
         republishWithTrack(trackId, nt);
+        if (lane.fresh) noteTakeLanded(trackId, scene); // a playable clip now: its rule may fire (#481)
         return;
     }
 

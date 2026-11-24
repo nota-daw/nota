@@ -113,7 +113,7 @@ int32_t paramIndexOfIdImpl(juce::AudioPluginInstance* p, const std::string& id) 
 }
 
 std::unique_ptr<juce::AudioPluginInstance> createInstance(
-    const juce::PluginDescription& desc, double sr, int maxBlock) {
+    const juce::PluginDescription& desc, double sr, int maxBlock, std::string* error) {
     juce::String err;
     auto inst = scanner::sharedFormatManager().createPluginInstance(desc, sr, maxBlock, err);
     // The format's reason was dropped, so a plug-in that wouldn't load left nothing to go on
@@ -122,6 +122,7 @@ std::unique_ptr<juce::AudioPluginInstance> createInstance(
         std::fprintf(stderr, "[nota plugin] could not load '%s' (%s, %s): %s\n", desc.name.toRawUTF8(),
             desc.pluginFormatName.toRawUTF8(), desc.fileOrIdentifier.toRawUTF8(),
             err.isNotEmpty() ? err.toRawUTF8() : "no reason given");
+    if (!inst && error != nullptr) *error = err.toStdString();
     return inst;
 }
 
@@ -154,16 +155,30 @@ std::unique_ptr<juce::AudioPluginInstance> cloneInstance(juce::AudioPluginInstan
     return inst;
 }
 
-std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
-    int catalogIndex, double sr, int maxBlock, bool instrumentOnly) {
+bool catalogDescription(int catalogIndex, bool instrumentOnly, juce::PluginDescription& desc) {
     auto& catalog = scanner::PluginCatalog::instance();
     catalog.loadOnce();
-    juce::PluginDescription desc; // one entry, copied under one lock
-    if (!catalog.typeAt(catalogIndex, desc)) return nullptr;
+    if (!catalog.typeAt(catalogIndex, desc)) return false; // one entry, copied under one lock
     if (instrumentOnly && !desc.isInstrument) {
         std::fprintf(stderr, "[nota plugin] '%s' is not listed as an instrument\n", desc.name.toRawUTF8());
-        return nullptr;
+        return false;
     }
+    return true;
+}
+
+juce::PluginDescription catalogDescriptionOf(const juce::AudioPluginInstance& p) {
+    const juce::PluginDescription own = p.getPluginDescription();
+    juce::PluginDescription desc = own;
+    auto& catalog = scanner::PluginCatalog::instance();
+    catalog.loadOnce();
+    if (!catalog.typeOfId(own.createIdentifierString().toRawUTF8(), desc)) return own;
+    return desc;
+}
+
+std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
+    int catalogIndex, double sr, int maxBlock, bool instrumentOnly) {
+    juce::PluginDescription desc;
+    if (!catalogDescription(catalogIndex, instrumentOnly, desc)) return nullptr;
     return createInstance(desc, sr, maxBlock);
 }
 

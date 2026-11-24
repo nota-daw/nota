@@ -21,6 +21,8 @@ using Nota.Presentation;
 using static Nota.App.DeviceCardKit;
 using Nota.Application.Localization;
 
+using Nota.Application.Controllers;
+
 namespace Nota.App;
 
 public sealed partial class DeviceChainView
@@ -81,6 +83,28 @@ public sealed partial class DeviceChainView
 
     private void ClearDeviceSelection() => _sel.Clear();
 
+    /// <summary>Select one top-level device of the track shown — the controller's Next / Previous
+    /// device and its "Show device" (specs/107). The rebuild hands the focus on as a click does.
+    /// False when the panel shows another track or the device isn't there.</summary>
+    public bool SelectAddress(DeviceAddress a)
+    {
+        if (a.TrackId != _trackId || _trackId <= 0) return false;
+        var kind = a.Section switch { FocusSection.Midi => ChainKind.Midi, FocusSection.Instrument => ChainKind.Instrument, _ => ChainKind.Effect };
+        int count = kind switch { ChainKind.Midi => MidiCount, ChainKind.Effect => FxCount, _ => 1 };
+        if (kind != ChainKind.Instrument && (a.Index < 0 || a.Index >= count)) return false;
+        _rackSel = null; _rackCmds = null;
+        SelectDevices(new[] { (kind, kind == ChainKind.Instrument ? -1 : a.Index) });
+        Rebuild();
+        // A long chain scrolls sideways: bring the device the knobs went to into view.
+        var top = new DeviceAddress(a.TrackId, a.Section, kind == ChainKind.Instrument ? -1 : a.Index);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var c in _row.Children)
+                if (Controllers.ControllerFocusOverlay.GetCardAddress(c) == top) { c.BringIntoView(); break; }
+        }, Avalonia.Threading.DispatcherPriority.Background);
+        return true;
+    }
+
     // A device in a rack chain (specs/042): the rack card selects it and hands over what the
     // keys do to it; the track chain's selection clears.
     private RackDeviceSel? _rackSel;
@@ -96,6 +120,26 @@ public sealed partial class DeviceChainView
             ClearDeviceSelection();
             foreach (var r in _selRings) r.IsVisible = false; // no rebuild: the rack card may be mid-drag
         }
+        RaiseControllerFocus();
+    }
+
+    /// <summary>The track shown and its selected device, after every rebuild and rack selection:
+    /// a hardware controller's knobs follow it (specs/051, FR-016).</summary>
+    public event Action<int, DeviceAddress?>? ControllerFocusChanged;
+
+    private void RaiseControllerFocus()
+    {
+        DeviceAddress? a = null;
+        if (_trackId > 0 && _rackSel is { } r)
+        {
+            var path = new RackPath(r.Chain, r.Index, r.Midi && r.Rack > MidiTarget.MidiRackBase);
+            a = r.Rack <= MidiTarget.MidiRackBase ? new DeviceAddress(_trackId, FocusSection.Midi, MidiTarget.MidiRackBase - r.Rack, path)
+              : r.Rack < 0 ? new DeviceAddress(_trackId, FocusSection.Instrument, -1, path)
+              : new DeviceAddress(_trackId, FocusSection.Audio, r.Rack, path);
+        }
+        else if (_trackId > 0 && _sel.Anchor is { } an && _sel.Contains(an))
+            a = new DeviceAddress(_trackId, (FocusSection)(int)an.Section, an.Index);
+        ControllerFocusChanged?.Invoke(_trackId, a);
     }
 
     // The track cards' selection rings, refilled on every rebuild.
@@ -528,7 +572,11 @@ public sealed partial class DeviceChainView
             // its track away — an instrument track never stands without one.
             MenuKit.AddGroups(flyout.Items,
                 new Control[] { ReplaceInstrumentMenu() },
-                new Control[] { MenuKit.Item(Loc.T("common.save_preset"), GlyphKind.Save, () => PresetSaveRequested?.Invoke(-1)) },
+                new Control[]
+                {
+                    MenuKit.Item(Loc.T("common.save_preset"), GlyphKind.Save, () => PresetSaveRequested?.Invoke(-1)),
+                    PagesItem(DeviceAddress.Instrument(_trackId)),
+                },
                 new Control[]
                 {
                     MenuKit.Item(Loc.T("common.copy"), GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey),
@@ -543,7 +591,11 @@ public sealed partial class DeviceChainView
         }
         bool selectable = SelectableKind(kind);
         MenuKit.AddGroups(flyout.Items,
-            new Control[] { MenuKit.Item(Loc.T("common.save_preset"), GlyphKind.Save, () => PresetSaveRequested?.Invoke(kind == ChainKind.Midi ? PresetService.MidiEffectBase - di : di)) },
+            new Control[]
+            {
+                MenuKit.Item(Loc.T("common.save_preset"), GlyphKind.Save, () => PresetSaveRequested?.Invoke(kind == ChainKind.Midi ? PresetService.MidiEffectBase - di : di)),
+                PagesItem(new DeviceAddress(_trackId, kind == ChainKind.Midi ? FocusSection.Midi : FocusSection.Audio, di)),
+            },
             new Control[]
             {
                 MenuKit.Item(Loc.T("common.copy"), GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey, selectable),
@@ -556,6 +608,12 @@ public sealed partial class DeviceChainView
             new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey, selectable) });
         flyout.ShowAt(anchor, showAtPointer: true);
     }
+
+    /// <summary>"Edit controller pages…" on a device (specs/051 FR-018): the main window opens the editor.</summary>
+    public event Action<DeviceAddress>? ControllerPagesRequested;
+
+    private MenuItem PagesItem(DeviceAddress device)
+        => MenuKit.Item(Loc.T("device_chain.clipboard.edit_controller_pages"), GlyphKind.Sliders, () => ControllerPagesRequested?.Invoke(device));
 
     // Group into rack, or Ungroup rack on a rack card (any of the three; one chain to be enabled).
     private Control GroupItem()

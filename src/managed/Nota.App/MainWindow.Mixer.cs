@@ -259,6 +259,8 @@ public partial class MainWindow
         win.ViewPicked += v => { PickMixerView(v); Fit(); };
         win.DockRequested += () => SetMixerFloating(false);
         win.EnableMidiLearn(_learn);   // faders/knobs stay MIDI-mappable in the window
+        _controllerMenu?.Attach(win);  // …and rebindable from a control's menu (specs/051 Story 7)
+        if (NewControllerOverlay() is { } mixOverlay) win.AddBodyOverlay(mixOverlay);   // knob numbers, pickup hints
         win.WindowClosed += () =>
         {
             mixer.StripsChanged -= Fit;

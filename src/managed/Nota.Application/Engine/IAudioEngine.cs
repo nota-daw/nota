@@ -130,6 +130,18 @@ public interface IAudioEngine : IDisposable
     void LaunchScene(int scene);
     void StopScene(int scene);
     void StopAllSession();
+    /// <summary>Cancel a slot's queued launch before its boundary (#480): the track carries on as if it
+    /// had never been asked. False when nothing of it is queued (it started, or never was).</summary>
+    bool CancelSlotLaunch(int trackId, int scene);
+    /// <summary>Cancel a queued scene launch (#480): every queued launch in that row and every stop the
+    /// scene launch queued are withdrawn, with its follow action and tempo change. False if nothing waits.</summary>
+    bool CancelSceneLaunch(int scene);
+    /// <summary>Whether a track's launch of a slot waits for its launch point — also a queued restart
+    /// of the slot already playing (state 3). A group id: any track below it (#480).</summary>
+    bool SessionSlotLaunchQueued(int trackId, int scene);
+    /// <summary>Whether a row has a launch waiting: a queued launch of one of its slots, or its scene
+    /// launch while nothing of it has started — a row that queued only stops counts too (#480).</summary>
+    bool SessionSceneQueued(int scene);
     /// <summary>Stop every session clip and hand all tracks back to the Arrangement timeline.</summary>
     void BackToArrangement();
     /// <summary>True when the Arrangement is playing; false in a session-only jam.</summary>
@@ -158,6 +170,19 @@ public interface IAudioEngine : IDisposable
     /// <summary>An empty slot's stop button: true (default) = launching its scene stops the track.</summary>
     bool GetSessionSlotStopButton(int trackId, int scene);
     void SetSessionSlotStopButton(int trackId, int scene, bool on);
+    /// <summary>A slot's next-take length (#503); false for an unknown track/scene. Kept, hidden,
+    /// while the slot holds a clip.</summary>
+    bool TryGetSessionSlotTakeLength(int trackId, int scene, out NotaSlotTakeLength value);
+    /// <summary>One undo step; false when refused (unknown slot or mode, Fixed outside 1 beat .. 64 bars).</summary>
+    bool SetSessionSlotTakeLength(int trackId, int scene, NotaSlotTakeLength value);
+    /// <summary>Beats a fresh take into the slot would record now; 0 = until stopped.</summary>
+    double SessionSlotTakeBeats(int trackId, int scene);
+    /// <summary>A slot's landing rule (#481): what a fresh take landing in it launches. False for an
+    /// unknown track/scene. Kept, hidden, while the slot holds a clip.</summary>
+    bool TryGetSessionSlotLandingRule(int trackId, int scene, out NotaSlotLandingRule value);
+    /// <summary>One undo step; false when refused (unknown slot or action, target scene out of
+    /// range, quantum not &lt; 0 or 0..32 beats).</summary>
+    bool SetSessionSlotLandingRule(int trackId, int scene, NotaSlotLandingRule value);
     /// <summary>Copies a slot (clip + properties) onto a slot of a same-kind track.</summary>
     bool CopySessionSlot(int srcTrackId, int srcScene, int dstTrackId, int dstScene);
     bool TryGetSceneProps(int scene, out NotaSceneProps props);
@@ -647,6 +672,22 @@ public interface IAudioEngine : IDisposable
     /// given kind. Returns false for Racks/unknown kinds or non-instrument tracks.</summary>
     bool SetTrackBuiltinInstrument(int trackId, int kind);
     int AddTrackEffectPlugin(int trackId, int catalogIndex);
+    /// <summary>Hosted plug-ins load after they are inserted (#979, specs/113): attaches the ones
+    /// whose binary has loaded and marks overdue ones not responding. Returns how many devices'
+    /// load state changed. Call it from a UI timer.</summary>
+    int ServicePluginLoads();
+    /// <summary>Services plug-in loads until none is left or <paramref name="timeoutMs"/> passed;
+    /// returns how many still load. Blocks the caller — for tests and tools.</summary>
+    int WaitPluginLoads(int timeoutMs);
+    /// <summary>A device's load state (deviceIndex −1 = the track's instrument).</summary>
+    PluginLoadState DevicePluginLoadState(int trackId, int deviceIndex);
+    /// <summary>Why the device is waiting, not responding or couldn't load — the app words it.</summary>
+    PluginLoadReason DevicePluginLoadReasonCode(int trackId, int deviceIndex);
+    /// <summary>The reason's argument: the plug-in being waited for, this plug-in's name, or the
+    /// format's message (<see cref="PluginLoadReason"/>); empty otherwise.</summary>
+    string DevicePluginLoadReasonArg(int trackId, int deviceIndex);
+    /// <summary>Keep waiting / give up / try again on a device's load.</summary>
+    bool DevicePluginLoadAction(int trackId, int deviceIndex, PluginLoadAction action);
     int TrackDeviceCount(int trackId);
     /// <summary>Copies an audio clip's played region down-mixed to mono for offline audio→MIDI
     /// analysis. Pass null to query the frame count. Returns the frame count; sr = source rate.</summary>
@@ -1224,7 +1265,13 @@ public interface IAudioEngine : IDisposable
     /// started and counts in again if the take did; a Session slot records again from the next
     /// launch quantum while everything else keeps playing.</summary>
     RetryTakeResult RetryTake();
+    /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed,
+    /// 3 ok — a performance-only pass: nothing armed while the Session plays, so the take records the
+    /// Session performance into the Arrangement alone (#971).</summary>
     int RecordStartStatus { get; }
+    /// <summary>The Session clips the running take has heard so far (#971), into <paramref name="buf"/>;
+    /// returns how many there are (may exceed the buffer). 0 when no take runs.</summary>
+    int SessionPassSpans(NotaPassSpan[] buf);
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }
     /// <summary>Beat where the in-progress audio take began.</summary>
@@ -1414,6 +1461,26 @@ public interface IAudioEngine : IDisposable
 
     // --- MIDI learn: drain incoming CC/note-on events (4 int32 per event) ---
     int PollMidiControlEvents(int[] quadBuffer);
+
+    // --- control surfaces (specs/051) ----------------------------------------
+    /// <summary>Bumped when MIDI ports appear / disappear; on a change, <see cref="ApplyMidi"/>
+    /// connects the new set and <see cref="MidiPorts"/> lists it.</summary>
+    uint MidiPortsGeneration { get; }
+    IReadOnlyList<MidiPortInfo> MidiPorts();
+    /// <summary>Replaces the whole claim table; false (table unchanged) on a malformed entry.</summary>
+    bool SetMidiClaims(ReadOnlySpan<MidiClaim> claims);
+    /// <summary>While on, claimed CC / note-on are also copied to <see cref="PollMidiControlEvents"/>.</summary>
+    void SetMidiLearnListening(bool listening);
+    /// <summary>Drains claimed messages, 5 int32 each {source, status, channel, data1, data2}.</summary>
+    int PollMidiSurfaceEvents(int[] quintBuffer);
+    uint MidiSurfaceDropped { get; }
+    /// <summary>One complete SysEx into <paramref name="buffer"/>; 0 none, -n did not fit.</summary>
+    int PollMidiSysex(out int source, byte[] buffer);
+    bool MidiSend(string outputUid, ReadOnlySpan<byte> bytes);
+    /// <summary>Test ports (MCP controller_inject): a virtual input + loopback output.</summary>
+    int MidiTestPortAdd(string name);
+    bool MidiTestInject(int source, ReadOnlySpan<byte> bytes);
+    int MidiTestTakeSent(int source, byte[] buffer);
 
     // --- gamepad input (live note source) ----------------------------------
     // Poll-driven: the UI ticks PollGamepadEvents and turns each edge into

@@ -81,8 +81,11 @@ public sealed class PluginTools(IAudioEngine engine, IEngineDispatch dispatch, I
     });
 
     [McpServerTool(Name = "set_plugin_param"), Description("Set a hosted plugin parameter by index to a normalized value 0..1 (deviceIndex -1 = the track instrument).")]
-    public Task SetPluginParam(int trackId, int deviceIndex, int paramIndex, [Description("Normalized 0..1")] float value)
-        => Mutate(() => PlugParam(trackId, deviceIndex, paramIndex, Math.Clamp(value, 0f, 1f)));
+    public async Task SetPluginParam(int trackId, int deviceIndex, int paramIndex, [Description("Normalized 0..1")] float value)
+    {
+        await SettlePluginLoadsAsync();   // a plug-in just inserted may still be loading (specs/113)
+        await Mutate(() => PlugParam(trackId, deviceIndex, paramIndex, Math.Clamp(value, 0f, 1f)));
+    }
 
     [McpServerTool(Name = "get_plugin_state"), Description("Get a hosted plugin's opaque state as base64 (deviceIndex -1 = the track instrument). Round-trips with set_plugin_state.")]
     public Task<string> GetPluginState(int trackId, int deviceIndex) => Read(() => Convert.ToBase64String(E.GetPluginState(trackId, deviceIndex) ?? Array.Empty<byte>()));

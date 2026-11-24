@@ -36,6 +36,7 @@ public sealed partial class SessionView
     private TextBlock? _posText, _tempoText;
     private Button? _backBtn;
     private ToggleButton? _inspectorToggle;
+    private Button? _turnBtn;   // turns the grid (specs/108)
     private readonly List<ToggleButton> _sectionToggles = new();
 
     /// <summary>Tempo and time signature for the toolbar readout.</summary>
@@ -77,7 +78,8 @@ public sealed partial class SessionView
             foreach (var (beats, label) in QuantSteps)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = Math.Abs(beats - cur) < 1e-6 };
-                mi.Click += (_, _) => { _engine.SetLaunchQuant(beats); SyncToolbar(); };
+                // The inspector too: a slot's landing rule shows the boundary it would use (#481).
+                mi.Click += (_, _) => { _engine.SetLaunchQuant(beats); SyncToolbar(); RebuildInspector(); };
                 f.Items.Add(mi);
             }
             f.ShowAt(quant);
@@ -133,6 +135,16 @@ public sealed partial class SessionView
         ToolTip.SetTip(stopAll, Loc.T("session.stop_every_session_clip"));
         stopAll.Click += (_, _) => { _engine.StopAllSession(); UpdateStates(); };
 
+        // Turn the grid (specs/108): scenes down ↔ scenes across; the same setting as Preferences →
+        // Editing → Session grid.
+        _turnBtn = new Button
+        {
+            Content = new Glyph(GlyphKind.TurnGrid, 16), Width = NotaSize.Shell + 6, Height = NotaSize.Shell, Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        Avalonia.Automation.AutomationProperties.SetName(_turnBtn, Loc.T("preferences.session_grid"));
+        _turnBtn.Click += (_, _) => SetAcross(!_across);
+
         // The inspector column can be folded away to give the grid its width back (critique F2).
         _inspectorToggle = new ToggleButton
         {
@@ -166,7 +178,7 @@ public sealed partial class SessionView
         };
 
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { _recBtn, fixedRow, quant, follow, capture } };
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { sectionsWell, readout, _backBtn, stopAll, more, _inspectorToggle } };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { sectionsWell, readout, _backBtn, stopAll, more, _turnBtn, _inspectorToggle } };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(10, 0) };
         grid.Children.Add(left);
         Grid.SetColumn(right, 2); grid.Children.Add(right);
@@ -178,7 +190,7 @@ public sealed partial class SessionView
             // Widths are learnt while a control is shown (a hidden one measures 0).
             foreach (var c in foldOrder) if (c.IsVisible && c.Bounds.Width > 0) width[c] = c.Bounds.Width;
             double need(IEnumerable<Control> shown) { double w = 0; foreach (var c in shown) w += c.Bounds.Width > 0 ? c.Bounds.Width + 8 : 0; return w; }
-            double fixedW = need(new Control[] { _recBtn, fixedRow, quant, stopAll, _inspectorToggle }) + 20 + 24;
+            double fixedW = need(new Control[] { _recBtn, fixedRow, quant, stopAll, _turnBtn, _inspectorToggle }) + 20 + 24;
             double avail = grid.Bounds.Width;
             int hide = 0;
             double total = fixedW;
@@ -231,9 +243,10 @@ public sealed partial class SessionView
             double len = _engine.SessionRecordLength;
             int sel = Array.FindIndex(FixedBars, b => Math.Abs(b * 4 - len) < 1e-6);
             var seg = Segmented(Array.ConvertAll(FixedBars, b => b == 0 ? Loc.T("common.off") : b.ToString(NotaNum.Culture)), sel < 0 ? 0 : sel,
-                i => _engine.SessionRecordLength = FixedBars[i] * 4.0, mono: true);
+                i => { _engine.SessionRecordLength = FixedBars[i] * 4.0; RebuildInspector(); }, mono: true); // "Global (…)" follows it (#503)
             _fixedSeg.Child = seg;
         }
+        if (_turnBtn is not null) ToolTip.SetTip(_turnBtn, _across ? Loc.T("session.toolbar.turn_to_down") : Loc.T("session.toolbar.turn_to_across"));
         for (int i = 0; i < _sectionToggles.Count; i++)
             _sectionToggles[i].IsChecked = i switch { 0 => _showIO, 1 => _showSends, _ => _showMixer };
     }

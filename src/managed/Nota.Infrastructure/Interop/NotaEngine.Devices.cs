@@ -42,12 +42,44 @@ public sealed partial class NotaEngine
         return NativeMethods.ClipAudioMono(_handle, trackId, clipIndex, outOrNull, outOrNull?.Length ?? 0, out sr);
     }
 
-    /// <summary>Appends a hosted effect plugin to a track's device chain. Returns the device index, or -1.</summary>
+    /// <summary>Appends a hosted effect plugin to a track's device chain. Returns the device index, or -1.
+    /// The device is there at once; its plug-in is still loading (<see cref="DevicePluginLoadState"/>).</summary>
     public int AddTrackEffectPlugin(int trackId, int catalogIndex)
     {
         ThrowIfDisposed();
         return NativeMethods.AddTrackEffectPlugin(_handle, trackId, catalogIndex);
     }
+
+    // --- hosted plug-ins load after they are inserted (#979, specs/113) ----------
+
+    /// <inheritdoc />
+    public int ServicePluginLoads() { ThrowIfDisposed(); return NativeMethods.PluginLoadsService(_handle); }
+
+    /// <inheritdoc />
+    public int WaitPluginLoads(int timeoutMs) { ThrowIfDisposed(); return NativeMethods.PluginLoadsWait(_handle, timeoutMs); }
+
+    /// <inheritdoc />
+    public PluginLoadState DevicePluginLoadState(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return (PluginLoadState)NativeMethods.DevicePluginLoadState(_handle, trackId, deviceIndex); }
+
+    /// <inheritdoc />
+    public PluginLoadReason DevicePluginLoadReasonCode(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return (PluginLoadReason)NativeMethods.DevicePluginLoadReasonCode(_handle, trackId, deviceIndex); }
+
+    /// <inheritdoc />
+    public string DevicePluginLoadReasonArg(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.DevicePluginLoadReasonArg(_handle, trackId, deviceIndex)) ?? ""; }
+
+    /// <inheritdoc />
+    public bool DevicePluginLoadAction(int trackId, int deviceIndex, PluginLoadAction action)
+    { ThrowIfDisposed(); return NativeMethods.DevicePluginLoadAction(_handle, trackId, deviceIndex, (int)action) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Project open: inside the scope a plug-in that froze Nota last time isn't loaded
+    /// (it comes up "couldn't load", with Try again). Process-wide; pair every true with a false.</summary>
+    public static void PluginAutoloadScope(bool on) => NativeMethods.PluginHostAutoloadScope(on ? 1 : 0);
+
+    /// <summary>The plug-in that was loading when Nota last ended (it froze Nota) — once, then empty.</summary>
+    public static string TakeFrozenPluginNotice() => Marshal.PtrToStringUTF8(NativeMethods.PluginHostFrozenNotice()) ?? "";
 
     /// <summary>Number of insert effects on a track's device chain.</summary>
     public int TrackDeviceCount(int trackId)

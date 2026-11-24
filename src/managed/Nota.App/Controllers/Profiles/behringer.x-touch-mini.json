@@ -1,0 +1,189 @@
+{
+  "format": 1,
+  "id": "behringer.x-touch-mini",
+  "name": "Behringer X-Touch Mini",
+  "protocol": "generic",
+  "source": "Behringer X-TOUCH MINI Quick Start Guide, MIDI map: Standard mode, layer A on channel 11 \u2014 encoders CC 1-8, fader CC 9, buttons notes 8-23 (https://www.bhphotovideo.com/lit_files/1142312.pdf)",
+  "match": {
+    "portNames": [
+      "^x-touch mini"
+    ]
+  },
+  "pickup": true,
+  "controls": [
+    {
+      "role": "knob",
+      "index": 1,
+      "message": "cc",
+      "channel": 11,
+      "number": 1
+    },
+    {
+      "role": "knob",
+      "index": 2,
+      "message": "cc",
+      "channel": 11,
+      "number": 2
+    },
+    {
+      "role": "knob",
+      "index": 3,
+      "message": "cc",
+      "channel": 11,
+      "number": 3
+    },
+    {
+      "role": "knob",
+      "index": 4,
+      "message": "cc",
+      "channel": 11,
+      "number": 4
+    },
+    {
+      "role": "knob",
+      "index": 5,
+      "message": "cc",
+      "channel": 11,
+      "number": 5
+    },
+    {
+      "role": "knob",
+      "index": 6,
+      "message": "cc",
+      "channel": 11,
+      "number": 6
+    },
+    {
+      "role": "knob",
+      "index": 7,
+      "message": "cc",
+      "channel": 11,
+      "number": 7
+    },
+    {
+      "role": "knob",
+      "index": 8,
+      "message": "cc",
+      "channel": 11,
+      "number": 8
+    },
+    {
+      "role": "master-fader",
+      "message": "cc",
+      "channel": 11,
+      "number": 9
+    },
+    {
+      "role": "button",
+      "index": 1,
+      "message": "note",
+      "channel": 11,
+      "number": 8
+    },
+    {
+      "role": "button",
+      "index": 2,
+      "message": "note",
+      "channel": 11,
+      "number": 9
+    },
+    {
+      "role": "button",
+      "index": 3,
+      "message": "note",
+      "channel": 11,
+      "number": 10
+    },
+    {
+      "role": "button",
+      "index": 4,
+      "message": "note",
+      "channel": 11,
+      "number": 11
+    },
+    {
+      "role": "button",
+      "index": 5,
+      "message": "note",
+      "channel": 11,
+      "number": 12
+    },
+    {
+      "role": "button",
+      "index": 6,
+      "message": "note",
+      "channel": 11,
+      "number": 13
+    },
+    {
+      "role": "button",
+      "index": 7,
+      "message": "note",
+      "channel": 11,
+      "number": 14
+    },
+    {
+      "role": "button",
+      "index": 8,
+      "message": "note",
+      "channel": 11,
+      "number": 15
+    },
+    {
+      "role": "button",
+      "index": 9,
+      "message": "note",
+      "channel": 11,
+      "number": 16
+    },
+    {
+      "role": "button",
+      "index": 10,
+      "message": "note",
+      "channel": 11,
+      "number": 17
+    },
+    {
+      "role": "button",
+      "index": 11,
+      "message": "note",
+      "channel": 11,
+      "number": 18
+    },
+    {
+      "role": "button",
+      "index": 12,
+      "message": "note",
+      "channel": 11,
+      "number": 19
+    },
+    {
+      "role": "button",
+      "index": 13,
+      "message": "note",
+      "channel": 11,
+      "number": 20
+    },
+    {
+      "role": "button",
+      "index": 14,
+      "message": "note",
+      "channel": 11,
+      "number": 21
+    },
+    {
+      "role": "button",
+      "index": 15,
+      "message": "note",
+      "channel": 11,
+      "number": 22
+    },
+    {
+      "role": "button",
+      "index": 16,
+      "message": "note",
+      "channel": 11,
+      "number": 23
+    }
+  ]
+}

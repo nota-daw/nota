@@ -84,6 +84,8 @@ public partial class MainWindow
             _ => Need(_detailMaximized || CanMaximizeDetail, Loc.T("main.open_a_clip_in_the")));
         B("view.showDevices", () => { int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack(); if (t > 0) ShowDevices(t); },
             c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
+        B("device.focusNext", () => StepControllerDevice(+1), c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
+        B("device.focusPrevious", () => StepControllerDevice(-1), c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
         B("view.popOutDetail", () => OnToggleDetailWindow(this, e));
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
@@ -118,6 +120,9 @@ public partial class MainWindow
         B("transport.metronome", () => OnMenuMetronome(this, e));
         B("transport.loopRecordMode", () => { if (_vm is not null) _vm.Transport.LoopRecordReplace = !_vm.Transport.LoopRecordReplace; });
         B("transport.tapTempo", TapTempoBeat);
+        // One BPM a step, for a controller's − / + (or an encoder): the tempo field's own path.
+        B("transport.tempoDown", () => { if (_vm is { } v) v.Transport.Bpm = Math.Clamp(Math.Round(v.Transport.Bpm) - 1, 20m, 999m); });
+        B("transport.tempoUp", () => { if (_vm is { } v) v.Transport.Bpm = Math.Clamp(Math.Round(v.Transport.Bpm) + 1, 20m, 999m); });
 
         // ---- Track
         B("track.newInstrument", () => AddTrack(NewTrackKind.Instrument));
@@ -132,6 +137,13 @@ public partial class MainWindow
         // ---- Session
         B("session.launchScene", () => _session?.LaunchSelectedScene(), c => Need(c.View == "Session", Loc.T("main.commands.open_the_session_view_first")));
         B("session.stopAll", () => _session?.StopAll());
+        Availability InSession(PaletteContext c) => Need(c.View == "Session" && _session is not null, Loc.T("main.commands.open_the_session_view_first"));
+        B("session.selectUp", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.PrevScene), InSession);
+        B("session.selectDown", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.NextScene), InSession);
+        B("session.selectLeft", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.PrevTrack), InSession);
+        B("session.selectRight", () => _session?.MoveSelection(Nota.Application.Editing.SessionStep.NextTrack), InSession);
+        B("session.toggleSlot", () => _session?.ToggleSelection(), InSession);
+        B("session.stopTrack", () => _session?.StopSelectedTrack(), InSession);
         B("session.insertScene", () => OnMenuInsertScene(this, e), c => Need(c.View == "Session", Loc.T("main.commands.scenes_live_in_the_session")));
 
         // ---- Piano roll: the clip open in the editor

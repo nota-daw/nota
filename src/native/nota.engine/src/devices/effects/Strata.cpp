@@ -397,7 +397,7 @@ void Strata::setState(const uint8_t* data, int32_t size) {
         for (int64_t i = 0; i < len * 2; ++i) b[i] = (off + 4 <= size) ? gF() : 0.0f;
         gainDb_[k].store(g[k]);
         muted_[k].store(mu[k] != 0);
-        state_[k].store(st[k]);
+        state_[k].store(st[k] == LS_Rec ? LS_Play : st[k]); // a pass saved mid-recording comes back finished: nothing records after a load (#482)
     }
     loopLen_.store(len);
     loopBars_ = std::max(1, bars);

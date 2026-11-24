@@ -974,6 +974,13 @@ Device* Engine::rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) c
     auto* rh = rhythmOf(findTrackAuthoring(trackId));
     return rh ? rh->voiceDevice(voice, dev) : nullptr;
 }
+
+void Engine::rhythmVoiceDeviceParamSet(int32_t trackId, int32_t voice, int32_t dev, int32_t param, float value) {
+    if (auto* device = rhythmVoiceDevice(trackId, voice, dev)) {
+        if (device->isLatencyConfigurationParam(param)) setLatencyConfigurationParam(*device, param, value);
+        else device->setParam(param, value);
+    }
+}
 std::string Engine::rhythmKitName(int32_t trackId) const {
     auto* rh = rhythmOf(findTrackAuthoring(trackId));
     return rh ? rh->kitName() : std::string{};
@@ -1694,6 +1701,14 @@ void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns
     // The caller measured ns/ne with `spb`. Comp and a loop take use the authoring tempo;
     // a recording that just stopped uses the same clock as the clip it is about to place.
     audioOverwriteRange(clips, ns, ne, spb, transport_.sampleRate(), tempoMap());
+}
+
+void Engine::overwriteMidiClipsInRange(std::vector<MidiClip>& clips, double ns, double ne) {
+    midiOverwriteRange(clips, ns, ne);
+}
+
+AudioClip Engine::sliceAudioClip(const AudioClip& c, double ns, double ne) const {
+    return audioSlice(c, ns, ne, authoringSamplesPerBeat(), transport_.sampleRate(), tempoMap());
 }
 
 int32_t Engine::pasteAudioFrames(

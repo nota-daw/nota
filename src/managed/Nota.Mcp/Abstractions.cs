@@ -43,6 +43,48 @@ public interface IMidiLearnAccess
     void ClearRecentControls();
 }
 
+/// <summary>A connected controller port as the controller tools report it (specs/051).</summary>
+public readonly record struct ControllerInfo(
+    string PortUid, string PortName, string OutputUid, string? ProfileId, string? ProfileName,
+    string Protocol, string Stage, bool Enabled, bool Pickup, int BankOrigin, string KnobMode, int Page);
+
+/// <summary>A loaded controller profile (specs/051).</summary>
+public readonly record struct ControllerProfileInfo(string Id, string Name, string Origin, string Protocol, string Source);
+
+/// <summary>Facade over the app's controller auto-mapping (specs/051) for the MCP tools, without
+/// referencing Nota.App. Every call runs on the UI thread.</summary>
+public interface IControllerAccess
+{
+    IReadOnlyList<ControllerInfo> Controllers();
+    /// <summary>Profile override (null = automatic, "none" = plain MIDI, or a profile id), on / off
+    /// and pickup for a port; null leaves that setting as it is. False for an unknown port or profile.</summary>
+    bool SetController(string portUid, string? profileId, bool? enabled, bool? pickup);
+    IReadOnlyList<ControllerProfileInfo> Profiles();
+    IReadOnlyList<string> ProfileWarnings();
+    void ReloadProfiles();
+    /// <summary>Look at the port list now (after a test port was added) instead of on the next scan.</summary>
+    void Rescan();
+    /// <summary>The device a controller's knobs follow (the first active one with knobs when
+    /// <paramref name="portUid"/> is null), or null when nothing is focused.</summary>
+    ControllerFocusInfo? Focus(string? portUid);
+    /// <summary>Next (+1) / previous (−1) device on the focused track, as the command (specs/107).
+    /// False at an end of the chain or with no track.</summary>
+    bool StepDevice(int direction);
+    /// <summary>The Session view's selection (specs/107).</summary>
+    SessionSelectionInfo SessionSelection();
+}
+
+/// <summary>What the Session view has selected: kind "none" | "slot" | "scene" (specs/107, contracts/mcp.md).</summary>
+public readonly record struct SessionSelectionInfo(string Kind, int? Track, int? Scene);
+
+/// <summary>One knob of the focused page: its parameter (null name = empty knob) and value 0..1.</summary>
+public readonly record struct ControllerKnobInfo(int Knob, string? Name, double? Value);
+
+/// <summary>What a controller's knobs follow (specs/051, contracts/mcp.md).</summary>
+public readonly record struct ControllerFocusInfo(
+    int Track, string Section, int Index, int? RackChain, int? RackSlot, string Device, string TypeKey,
+    string KnobMode, int Page, int PageCount, string PageName, ControllerKnobInfo[] Params);
+
 /// <summary>Facade over the open project for the version-history tools: what is open, whether
 /// it has unsaved edits, and the two actions that go through the window (save, switch) —
 /// without referencing Nota.App. Implemented in Nota.App over MainWindow; every member runs on

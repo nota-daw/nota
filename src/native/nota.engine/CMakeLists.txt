@@ -97,6 +97,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine_Tracks.cpp
     src/engine/Engine_Session.cpp
     src/engine/Engine_Devices.cpp
+    src/engine/Engine_PluginLoads.cpp
     src/engine/Engine_Rack.cpp
     src/engine/Engine_Recording.cpp
     src/engine/Engine_Takes.cpp
@@ -139,10 +140,13 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Track.cpp
     src/engine/Transport.cpp
     src/engine/SessionPlayer.cpp
+    src/engine/SessionPass.cpp
+    src/engine/Engine_SessionPass.cpp
     src/engine/Automation.cpp
     src/engine/Modulation.cpp
     src/engine/MidiClip.cpp
     src/engine/MidiController.cpp
+    src/engine/MidiSurface.cpp  # control-surface claims / queue (specs/051)
     src/engine/NoteExpression.cpp
     src/devices/effects/Eq.cpp
     src/devices/effects/Eq3.cpp
@@ -170,6 +174,8 @@ set(NOTA_ENGINE_SOURCES
     src/devices/effects/Crush.cpp
     src/devices/effects/Forge.cpp
     src/devices/effects/AutoShift.cpp
+    src/devices/effects/Color.cpp
+    src/devices/effects/Color.h
     src/devices/effects/Vocoder.cpp
     src/devices/instruments/Synth.cpp
     src/devices/instruments/VoltSynth.cpp
@@ -219,6 +225,7 @@ if(APPLE)
         src/audio_io/macos/CoreAudioInput.mm
         src/audio_io/macos/AudioConfig.mm
         src/audio_io/macos/MidiInput.mm
+        src/audio_io/macos/MidiOutput.mm
         src/audio_io/macos/MidiConfig.mm
         src/audio_io/macos/GamepadInput.mm
     )
@@ -229,6 +236,7 @@ elseif(WIN32 OR (UNIX AND NOT APPLE))
         src/audio_io/desktop/MiniaudioInput.cpp
         src/audio_io/desktop/AudioConfig_miniaudio.cpp
         src/audio_io/desktop/MidiInput_rtmidi.cpp
+        src/audio_io/desktop/MidiOutput_rtmidi.cpp
         src/audio_io/desktop/MidiConfig_rtmidi.cpp
         src/audio_io/desktop/GamepadInput_stub.cpp     # v1: macOS-only; reports zero pads
         ${rtmidi_SOURCE_DIR}/RtMidi.cpp
@@ -360,6 +368,7 @@ add_library(nota_pluginhost STATIC
     pluginhost/hosting/EditorSnapshot.cpp  # editor preview capture (specs/046)
     pluginhost/hosting/PluginInstrument.cpp
     pluginhost/hosting/PluginEffect.cpp
+    pluginhost/hosting/PluginLoader.cpp  # loads off the main thread (specs/113)
     pluginhost/scanner/abi_pluginscanner.cpp
     pluginhost/scanner/PluginCatalog.cpp  # thread-safe catalog
     pluginhost/scanner/OutOfProcessScanner.cpp  # scan coordinator

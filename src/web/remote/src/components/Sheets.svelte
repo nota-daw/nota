@@ -5,10 +5,17 @@
   import type { Form } from '../lib/device.svelte';
   import { NN } from '../lib/music';
   import { look } from '../lib/theme.svelte';
+  import { effectiveAcross } from '../lib/grid';
 
   let { form }: { form: Form } = $props();
   const portrait = $derived(form === 'phone');
   let nameInput = $state('');
+  // specs/108: what the Session grid choice shows now — "As in Nota" names Nota's current layout.
+  const gridCaption = $derived.by(() => {
+    const across = effectiveAcross(app.prefs.sessionGrid, app.ses);
+    const layout = across ? 'A scene per column, a track per row' : 'A scene per row, a track per column';
+    return app.prefs.sessionGrid === 'nota' ? `${layout}, as Nota shows it` : layout;
+  });
   $effect(() => { if (app.sheet === 'menu') nameInput = app.name; });
 
   function close() {
@@ -65,6 +72,15 @@
       </div>
       <span class="d2">{wearing}</span>
     </div>
+    <div class="block">
+      <span class="label">Session grid</span>
+      <div class="seg">
+        <button class:on={app.prefs.sessionGrid === 'nota'} onclick={() => (app.prefs.sessionGrid = 'nota')}>As in Nota</button>
+        <button class:on={app.prefs.sessionGrid === 'down'} onclick={() => (app.prefs.sessionGrid = 'down')}>Scenes down</button>
+        <button class:on={app.prefs.sessionGrid === 'across'} onclick={() => (app.prefs.sessionGrid = 'across')}>Scenes across</button>
+      </div>
+      <span class="d2">{gridCaption}</span>
+    </div>
     <button class="toggle" onclick={() => (app.prefs.haptics = !app.prefs.haptics)}>
       <span class="switch" class:on={app.prefs.haptics}></span><span class="n2">Haptics on pads</span>
     </button>
@@ -96,7 +112,7 @@
     <div class="label head">Device on {app.track?.name ?? 'this track'}</div>
     <div class="list">
       {#each app.mac?.devs ?? [] as d, i}
-        <button class="row" class:on={i === (app.mac?.di ?? 0)} onclick={() => { app.macroDevice = i; app.sub(); app.sheet = null; }}>
+        <button class="row" class:on={i === (app.mac?.di ?? 0)} onclick={() => { app.nav('deviceAt', i); app.sheet = null; }}>
           <span class="names"><span class="n">{d}</span></span>
         </button>
       {/each}
@@ -109,7 +125,9 @@
   /* A floating sheet drawn in the page: a menu-sized card with the popover ring and drop. */
   .sheet { position: absolute; z-index: 21; left: 12px; top: calc(env(safe-area-inset-top) + 64px); width: 360px; max-width: calc(100% - 24px); max-height: calc(100% - 88px); background: var(--panel); border-radius: min(var(--r-group), 12px); box-shadow: var(--popover); display: flex; flex-direction: column; overflow: hidden; }
   .sheet.bottom { top: auto; right: 12px; width: auto; bottom: max(24px, env(safe-area-inset-bottom)); max-height: 75%; }
-  .sheet.menu { left: auto; right: 12px; width: 300px; }
+  /* The menu scrolls when it is taller than the screen (a phone on its side). */
+  .sheet.menu { left: auto; right: 12px; width: 300px; overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; }
+  .sheet.menu > * { flex: none; }
   .head { padding: 14px 16px 8px; }
   .list { overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; }
   /* Rows on rules, full width; the chosen one is picked: the soft tint, orange name and a 2 × 14 orange tick. */

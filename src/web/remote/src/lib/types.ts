@@ -107,18 +107,59 @@ export interface Macros {
   id: number;
   di: number;
   devs: string[];
+  /** The page of that device and the page names (specs/114); older Nota: absent. */
+  pg?: number;
+  pgs?: string[];
   k: MacroKnob[];
+}
+
+/** One LED display frame (specs/114, contracts/remote-led.md): RLE4 runs in base64. */
+export interface Led {
+  id: number;
+  di: number;
+  pg: number;
+  w: number;
+  h: number;
+  seq: number;
+  /** The dots, one level 0..15 each, decoded. */
+  dots: Uint8Array;
 }
 
 /** Per scene: [state (0 empty, 1 filled, 2 queued, 3 playing, 4 recording), length beats, progress 0..1]. */
 export interface SessionTrack {
   id: number;
+  /** A group: its members' ids (every clip-holding track below it); it has no slots of its own. */
+  k?: number[];
   c: [number, number, number][];
+  /** The slot whose launch waits for its launch point — also a restart of the slot playing (issue 480). */
+  w?: number;
 }
 
 export interface Session {
   n: number;
   tr: SessionTrack[];
+  /** Rows with a launch waiting, including rows that queued only stops (issue 480). Older Nota: absent. */
+  q?: number[];
+  /** Nota's Session selection (specs/107): a slot, a scene row, or nothing. Older Nota: absent. */
+  sel?: { id: number; i: number } | { row: number } | null;
+  /** Nota's Session grid runs scenes across (specs/108); absent: scenes down, or an older Nota. */
+  ax?: 'across';
+}
+
+/** What a hardware controller's knobs are on in Nota (specs/107, contracts/remote-focus.md). */
+export interface Focus {
+  on: true;
+  ctl: string;
+  mode: 'device' | 'volume' | 'pan' | 'send';
+  send?: number;
+  id: number;
+  tn: string;
+  dev: string | null;
+  md: number | null;
+  pg: number;
+  pn: number;
+  pgn: string;
+  bank: [number, number];
 }
 
 export interface Learn {

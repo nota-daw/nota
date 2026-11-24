@@ -849,6 +849,88 @@ int32_t nota_midi_poll_control_events(NotaEngine* e, int32_t* out, int32_t max) 
     return ENG(e)->pollControlEvents(reinterpret_cast<nota::ControlEvent*>(out), max);
 }
 
+// ---- MIDI control surfaces (specs/051) ----------------------------------------------------
+
+namespace {
+const nota::MidiInput::PortInfo* portRow(const NotaEngine* e, int32_t i) {
+    if (!e) return nullptr;
+    const auto& rows = CENG(e)->midiPortRows();
+    return (i >= 0 && i < static_cast<int32_t>(rows.size())) ? &rows[static_cast<size_t>(i)] : nullptr;
+}
+} // namespace
+
+uint32_t nota_midi_ports_generation(void) {
+    return nota::MidiInput::portsGeneration();
+}
+
+int32_t nota_midi_port_count(NotaEngine* e) {
+    return e ? static_cast<int32_t>(ENG(e)->midiPorts().size()) : 0;
+}
+int32_t nota_midi_port_source(const NotaEngine* e, int32_t i) {
+    const auto* p = portRow(e, i);
+    return p ? p->source : -1;
+}
+const char* nota_midi_port_uid(const NotaEngine* e, int32_t i) {
+    const auto* p = portRow(e, i);
+    return p ? p->uid.c_str() : nullptr;
+}
+const char* nota_midi_port_name(const NotaEngine* e, int32_t i) {
+    const auto* p = portRow(e, i);
+    return p ? p->name.c_str() : nullptr;
+}
+const char* nota_midi_port_output_uid(const NotaEngine* e, int32_t i) {
+    const auto* p = portRow(e, i);
+    return p ? p->outputUid.c_str() : nullptr;
+}
+
+NotaResult nota_midi_set_claims(NotaEngine* e, const NotaMidiClaim* claims, int32_t count) {
+    if (!e || count < 0 || (count > 0 && !claims)) return NOTA_ERR_INVALID_ARG;
+    static_assert(sizeof(NotaMidiClaim) == sizeof(nota::MidiClaimEntry), "claim layouts must match");
+    return ENG(e)->setMidiClaims(reinterpret_cast<const nota::MidiClaimEntry*>(claims), count) ? NOTA_OK
+                                                                                               : NOTA_ERR_INVALID_ARG;
+}
+
+void nota_midi_set_learn_listening(NotaEngine* e, int32_t listening) {
+    if (e) ENG(e)->setMidiLearnListening(listening != 0);
+}
+
+int32_t nota_midi_poll_surface_events(NotaEngine* e, int32_t* out, int32_t max) {
+    if (!e || !out || max <= 0) return 0;
+    static_assert(sizeof(nota::SurfaceEvent) == 5 * sizeof(int32_t), "surface events are int32 quints");
+    return ENG(e)->pollSurfaceEvents(reinterpret_cast<nota::SurfaceEvent*>(out), max);
+}
+
+uint32_t nota_midi_surface_dropped(const NotaEngine* e) {
+    return e ? CENG(e)->surfaceDropped() : 0;
+}
+
+int32_t nota_midi_poll_sysex(NotaEngine* e, int32_t* out_source, uint8_t* out, int32_t cap) {
+    if (!e) return 0;
+    return ENG(e)->pollMidiSysex(out_source, out, cap);
+}
+
+NotaResult nota_midi_send(NotaEngine* e, const char* output_uid, const uint8_t* bytes, int32_t len) {
+    if (!e || !output_uid || !bytes || len <= 0 || !(bytes[0] & 0x80)) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->midiSend(output_uid, bytes, len) ? NOTA_OK : NOTA_ERR_UNKNOWN;
+}
+
+int32_t nota_midi_surface_selftest(void) {
+    return nota::MidiSurface::selfTest();
+}
+
+int32_t nota_midi_test_port_add(NotaEngine* e, const char* name) {
+    return (e && name) ? ENG(e)->addTestMidiPort(name) : -1;
+}
+
+NotaResult nota_midi_test_inject(NotaEngine* e, int32_t source, const uint8_t* bytes, int32_t len) {
+    if (!e || !bytes || len <= 0) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->injectTestMidi(source, bytes, len) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+
+int32_t nota_midi_test_take_sent(NotaEngine* e, int32_t source, uint8_t* out, int32_t cap) {
+    return e ? ENG(e)->takeTestMidiSent(source, out, cap) : 0;
+}
+
 } // extern "C"
 
 // ---- Gamepad input ---------------------------------------------------------

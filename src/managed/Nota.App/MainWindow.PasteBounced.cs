@@ -42,8 +42,8 @@ public partial class MainWindow
         double at = Math.Max(0.0, atBeat ?? Engine.PositionBeats);   // read now: the render moves the playhead
         string name = Engine.GetTrackName(sourceId);
 
+        if (!await _vm.TryBeginRenderAsync()) return;   // another render holds the engine; this one settles plug-in loads first (specs/113)
         _bounceBusy = true;
-        _vm.SuspendEnginePolling = true;
         float[]? pcm = null;
         try
         {
@@ -55,7 +55,7 @@ public partial class MainWindow
             });
         }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.paste_bounced.paste_bounced_audio_failed", ex.Message); return; }
-        finally { _vm.SuspendEnginePolling = false; _bounceBusy = false; }
+        finally { _vm.EndRender(); _bounceBusy = false; }
 
         if (pcm is null) { _vm.StatusText = Loc.T("main.paste_bounced.couldnt_render_this_track"); return; }
         if (Engine.PasteAudioFrames(targetId, pcm, pcm.Length / 2, at, name) < 0)

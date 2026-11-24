@@ -56,6 +56,7 @@ public partial class MainWindow
         CloseFloatingDetail();   // tear down the popped-out Devices/Clip window, if any
         ShutdownGamepad();       // stop the IOKit pad thread before the engine dies
         ShutdownRemote();        // phones leave (their held notes released) before the engine dies
+        _controllers?.ReleaseAll();   // controllers get their release messages (DAW mode off) (specs/051)
         _recovery.EndSessionClean();
     }
 
@@ -96,6 +97,15 @@ public partial class MainWindow
         _panLawLegacy = false;
         RefreshAfterLoad();
         MarkProjectClean();   // the fresh startup project counts as unmodified
+
+        // A plug-in was loading when Nota last ended — it froze Nota (#979, specs/113). Say which;
+        // projects now bring it up as "couldn't load" until it is tried again.
+        try
+        {
+            if (Nota.Infrastructure.NotaEngine.TakeFrozenPluginNotice() is { Length: > 0 } froze)
+                _vm.StatusText = Loc.F("main.plugin_froze_nota", froze);
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
 
         // Look for a newer release now and once a day (unless Settings → Updates says not to);
         // the start screen and the status bar show what it finds.

@@ -20,6 +20,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Controllers;
 using Nota.Presentation;
 using static Nota.App.DeviceCardKit;
 using Nota.Application.Localization;
@@ -210,6 +211,7 @@ public sealed partial class DeviceChainView : UserControl
             do { _rebuildAgain = false; RebuildRow(); } while (_rebuildAgain);
         }
         finally { _rebuilding = false; }
+        RaiseControllerFocus();
     }
 
     private void RebuildRow()
@@ -229,17 +231,24 @@ public sealed partial class DeviceChainView : UserControl
         // MIDI effects sit before the instrument (they shape the note stream).
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
         _sel.Prune(midiCount, IsInstrumentTrack(_trackId), _engine.TrackDeviceCount(_trackId));   // an edit elsewhere shrank the chain
-        for (int i = 0; i < midiCount; i++) _row.Children.Add(MidiDeviceCard(i, midiCount));
+        for (int i = 0; i < midiCount; i++) _row.Children.Add(Card(MidiDeviceCard(i, midiCount), FocusSection.Midi, i));
 
-        if (IsInstrumentTrack(_trackId)) _row.Children.Add(_instrumentCard = InstrumentCard());
+        if (IsInstrumentTrack(_trackId)) _row.Children.Add(Card(_instrumentCard = InstrumentCard(), FocusSection.Instrument, -1));
 
         int count = _engine.TrackDeviceCount(_trackId);
-        for (int i = 0; i < count; i++) _row.Children.Add(DeviceCard(i, count));
+        for (int i = 0; i < count; i++) _row.Children.Add(Card(DeviceCard(i, count), FocusSection.Audio, i));
 
         int returns = _engine.ReturnTrackCount;
         if (returns > 0 && !IsReturnTrack(_trackId) && !IsGroupTrack(_trackId)) _row.Children.Add(SendsCard());
 
         _row.Children.Add(AddDeviceCard());
+    }
+
+    // Which top-level device a card is: the controller overlay marks the focused one (specs/107).
+    private Control Card(Control card, FocusSection section, int index)
+    {
+        Controllers.ControllerFocusOverlay.SetCardAddress(card, new DeviceAddress(_trackId, section, index));
+        return card;
     }
 
     // ---- device card ------------------------------------------------------

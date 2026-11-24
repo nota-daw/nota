@@ -182,4 +182,53 @@ internal static partial class NativeMethods
     // returns the event count. Used by MIDI-learn to drain incoming CC/note-on.
     [LibraryImport(Lib, EntryPoint = "nota_midi_poll_control_events")]
     internal static partial int MidiPollControlEvents(IntPtr engine, [Out] int[] buf, int max);
+
+    // --- control surfaces (specs/051) ---
+    [LibraryImport(Lib, EntryPoint = "nota_midi_ports_generation")]
+    internal static partial uint MidiPortsGeneration();
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_port_count")]
+    internal static partial int MidiPortCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_port_source")]
+    internal static partial int MidiPortSource(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_port_uid")]
+    internal static partial IntPtr MidiPortUid(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_port_name")]
+    internal static partial IntPtr MidiPortName(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_port_output_uid")]
+    internal static partial IntPtr MidiPortOutputUid(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_set_claims")]
+    internal static unsafe partial NotaResult MidiSetClaims(IntPtr engine, MidiClaim* claims, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_set_learn_listening")]
+    internal static partial void MidiSetLearnListening(IntPtr engine, int listening);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_poll_surface_events")]
+    internal static partial int MidiPollSurfaceEvents(IntPtr engine, [Out] int[] buf, int max);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_surface_dropped")]
+    internal static partial uint MidiSurfaceDropped(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_poll_sysex")]
+    internal static partial int MidiPollSysex(IntPtr engine, out int source, [Out] byte[] buf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_send", StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial NotaResult MidiSend(IntPtr engine, string outputUid, byte* bytes, int len);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_surface_selftest")]
+    internal static partial int MidiSurfaceSelfTest();
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_test_port_add", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int MidiTestPortAdd(IntPtr engine, string name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_test_inject")]
+    internal static unsafe partial NotaResult MidiTestInject(IntPtr engine, int source, byte* bytes, int len);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_test_take_sent")]
+    internal static partial int MidiTestTakeSent(IntPtr engine, int source, [Out] byte[] buf, int cap);
 }

@@ -1,0 +1,23 @@
+{
+  "subtitle": "Controllers that just work, an LED display in Nota Remote, a Session you can play — and Nota Color for color bass.",
+  "tags": ["Nota Color", "LED display", "Controller auto-mapping", "Session → Arrangement"],
+  "hero": {
+    "title": "Nota Color",
+    "label": "New audio effect",
+    "image": "color.png"
+  },
+  "leds": {
+    "title": "Nota Remote: an LED display for every built-in device",
+    "label": "Real frames",
+    "items": [
+      { "device": "builtin:fx:reverb", "page": 1, "caption": "Reverb", "pageName": "decay" },
+      { "device": "builtin:inst:volt", "page": 3, "caption": "Volt", "pageName": "filter" },
+      { "device": "builtin:fx:compressor", "page": 1, "caption": "Compressor", "pageName": "curve" },
+      { "device": "builtin:midi:chord", "page": 1, "caption": "Chord", "pageName": "keyboard" }
+    ]
+  },
+  "footer": {
+    "left": ["macOS", "Windows", "Linux"],
+    "right": ["Free and open source", "github.com/nota-daw/nota"]
+  }
+}

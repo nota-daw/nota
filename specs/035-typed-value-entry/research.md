@@ -124,8 +124,9 @@ as commit (it already closes on `LostFocus` and on an outside press).
 **Decision**: keep `TextBox.field` (well fill, 1 px rule edge, accent edge while
 focused — DESIGN.md § Readouts and fields), radius `NotaRadius.Badge`, mono family and the
 read-out's own size, right-aligned, at least 48 wide, growing left over the control;
-kept inside the top level's bounds (clamped against `TopLevel.ClientSize`). Value
-pre-selected. Same in every theme because it is drawn from tokens only.
+kept inside the top level's bounds (clamped against `TopLevel.ClientSize`). The whole
+read-out pre-selected, unit included (#661): with only the number selected, "500" typed over
+"2.00 kHz" read 500 kHz. Same in every theme because it is drawn from tokens only.
 
 ## R8 — Envelope editors
 

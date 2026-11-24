@@ -16,6 +16,22 @@
 namespace nota {
 namespace hosting {
 
+#if JUCE_MAC
+namespace {
+// Whether the plug-in window's key focus is a place that takes typing (#986). A Cocoa field
+// edits through an NSText field editor; a plug-in that draws its own text fields (JUCE,
+// IK, VSTGUI's custom views…) receives text as an NSTextInputClient and reports where its
+// caret is — NSNotFound when no text field of its has focus, as JUCE's view does.
+bool takesTyping(NSResponder* responder) {
+    if (responder == nil) return false;
+    if ([responder isKindOfClass:[NSText class]]) return true;
+    if ([responder conformsToProtocol:@protocol(NSTextInputClient)])
+        return [(id<NSTextInputClient>)responder selectedRange].location != NSNotFound;
+    return false;
+}
+} // namespace
+#endif
+
 #if !JUCE_MAC
 namespace {
 // A JUCE key as the code the app names it by (Nota.Application.Input.EditorKeyCodes): its
@@ -153,7 +169,7 @@ void PluginEditorWindow::installKeyMonitor() {
                                        if (ev.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
                                                                   NSEventModifierFlagOption))
                                            return ev; // a shortcut chord, not a note
-                                       if ([ev.window.firstResponder isKindOfClass:[NSText class]])
+                                       if (takesTyping(ev.window.firstResponder))
                                            return ev; // typing into the plug-in's own field
                                        if (held_.count(code) != 0) return nil; // auto-repeat of a key the app has
                                        if (!editorkeys::claims(ch)) return ev;

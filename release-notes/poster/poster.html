@@ -1,0 +1,186 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<!--
+  The release poster: one 1280 × 720 page, rendered at 2× by scripts/release-poster.mjs.
+  It carries no release of its own: the script copies it next to the release's
+  poster-data.js (built from release-notes/X.Y.Z.poster.json), the fonts and the pictures.
+
+  The look is Nota's (DESIGN.md), in Studio Dark: a flat grey shell, depth only around the
+  device card, orange for what is live and the soft tint for what is picked, Geist with
+  tabular figures, sentence-case labels. The LED panels light the real frames Nota draws
+  for Nota Remote, the way the phone does (src/web/remote/src/components/Led.svelte).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nota release poster</title>
+<style>
+  @font-face { font-family: Geist; src: url(fonts/Geist-Regular.ttf); font-weight: 400; }
+  @font-face { font-family: Geist; src: url(fonts/Geist-Medium.ttf); font-weight: 500; }
+  @font-face { font-family: Geist; src: url(fonts/Geist-SemiBold.ttf); font-weight: 600; }
+  @font-face { font-family: Geist; src: url(fonts/Geist-Bold.ttf); font-weight: 700; }
+
+  /* Studio Dark (src/managed/Nota.App/Theme/Themes/studio-dark.json). */
+  :root {
+    --abyss: #17181A; --bg: #1E1F22; --panel: #26282C; --card: #2B2D31; --inset: #232427;
+    --raised: #303237; --seam: #141517; --rule: #45484E;
+    --ink-0: #F4F5F6; --ink-1: #E8E9EB; --ink-2: #C0C4C9; --ink-3: #92969D;
+    --accent: #FF9F1C; --accent-bright: #FFB547; --accent-soft: #4A3B28; --accent-dim: #C77612;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; background: var(--bg); }
+  body {
+    font-family: Geist, sans-serif; font-feature-settings: "tnum" 1; color: var(--ink-1);
+    -webkit-font-smoothing: antialiased; position: relative;
+  }
+
+  /* The shell: flat, with the arrangement's bar grid faintly behind everything. */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(to right, rgba(255,255,255,.015) 1px, transparent 1px);
+    background-size: 128px 100%, 32px 100%;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.25));
+  }
+  .top { position: absolute; left: 64px; top: 60px; right: 64px; display: flex; gap: 44px; }
+  .intro { flex: 0 0 468px; display: flex; flex-direction: column; }
+
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand img { width: 40px; height: 40px; border-radius: 10px; box-shadow: 0 0 0 1px var(--seam); }
+  .brand span { font-size: 18px; font-weight: 600; color: var(--ink-0); letter-spacing: 0; }
+  .brand em { font-style: normal; font-size: 13px; font-weight: 500; color: var(--ink-3); margin-left: 4px; }
+
+  h1 { margin-top: 30px; font-size: 76px; line-height: 1; font-weight: 600; color: var(--ink-0); letter-spacing: -0.02em; }
+  h1 b { font-weight: 600; color: var(--accent); }
+  .sub { margin-top: 18px; font-size: 19px; line-height: 1.42; color: var(--ink-2); max-width: 452px; }
+
+  .tags { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 7px;
+    font-size: 13px; font-weight: 500; color: var(--ink-2); background: var(--panel);
+    box-shadow: 0 0 0 1px var(--seam);
+  }
+  .tag.on { color: var(--accent-bright); background: var(--accent-soft); box-shadow: none; }
+
+  /* The hero: a device card, raised, the one place with depth. */
+  .hero { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .label { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--ink-3); }
+  .label b { font-size: 15px; font-weight: 600; color: var(--ink-0); }
+  .label i { font-style: normal; color: var(--accent-bright); background: var(--accent-soft); border-radius: 5px; padding: 2px 7px; font-size: 11.5px; font-weight: 600; }
+  .card {
+    border-radius: 12px; overflow: hidden; background: var(--card);
+    box-shadow: 0 0 0 1px var(--seam), 0 2px 2px rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.35);
+  }
+  .card img { display: block; width: 100%; height: auto; }
+
+  /* The LED row: Nota Remote's display, one panel per page. */
+  .leds { position: absolute; left: 64px; right: 64px; bottom: 100px; }
+  .leds .label { margin-bottom: 12px; }
+  .row { display: grid; gap: 16px; }
+  .lcd {
+    padding: 9px 9px 8px; border-radius: 12px; background: #0c0c0d;
+    box-shadow: 0 0 0 1px var(--seam), inset 0 2px 10px rgba(0,0,0,.6);
+  }
+  .lcd canvas { display: block; }
+  .cap { margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
+  .cap b { color: var(--ink-2); font-weight: 500; }
+
+  .foot {
+    position: absolute; left: 64px; right: 64px; bottom: 34px; display: flex; justify-content: space-between;
+    padding-top: 14px; border-top: 1px solid rgba(255,255,255,.06);
+    font-size: 12.5px; color: var(--ink-3);
+  }
+  .foot .dot { color: var(--rule); margin: 0 8px; }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<div class="top">
+  <div class="intro">
+    <div class="brand"><img src="logo.svg" alt=""><span>Nota</span><em id="kind"></em></div>
+    <h1 id="title"></h1>
+    <p class="sub" id="sub"></p>
+    <div class="tags" id="tags"></div>
+  </div>
+  <div class="hero" id="hero"></div>
+</div>
+<div class="leds" id="leds"></div>
+<div class="foot"><span id="left"></span><span id="right"></span></div>
+
+<script src="poster-data.js"></script>
+<script>
+  const P = window.POSTER;
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // "Nota 0.61.1": the version in orange.
+  document.getElementById('title').innerHTML = `Nota <b>${esc(P.version)}</b>`;
+  document.getElementById('kind').textContent = P.kind ?? '';
+  document.getElementById('sub').textContent = P.subtitle;
+  for (const [i, t] of (P.tags ?? []).entries()) document.getElementById('tags').append(el('span', 'tag' + (i === 0 ? ' on' : ''), esc(t)));
+
+  const label = (o) => {
+    const l = el('div', 'label');
+    l.innerHTML = `<b>${esc(o.title)}</b>${o.label ? `<i>${esc(o.label)}</i>` : ''}${o.note ? `<span>${esc(o.note)}</span>` : ''}`;
+    return l;
+  };
+
+  if (P.hero) {
+    const h = document.getElementById('hero');
+    h.append(label(P.hero));
+    const c = el('div', 'card');
+    const img = el('img'); img.src = P.hero.image; c.append(img); h.append(c);
+  }
+
+  // RLE4 as Nota sends it: one byte per run of up to 16 equal dots, (count − 1) << 4 | level.
+  function dots(b64, w, h) {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const d = new Uint8Array(w * h); let at = 0;
+    for (const b of bytes) { const n = (b >> 4) + 1; d.fill(b & 15, at, at + n); at += n; }
+    return d;
+  }
+
+  // The phone's drawing (Led.svelte): every dot round, unlit ones faintly there, a soft bloom on top.
+  function drawLed(canvas, d, w, h, width) {
+    const dpr = 2, pitch = width / w, p = pitch * dpr, rad = p * 0.38;
+    canvas.width = Math.round(w * p); canvas.height = Math.round(h * p);
+    canvas.style.width = `${width}px`; canvas.style.height = `${pitch * h}px`;
+    const off = document.createElement('canvas'); off.width = canvas.width; off.height = canvas.height;
+    const o = off.getContext('2d'), ctx = canvas.getContext('2d');
+    const paths = Array.from({ length: 16 }, () => new Path2D());
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const l = d[y * w + x], cx = (x + 0.5) * p, cy = (y + 0.5) * p;
+      paths[l].moveTo(cx + rad, cy); paths[l].arc(cx, cy, rad, 0, Math.PI * 2);
+    }
+    const [r, g, b] = [255, 159, 28];
+    o.fillStyle = `rgba(${r},${g},${b},0.07)`; o.fill(paths[0]);
+    for (let l = 1; l < 16; l++) { o.fillStyle = `rgba(${r},${g},${b},${(0.16 + 0.84 * l / 15).toFixed(3)})`; o.fill(paths[l]); }
+    ctx.drawImage(off, 0, 0);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4; ctx.filter = `blur(${(p * 0.9).toFixed(1)}px)`;
+    ctx.drawImage(off, 0, 0); ctx.restore();
+  }
+
+  if (P.leds?.items?.length) {
+    const box = document.getElementById('leds');
+    box.append(label(P.leds));
+    const row = el('div', 'row');
+    const n = P.leds.items.length, gap = 16, inner = 1152;
+    row.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    const width = Math.floor((inner - gap * (n - 1)) / n) - 18;
+    box.append(row);
+    for (const it of P.leds.items) {
+      const cell = el('div'), lcd = el('div', 'lcd'), cv = el('canvas');
+      lcd.append(cv); cell.append(lcd); cell.append(el('div', 'cap', `<b>${esc(it.caption)}</b>${it.page ? ' · ' + esc(it.page) : ''}`));
+      row.append(cell);
+      drawLed(cv, dots(it.rle, it.w ?? 128, it.h ?? 48), it.w ?? 128, it.h ?? 48, width);
+    }
+  }
+
+  document.getElementById('left').innerHTML = (P.footer?.left ?? []).map(esc).join('<span class="dot">·</span>');
+  document.getElementById('right').innerHTML = (P.footer?.right ?? []).map(esc).join('<span class="dot">·</span>');
+</script>
+</body>
+</html>

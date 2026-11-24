@@ -40,6 +40,25 @@ public enum PhoneControlResult
     Mapped,
 }
 
+/// <summary>Nota's Session selection as the phone outlines it (specs/107): a slot, a scene row,
+/// or nothing (the Session isn't showing, or a Return / Master column is selected).</summary>
+public readonly record struct RemoteSessionSelection(bool Slot, bool Row, int TrackId, int Scene)
+{
+    public static readonly RemoteSessionSelection None = default;
+}
+
+/// <summary>What the lead hardware controller's knobs are on (specs/107, contracts/remote-focus.md).
+/// <see cref="MacroIndex"/> is the device's index in the phone's Macros list for that track
+/// (−1 the instrument / rack, ≥0 an audio effect), null when the phone can't show it.</summary>
+public sealed record RemoteControllerFocus(
+    string Controller, string Mode, int Send, int TrackId, string TrackName, string? Device,
+    int? MacroIndex, int Page, int PageCount, string PageName, int BankFirst, int BankLast)
+{
+    /// <summary>The focused device itself (specs/114), so a MIDI-effect focus reaches the phone too;
+    /// null when the host doesn't say (then <see cref="MacroIndex"/> stands for it).</summary>
+    public Nota.Application.Controllers.DeviceAddress? Address { get; init; }
+}
+
 /// <summary>The app side of Nota Remote: everything that lives above the engine (the transport
 /// view-model, MIDI Learn, the arrangement's sections, track colours, redraws). Implemented by
 /// Nota.App. Every member is called on the UI thread, from <see cref="RemoteHub.Tick"/>.</summary>
@@ -58,6 +77,13 @@ public interface IRemoteHost
     string ClipColor(int trackId, int scene);
     /// <summary>The track selected in Nota (0 = none), for "Follow Nota's selection".</summary>
     int SelectedTrackId { get; }
+    /// <summary>The Session view's selection (specs/107).</summary>
+    RemoteSessionSelection SessionSelection { get; }
+    /// <summary>Whether Nota's Session grid runs Scenes across (specs/108) — a phone or a Switch
+    /// set to "As in Nota" turns its own Scenes grid to match.</summary>
+    bool SessionAcross => false;
+    /// <summary>The lead controller's focus, or null when no controller with knobs is active (specs/107).</summary>
+    RemoteControllerFocus? ControllerFocus { get; }
     /// <summary>The project key as a <c>MusicalKey.Code</c>, −1 = none.</summary>
     int ProjectKeyCode { get; }
     /// <summary>The arrangement's sections (Intro, Verse…), in time order.</summary>
@@ -91,6 +117,18 @@ public interface IRemoteHost
     PhoneControlResult PhoneControl(int controlId, int trackId, double norm);
     /// <summary>The name of what a phone control is mapped to on that track, or null when it isn't.</summary>
     string? PhoneMappingName(int controlId, int trackId);
+
+    /// <summary>The user's and the project's edited controller pages (specs/051), which the phone's
+    /// Macros pages follow too (specs/114); null for the shipped pages only.</summary>
+    Nota.Application.Controllers.IDevicePageSource? DevicePages => null;
+    /// <summary>Select <paramref name="trackId"/> in Nota as the controller's Track ◀ ▶ do, so the
+    /// controller's knobs follow it (specs/114: a phone's Macros arrows with Follow on).</summary>
+    void SelectTrack(int trackId) { }
+    /// <summary>Focus <paramref name="device"/> as the Devices panel's selection would, so the
+    /// controller's knobs follow it (specs/114).</summary>
+    void FocusDevice(Nota.Application.Controllers.DeviceAddress device) { }
+    /// <summary>Put the lead controller's knobs on <paramref name="page"/> of the focused device (specs/114).</summary>
+    void SetDevicePage(int page) { }
 
     /// <summary>A phone connected, left, renamed itself or switched track.</summary>
     void DevicesChanged();

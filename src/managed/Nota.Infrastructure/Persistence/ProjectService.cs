@@ -43,7 +43,9 @@ public sealed class ProjectService
     /// v31 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
     /// v32 (specs/089) adds Cue on tracks and CueVolume on the mixer.
     /// v33 (specs/086) adds the optional tempo map and curve handles.
-    public const int CurrentFormatVersion = 34;
+    /// v34 (specs/099) makes tempo the master track's Tempo automation lane.
+    /// v35 (specs/103) adds FollowBypass on Session slots.
+    public const int CurrentFormatVersion = 35;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -286,6 +288,16 @@ public sealed class ProjectService
             {
                 if (!engine.GetSessionSlotStopButton(ti.Id, s) && engine.SessionSlotState(ti.Id, s) == 0)
                     (t.SessionNoStop ??= new List<int>()).Add(s);
+                if (engine.TryGetSessionSlotTakeLength(ti.Id, s, out var take) && take.TakeMode != SlotTakeMode.Global)
+                    (t.SessionTakeLengths ??= new List<SlotTakeLengthDto>()).Add(new SlotTakeLengthDto
+                    {
+                        Scene = s, Mode = take.Mode, Bars = take.Bars, Beats = take.Beats,
+                    });
+                if (engine.TryGetSessionSlotLandingRule(ti.Id, s, out var landing) && landing.LandingAction != SlotLandingAction.Off)
+                    (t.SessionLandingRules ??= new List<SlotLandingRuleDto>()).Add(new SlotLandingRuleDto
+                    {
+                        Scene = s, Action = landing.Action, TargetScene = landing.Scene, QuantBeats = landing.QuantBeats,
+                    });
                 // Persist any slot that holds a clip — skip only truly empty ones. (A slot
                 // that's playing/queued/recording is state 2-4, not 1, but still has content;
                 // gating on == 1 dropped it when saving mid-jam.)
@@ -629,6 +641,15 @@ public sealed class ProjectService
     /// content downgraded on load.</summary>
     public static IReadOnlyList<string> Apply(ProjectDocument doc, IAudioEngine engine, string bundleDir)
     {
+        // A plug-in that froze Nota while loading last time comes up "couldn't load" rather than
+        // freezing it again on the way in (#979, specs/113); its card offers Try again.
+        NotaEngine.PluginAutoloadScope(true);
+        try { return ApplyDocument(doc, engine, bundleDir); }
+        finally { NotaEngine.PluginAutoloadScope(false); }
+    }
+
+    private static IReadOnlyList<string> ApplyDocument(ProjectDocument doc, IAudioEngine engine, string bundleDir)
+    {
         var warnings = new List<string>();
         engine.Reset();
 
@@ -959,6 +980,16 @@ public sealed class ProjectService
             }
             if (t.SessionNoStop is { } noStop)
                 foreach (int sc in noStop) engine.SetSessionSlotStopButton(id, sc, false);
+            if (t.SessionTakeLengths is { } takeLens)
+                foreach (var tl in takeLens)
+                    if (!engine.SetSessionSlotTakeLength(id, tl.Scene, new NotaSlotTakeLength((SlotTakeMode)tl.Mode, tl.Bars, tl.Beats)))
+                        warnings.Add($"Scene {tl.Scene + 1}: a Session slot's take length couldn't be restored.");
+            // Landing rules (#481): configuration only — restoring them never fires anything.
+            if (t.SessionLandingRules is { } landings)
+                foreach (var lr in landings)
+                    if (!engine.SetSessionSlotLandingRule(id, lr.Scene,
+                            new NotaSlotLandingRule((SlotLandingAction)lr.Action, lr.TargetScene, lr.QuantBeats)))
+                        warnings.Add($"Scene {lr.Scene + 1}: a Session slot's landing rule couldn't be restored.");
 
             // Automation lanes (M9-A4). Devices are already rebuilt above.
             ApplyLanes(engine, id, t.Automation, warnings);
@@ -1368,6 +1399,8 @@ public sealed class ProjectService
     // Does a hosted plugin still expose a parameter with this stable id? (M9-B4)
     private static bool PluginParamExists(IAudioEngine engine, int trackId, int deviceIndex, string paramId)
     {
+        // Still loading (specs/113): its lanes resolve when it attaches; nothing to warn about yet.
+        if (engine.DevicePluginLoadState(trackId, deviceIndex) != PluginLoadState.Loaded) return true;
         int n = engine.PluginParamCount(trackId, deviceIndex);
         for (int i = 0; i < n; i++)
             if (engine.PluginParamId(trackId, deviceIndex, i) == paramId) return true;
@@ -1502,7 +1535,7 @@ public sealed class ProjectService
         dto.Color = p.Color; dto.LaunchMode = p.LaunchMode; dto.Quant = p.QuantBeats;
         dto.Legato = p.Legato != 0; dto.Loop = p.Loop != 0; dto.VelocityAmount = p.VelocityAmount;
         dto.FollowA = p.FollowA; dto.FollowB = p.FollowB; dto.ChanceA = p.ChanceA; dto.ChanceB = p.ChanceB;
-        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene;
+        dto.FollowBeats = p.FollowBeats; dto.JumpScene = p.JumpScene; dto.FollowBypass = p.FollowBypass != 0;
         return dto;
     }
 
@@ -1514,7 +1547,7 @@ public sealed class ProjectService
             Color = sl.Color, LaunchMode = sl.LaunchMode, QuantBeats = sl.Quant,
             Legato = sl.Legato ? 1 : 0, Loop = sl.Loop ? 1 : 0, VelocityAmount = sl.VelocityAmount,
             FollowA = sl.FollowA, FollowB = sl.FollowB, ChanceA = sl.ChanceA, ChanceB = sl.ChanceB,
-            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene,
+            FollowBeats = sl.FollowBeats, JumpScene = sl.JumpScene, FollowBypass = sl.FollowBypass ? 1 : 0,
         });
     }
 }

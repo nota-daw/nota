@@ -172,6 +172,25 @@ enum class FollowAction : int32_t { None = 0, Stop, Again, Previous, Next, First
 // starts / stops, Repeat retriggers at the launch quantum while held.
 enum class LaunchMode : int32_t { Trigger = 0, Gate, Toggle, Repeat };
 
+// A slot's next fresh take (#503, specs/106): Global follows the Session record length, Open
+// records until stopped, Fixed records bars + beats of the meter in effect when it starts.
+enum class SlotTakeMode : int32_t { Global = 0, Open = 1, Fixed = 2 };
+struct NextTakeLength {
+    SlotTakeMode mode = SlotTakeMode::Global;
+    int32_t bars = 0, beats = 0; // Fixed only
+    bool operator==(const NextTakeLength&) const = default;
+};
+
+// What a fresh take landing in a slot launches (#481, specs/111): nothing, the next scene, or a
+// chosen scene — once per landed take, on the global launch quantum (quantBeats < 0) or its own.
+enum class LandingAction : int32_t { Off = 0, NextScene = 1, Scene = 2 };
+struct LandingRule {
+    LandingAction action = LandingAction::Off;
+    int32_t scene = 0;        // Scene only
+    double quantBeats = -1.0; // <0 = as a manual scene launch, 0 = at once
+    bool operator==(const LandingRule&) const = default;
+};
+
 struct SessionSlot {
     bool hasClip = false;
     MidiClip midi;            // instrument tracks: notes relative to slot start
@@ -192,7 +211,10 @@ struct SessionSlot {
     int32_t chanceA = 100, chanceB = 0; // relative weights, 0..100
     double followBeats = 0.0;           // 0 = after one pass (lengthBeats)
     int32_t jumpScene = 0;              // FollowAction::Jump target
+    bool followBypass = false;          // hold the Follow actions without changing them (#499)
     bool stopButton = true;             // an EMPTY slot stops its track on scene launch
+    NextTakeLength nextTake;            // belongs to the slot, kept (hidden) under a clip (#503)
+    LandingRule landing;                // what a fresh take landing here launches; kept like nextTake (#481)
 };
 
 // Scene metadata (Session P0). Graph-level, one per scene row; kept in step with sceneCount.
@@ -277,6 +299,8 @@ class Track {
         int32_t routedFrom = -1;
         uint64_t routedInstUid = 0; // the instrument those notes sound on (Instrument::uid)
         void forgetRouted() { routedBits[0] = routedBits[1] = 0; } // the voices were ended elsewhere
+        MidiKeyNotes midiKey; // post-MIDI-FX, shared across edits to the track
+        bool midiKeyArrangement = false;
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 

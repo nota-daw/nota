@@ -19,24 +19,16 @@ using System.Linq;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Localization;
+using Nota.App.Controllers;
 
 namespace Nota.App;
 
 public sealed class MidiLearnService
 {
-    private const float VolumeMax = 1.5f;   // track/master fader travel (matches VFader.Max)
-    private const float RackGainMax = 2.0f; // rack out / chain gain travel (matches the rack faders)
-
     private readonly IAudioEngine _engine;
-    // One undo step per controller movement on a mapped volume / pan / parameter target, ended by a 1 s
-    // pause (specs/009, specs/016); the pause is checked on every Tick.
-    private static readonly TimeSpan MixPause = TimeSpan.FromSeconds(1);
-    private readonly Dictionary<MixTarget, MixMovement> _mixUndo = new();
-    private void MixTouch(MixTarget target, Action set)
-    {
-        if (!_mixUndo.TryGetValue(target, out var m)) _mixUndo[target] = m = new MixMovement(_engine, target, MixPause);
-        m.Touch(set, Environment.TickCount64);
-    }
+    // Values land through the applier shared with controller profiles (specs/051): latching
+    // automation and one undo step per movement (specs/009, specs/016).
+    private readonly ControlApplier _applier;
     private readonly ILogSink? _log;
     private readonly List<MidiMapping> _mappings = new();
     private readonly int[] _buf = new int[256 * 4];   // reused each tick — up to 256 events
@@ -54,7 +46,8 @@ public sealed class MidiLearnService
     // avoid flooding the terminal with a knob's CC stream during normal use).
     private readonly bool _echo = Environment.GetEnvironmentVariable("NOTA_MIDI_LOG") is not null;
 
-    public MidiLearnService(IAudioEngine engine, ILogSink? log = null) { _engine = engine; _log = log; }
+    public MidiLearnService(IAudioEngine engine, ControlApplier applier, ILogSink? log = null)
+    { _engine = engine; _applier = applier; _log = log; }
 
     private void LogMidi(string msg) { _log?.Info(msg); if (_echo) Console.WriteLine(msg); }
 
@@ -254,7 +247,7 @@ public sealed class MidiLearnService
     public void Tick()
     {
         long nowMs = Environment.TickCount64;
-        foreach (var m in _mixUndo.Values) m.Poll(nowMs);   // end controller movements after their pause
+        _applier.Poll(nowMs);   // end controller movements after their pause
         int n = _engine.PollMidiControlEvents(_buf);
         EventCount += n;
         for (int i = 0; i < n; i++)
@@ -295,6 +288,16 @@ public sealed class MidiLearnService
         MappingsChanged?.Invoke();
     }
 
+    /// <summary>A MIDI Learn mapping on a port a controller profile owns whole (specs/051): the
+    /// controller hands the message over, because an explicit mapping beats a role (FR-012).
+    /// Returns whether a mapping took it.</summary>
+    public bool DispatchFromController(bool isNote, int channel, int number, int value)
+    {
+        int matched = Dispatch(isNote ? MidiSourceKind.Note : MidiSourceKind.Cc, channel, number, value);
+        if (matched > 0) EventCount++;
+        return matched > 0;
+    }
+
     private int Dispatch(MidiSourceKind kind, int channel, int number, int value)
     {
         int matched = 0;
@@ -321,6 +324,9 @@ public sealed class MidiLearnService
     private void ApplyNormalized(MidiMapping m, double norm)
     {
         var t = m.Target;
+        if (t.Kind == MidiTargetKind.DeviceParam &&
+            DeviceView.IsConfigurationParam(_engine.DeviceParamName(t.TrackId, t.DeviceIndex, t.ParamIndex),
+                _engine.TrackDeviceBuiltinKind(t.TrackId, t.DeviceIndex))) return;
         if (t.IsButton)
         {
             // Crossing the half-way point. Latch on the edge: a swept CC or a squeezed
@@ -330,136 +336,12 @@ public sealed class MidiLearnService
             if (m.Invert) on = !on;
             if (on == m.TriggerLatch) return;
             m.TriggerLatch = on;
-            if (on) Trigger(t);
+            if (on) _applier.Trigger(t);
             return;
         }
 
         if (m.Invert) norm = 1.0 - norm;
-        double outv = m.RangeMin + norm * (m.RangeMax - m.RangeMin);   // 0..1 within the mapped window
-
-        BeginLatchWrite(t);   // a hardware move is a latching automation gesture
-
-        switch (t.Kind)
-        {
-            // Device parameters, volume and pan: one undo step per movement, ended by a 1 s
-            // pause (specs/009, specs/016).
-            case MidiTargetKind.DeviceParam:
-            {
-                float min = _engine.DeviceParamMin(t.TrackId, t.DeviceIndex, t.ParamIndex);
-                float max = _engine.DeviceParamMax(t.TrackId, t.DeviceIndex, t.ParamIndex);
-                MixTouch(MixTarget.DeviceParam(t.TrackId, t.DeviceIndex, t.ParamIndex),
-                    () => _engine.DeviceSetParam(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(min + outv * (max - min))));
-                break;
-            }
-            case MidiTargetKind.PluginParam:
-                MixTouch(MixTarget.PluginParam(t.TrackId, t.DeviceIndex, t.ParamIndex),
-                    () => _engine.PluginParamSet(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)outv));
-                break;
-            case MidiTargetKind.MidiDeviceParam:
-            {
-                float min = _engine.MidiEffectParamMin(t.TrackId, t.DeviceIndex, t.ParamIndex);
-                float max = _engine.MidiEffectParamMax(t.TrackId, t.DeviceIndex, t.ParamIndex);
-                MixTouch(MixTarget.MidiDeviceParam(t.TrackId, t.DeviceIndex, t.ParamIndex),
-                    () => _engine.MidiEffectSetParam(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(min + outv * (max - min))));
-                break;
-            }
-            case MidiTargetKind.TrackVolume:
-                MixTouch(MixTarget.Volume(t.TrackId), () => _engine.SetTrackVolume(t.TrackId, (float)(outv * VolumeMax)));
-                break;
-            case MidiTargetKind.MasterVolume:
-                MixTouch(MixTarget.Master, () => _engine.SetMasterVolume((float)(outv * VolumeMax)));
-                break;
-            case MidiTargetKind.CueVolume: // a listening level: no undo step (specs/089)
-                _engine.CueVolume = (float)(outv * VolumeMax); // the Cue fader's travel
-                break;
-            case MidiTargetKind.TrackPan:
-                MixTouch(MixTarget.Pan(t.TrackId), () => _engine.SetTrackPan(t.TrackId, (float)(outv * 2.0 - 1.0)));
-                break;
-            case MidiTargetKind.RackVolume or MidiTargetKind.RackChainGain when t.DeviceIndex <= MidiTarget.MidiRackBase:
-                break; // a MIDI Effect Rack has no audio level
-            case MidiTargetKind.RackVolume:
-                if (t.DeviceIndex < 0) _engine.RackSetVolume(t.TrackId, (float)(outv * RackGainMax));
-                else _engine.RackDevSetVolume(t.TrackId, t.DeviceIndex, (float)(outv * RackGainMax));
-                break;
-            case MidiTargetKind.RackChainGain:
-                if (t.DeviceIndex < 0) _engine.RackSetChainGain(t.TrackId, t.ParamIndex, (float)(outv * RackGainMax));
-                else _engine.RackDevSetChainGain(t.TrackId, t.DeviceIndex, t.ParamIndex, (float)(outv * RackGainMax));
-                break;
-        }
-    }
-
-    // Moving a hardware control (knob, fader, stick, trigger) is a latching automation
-    // gesture: while the transport is recording it writes this parameter's lane and keeps
-    // writing past the release until the transport stops — a physical control has no
-    // "release", so Live's Latch is the behaviour that fits. With record off, the engine
-    // turns this into an override of an already-automated lane, and ignores it otherwise.
-    // Targets with no automation lane of their own (master volume, rack chains) are skipped.
-    private void BeginLatchWrite(MidiTarget t)
-    {
-        switch (t.Kind)
-        {
-            case MidiTargetKind.DeviceParam:
-                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.DeviceParam, t.DeviceIndex, t.ParamIndex, "", latch: true);
-                break;
-            case MidiTargetKind.MidiDeviceParam:
-                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.MidiDeviceParam, t.DeviceIndex, t.ParamIndex, "", latch: true);
-                break;
-            case MidiTargetKind.PluginParam:
-                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.PluginParam, t.DeviceIndex, -1,
-                    _engine.PluginParamId(t.TrackId, t.DeviceIndex, t.ParamIndex), latch: true);
-                break;
-            case MidiTargetKind.TrackVolume:
-                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.Volume, -1, -1, "", latch: true);
-                break;
-            case MidiTargetKind.TrackPan:
-                _engine.BeginAutomationWrite(t.TrackId, AutomationTarget.Pan, -1, -1, "", latch: true);
-                break;
-        }
-    }
-
-    private void Trigger(MidiTarget t)
-    {
-        switch (t.Kind)
-        {
-            case MidiTargetKind.TransportPlay: _engine.Play(); break;
-            case MidiTargetKind.TransportStop: _engine.StopTransport(); break;
-            case MidiTargetKind.TransportRecord: _engine.SetRecording(!_engine.IsRecording); break;
-            case MidiTargetKind.TrackMute: _engine.SetTrackMute(t.TrackId, !TrackFlag(t.TrackId, mute: true)); break;
-            case MidiTargetKind.TrackSolo: _engine.SetTrackSolo(t.TrackId, !TrackFlag(t.TrackId, mute: false)); break;
-            case MidiTargetKind.TrackCue:
-                _engine.SetTrackCue(t.TrackId, !_engine.GetTrackCue(t.TrackId));
-                CueKey.NotifyChanged();
-                break;
-            case MidiTargetKind.RackChainMute when t.DeviceIndex <= MidiTarget.MidiRackBase:
-            {
-                int mi = MidiTarget.MidiRackBase - t.DeviceIndex;
-                _engine.MidiRackSetChainMute(t.TrackId, mi, t.ParamIndex, !_engine.MidiRackChainMute(t.TrackId, mi, t.ParamIndex));
-                break;
-            }
-            case MidiTargetKind.RackChainSolo when t.DeviceIndex <= MidiTarget.MidiRackBase:
-            {
-                int mi = MidiTarget.MidiRackBase - t.DeviceIndex;
-                _engine.MidiRackSetChainSolo(t.TrackId, mi, t.ParamIndex, !_engine.MidiRackChainSolo(t.TrackId, mi, t.ParamIndex));
-                break;
-            }
-            case MidiTargetKind.RackChainMute:
-                if (t.DeviceIndex < 0) _engine.RackSetChainMute(t.TrackId, t.ParamIndex, !_engine.RackChainMute(t.TrackId, t.ParamIndex));
-                else _engine.RackDevSetChainMute(t.TrackId, t.DeviceIndex, t.ParamIndex, !_engine.RackDevChainMute(t.TrackId, t.DeviceIndex, t.ParamIndex));
-                break;
-            case MidiTargetKind.RackChainSolo:
-                if (t.DeviceIndex < 0) _engine.RackSetChainSolo(t.TrackId, t.ParamIndex, !_engine.RackChainSolo(t.TrackId, t.ParamIndex));
-                else _engine.RackDevSetChainSolo(t.TrackId, t.DeviceIndex, t.ParamIndex, !_engine.RackDevChainSolo(t.TrackId, t.DeviceIndex, t.ParamIndex));
-                break;
-        }
-    }
-
-    private bool TrackFlag(int trackId, bool mute)
-    {
-        int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
-            if (_engine.TryGetTrackInfo(i, out var ti) && ti.Id == trackId)
-                return (mute ? ti.Muted : ti.Soloed) != 0;
-        return false;
+        _applier.SetNormalized(t, m.RangeMin + norm * (m.RangeMax - m.RangeMin));   // 0..1 within the mapped window
     }
 
     // ---- persistence seam (see project DTO mapping) -----------------------
@@ -572,7 +454,8 @@ public sealed class MidiLearnService
         or MidiTargetKind.TrackVolume or MidiTargetKind.TrackPan or MidiTargetKind.TrackMute or MidiTargetKind.TrackSolo
         or MidiTargetKind.TrackCue
         or MidiTargetKind.RackVolume or MidiTargetKind.RackChainGain
-        or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo;
+        or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo
+        or MidiTargetKind.TrackArm or MidiTargetKind.TrackSelect or MidiTargetKind.TrackSend;
 
     private int IndexOfTrackId(int trackId)
     {

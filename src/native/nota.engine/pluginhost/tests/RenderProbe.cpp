@@ -10,8 +10,22 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <thread>
+
+// A binary that blocks while it loads (#979, specs/113): with NOTA_RENDER_PROBE_LOAD_DELAY_MS
+// set, loading this module sleeps that long in a static initialiser — where a copy-protection
+// wrapper runs — so tests can check the host stays responsive meanwhile.
+namespace {
+[[maybe_unused]] const bool kLoadDelay = [] {
+    if (const char* ms = std::getenv("NOTA_RENDER_PROBE_LOAD_DELAY_MS"); ms != nullptr && *ms != '\0')
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::strtol(ms, nullptr, 10)));
+    return true;
+}();
+} // namespace
 
 class RenderProbe final : public juce::AudioProcessor {
   public:

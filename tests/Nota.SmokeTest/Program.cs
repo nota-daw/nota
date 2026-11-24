@@ -62,6 +62,21 @@ if (args.Length >= 2 && args[0] == "--profile-hosted")
         args.Length > 3 ? int.Parse(args[3]) : 48000);
     return 0;
 }
+if (args.Contains("--plugin-load-retry"))
+{
+    foreach (var (ok, label) in PluginLoadTests.RunRetry()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+if (args.Contains("--plugin-load-removal"))
+{
+    foreach (var (ok, label) in PluginLoadTests.RunRemoval()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+if (args.Contains("--plugin-load"))
+{
+    foreach (var (ok, label) in PluginLoadTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 if (args.Contains("--hosted-render-pool"))
 {
     foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
@@ -269,6 +284,8 @@ if (args.Length >= 1 && args[0] == "--shortcuts")
     foreach (var (ok, label) in ShortcutBuilderTests.Run()) Check(ok, label);
     Console.WriteLine("-- custom shortcuts --");
     foreach (var (ok, label) in KeyBindingTests.Run()) Check(ok, label);
+    Console.WriteLine("-- clip launch keys --");
+    foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SHORTCUTS PASSED" : $"SHORTCUTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -825,6 +842,31 @@ if (args.Length >= 1 && args[0] == "--sidechain-parts")
     Console.WriteLine(failures == 0 ? "SIDECHAIN PARTS PASSED" : $"SIDECHAIN PARTS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Controller mapping editor alone: `--controller-remap` (specs/110). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-remap")
+{
+    Console.WriteLine("-- controller remap --");
+    foreach (var (ok, label) in ControllerRemapTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER REMAP PASSED" : $"CONTROLLER REMAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The Remote LED displays alone: `--displays` (specs/114). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--displays")
+{
+    Console.WriteLine("-- device displays --");
+    foreach (var (ok, label) in DisplayTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DISPLAYS PASSED" : $"DISPLAYS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Controller auto-mapping alone: `--controllers` (specs/051). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controllers")
+{
+    Console.WriteLine("-- controllers --");
+    foreach (var (ok, label) in ControllerTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLERS PASSED" : $"CONTROLLERS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Plug-in card preview alone: `--preview`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--preview")
 {
@@ -957,6 +999,12 @@ if (args.Length >= 1 && args[0] == "--twin")
     Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Experimental color bass device, also exercised by the full run.
+if (args.Length >= 1 && args[0] == "--color")
+{
+    foreach (var (ok, label) in ColorTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--vocoder")
 {
@@ -1005,6 +1053,14 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Cancelling a queued Session launch alone (fast iteration): `--cancel-launch`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--cancel-launch")
+{
+    Console.WriteLine("-- cancel queued launch --");
+    foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CANCEL LAUNCH PASSED" : $"CANCEL LAUNCH FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MIDI In switched while a routed note is held alone (fast iteration): `--midi-source`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--midi-source")
 {
@@ -1045,6 +1101,30 @@ if (args.Length >= 1 && args[0] == "--retry-take")
     Console.WriteLine("-- retry take --");
     foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Session performance → Arrangement alone (fast iteration): `--session-to-arrangement`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--session-to-arrangement")
+{
+    Console.WriteLine("-- session to arrangement --");
+    foreach (var (ok, label) in SessionToArrangementTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SESSION TO ARRANGEMENT PASSED" : $"SESSION TO ARRANGEMENT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// A Session slot's next-take length alone (fast iteration): `--slot-take-length`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--slot-take-length")
+{
+    Console.WriteLine("-- slot take length --");
+    foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SLOT TAKE LENGTH PASSED" : $"SLOT TAKE LENGTH FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// A slot's landing rule alone (fast iteration): `--take-landed`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--take-landed")
+{
+    Console.WriteLine("-- take landed follow --");
+    foreach (var (ok, label) in TakeLandedFollowTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAKE LANDED PASSED" : $"TAKE LANDED FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
@@ -1164,6 +1244,7 @@ if (args.Length >= 2 && args[0] == "--hostcheck")
     {
         Console.WriteLine($"instrument: {NotaEngine.PluginDescription(instIdx)}");
         int tid = eng.AddPluginInstrumentTrack(instIdx);
+        eng.WaitPluginLoads(60000); // plug-ins load after they are inserted (specs/113)
         Check(tid > 0, "load hosted instrument onto a new track");
         int c = eng.AddMidiClip(tid, 0.0, 4.0);
         eng.SetClipNotes(tid, c, new[] { new NotaNote(60, 0.0, 2.0, 1.0f) });
@@ -1188,6 +1269,7 @@ if (args.Length >= 2 && args[0] == "--hostcheck")
         {
             Console.WriteLine($"effect: {NotaEngine.PluginDescription(fxIdx)}");
             int di = eng.AddTrackEffectPlugin(tid, fxIdx);
+            eng.WaitPluginLoads(60000);
             Check(di >= 0, "add hosted effect to the track chain");
             Check(eng.TrackDeviceCount(tid) == 1, "device count == 1");
             eng.Seek(0);
@@ -1352,6 +1434,23 @@ Nota.SmokeTest.WavWriter.WriteSine(wav, seconds: 1.0, freq: 440.0, sampleRate: 4
 Console.WriteLine($"wrote test wav: {wav}");
 
 using var engine = new NotaEngine();
+
+// Plug-in load state (#979, specs/113) without a plug-in: built-ins and instruments read loaded,
+// with nothing to say, and the per-device calls refuse what isn't there.
+using (var loads = new NotaEngine())
+{
+    int lt = loads.AddInstrumentTrack();
+    int ld = loads.AddBuiltinDevice(lt, 0);
+    Check(loads.DevicePluginLoadState(lt, ld) == Nota.Application.PluginLoadState.Loaded
+          && loads.DevicePluginLoadState(lt, -1) == Nota.Application.PluginLoadState.Loaded
+          && loads.DevicePluginLoadReasonCode(lt, ld) == Nota.Application.PluginLoadReason.None
+          && loads.DevicePluginLoadReasonArg(lt, ld) == "",
+        "built-in devices and instruments report their plug-in load state as loaded");
+    Check(loads.DevicePluginLoadState(lt, 99) == Nota.Application.PluginLoadState.Loaded
+          && !loads.DevicePluginLoadAction(lt, 99, Nota.Application.PluginLoadAction.TryAgain),
+        "plug-in load calls on a missing device are harmless");
+    Check(loads.ServicePluginLoads() >= 0 && loads.WaitPluginLoads(10) >= 0, "plug-in load service and wait run with nothing to load");
+}
 
 int track = engine.AddAudioTrack();
 Check(track > 0, "add audio track");
@@ -3871,7 +3970,7 @@ Console.WriteLine("-- Nota Operator --");
     Check(oe.DeviceName(t, -1) == "Nota Operator", $"instrument is Nota Operator (got '{oe.DeviceName(t, -1)}')");
 
     int pc = oe.PluginParamCount(t, -1);
-    Check(pc == 60, $"Nota Operator exposes 60 params (got {pc})");
+    Check(pc == 64, $"Nota Operator exposes 64 params (got {pc})");
     int algoI = -1; bool idsOk = true;
     var opIds = new System.Collections.Generic.HashSet<string>();
     for (int i = 0; i < pc; i++)
@@ -3887,6 +3986,8 @@ Console.WriteLine("-- Nota Operator --");
     Check(opIds.Contains("bend") && opIds.Contains("bendrange") && opIds.Contains("modwheel")
           && opIds.Contains("filkeytrk") && opIds.Contains("veltolevel"),
           "wheel + tracking params present (bend/bendrange/modwheel/filkeytrk/veltolevel)");
+    Check(opIds.Contains("asemi") && opIds.Contains("bsemi") && opIds.Contains("csemi") && opIds.Contains("dsemi"),
+          "the Semitones knobs are present (asemi…dsemi)");
 
     // State round-trips to another track.
     int dlvl = -1; for (int i = 0; i < pc; i++) if (oe.PluginParamId(t, -1, i) == "dlevel") dlvl = i;
@@ -3924,6 +4025,53 @@ Console.WriteLine("-- Nota Operator --");
         bool ok = sn == 32; float mx = 0;
         for (int i = 0; i < sn; i++) { if (!float.IsFinite(sbuf[i]) || sbuf[i] < 0 || sbuf[i] > 1.001f) ok = false; mx = Math.Max(mx, sbuf[i]); }
         Check(ok && mx > 0.01f, $"Operator spectrum scope returns 32 partials (n={sn}, peak {mx:F2})");
+    }
+
+    // The Semitones knob (asemi…dsemi): a per-operator offset from its coarse ratio. +7 on a
+    // ×1 operator is a fifth — the interval the 16-ratio table cannot reach — and +12 an
+    // octave; both show up in the rendered fundamental. Its own engine: the measurement
+    // reads the whole mix, so no other track may sound.
+    {
+        using var se = new NotaEngine();
+        se.SetBpm(120); se.SetTimeSignature(4, 4);
+        int ts = se.AddOperatorSynthTrack();
+        int Ps(string id) { for (int i = 0; i < se.PluginParamCount(ts, -1); i++) if (se.PluginParamId(ts, -1, i) == id) return i; return -1; }
+        se.PluginParamSet(ts, -1, Ps("algo"), 1f);            // the 11th algorithm: all parallel, A is a carrier
+        se.PluginParamSet(ts, -1, Ps("alevel"), 0.8f);
+        se.PluginParamSet(ts, -1, Ps("blevel"), 0f);
+        se.PluginParamSet(ts, -1, Ps("clevel"), 0f);
+        se.PluginParamSet(ts, -1, Ps("dlevel"), 0f);
+        se.PluginParamSet(ts, -1, Ps("acoarse"), 1f / 15f);   // ratio ×1 (index 1 of the 16)
+        se.PluginParamSet(ts, -1, Ps("afine"), 0.5f);         // no cents
+        se.PluginParamSet(ts, -1, Ps("asus"), 1f);            // hold the tone through the measurement
+        se.PluginParamSet(ts, -1, Ps("fmdepth"), 0.5f);       // ×1 modulation index
+        se.PluginParamSet(ts, -1, Ps("filfreq"), 1f);         // filter wide open
+        se.PluginParamSet(ts, -1, Ps("volume"), 1f);
+        se.AddMidiClip(ts, 0.0, 4.0);
+        se.SetClipNotes(ts, 0, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+
+        // The engine's map: 0.5 = 0 st, the travel ±12 st, so v = 0.5 + semis / 24. Render at an
+        // explicit rate — a fresh engine has negotiated none, so SampleRate is 0 until audio runs.
+        const double Sr = 44100;
+        double F0(double semis)
+        {
+            se.PluginParamSet(ts, -1, Ps("asemi"), (float)(0.5 + semis / 24.0));
+            var b = new float[8192 * 2];
+            se.Seek(0.0); se.Play(); se.RenderOffline(b, 8192, Sr); se.StopTransport();
+            int rising = 0, first = -1, last = -1;
+            for (int i = 1; i < 8192; i++)
+            {
+                if (b[(i - 1) * 2] <= 0f && b[i * 2] > 0f) { if (first < 0) first = i; last = i; rising++; }
+            }
+            return rising > 2 && last > first ? (rising - 1) * Sr / (last - first) : 0;
+        }
+
+        double plain = F0(0), fifth = F0(7), octave = F0(12);
+        Check(Math.Abs(plain - 261.63) < 5, $"Operator Semitones 0 sounds the written note (f0 {plain:F1} Hz)");
+        Check(plain > 0 && Math.Abs(fifth / plain - 1.4983) < 0.02,
+              $"Operator Semitones +7 sounds a fifth above its ratio (×{(plain > 0 ? fifth / plain : 0):F3})");
+        Check(plain > 0 && Math.Abs(octave / plain - 2.0) < 0.02,
+              $"Operator Semitones +12 sounds an octave above its ratio (×{(plain > 0 ? octave / plain : 0):F3})");
     }
 
     // Mono + glide render stays finite (legato voice path).
@@ -6070,6 +6218,112 @@ Console.WriteLine("-- Nota Strata --");
     se.SetAutomationPoints(st, slane, new[] { new AutomationPoint(0.0, 20f), new AutomationPoint(2.0, 90f) });
     se.Seek(1.99); se.Play(); se.RenderOffline(rb, 4096); se.StopTransport();
     Check(se.DeviceGetParam(st, sd, 0) > 60f, $"automation drives Strata Feedback ({se.DeviceGetParam(st, sd, 0):F1})");
+}
+
+// Strata layer export (#482, specs/102): one layer on its own, as recorded — after Input gain,
+// sample 0 at the loop's top, one cycle long, no Speed / Reverse / Feedback / level / mute, no
+// other layer — and the device is left exactly as it was.
+Console.WriteLine("-- Nota Strata layer export --");
+{
+    using var le = new NotaEngine();
+    le.SetBpm(120); le.SetTimeSignature(4, 4);
+    int lt = le.AddInstrumentTrack();
+    le.AddMidiClip(lt, 0.0, 16.0);
+    le.SetClipNotes(lt, 0, new[] { new NotaNote(48, 0.0, 3.5, 1.0f), new NotaNote(76, 4.6, 3.0, 1.0f) });   // a low pass, then a high one
+    int ld = le.AddBuiltinDevice(lt, 15);
+    le.DeviceSetParam(lt, ld, 3, 0f);   // Quantize Off: commands land on the next block's sl_first sample
+    const int Blk = 4096, Blocks = 24;
+    var sl_lb = new float[Blk * 2];
+    string sl_dir = Path.Combine(Path.GetTempPath(), $"nota-strata-layer-{Environment.ProcessId}");
+    Directory.CreateDirectory(sl_dir);
+
+    le.Seek(0); le.Play();
+    le.DeviceAction(lt, ld, 0, 0, 0); le.RenderOffline(sl_lb, Blk);                 // C_Record
+    var sl_first = le.DeviceGetState(lt, ld);
+    string sl_pFirst = Path.Combine(sl_dir, "first.wav");
+    Check(StrataLayerExport.WriteLayerWav(sl_first, 0, sl_pFirst) == StrataLayerExportResult.NoLoop && !File.Exists(sl_pFirst),
+        "a layer of a first pass that hasn't closed isn't exported (NoLoop, no file)");
+    for (int b = 1; b < Blocks; b++) le.RenderOffline(sl_lb, Blk);
+    le.DeviceAction(lt, ld, 1, 0, 0);                                             // C_Overdub: close, record layer 2
+    for (int b = 0; b < Blocks / 2; b++) le.RenderOffline(sl_lb, Blk);
+    var sl_mid = le.DeviceGetState(lt, ld);
+    string sl_pMid = Path.Combine(sl_dir, "mid.wav");
+    Check(StrataLayerExport.Check(sl_mid, 0) == StrataLayerExportResult.Written, "layer 1 exports while layer 2 records");
+    Check(StrataLayerExport.WriteLayerWav(sl_mid, 1, sl_pMid) == StrataLayerExportResult.Recording && !File.Exists(sl_pMid),
+        "a layer still recording isn't exported (Recording, no file)");
+    for (int b = Blocks / 2; b <= Blocks; b++) le.RenderOffline(sl_lb, Blk);
+    var sl_ls = new float[6 + 8 * 3];
+    le.DeviceScope(lt, ld, sl_ls, sl_ls.Length);
+    Check((int)sl_ls[3] == 2 && (int)sl_ls[4] == -1, $"two finished layers (count {(int)sl_ls[3]}, rec {(int)sl_ls[4]})");
+
+    // Playback settings far from their defaults: none of them may reach the file.
+    le.DeviceSetParam(lt, ld, 0, 40f); le.DeviceSetParam(lt, ld, 2, 2f); le.DeviceSetParam(lt, ld, 6, 1f);
+    le.DeviceAction(lt, ld, 7, 1, -9f); le.DeviceAction(lt, ld, 6, 1, 1f);       // layer 2: −9 dB, muted
+    le.RenderOffline(sl_lb, Blk); le.StopTransport();
+
+    var sl_before = le.DeviceGetState(lt, ld);
+    int sl_len = BitConverter.ToInt32(sl_before, 8), sl_lsr = BitConverter.ToInt32(sl_before, 4), sl_lcount = BitConverter.ToInt32(sl_before, 16);
+    Check(sl_len == Blocks * Blk && sl_lcount == 2, $"the loop is {Blocks} blocks long ({sl_len} frames, {sl_lcount} layers)");
+    string sl_p2 = Path.Combine(sl_dir, "layer2.wav");
+    var sl_res = StrataLayerExport.WriteLayerWav(sl_before, 1, sl_p2);
+    var sl_after = le.DeviceGetState(lt, ld);
+    Check(sl_res == StrataLayerExportResult.Written && File.Exists(sl_p2), $"layer 2 exported ({sl_res})");
+    Check(sl_before.AsSpan().SequenceEqual(sl_after), "exporting a layer leaves the Strata state byte-identical");
+    le.DeviceScope(lt, ld, sl_ls, sl_ls.Length);
+    Check(sl_ls[8 + 3] > 0.5f && Math.Abs(sl_ls[7 + 3] + 9f) < 1e-3, "the exported layer keeps its mute and level");
+
+    // The file: 32-bit float stereo at the loop's rate, one cycle, sample-identical to layer 2.
+    var sl_wav = File.ReadAllBytes(sl_p2);
+    int sl_fmt = BitConverter.ToInt16(sl_wav, 20), sl_ch = BitConverter.ToInt16(sl_wav, 22), sl_wsr = BitConverter.ToInt32(sl_wav, 24);
+    int sl_data = 12; while (sl_data + 8 <= sl_wav.Length && System.Text.Encoding.ASCII.GetString(sl_wav, sl_data, 4) != "data") sl_data += 8 + BitConverter.ToInt32(sl_wav, sl_data + 4);
+    int sl_dataBytes = BitConverter.ToInt32(sl_wav, sl_data + 4);
+    Check(sl_fmt == 3 && sl_ch == 2 && sl_wsr == sl_lsr, $"layer WAV is float stereo at the loop's rate (fmt {sl_fmt}, ch {sl_ch}, {sl_wsr} Hz)");
+    Check(sl_dataBytes == sl_len * 8, $"layer WAV is exactly one loop cycle ({sl_dataBytes / 8} of {sl_len} frames)");
+    int sl_l2At = 20 + sl_lcount * 12 + sl_len * 8, sl_l1At = 20 + sl_lcount * 12;
+    bool sl_same = sl_dataBytes == sl_len * 8 && sl_wav.AsSpan(sl_data + 8, sl_dataBytes).SequenceEqual(sl_before.AsSpan(sl_l2At, sl_len * 8));
+    Check(sl_same, "layer WAV is sample-identical to layer 2 as recorded (loop top first, nothing applied)");
+    Check(!sl_before.AsSpan(sl_l1At, sl_len * 8).SequenceEqual(sl_before.AsSpan(sl_l2At, sl_len * 8)), "layer 2 differs from layer 1 (no other layer in the file)");
+    StrataLayerExport.TryReadLayer(sl_before, 1, out _, out var sl_l2pcm, out _);
+    Check(Rms(sl_l2pcm, sl_len) > 0.001f, $"layer 2 carries its pass (rms {Rms(sl_l2pcm, sl_len):F3})");
+
+    // Save / reopen: the sl_same layer from the restored device is the sl_same file.
+    int sl_rt = le.AddInstrumentTrack(); int sl_rd = le.AddBuiltinDevice(sl_rt, 15);
+    le.DeviceSetState(sl_rt, sl_rd, sl_before);
+    string sl_pRe = Path.Combine(sl_dir, "reopened.wav");
+    Check(StrataLayerExport.WriteLayerWav(le.DeviceGetState(sl_rt, sl_rd), 1, sl_pRe) == StrataLayerExportResult.Written
+        && File.ReadAllBytes(sl_pRe).AsSpan().SequenceEqual(sl_wav), "after save/reopen the layer exports to the identical file");
+
+    // Saved mid-overdub (review of #663): a load stops recording, so the reopened pass is a finished
+    // layer that exports — not one stuck "recording".
+    int sl_mt = le.AddInstrumentTrack(); int sl_md = le.AddBuiltinDevice(sl_mt, 15);
+    le.DeviceSetState(sl_mt, sl_md, sl_mid);
+    var sl_ms = new float[6 + 8 * 3];
+    le.DeviceScope(sl_mt, sl_md, sl_ms, sl_ms.Length);
+    Check((int)sl_ms[4] == -1 && (int)sl_ms[6 + 3] != 2, $"a Strata saved mid-overdub reopens with nothing recording (rec {(int)sl_ms[4]}, layer 2 state {(int)sl_ms[6 + 3]})");
+    Check(StrataLayerExport.Check(le.DeviceGetState(sl_mt, sl_md), 1) == StrataLayerExportResult.Written, "…and its last pass exports");
+
+    // The same slot, another take (review of #663): undo layer 2 and record it again while a save
+    // dialog would be open — the card's take fingerprint (the layer's peak envelope) must tell them apart.
+    float[] SlPrint() { var w = new float[512]; int n = le.DeviceLayerWave(lt, ld, 1, w, w.Length); return w[..Math.Max(0, n)]; }
+    var sl_print = SlPrint();
+    le.RenderOffline(sl_lb, Blk);
+    Check(sl_print.Length > 0 && SlPrint().AsSpan().SequenceEqual(sl_print), "an untouched layer keeps its take fingerprint");
+    le.Seek(0); le.Play();
+    le.DeviceAction(lt, ld, 4, 0, 0); le.RenderOffline(sl_lb, Blk);               // C_Undo: layer 2 dropped
+    le.DeviceAction(lt, ld, 1, 0, 0);                                             // C_Overdub: a new layer 2
+    for (int b = 0; b <= Blocks + 1; b++) le.RenderOffline(sl_lb, Blk);
+    le.StopTransport();
+    var sl_retake = le.DeviceGetState(lt, ld);
+    Check(StrataLayerExport.Check(sl_retake, 1) == StrataLayerExportResult.Written && !SlPrint().AsSpan().SequenceEqual(sl_print),
+        "a slot undone and recorded again has another take fingerprint (the export reports the chosen one gone)");
+
+    // Nothing there: no fallback to the mix.
+    string sl_pNo = Path.Combine(sl_dir, "none.wav");
+    Check(StrataLayerExport.WriteLayerWav(sl_before, 2, sl_pNo) == StrataLayerExportResult.NoLayer && !File.Exists(sl_pNo), "a layer that isn't there exports nothing (NoLayer)");
+    Check(StrataLayerExport.WriteLayerWav(sl_before[..(sl_before.Length - 16)], 1, sl_pNo) == StrataLayerExportResult.Invalid && !File.Exists(sl_pNo), "a truncated state exports nothing (Invalid)");
+    le.DeviceAction(lt, ld, 5, 0, 0); le.Seek(0); le.Play(); le.RenderOffline(sl_lb, Blk); le.StopTransport();   // C_Clear
+    Check(StrataLayerExport.Check(le.DeviceGetState(lt, ld), 1) == StrataLayerExportResult.NoLayer, "a cleared loop has no layer to export");
+    try { Directory.Delete(sl_dir, true); } catch (IOException) { }
 }
 
 // ============================ Nota EQ-3 ====================================
@@ -8871,6 +9125,39 @@ engine.StopTransport();
 engine.RemoveTrack(scSrcT);
 engine.RemoveTrack(scDstT);
 
+// -- specs/108: walking the Session grid by meaning, either way round --
+Console.WriteLine("-- 108 grid nav --");
+{
+    bool Maps(bool across, Nota.Application.Editing.GridArrow a, Nota.Application.Editing.SessionStep st)
+        => Nota.Application.Editing.SessionGridNav.FromArrow(a, across) == st;
+    Check(Maps(false, Nota.Application.Editing.GridArrow.Up, Nota.Application.Editing.SessionStep.PrevScene)
+        && Maps(false, Nota.Application.Editing.GridArrow.Down, Nota.Application.Editing.SessionStep.NextScene)
+        && Maps(false, Nota.Application.Editing.GridArrow.Left, Nota.Application.Editing.SessionStep.PrevTrack)
+        && Maps(false, Nota.Application.Editing.GridArrow.Right, Nota.Application.Editing.SessionStep.NextTrack),
+        "Scenes down: up/down step scenes, left/right step tracks");
+    Check(Maps(true, Nota.Application.Editing.GridArrow.Left, Nota.Application.Editing.SessionStep.PrevScene)
+        && Maps(true, Nota.Application.Editing.GridArrow.Right, Nota.Application.Editing.SessionStep.NextScene)
+        && Maps(true, Nota.Application.Editing.GridArrow.Up, Nota.Application.Editing.SessionStep.PrevTrack)
+        && Maps(true, Nota.Application.Editing.GridArrow.Down, Nota.Application.Editing.SessionStep.NextTrack),
+        "Scenes across: left/right step scenes, up/down step tracks");
+    var K = Nota.Application.Editing.GridSelKind.Slot;
+    Nota.Application.Editing.GridPos P(Nota.Application.Editing.GridSelKind k, int i, int s) => new(k, i, s);
+    Nota.Application.Editing.GridPos Step(Nota.Application.Editing.GridPos at, Nota.Application.Editing.SessionStep st)
+        => Nota.Application.Editing.SessionGridNav.Step(at, st, tracks: 3, buses: 2, scenes: 4);
+    var scene = Nota.Application.Editing.GridSelKind.Scene; var bus = Nota.Application.Editing.GridSelKind.Bus;
+    Check(Step(P(K, 0, 1), Nota.Application.Editing.SessionStep.PrevTrack) == P(scene, 0, 1), "previous track off the first track selects the scene");
+    Check(Step(P(scene, 0, 1), Nota.Application.Editing.SessionStep.NextTrack) == P(K, 0, 1), "next track from the scene selects the first track");
+    Check(Step(P(K, 2, 1), Nota.Application.Editing.SessionStep.NextTrack) == P(bus, 0, 1), "next track past the last track reaches the first Return");
+    Check(Step(P(bus, 0, 1), Nota.Application.Editing.SessionStep.PrevTrack) == P(K, 2, 1), "previous track off the first Return goes back to the last track");
+    Check(Step(P(bus, 1, 1), Nota.Application.Editing.SessionStep.NextScene) == P(bus, 1, 1), "scene steps do nothing on a Return / Master");
+    Check(Step(P(K, 1, 3), Nota.Application.Editing.SessionStep.NextScene) == P(K, 1, 3), "next scene stops at the last scene");
+    Check(Step(P(K, 1, 0), Nota.Application.Editing.SessionStep.PrevScene) == P(K, 1, 0), "previous scene stops at the first scene");
+    Check(Step(P(K, 1, 2), Nota.Application.Editing.SessionStep.NextScene) == P(K, 1, 3), "next scene keeps the track");
+    Check(Nota.Application.Editing.SessionGridNav.IsAcross("across") && !Nota.Application.Editing.SessionGridNav.IsAcross("down")
+        && !Nota.Application.Editing.SessionGridNav.IsAcross(null) && !Nota.Application.Editing.SessionGridNav.IsAcross("sideways"),
+        "Session grid setting: only \"across\" turns the grid");
+}
+
 // -- M5: Session view launch --
 Console.WriteLine("-- M5 --");
 int sesT = engine.AddInstrumentTrack();
@@ -9151,6 +9438,75 @@ engine.StopTransport();
     Check(e.SessionPlayingSlot(t) == 1, $"follow action Next moved to slot 1 (playing {e.SessionPlayingSlot(t)})");
     e.StopAllSession(); Run(0.1);
 
+    // Follow bypass (specs/103, #499): one clip holds while its settings stay; others follow;
+    // when the bypass ends the action lands on the next multiple of the follow time since launch.
+    trig.FollowBeats = 2.0; trig.FollowBypass = 1;
+    e.SetSessionClipProps(t, 0, trig);
+    Check(e.TryGetSessionClipProps(t, 0, out var byp) && byp.FollowBypass == 1 && byp.FollowA == (int)SessionFollowAction.Next
+        && byp.ChanceA == 100 && Math.Abs(byp.FollowBeats - 2.0) < 1e-9, "follow bypass round-trips and keeps the follow settings");
+    e.Undo();
+    Check(e.TryGetSessionClipProps(t, 0, out var byu) && byu.FollowBypass == 0 && Math.Abs(byu.FollowBeats - 1.0) < 1e-9,
+        "undo restores the clip's follow props in one step");
+    e.SetSessionClipProps(t, 0, trig);
+    Check(e.CopySessionSlot(t, 0, t, 4) && e.TryGetSessionClipProps(t, 4, out var byc) && byc.FollowBypass == 1,
+        "a copied slot carries its follow bypass");
+    e.ClearSessionSlot(t, 4);
+    int tf = e.AddInstrumentTrack();
+    e.AddSessionMidiClip(tf, 0, 4.0); e.AddSessionMidiClip(tf, 1, 4.0);
+    e.SetSessionNotes(tf, 0, new[] { new NotaNote(67, 0.0, 1.0, 0.9f) });
+    e.SetSessionNotes(tf, 1, new[] { new NotaNote(69, 0.0, 1.0, 0.9f) });
+    var other = trig; other.FollowBypass = 0;
+    e.SetSessionClipProps(tf, 0, other);
+    Start(); e.LaunchSlot(t, 0); e.LaunchSlot(tf, 0); Run(9.0);
+    Check(e.SessionPlayingSlot(t) == 0, $"bypassed clip keeps looping past 4x its follow time (playing {e.SessionPlayingSlot(t)})");
+    Check(e.SessionPlayingSlot(tf) == 1, $"another track's clip still follows (playing {e.SessionPlayingSlot(tf)})");
+    Check(e.SessionFollow, "the global follow switch is untouched by a clip's bypass");
+    e.LaunchSlot(t, 1); Run(0.5);
+    Check(e.SessionPlayingSlot(t) == 1, "a bypassed clip's track still launches by hand");
+    e.StopAllSession(); Run(0.1);
+
+    // Bypass ends past the deadline: no catch-up at once; fires at the next multiple (beat 6).
+    Start(); e.LaunchSlot(t, 0); Run(5.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.6);
+    Check(e.SessionPlayingSlot(t) == 0, $"ending the bypass after the deadline fires no catch-up (at {e.SessionSlotPosition(t):F2}, playing {e.SessionPlayingSlot(t)})");
+    Run(0.8);
+    Check(e.SessionPlayingSlot(t) == 1, $"the follow action lands on the next multiple of the follow time (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+
+    // Bypass ends before the deadline: the action fires on time, as if never bypassed.
+    trig.FollowBypass = 1; e.SetSessionClipProps(t, 0, trig);
+    Start(); e.LaunchSlot(t, 0); Run(1.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.6);
+    Check(e.SessionPlayingSlot(t) == 0, "ending the bypass before the deadline waits for it");
+    Run(0.7);
+    Check(e.SessionPlayingSlot(t) == 1, $"then fires at the normal follow time (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+
+    // A launch queued while the bypass came and went, then cancelled (its row removed): the
+    // bypass still re-bases the follow count, so nothing fires as a catch-up (beat 6, not at once).
+    int qs = e.InsertScene(2);
+    e.AddSessionMidiClip(t, qs, 4.0);
+    e.SetSessionNotes(t, qs, new[] { new NotaNote(62, 0.0, 1.0, 0.9f) });
+    Check(e.TryGetSessionClipProps(t, qs, out var qp), "queued-slot props");
+    qp.QuantBeats = 16.0; e.SetSessionClipProps(t, qs, qp);
+    Start(); e.LaunchSlot(t, 0); Run(0.5);
+    e.LaunchSlot(t, qs); Run(0.5);
+    trig.FollowBypass = 1; e.SetSessionClipProps(t, 0, trig);
+    Run(4.0);
+    trig.FollowBypass = 0; e.SetSessionClipProps(t, 0, trig);
+    Run(0.1);
+    Check(e.SessionPlayingSlot(t) == 0 && e.SessionSlotState(t, qs) == 2, $"the launch is still queued while the bypass ends (state {e.SessionSlotState(t, qs)})");
+    e.RemoveScene(qs);
+    Run(0.4);
+    Check(e.SessionPlayingSlot(t) == 0, $"cancelling a queued launch after a bypass fires no catch-up (playing {e.SessionPlayingSlot(t)})");
+    Run(0.8);
+    Check(e.SessionPlayingSlot(t) == 1, $"the follow action lands on the next multiple after the cancelled launch (playing {e.SessionPlayingSlot(t)})");
+    e.StopAllSession(); Run(0.1);
+    e.RemoveTrack(tf);
+    trig.FollowBeats = 1.0; e.SetSessionClipProps(t, 0, trig);
+
     // Empty slot without a stop button: launching its scene leaves the track playing.
     int t2 = e.AddInstrumentTrack();
     e.AddSessionMidiClip(t2, 0, 4.0);
@@ -9205,6 +9561,8 @@ engine.StopTransport();
     e.StopAllSession(); Run(0.1); e.StopTransport();
 
     // Persistence: names, props, stop buttons and scenes survive save/load.
+    Check(e.TryGetSessionClipProps(t2, 0, out var held), "track 2 clip props");
+    held.FollowA = (int)SessionFollowAction.Stop; held.FollowBypass = 1; e.SetSessionClipProps(t2, 0, held);
     var w = new System.Collections.Generic.List<string>();
     var doc = ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), w);
     string bundle = Path.Combine(Path.GetTempPath(), "nota-session-" + System.Guid.NewGuid().ToString("N") + ".nota");
@@ -9217,6 +9575,8 @@ engine.StopTransport();
     Check(t1b > 0 && e2.TryGetSessionClipProps(t1b, 0, out var lp) && lp.FollowA == (int)SessionFollowAction.Next && lp.Loop == 1,
         "clip props survive save/load");
     Check(t2b > 0 && !e2.GetSessionSlotStopButton(t2b, 3), "removed stop button survives save/load");
+    Check(t1b > 0 && t2b > 0 && e2.TryGetSessionClipProps(t2b, 0, out var lh) && lh.FollowBypass == 1 && lh.FollowA == (int)SessionFollowAction.Stop
+        && e2.TryGetSessionClipProps(t1b, 0, out var lu) && lu.FollowBypass == 0, "follow bypass survives save/load, per clip");
     Check(e2.TryGetSceneProps(2, out var lsp) && Math.Abs(lsp.Tempo - 140) < 1e-9, "scene props survive save/load");
 }
 
@@ -14952,6 +15312,47 @@ Console.WriteLine("-- MCP tools --");
         "MCP stop button + follow switch show in get_session");
     Check(mcpSession.MoveScene(4, 0).Result && mcpSession.DeleteScene(1).Result, "MCP move_scene + delete_scene");
     mcpSession.SetSessionFollow(true).Wait();
+    // #480: nothing queued → the cancel tools say so (the engine behaviour is CancelLaunchTests).
+    Check(!mcpSession.CancelSlotLaunch(mcpT, 0).Result && !mcpSession.CancelSceneLaunch(0).Result,
+        "MCP cancel_slot_launch / cancel_scene_launch: false with nothing queued");
+
+    // A slot's next-take length over MCP (#503): set on an empty slot, listed by get_session, refused
+    // on a filled slot or out of range; the global record length stays.
+    {
+        int emptyScene = -1;
+        var takeSnap0 = mcpSession.GetSession().Result;
+        for (int s = 0; s < takeSnap0.SceneCount && emptyScene < 0; s++)
+            if (!Array.Exists(takeSnap0.FilledSlots, x => x.TrackId == mcpT && x.Scene == s)) emptyScene = s;
+        int filledScene = Array.Find(takeSnap0.FilledSlots, x => x.TrackId == mcpT)?.Scene ?? -1;
+        mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "fixed", 3, 0).Wait();
+        var takeSnap = mcpSession.GetSession().Result;
+        var prep = Array.Find(takeSnap.PreparedSlots, x => x.TrackId == mcpT && x.Scene == emptyScene);
+        Check(prep is { Mode: "fixed", Bars: 3, Beats: 0 } && Math.Abs(prep.ResolvedBeats - 12) < 1e-9
+              && takeSnap.RecordLengthBeats == takeSnap0.RecordLengthBeats,
+            $"MCP set_session_slot_take_length shows in get_session ({prep?.Mode} {prep?.Bars} = {prep?.ResolvedBeats})");
+        bool McpRefused(Func<Task> call) { try { call().GetAwaiter().GetResult(); return false; } catch (ArgumentException) { return true; } }
+        Check(filledScene >= 0 && McpRefused(() => mcpSession.SetSessionSlotTakeLength(mcpT, filledScene, "fixed", 2, 0))
+              && McpRefused(() => mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "fixed", 65, 0))
+              && McpRefused(() => mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "sometimes")),
+            "MCP set_session_slot_take_length refuses a filled slot, 65 bars and an unknown mode");
+        mcpSession.SetSessionSlotTakeLength(mcpT, emptyScene, "global").Wait();
+        Check(!Array.Exists(mcpSession.GetSession().Result.PreparedSlots, x => x.TrackId == mcpT && x.Scene == emptyScene),
+            "MCP: a slot set back to global leaves PreparedSlots");
+
+        // A slot's landing rule over MCP (#481): set, listed by get_session, refused when unknown, removed by "off".
+        mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "scene", 0, 8).Wait();
+        var landSnap = mcpSession.GetSession().Result;
+        var land = Array.Find(landSnap.LandingRules, x => x.TrackId == mcpT && x.Scene == emptyScene);
+        Check(land is { Action: "scene", TargetScene: 0 } && Math.Abs(land.QuantBeats - 8) < 1e-9,
+            $"MCP set_session_slot_landing_rule shows in get_session ({land?.Action} {land?.TargetScene} q{land?.QuantBeats})");
+        Check(McpRefused(() => mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "sometimes"))
+              && McpRefused(() => mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "scene", landSnap.SceneCount))
+              && McpRefused(() => mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "next_scene", 0, 64)),
+            "MCP set_session_slot_landing_rule refuses an unknown action, a missing scene and a 64-beat quantum");
+        mcpSession.SetSessionSlotLandingRule(mcpT, emptyScene, "off").Wait();
+        Check(!Array.Exists(mcpSession.GetSession().Result.LandingRules, x => x.TrackId == mcpT && x.Scene == emptyScene),
+            "MCP: a rule set to off leaves LandingRules");
+    }
 
     // Rack: build an Instrument Rack, add a chain, drive a macro + trigger note.
     int mcpRackT = mcpInstr.AddInstrumentTrack(3).Result;   // 3 = Instrument Rack
@@ -15931,6 +16332,12 @@ Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
 Console.WriteLine("-- retry take --");
 foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
+Console.WriteLine("-- slot take length --");
+foreach (var (ok, label) in SlotTakeLengthTests.Run()) Check(ok, label);
+Console.WriteLine("-- take landed follow --");
+foreach (var (ok, label) in TakeLandedFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- session to arrangement --");
+foreach (var (ok, label) in SessionToArrangementTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");
@@ -15949,6 +16356,9 @@ foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- MIDI In switch --");
 foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
+foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
+Console.WriteLine("-- clip launch keys --");
+foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);
 Console.WriteLine("-- cue output --");
 foreach (var (ok, label) in CueOutputTests.Run()) Check(ok, label);
 Console.WriteLine("-- rc envelopes: live sustain --");
@@ -15959,6 +16369,12 @@ Console.WriteLine("-- group membership --");
 foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- play past the loop (#981) --");
+foreach (var (ok, label) in PlayPastLoopTests.Run()) Check(ok, label);
+Console.WriteLine("-- non-ASCII sample paths (#974) --");
+foreach (var (ok, label) in UnicodeSamplePathTests.Run()) Check(ok, label);
+Console.WriteLine("-- play vs count-in (#988) --");
+foreach (var (ok, label) in PlayCountInTests.Run()) Check(ok, label);
 using (var tempoLane = new NotaEngine())
 {
     int failed = tempoLane.TempoLaneSelfTest();
@@ -15981,6 +16397,7 @@ Console.WriteLine("-- nota twin --");
 foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ColorTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");
 foreach (var (ok, label) in InstrumentBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- synth lfo sync --");
@@ -16086,6 +16503,13 @@ foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- sidechain parts --");
 foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- controllers --");
+foreach (var (ok, label) in ControllerTests.Run()) Check(ok, label);
+foreach (var (ok, label) in ControllerRemapTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- device displays (specs/114) --");
+foreach (var (ok, label) in DisplayTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);

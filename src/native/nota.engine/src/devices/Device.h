@@ -22,6 +22,30 @@
 namespace nota {
 
 struct MidiEv;
+struct MidiKeyNotes;
+
+// Borrowed render data, valid until the device finishes the current block.
+struct MidiKeyBlock {
+    int32_t sourceTrack = -1;
+    const MidiEv* events = nullptr;
+    int32_t count = 0;
+    const MidiKeyNotes* start = nullptr;
+    int endMask = 0; // pitch classes held after the last event
+};
+
+// Devices that read MidiKeyBlock::start / endMask (the notes held before and after a block)
+// or override wantsMidiKeyWhenSilent hold one of these (Nota Color, #977). While none exists
+// in the process, the render keeps no held-note books and skips the silent tracks' MIDI-key
+// walk, so a project without such a device pays nothing for them (perf gate). Counting is
+// conservative: a device kept alive by the undo history still counts.
+inline std::atomic<int32_t> gHeldMidiKeyReaders{0};
+struct HeldMidiKeyReader {
+    HeldMidiKeyReader() noexcept { gHeldMidiKeyReaders.fetch_add(1, std::memory_order_relaxed); }
+    HeldMidiKeyReader(const HeldMidiKeyReader&) noexcept : HeldMidiKeyReader() {}
+    HeldMidiKeyReader& operator=(const HeldMidiKeyReader&) noexcept { return *this; }
+    ~HeldMidiKeyReader() { gHeldMidiKeyReaders.fetch_sub(1, std::memory_order_relaxed); }
+};
+inline bool heldMidiKeysRead() noexcept { return gHeldMidiKeyReaders.load(std::memory_order_relaxed) > 0; }
 
 class RackCore;
 
@@ -89,6 +113,16 @@ class Device {
     // Message thread only.
     virtual std::string pluginIdentifier() const { return {}; }
 
+    // A hosted plug-in loads after it is inserted (#979, specs/113): 0 loaded (or not a hosted
+    // plug-in), 1 waiting for another plug-in, 2 loading, 3 not responding, 4 couldn't load;
+    // the reason code (nota_device_plugin_load_reason_code) says why, with its argument (a
+    // plug-in's name, the format's message). Actions: 1 keep waiting, 2 give up, 3 try again,
+    // 4 abandon (the device left the project while it loaded). Message thread.
+    virtual int32_t pluginLoadState() const { return 0; }
+    virtual int32_t pluginLoadReasonCode() const { return 0; }
+    virtual std::string pluginLoadReasonArg() const { return {}; }
+    virtual void pluginLoadAction(int32_t /*action*/) {}
+
     // Built-in parameter interface (M4-4/5). Params are plain floats in
     // [min,max]; get/set is atomic and lock-free (UI thread <-> audio thread).
     // Hosted plugins keep the defaults (0 params) — they use their own editor.
@@ -112,6 +146,12 @@ class Device {
     virtual void setParam(int32_t index, float value) {
         (void)index;
         (void)value;
+    }
+    virtual bool isLatencyConfigurationParam(int32_t) const { return false; }
+    virtual bool isPresetParam(int32_t) const { return true; }
+    // Latency configuration changes go through Engine so it can update compensation.
+    void setLiveParam(int32_t index, float value) {
+        if (!isLatencyConfigurationParam(index)) setParam(index, value);
     }
 
     // Hosted-plugin parameter automation (M9-B). Distinct from the built-in
@@ -233,7 +273,13 @@ class Device {
     // returns true; the engine then hands it the sidechain source track's post-FX note
     // events for the block (offsets within the block) right before process(). Audio thread.
     virtual bool wantsMidiKey() const { return false; }
+    // A note display can consume its MIDI key even when its audio chain is skipped. A device
+    // returning true must hold a HeldMidiKeyReader, or the render never asks it.
+    virtual bool wantsMidiKeyWhenSilent() const { return false; }
     virtual void setMidiKey(const MidiEv* /*evs*/, int32_t /*n*/) {}
+    virtual void setMidiKeyBlock(const MidiKeyBlock& block) {
+        if (block.events) setMidiKey(block.events, block.count);
+    }
     // With no sidechain source routed, a device that returns true here gets its own track's
     // notes through setMidiKey instead (Nota Shutter's pattern retrigger).
     virtual bool wantsOwnMidiKey() const { return false; }

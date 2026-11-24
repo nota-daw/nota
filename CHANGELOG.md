@@ -22,6 +22,321 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.61.1] — 2026-11-24
+
+### Added
+- **Nota Remote: Macros is a controller surface with an LED display** (specs/114).
+  - **Track ◀ ▶** and **Device ◀ ▶** buttons step through the tracks and through the track's
+    devices in chain order; **page buttons** walk the device's controller pages, so the phone
+    shows the same eight knobs as a MIDI controller. With Follow Nota's selection on, a press on
+    the phone moves Nota's selection and the controller, and the controller moves the phone.
+  - A **128 × 48 LED display** above the knobs pictures the page for every built-in instrument,
+    audio effect and MIDI effect: filter response over the live spectrum, envelopes,
+    oscillators, LFOs, EQ curves, compressor and limiter curves with the live level, Reverb's
+    decay with your audio's measured tail, delay taps, chorus / flanger sweeps, phaser notches,
+    keyboards for Chord and Scale. Plug-ins and racks show their knobs as bars. While a knob
+    turns, its name and value take the top row.
+  - Nota draws the picture and sends the dots (only when they change), so every phone on the
+    same page sees the same frame.
+  - **Follow** (on by default, kept per phone): Macros goes where the controller goes — another
+    track, device or page — and the phone's buttons move the controller; off, the phone stays put.
+  - On its side the phone puts the eight knobs in one row so the display gets most of the screen;
+    the corner button opens the display full screen, with the page steps under it.
+- **Nota Color** (#977, specs/113) is a built-in audio effect for color bass. It combines
+  semitone shifts, tuned resonance and attack protection. Pick a scale or custom notes, set the
+  processing band, and see the input and shifted components on the live spectrum.
+  Morph and Gate shape the shifted components. The card has S and L sizes, and
+  Mute low and Mute high independently silence the sidebands in the wet signal.
+  Set the FFT to 512, 1024 (default), or 2048 samples during playback. Gate and
+  Pre pitch can also be switched live, with automatic delay compensation.
+  Pre pitch shifts the band before tuning, and Post pitch fine-tunes correction
+  and resonance.
+- **Nota Color** can follow another track's Arrangement notes and live MIDI after
+  its MIDI effects. The keyboard shows the active notes and correction fades
+  out when they are released.
+- **Session: play the grid from the keyboard, and buttons you can hit** (#364, specs/112).
+  - With the arrows on a slot, **Return** does what a click does: launches the clip, starts
+    recording in an armed track's empty slot, and on a recording slot ends the take.
+  - **⇧Return** stops the selected track (a group: all its tracks), **⌘Return** (Ctrl+Return)
+    launches the selected scene row, **⌘⇧Return** (Ctrl+Shift+Return) stops every clip. All
+    four are rebindable in Settings → Shortcuts; outside the Session, Return is still Stop.
+  - The record circle and stop square in empty slots are almost twice as big, with a bigger
+    click area; the stop buttons under the tracks and Stop All got a larger glyph too.
+  - A controller's launch button records into an armed empty slot as well.
+- **Session: a slot can launch a scene once its recorded take is ready to play** (#481, specs/111).
+  - An empty slot's inspector (and its right-click menu) has **When the take lands**: Off, Next
+    scene, or Launch *a scene*, and **On**: the global launch quantization or a quantum of its own.
+    The grid shows "→ scene" on the slot.
+  - It fires once per take, when the take has become a playable clip — not when Stop is pressed,
+    and not waiting for the project to be saved. The scene launches on the next boundary after
+    that, like any scene launch: it shows as queued, can be cancelled, and a later launch replaces it.
+  - Nothing fires for a take stopped in its count-in or before its boundary, a discarded attempt,
+    an empty MIDI take, an overdub, Stop / Stop all clips, or while follow actions are off. Undoing
+    the take before its boundary withdraws the launch; Undo, Redo and reopening a project never fire it.
+  - The rule belongs to the slot: it stays under the clip, travels with its scene row, follows the
+    scene it names (Off if that scene is deleted), and is saved with the project.
+  - MCP: `set_session_slot_landing_rule`; `get_session` lists the rules.
+- **Controllers: remap one function without redoing the setup** (#973, specs/110).
+  - Preferences → MIDI → a controller with a profile → **Edit mapping…** opens on its current
+    mapping: every function grouped as in the setup wizard (knobs, faders, transport, track /
+    bank / page, Session, extras) with the control it is on, or "—". Click a function (or
+    Enter), press or move a control — learned as the wizard does (note / CC / 14-bit / NRPN,
+    encoder type, one encoder or two buttons for a pair) — and Finish; nothing else changes.
+  - A control that already does something else is named in the row; **Move here** takes it
+    over, Cancel leaves both. A function can be cleared (×) or put back (↺).
+  - **+ Command…** in Extras puts any command from the command palette on a spare button.
+  - Moving a control while nothing listens highlights the function it does; *Unassigned only*
+    shows the gaps and goes on to the next one after each learn. ↑ / ↓, Enter, Delete, Esc,
+    Cmd/Ctrl+Enter work in the window.
+  - Editing a shipped profile saves your own copy in the controllers folder that replaces it,
+    keeping its init messages and LED feedback; **Back to shipped profile** removes the copy.
+  - **Learn everything again** runs the step-by-step wizard with each step already on the
+    current control — Keep (Enter) keeps it, a new control replaces it.
+- **Recording: the Session performance goes into the Arrangement** (#971, specs/109). Every
+  Arrangement take now also records what you play in the Session, as Arrangement Record does in
+  other DAWs.
+  - Each Session clip that plays during the take lands on its track's Arrangement lane where it
+    really played — from the beat it started (after launch quantize) to the beat it stopped —
+    whether it was launched by hand, by a scene, by a follow action, from Nota Remote or a
+    controller. While the take runs, the Arrangement already shows them, growing with the
+    playhead. A looping slot is repeated for as long as it played: an instrument slot as one
+    clip, an audio slot as one clip per repetition. Legato launches and clips already playing
+    when Record starts are written from where they were.
+  - Only what was played is replaced: a track's own clips stay before the launch and after the
+    stop, and tracks that played no Session clip keep their Arrangement as it was.
+  - Notes you play on an armed instrument track over a playing slot join the clip it writes.
+    An armed audio track records its input as before.
+  - A scene with its own tempo writes the change to the master Tempo lane when the project has
+    no Tempo automation yet.
+  - The whole take — Session clips, input takes, automation — is one undo step, and
+    **Discard and retry take** (⌘.) drops all of it.
+  - **Record with nothing armed** while a Session clip plays (or waits to start) now records the
+    performance alone ("Recording the Session performance…") instead of arming the selected
+    track; with the Session silent it arms the selected track as before.
+- **Session: turn the grid — scenes across, tracks down** (#968, specs/108).
+  - **Settings → Editing → Session → Session grid**: *Scenes down* (a scene per row, a track per
+    column — as before) or *Scenes across* (a scene per column, a track per row); the turn button
+    in the Session toolbar switches it too. The open Session view turns at once; the choice is
+    kept on this computer, not in the project.
+  - **Scenes across**: scene names and launch buttons run across the top (+ Scene at the end),
+    track headers sit at the left, each track's Stop and its I/O · Sends · Mixer sections sit at
+    the right end of its row, Stop All above them. Clips, groups, Returns / Master, clip and
+    scene drags, Browser drops and the inspector work as before, turned.
+  - **Arrow keys follow the screen** (← / → scenes and ↑ / ↓ tracks when turned). The Session
+    selection commands are now named by what they do — *Select the previous / next scene*,
+    *Select the previous / next track* — and keep their meaning either way round, so controller
+    buttons and shortcuts bound to them step by scene and by track as before.
+  - **Nota Remote and Nota NX** have a *Session grid* choice too: **As in Nota** (the default —
+    the Scenes grid turns with the desktop), *Scenes down* or *Scenes across*. A phone that had
+    picked Scenes across keeps it. Nota NX draws the turned grid with scene launch pinned at
+    the top and track names + Stop at the left.
+- **Controllers: see what the knobs are on, and step through a track's devices** (#929,
+  specs/107).
+  - **Always in view**: the controller chip next to **MIDI** in the top bar reads
+    *track · device · page* (or *Volume · tracks 9–16* in a mixer mode), in every view, and
+    follows each track, device and page change at once. In the Session, where the Clip editor
+    keeps the panel, it is how you see the device. On the Devices panel the device the knobs are
+    on carries an orange line and a **Controller** tag. Click the chip → **Show device** opens it.
+  - **Track buttons select the track**: Track ◀ / ▶ now select the previous / next track in
+    every view (as a click on its header — the knobs, the Devices panel and the Mixer follow),
+    and the eight-track bank moves along to keep it inside; Bank ◀ / ▶ still step by eight. In
+    the Session they move the selection to the same scene of the next track.
+  - **Next / Previous device**: two new commands walk the track's chain — MIDI effects, the
+    instrument, the audio effects, a rack as one device — and select it, scrolled into view.
+    Bind them to controller buttons in **Set up…** (a new Devices step), from a control's
+    right-click menu, or to keys in Settings → Shortcuts. MCP: `step_controller_device`,
+    `get_session_selection`.
+  - **In Nota Remote**: the Scenes grid outlines the slot (or scene) selected in Nota — moved by
+    the mouse or the controller — and the header shows what the knobs are on. A phone that
+    follows Nota's selection turns its Macros screen to the controller's device.
+- **Controller auto-mapping** (#100, specs/051): plug in a controller and it works — no MIDI
+  Learn needed.
+  - **Recognised on plug-in**: Nota knows a controller by a profile (port name and its MIDI
+    identity). Transport buttons drive Play, Stop, Record, Loop, Rewind and Forward; the faders
+    move a bank of eight tracks (bank / track buttons shift it; the tracks under it are marked in
+    the Arrangement and the Mixer); transport LEDs follow. Keys and pads keep playing. A fader
+    move is one undo step and writes automation like the on-screen fader. Profiles ship for the
+    Arturia KeyLab Essential 61 mk3 (its DAW program, or its MCU/HUI port in MCU mode), the
+    Novation Launchkey MK3 (DAW mode) and the Behringer X-Touch Mini. A control you map with MIDI
+    Learn keeps your mapping. Extra buttons can run Nota commands: on the KeyLab, Undo, Redo,
+    Metro, Save, Quantize and Tap do what their labels say.
+  - **Rebind from a control's menu**: right-click a device knob, a mixer fader or pan, or a
+    transport button — **Controller** names the hardware control that drives it, **Unbind**
+    removes just this parameter, **Bind to ▸** picks another knob, fader or button by name (a
+    pinned control drives it whatever the bank), **Back to default** undoes it. Device changes
+    are saved as its pages; track changes with the project; transport / master changes globally.
+  - **Session from the controller**: in the Session view the jog wheel walks the clips, the track
+    buttons the tracks, and a launch button starts or stops the selected clip (the KeyLab's encoder
+    push); buttons for up / down / left / right, stop track, launch scene and stop all can be set up.
+  - **Set up… shows each control**: a picture of the knob, fader, button or wheel each step wants,
+    what the controller sends as it arrives, the next step by itself once a control is learned,
+    "No more knobs" to skip a group, Back, and steps for Session, Undo / Redo / Metronome / Save /
+    Tap tempo and the jog wheel; a strip of groups to jump between and the learned controls as
+    chips to redo.
+  - **Pairs as an encoder or two buttons**: previous / next track, bank and page, rewind / forward,
+    the Session's up / down and left / right, undo / redo and the new Tempo − / + can each be one
+    encoder (right and left) or two buttons; Set up… asks for a pair in one step.
+  - **Knobs follow the selected device**: the eight knobs control the selected device — else
+    the selected track's instrument, else its first device — page by page. Every built-in
+    instrument, effect and MIDI effect has pages of the parameters you play first; racks show
+    their macros, devices inside racks work too, and a plug-in gets its parameters in order,
+    eight per page. The device card numbers the eight controls of the current page and shows
+    the page. Knob modes **Device**, **Volume**, **Pan** and **Send A, B, …** (for the bank's
+    tracks) switch from the controller's mode buttons or the controller chip next to **MIDI**
+    in the top bar.
+  - **No jumps**: a knob or fader that is not where the value is picks it up when it gets
+    there (pickup); until then a small rail under the control shows where the hardware is.
+    Switch it off per controller in Preferences.
+  - **Mackie Control and HUI surfaces**: channel strips (motor fader, V-pot and its ring,
+    Rec / Solo / Mute / Select, track names on the scribble strips, meters), master fader,
+    transport, bank / channel and jog, with feedback whenever anything changes in Nota.
+    Touching a motor fader is the movement — for automation and undo — and Nota leaves it
+    alone while you hold it. Any port can be driven as Mackie Control or HUI from Preferences.
+  - **Make it yours**: **Edit controller pages…** in a device's menu picks the parameters of
+    each page for every device of that kind (saved for you and in the project, so it opens the
+    same elsewhere). **Set up…** in Preferences walks an unknown controller through its knobs,
+    faders and buttons and saves a profile for it. Your own profile files go in the
+    `controllers` folder of Nota's data directory (**Open profiles folder**, **Reload
+    profiles**); Preferences lists any problem in them.
+  - MCP: `list_controllers`, `set_controller`, `list_controller_profiles`,
+    `reload_controller_profiles`, `get_controller_focus`.
+- **Session: a take length per empty slot** (#503, specs/106). An empty slot's inspector has a
+  **Take length**: **Global** (follow **Fixed** in the toolbar, as before — every slot starts
+  here), **Open** (record until stopped, whatever Fixed says), or a length of its own from
+  1 beat to 64 bars (1, 2, 3, 4, 8, 16 bars, or any bars + beats); the slot's right-click menu
+  has the same picks under **Take length**. The next take recorded into that slot starts on
+  the launch boundary and stops after that length — so slot A can be ready for 3 bars and
+  slot B for 8 without touching Fixed, the tempo or any clip. Slots recording together each
+  stop on their own length; stopped by hand before it, such a take is cut to whole bars of
+  what it recorded. The grid shows the length on the empty slot. The value belongs to the
+  slot: a cancelled count-in or a retried take leaves it, it
+  stays (hidden) under the clip a take leaves and shows again when the slot is emptied or the
+  take undone, changing it is one undo step, and it is saved with the project. MCP:
+  `set_session_slot_take_length`, and `get_session` lists prepared slots.
+- **Session: cancel a queued launch before it starts** (#480, specs/104). Queued the wrong clip
+  or scene for the next bar? **⌥-click** (Alt-click) its blinking launch button, or right-click
+  it and choose **Cancel launch**, before the launch point. The clip or scene never starts, and
+  everything playing carries on at the same place in its loop — the transport keeps running.
+  Cancelling a scene takes back all of it: its clips don't start, tracks it would have stopped
+  keep playing, its tempo / time-signature change doesn't apply and its follow action doesn't
+  fire; a scene follow that was running before it carries on. ⌥-click a group's slot to cancel
+  its tracks' queued launches in that scene. In Nota Remote, press and hold a queued clip, group
+  slot or scene to cancel it. Clicking a queued clip or scene again still leaves it queued, Stop
+  still stops the track at the launch point, and Stop All now also drops a queued scene's tempo
+  change. AI assistants get `cancel_slot_launch` and `cancel_scene_launch`.
+- **Session: bypass one clip's follow actions** (#499, specs/103). The switch in the clip
+  inspector's **Follow action** head — or **Bypass follow actions** in the clip's right-click
+  menu — holds that clip: it keeps looping and can still be launched by hand, while every other
+  clip's follow actions and the global **Follow** switch carry on. Its A/B actions, chances,
+  Jump target and time stay as they were (and stay editable, greyed, under **Bypassed**); the
+  slot shows a bypass ring next to its length. Switch it back on and the action fires at the
+  next multiple of its time since the clip launched — the point where it would have fired
+  anyway — never at once as a catch-up. Saved with the project; undoable; copies of the clip
+  keep it; the MCP `get_session` / `set_session_clip` tools read and set it.
+- **Nota Strata: export one layer on its own** (#482, specs/102). Right-click a layer in
+  Strata's layer list and choose **Export layer N as WAV…** to get just that pass — say, the
+  vocal overdub without the cello under it — for editing elsewhere. The file is the layer as
+  it was recorded: the input after Input gain, starting at the loop's top and exactly one loop
+  long, so it lines up with the loop. Speed, Reverse, Feedback, the layer's level and its mute
+  aren't applied, and the export leaves the loop untouched — no muting or soloing needed. It
+  works the same after the project is saved and reopened. A layer that is still recording, or
+  a loop whose first pass hasn't closed, shows the entry unavailable and says why instead of
+  writing the mixed loop. The Export button still writes the whole loop as you hear it.
+- **Nota Remote: the Session grid keeps its controls in view, shows groups and turns** (#662,
+  specs/102).
+  - **Pinned controls**: the scene launch buttons, the track names, every track's Stop and
+    Stop All stay at the edges of the Scenes screen while the clips scroll under them, so a
+    scene launches or a track stops with one tap wherever the grid is scrolled.
+  - **Groups**: group tracks now appear in the grid, as on the desktop. Tap a group's name to
+    fold or unfold its tracks (the same choice as on the Mixer screen). A group's slot shows
+    how many of its tracks have a clip in that scene ("2 of 3"), with a bar per track. Tap the
+    slot to launch all those clips together, or the group's Stop to stop all its tracks.
+  - **Orientation**: ⋯ → **Session grid** chooses **Scenes down** (a scene per row, as in
+    Nota, the default) or **Scenes across** (a scene per column, a track per row with its
+    Stop beside its name). Each phone keeps its own choice.
+- **A Semitones knob on every Operator** (#589). Each of the four operators gains a SEMI
+  knob between CRS and FINE: a whole-semitone offset from that operator's coarse ratio, ±12
+  st, 0 at centre. CRS stays the ratio and FINE the cents, so a ×1 operator at +7 sounds the
+  1.5 fifth the 16-ratio table cannot reach, and a modulator can be placed at any interval
+  without transposing the clip. Each row's WAVE is now four drawn waveforms in a 2 × 2 block
+  rather than four words, so the table keeps its LEVEL slider and the card its 700 × 260 size.
+  Saved projects and factory presets read 0 st and are unchanged.
+
+### Changed
+- **Nota Color** uses a single HQ engine. Older prototype sessions keep their
+  control values and load into HQ, including sessions saved in Polyphonic mode.
+- **Nota Color Gate** follows the dry spectrum and gates the entire processed
+  band, including the resonance tail. Gate adds one FFT window of latency.
+  Both card sizes show the total latency below the spectrum.
+
+### Fixed
+- **Typing into a plug-in's text field on macOS** (#986). In a plug-in editor that draws
+  its own text fields (AmpliTube 5, JUCE-built plug-ins…), the keys of the computer-keyboard
+  note map played notes instead of typing, so `a w s e d f t g y h u j k` never reached the
+  field. Nota now sees when the plug-in has a text caret and leaves all typing to it; with
+  no text field focused, those keys play notes as before.
+- **A plug-in that hangs while it loads no longer freezes Nota** (#979, specs/113). SSL / Slate
+  Digital plug-ins (VST3 and AU) froze Nota on macOS as soon as they were inserted: a plug-in's
+  binary loaded on the main thread, and a copy-protection wrapper (PACE / iLok) that waits for the
+  main run loop while it loads waited forever.
+  - The binary now loads in the background. The device is in the chain at once — an effect passes
+    audio through, an instrument is silent — and becomes the plug-in when it is ready. Nota keeps
+    playing and editing meanwhile, for an insert, a project open, a preset or a duplicate alike.
+  - After 30 seconds the card says the plug-in isn't responding, with **Keep waiting** and
+    **Give up**. A plug-in that couldn't load stays in the chain with its settings, which a save
+    keeps, and **Try again** on its card.
+  - If Nota still stops while loading a plug-in, the next start names it, and projects bring it up
+    as "couldn't load" instead of loading it again, until you try it again.
+- **Play from past the loop plays on** (#981). With the loop on, Play from a playhead after
+  the loop's end jumped straight to the loop start. Now the loop only wraps a playhead that
+  plays into its end: launched (or seeked) past it, playback carries on, and switching the
+  loop on or moving it behind the playhead lets it carry on too. Seek back before the loop
+  end (or slow the tempo so the playhead lands before it) and it loops again. Recording from
+  past the loop records straight through, where you hear it, not into the loop; seek out of
+  (or back into) the loop during a take and what was recorded so far lands as a clip, and the
+  take carries on where you now are.
+- **Nota starts in seconds on Linux with the MCP server on** (#966). Launched from the app
+  menu, startup took 25–40 s: the MCP server's web host used the current folder — the home
+  folder — as its content root and watched all of it for a settings file, one inotify watch
+  per folder. It uses the app's own folder now.
+- **An armed audio track's meter shows its input again** (#987). When the audio input
+  didn't open the moment a track was armed or set to monitor (on macOS, while the
+  microphone permission was still being asked, or the interface not ready yet), Nota never
+  tried again for the meter: takes still recorded, but the track's meter stayed at zero and
+  monitoring was silent. Any later successful open of the input — a take starting —
+  now brings the input meter and monitoring back.
+- **Samples in folders with accented names play on Windows** (#974). A WAV, FLAC or MP3
+  whose folder or file name had a character outside plain English — `Música`, `Canción`,
+  `ñ`, Cyrillic, CJK — couldn't be opened on Windows: it didn't sound, didn't show its
+  waveform and read as unsupported. Nota now opens these paths as Unicode.
+- **Play starts at once with a count-in set** (#988). The count-in also ran before plain Play
+  (the button, Space and ⇧Space), so Play lit up while the transport stood still for the
+  count-in bars — and with the clicks routed to Cue only, nothing seemed to happen at all. The
+  count-in is now for Record only: Record from stop (Arrangement or a Session slot) still
+  clicks it out first, Play rolls immediately.
+- **Nota Color** sleeps after its resonant tail fades, reducing DSP usage during silence.
+- **Nota Color** keeps the width and spacing of its spectrum lines consistent
+  across display scales. Tuned uses the inverse of the active accent and
+  follows theme changes. Dry and Tuned show nearby bass tones
+  as separate peaks, including with opposite stereo polarity.
+- **AI models install again** (#969). Every AI model (Separate Stems, Convert to MIDI, Manual
+  search) failed with "Couldn't download ONNX runtime (404)": the repository Nota fetched ONNX
+  Runtime 1.23.2 from is gone. The runtime now comes from Nota's own mirror on
+  `nota-daw/nota-models`, taken from Microsoft's signed NuGet package and pinned to a size and
+  sha256 as before. Only the library and its license files are downloaded now, not the whole
+  release archive (on Windows 14 MB instead of 78 MB). A runtime already installed from the
+  old source keeps working and isn't downloaded again.
+- **Typing a value replaces its unit too** (#661). A read-out opened for typing (double-click,
+  ⌥-click, **Type value…**, Tab) selected only the number, so typing `500` over `2.00 kHz`
+  kept the unit, read 500 kHz and jumped to the top of the range. The whole read-out is
+  selected now, unit included: a bare number takes the unit shown when it fits, else the unit
+  that fits — `500` there is 500 Hz, `12` over `10.0 ms` is still 12 ms, and `1.2k` or
+  `1.2 kHz` work as before.
+- **Stopping a Session take before it starts leaves the slot empty** (#503). Stopping a fresh
+  MIDI take while it still waited for its launch boundary used to leave an empty clip in the
+  slot (as long as **Fixed**), which then played. Now nothing was recorded, so nothing stays:
+  the slot is empty, no undo step is left, and the clip the track was playing plays on.
+
 ## [0.60.4] — 2026-11-19
 
 ### Added

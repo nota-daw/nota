@@ -1,17 +1,22 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The header every screen sits under: the track picker (‹ › step, tap for the list), the
      mini transport, the link indicator and the ⋯ menu. Tapping the position opens the big
-     transport. Portrait stacks it in two rows; landscape and tablet keep one. -->
+     transport. Portrait stacks it in two rows; landscape and tablet keep one. While a hardware
+     controller is on in Nota, what its knobs are on shows too (specs/107): a line beside the
+     link on a tablet, the picker's second line on a phone. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import { device, toggleFullscreen, type Form } from '../lib/device.svelte';
   import { bpm, unit } from '../lib/fmt';
+  import { focusLine } from '../lib/focus';
 
   let { form }: { form: Form } = $props();
 
   const t = $derived(app.track);
+  const focus = $derived(focusLine(app.foc));
   const sub = $derived.by(() => {
     if (!t) return app.proj ? 'No track to play' : 'Connecting…';
+    if (focus && form !== 'tablet') return `Knobs: ${focus}`;
     const others = (app.who[String(t.id)] ?? []).join(', ');
     return t.dev + (app.proj?.follow ? ' · following Nota' : '') + (others ? ` · with ${others}` : '');
   });
@@ -104,6 +109,12 @@
   </div>
 
   <div class="status">
+    {#if focus && form === 'tablet'}
+      <span class="focus" title="{app.foc?.ctl}: {focus}">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" /><path d="M7 7 L7 3" /></svg>
+        <span class="ft">{focus}</span>
+      </span>
+    {/if}
     <button class="link" onclick={linkTip} aria-label="Connection: {link.label}">
       <span class="ldot" class:blink={link.blink} style:background={link.dot}></span>
       <span class="lt" style:color={link.ink}>{link.label}</span>
@@ -156,6 +167,11 @@
 
   .status { order: 2; display: flex; align-items: center; gap: 4px; }
   .phoneLand .status, .tablet .status { order: 3; }
+  /* The controller's focus: quiet ink, the orange-lines family for the knob glyph (it reads as the
+     desktop's knob numbers). */
+  .focus { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; max-width: 260px; border-radius: min(var(--r-field), 12px); background: var(--bg-sunken); }
+  .focus svg circle, .focus svg path { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .ft { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .link { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: min(var(--r-group), 14px); }
   .lt { font-size: 11px; white-space: nowrap; }
   .ldot { width: 7px; height: 7px; border-radius: 50%; }

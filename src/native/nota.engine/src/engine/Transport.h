@@ -27,7 +27,10 @@ class Transport {
 
     // --- control (applied on the audio thread) ---
     void play() {
-        if (!playing_) ++presentationEpoch_;
+        if (!playing_) {
+            ++presentationEpoch_;
+            updatePastLoopEnd(); // Play from past the loop plays on (#981)
+        }
         playing_ = true;
         publish();
     }
@@ -77,6 +80,7 @@ class Transport {
         ++presentationEpoch_;
         playheadSamples_ = samplesAtBeat(beat);
         startAnchorSamples_ = playheadSamples_;
+        updatePastLoopEnd();
         publish();
     }
 
@@ -99,6 +103,18 @@ class Transport {
     }
 
     bool isLooping() const { return loopEnabled_; }
+    // The loop wraps the playhead only when it rolls into the loop end. Launched (or seeked,
+    // or the loop moved) to at or past the loop end, it plays on past it (#981) — the loop
+    // takes over again once a seek puts the playhead before its end.
+    bool wrapsAtLoopEnd() const { return loopEnabled_ && !pastLoopEnd_; }
+    // A tempo, tempo-map or sample-rate change keeps the sample position, so it can put a
+    // playhead that played on past the loop back before its end: the loop takes it again.
+    // Only ever cleared here, never set — a playhead that rolled into the end still wraps.
+    // The render loop calls it at each segment start (inside the render scope, where the
+    // tempo map may be read), so every kind of clock change is covered in one place.
+    void rejoinLoop() {
+        if (pastLoopEnd_ && playheadSamples_ < loopEndSamples() - 0.5) pastLoopEnd_ = false;
+    }
     double loopStartSamples() const { return samplesAtBeat(loopStartBeat_); }
     double loopEndSamples() const { return samplesAtBeat(loopEndBeat_); }
     int timeSigDenom() const { return tsDenom_; }
@@ -111,6 +127,11 @@ class Transport {
     // Atomic mirror for the UI (poll these; never touch the private fields).
     double uiPositionBeats() const { return uiBeats_.load(std::memory_order_relaxed); }
     bool uiIsPlaying() const { return uiPlaying_.load(std::memory_order_relaxed); }
+    // The transport plays on past the loop end (#981): a running loop take must stop folding.
+    bool uiPastLoopEnd() const { return uiPastLoopEnd_.load(std::memory_order_relaxed); }
+    // The beat it began playing on from (a seek or Play target): where a loop take's audio
+    // stops belonging to the loop.
+    double uiPastLoopFromBeats() const { return uiPastLoopFrom_.load(std::memory_order_relaxed); }
     double uiBpm() const { return uiBpm_.load(std::memory_order_relaxed); }
     // Where Stop rewinds to / Play launched from (the insert marker), in beats.
     double uiAnchorBeats() const { return uiAnchorBeats_.load(std::memory_order_relaxed); }
@@ -121,6 +142,10 @@ class Transport {
 
   private:
     void publish();
+    void updatePastLoopEnd() {
+        pastLoopEnd_ = loopEnabled_ && playheadSamples_ >= loopEndSamples() - 0.5;
+        if (pastLoopEnd_) pastLoopFromSamples_ = playheadSamples_; // a Play, seek or loop move: playing on from here
+    }
     // Keep map searches out of these small fixed-clock accessors, so callers can
     // inline the ordinary arithmetic without pulling in the compiled-map lookup.
     double mappedBpm() const;
@@ -137,12 +162,16 @@ class Transport {
     double playheadSamples_ = 0.0;
     double startAnchorSamples_ = 0.0; // launch position Stop rewinds to (insert marker)
     bool loopEnabled_ = false;
+    bool pastLoopEnd_ = false; // the playhead got past the loop end without rolling into it
     double loopStartBeat_ = 0.0, loopEndBeat_ = 0.0;
     bool metronome_ = false;
 
     std::atomic<double> uiBeats_{0.0};
     std::atomic<double> uiBpm_{120.0};
     std::atomic<bool> uiPlaying_{false};
+    std::atomic<bool> uiPastLoopEnd_{false};
+    std::atomic<double> uiPastLoopFrom_{0.0};
+    double pastLoopFromSamples_ = 0.0;
     std::atomic<double> uiAnchorBeats_{0.0};
 
     // Atomic payloads avoid data races even when a reader overlaps the writer.

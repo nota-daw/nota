@@ -72,6 +72,7 @@ internal static class HostedRenderPoolTests
         {
             int t = inserts ? e.AddInstrumentTrack() : e.AddPluginInstrumentTrack(catalog);
             int device = inserts ? e.AddTrackEffectPlugin(t, catalog) : -1;
+            e.WaitPluginLoads(60000); // plug-ins load after they are inserted (specs/113)
             e.SetTrackVolume(t, 0.2f);
             e.SetTrackPan(t, (i - 1.5f) / 4);
             int clip = e.AddMidiClip(t, 0, 16);
@@ -166,12 +167,13 @@ internal static class HostedRenderPoolTests
                 var ids = Enumerable.Range(0, e.TrackCount).Select(i =>
                     e.TryGetTrackInfo(i, out var track) ? track.Id : -1).ToArray();
                 int effect = e.AddTrackEffectPlugin(ids[0], catalog);
+                e.WaitPluginLoads(60000);
                 return Render(e, 80, i =>
                 {
                     if (i == 8) e.SetDeviceBypassed(ids[0], effect, true);
                     if (i == 16) e.SetDeviceBypassed(ids[0], effect, false);
                     if (i == 24) e.RemoveDevice(ids[0], effect);
-                    if (i == 32) e.SetTrackInstrumentPlugin(ids[1], catalog);
+                    if (i == 32) { e.SetTrackInstrumentPlugin(ids[1], catalog); e.WaitPluginLoads(60000); }
                     if (i == 48) e.RemoveTrack(ids[2]);
                     if (i == 56 && !e.Undo()) throw new InvalidOperationException("Hosted remove undo failed");
                 });
@@ -245,6 +247,7 @@ internal static class HostedRenderPoolTests
                 rack.RenderOffline(new float[Block * 2], Block, Rate);
                 int t = rack.AddInstrumentRackTrack();
                 rack.RackAddPluginInstrumentChain(t, catalog);
+                rack.WaitPluginLoads(60000);
                 int clip = rack.AddMidiClip(t, 0, 16);
                 rack.SetClipNotes(t, clip, [new NotaNote(60, 0, 8, 0.8f)]); rack.Play();
                 double cpu = rack.RenderThreadsCpuSeconds;

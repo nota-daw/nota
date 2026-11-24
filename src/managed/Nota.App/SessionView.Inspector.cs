@@ -268,13 +268,30 @@ public sealed partial class SessionView
         launch.Children.Add(Row(Loc.T("session.inspector.velocity"), new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
-        // Follow actions.
+        // Follow actions. The head's switch bypasses this clip's follow actions without changing
+        // them (#499); it stays out of the greyed body so "Bypassed" / "Off globally" stay legible.
         bool follow = _engine.SessionFollow;
+        bool bypassed = p.FollowBypass != 0;
+        var faBox = new StackPanel { Spacing = 10 };
         var fa = new StackPanel { Spacing = 10 };
-        var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        faHead.Children.Add(SectionHead(Loc.T("session.inspector.follow_action")));
-        if (!follow) { var off = Mono(Loc.T("session.inspector.off_globally"), 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
-        fa.Children.Add(faHead);
+        var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 8 };
+        var faTitle = SectionHead(Loc.T("session.inspector.follow_action"));
+        faTitle.VerticalAlignment = VerticalAlignment.Center;
+        faHead.Children.Add(faTitle);
+        string? faState = bypassed ? Loc.T("session.inspector.bypassed") : !follow ? Loc.T("session.inspector.off_globally") : null;
+        if (faState is not null)
+        {
+            var st = Mono(faState, 9, bypassed ? NotaPalette.TextSecondary : NotaPalette.TextTertiary);
+            st.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(st, 1); faHead.Children.Add(st);
+        }
+        var faSwitch = new SwitchTrack { IsOn = !bypassed, IsDim = !follow };
+        var faToggle = new Button { Padding = new Thickness(0), MinHeight = 0, Height = 14, Background = Brushes.Transparent, MinWidth = 0, Content = faSwitch, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(faToggle, Loc.T("session.inspector.follow_switch_tip"));
+        faToggle.Click += (_, _) => Set(x => { x.FollowBypass = x.FollowBypass != 0 ? 0 : 1; return x; });   // Set's RefreshSlot rebuilds the inspector
+        Grid.SetColumn(faToggle, 2); faHead.Children.Add(faToggle);
+        faBox.Children.Add(faHead);
+        faBox.Children.Add(fa);
         string ActionLabel(int a) => Array.Find(FollowActions, x => (int)x.Action == a).Label ?? Loc.T("common.none");
         Control ActionRow(string slot, int action, Action<int> setAction, Control chance)
         {
@@ -322,8 +339,8 @@ public sealed partial class SessionView
         double after = p.FollowBeats > 0 ? p.FollowBeats : len;
         fa.Children.Add(Row(Loc.T("session.inspector.after"), Chip(FormatDuration(after), false, a => Pick(a, FollowTimes, b => Math.Abs(b - p.FollowBeats) < 1e-6,
             b => Set(x => { x.FollowBeats = b; return x; })))));
-        s.Children.Add(fa);
-        if (!follow) Inactive.Set(fa, true, interactive: true);
+        s.Children.Add(faBox);
+        if (!follow || bypassed) Inactive.Set(fa, true, interactive: true);
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
@@ -428,6 +445,8 @@ public sealed partial class SessionView
             Text = stop ? Loc.F("session.inspector.launching_this_scene_stops", c.Name) : Loc.F("session.inspector.launching_this_scene_keeps_playing", c.Name),
             FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
+        if (!rec) TakeLengthRows(rows, c, scene);
+        if (!rec) LandingRows(rows, c, scene);
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
         if (c.IsInstrument) actions.Add((Loc.T("session.insert_midi_clip"), "", () => InsertMidiClip(c.TrackId, scene)));
@@ -435,6 +454,177 @@ public sealed partial class SessionView
                         : (Loc.T("session.record_here"), "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
         if (CanPaste) actions.Add((Loc.T("common.paste"), K("edit.paste"), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
+    }
+
+    // The slot's next-take length (#503): Global follows Fixed in the toolbar, Open records until
+    // stopped, or bars + beats of its own. It applies to the next take recorded into the slot only.
+    private static readonly int[] TakeLengthBars = { 1, 2, 3, 4, 8, 16 };
+
+    // The quick picks (Global with what it resolves to now, Open, whole bars) and the current label.
+    private (List<(NotaSlotTakeLength Value, string Label)> Items, string Current) TakeLengthChoices(NotaSlotTakeLength take)
+    {
+        double global = _engine.SessionRecordLength;
+        string globalText = Loc.F("session.take_length.global_value",
+            global > 0 ? FormatLength(global) : Loc.T("session.take_length.open"));
+        var items = new List<(NotaSlotTakeLength, string)>
+        {
+            (new NotaSlotTakeLength(SlotTakeMode.Global), globalText),
+            (new NotaSlotTakeLength(SlotTakeMode.Open), Loc.T("session.take_length.open")),
+        };
+        foreach (int b in TakeLengthBars) items.Add((new NotaSlotTakeLength(SlotTakeMode.Fixed, b), Loc.Plural("session.bars", b)));
+        return (items, take.TakeMode == SlotTakeMode.Global ? globalText : TakeLengthText(take));
+    }
+
+    private static bool SameTake(NotaSlotTakeLength a, NotaSlotTakeLength b) => a.Mode == b.Mode && a.Bars == b.Bars && a.Beats == b.Beats;
+
+    private void SetTakeLength(Column c, int scene, NotaSlotTakeLength v)
+    {
+        _engine.SetSessionSlotTakeLength(c.TrackId, scene, v);
+        RefreshSlot(c.TrackId, scene);
+    }
+
+    // "Take length ▸" in an empty slot's right-click menu: the same quick picks, right-click + pick.
+    private MenuItem? TakeLengthSubmenu(Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take)) return null;
+        var (items, current) = TakeLengthChoices(take);
+        var sub = MenuKit.ValueItem(Loc.T("session.inspector.take_length"), GlyphKind.Loop, current);
+        foreach (var (value, label) in items)
+        {
+            var v = value;
+            var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = SameTake(v, take) };
+            mi.Click += (_, _) => SetTakeLength(c, scene, v);
+            sub.Items.Add(mi);
+        }
+        return sub;
+    }
+
+    private void TakeLengthRows(StackPanel rows, Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotTakeLength(c.TrackId, scene, out var take)) return;
+        var (items, label) = TakeLengthChoices(take);
+        // `take` follows the Bars · beats numbers below, so the chip and its checked pick do too.
+        var chip = Chip(label, take.TakeMode != SlotTakeMode.Global,
+            a => Pick(a, items, v => SameTake(v, take), v => SetTakeLength(c, scene, v)));
+        rows.Children.Add(Row(Loc.T("session.inspector.take_length"), chip));
+
+        var hint = new TextBlock
+        {
+            Text = take.TakeMode switch
+            {
+                SlotTakeMode.Open => Loc.T("session.inspector.take_length_open_hint"),
+                SlotTakeMode.Fixed => Loc.T("session.inspector.take_length_hint"),
+                _ => Loc.T("session.inspector.take_length_global_hint"),
+            },
+            FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+        };
+        if (take.TakeMode == SlotTakeMode.Fixed)
+        {
+            // Bars and beats of the meter shown; the engine refuses 0 + 0 and anything past 64 bars,
+            // which the hint then says in the warning ink. Beats saved under a longer meter (6 of
+            // 7/8, now in 4/4) show as saved, so editing the bars never drops them.
+            int bpb = Math.Max(1, Meter.BeatsPerBar);
+            int bars = take.Bars, beats = take.Beats;
+            DragNumber Num(int value, int max, Action<int> set)
+            {
+                var dn = new DragNumber(value, 0, max, 0.25, "0", 10) { Width = 40, Height = 22 };
+                OneUndoStep(dn);
+                dn.ValueChanged += v => set((int)Math.Round(v));
+                return dn;
+            }
+            void Apply()
+            {
+                bool ok = _engine.SetSessionSlotTakeLength(c.TrackId, scene, new NotaSlotTakeLength(SlotTakeMode.Fixed, bars, beats));
+                hint.Foreground = ok ? NotaPalette.TextTertiary : NotaPalette.Warning;
+                if (!ok) return;
+                take = new NotaSlotTakeLength(SlotTakeMode.Fixed, bars, beats);
+                chip.Content = Mono(TakeLengthText(take), 10, NotaPalette.TextOnAccent);
+                RefreshSlot(c.TrackId, scene, inspector: false);
+            }
+            var barsDn = Num(bars, NotaSlotTakeLength.MaxBars, v => { bars = v; Apply(); });
+            var beatsDn = Num(beats, Math.Max(bpb - 1, beats), v => { beats = v; Apply(); });
+            Control Boxed(Control child) => new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = child };
+            var pair = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Boxed(barsDn), Mono(".", 10, NotaPalette.TextTertiary), Boxed(beatsDn) } };
+            ((TextBlock)pair.Children[1]).VerticalAlignment = VerticalAlignment.Center;
+            rows.Children.Add(Row(Loc.T("session.inspector.bars_beats"), pair));
+        }
+        rows.Children.Add(hint);
+    }
+
+    // The slot's landing rule (#481): once a fresh take recorded here is ready to play, launch the
+    // next scene or a chosen one, on the global launch quantum or one of its own — once per take.
+    private List<(NotaSlotLandingRule Value, string Label)> LandingTargets(NotaSlotLandingRule cur)
+    {
+        var items = new List<(NotaSlotLandingRule, string)>
+        {
+            (NotaSlotLandingRule.Off, Loc.T("session.landing.off")),
+            (new NotaSlotLandingRule(SlotLandingAction.NextScene, 0, cur.QuantBeats), Loc.T("session.landing.next_scene")),
+        };
+        for (int s = 0; s < _engine.SceneCount; s++)
+            items.Add((new NotaSlotLandingRule(SlotLandingAction.Scene, s, cur.QuantBeats), Loc.F("session.landing.scene", SceneName(s))));
+        return items;
+    }
+
+    private string LandingTargetText(NotaSlotLandingRule r) => r.LandingAction switch
+    {
+        SlotLandingAction.NextScene => Loc.T("session.landing.next_scene"),
+        SlotLandingAction.Scene => Loc.F("session.landing.scene", SceneName(r.Scene)),
+        _ => Loc.T("session.landing.off"),
+    };
+
+    private List<(double Value, string Label)> LandingQuants()
+    {
+        var items = new List<(double, string)> { (-1.0, Loc.F("session.landing.global", QuantLabel(_engine.LaunchQuant))) };
+        foreach (var (b, label) in QuantSteps) items.Add((b, label));
+        return items;
+    }
+
+    private static bool SameLanding(NotaSlotLandingRule a, NotaSlotLandingRule b)
+        => a.Action == b.Action && a.Scene == b.Scene && (a.IsGlobalQuant ? b.IsGlobalQuant : Math.Abs(a.QuantBeats - b.QuantBeats) < 1e-9);
+
+    private void SetLanding(Column c, int scene, NotaSlotLandingRule v)
+    {
+        _engine.SetSessionSlotLandingRule(c.TrackId, scene, v);
+        RefreshSlot(c.TrackId, scene);
+    }
+
+    // "When the take lands ▸" in an empty slot's right-click menu: the targets, on the rule's quantum.
+    private MenuItem? LandingSubmenu(Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotLandingRule(c.TrackId, scene, out var rule)) return null;
+        var sub = MenuKit.ValueItem(Loc.T("session.inspector.landing"), GlyphKind.Follow, LandingTargetText(rule));
+        foreach (var (value, label) in LandingTargets(rule))
+        {
+            var v = value;
+            var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = v.Action == rule.Action && v.Scene == rule.Scene };
+            mi.Click += (_, _) => SetLanding(c, scene, v);
+            sub.Items.Add(mi);
+        }
+        return sub;
+    }
+
+    private void LandingRows(StackPanel rows, Column c, int scene)
+    {
+        if (!_engine.TryGetSessionSlotLandingRule(c.TrackId, scene, out var rule)) return;
+        rows.Children.Add(Row(Loc.T("session.inspector.landing"), Chip(LandingTargetText(rule), rule.LandingAction != SlotLandingAction.Off,
+            a => Pick(a, LandingTargets(rule), v => v.Action == rule.Action && v.Scene == rule.Scene, v => SetLanding(c, scene, v)))));
+        if (rule.LandingAction == SlotLandingAction.Off) return;
+        var quants = LandingQuants();
+        string quantText = rule.IsGlobalQuant ? quants[0].Label : QuantLabel(rule.QuantBeats);
+        rows.Children.Add(Row(Loc.T("session.inspector.landing_on"), Chip(quantText, !rule.IsGlobalQuant,
+            a => Pick(a, quants, q => SameLanding(new NotaSlotLandingRule(rule.LandingAction, rule.Scene, q), rule),
+                q => SetLanding(c, scene, new NotaSlotLandingRule(rule.LandingAction, rule.Scene, q))))));
+        int target = rule.LandingAction == SlotLandingAction.NextScene ? (scene + 1) % Math.Max(1, _engine.SceneCount) : rule.Scene;
+        double q = rule.IsGlobalQuant ? _engine.LaunchQuant : rule.QuantBeats;
+        rows.Children.Add(new TextBlock
+        {
+            Text = _engine.SessionFollow
+                ? (q > 0 ? Loc.F("session.inspector.landing_hint", SceneName(target), QuantLabel(q))
+                         : Loc.F("session.inspector.landing_hint_now", SceneName(target)))
+                : Loc.T("session.inspector.landing_off_globally"),
+            FontSize = 10, LineHeight = 16, TextWrapping = TextWrapping.Wrap,
+            Foreground = _engine.SessionFollow ? NotaPalette.TextTertiary : NotaPalette.Warning,
+        });
     }
 
     // A Return / Master column (#314): no slots to launch; its devices are in the panel below.

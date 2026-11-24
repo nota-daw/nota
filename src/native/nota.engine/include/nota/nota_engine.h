@@ -184,7 +184,9 @@ typedef struct NotaSessionAudioSlot {
  * the global launch quantum. follow_a/b: 0 None, 1 Stop, 2 Again, 3 Previous, 4 Next,
  * 5 First, 6 Last, 7 Any, 8 Other, 9 Jump (to jump_scene); chance_a/b are relative weights
  * 0..100; follow_beats 0 = after one pass. velocity_amount 0..1 scales the clip by the
- * launch velocity. */
+ * launch velocity. follow_bypass 1 holds the clip's follow actions without changing them;
+ * when it ends the action fires at the next multiple of the follow time since the clip's
+ * follow count started, never as a catch-up (#499). */
 typedef struct NotaSessionClipProps {
     int32_t color;
     int32_t launch_mode;
@@ -198,6 +200,7 @@ typedef struct NotaSessionClipProps {
     int32_t chance_b;
     double  follow_beats;
     int32_t jump_scene;
+    int32_t follow_bypass;
 } NotaSessionClipProps;
 
 /* Scene row properties (Session P0). color: track-palette index, -1 = neutral. tempo > 0
@@ -572,6 +575,9 @@ NOTA_API int32_t nota_engine_tempo_automated(const NotaEngine* engine);
  * clamping, live edits, undo/redo, unwarped clip reprojection, lane removal).
  * 0 = pass, else the number of the failed check. */
 NOTA_API int32_t nota_engine_tempo_lane_selftest(NotaEngine* engine);
+/* Device-free check of the Session-performance recording rules (#971): launch reports → played
+ * spans, and a slot's MIDI unrolled over a span. 0 = pass, else the failed check. */
+NOTA_API int32_t nota_engine_session_pass_selftest(NotaEngine* engine);
 NOTA_API double nota_tempo_beat_to_seconds(const NotaEngine* engine, double beat);
 NOTA_API double nota_tempo_seconds_to_beat(const NotaEngine* engine, double seconds);
 NOTA_API double nota_tempo_bpm_at(const NotaEngine* engine, double beat);
@@ -1059,8 +1065,26 @@ NOTA_API int32_t    nota_engine_is_recording(const NotaEngine* engine);
  * take retried, -1 discarded but recording could not start again (see
  * nota_engine_record_start_status). Message thread. */
 NOTA_API int32_t    nota_engine_retry_take(NotaEngine* engine);
-/* Why the last set_recording(1) did (not) start: 0 ok, 1 no armed track, 2 audio input failed. */
+/* Why the last set_recording(1) did (not) start: 0 ok, 1 no armed track, 2 audio input failed,
+ * 3 ok — a performance-only pass: nothing armed while a Session clip plays or waits, so the take
+ * records the Session performance alone (#971). Every Arrangement take also writes the Session
+ * clips that play during it onto the Arrangement when it stops. */
 NOTA_API int32_t    nota_engine_record_start_status(const NotaEngine* engine);
+/* What the running take has heard of the Session so far (#971): one span per Session clip that
+ * played, in the order they started. A span still playing ends at the playhead (open = 1). The
+ * Arrangement draws them while recording; the clips themselves are written when the take stops.
+ * An armed audio track's spans are left out (its input take wins there). Fills up to `cap`
+ * spans and returns how many there are (0 when no take runs). Message thread. */
+typedef struct NotaPassSpan {
+    int32_t trackId;
+    int32_t slot;      /* the Session slot (scene index) that played */
+    double  startBeat;
+    double  endBeat;
+    double  slotPos;   /* the slot's loop position at startBeat */
+    int32_t open;      /* 1 = still playing */
+    int32_t warped;    /* 1 = an audio slot that is warped (its waveform follows the tempo map) */
+} NotaPassSpan;
+NOTA_API int32_t    nota_engine_session_pass_spans(const NotaEngine* engine, NotaPassSpan* out, int32_t cap);
 /* Live audio-capture geometry for drawing a growing take: the armed track id
  * (0 when not capturing) and the beat where the current take began. */
 NOTA_API int32_t    nota_engine_audio_record_track(const NotaEngine* engine);
@@ -1411,6 +1435,23 @@ NOTA_API NotaResult nota_session_stop_slot(NotaEngine* engine, int32_t track_id)
 NOTA_API NotaResult nota_session_launch_scene(NotaEngine* engine, int32_t scene);
 NOTA_API NotaResult nota_session_stop_scene(NotaEngine* engine, int32_t scene);
 NOTA_API NotaResult nota_session_stop_all(NotaEngine* engine);
+/* Cancel a queued launch before its quantized start (#480). The track keeps doing what it does
+ * now (a playing clip plays on, uninterrupted); nothing is undoable or marks the project dirty.
+ * Slot: withdraws the track's queued launch of `scene`. Scene: withdraws every queued launch of a
+ * slot in that row and every stop the row's waiting scene launch queued, and drops that launch's
+ * follow action and tempo / signature change. Applied by the audio thread at the start of its next
+ * block, before any track's boundary — so a scene is withdrawn on all its tracks or none.
+ * Returns NOTA_OK if something was queued to cancel, NOTA_ERR_UNKNOWN if nothing was (the launch
+ * already started or was never queued: use the normal stop). */
+NOTA_API NotaResult nota_session_cancel_slot_launch(NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API NotaResult nota_session_cancel_scene_launch(NotaEngine* engine, int32_t scene);
+/* Whether a launch waits for its launch point (#480), i.e. there is something to cancel. Slot:
+ * the track's launch of `scene` — also a queued restart of the slot already playing, which
+ * nota_session_slot_state reports as playing (3). A group id: any track below it. Scene: a queued
+ * launch of one of the row's slots, or the row's scene launch while nothing of it has started (a
+ * row that queued only stops counts too). 1 = queued, 0 = not. */
+NOTA_API int32_t nota_session_slot_launch_queued(const NotaEngine* engine, int32_t track_id, int32_t scene);
+NOTA_API int32_t nota_session_scene_queued(const NotaEngine* engine, int32_t scene);
 /* Session vs Arrangement (M5): launching a session clip starts the clock but leaves the
  * Arrangement inactive (non-session tracks stay silent — a session-only jam). back_to_arrangement
  * stops every session clip and re-activates the timeline; arrangement_active returns 1 when the
@@ -1463,6 +1504,44 @@ NOTA_API NotaResult nota_session_set_clip_name(NotaEngine* engine, int32_t track
 /* An EMPTY slot's stop button: 1 (default) = launching its scene stops the track, 0 = leaves it playing. */
 NOTA_API int32_t    nota_session_get_slot_stop_button(const NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_set_slot_stop_button(NotaEngine* engine, int32_t track_id, int32_t scene, int32_t on);
+/* A slot's next-take length (#503): how long a fresh take recorded into it runs.
+   mode: NOTA_SLOT_TAKE_GLOBAL follows nota_session_set_record_length, NOTA_SLOT_TAKE_OPEN records
+   until stopped, NOTA_SLOT_TAKE_FIXED records bars + beats of the meter in effect when the take
+   starts (1 beat .. 64 bars). The value belongs to the slot: kept, hidden, while it holds a clip. */
+#define NOTA_SLOT_TAKE_GLOBAL 0
+#define NOTA_SLOT_TAKE_OPEN 1
+#define NOTA_SLOT_TAKE_FIXED 2
+typedef struct NotaSlotTakeLength {
+    int32_t mode;
+    int32_t bars;  /* 0..64, Fixed only */
+    int32_t beats; /* 0..31 (a bar of the meter at most), Fixed only; 64 bars = 64 + 0 */
+} NotaSlotTakeLength;
+/* get: 1 and *out filled for an existing track/scene, 0 otherwise. set: one undo step;
+   NOTA_ERR_INVALID_ARG for an unknown track/scene/mode or a Fixed length out of range. */
+NOTA_API int32_t    nota_session_get_slot_take_length(const NotaEngine* engine, int32_t track_id, int32_t scene, NotaSlotTakeLength* out);
+NOTA_API NotaResult nota_session_set_slot_take_length(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaSlotTakeLength* in);
+/* The length a fresh take into the slot would get now, in beats; 0 = open-ended. */
+NOTA_API double     nota_session_slot_take_beats(const NotaEngine* engine, int32_t track_id, int32_t scene);
+/* A slot's landing rule (#481): what happens once a fresh take recorded into the slot has landed —
+   been kept as a playable clip (not when Stop is pressed, not when capture ends, not on save).
+   action: NOTA_SLOT_LANDING_OFF, _NEXT_SCENE (wraps to the first) or _SCENE (launch `scene`).
+   quant_beats: < 0 = the global launch quantum, as a manual scene launch; >= 0 = every slot of the
+   launch waits for that quantum (0 = at once). Fires once per landed take, served by
+   nota_engine_poll; never for a cancelled, discarded, empty or overdub take, a global stop, with
+   Follow off globally, or on load / Undo / Redo. Belongs to the slot: kept, hidden, under a clip. */
+#define NOTA_SLOT_LANDING_OFF 0
+#define NOTA_SLOT_LANDING_NEXT_SCENE 1
+#define NOTA_SLOT_LANDING_SCENE 2
+typedef struct NotaSlotLandingRule {
+    int32_t action;
+    int32_t scene;      /* target, NOTA_SLOT_LANDING_SCENE only */
+    double quant_beats; /* -1 or 0..32 */
+} NotaSlotLandingRule;
+/* get: 1 and *out filled for an existing track/scene, 0 otherwise. set: one undo step;
+   NOTA_ERR_INVALID_ARG for an unknown track/scene/action, a target scene out of range or a
+   quant_beats that is not < 0 or 0..32. */
+NOTA_API int32_t    nota_session_get_slot_landing_rule(const NotaEngine* engine, int32_t track_id, int32_t scene, NotaSlotLandingRule* out);
+NOTA_API NotaResult nota_session_set_slot_landing_rule(NotaEngine* engine, int32_t track_id, int32_t scene, const NotaSlotLandingRule* in);
 /* Copy a slot (clip + properties) onto another slot of a track of the same kind; overwrites. */
 NOTA_API NotaResult nota_session_copy_slot(NotaEngine* engine, int32_t src_track, int32_t src_scene, int32_t dst_track, int32_t dst_scene);
 /* Scene properties and name. */
@@ -1878,8 +1957,54 @@ NOTA_API NotaResult nota_track_set_instrument_plugin(NotaEngine* engine, int32_t
 NOTA_API NotaResult nota_track_set_builtin_instrument(NotaEngine* engine, int32_t track_id, int32_t kind);
 
 /* Append catalog plugin `catalog_index` as an insert effect on the track's
- * device chain. Returns the new device index (>=0), or <0 on failure. */
+ * device chain. Returns the new device index (>=0), or <0 on failure. The device is
+ * there at once but its plug-in is still loading (see nota_device_plugin_load_state). */
 NOTA_API int32_t nota_track_add_effect_plugin(NotaEngine* engine, int32_t track_id, int32_t catalog_index);
+
+/* ---- hosted plug-ins load after they are inserted (#979, specs/113) ------------------
+ * Every way a hosted plug-in gets into a project (insert, instrument, rack chain, project
+ * open, preset, duplicate) puts its device in place at once: an effect passes audio
+ * through, an instrument is silent, and state handed to it is kept until it loads. Its
+ * binary loads on a background thread, so a plug-in that blocks while loading (a copy-
+ * protection wrapper waiting for the main run loop) can't freeze the app; the app's UI
+ * timer then calls nota_engine_plugin_loads_service to attach the instances. All of these
+ * are message-thread calls. */
+
+/* Attaches plug-ins whose binary has loaded, marks loads past their deadline (30 s;
+ * NOTA_PLUGIN_LOAD_TIMEOUT_MS overrides it) "not responding". Returns how many devices'
+ * load state changed (the UI refreshes their cards). */
+NOTA_API int32_t nota_engine_plugin_loads_service(NotaEngine* engine);
+
+/* Services until no plug-in is loading or `timeout_ms` passed; returns how many still
+ * load. For tests and tools that need the plug-in right away — it blocks the caller. */
+NOTA_API int32_t nota_engine_plugin_loads_wait(NotaEngine* engine, int32_t timeout_ms);
+
+/* A device's load state (device_index -1 = the track's instrument): 0 loaded (or not a
+ * hosted plug-in), 1 waiting for another plug-in to load, 2 loading, 3 not responding,
+ * 4 couldn't load. */
+NOTA_API int32_t nota_device_plugin_load_state(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* Why, for the app to word: 0 nothing to say, 1 waiting for another plug-in (arg: its
+ * name), 2 not responding (arg: this plug-in's name), 3 given up, 4 a load that never
+ * returned blocks loading until a restart, 5 it was loading when the app last ended (held
+ * back on project open), 6 failed to load (arg: the format's message, may be empty), 7 it
+ * left the project while it loaded. */
+NOTA_API int32_t nota_device_plugin_load_reason_code(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* The reason's argument (see above); empty when it has none. Valid until the next call. */
+NOTA_API const char* nota_device_plugin_load_reason_arg(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* 1 keep waiting (a not-responding load gets another deadline), 2 give up (it becomes
+ * "couldn't load"; plug-ins queued behind a load that never returns can't load until a
+ * restart), 3 try again (a load that couldn't). */
+NOTA_API NotaResult nota_device_plugin_load_action(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t action);
+
+/* Project open: between on=1 and on=0, a plug-in that froze the app while loading last time
+ * (it was loading when the app ended) is put in place as "couldn't load" instead of loaded. */
+NOTA_API void nota_pluginhost_autoload_scope(int32_t on);
+
+/* The name of the plug-in that was loading when the app last ended — once, then empty. */
+NOTA_API const char* nota_pluginhost_frozen_notice(void);
 
 /* Number of insert effects on the track's device chain. */
 NOTA_API int32_t nota_track_device_count(const NotaEngine* engine, int32_t track_id);
@@ -2971,6 +3096,81 @@ NOTA_API NotaResult  nota_midi_apply(NotaEngine* engine);
 /* MIDI-learn: drain incoming CC/note-on events into a caller buffer of int32 quads
  * {kind, channel, number, value}; returns the event count written (<= max). */
 NOTA_API int32_t     nota_midi_poll_control_events(NotaEngine* engine, int32_t* out, int32_t max);
+
+/* ---- MIDI control surfaces (specs/051) -----------------------------------
+ * Controllers recognised by a profile claim some of their messages: a claimed message is
+ * delivered to the app through the surface queue below and never reaches an instrument (nor
+ * the MIDI-learn copy above, except while learn listens). Unclaimed messages are routed
+ * exactly as before. Claims are published as one immutable table for all sources and swapped
+ * atomically; the MIDI thread only reads it. `source` is the 0..15 index an input tags its
+ * events with (nota_midi_port_source). All calls: message thread unless noted. */
+
+/* Bumped whenever MIDI sources / destinations appear or disappear (hot-plug). Poll it on the
+ * UI tick; on a change call nota_midi_apply to connect the new set, then re-read the ports.
+ * On RtMidi the lists are compared at most once a second. Any thread. */
+NOTA_API uint32_t    nota_midi_ports_generation(void);
+
+/* Connected (enabled) inputs as the MIDI thread numbers them, then test ports. count re-reads
+ * the list; the strings are engine-owned and valid until the next count call. NULL / -1 if
+ * out of range. */
+NOTA_API int32_t     nota_midi_port_count(NotaEngine* engine);
+NOTA_API int32_t     nota_midi_port_source(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_midi_port_uid(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_midi_port_name(const NotaEngine* engine, int32_t index);
+/* The output of the same device (CoreMIDI: same entity; RtMidi: same name). "" when none. */
+NOTA_API const char* nota_midi_port_output_uid(const NotaEngine* engine, int32_t index);
+
+/* Claim table. whole_port = 1 claims every channel message of that source (MCU / HUI / the
+ * setup wizard's capture) and ignores status/channel/data1. status: 0x80 note (on and off),
+ * 0xB0 CC, 0xD0 channel pressure, 0xE0 pitch bend; data1 = note / CC number (ignored for
+ * pressure / bend). Replaces the previous table; count 0 clears all claims.
+ * NOTA_OK, or NOTA_ERR_INVALID_ARG on a malformed entry (table unchanged). */
+typedef struct NotaMidiClaim {
+    int32_t source;
+    int32_t whole_port;
+    int32_t status;
+    int32_t channel; /* 0..15 */
+    int32_t data1;   /* 0..127 */
+} NotaMidiClaim;
+NOTA_API NotaResult  nota_midi_set_claims(NotaEngine* engine, const NotaMidiClaim* claims, int32_t count);
+
+/* While MIDI Learn waits for a message, claimed CC / note-on are ALSO copied to the MIDI-learn
+ * queue (nota_midi_poll_control_events), so a control a profile owns can still be learned.
+ * They keep going to the surface queue, never to instruments. */
+NOTA_API void        nota_midi_set_learn_listening(NotaEngine* engine, int32_t listening);
+
+/* Drain claimed channel messages: int32 quints {source, status, channel, data1, data2}
+ * (status high nibble; note-on with velocity 0 reported as 0x80). Returns the count written
+ * (<= max). Lossy when the 1024-entry queue overflows (counted by nota_midi_surface_dropped). */
+NOTA_API int32_t     nota_midi_poll_surface_events(NotaEngine* engine, int32_t* out, int32_t max);
+NOTA_API uint32_t    nota_midi_surface_dropped(const NotaEngine* engine);
+
+/* Drain one complete SysEx message (F0 … F7 inclusive, <= 512 bytes) received from a source
+ * that has a claim, or from a source within 2 s of an Identity Request (F0 7E 7F 06 01 F7)
+ * sent with nota_midi_send to its paired output. Returns the byte length copied (0 = none
+ * pending, -n = a message of n bytes did not fit in cap and is dropped); *out_source gets
+ * the source. */
+NOTA_API int32_t     nota_midi_poll_sysex(NotaEngine* engine, int32_t* out_source, uint8_t* out, int32_t cap);
+
+/* Send complete MIDI messages (SysEx allowed) to the output `output_uid`, opened on first
+ * use. Never from the audio thread. NOTA_OK, NOTA_ERR_INVALID_ARG (bad args / malformed
+ * bytes), NOTA_ERR_UNKNOWN (no such output, or the send failed). */
+NOTA_API NotaResult  nota_midi_send(NotaEngine* engine, const char* output_uid, const uint8_t* bytes, int32_t len);
+
+/* Deterministic self-test, no hardware: claimed → surface queue and not instruments,
+ * unclaimed → as before, whole-port claims and the learn copy, SysEx reassembly across
+ * packets and its gating, the 512-byte cap, output loopback. 0 = pass, else the first failed
+ * check. */
+NOTA_API int32_t     nota_midi_surface_selftest(void);
+
+/* Test ports (MCP controller_inject; the app gates them behind NOTA_CONTROLLER_TEST=1).
+ * add: a virtual input + loopback output named `name` (uid and output uid "test:<name>");
+ * returns its source or -1. inject: raw bytes through the same parser and claim path as a
+ * real input. take_sent: bytes sent to its output (64 KiB ring), oldest first; returns the
+ * count. */
+NOTA_API int32_t     nota_midi_test_port_add(NotaEngine* engine, const char* name);
+NOTA_API NotaResult  nota_midi_test_inject(NotaEngine* engine, int32_t source, const uint8_t* bytes, int32_t len);
+NOTA_API int32_t     nota_midi_test_take_sent(NotaEngine* engine, int32_t source, uint8_t* out, int32_t cap);
 
 /* --- Gamepad input (live note source) ---------------------------------------
  * A gamepad is polled on its own thread; button edges queue internally and are

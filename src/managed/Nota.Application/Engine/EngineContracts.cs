@@ -293,7 +293,22 @@ public enum SessionFollowAction { None = 0, Stop, Again, Previous, Next, First, 
 
 /// <summary>Session clip (slot) properties. Matches native NotaSessionClipProps (Session P0).
 /// Color is a track-palette index (-1 = the track's colour); QuantBeats &lt; 0 = global;
-/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass.</summary>
+/// ChanceA/B are relative weights 0..100; FollowBeats 0 = one pass. FollowBypass 1 holds
+/// the clip's follow actions without changing them (#499).</summary>
+/// <summary>One Session clip the running take has heard so far (#971): what the Arrangement draws
+/// while recording, before the clips are written at stop. Matches native NotaPassSpan.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaPassSpan
+{
+    public int TrackId;
+    public int Slot;
+    public double StartBeat;
+    public double EndBeat;
+    public double SlotPos;
+    public int Open;
+    public int Warped;
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionClipProps
 {
@@ -309,6 +324,46 @@ public struct NotaSessionClipProps
     public int ChanceB;
     public double FollowBeats;
     public int JumpScene;
+    public int FollowBypass;
+}
+
+/// <summary>How long a fresh take into a Session slot runs (#503): Global follows the session
+/// record length, Open records until stopped, Fixed records bars + beats of the meter.</summary>
+public enum SlotTakeMode { Global = 0, Open = 1, Fixed = 2 }
+
+/// <summary>A Session slot's next-take length (#503). Matches native NotaSlotTakeLength.
+/// Bars 0..64 and Beats 0..beats-per-bar-1 apply to Fixed only (1 beat .. 64 bars).</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSlotTakeLength
+{
+    public int Mode;
+    public int Bars;
+    public int Beats;
+
+    public NotaSlotTakeLength(SlotTakeMode mode, int bars = 0, int beats = 0) { Mode = (int)mode; Bars = bars; Beats = beats; }
+    public readonly SlotTakeMode TakeMode => (SlotTakeMode)Mode;
+    public const int MaxBars = 64;
+}
+
+/// <summary>What a fresh take landing in a Session slot launches (#481).</summary>
+public enum SlotLandingAction { Off = 0, NextScene = 1, Scene = 2 }
+
+/// <summary>A Session slot's landing rule (#481). Matches native NotaSlotLandingRule. Scene is the
+/// target for <see cref="SlotLandingAction.Scene"/>; QuantBeats &lt; 0 = the global launch quantum,
+/// 0 = at once, else up to <see cref="MaxQuantBeats"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaSlotLandingRule
+{
+    public int Action;
+    public int Scene;
+    public double QuantBeats;
+
+    public NotaSlotLandingRule(SlotLandingAction action, int scene = 0, double quantBeats = -1.0)
+    { Action = (int)action; Scene = scene; QuantBeats = quantBeats; }
+    public readonly SlotLandingAction LandingAction => (SlotLandingAction)Action;
+    public readonly bool IsGlobalQuant => QuantBeats < 0;
+    public const double MaxQuantBeats = 32.0;
+    public static readonly NotaSlotLandingRule Off = new(SlotLandingAction.Off);
 }
 
 /// <summary>Scene row properties. Matches native NotaSceneProps (Session P0). Color is a
@@ -342,6 +397,22 @@ public struct NotaMeter
 /// lane's device index (0..3), values 0..1.</summary>
 /// <summary>Tempo (specs/099) is valid only on the master track; its values are BPM (20–300).</summary>
 public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5, Tempo = 6 }
+
+/// <summary>How far a hosted plug-in's load got (#979, specs/113). <see cref="Loaded"/> is also
+/// every device that isn't a hosted plug-in.</summary>
+public enum PluginLoadState { Loaded = 0, Waiting = 1, Loading = 2, NotResponding = 3, Failed = 4 }
+
+/// <summary>What the device card's buttons do to a load.</summary>
+public enum PluginLoadAction { KeepWaiting = 1, GiveUp = 2, TryAgain = 3 }
+
+/// <summary>Why a hosted plug-in hasn't loaded (yet), as the engine reports it; the app words it.
+/// The argument (DevicePluginLoadReasonArg) is the plug-in waited for (<see cref="WaitingFor"/>),
+/// this plug-in's name (<see cref="NotResponding"/>) or the format's message (<see cref="Failed"/>).</summary>
+public enum PluginLoadReason
+{
+    None = 0, WaitingFor = 1, NotResponding = 2, GaveUp = 3, RestartRequired = 4,
+    FrozeNota = 5, Failed = 6, Removed = 7,
+}
 
 /// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
 /// track's instrument. Matches nota_track_transfer_device's family.</summary>
@@ -557,6 +628,24 @@ public enum AudioDeviceEvent { None = 0, ResetRequested = 1, DriverFailed = 2 }
 
 /// <summary>A MIDI input source: a stable UID (persistence key) and a display name (M7-2).</summary>
 public readonly record struct MidiDevice(string Uid, string Name);
+
+/// <summary>A connected MIDI input as the engine's MIDI thread numbers it (specs/051): the
+/// source index its events carry, a stable uid, the display name, and the output of the same
+/// device ("" when it has none). Test ports have uids "test:&lt;name&gt;".</summary>
+public readonly record struct MidiPortInfo(string Uid, string Name, int Source, string OutputUid);
+
+/// <summary>One claimed message (specs/051), blittable and matching NotaMidiClaim. A claimed
+/// message goes to the surface queue instead of the instruments. Status 0x80 note (on and
+/// off), 0xB0 CC, 0xD0 channel pressure, 0xE0 pitch bend; WholePort = 1 claims every channel
+/// message of the source.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct MidiClaim(int Source, int WholePort, int Status, int Channel, int Data1)
+{
+    public static MidiClaim Whole(int source) => new(source, 1, 0, 0, 0);
+    public static MidiClaim Cc(int source, int channel, int cc) => new(source, 0, 0xB0, channel, cc);
+    public static MidiClaim Note(int source, int channel, int note) => new(source, 0, 0x80, channel, note);
+    public static MidiClaim PitchBend(int source, int channel) => new(source, 0, 0xE0, channel, 0);
+}
 
 /// <summary>A game controller usable as a live note source (macOS v1). The UID is
 /// the stable IORegistryEntryID stringified; the name is the HID product string.</summary>

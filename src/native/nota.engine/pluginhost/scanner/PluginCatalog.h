@@ -32,6 +32,10 @@ namespace scanner {
 // scanning and in-process hosting. Created on first use; thread-safe to obtain.
 juce::AudioPluginFormatManager& sharedFormatManager();
 
+// The folder the catalog lives in (the per-user data dir); empty when persistence is off.
+// The plug-in loader keeps its freeze guard next to it (specs/113).
+std::string supportDirPath();
+
 class PluginCatalog {
   public:
     static PluginCatalog& instance();

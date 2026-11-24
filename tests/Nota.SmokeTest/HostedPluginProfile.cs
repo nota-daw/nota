@@ -58,6 +58,7 @@ internal static class HostedPluginProfile
             for (int i = 0; i < instances; i++)
             {
                 int track = engine.AddPluginInstrumentTrack(catalog);
+                engine.WaitPluginLoads(60000); // plug-ins load after they are inserted (specs/113)
                 engine.SetTrackVolume(track, 0.1f);
                 int clip = engine.AddMidiClip(track, 0, 128);
                 engine.SetClipNotes(track, clip, [new NotaNote(60 + i * 3, 0, 120, 0.8f)]);

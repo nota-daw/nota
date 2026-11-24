@@ -63,14 +63,22 @@ std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, do
     uint64_t total = 0;
     if (ext == "wav") {
         dec->kind = Decoder::Kind::Wav;
+#ifdef _WIN32
+        if (!drwav_init_file_w(&dec->wav, widePath(path).c_str(), nullptr)) return nullptr; // #974
+#else
         if (!drwav_init_file(&dec->wav, path.c_str(), nullptr)) return nullptr;
+#endif
         dec->open = true;
         channels = dec->wav.channels;
         rate = dec->wav.sampleRate;
         total = dec->wav.totalPCMFrameCount;
     } else if (ext == "flac") {
         dec->kind = Decoder::Kind::Flac;
+#ifdef _WIN32
+        dec->flac = drflac_open_file_w(widePath(path).c_str(), nullptr);
+#else
         dec->flac = drflac_open_file(path.c_str(), nullptr);
+#endif
         if (!dec->flac) return nullptr;
         dec->open = true;
         channels = dec->flac->channels;
@@ -78,7 +86,11 @@ std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, do
         total = dec->flac->totalPCMFrameCount;
     } else if (ext == "mp3") {
         dec->kind = Decoder::Kind::Mp3;
+#ifdef _WIN32
+        if (!drmp3_init_file_w(&dec->mp3, widePath(path).c_str(), nullptr)) return nullptr;
+#else
         if (!drmp3_init_file(&dec->mp3, path.c_str(), nullptr)) return nullptr;
+#endif
         dec->open = true;
         channels = dec->mp3.channels;
         rate = dec->mp3.sampleRate;

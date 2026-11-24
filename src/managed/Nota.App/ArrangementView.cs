@@ -2341,6 +2341,8 @@ public sealed partial class ArrangementView : UserControl
         AddRowSeamGrips();                       // row-height grips sit above the cards
         _headers.Children.Add(_trackDropLine);   // insertion marker (kept invisible until a drag)
         _headers.Children.Add(_headerDropRing);  // browser drop target (kept invisible until a drag)
+        _bankMarks.Clear();
+        PlaceBankMarks();                        // controller bank bars (specs/051)
         _headers.Height = Math.Max(DefaultRowHeight, RowsHeight);
     }
 

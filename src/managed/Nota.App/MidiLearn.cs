@@ -83,12 +83,28 @@ public enum MidiTargetKind
     RackVolume, RackChainGain, RackChainMute, RackChainSolo,
     // Cue (specs/089): a track's Cue toggle and the Cue mix's level. Appended: saved as ints.
     TrackCue, CueVolume,
+    // Controller roles (specs/051). Appended: the integer values are persisted in midimap.json.
+    TransportLoop, TransportRewind, TransportForward, TrackArm, TrackSelect,
+    TrackSend,   // ParamIndex = send bus
+    // A device inside a rack (specs/051, research R10): DeviceIndex = the rack as above (−1
+    // Instrument Rack, ≥ 0 Audio Effect Rack, ≤ MidiRackBase − mi MIDI Effect Rack), ParamIndex =
+    // the parameter, Sub = the chain (and for a chain device its slot, see MidiTarget.ChainSlot).
+    RackChainDeviceParam, RackChainInstrumentParam,
 }
 
 /// <summary>Stable identity of a mappable control. TrackId is a runtime engine id;
 /// persistence translates it to/from a track position (see the project DTOs).</summary>
-public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int DeviceIndex, int ParamIndex)
+public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int DeviceIndex, int ParamIndex, int Sub = -1)
 {
+    /// <summary>A rack chain device's parameter: chain and slot packed in <see cref="Sub"/>.</summary>
+    public static MidiTarget RackChainDeviceParam(int track, int rack, int chain, int slot, int p)
+        => new(MidiTargetKind.RackChainDeviceParam, track, rack, p, chain * 1024 + slot);
+    /// <summary>A rack chain instrument's parameter (normalized 0..1).</summary>
+    public static MidiTarget RackChainInstrumentParam(int track, int rack, int chain, int p)
+        => new(MidiTargetKind.RackChainInstrumentParam, track, rack, p, chain);
+    /// <summary>The chain and slot of a <see cref="MidiTargetKind.RackChainDeviceParam"/>.</summary>
+    public (int Chain, int Slot) ChainSlot => (Sub / 1024, Sub % 1024);
+
     public static MidiTarget DeviceParam(int track, int dev, int p) => new(MidiTargetKind.DeviceParam, track, dev, p);
     public static MidiTarget PluginParam(int track, int dev, int p) => new(MidiTargetKind.PluginParam, track, dev, p);
     public static MidiTarget MidiDeviceParam(int track, int dev, int p) => new(MidiTargetKind.MidiDeviceParam, track, dev, p);
@@ -109,11 +125,19 @@ public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int D
     public static MidiTarget RackChainGain(int track, int di, int chain) => new(MidiTargetKind.RackChainGain, track, di, chain);
     public static MidiTarget RackChainMute(int track, int di, int chain) => new(MidiTargetKind.RackChainMute, track, di, chain);
     public static MidiTarget RackChainSolo(int track, int di, int chain) => new(MidiTargetKind.RackChainSolo, track, di, chain);
+    public static readonly MidiTarget TransportLoop = new(MidiTargetKind.TransportLoop, -1, -1, -1);
+    public static readonly MidiTarget TransportRewind = new(MidiTargetKind.TransportRewind, -1, -1, -1);
+    public static readonly MidiTarget TransportForward = new(MidiTargetKind.TransportForward, -1, -1, -1);
+    public static MidiTarget TrackArm(int track) => new(MidiTargetKind.TrackArm, track, -1, -1);
+    public static MidiTarget TrackSelect(int track) => new(MidiTargetKind.TrackSelect, track, -1, -1);
+    public static MidiTarget TrackSend(int track, int bus) => new(MidiTargetKind.TrackSend, track, -1, bus);
 
     /// <summary>True for on/off targets (buttons) — applied as a trigger, not a value.</summary>
     public bool IsButton => Kind is MidiTargetKind.TrackMute or MidiTargetKind.TrackSolo or MidiTargetKind.TrackCue
         or MidiTargetKind.TransportPlay or MidiTargetKind.TransportStop or MidiTargetKind.TransportRecord
-        or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo;
+        or MidiTargetKind.RackChainMute or MidiTargetKind.RackChainSolo
+        or MidiTargetKind.TransportLoop or MidiTargetKind.TransportRewind or MidiTargetKind.TransportForward
+        or MidiTargetKind.TrackArm or MidiTargetKind.TrackSelect;
 }
 
 /// <summary>Attached to a control so the learn overlay can find it and label it, and

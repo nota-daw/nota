@@ -27,6 +27,8 @@ if (!existsSync(join(root, 'index.html'))) {
 }
 const themesDir = join(here, '../../../managed/Nota.App/Theme/Themes');
 const port = Number(process.env.PORT ?? 7790);
+// specs/108: MOCK_AX=across plays a Nota whose Session grid runs scenes across.
+const across = process.env.MOCK_AX === 'across';
 
 // ---- themes -------------------------------------------------------------------------
 
@@ -80,24 +82,34 @@ const trackDefs = [
   { id: 4, name: 'Vocals', slot: 8, kind: 'audio', dev: 'Audio', grp: 0 },
   { id: 5, name: 'Pads', slot: 5, kind: 'group', dev: 'Group', grp: 0 },
   { id: 6, name: 'Strings', slot: 6, kind: 'inst', dev: 'Nota Chamber', grp: 5 },
+  { id: 8, name: 'Choir', slot: 7, kind: 'inst', dev: 'Nota Aurora', grp: 5 },
   { id: 7, name: 'Reverb', slot: 9, kind: 'return', dev: 'Return', grp: 0 },
 ];
 const pads = [[36, 'Kick'], [37, 'Rim'], [38, 'Snare'], [39, 'Clap'], [42, 'Closed hat'], [46, 'Open hat'], [45, 'Low tom'], [49, 'Crash']];
 
 const state = {
   tp: { play: true, rec: false, loop: true, met: false, pos: 22.5, bpm: 122, ls: 16, le: 32, can: true },
-  mix: new Map(trackDefs.map((t, i) => [t.id, { vol: [0.9, 0.75, 0.6, 1.1, 0.8, 0.7, 0.5][i], pan: [0, -0.2, 0.3, 0, 0, -0.4, 0][i], mute: t.id === 3, solo: t.id === 2, arm: t.id === 4 }])),
+  mix: new Map(trackDefs.map((t, i) => [t.id, { vol: [0.9, 0.75, 0.6, 1.1, 0.8, 0.7, 0.65, 0.5][i], pan: [0, -0.2, 0.3, 0, 0, -0.4, 0.4, 0][i], mute: t.id === 3, solo: t.id === 2, arm: t.id === 4 }])),
   master: 1,
   you: 1,
   follow: false,
   started: Date.now(),
+  // specs/107: Nota's Session selection (the phone's last tap moves it, as the controller would)
+  // and a controller whose knobs walk Bass's chain every few seconds.
+  sel: { id: 2, i: 1 },
+  focStep: 0,
 };
+const focChain = [['Nota Volt', -1, 3], ['Auto Filter', 0, 2], ['Reverb', 1, 1]];
+function foc() {
+  const [dev, md, pn] = focChain[Math.floor(state.focStep / 2) % focChain.length];
+  return { t: 'foc', on: true, ctl: 'KeyLab Essential 61 mk3', mode: 'device', id: 2, tn: 'Bass', dev, md, pg: (state.focStep % 2) % pn, pn, pgn: '', bank: [0, 0] };
+}
 
 function proj() {
   return {
     t: 'proj', host: 'Studio Mac', dark: themes[look.on].dark,
     tracks: trackDefs.map((t) => ({ id: t.id, name: t.name, color: colour(t.slot), kind: t.kind, dev: t.dev, grp: t.grp, ...(t.mpe ? { mpe: true } : {}), ...(t.kind === 'drum' ? { pads } : {}) })),
-    key: { root: 9, minor: true, name: 'A minor' }, scenes: 4,
+    key: { root: 9, minor: true, name: 'A minor' }, scenes: SCENES,
     sections: [['Intro', 0], ['Verse', 16], ['Chorus', 32], ['Bridge', 48], ['Outro', 64]],
     access: 'control', you: state.you, follow: state.follow,
   };
@@ -118,8 +130,26 @@ function mix() {
 }
 
 const xy = () => ({ t: 'xy', id: state.you, ok: true, auto: false, x: { n: 'Cutoff', d: 'Auto Filter', v: 0.62, txt: '2.4 kHz', map: null, tilt: null }, y: { n: 'Resonance', d: 'Auto Filter', v: 0.35, txt: '35 %', map: null, tilt: null } });
+// The Macros screen (specs/114): the device and page the phone is on, and a stand-in LED frame —
+// a filter curve that breathes, RLE4 as Nota sends it (contracts/remote-led.md).
+const macState = { di: 1, pg: 0, seq: 0 };
+function led() {
+  const W = 128, H = 48, d = new Uint8Array(W * H), t = (Date.now() - state.started) / 1000;
+  const fc = 0.45 + 0.15 * Math.sin(t * 0.8) + macState.pg * 0.08 + macState.di * 0.05;
+  for (let x = 0; x < W; x++) d[6 * W + x] = x % 2 ? 0 : 2;
+  for (let x = 0; x < W; x++) {
+    const r = (x / W) / fc, m = 1 / Math.sqrt((1 - r * r) ** 2 + (r / 3) ** 2);
+    const y = Math.max(9, Math.min(47, Math.round(9 + (18 - 20 * Math.log10(m)) / 60 * 38)));
+    for (let j = y + 1; j < 48; j++) d[j * W + x] = 2;
+    d[y * W + x] = 15;
+  }
+  const out = [];
+  for (let i = 0; i < d.length;) { let n = 1; while (i + n < d.length && d[i + n] === d[i] && n < 16) n++; out.push(((n - 1) << 4) | d[i]); i += n; }
+  return { t: 'led', id: state.you, di: macState.di, pg: macState.pg, w: W, h: H, bpp: 4, enc: 'rle4', seq: ++macState.seq, f: Buffer.from(out).toString('base64') };
+}
 const mac = () => ({
-  t: 'mac', id: state.you, di: 0, devs: ['Nota Volt', 'Auto Filter', 'Reverb'],
+  t: 'mac', id: state.you, di: macState.di, devs: ['Arp', 'Nota Volt', 'Auto Filter', 'Reverb'],
+  pg: macState.pg, pgs: [['Main'], ['Main', 'Osc', 'Filter', 'LFO'], ['Main', 'Mod'], ['Main', 'More']][macState.di],
   k: [
     { n: 'Cutoff', v: 0.64, txt: '3.1 kHz', a: true, map: null }, { n: 'Reso', v: 0.3, txt: '30 %', map: null },
     { n: 'Drive', v: 0.45, txt: '+4.5 dB', map: null }, { n: 'Env amount', v: 0.7, txt: '70 %', map: null },
@@ -127,16 +157,23 @@ const mac = () => ({
     { n: 'LFO rate', v: 0.55, txt: '2.20 Hz', map: null }, { map: null },
   ],
 });
+// Twelve scenes, so the grid scrolls on a phone either way round (specs/102); the first four
+// are the hand-made ones, the rest repeat them.
+const SCENES = 12;
+const more = (four) => Array.from({ length: SCENES }, (_, i) => (i < 4 ? four[i] : [four[i % 4][0] === 0 ? 0 : 1, four[i % 4][1], 0]));
 function ses() {
   const prog = (((Date.now() - state.started) / 1000) % 8) / 8;
   return {
-    t: 'ses', n: 4,
+    t: 'ses', n: SCENES, sel: state.sel, ...(across ? { ax: 'across' } : {}),
+    // A group (Pads) sends its tracks' ids and no slots of its own (contracts/session-message.md).
     tr: [
-      { id: 1, c: [[3, 16, prog], [1, 16, 0], [1, 8, 0], [0, 0, 0]] },
-      { id: 2, c: [[1, 16, 0], [3, 16, prog], [2, 16, 0], [0, 0, 0]] },
-      { id: 3, c: [[1, 32, 0], [0, 0, 0], [1, 16, 0], [1, 4, 0]] },
-      { id: 4, c: [[0, 0, 0], [4, 16, 0], [0, 0, 0], [0, 0, 0]] },
-      { id: 6, c: [[1, 16, 0], [1, 16, 0], [0, 0, 0], [3, 16, prog]] },
+      { id: 1, c: more([[3, 16, prog], [1, 16, 0], [1, 8, 0], [0, 0, 0]]) },
+      { id: 2, c: more([[1, 16, 0], [3, 16, prog], [2, 16, 0], [0, 0, 0]]) },
+      { id: 3, c: more([[1, 32, 0], [0, 0, 0], [1, 16, 0], [1, 4, 0]]) },
+      { id: 4, c: more([[0, 0, 0], [4, 16, 0], [0, 0, 0], [0, 0, 0]]) },
+      { id: 5, k: [6, 8], c: [] },
+      { id: 6, c: more([[1, 16, 0], [1, 16, 0], [0, 0, 0], [3, 16, prog]]) },
+      { id: 8, c: more([[0, 0, 0], [1, 8, 0], [0, 0, 0], [1, 16, 0]]) },
     ],
   };
 }
@@ -190,7 +227,7 @@ function notesOf(seed, count, lo, span, len = 4) {
   return out;
 }
 const peaksOf = (seed, n = 48) => { const r = rnd(seed); return Array.from({ length: n }, (_, i) => Math.round(99 * Math.min(1, 0.25 + 0.75 * Math.abs(Math.sin(i / 3 + seed)) * r()))); };
-const clipNames = { 1: ['Beat A', 'Beat B', 'Fill', ''], 2: ['Bass line', 'Bass line 2', 'Walk', ''], 3: ['Chords', '', 'Chords alt', 'Stab'], 4: ['', 'Vox take', '', ''], 6: ['Strings', 'Strings hi', '', 'Swell'] };
+const clipNames = { 1: ['Beat A', 'Beat B', 'Fill', ''], 2: ['Bass line', 'Bass line 2', 'Walk', ''], 3: ['Chords', '', 'Chords alt', 'Stab'], 4: ['', 'Vox take', '', ''], 6: ['Strings', 'Strings hi', '', 'Swell'], 8: ['', 'Ooh', '', 'Aah'] };
 function clips(all) {
   const s = [];
   for (const tr of ses().tr) {
@@ -222,6 +259,7 @@ function welcome(c, m) {
   c.send({ t: 'tp', ...state.tp });
   c.send({ t: 'who', p: { 3: ['Anna'] } });
   c.send({ t: 'learn', on: false, pend: null });
+  c.send(foc());
   sendScreen(c);
   if (c.screen === 'Scenes') c.send(clips(true));
 }
@@ -231,7 +269,17 @@ function onMessage(c, m) {
   switch (m.t) {
     case 'pair': case 'hello': welcome(c, m); break;
     case 'ping': c.send({ t: 'pong', c: m.c }); break;
-    case 'sub': c.screen = m.s; sendScreen(c); if (m.s === 'Scenes') c.send(clips(true)); break;
+    case 'sub': c.screen = m.s; if (m.s === 'Macros' && typeof m.i === 'number' && m.i !== macState.di && m.i < 4) { macState.di = m.i; macState.pg = 0; } sendScreen(c); if (m.s === 'Scenes') c.send(clips(true)); break;
+    case 'nav': {
+      const pages = [1, 4, 2, 2];
+      if (m.s === 'device') macState.di = Math.max(0, Math.min(3, macState.di + m.i)), macState.pg = 0;
+      else if (m.s === 'deviceAt' && Number.isInteger(m.i) && m.i >= 0 && m.i < pages.length && m.i !== macState.di) { macState.di = m.i; macState.pg = 0; }
+      else if (m.s === 'page') macState.pg = Math.max(0, Math.min(pages[macState.di] - 1, macState.pg + m.i));
+      else if (m.s === 'pageAt') macState.pg = Math.max(0, Math.min(pages[macState.di] - 1, m.i));
+      else if (m.s === 'track') { const ids = trackDefs.map((t) => t.id); const at = ids.indexOf(state.you) + Math.sign(m.i); if (at >= 0 && at < ids.length) { state.you = ids[at]; broadcast(proj()); } }
+      sendScreen(c);
+      break;
+    }
     case 'track': state.you = m.id; broadcast(proj()); break;
     case 'follow': state.follow = m.on; broadcast(proj()); break;
     case 'play': tp.play = true; broadcast({ t: 'tp', ...tp }); break;
@@ -246,6 +294,9 @@ function onMessage(c, m) {
     case 'mvol': state.master = m.v; break;
     case 'on': c.send({ t: 'lit', n: [m.p] }); break;
     case 'off': c.send({ t: 'lit', n: [] }); break;
+    case 'launch': state.sel = { id: m.id, i: m.i }; console.log('session', JSON.stringify(m)); break;
+    case 'scene': state.sel = { row: m.i }; console.log('session', JSON.stringify(m)); break;
+    case 'stopSlot': case 'stopAll': console.log('session', JSON.stringify(m)); break;
   }
 }
 
@@ -261,6 +312,12 @@ setInterval(() => {
   for (const c of clients) if (c.paired && (c.screen === 'Mixer' || c.screen === 'Scenes')) sendScreen(c);
   for (const c of clients) if (c.paired && c.screen === 'Scenes') c.send(clips(false));
 }, 250);
+
+// The Macros screen's LED display moves at ~15 frames a second (specs/114).
+setInterval(() => { for (const c of clients) if (c.paired && c.screen === 'Macros') c.send(led()); }, 66);
+
+// The controller moves on: a page, then the next device.
+setInterval(() => { state.focStep++; broadcast(foc()); }, 4000);
 
 // ---- HTTP -----------------------------------------------------------------------------
 

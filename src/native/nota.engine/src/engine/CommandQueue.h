@@ -43,6 +43,12 @@ enum class CommandType : uint32_t {
     // that put the playhead back, so every block rendered from here belongs to the new take:
     // i0 = the new take epoch, i1 = 1 to open the capture gate now (no count-in to wait for).
     TakeRestart,
+    // Cancel one queued Session launch before its boundary (#480): i0 / i1 = low / high half of the
+    // exact SessionPlayer::request word to withdraw, d0 = track id. A cancel pushes one per target
+    // as a single batch, drained in one go before any track applies its request in that block, so
+    // a cancel and a boundary never split a scene. A scene launch that has started anywhere keeps
+    // its requests; a request replaced since is a different word and stays.
+    CancelSessionLaunch,
 };
 
 struct Command {
@@ -62,6 +68,17 @@ template <typename T, size_t Capacity> class SpscRingBuffer {
         if (next == tail_.load(std::memory_order_acquire)) return false; // full — drop rather than block
         buffer_[head] = item;
         head_.store(next, std::memory_order_release);
+        return true;
+    }
+
+    // Push `n` items as one: the consumer sees all of them or none (one head publish). False, and
+    // nothing pushed, when they don't all fit.
+    bool pushBatch(const T* items, size_t n) noexcept {
+        const size_t head = head_.load(std::memory_order_relaxed);
+        const size_t room = (tail_.load(std::memory_order_acquire) - head - 1) & kMask;
+        if (n > room) return false;
+        for (size_t i = 0; i < n; ++i) buffer_[(head + i) & kMask] = items[i];
+        head_.store((head + n) & kMask, std::memory_order_release);
         return true;
     }
 

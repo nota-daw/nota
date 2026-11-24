@@ -161,6 +161,70 @@ public partial class MainWindow : IRemoteHost
     }
 
     int IRemoteHost.SelectedTrackId => Timeline.SelectedTrackId;
+
+    // specs/107: what the phone outlines on its Scenes grid and shows as the controller's focus.
+    RemoteSessionSelection IRemoteHost.SessionSelection
+    {
+        get
+        {
+            if (_session is not { IsEffectivelyVisible: true } s) return RemoteSessionSelection.None;
+            var sel = s.CurrentSelection;
+            return sel.Kind switch
+            {
+                SessionView.SelKind.Slot when sel.TrackId > 0 => new RemoteSessionSelection(true, false, sel.TrackId, sel.Scene),
+                SessionView.SelKind.Scene => new RemoteSessionSelection(false, true, 0, sel.Scene),
+                _ => RemoteSessionSelection.None,
+            };
+        }
+    }
+
+    // specs/108: the desktop's Session grid orientation, for remotes set to "As in Nota".
+    bool IRemoteHost.SessionAcross => Nota.Application.Editing.SessionGridNav.IsAcross(
+        (App.Services?.GetService(typeof(ISettingsService)) as ISettingsService)?.Current.SessionGrid);
+
+    RemoteControllerFocus? IRemoteHost.ControllerFocus
+    {
+        get
+        {
+            if (_controllers?.CurrentSummary is not { } f) return null;
+            string mode = f.Mode.Kind switch
+            {
+                Nota.Application.Controllers.KnobModeKind.Volume => "volume",
+                Nota.Application.Controllers.KnobModeKind.Pan => "pan",
+                Nota.Application.Controllers.KnobModeKind.Send => "send",
+                _ => "device",
+            };
+            // The phone's Macros list for a track: the instrument (or rack) at −1, then the audio effects.
+            // A device inside a rack shows as its rack (the same index); MIDI effects aren't on the phone.
+            int? md = f.Address?.Section switch
+            {
+                Nota.Application.Controllers.FocusSection.Instrument => -1,
+                Nota.Application.Controllers.FocusSection.Audio => f.Address.Index,
+                _ => null,
+            };
+            return new RemoteControllerFocus(f.Controller, mode, f.Mode.Send, f.TrackId, f.TrackName, f.Device, md,
+                f.Page, f.PageCount, f.PageName, f.BankFirst, f.BankLast) { Address = f.Address };
+        }
+    }
+
+    // specs/114: the phone's Macros screen walks the controller's pages and moves its focus.
+    Nota.Application.Controllers.IDevicePageSource? IRemoteHost.DevicePages => _devicePages;
+
+    void IRemoteHost.SelectTrack(int trackId)
+    {
+        if (trackId <= 0) return;
+        if (_controllers is { } svc) svc.SelectTrackFromRemote(trackId);   // as Track ◀ ▶ do: selection + banks (specs/107)
+        else if (Timeline.SelectedTrackId != trackId) Timeline.SelectTrackFromOutside(trackId);
+    }
+
+    void IRemoteHost.FocusDevice(Nota.Application.Controllers.DeviceAddress device)
+    {
+        if (device.TrackId <= 0 || _deviceChain is null) return;
+        if (_deviceChain.TrackId != device.TrackId) ShowDevices(device.TrackId, takeOverPanel: false);
+        _deviceChain.SelectAddress(device);
+    }
+
+    void IRemoteHost.SetDevicePage(int page) => _controllers?.SetPage(page);
     int IRemoteHost.ProjectKeyCode => _vm?.Transport.KeyCode ?? -1;
 
     IReadOnlyList<(string Name, double StartBeat)> IRemoteHost.Sections =>

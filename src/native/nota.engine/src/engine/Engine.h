@@ -17,12 +17,16 @@
 #include "CommandQueue.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
+#include "engine/SessionPass.h"
 #include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
 #include "Graph.h"
 #include "audio_io/MidiConfig.h"
 #include "audio_io/MidiInput.h"
+#include "audio_io/MidiOutput.h"
+#include "audio_io/MidiParser.h"
 #include "audio_io/MpeInput.h"
+#include "engine/MidiSurface.h"
 #include "audio_io/GamepadInput.h"
 #include "media/SampleBuffer.h"
 #include "Transport.h"
@@ -136,6 +140,26 @@ class Engine {
     // MIDI-learn: drain up to `max` incoming CC/note-on events captured since the
     // last call into `out`. Returns the count written. Called from the UI tick.
     int32_t pollControlEvents(ControlEvent* out, int32_t max);
+
+    // --- control surfaces (specs/051) ---
+    // Connected inputs (real, then test ports) with their paired outputs. Rebuilt on every
+    // call; the strings stay valid until the next one. Message thread.
+    const std::vector<MidiInput::PortInfo>& midiPorts();
+    const std::vector<MidiInput::PortInfo>& midiPortRows() const { return midiPortRows_; } // last midiPorts()
+    bool setMidiClaims(const MidiClaimEntry* claims, int32_t count) { return midiSurface_.setClaims(claims, count); }
+    void setMidiLearnListening(bool on) { midiSurface_.setLearnListening(on); }
+    int32_t pollSurfaceEvents(SurfaceEvent* out, int32_t max) { return midiSurface_.pollEvents(out, max); }
+    uint32_t surfaceDropped() const { return midiSurface_.dropped(); }
+    int32_t pollMidiSysex(int32_t* outSource, uint8_t* out, int32_t cap) {
+        return midiSurface_.pollSysex(outSource, out, cap);
+    }
+    // Sends to the output with `outputUid` (opened on first use); an identity request opens
+    // the SysEx window of every input paired with that output. Message thread.
+    bool midiSend(const std::string& outputUid, const uint8_t* data, int32_t len);
+    // Test ports (MCP controller_inject): a virtual input + loopback output. Message thread.
+    int32_t addTestMidiPort(const std::string& name);
+    bool injectTestMidi(int32_t source, const uint8_t* data, int32_t len);
+    int32_t takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap);
 
     // --- gamepad input (live note source) ---
     // The pad runs on its own IOKit thread and queues button edges; the UI
@@ -521,10 +545,20 @@ class Engine {
     // --- Session view (M5) ---
     void setLaunchQuant(double beats);
     void launchSlot(int32_t trackId, int32_t scene); // quantized; empty slot = stop track
-    void launchScene(int32_t scene);                 // launch every track's slot in this row (empty = stop that track)
+    // Launch every track's slot in this row (empty = stop that track). quantOverride >= 0: every
+    // slot of this launch waits for that quantum instead of its own / the global one (#481).
+    void launchScene(int32_t scene, bool fromFollow = false, double quantOverride = -1.0);
     void stopSlot(int32_t trackId);
     void stopScene(int32_t scene); // stop tracks whose playing/queued slot is this row
     void stopAllSession();
+    // Withdraw a queued launch before its boundary (#480): the track (or the row) carries on as if
+    // it had never been asked. False when nothing of it is queued — it started or never was.
+    bool cancelSlotLaunch(int32_t trackId, int32_t scene); // trackId may be a group
+    bool cancelSceneLaunch(int32_t scene);
+    // Whether a launch waits (#480): a track's launch of `scene` (also a queued restart), or a row
+    // — a queued slot launch in it, or its scene launch with nothing of it started yet.
+    bool sessionSlotLaunchQueued(int32_t trackId, int32_t scene) const;
+    bool sessionSceneQueued(int32_t scene) const;
     void recordSessionSlot(int32_t trackId, int32_t scene); // M5-4: launch + overdub-record MIDI into the slot
     // Stop one recording slot (specs/086): with other slots still recording only its lane lands
     // and loops back; the last one ends the take as stopSessionRecord() does.
@@ -533,6 +567,8 @@ class Engine {
     void stopSessionRecord();                               // stop recording; the slot keeps playing
     // M5-6: move clips between Session and Arrangement (MIDI, instrument tracks).
     int32_t sessionSlotToArrangement(int32_t trackId, int32_t scene, double startBeat); // -> new clip index or -1
+    // The running take's Session spans so far, for the Arrangement to draw (#971); count, fills up to cap.
+    int32_t sessionPassSpans(NotaPassSpan* out, int32_t cap) const;
     bool arrangementClipToSession(int32_t trackId, int32_t clipIndex, int32_t scene);
     bool arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, int32_t scene); // audio clip -> session slot
     int32_t sceneCount() const;
@@ -555,6 +591,14 @@ class Engine {
     bool setSessionClipName(int32_t trackId, int32_t scene, const std::string& name);
     bool sessionSlotStopButton(int32_t trackId, int32_t scene) const;
     bool setSessionSlotStopButton(int32_t trackId, int32_t scene, bool on);
+    // A slot's next-take length (#503, specs/106) and the beats a fresh take into it would get
+    // now (0 = open-ended).
+    bool sessionSlotTakeLength(int32_t trackId, int32_t scene, NextTakeLength& out) const;
+    bool setSessionSlotTakeLength(int32_t trackId, int32_t scene, const NextTakeLength& v);
+    double sessionSlotTakeBeats(int32_t trackId, int32_t scene) const;
+    // A slot's landing rule (#481, specs/111): what a fresh take landing in it launches.
+    bool sessionSlotLandingRule(int32_t trackId, int32_t scene, LandingRule& out) const;
+    bool setSessionSlotLandingRule(int32_t trackId, int32_t scene, const LandingRule& v);
     bool copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrack, int32_t dstScene);
     bool sceneProps(int32_t scene, NotaSceneProps* out) const;
     bool setSceneProps(int32_t scene, const NotaSceneProps& p);
@@ -844,6 +888,7 @@ class Engine {
     bool rhythmRemoveVoiceDevice(int32_t trackId, int32_t voice, int32_t dev);
     bool rhythmMoveVoiceDevice(int32_t trackId, int32_t voice, int32_t from, int32_t to);
     Device* rhythmVoiceDevice(int32_t trackId, int32_t voice, int32_t dev) const;
+    void rhythmVoiceDeviceParamSet(int32_t trackId, int32_t voice, int32_t dev, int32_t param, float value);
     std::string rhythmKitName(int32_t trackId) const;
     void setRhythmKitName(int32_t trackId, const std::string& name);
     // Nota Rhythm macros: names + mappings (the values are the macro1..8 plugin params).
@@ -871,6 +916,15 @@ class Engine {
     bool setTrackInstrumentPlugin(int32_t trackId, int32_t catalogIndex);
     bool setTrackBuiltinInstrument(int32_t trackId, int32_t kind);       // replace with a built-in synth
     int32_t addTrackEffectPlugin(int32_t trackId, int32_t catalogIndex); // returns device index or -1
+    // Hosted plug-ins load after they are inserted (#979, specs/113). Message thread.
+    // servicePluginLoads attaches loaded plug-ins (then realigns PDC and resolves plug-in-param
+    // lanes made while they loaded) and returns how many devices' load state changed;
+    // waitPluginLoads services until nothing is loading or `timeoutMs` passed, returning how
+    // many still load. deviceIndex -1 is the track's instrument.
+    int32_t servicePluginLoads();
+    int32_t waitPluginLoads(int32_t timeoutMs);
+    int32_t devicePluginLoadState(int32_t trackId, int32_t deviceIndex, int32_t* reasonCode, std::string* reasonArg) const;
+    bool devicePluginLoadAction(int32_t trackId, int32_t deviceIndex, int32_t action);
     int32_t trackDeviceCount(int32_t trackId) const;
     // Offline analysis (audio→MIDI): an audio clip's played region, mono. out==null → frame count.
     int32_t clipAudioMono(int32_t trackId, int32_t clipIndex, float* out, int32_t maxFrames, double* outSr) const;
@@ -1571,7 +1625,12 @@ class Engine {
     void mixGraph(Graph* g, float* out, int32_t frames, double blockStartSamples, double elapsedStartSamples,
         bool playing, double spb);
     void renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t frames); // live input monitoring
-    void drainCommands();
+    void drainCommands(Graph* g);
+    // #480: withdraw the queued Session launches cancels aimed at (CancelSessionLaunch), on the
+    // audio thread while it drains commands — before any track reaches its boundary.
+    void applyLaunchCancel(Graph* g, const Command& c);
+    // Is `t` inside group `groupId` (at any depth)? Walks the parent ids; no allocation.
+    static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
     void drainLiveMidi(double blockStartBeat, bool playing);
     void renderInstrumentRaw(
         Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing);
@@ -1690,6 +1749,11 @@ class Engine {
     void propagateSampleRate(double sr); // re-prepare every instrument/device/MIDI-FX (incl. master) at sr
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
+    void resolveLoadedPluginLanes(); // plug-in-param lanes made while their plug-in loaded (specs/113)
+    // A hosted plug-in that left the project (removed, its track deleted, the project closed)
+    // while still loading gives up its load: its card is gone, so nothing may wait for it.
+    // Undo brings it back as "couldn't load", with Try again (specs/113).
+    void giveUpVanishedPluginLoads(const Graph& before, const Graph& after);
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
     // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
     // set `sections`, and publish it as one undo step.
@@ -1730,7 +1794,8 @@ class Engine {
     std::vector<ClipEntry> clipMany_;
     int32_t insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, int32_t atIndex);
     int32_t insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevice> md, int32_t atIndex); // ... or of the copied MIDI effect (one of the two at a time)
-    void recomputePdc(); // message thread: realign all tracks
+    void recomputePdc(bool resetChangedDelays = false); // message thread: realign all tracks
+    void setLatencyConfigurationParam(Device& device, int32_t param, float value);
     Device* deviceAt(int32_t trackId, int32_t deviceIndex) const;
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;
     void openMidiInput(); // (re)connect MIDI sources per midiConfig_
@@ -1749,9 +1814,22 @@ class Engine {
         void mpeController(int32_t ctl, float value) override { e->controller(ctl, value, source, channel); }
     };
     std::array<MpeSink, MidiInput::kMaxSources> mpeSinks_;
-    void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2); // MIDI thread
     std::vector<std::string> midiSourceUids_; // source index -> uid of the connected input (message thread)
     std::array<MpeInput, MidiInput::kMaxSources> mpeInputs_;
+    // Every channel message / complete SysEx from any input (MIDI thread, or the message
+    // thread for test ports) comes through here: claimed → surface, else instruments.
+    void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2);
+    void onMidiSysex(int32_t source, const uint8_t* data, int32_t len);
+    MidiSurface midiSurface_;
+    std::map<std::string, std::unique_ptr<MidiOutput>> midiOutputs_; // by output uid (message thread)
+    struct TestMidiPort {
+        std::string name;
+        int32_t source = 0;
+        MidiParser parser;
+        MidiLoopback sent;
+    };
+    std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_;
+    std::vector<MidiInput::PortInfo> midiPortRows_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
     std::unique_ptr<AudioBackend> backend_;
@@ -1770,6 +1848,21 @@ class Engine {
     RecordedQueue recorded_;
     RecordedExprQueue recordedExpr_;
     RecordedCtlQueue recordedCtl_;
+    // Session performance → Arrangement (#971, specs/109): the audio thread reports each launch,
+    // stop, loop seam and transport stop of a running pass; poll() folds them into sessionPass_.
+    // passSerial_ names the running pass (0 = none): the audio thread opens a pass once per serial
+    // (rtPassSerial_), so a retry's new serial re-reports what plays, and stale reports are dropped.
+    SpscRingBuffer<LaunchEvent, 1024> launchEvents_;
+    std::atomic<uint32_t> passSerial_{0};
+    std::atomic<int32_t> passDropped_{0};
+    uint32_t rtPassSerial_ = 0; // audio thread
+    double rtPassEndBeat_ = 0.0; // audio thread: where the last reported segment ended (a Stop ends the spans there)
+    uint32_t passSerialNext_ = 0;
+    SessionPass sessionPass_;                       // message thread
+    std::vector<std::shared_ptr<Track>> passBase_;  // the tracks when the pass began (take notes)
+    size_t passUndoBase_ = 0;                       // undoStack_ size when the pass began
+    std::shared_ptr<Graph> passGraph_;              // authoring_ when the pass began (its undo state)
+    std::vector<int32_t> passArmed_;                // tracks armed when the pass began (their input records)
     mutable std::mutex exprMx_; // the expression store
     std::unordered_map<int32_t, std::shared_ptr<const NoteExpr>> exprStore_;
     int32_t nextExprId_ = 1;
@@ -1897,6 +1990,23 @@ class Engine {
     // Carve [ns, ne) out of a track's audio clips (overwrite/comp on record + drag).
     // `spb` is the samples-per-beat the caller used to measure `ns` and `ne`.
     void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb);
+    // The same for MIDI clips, and an audio clip cut to the timeline range [ns, ne) (#971).
+    static void overwriteMidiClipsInRange(std::vector<MidiClip>& clips, double ns, double ne);
+    AudioClip sliceAudioClip(const AudioClip& c, double ns, double ne) const;
+
+    // Session performance → Arrangement (#971, specs/109). Message thread unless noted.
+    void beginSessionPass(bool performanceOnly);
+    void drainSessionPass();               // poll(): reports → spans
+    bool finishSessionPass(double stopBeat); // write the spans as clips; true if anything was written
+    void abandonSessionPass();             // a discarded take: forget what the pass heard
+    bool sessionPlayingOrQueued() const;   // a Session clip plays or waits to launch on some track
+    void pushPassEvent(const LaunchEvent& e) { // audio thread
+        if (!launchEvents_.push(e)) passDropped_.fetch_add(1, std::memory_order_relaxed);
+    }
+    bool passRecordsInput(const Track& t) const; // #971: a track whose input the pass's take records
+    void writePassTrack(int32_t trackId, const std::vector<const PlayedSpan*>& spans);
+    void reportPassEvents(Graph* g, double segBeat, double segBeats); // audio thread, after a segment
+    void writePassTempo();
 
     // Loop region mirror (see loopEnabled()/loopStart()/loopEnd()).
     bool loopEnabled_ = false;
@@ -2070,6 +2180,7 @@ class Engine {
     std::atomic<bool> captureGate_{true};
     bool recordCountIn_ = false; // setRecording → startAudioRecording: count-in pending
     void playClock();            // push a TransportPlay command without touching arrangementActive_
+    bool enqueueTransportStart(int32_t countInBars);
     // Click `bars` of count-in, then roll the clock (arrangementActive_ untouched). Message thread.
     void startCountIn(int32_t bars);
     // A Session take started from stop counts in first (#158). sessionCountIn_: this take
@@ -2089,12 +2200,42 @@ class Engine {
     // Session P0 helpers (message thread).
     int32_t insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying);
     void remapPlayers(const std::function<int32_t(int32_t)>& map); // shift players after a row insert/remove
-    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene);
+    // quantOverride >= 0 replaces the slot's / global launch quantum for this request (#481).
+    void launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromScene, int32_t gen = 0,
+                        double quantOverride = -1.0);
     void serviceSessionFollow(); // poll(): scene follow + fixed-length capture
+    // Landing rules (#481, specs/111). A fresh take that lands as a playable clip is noted here
+    // (message thread) and served on the next poll(): its slot's rule queues one scene launch. A
+    // global stop or a row delete lands takes with notes muted. The rule's launch still waiting is
+    // watched so an undone take (or deleted clip) withdraws it.
+    void noteTakeLanded(int32_t trackId, int32_t scene);
+    void serviceLandingRules();
+    std::vector<std::pair<int32_t, int32_t>> landedTakes_; // (track, scene) landed since the last poll
+    struct RuleWait {
+        int32_t gen = 0, trackId = 0, scene = -1;
+    } ruleWait_;
+    int32_t landingMuted_ = 0;
+    struct LandingMute {
+        Engine& e;
+        explicit LandingMute(Engine& en) : e(en) { ++e.landingMuted_; }
+        ~LandingMute() { --e.landingMuted_; }
+    };
+    void remapLandingScenes(Graph& g, const std::function<int32_t(int32_t)>& map);
     std::atomic<bool> sessionFollow_{true};
     double sessionRecordLen_ = 0.0; // fixed session record length, beats (0 = off)
     int32_t sceneFollowScene_ = -1; // last launched scene (for scene follow)
     double sceneFollowStart_ = 0.0; // beat it started at (quantized)
+    // #480: a scene launch waits for its boundary until one of its requests applies (confirmed:
+    // its follow and tempo go ahead) or none is left queued (cancelled or replaced: the tempo change
+    // is dropped and the follow that ran before it comes back). Each launch has a generation that
+    // its tracks' requests carry (SessionPlayer::pendingGen / appliedGen).
+    int32_t sceneLaunchGen_ = 0;
+    int32_t waitSceneGen_ = 0, waitScene_ = -1; // the waiting launch (gen 0 = none)
+    int32_t prevFollowScene_ = -1;              // the scene follow running before it
+    double prevFollowStart_ = 0.0;
+    bool waitFromFollow_ = false;               // a scene follow action made the waiting launch
+    template <typename Match> bool aimLaunchCancel(bool wholeScene, Match match);
+    bool sceneLaunchWaiting(); // resolve the waiting launch (poll, and before a new one); true while it waits
     // A launched scene's tempo / signature, applied by poll() on the boundary it starts on.
     bool sceneTempoPending_ = false;
     double sceneTempo_ = 0.0, sceneTempoAt_ = 0.0;
@@ -2105,6 +2246,20 @@ class Engine {
     // cut to whole quanta.
     static constexpr double kGrowingTakeBeats = 4096.0;
     bool recordSessionGrowing_ = false;
+    // The Session take's length as resolved from its slot when it started (#503): beats, 0 =
+    // open-ended. It sizes the take; each slot of the take stops on its own lane's lenBeats.
+    double recordSessionLen_ = 0.0;
+    bool recordSessionOwnLen_ = false; // recordSessionLen_ is the slot's own (not Fixed's)
+    bool takeLengthReached_ = false;   // a take is landing because its length ran out (poll())
+    static bool ownTakeLength(const SessionSlot* s) {
+        return s && !s->hasClip && s->nextTake.mode == SlotTakeMode::Fixed;
+    }
+    static constexpr int32_t kMaxTakeBars = 64;   // a slot's prepared take: 1 beat .. 64 bars
+    static constexpr int32_t kMaxMeterBeats = 32; // a time signature's largest numerator
+    double resolveTakeBeats(const SessionSlot* s) const;
+    // Writes a clip's slot over another, keeping the destination's next-take length: that belongs
+    // to the slot, not to the clip (#503).
+    static void replaceSlotContent(SessionSlot& dst, SessionSlot src);
     double roundedTakeBeats(double beats) const;
     double audioClipBeats(const AudioClip& c) const;
     void syncSessionAudioSlot(Track& t, int32_t clipIndex) const;
@@ -2135,12 +2290,17 @@ class Engine {
         // A Session take's lane records into a slot on that slot's own loop clock (specs/086).
         int32_t scene = -1;
         bool growing = false; // a fresh take with no fixed length: cut to whole quanta at its stop
+        double lenBeats = 0.0; // its slot's resolved take length, beats; 0 = until stopped (#503)
+        bool ownLen = false;   // that length is the slot's own: stopped by hand before it, it is cut
+        bool fresh = false;    // its slot was empty when it started: landing fires its rule (#481)
+        bool started = false;  // its slot has been seen recording (poll) — a stop no longer drops it
         std::shared_ptr<SessionPlayer> player;
         std::vector<TakeNote> takeNotes;
         std::array<CtlFold, kCtlCount> ctlFold{};
         std::vector<TakeCtl> takeCtls;
     };
     std::vector<MidiTakeLane> midiLanes_;
+    void noteMidiLaneLanded(const MidiTakeLane& l); // a fresh lane that started has landed (#481)
     // The Session lanes' slots for the audio thread: an immutable table swapped whole, kept alive
     // (with the players it names) until no render can still read it.
     struct SessionLaneSlots {
@@ -2240,6 +2400,12 @@ class Engine {
     bool startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn);
     double takeStartOverride_ = std::numeric_limits<double>::quiet_NaN(); // startAudioRecording
     int takePlayingOverride_ = -1;                                         // -1 = read the transport
+    double takeBeatOverride_ = std::numeric_limits<double>::quiet_NaN();  // tests: the take's playhead
+    double takeTransportBeats() const {
+        return std::isnan(takeBeatOverride_) ? transport_.uiPositionBeats() : takeBeatOverride_;
+    }
+    // The transport plays on past the loop (#981). The take test hooks roll no transport.
+    bool takeLoopBypassed() const { return std::isnan(takeBeatOverride_) && transport_.uiPastLoopEnd(); }
     double takePlayhead() const;
     bool takeTransportPlaying() const;
     // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
@@ -2484,6 +2650,7 @@ class Engine {
     bool hwMonitorWanted_ = false;             // message thread: some track monitors hw input
     bool inputTestMode_ = false;               // tests: never open a real capture device
     bool ensureAudioInput();                   // open the capture device once (shared)
+    bool openAudioInput();                     // ensureAudioInput without the monitor-tap catch-up
     void releaseAudioInputIfIdle();            // close it when nothing records/monitors
     void updateMonitorInput();                 // (re)evaluate hw monitoring after edits
     void pullMonitorInput(int32_t frames);     // audio thread: ring -> monitorHwBuf_
@@ -2554,6 +2721,12 @@ class Engine {
         int32_t channels = 2;         // stored channels
         int32_t scene = -1;           // Session slot the lane records into (-1: Arrangement)
         size_t offset = 0;            // take frame where the lane joined (a Session slot launched later)
+        double lenBeats = 0.0;        // a Session lane's resolved take length, beats; 0 = open (#503)
+        bool ownLen = false;          // the slot's own length: stopped by hand before it, it is cut
+        bool fresh = false;           // its slot was empty when it started: landing fires its rule (#481)
+        // Where a Session lane that joined the running take started recording; NaN = it counts
+        // from the take's own start (a retry's boundary included).
+        double startBeat = std::numeric_limits<double>::quiet_NaN();
         std::vector<float> buf;       // message thread, `channels` interleaved
         std::vector<float> scratch;   // this drain's frames
         std::vector<LoopPass> passes;
@@ -2563,6 +2736,10 @@ class Engine {
     void beginTestLane(int32_t trackId, int32_t first, int32_t width);
     struct TakeGeometry;
     void materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g);
+    // Land what the running Arrangement take captured so far, as a stop would, and keep every
+    // lane recording into a fresh capture (#981: the take moved into or out of the loop).
+    void landCaptureSoFar();
+    bool captureLinearUnderLoop_ = false; // a straight capture with the loop on, past its end
     void finishCaptureLane(int32_t trackId); // one lane leaves a running take (its track disarmed)
     // Session (specs/086): another slot joins the running Session audio take as a lane of its own.
     bool addSessionAudioLane(int32_t trackId, int32_t scene);
@@ -2576,6 +2753,9 @@ class Engine {
                               double sampleRate);
     void beginCaptureLayout();             // decide linear vs loop capture at take start
     void activateLoopPunch(double atBeat); // switch capture to loop punch (start or mid-take)
+    // The loop will wrap a take at `beat`: it is on and `beat` is before its end. Past the end
+    // the transport plays on (#981), so the take records straight through, where it is heard.
+    bool loopWrapsFrom(double beat) const { return loopEnabled_ && loopEnd_ > loopStart_ && beat < loopEnd_ - 1e-6; }
     bool audioRecording_ = false;
     int32_t audioRecordTrackId_ = 0;
     double audioRecordStartBeat_ = 0.0;
@@ -2723,6 +2903,7 @@ class Engine {
         // MIDI FX (arp) drive the destination too.
         std::vector<std::vector<MidiEv>> blockMidi;
         std::vector<int> blockMidiN;
+        std::vector<MidiKeyNotes> blockMidiStart;
         // Clip-note expression replayed per block (computeBlockMidi fills, the render pass
         // merges).
         std::vector<std::vector<ExprEv>> blockExpr;
