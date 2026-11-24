@@ -202,20 +202,6 @@ public partial class App : Avalonia.Application
             pump.Start();
         }
 
-        // Hosted plug-ins load their binary off the UI thread (#979, specs/113): a plug-in that
-        // blocks while loading (a copy-protection wrapper) used to freeze Nota. This tick attaches
-        // the loaded ones and flags overdue ones; device cards follow the state themselves.
-        {
-            var engine = Services.GetRequiredService<IAudioEngine>();
-            var loads = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(50),
-                Avalonia.Threading.DispatcherPriority.Normal, (_, _) =>
-                {
-                    try { engine.ServicePluginLoads(); }
-                    catch (Exception e) { log.Error("Plug-in load service failed", e); }
-                });
-            loads.Start();
-        }
-
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // A downloaded update installs once the app is gone (see AppUpdater).

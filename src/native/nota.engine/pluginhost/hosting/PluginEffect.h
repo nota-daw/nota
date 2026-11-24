@@ -38,7 +38,8 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     bool supportsParallelRender() const override { return parallelRender_.load(std::memory_order_relaxed); }
 
     int32_t pluginLoadState() const override;
-    std::string pluginLoadReason() const override;
+    int32_t pluginLoadReasonCode() const override;
+    std::string pluginLoadReasonArg() const override;
     void pluginLoadAction(int32_t action) override;
 
     void setSampleRate(double sr, int32_t maxBlock) override;

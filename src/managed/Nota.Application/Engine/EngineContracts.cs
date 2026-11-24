@@ -405,6 +405,15 @@ public enum PluginLoadState { Loaded = 0, Waiting = 1, Loading = 2, NotRespondin
 /// <summary>What the device card's buttons do to a load.</summary>
 public enum PluginLoadAction { KeepWaiting = 1, GiveUp = 2, TryAgain = 3 }
 
+/// <summary>Why a hosted plug-in hasn't loaded (yet), as the engine reports it; the app words it.
+/// The argument (DevicePluginLoadReasonArg) is the plug-in waited for (<see cref="WaitingFor"/>),
+/// this plug-in's name (<see cref="NotResponding"/>) or the format's message (<see cref="Failed"/>).</summary>
+public enum PluginLoadReason
+{
+    None = 0, WaitingFor = 1, NotResponding = 2, GaveUp = 3, RestartRequired = 4,
+    FrozeNota = 5, Failed = 6, Removed = 7,
+}
+
 /// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
 /// track's instrument. Matches nota_track_transfer_device's family.</summary>
 public enum DeviceFamily { Audio = 0, Midi = 1, Instrument = 2 }

@@ -63,8 +63,12 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return (PluginLoadState)NativeMethods.DevicePluginLoadState(_handle, trackId, deviceIndex); }
 
     /// <inheritdoc />
-    public string DevicePluginLoadReason(int trackId, int deviceIndex)
-    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.DevicePluginLoadReason(_handle, trackId, deviceIndex)) ?? ""; }
+    public PluginLoadReason DevicePluginLoadReasonCode(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return (PluginLoadReason)NativeMethods.DevicePluginLoadReasonCode(_handle, trackId, deviceIndex); }
+
+    /// <inheritdoc />
+    public string DevicePluginLoadReasonArg(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.DevicePluginLoadReasonArg(_handle, trackId, deviceIndex)) ?? ""; }
 
     /// <inheritdoc />
     public bool DevicePluginLoadAction(int trackId, int deviceIndex, PluginLoadAction action)

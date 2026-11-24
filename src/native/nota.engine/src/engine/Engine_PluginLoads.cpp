@@ -76,17 +76,44 @@ void Engine::resolveLoadedPluginLanes() {
     }
 }
 
-int32_t Engine::devicePluginLoadState(int32_t trackId, int32_t deviceIndex, std::string* reason) const {
+void Engine::giveUpVanishedPluginLoads(const Graph& before, const Graph& after) {
+    // Cheap first: usually nothing is loading, and then nothing is compared.
+    auto loading = [](int32_t s) { return s > 0 && s < 4; }; // waiting, loading, not responding
+    std::vector<Instrument*> insts;
+    std::vector<Device*> devs;
+    auto collect = [&](const std::shared_ptr<Track>& t) {
+        if (!t) return;
+        if (t->instrument && loading(t->instrument->pluginLoadState())) insts.push_back(t->instrument.get());
+        for (const auto& d : t->devices)
+            if (d && loading(d->pluginLoadState())) devs.push_back(d.get());
+    };
+    for (const auto& t : before.tracks) collect(t);
+    collect(before.masterTrack);
+    if (insts.empty() && devs.empty()) return;
+    auto drop = [&](const std::shared_ptr<Track>& t) {
+        if (!t) return;
+        insts.erase(std::remove(insts.begin(), insts.end(), t->instrument.get()), insts.end());
+        for (const auto& d : t->devices) devs.erase(std::remove(devs.begin(), devs.end(), d.get()), devs.end());
+    };
+    for (const auto& t : after.tracks) drop(t);
+    drop(after.masterTrack);
+    for (Instrument* i : insts) i->pluginLoadAction(4); // abandon: it left the project
+    for (Device* d : devs) d->pluginLoadAction(4);
+}
+
+int32_t Engine::devicePluginLoadState(int32_t trackId, int32_t deviceIndex, int32_t* reasonCode, std::string* reasonArg) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;
     if (deviceIndex < 0) {
         if (!t->instrument) return 0;
-        if (reason) *reason = t->instrument->pluginLoadReason();
+        if (reasonCode) *reasonCode = t->instrument->pluginLoadReasonCode();
+        if (reasonArg) *reasonArg = t->instrument->pluginLoadReasonArg();
         return t->instrument->pluginLoadState();
     }
     if (deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[static_cast<size_t>(deviceIndex)]) return 0;
     const auto& d = t->devices[static_cast<size_t>(deviceIndex)];
-    if (reason) *reason = d->pluginLoadReason();
+    if (reasonCode) *reasonCode = d->pluginLoadReasonCode();
+    if (reasonArg) *reasonArg = d->pluginLoadReasonArg();
     return d->pluginLoadState();
 }
 

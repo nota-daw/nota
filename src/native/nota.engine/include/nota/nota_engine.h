@@ -1984,9 +1984,15 @@ NOTA_API int32_t nota_engine_plugin_loads_wait(NotaEngine* engine, int32_t timeo
  * 4 couldn't load. */
 NOTA_API int32_t nota_device_plugin_load_state(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
-/* Why: "Waiting for X to load", "X isn't responding while it loads", the reason it couldn't
- * load. Empty when there is nothing to say. Valid until the next call. */
-NOTA_API const char* nota_device_plugin_load_reason(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* Why, for the app to word: 0 nothing to say, 1 waiting for another plug-in (arg: its
+ * name), 2 not responding (arg: this plug-in's name), 3 given up, 4 a load that never
+ * returned blocks loading until a restart, 5 it was loading when the app last ended (held
+ * back on project open), 6 failed to load (arg: the format's message, may be empty), 7 it
+ * left the project while it loaded. */
+NOTA_API int32_t nota_device_plugin_load_reason_code(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* The reason's argument (see above); empty when it has none. Valid until the next call. */
+NOTA_API const char* nota_device_plugin_load_reason_arg(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* 1 keep waiting (a not-responding load gets another deadline), 2 give up (it becomes
  * "couldn't load"; plug-ins queued behind a load that never returns can't load until a

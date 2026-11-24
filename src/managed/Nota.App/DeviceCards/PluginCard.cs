@@ -97,6 +97,20 @@ internal static class PluginCard
         catch { return PluginLoadState.Loaded; }   // the device is gone (the card is about to rebuild)
     }
 
+    // The engine says why by a code; the words are the app's, like every label (en.json).
+    private static string ReasonText(PluginLoadReason code, string arg) => code switch
+    {
+        PluginLoadReason.WaitingFor => Loc.F("device.plugin.load.reason.waiting_for", arg),
+        PluginLoadReason.NotResponding => Loc.F("device.plugin.load.reason.not_responding", arg),
+        PluginLoadReason.GaveUp => Loc.T("device.plugin.load.reason.gave_up"),
+        PluginLoadReason.RestartRequired => Loc.T("device.plugin.load.reason.restart_required"),
+        PluginLoadReason.FrozeNota => Loc.T("device.plugin.load.reason.froze_nota"),
+        PluginLoadReason.Failed when arg.Length > 0 => Loc.F("device.plugin.load.reason.failed_n", arg),
+        PluginLoadReason.Failed => Loc.T("device.plugin.load.reason.failed"),
+        PluginLoadReason.Removed => Loc.T("device.plugin.load.reason.removed"),
+        _ => "",
+    };
+
     private static Control LoadColumn(DeviceCardContext ctx, int di, PluginInfo info, PluginLoadState shown)
     {
         var e = ctx.Engine; int t = ctx.TrackId;
@@ -120,7 +134,7 @@ internal static class PluginCard
             Foreground = trouble ? NotaPalette.Warning : TextSecondary,
         };
         string reason = "";
-        try { reason = e.DevicePluginLoadReason(t, di); } catch { }
+        try { reason = ReasonText(e.DevicePluginLoadReasonCode(t, di), e.DevicePluginLoadReasonArg(t, di)); } catch { }
         var detail = new TextBlock
         {
             Text = reason.Length > 0 ? reason : shown == PluginLoadState.Failed ? ""

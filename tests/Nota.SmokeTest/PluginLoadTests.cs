@@ -31,13 +31,22 @@ internal static class PluginLoadTests
         }
     }
 
+    // Each child gets one blocking binary load (the probe blocks only on the process's first).
     public static IEnumerable<(bool Ok, string Label)> RunIsolated()
+    {
+        foreach (var r in Child("--plugin-load", LoadDelayMs, "isolated plug-in load checks (a binary that blocks while it loads)")) yield return r;
+        foreach (var r in Child("--plugin-load-removal", RemovalDelayMs, "isolated plug-in load checks (removing a load that doesn't return)")) yield return r;
+    }
+
+    private const int RemovalDelayMs = 3000;
+
+    private static IEnumerable<(bool Ok, string Label)> Child(string mode, int delayMs, string label)
     {
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true,
             RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         start.ArgumentList.Add(typeof(PluginLoadTests).Assembly.Location);
-        start.ArgumentList.Add("--plugin-load");
-        start.Environment["NOTA_RENDER_PROBE_LOAD_DELAY_MS"] = LoadDelayMs.ToString();
+        start.ArgumentList.Add(mode);
+        start.Environment["NOTA_RENDER_PROBE_LOAD_DELAY_MS"] = delayMs.ToString();
         start.Environment["NOTA_PLUGIN_LOAD_TIMEOUT_MS"] = TimeoutMs.ToString();
         using var child = Process.Start(start)!;
         var stdout = child.StandardOutput.ReadToEndAsync();
@@ -48,27 +57,83 @@ internal static class PluginLoadTests
             catch (InvalidOperationException) { }
             stdout.GetAwaiter().GetResult();
             stderr.GetAwaiter().GetResult();
-            yield return (false, "isolated plug-in load checks (did not finish within 5 minutes, killed)");
+            yield return (false, label + " (did not finish within 5 minutes, killed)");
             yield break;
         }
         Console.Write(stdout.GetAwaiter().GetResult());
         if (child.ExitCode != 0) Console.Write(stderr.GetAwaiter().GetResult());
-        yield return (child.ExitCode == 0, "isolated plug-in load checks (a binary that blocks while it loads)");
+        yield return (child.ExitCode == 0, label);
+    }
+
+    private static int ScanProbe(string scratch, out string id)
+    {
+        NotaEngine.SetDataDir(scratch);
+        string fixture = Path.Combine(NativeDir, "nota-render-probe_artefacts", "Release", "VST3");
+        string worker = Path.Combine(NativeDir, OperatingSystem.IsWindows() ? "nota-scanworker.exe" : "nota-scanworker");
+        if (!Directory.Exists(fixture)) throw new DirectoryNotFoundException("Build nota-render-probe_VST3 before plug-in load tests.");
+        NotaEngine.ScanPlugins(worker, fixture, true);
+        int catalog = Enumerable.Range(0, NotaEngine.PluginCount)
+            .First(i => NotaEngine.PluginDescription(i)?.StartsWith("Nota Render Probe |") == true);
+        id = NotaEngine.PluginId(catalog) ?? "";
+        return catalog;
+    }
+
+    // Removing a plug-in whose binary load doesn't come back: the loads behind it end, asking for
+    // a restart, instead of waiting for a card that is gone; undo brings it back "couldn't load".
+    public static IEnumerable<(bool Ok, string Label)> RunRemoval()
+    {
+        string scratch = Directory.CreateTempSubdirectory("nota-plugin-load-rm-").FullName;
+        try
+        {
+            int catalog = ScanProbe(scratch, out _);
+            using var e = new NotaEngine();
+            e.RenderOffline(new float[256], 128, 48000);
+            int t = e.AddInstrumentTrack();
+            var clock = Stopwatch.StartNew();
+            int stuck = e.AddTrackEffectPlugin(t, catalog);   // its binary blocks for RemovalDelayMs
+            int behind = e.AddTrackEffectPlugin(t, catalog);
+            e.ServicePluginLoads();
+            yield return (e.DevicePluginLoadState(t, behind) == PluginLoadState.Waiting
+                          && e.DevicePluginLoadReasonCode(t, behind) == PluginLoadReason.WaitingFor
+                          && e.DevicePluginLoadReasonArg(t, behind) == "Nota Render Probe",
+                "a second load waits for the first, naming it");
+            e.RemoveDevice(t, stuck);
+            behind = 0;   // the chain closed up
+            while (clock.ElapsedMilliseconds < RemovalDelayMs - 500 && e.DevicePluginLoadState(t, behind) == PluginLoadState.Waiting)
+            {
+                e.ServicePluginLoads();
+                Thread.Sleep(20);
+            }
+            yield return (e.DevicePluginLoadState(t, behind) == PluginLoadState.Failed
+                          && e.DevicePluginLoadReasonCode(t, behind) == PluginLoadReason.RestartRequired
+                          && clock.ElapsedMilliseconds < RemovalDelayMs,
+                $"once the removed load is past its deadline the one behind it ends, asking for a restart ({clock.ElapsedMilliseconds} ms)");
+            int later = e.AddTrackEffectPlugin(t, catalog);
+            yield return (e.DevicePluginLoadState(t, later) == PluginLoadState.Failed
+                          && e.DevicePluginLoadReasonCode(t, later) == PluginLoadReason.RestartRequired,
+                "…as does a new insert while that load is still out");
+            e.Undo();   // the later insert
+            e.Undo();   // the removal
+            yield return (e.TrackDeviceCount(t) == 2 && e.DevicePluginLoadState(t, 0) == PluginLoadState.Failed
+                          && e.DevicePluginLoadReasonCode(t, 0) == PluginLoadReason.Removed,
+                "undo brings the removed plug-in back as \"couldn't load\", saying it was removed while loading");
+            while (clock.ElapsedMilliseconds < RemovalDelayMs + 500) { e.ServicePluginLoads(); Thread.Sleep(20); }
+            e.DevicePluginLoadAction(t, 0, PluginLoadAction.TryAgain);
+            e.DevicePluginLoadAction(t, 1, PluginLoadAction.TryAgain);
+            int left = e.WaitPluginLoads(10000);
+            yield return (left == 0 && e.DevicePluginLoadState(t, 0) == PluginLoadState.Loaded
+                          && e.DevicePluginLoadState(t, 1) == PluginLoadState.Loaded,
+                "once the load comes back, Try again loads both");
+        }
+        finally { NotaEngine.SetDataDir(null); }
     }
 
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         string scratch = Directory.CreateTempSubdirectory("nota-plugin-load-").FullName;
-        NotaEngine.SetDataDir(scratch);
         try
         {
-            string fixture = Path.Combine(NativeDir, "nota-render-probe_artefacts", "Release", "VST3");
-            string worker = Path.Combine(NativeDir, OperatingSystem.IsWindows() ? "nota-scanworker.exe" : "nota-scanworker");
-            if (!Directory.Exists(fixture)) throw new DirectoryNotFoundException("Build nota-render-probe_VST3 before plug-in load tests.");
-            NotaEngine.ScanPlugins(worker, fixture, true);
-            int catalog = Enumerable.Range(0, NotaEngine.PluginCount)
-                .First(i => NotaEngine.PluginDescription(i)?.StartsWith("Nota Render Probe |") == true);
-            string id = NotaEngine.PluginId(catalog) ?? "";
+            int catalog = ScanProbe(scratch, out string id);
             yield return (id.Length > 0, "render probe scanned into an isolated catalog");
 
             // ---- the freeze guard (US3), before anything loads the binary -----------------
@@ -89,8 +154,8 @@ internal static class PluginLoadTests
             int frozen = e.AddTrackEffectPlugin(t, catalog);
             NotaEngine.PluginAutoloadScope(false);
             yield return (frozen >= 0 && e.DevicePluginLoadState(t, frozen) == PluginLoadState.Failed
-                          && e.DevicePluginLoadReason(t, frozen).Contains("froze"),
-                $"on project open it comes up \"couldn't load\" without loading ({e.DevicePluginLoadReason(t, frozen)})");
+                          && e.DevicePluginLoadReasonCode(t, frozen) == PluginLoadReason.FrozeNota,
+                $"on project open it comes up \"couldn't load\" without loading ({e.DevicePluginLoadReasonCode(t, frozen)})");
             var blob = new byte[] { 7, 0, 255, 1, 42, 9 };
             e.SetPluginState(t, frozen, blob);
             yield return (e.GetPluginState(t, frozen).SequenceEqual(blob) && e.TrackDevicePluginId(t, frozen) == id,
@@ -140,11 +205,21 @@ internal static class PluginLoadTests
             yield return (left == 0 && before == -1 && after == gain,
                 $"a plug-in-param lane made while loading resolves once it loads ({before} → {after})");
 
+            // ---- a CV link onto a hosted instrument that is still loading (project open) ---
+            int inst = e.AddPluginInstrumentTrack(catalog);
+            int mod = e.ModulatorAdd(inst, 0);
+            int link = e.CvLinkAddToTarget(inst, mod, 1, -1, -1, gain);   // 1 = the instrument
+            bool keptWhileLoading = link >= 0 && e.CvLinkCount(inst) == 1;
+            e.WaitPluginLoads(10000);
+            yield return (keptWhileLoading && e.CvLinkCount(inst) == 1 && e.DevicePluginLoadState(inst, -1) == PluginLoadState.Loaded,
+                $"a CV link onto a loading instrument's parameter is kept until it loads (link {link})");
+
             // ---- give up, then try again --------------------------------------------------
             int fx3 = e.AddTrackEffectPlugin(t, catalog);
             bool gaveUp = e.DevicePluginLoadAction(t, fx3, PluginLoadAction.GiveUp);
-            yield return (gaveUp && e.DevicePluginLoadState(t, fx3) == PluginLoadState.Failed,
-                $"Give up leaves a \"couldn't load\" device ({e.DevicePluginLoadReason(t, fx3)})");
+            yield return (gaveUp && e.DevicePluginLoadState(t, fx3) == PluginLoadState.Failed
+                          && e.DevicePluginLoadReasonCode(t, fx3) == PluginLoadReason.GaveUp,
+                $"Give up leaves a \"couldn't load\" device ({e.DevicePluginLoadReasonCode(t, fx3)})");
             Thread.Sleep(200);   // the loader thread comes back from the given-up load
             e.ServicePluginLoads();
             yield return (e.DevicePluginLoadState(t, fx3) == PluginLoadState.Failed,

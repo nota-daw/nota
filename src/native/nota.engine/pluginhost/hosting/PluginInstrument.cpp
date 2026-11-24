@@ -71,8 +71,12 @@ int32_t PluginInstrument::pluginLoadState() const {
     return load_ ? static_cast<int32_t>(load_->state()) : 0;
 }
 
-std::string PluginInstrument::pluginLoadReason() const {
-    return load_ ? load_->reason() : std::string{};
+int32_t PluginInstrument::pluginLoadReasonCode() const {
+    return load_ ? static_cast<int32_t>(load_->reason()) : 0;
+}
+
+std::string PluginInstrument::pluginLoadReasonArg() const {
+    return load_ ? load_->reasonArg() : std::string{};
 }
 
 void PluginInstrument::pluginLoadAction(int32_t action) {
@@ -197,7 +201,8 @@ bool PluginInstrument::hasTail() const {
 }
 
 int32_t PluginInstrument::pluginParamCount() const {
-    return paramCountImpl(plugin_.get());
+    // The audio thread asks too (modulation targets): only once the instance is live.
+    return live_.load(std::memory_order_acquire) ? paramCountImpl(plugin_.get()) : 0;
 }
 std::string PluginInstrument::pluginParamId(int32_t i) const {
     return paramIdImpl(plugin_.get(), i);

@@ -922,7 +922,7 @@ class Engine {
     // many still load. deviceIndex -1 is the track's instrument.
     int32_t servicePluginLoads();
     int32_t waitPluginLoads(int32_t timeoutMs);
-    int32_t devicePluginLoadState(int32_t trackId, int32_t deviceIndex, std::string* reason) const;
+    int32_t devicePluginLoadState(int32_t trackId, int32_t deviceIndex, int32_t* reasonCode, std::string* reasonArg) const;
     bool devicePluginLoadAction(int32_t trackId, int32_t deviceIndex, int32_t action);
     int32_t trackDeviceCount(int32_t trackId) const;
     // Offline analysis (audio→MIDI): an audio clip's played region, mono. out==null → frame count.
@@ -1749,6 +1749,10 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void resolveLoadedPluginLanes(); // plug-in-param lanes made while their plug-in loaded (specs/113)
+    // A hosted plug-in that left the project (removed, its track deleted, the project closed)
+    // while still loading gives up its load: its card is gone, so nothing may wait for it.
+    // Undo brings it back as "couldn't load", with Try again (specs/113).
+    void giveUpVanishedPluginLoads(const Graph& before, const Graph& after);
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
     // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
     // set `sections`, and publish it as one undo step.

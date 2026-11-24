@@ -36,7 +36,6 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-const char* const kRestartReason = "Another plug-in is still stuck loading — restart Nota to load plug-ins";
 
 double secondsSince(Clock::time_point t) {
     return t == Clock::time_point{} ? 0.0 : std::chrono::duration<double>(Clock::now() - t).count();
@@ -178,11 +177,26 @@ std::chrono::milliseconds PluginLoader::timeout() {
     return std::chrono::seconds(30);
 }
 
+// English for the log only; the app words the reason itself (LoadReason -> Loc).
+std::string reasonText(LoadReason r, const std::string& arg) {
+    switch (r) {
+    case LoadReason::WaitingFor: return "waiting for " + arg;
+    case LoadReason::NotResponding: return "not responding";
+    case LoadReason::GaveUp: return "given up: it stopped responding while loading";
+    case LoadReason::RestartRequired: return "a load that never returned blocks loading until a restart";
+    case LoadReason::FrozeNota: return "it was loading when Nota last ended; held back";
+    case LoadReason::Failed: return arg.empty() ? "it failed to load" : "it failed to load: " + arg;
+    case LoadReason::Removed: return "it left the project while it loaded";
+    case LoadReason::None: break;
+    }
+    return {};
+}
+
 std::shared_ptr<LoadTicket> PluginLoader::request(const juce::PluginDescription& desc, LoadTicket::Finish finish) {
     auto t = std::make_shared<LoadTicket>(desc, std::move(finish));
     active_.push_back(t);
     if (autoloadScope_ > 0 && frozen(idOf(desc))) {
-        fail(*t, "Nota froze while loading it last time, so it wasn't loaded — try again to load it");
+        fail(*t, LoadReason::FrozeNota);
         return t;
     }
     bool stuck;
@@ -191,7 +205,7 @@ std::shared_ptr<LoadTicket> PluginLoader::request(const juce::PluginDescription&
         stuck = stuck_;
     }
     if (stuck) {
-        fail(*t, kRestartReason);
+        fail(*t, LoadReason::RestartRequired);
         return t;
     }
     enqueue(t);
@@ -200,7 +214,8 @@ std::shared_ptr<LoadTicket> PluginLoader::request(const juce::PluginDescription&
 
 void PluginLoader::enqueue(const std::shared_ptr<LoadTicket>& t) {
     t->state_ = LoadState::Waiting;
-    t->reason_.clear();
+    t->reason_ = LoadReason::None;
+    t->reasonArg_.clear();
     t->started_ = Clock::now();
     t->deadline_ = {};
     {
@@ -221,6 +236,7 @@ void PluginLoader::run() {
             t = queue_.front();
             queue_.pop_front();
             current_ = t;
+            currentStarted_ = Clock::now();
         }
         const auto t0 = Clock::now();
         std::string err;
@@ -230,7 +246,7 @@ void PluginLoader::run() {
         else if (secs > 2.0) logLoad(t->desc, "the binary load", secs, "binary loaded");
         const std::lock_guard<std::mutex> lock(mx_);
         current_.reset();
-        if (t->gaveUp_) stuck_ = false; // the load given up on came back after all
+        stuck_ = false; // whatever it was, the loader thread is free again
         if (!t->cancelled_ && !t->gaveUp_) {
             t->binaryDone_ = true;
             t->binaryError_ = ok ? std::string{} : err;
@@ -239,10 +255,25 @@ void PluginLoader::run() {
     }
 }
 
-void PluginLoader::fail(LoadTicket& t, std::string reason) {
+void PluginLoader::fail(LoadTicket& t, LoadReason reason, std::string arg) {
     t.state_ = LoadState::Failed;
-    t.reason_ = std::move(reason);
-    logLoad(t.desc, "loading", secondsSince(t.started_), "couldn't load: " + t.reason_);
+    t.reason_ = reason;
+    t.reasonArg_ = std::move(arg);
+    logLoad(t.desc, "loading", secondsSince(t.started_), "couldn't load: " + reasonText(t.reason_, t.reasonArg_));
+}
+
+std::vector<std::shared_ptr<LoadTicket>> PluginLoader::poisonLocked() {
+    std::vector<std::shared_ptr<LoadTicket>> behind;
+    if (!current_ || stuck_ || !(current_->cancelled_ || current_->gaveUp_)) return behind;
+    if (Clock::now() - currentStarted_ < timeout()) return behind; // it may still come back in time
+    // Its loader thread can't be stopped and may hold the system's library lock, so nothing
+    // behind it can load until it returns (FR-010): those loads end instead of waiting for a
+    // card that may be gone.
+    stuck_ = true;
+    behind.assign(queue_.begin(), queue_.end());
+    for (auto& q : behind) q->gaveUp_ = true;
+    queue_.clear();
+    return behind;
 }
 
 void PluginLoader::finishOne(const std::shared_ptr<LoadTicket>& t, Serviced& s) {
@@ -260,31 +291,30 @@ void PluginLoader::finishOne(const std::shared_ptr<LoadTicket>& t, Serviced& s) 
     if (secs > 2.0) logLoad(t->desc, "instance creation", secs, ok ? "created" : "failed");
     if (ok) {
         t->state_ = LoadState::Loaded;
-        t->reason_.clear();
+        t->reason_ = LoadReason::None;
+        t->reasonArg_.clear();
         ++s.attached;
         setFrozen(idOf(t->desc), false); // it loads now: no longer held back on project open
     } else {
-        fail(*t, err.empty() ? "The plug-in failed to load" : "The plug-in failed to load: " + err);
+        fail(*t, LoadReason::Failed, err);
     }
 }
 
 PluginLoader::Serviced PluginLoader::service() {
     Serviced s;
-    std::vector<std::shared_ptr<LoadTicket>> ready;
-    {
-        const std::lock_guard<std::mutex> lock(mx_);
-        ready.swap(loaded_);
-    }
-    for (const auto& t : ready) finishOne(t, s);
-
-    const auto now = Clock::now();
-    std::string currentName;
+    std::vector<std::shared_ptr<LoadTicket>> ready, behind;
     std::shared_ptr<LoadTicket> current;
     {
         const std::lock_guard<std::mutex> lock(mx_);
+        ready.swap(loaded_);
+        behind = poisonLocked();
         current = current_;
     }
-    if (current) currentName = current->desc.name.toStdString();
+    for (auto& q : behind) fail(*q, LoadReason::RestartRequired);
+    for (const auto& t : ready) finishOne(t, s);
+
+    const auto now = Clock::now();
+    const std::string currentName = current ? current->desc.name.toStdString() : std::string{};
     active_.erase(std::remove_if(active_.begin(), active_.end(), [](const std::weak_ptr<LoadTicket>& w) { return w.expired(); }),
         active_.end());
     for (const auto& w : active_) {
@@ -294,13 +324,16 @@ PluginLoader::Serviced PluginLoader::service() {
             if (t == current) {
                 if (t->state_ == LoadState::Waiting) t->deadline_ = now + timeout(); // its turn just came
                 t->state_ = LoadState::Loading;
-                t->reason_.clear();
+                t->reason_ = LoadReason::None;
+                t->reasonArg_.clear();
             } else if (t->state_ == LoadState::Waiting) {
-                t->reason_ = currentName.empty() ? std::string{} : "Waiting for " + currentName + " to load";
+                t->reason_ = currentName.empty() ? LoadReason::None : LoadReason::WaitingFor;
+                t->reasonArg_ = currentName;
             }
             if (t->state_ == LoadState::Loading && t->deadline_ != Clock::time_point{} && now > t->deadline_) {
                 t->state_ = LoadState::NotResponding;
-                t->reason_ = t->desc.name.toStdString() + " isn't responding while it loads";
+                t->reason_ = LoadReason::NotResponding;
+                t->reasonArg_ = t->desc.name.toStdString();
                 logLoad(t->desc, "the binary load", secondsSince(t->started_), "not responding");
             }
         }
@@ -325,29 +358,26 @@ void PluginLoader::act(const std::shared_ptr<LoadTicket>& t, LoadAction a) {
     case LoadAction::KeepWaiting:
         if (t->state_ == LoadState::NotResponding) {
             t->state_ = LoadState::Loading;
-            t->reason_.clear();
+            t->reason_ = LoadReason::None;
+            t->reasonArg_.clear();
             t->deadline_ = Clock::now() + timeout();
         }
         break;
-    case LoadAction::GiveUp: {
+    case LoadAction::GiveUp:
+    case LoadAction::Abandon: {
         if (t->state_ == LoadState::Loaded || t->state_ == LoadState::Failed) break;
-        std::vector<std::shared_ptr<LoadTicket>> behind; // loads waiting behind a stuck one
+        std::vector<std::shared_ptr<LoadTicket>> behind;
         {
             const std::lock_guard<std::mutex> lock(mx_);
             t->gaveUp_ = true;
             queue_.erase(std::remove(queue_.begin(), queue_.end(), t), queue_.end());
             loaded_.erase(std::remove(loaded_.begin(), loaded_.end(), t), loaded_.end());
-            if (current_ == t) {
-                // Its loader thread can't be stopped and may hold the system's library lock, so
-                // nothing behind it can load until it returns (FR-010).
-                stuck_ = true;
-                behind.assign(queue_.begin(), queue_.end());
-                for (auto& q : behind) q->gaveUp_ = true;
-                queue_.clear();
-            }
+            // The load in progress: once past its deadline nothing behind it can load; before
+            // that it may still come back, and service() checks again every tick.
+            if (current_ == t) behind = poisonLocked();
         }
-        fail(*t, "Stopped responding while loading");
-        for (auto& q : behind) fail(*q, kRestartReason);
+        fail(*t, a == LoadAction::Abandon ? LoadReason::Removed : LoadReason::GaveUp);
+        for (auto& q : behind) fail(*q, LoadReason::RestartRequired);
         break;
     }
     case LoadAction::TryAgain: {
@@ -357,7 +387,7 @@ void PluginLoader::act(const std::shared_ptr<LoadTicket>& t, LoadAction a) {
             const std::lock_guard<std::mutex> lock(mx_);
             stuck = stuck_;
         }
-        if (stuck) fail(*t, kRestartReason);
+        if (stuck) fail(*t, LoadReason::RestartRequired);
         else enqueue(t);
         break;
     }
@@ -368,6 +398,8 @@ void PluginLoader::cancel(const std::shared_ptr<LoadTicket>& t) {
     if (!t) return;
     t->finish = nullptr;
     const std::lock_guard<std::mutex> lock(mx_);
+    // The adapter is gone. A load in progress stays current_ until its loader thread returns;
+    // service() stops anything waiting behind it once it is past its deadline (poisonLocked).
     t->cancelled_ = true;
     queue_.erase(std::remove(queue_.begin(), queue_.end(), t), queue_.end());
     loaded_.erase(std::remove(loaded_.begin(), loaded_.end(), t), loaded_.end());

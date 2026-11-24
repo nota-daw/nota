@@ -1029,6 +1029,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         }
     }
     if (g && authoring_ && transport_.uiIsPlaying()) releaseVanishedClipNotes(*authoring_, *g);
+    if (g && authoring_) giveUpVanishedPluginLoads(*authoring_, *g);
     authoring_ = g;
     if (g) ensureRenderScratch(g->tracks.size());
     // Fresh track objects only: the audio thread never sees them change. Before any CC target

@@ -73,9 +73,36 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>
     /// When true, the playhead clock stops touching the engine. Set during
     /// offline export (M6-4) so the render thread has exclusive engine access
-    /// while the audio backend is stopped.
+    /// while the audio backend is stopped. Setting it first settles hosted plug-ins
+    /// still loading (specs/113), so none attaches partway through the render.
     /// </summary>
-    public bool SuspendEnginePolling { get; set; }
+    public bool SuspendEnginePolling
+    {
+        get => _suspendEnginePolling;
+        set
+        {
+            if (value && !_suspendEnginePolling) SettlePluginLoads();
+            _suspendEnginePolling = value;
+        }
+    }
+    private bool _suspendEnginePolling;
+
+    // A render (export, freeze, bounce) is about to own the engine: give plug-ins still loading
+    // a bounded chance to land, so the render hears them throughout. Any that don't make it stay
+    // as they are (pass-through / silent) for the whole render, and the status bar says so.
+    private void SettlePluginLoads()
+    {
+        try
+        {
+            int left = Engine.WaitPluginLoads(10000);
+            if (left > 0)
+            {
+                _log.Warn($"{left} plug-in(s) still loading when a render started");
+                StatusText = Loc.Plural("main.plugins_still_loading_render", left);
+            }
+        }
+        catch (Exception ex) { _log.Error("Couldn't settle plug-in loads before a render", ex); }
+    }
 
     public MainWindowViewModel(IAudioEngine engine, TransportViewModel transport,
                                BrowserViewModel browser, ISettingsService settings,
@@ -118,6 +145,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void OnTick()
     {
         if (SuspendEnginePolling) return; // export in progress — render thread owns the engine
+        // Hosted plug-ins load their binary off the UI thread (#979, specs/113); this attaches the
+        // loaded ones and flags overdue ones. Device cards follow the state themselves.
+        try { Engine.ServicePluginLoads(); }
+        catch (Exception ex) { _log.Error("Plug-in load service failed", ex); }
         Engine.Poll(); // materialise recorded notes
         Transport.Tick();
         PlayheadUpdated?.Invoke(Engine.PositionBeats);

@@ -44,6 +44,13 @@
 - [ ] T024 Verify quitting Nota while a binary load is stuck (Windows loader lock, macOS dyld lock) doesn't hang the exit per Edge Cases: quitting while a plug-in is loading (partial)
 - [ ] T025 Update the user manual's plug-in hosting page (EN + RU) in nota-docs — the docs repo isn't on the dev machine per Constitution VI (partial)
 
+## Phase 5: Review follow-ups (PR #1002)
+
+- [x] T026 Keep CV links onto a hosted instrument that is still loading when a project opens (they were dropped: its params didn't exist yet); the audio thread skips them until it loads per FR-007
+- [x] T027 Service plug-in loads on the view model's clock, which stops while a render owns the engine, and settle pending loads (bounded) before an export, freeze or bounce per FR-004
+- [x] T028 A plug-in that leaves the project while loading gives up its load (undo brings it back "couldn't load"); an abandoned load past its deadline ends the loads behind it with "restart required" per FR-010
+- [x] T029 Report load reasons as a code + argument and word them in the app (en.json) per Constitution VI
+
 ## Dependencies & Execution Order
 
 T001–T005 before T006; T006 before T009; T009 before T010–T013; tests after their story.

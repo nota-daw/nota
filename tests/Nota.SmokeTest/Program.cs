@@ -62,6 +62,11 @@ if (args.Length >= 2 && args[0] == "--profile-hosted")
         args.Length > 3 ? int.Parse(args[3]) : 48000);
     return 0;
 }
+if (args.Contains("--plugin-load-removal"))
+{
+    foreach (var (ok, label) in PluginLoadTests.RunRemoval()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 if (args.Contains("--plugin-load"))
 {
     foreach (var (ok, label) in PluginLoadTests.Run()) Check(ok, label);
@@ -1418,7 +1423,8 @@ using (var loads = new NotaEngine())
     int ld = loads.AddBuiltinDevice(lt, 0);
     Check(loads.DevicePluginLoadState(lt, ld) == Nota.Application.PluginLoadState.Loaded
           && loads.DevicePluginLoadState(lt, -1) == Nota.Application.PluginLoadState.Loaded
-          && loads.DevicePluginLoadReason(lt, ld) == "",
+          && loads.DevicePluginLoadReasonCode(lt, ld) == Nota.Application.PluginLoadReason.None
+          && loads.DevicePluginLoadReasonArg(lt, ld) == "",
         "built-in devices and instruments report their plug-in load state as loaded");
     Check(loads.DevicePluginLoadState(lt, 99) == Nota.Application.PluginLoadState.Loaded
           && !loads.DevicePluginLoadAction(lt, 99, Nota.Application.PluginLoadAction.TryAgain),

@@ -44,13 +44,27 @@ enum class LoadState : int32_t {
     Failed = 4,        // couldn't load (reason says why)
 };
 
-// pluginLoadAction() values.
-enum class LoadAction : int32_t { KeepWaiting = 1, GiveUp = 2, TryAgain = 3 };
+// pluginLoadAction() values. Abandon is the engine's, not the card's: the device left the
+// project while it loaded (removed, its track deleted, the project closed).
+enum class LoadAction : int32_t { KeepWaiting = 1, GiveUp = 2, TryAgain = 3, Abandon = 4 };
+
+// pluginLoadReasonCode() values, as the C ABI reports them: the app words them (Loc), with
+// pluginLoadReasonArg() filled in where it says.
+enum class LoadReason : int32_t {
+    None = 0,
+    WaitingFor = 1,      // arg: the plug-in whose binary is loading now
+    NotResponding = 2,   // arg: this plug-in's name
+    GaveUp = 3,          // stopped responding; the user gave up on it
+    RestartRequired = 4, // a load that never returned blocks loading until a restart
+    FrozeNota = 5,       // it was loading when Nota last ended; held back on project open
+    Failed = 6,          // arg: the format's message (may be empty)
+    Removed = 7,         // it left the project while it loaded
+};
 
 class PluginLoader;
 
 // One plug-in being loaded for one adapter. The adapter owns it; the loader keeps it while the
-// binary loads. Everything but `binaryDone` / `binaryError` is message-thread only.
+// binary loads. Everything but the fields marked shared is message-thread only.
 class LoadTicket {
   public:
     // Creates the instance from the loaded binary and attaches it; false + `error` on failure.
@@ -59,7 +73,8 @@ class LoadTicket {
     LoadTicket(const juce::PluginDescription& d, Finish f) : desc(d), finish(std::move(f)) {}
 
     LoadState state() const { return state_; }
-    const std::string& reason() const { return reason_; }
+    LoadReason reason() const { return reason_; }
+    const std::string& reasonArg() const { return reasonArg_; }
 
     const juce::PluginDescription desc;
 
@@ -68,7 +83,8 @@ class LoadTicket {
     Finish finish;
     LoadState state_ = LoadState::Waiting;
     LoadState reported_ = LoadState::Waiting; // the state service() last counted as a change
-    std::string reason_;
+    LoadReason reason_ = LoadReason::None;
+    std::string reasonArg_;
     std::chrono::steady_clock::time_point started_{}, deadline_{};
     // Shared with the loader thread, under the loader's mutex:
     bool cancelled_ = false;  // the adapter is gone: drop the result
@@ -119,8 +135,11 @@ class PluginLoader {
     PluginLoader();
     void run(); // the loader thread
     void enqueue(const std::shared_ptr<LoadTicket>& t);
-    void fail(LoadTicket& t, std::string reason);
+    void fail(LoadTicket& t, LoadReason reason, std::string arg = {});
     void finishOne(const std::shared_ptr<LoadTicket>& t, Serviced& s);
+    // Under mx_: the load in progress is abandoned (given up, its device gone) and past its
+    // deadline; nothing behind it can load until it returns, so stop and hand back what waits.
+    std::vector<std::shared_ptr<LoadTicket>> poisonLocked();
 
     // Freeze guard.
     void readLeftoverRecord();
@@ -136,8 +155,9 @@ class PluginLoader {
     std::condition_variable cv_;
     std::deque<std::shared_ptr<LoadTicket>> queue_;
     std::shared_ptr<LoadTicket> current_;            // binary load in progress
+    std::chrono::steady_clock::time_point currentStarted_{}; // when the loader thread took it
     std::vector<std::shared_ptr<LoadTicket>> loaded_; // binary done, waiting for service()
-    bool stuck_ = false; // the current load was given up and hasn't returned
+    bool stuck_ = false; // an abandoned load is past its deadline and hasn't returned
 
     int autoloadScope_ = 0;
     std::set<std::string> frozenIds_;

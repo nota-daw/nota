@@ -40,7 +40,8 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     bool supportsParallelRender() const override { return parallelRender_.load(std::memory_order_relaxed); }
 
     int32_t pluginLoadState() const override;
-    std::string pluginLoadReason() const override;
+    int32_t pluginLoadReasonCode() const override;
+    std::string pluginLoadReasonArg() const override;
     void pluginLoadAction(int32_t action) override;
     bool takesTimedEvents() const override { return true; } // one processBlock per block (#436)
 

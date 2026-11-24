@@ -31,8 +31,11 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_state")]
     internal static partial int DevicePluginLoadState(IntPtr engine, int trackId, int deviceIndex);
 
-    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_reason")]
-    internal static partial IntPtr DevicePluginLoadReason(IntPtr engine, int trackId, int deviceIndex);
+    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_reason_code")]
+    internal static partial int DevicePluginLoadReasonCode(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_reason_arg")]
+    internal static partial IntPtr DevicePluginLoadReasonArg(IntPtr engine, int trackId, int deviceIndex);
 
     [LibraryImport(Lib, EntryPoint = "nota_device_plugin_load_action")]
     internal static partial NotaResult DevicePluginLoadAction(IntPtr engine, int trackId, int deviceIndex, int action);

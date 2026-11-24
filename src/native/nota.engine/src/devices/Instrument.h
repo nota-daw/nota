@@ -301,9 +301,12 @@ class Instrument {
 
     // A hosted plug-in loads after it is inserted (#979, specs/113): 0 loaded (or not a hosted
     // plug-in), 1 waiting for another plug-in, 2 loading, 3 not responding, 4 couldn't load;
-    // the reason says why. Actions: 1 keep waiting, 2 give up, 3 try again. Message thread.
+    // the reason code (nota_device_plugin_load_reason_code) says why, with its argument (a
+    // plug-in's name, the format's message). Actions: 1 keep waiting, 2 give up, 3 try again,
+    // 4 abandon (the instrument left the project while it loaded). Message thread.
     virtual int32_t pluginLoadState() const { return 0; }
-    virtual std::string pluginLoadReason() const { return {}; }
+    virtual int32_t pluginLoadReasonCode() const { return 0; }
+    virtual std::string pluginLoadReasonArg() const { return {}; }
     virtual void pluginLoadAction(int32_t /*action*/) {}
 
     // Native editor GUI (M3-4). No-op for built-in instruments; hosted plugins

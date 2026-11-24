@@ -54,12 +54,17 @@ int32_t nota_engine_plugin_loads_wait(NotaEngine* e, int32_t timeout_ms) {
     return e ? ENG(e)->waitPluginLoads(timeout_ms) : 0;
 }
 int32_t nota_device_plugin_load_state(const NotaEngine* e, int32_t track_id, int32_t device_index) {
-    return e ? CENG(e)->devicePluginLoadState(track_id, device_index, nullptr) : 0;
+    return e ? CENG(e)->devicePluginLoadState(track_id, device_index, nullptr, nullptr) : 0;
 }
-const char* nota_device_plugin_load_reason(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+int32_t nota_device_plugin_load_reason_code(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    int32_t code = 0;
+    if (e) CENG(e)->devicePluginLoadState(track_id, device_index, &code, nullptr);
+    return code;
+}
+const char* nota_device_plugin_load_reason_arg(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     static std::string s; // owned by the engine, valid until the next call
     s.clear();
-    if (e) CENG(e)->devicePluginLoadState(track_id, device_index, &s);
+    if (e) CENG(e)->devicePluginLoadState(track_id, device_index, nullptr, &s);
     return s.c_str();
 }
 NotaResult nota_device_plugin_load_action(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t action) {

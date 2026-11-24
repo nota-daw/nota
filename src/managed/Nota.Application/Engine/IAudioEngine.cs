@@ -681,8 +681,11 @@ public interface IAudioEngine : IDisposable
     int WaitPluginLoads(int timeoutMs);
     /// <summary>A device's load state (deviceIndex −1 = the track's instrument).</summary>
     PluginLoadState DevicePluginLoadState(int trackId, int deviceIndex);
-    /// <summary>Why the device is waiting, not responding or couldn't load; empty otherwise.</summary>
-    string DevicePluginLoadReason(int trackId, int deviceIndex);
+    /// <summary>Why the device is waiting, not responding or couldn't load — the app words it.</summary>
+    PluginLoadReason DevicePluginLoadReasonCode(int trackId, int deviceIndex);
+    /// <summary>The reason's argument: the plug-in being waited for, this plug-in's name, or the
+    /// format's message (<see cref="PluginLoadReason"/>); empty otherwise.</summary>
+    string DevicePluginLoadReasonArg(int trackId, int deviceIndex);
     /// <summary>Keep waiting / give up / try again on a device's load.</summary>
     bool DevicePluginLoadAction(int trackId, int deviceIndex, PluginLoadAction action);
     int TrackDeviceCount(int trackId);
