@@ -144,36 +144,51 @@ public sealed partial class RemoteHub
             {
                 int knob = cmd.I;
                 if (knob is < 0 or > 7) break;
+                // A touch is checked once, before anything acts on it (specs/114): a press — or a
+                // move from a client whose press never arrived — names the track, device and page
+                // it saw; if the controller moved them a moment before, the whole touch drives
+                // nothing: no parameter, no MIDI Learn binding, no mapped target. The phone is
+                // re-sent the page and its next touch lands right.
+                bool held = cmd.Phase != 1 && c.DragKnob == knob;
+                if (!held)
+                {
+                    c.DragKnob = knob;
+                    c.DragParam = null;
+                    c.DragDevice = "";
+                    c.DragStale = (cmd.Id > 0 && cmd.Id != c.TrackId) || (cmd.Di >= 0 && cmd.Di != c.MacroDevice) || (cmd.Pg >= 0 && cmd.Pg != c.MacroPage);
+                    if (c.DragStale) c.SentScreenState = null;
+                }
+                if (c.DragStale)
+                {
+                    if (cmd.Phase == 2) EndDrag(c);
+                    break;
+                }
                 var r = host.PhoneControl(PhoneControls.Macro1 + knob, c.TrackId, cmd.V);
                 if (r == PhoneControlResult.Bound) Learned(host, c, PhoneControls.Macro1 + knob);
-                if (r != PhoneControlResult.None) break;
-                // A touch keeps the parameter it started on (specs/114): if the controller turns the
-                // page or the device under a held knob, the drag must not land on the new slot.
+                if (r != PhoneControlResult.None) { if (cmd.Phase == 2) EndDrag(c); break; }
+                // The touch keeps the parameter it started on: a page or device the controller turns
+                // to under a held knob doesn't take the drag — and if that device moved or went
+                // (a chain edit mid-drag), the touch ends.
                 RemoteParam? p = null;
-                if (cmd.Phase != 1 && c.DragKnob == knob)
+                if (held)
                 {
-                    // ...as long as that device is still there: a chain edit mid-drag ends the touch.
-                    p = c.DragParam is { } held && DeviceIdentity(held) == c.DragDevice ? held : null;
+                    p = c.DragParam is { } kept && DeviceIdentity(kept) == c.DragDevice ? kept : null;
                     if (p is null) c.DragParam = null;
                 }
                 else
                 {
-                    // A touch that started on a page the phone no longer shows (the controller moved
-                    // it a moment before the press reached Nota) drives nothing: the phone gets the
-                    // new page and the next touch lands right.
-                    bool stale = cmd.Phase == 1 && ((cmd.Id > 0 && cmd.Id != c.TrackId) || (cmd.Di >= 0 && cmd.Di != c.MacroDevice) || (cmd.Pg >= 0 && cmd.Pg != c.MacroPage));
-                    var devs = stale ? new List<RemoteMacroDevice>() : MacroDevicesFor(host, c.TrackId);
-                    if (stale) c.SentScreenState = null;
+                    var devs = MacroDevicesFor(host, c.TrackId);
                     if (c.MacroDevice < devs.Count && c.MacroPage < devs[c.MacroDevice].Pages.Count
                         && devs[c.MacroDevice].Pages[c.MacroPage].Knobs is var knobs && knob < knobs.Count)
                     {
                         p = knobs[knob];
                         if (p is not null) LedTurned(c, devs[c.MacroDevice], c.MacroPage, knob);
                     }
-                    if (cmd.Phase == 1) { c.DragKnob = knob; c.DragParam = p; c.DragDevice = p is null ? "" : DeviceIdentity(p); }
+                    c.DragParam = p;
+                    c.DragDevice = p is null ? "" : DeviceIdentity(p);
                 }
                 if (p is not null) SetParam(c, p, cmd.V, cmd.Phase);
-                if (cmd.Phase == 2) { c.DragKnob = -1; c.DragParam = null; host.Refresh(); }
+                if (cmd.Phase == 2) { EndDrag(c); host.Refresh(); }
                 break;
             }
             case "nav": Navigate(host, c, cmd.S, cmd.I); break;
@@ -200,6 +215,8 @@ public sealed partial class RemoteHub
     }
 
     private const int MasterFaderId = -1;
+
+    private static void EndDrag(RemoteClient c) { c.DragKnob = -1; c.DragParam = null; c.DragDevice = ""; c.DragStale = false; }
 
     /// <summary>Which device a parameter belongs to — the device itself, not its slot in the chain
     /// (specs/114), so a drag notices a device removed or moved under it.</summary>

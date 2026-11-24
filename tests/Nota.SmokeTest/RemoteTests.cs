@@ -240,7 +240,8 @@ internal static class RemoteTests
         public void Refresh() => Refreshes++;
         public bool LearnArmed => false;
         public string? LearnPendingName => null;
-        public PhoneControlResult PhoneControl(int controlId, int trackId, double norm) => PhoneControlResult.None;
+        public int PhoneControlCalls;   // specs/114: a stale touch must not reach MIDI Learn
+        public PhoneControlResult PhoneControl(int controlId, int trackId, double norm) { PhoneControlCalls++; return PhoneControlResult.None; }
         public string? PhoneMappingName(int controlId, int trackId) => null;
         public void DevicesChanged() { }
         public void Activity() { }
@@ -561,15 +562,17 @@ internal static class RemoteTests
         // A press that names a page the phone no longer shows drives nothing; the shown page does.
         int scHp = Enumerable.Range(0, e.DeviceParamCount(inst, comp)).First(k => e.DeviceParamName(inst, comp, k) == "SC HP");
         float scHp0 = e.DeviceGetParam(inst, comp, scHp);
+        int learnCalls0 = host.PhoneControlCalls;
         Send(new { t = "mac", i = 0, v = 0.9, ph = 1, id = inst, di = 1, pg = 0 });
         Send(new { t = "mac", i = 0, v = 0.95, ph = 2, id = inst, di = 1, pg = 0 });
         Thread.Sleep(80); hub.Tick(); hub.Tick();
         float scHpStale = e.DeviceGetParam(inst, comp, scHp);
+        int learnCallsStale = host.PhoneControlCalls - learnCalls0;
         Send(new { t = "mac", i = 0, v = 0.9, ph = 1, id = inst, di = 1, pg = 1 });
         Send(new { t = "mac", i = 0, v = 0.9, ph = 2, id = inst, di = 1, pg = 1 });
         WaitFor(() => { hub.Tick(); return e.DeviceGetParam(inst, comp, scHp) != scHp0; }, 2000);
-        yield return (scHpStale == scHp0 && e.DeviceGetParam(inst, comp, scHp) != scHp0,
-            "Macros: a touch from a page the phone no longer shows changes nothing; one from the shown page does");
+        yield return (scHpStale == scHp0 && learnCallsStale == 0 && e.DeviceGetParam(inst, comp, scHp) != scHp0,
+            "Macros: a touch from a page the phone no longer shows changes nothing (not even MIDI Learn); one from the shown page does");
 
         // Macros follows the controller to another track (on by default), not when the phone turns
         // it off, and catches up when it is turned back on.

@@ -51,6 +51,8 @@ public sealed class RemoteClient
     internal int DragKnob = -1;
     internal RemoteParam? DragParam;
     internal string DragDevice = "";
+    /// <summary>The held touch started on a page the phone no longer showed: it drives nothing.</summary>
+    internal bool DragStale;
     /// <summary>The phone walks devices and pages itself (`mac.pg` / `pgs`, `nav`); an older client
     /// gets the flat list of "Device · 1/3" entries it picks with `sub` (specs/114).</summary>
     public bool PagedMacros;
