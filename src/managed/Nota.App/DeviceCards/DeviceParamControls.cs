@@ -26,8 +26,11 @@ internal static class DeviceParamControls
     internal static Control ParamBars(DeviceCardContext ctx, int index)
     {
         int pc = ctx.Engine.DeviceParamCount(ctx.TrackId, index);
+        int kind = ctx.Engine.TrackDeviceBuiltinKind(ctx.TrackId, index);
         var body = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
-        for (int p = 0; p < pc; p++) body.Children.Add(ParamRow(ctx, index, p));
+        for (int p = 0; p < pc; p++)
+            if (DeviceView.IsSoundParam(ctx.Engine.DeviceParamName(ctx.TrackId, index, p), kind))
+                body.Children.Add(ParamRow(ctx, index, p));
         return body;
     }
 

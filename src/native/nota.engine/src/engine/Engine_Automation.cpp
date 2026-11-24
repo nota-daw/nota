@@ -33,7 +33,7 @@ static void applyTrackLanes(Track& t, double beat, double beatEnd) {
                 if (lane.paramIndex < 0) continue;
                 if (o.instrument) o.instrument->pluginParamSet(lane.paramIndex, v);
                 else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
-            } else if (o.device) o.device->setParam(lane.paramIndex, v);
+            } else if (o.device) o.device->setLiveParam(lane.paramIndex, v);
             else if (o.midi) o.midi->setParam(lane.paramIndex, v);
             continue;
         }
@@ -44,7 +44,7 @@ static void applyTrackLanes(Track& t, double beat, double beatEnd) {
         case AutomationTarget::Send: break; // specs/069: a send lane does not move the level
         case AutomationTarget::DeviceParam:
             if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.devices.size()))
-                if (auto* d = t.devices[lane.deviceIndex].get()) d->setParam(lane.paramIndex, v);
+                if (auto* d = t.devices[lane.deviceIndex].get()) d->setLiveParam(lane.paramIndex, v);
             break;
         case AutomationTarget::MidiDeviceParam: // deviceIndex = MIDI-FX chain index
             if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.midiEffects.size()))
@@ -300,6 +300,10 @@ int32_t Engine::addNestedAutomationLane(int32_t trackId, int32_t target, int32_t
     const auto tgt = static_cast<AutomationTarget>(target);
     if (tgt != AutomationTarget::DeviceParam && tgt != AutomationTarget::MidiDeviceParam && tgt != AutomationTarget::PluginParam)
         return -1;
+    if (tgt == AutomationTarget::DeviceParam) {
+        const auto owner = resolveNested(*old, host, uid, slot);
+        if (owner.device && owner.device->isLatencyConfigurationParam(paramIndex)) return -1;
+    }
     TrackLane lane;
     lane.target = tgt;
     lane.deviceIndex = host;
@@ -676,6 +680,10 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     // specs/099: the master's Volume is the graph-level masterVolume lane; it has no MIDI chain.
     if (trackId == kMasterTrackId && (tgt == AutomationTarget::Volume || tgt == AutomationTarget::MidiDeviceParam))
         return -1;
+    if (tgt == AutomationTarget::DeviceParam) {
+        const auto* device = deviceAt(trackId, deviceIndex);
+        if (device && device->isLatencyConfigurationParam(paramIndex)) return -1;
+    }
     const bool usesDev = tgt == AutomationTarget::DeviceParam || tgt == AutomationTarget::MidiDeviceParam;
     // Reuse an existing lane on the same target (no snapshot) — one lane per target.
     for (size_t i = 0; i < old->automation.size(); ++i) {

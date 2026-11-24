@@ -1068,6 +1068,10 @@ def build_sections():
                  'what is live gets solid orange. Inside a device, controls sit in grooves and the picked option is raised.', body))
 
     # Knobs, sliders, meters, wheels
+    color_rule = re.search(r'^- \*\*Nota Color spectrum\*\* (.*?)(?=\n\n)', GUIDE, re.M | re.S)
+    if not color_rule:
+        fail('missing Nota Color spectrum rule in DESIGN.md')
+    color_caption = html.escape(' '.join(color_rule[1].replace('`', '').split()))
     wheels = (f'<div class="wrail"><span class="kl">Wheels</span><div class="row g10" style="align-items:stretch">'
               f'<span class="col g4 c">{wheel(120, 0.5)}<span class="kl">Pitch</span></span>'
               f'<span class="col g4 c">{wheel(120, 0.25, "moved")}<span class="kl">Mod</span></span></div>'
@@ -1103,6 +1107,11 @@ def build_sections():
         + '<h3>Graphs</h3>'
         + stage(fig(graph(360, 156, 'EQ', 'eq', 1), 'Graph window: SurfaceInset, rule frame, labels in the corners, no fills under curves')
                 + fig(graph(240, 156, 'Impulse', 'ir'), 'Bars: an impulse response'), 'device')
+        + '<p><b>Nota Color spectrum.</b> ' + color_caption + '</p>'
+        + stage(fig('<span class="row g12">'
+                    '<span class="chip"><i class="cdot" style="background:var(--accent)"></i>Dry</span>'
+                    '<span class="chip"><i class="cdot" style="background:var(--accent);filter:invert(1)"></i>Tuned</span>'
+                    '</span>', 'Spectral legend colors'), 'device')
         + '<h3>Interaction contract</h3><ul class="plain">'
           '<li><b>Vertical drag</b>, up increases, full range over about 140 px; Shift (or Ctrl / ⌘) is fine. A click never jumps the value.</li>'
           '<li><b>Double-click on the control</b> restores the default.</li>'
