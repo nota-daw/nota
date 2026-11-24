@@ -256,6 +256,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   note map played notes instead of typing, so `a w s e d f t g y h u j k` never reached the
   field. Nota now sees when the plug-in has a text caret and leaves all typing to it; with
   no text field focused, those keys play notes as before.
+- **Nota starts in seconds on Linux with the MCP server on** (#966). Launched from the app
+  menu, startup took 25–40 s: the MCP server's web host used the current folder — the home
+  folder — as its content root and watched all of it for a settings file, one inotify watch
+  per folder. It uses the app's own folder now.
 - **An armed audio track's meter shows its input again** (#987). When the audio input
   didn't open the moment a track was armed or set to monitor (on macOS, while the
   microphone permission was still being asked, or the interface not ready yet), Nota never

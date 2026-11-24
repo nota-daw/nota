@@ -30,7 +30,14 @@ public sealed class NotaMcpServer : IAsyncDisposable
     {
         if (_app is not null) return;
 
-        var builder = WebApplication.CreateBuilder();
+        // Content root = the app's own folder, not the process's current directory (#966).
+        // ASP.NET watches the content root recursively for appsettings.json; launched from a
+        // desktop menu the current directory is $HOME, and on Linux that put an inotify watch
+        // on every folder in it — 25–40 s on the UI thread before the window showed.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+        });
         builder.Logging.ClearProviders();                    // don't spam the app's console
         builder.WebHost.ConfigureKestrel(k => k.ListenLocalhost(port));   // loopback only
 
