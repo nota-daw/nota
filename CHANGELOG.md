@@ -259,6 +259,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   past the loop records straight through, where you hear it, not into the loop; seek out of
   (or back into) the loop during a take and what was recorded so far lands as a clip, and the
   take carries on where you now are.
+- **Nota starts in seconds on Linux with the MCP server on** (#966). Launched from the app
+  menu, startup took 25–40 s: the MCP server's web host used the current folder — the home
+  folder — as its content root and watched all of it for a settings file, one inotify watch
+  per folder. It uses the app's own folder now.
+- **An armed audio track's meter shows its input again** (#987). When the audio input
+  didn't open the moment a track was armed or set to monitor (on macOS, while the
+  microphone permission was still being asked, or the interface not ready yet), Nota never
+  tried again for the meter: takes still recorded, but the track's meter stayed at zero and
+  monitoring was silent. Any later successful open of the input — a take starting —
+  now brings the input meter and monitoring back.
 - **Samples in folders with accented names play on Windows** (#974). A WAV, FLAC or MP3
   whose folder or file name had a character outside plain English — `Música`, `Canción`,
   `ñ`, Cyrillic, CJK — couldn't be opened on Windows: it didn't sound, didn't show its

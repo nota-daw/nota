@@ -2636,6 +2636,7 @@ class Engine {
     bool hwMonitorWanted_ = false;             // message thread: some track monitors hw input
     bool inputTestMode_ = false;               // tests: never open a real capture device
     bool ensureAudioInput();                   // open the capture device once (shared)
+    bool openAudioInput();                     // ensureAudioInput without the monitor-tap catch-up
     void releaseAudioInputIfIdle();            // close it when nothing records/monitors
     void updateMonitorInput();                 // (re)evaluate hw monitoring after edits
     void pullMonitorInput(int32_t frames);     // audio thread: ring -> monitorHwBuf_
