@@ -256,7 +256,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   plays into its end: launched (or seeked) past it, playback carries on, and switching the
   loop on or moving it behind the playhead lets it carry on too. Seek back before the loop
   end (or slow the tempo so the playhead lands before it) and it loops again. Recording from
-  past the loop records straight through, where you hear it, not into the loop.
+  past the loop records straight through, where you hear it, not into the loop; seek out of
+  (or back into) the loop during a take and what was recorded so far lands as a clip, and the
+  take carries on where you now are.
 - **Samples in folders with accented names play on Windows** (#974). A WAV, FLAC or MP3
   whose folder or file name had a character outside plain English — `Música`, `Canción`,
   `ñ`, Cyrillic, CJK — couldn't be opened on Windows: it didn't sound, didn't show its

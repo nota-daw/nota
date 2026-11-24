@@ -127,6 +127,8 @@ class Transport {
     // Atomic mirror for the UI (poll these; never touch the private fields).
     double uiPositionBeats() const { return uiBeats_.load(std::memory_order_relaxed); }
     bool uiIsPlaying() const { return uiPlaying_.load(std::memory_order_relaxed); }
+    // The transport plays on past the loop end (#981): a running loop take must stop folding.
+    bool uiPastLoopEnd() const { return uiPastLoopEnd_.load(std::memory_order_relaxed); }
     double uiBpm() const { return uiBpm_.load(std::memory_order_relaxed); }
     // Where Stop rewinds to / Play launched from (the insert marker), in beats.
     double uiAnchorBeats() const { return uiAnchorBeats_.load(std::memory_order_relaxed); }
@@ -161,6 +163,7 @@ class Transport {
     std::atomic<double> uiBeats_{0.0};
     std::atomic<double> uiBpm_{120.0};
     std::atomic<bool> uiPlaying_{false};
+    std::atomic<bool> uiPastLoopEnd_{false};
     std::atomic<double> uiAnchorBeats_{0.0};
 
     // Atomic payloads avoid data races even when a reader overlaps the writer.

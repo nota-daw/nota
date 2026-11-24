@@ -2390,6 +2390,8 @@ class Engine {
     double takeTransportBeats() const {
         return std::isnan(takeBeatOverride_) ? transport_.uiPositionBeats() : takeBeatOverride_;
     }
+    // The transport plays on past the loop (#981). The take test hooks roll no transport.
+    bool takeLoopBypassed() const { return std::isnan(takeBeatOverride_) && transport_.uiPastLoopEnd(); }
     double takePlayhead() const;
     bool takeTransportPlaying() const;
     // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
@@ -2719,6 +2721,10 @@ class Engine {
     void beginTestLane(int32_t trackId, int32_t first, int32_t width);
     struct TakeGeometry;
     void materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g);
+    // Land what the running Arrangement take captured so far, as a stop would, and keep every
+    // lane recording into a fresh capture (#981: the take moved into or out of the loop).
+    void landCaptureSoFar();
+    bool captureLinearUnderLoop_ = false; // a straight capture with the loop on, past its end
     void finishCaptureLane(int32_t trackId); // one lane leaves a running take (its track disarmed)
     // Session (specs/086): another slot joins the running Session audio take as a lane of its own.
     bool addSessionAudioLane(int32_t trackId, int32_t scene);

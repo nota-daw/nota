@@ -1119,6 +1119,7 @@ void Engine::beginCaptureLayout() {
         l.buf.clear();
         l.passes.clear();
     }
+    captureLinearUnderLoop_ = false;
     if (!recordSessionAudio_ && loopWrapsFrom(audioRecordStartBeat_)) activateLoopPunch(audioRecordStartBeat_);
 }
 
@@ -1194,9 +1195,25 @@ double Engine::audioRecordLengthBeats(int32_t trackId) const {
 }
 
 void Engine::drainInputQueue() {
-    // Loop enabled after recording began → switch to loop punch from here.
-    if (audioRecording_ && !recordSessionAudio_ && !captureLoop_ && loopWrapsFrom(takeTransportBeats()))
-        activateLoopPunch(takeTransportBeats());
+    if (audioRecording_ && !recordSessionAudio_) {
+        const double at = takeTransportBeats();
+        // A seek past the loop end during a loop take (#981): the transport plays on there, so
+        // the passes so far land and the take goes on straight from where it is heard.
+        if (captureLoop_ && takeLoopBypassed()) {
+            landCaptureSoFar();
+            audioRecordStartBeat_ = at;
+            captureLinearUnderLoop_ = true;
+        }
+        if (!captureLoop_ && loopEnabled_ && !loopWrapsFrom(at)) captureLinearUnderLoop_ = true;
+        // Loop enabled after recording began → switch to loop punch from here, dropping the
+        // straight pre-roll. A straight take that played on past the loop and is seeked back
+        // into it keeps what it recorded instead: that lands first (#981).
+        if (!captureLoop_ && loopWrapsFrom(at)) {
+            if (captureLinearUnderLoop_ && captureWritePos_ > 0) landCaptureSoFar();
+            captureLinearUnderLoop_ = false;
+            activateLoopPunch(at);
+        }
+    }
 
     for (auto& l : captureLanes_) l.scratch.clear();
     auto clearScratch = [&] {
@@ -1435,6 +1452,37 @@ struct Engine::TakeGeometry {
     size_t origin = 0, reached = 0, loopFrames = 0;
     double loopStartBeat = 0.0;
 };
+
+void Engine::landCaptureSoFar() {
+    TakeGeometry g;
+    g.loop = captureLoop_;
+    g.wrapped = captureWrapped_;
+    g.origin = captureOrigin_;
+    g.reached = captureWritePos_;
+    g.loopFrames = captureLoopFrames_;
+    g.loopStartBeat = captureLoopStartBeat_;
+    if (g.loop) finishLoopPass(g.reached);
+    beginUndoGroup();
+    for (auto& l : captureLanes_) {
+        CaptureLane landed;
+        std::swap(landed, l); // the lane's frames and passes land; its set-up records on
+        l.trackId = landed.trackId;
+        l.first = landed.first;
+        l.width = landed.width;
+        l.channels = landed.channels;
+        l.scene = landed.scene;
+        l.lenBeats = landed.lenBeats;
+        l.ownLen = landed.ownLen;
+        l.fresh = landed.fresh;
+        materialiseCaptureLane(landed, g);
+    }
+    endUndoGroup();
+    captureLoop_ = false;
+    captureWrapped_ = false;
+    captureWritePos_ = 0;
+    captureOrigin_ = 0;
+    capturePassFrom_ = 0;
+}
 
 void Engine::stopAudioRecording() {
     if (!audioRecording_) return;
