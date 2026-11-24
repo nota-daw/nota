@@ -84,6 +84,32 @@ internal static class PlayPastLoopTests
         bool one = r.TryGetAudioClipInfo(t, 0, out var clip) && !r.TryGetAudioClipInfo(t, 1, out _);
         yield return (lanes == 1 && one && Math.Abs(clip.StartBeat - 4.0) < 1e-6 && r.TakeCount(t) <= 1,
             $"#981: a take from past the loop end records straight through (start {clip.StartBeat:F2}, takes {r.TakeCount(t)})");
+
+        // A loop take seeked past the loop end goes on straight from the seek — even when a beat
+        // renders before the queue drains, its audio starts at the seek, not a beat later.
+        using var s = new NotaEngine();
+        s.SetBpm(120);                            // 44.1 kHz offline: 22 050 frames a beat
+        int src = s.AddBassSynthTrack();
+        int mc = s.AddMidiClip(src, 0, 16);
+        s.SetClipNotes(src, mc, new[] { new NotaNote(36, 0.0, 16.0, 1.0f) });
+        int rec = s.AddAudioTrack();
+        s.SetTrackRecordInput(rec, src);
+        s.SetTrackArmed(rec, true);
+        s.SetLoop(true, 0.0, 4.0);
+        s.Seek(1.0);
+        s.SetRecording(true);
+        var blk = new float[1050 * 2];            // 21 blocks = one beat
+        for (int b = 0; b < 42; b++) { s.RenderOffline(blk, 1050); s.Poll(); }   // ~beat 3, inside the loop
+        s.Seek(8.0);
+        for (int b = 0; b < 21; b++) s.RenderOffline(blk, 1050);                  // a beat played on, not drained
+        s.Poll();
+        for (int b = 0; b < 21; b++) { s.RenderOffline(blk, 1050); s.Poll(); }
+        s.SetRecording(false); s.Poll();
+        double straight = double.NaN;
+        for (int i = 0; s.TryGetAudioClipInfo(rec, i, out var ci); i++)
+            if (ci.StartBeat >= 4.0) straight = ci.StartBeat;
+        yield return (Math.Abs(straight - 8.0) < 0.05,
+            $"#981: a loop take seeked past the loop end records on from the seek (straight clip at {straight:F3}, want 8)");
     }
 
     private static void Render(NotaEngine e, int frames)

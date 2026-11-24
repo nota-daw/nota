@@ -129,6 +129,9 @@ class Transport {
     bool uiIsPlaying() const { return uiPlaying_.load(std::memory_order_relaxed); }
     // The transport plays on past the loop end (#981): a running loop take must stop folding.
     bool uiPastLoopEnd() const { return uiPastLoopEnd_.load(std::memory_order_relaxed); }
+    // The beat it began playing on from (a seek or Play target): where a loop take's audio
+    // stops belonging to the loop.
+    double uiPastLoopFromBeats() const { return uiPastLoopFrom_.load(std::memory_order_relaxed); }
     double uiBpm() const { return uiBpm_.load(std::memory_order_relaxed); }
     // Where Stop rewinds to / Play launched from (the insert marker), in beats.
     double uiAnchorBeats() const { return uiAnchorBeats_.load(std::memory_order_relaxed); }
@@ -139,7 +142,10 @@ class Transport {
 
   private:
     void publish();
-    void updatePastLoopEnd() { pastLoopEnd_ = loopEnabled_ && playheadSamples_ >= loopEndSamples() - 0.5; }
+    void updatePastLoopEnd() {
+        pastLoopEnd_ = loopEnabled_ && playheadSamples_ >= loopEndSamples() - 0.5;
+        if (pastLoopEnd_) pastLoopFromSamples_ = playheadSamples_; // a Play, seek or loop move: playing on from here
+    }
     // Keep map searches out of these small fixed-clock accessors, so callers can
     // inline the ordinary arithmetic without pulling in the compiled-map lookup.
     double mappedBpm() const;
@@ -164,6 +170,8 @@ class Transport {
     std::atomic<double> uiBpm_{120.0};
     std::atomic<bool> uiPlaying_{false};
     std::atomic<bool> uiPastLoopEnd_{false};
+    std::atomic<double> uiPastLoopFrom_{0.0};
+    double pastLoopFromSamples_ = 0.0;
     std::atomic<double> uiAnchorBeats_{0.0};
 
     // Atomic payloads avoid data races even when a reader overlaps the writer.

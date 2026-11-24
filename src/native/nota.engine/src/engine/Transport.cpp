@@ -56,6 +56,7 @@ TransportInfo Transport::transportInfo(double blockStartSamples) const {
 
 void Transport::publish() {
     uiPastLoopEnd_.store(loopEnabled_ && pastLoopEnd_, std::memory_order_relaxed);
+    if (pastLoopEnd_) uiPastLoopFrom_.store(beatAtSamples(pastLoopFromSamples_), std::memory_order_relaxed);
     // The ordinary clock needs one conversion factor, without querying mapped
     // state separately for each published value.
     if (!map_ && !lastMap_) {

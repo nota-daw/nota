@@ -1207,13 +1207,8 @@ double Engine::audioRecordLengthBeats(int32_t trackId) const {
 void Engine::drainInputQueue() {
     if (audioRecording_ && !recordSessionAudio_) {
         const double at = takeTransportBeats();
-        // A seek past the loop end during a loop take (#981): the transport plays on there, so
-        // the passes so far land and the take goes on straight from where it is heard.
-        if (captureLoop_ && takeLoopBypassed()) {
-            landCaptureSoFar();
-            audioRecordStartBeat_ = at;
-            captureLinearUnderLoop_ = true;
-        }
+        // (A seek past the loop end during a loop take is handled where the frames are
+        // written below: it splits this drain's frames at the seek, #981.)
         if (!captureLoop_ && loopEnabled_ && !loopWrapsFrom(at)) captureLinearUnderLoop_ = true;
         // Loop enabled after recording began → switch to loop punch from here, dropping the
         // straight pre-roll. A straight take that played on past the loop and is seeked back
@@ -1280,13 +1275,28 @@ void Engine::drainInputQueue() {
     if (int64_t dropped = inputDroppedFrames_.exchange(0, std::memory_order_relaxed); dropped > 0)
         for (auto& l : captureLanes_)
             l.scratch.insert(l.scratch.end(), static_cast<size_t>(dropped) * static_cast<size_t>(l.channels), 0.0f);
-    const size_t frames = captureLanes_[0].scratch.size() / static_cast<size_t>(captureLanes_[0].channels);
+    size_t frames = captureLanes_[0].scratch.size() / static_cast<size_t>(captureLanes_[0].channels);
     if (frames == 0) return;
 
     if (captureLoop_ && captureLoopFrames_ > 0) {
+        // A seek past the loop end during a loop take (#981): the transport plays on from the
+        // seek, so the take must too. This drain's frames were captured up to now; the ones
+        // after the seek (the time the transport has played on since) start the straight take
+        // at the seek, the rest still belong to the loop — so nothing lands later than it sounded.
+        size_t toLoop = frames;
+        double from = 0.0, now = 0.0, fpb = 0.0;
+        const bool split = takeLoopBypassed();
+        if (split) {
+            from = transport_.uiPastLoopFromBeats();
+            now = takeTransportBeats();
+            const double devSR = transport_.sampleRate();
+            fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
+            const double after = std::max(0.0, (now - from) * fpb);
+            toLoop = frames - std::min(frames, static_cast<size_t>(std::llround(after)));
+        }
         // Loop punch: write into the loop-region buffers, the shared cursor wrapping at the
         // loop length so each pass overwrites the previous in place (frame-count clock → clean seams).
-        for (size_t i = 0; i < frames; ++i) {
+        for (size_t i = 0; i < toLoop; ++i) {
             for (auto& l : captureLanes_) {
                 const size_t ch = static_cast<size_t>(l.channels);
                 for (size_t c = 0; c < ch; ++c) l.buf[captureWritePos_ * ch + c] = l.scratch[i * ch + c];
@@ -1298,7 +1308,18 @@ void Engine::drainInputQueue() {
                 capturePassFrom_ = 0;
             }
         }
-        return;
+        if (!split) return;
+        landCaptureSoFar(); // the loop's passes land; every lane now records straight
+        // The straight take starts where its first frame sounded: the seek, or later if the
+        // queue holds less than the time played on since.
+        audioRecordStartBeat_ = fpb > 0.0 ? std::max(from, now - static_cast<double>(frames - toLoop) / fpb) : from;
+        captureLinearUnderLoop_ = true;
+        for (auto& l : captureLanes_) {
+            const size_t ch = static_cast<size_t>(l.channels);
+            l.scratch.erase(l.scratch.begin(), l.scratch.begin() + static_cast<std::ptrdiff_t>(std::min(l.scratch.size(), toLoop * ch)));
+        }
+        frames -= toLoop;
+        if (frames == 0) return;
     }
 
     // Linear append: every lane grows by exactly what was captured, reserved in 30 s steps so
@@ -1476,6 +1497,7 @@ void Engine::landCaptureSoFar() {
     for (auto& l : captureLanes_) {
         CaptureLane landed;
         std::swap(landed, l); // the lane's frames and passes land; its set-up records on
+        l.scratch = std::move(landed.scratch); // this drain's frames not yet written stay with it
         l.trackId = landed.trackId;
         l.first = landed.first;
         l.width = landed.width;
