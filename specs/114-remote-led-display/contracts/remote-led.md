@@ -47,6 +47,17 @@ know a field or a message ignores it.
   controller's page (page), so the controller follows; the phone gets a fresh `mac` either way.
 - At an end of its range a step does nothing.
 
+## `mac` (phone → Nota) — a touch names what it saw
+
+```jsonc
+{ "t": "mac", "i": 3, "v": 0.42, "ph": 1, "id": 6, "di": 1, "pg": 0 }   // press: track, device, page on screen
+```
+
+- On the press (`ph: 1`) Nota compares `id` / `di` / `pg` with what it holds for the phone; if any
+  differs (the controller moved the page a moment before) the touch drives nothing and the phone
+  is re-sent `mac`. Moves (`ph: 0`) and the release (`ph: 2`) keep the parameter the press
+  resolved. Older phones send none of the three; their presses are taken as before.
+
 ## `mfollow` (phone → Nota) and `fc` in `hello` / `pair`
 
 ```jsonc

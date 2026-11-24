@@ -140,7 +140,12 @@ public sealed partial class RemoteHub
                 if (cmd.Phase != 1 && c.DragKnob == knob) p = c.DragParam;
                 else
                 {
-                    var devs = MacroDevicesFor(host, c.TrackId);
+                    // A touch that started on a page the phone no longer shows (the controller moved
+                    // it a moment before the press reached Nota) drives nothing: the phone gets the
+                    // new page and the next touch lands right.
+                    bool stale = cmd.Phase == 1 && ((cmd.Id > 0 && cmd.Id != c.TrackId) || (cmd.Di >= 0 && cmd.Di != c.MacroDevice) || (cmd.Pg >= 0 && cmd.Pg != c.MacroPage));
+                    var devs = stale ? new List<RemoteMacroDevice>() : MacroDevicesFor(host, c.TrackId);
+                    if (stale) c.SentScreenState = null;
                     if (c.MacroDevice < devs.Count && c.MacroPage < devs[c.MacroDevice].Pages.Count
                         && devs[c.MacroDevice].Pages[c.MacroPage].Knobs is var knobs && knob < knobs.Count)
                     {

@@ -45,7 +45,9 @@
     drag = { i, y: e.clientY, v };
     active = i;
     local[i] = v;
-    app.send({ t: 'mac', i, v, ph: 1 });
+    // The press names the track, device and page on screen, so Nota can refuse it if the
+    // controller moved them meanwhile (specs/114); the rest of the touch follows its start.
+    app.send({ t: 'mac', i, v, ph: 1, id: m.id, di: m.di, pg: m.pg ?? 0 });
   }
   function move(e: PointerEvent) {
     if (!drag) return;

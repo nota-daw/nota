@@ -558,6 +558,19 @@ internal static class RemoteTests
         var mPast = Wait("mac", 300, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() != 1);   // the Compressor, another page
         yield return (mPast is null, "Macros: Page ▶ on the last page stays");
 
+        // A press that names a page the phone no longer shows drives nothing; the shown page does.
+        int scHp = Enumerable.Range(0, e.DeviceParamCount(inst, comp)).First(k => e.DeviceParamName(inst, comp, k) == "SC HP");
+        float scHp0 = e.DeviceGetParam(inst, comp, scHp);
+        Send(new { t = "mac", i = 0, v = 0.9, ph = 1, id = inst, di = 1, pg = 0 });
+        Send(new { t = "mac", i = 0, v = 0.95, ph = 2, id = inst, di = 1, pg = 0 });
+        Thread.Sleep(80); hub.Tick(); hub.Tick();
+        float scHpStale = e.DeviceGetParam(inst, comp, scHp);
+        Send(new { t = "mac", i = 0, v = 0.9, ph = 1, id = inst, di = 1, pg = 1 });
+        Send(new { t = "mac", i = 0, v = 0.9, ph = 2, id = inst, di = 1, pg = 1 });
+        WaitFor(() => { hub.Tick(); return e.DeviceGetParam(inst, comp, scHp) != scHp0; }, 2000);
+        yield return (scHpStale == scHp0 && e.DeviceGetParam(inst, comp, scHp) != scHp0,
+            "Macros: a touch from a page the phone no longer shows changes nothing; one from the shown page does");
+
         // Macros follows the controller to another track (on by default), not when the phone turns
         // it off, and catches up when it is turned back on.
         RemoteControllerFocus FocusOn(int track) => new("KeyLab", "device", 0, track, "", "Synth", -1, 0, 1, "", 0, 0)

@@ -334,7 +334,9 @@ public sealed partial class RemoteHub
 }
 
 /// <summary>A phone command, parsed on the socket thread and applied on the UI tick.</summary>
-internal readonly record struct RemoteCommand(string T, int Id, int I, double V, double V2, bool On, int Phase, string S)
+/// <summary>A phone command. <see cref="Di"/> / <see cref="Pg"/>: the Macros device and page the phone
+/// showed when it sent it (specs/114), −1 when it didn't say.</summary>
+internal readonly record struct RemoteCommand(string T, int Id, int I, double V, double V2, bool On, int Phase, string S, int Di = -1, int Pg = -1)
 {
     public static RemoteCommand Parse(string t, JsonElement m) => new(
         t,
@@ -344,5 +346,7 @@ internal readonly record struct RemoteCommand(string T, int Id, int I, double V,
         RemoteHub.Num(m, "v2"),
         RemoteHub.Bool(m, "on"),
         RemoteHub.Int(m, "ph"),
-        RemoteHub.Str(m, "s"));
+        RemoteHub.Str(m, "s"),
+        RemoteHub.Int(m, "di", -1),
+        RemoteHub.Int(m, "pg", -1));
 }
