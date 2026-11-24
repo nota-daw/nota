@@ -17,4 +17,10 @@ namespace nota {
 // format. Format is chosen by file extension.
 std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path);
 
+#ifdef _WIN32
+// A UTF-8 path as Windows wide characters, for the dr_libs *_w opens: their char* opens read
+// the path in the ANSI code page, so a non-ASCII folder or file name failed (#974).
+std::wstring widePath(const std::string& utf8);
+#endif
+
 } // namespace nota

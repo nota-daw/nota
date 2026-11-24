@@ -833,11 +833,12 @@ public sealed partial class ModularView : UserControl
     // params, so the card reflects what's being modulated; expanded (↕), it shows every
     // param with the patched ones kept on top. Records HiddenParamCount so the header knows
     // whether the expand affordance would actually reveal anything.
-    private void PopulateParams(GNode n, int count, Func<int, bool> modulated, Func<int, Control> cell)
+    private void PopulateParams(GNode n, int count, Func<int, bool> modulated, Func<int, Control> cell, Func<int, bool>? include = null)
     {
         var patched = new List<int>();
         var rest = new List<int>();
-        for (int p = 0; p < count; p++) (modulated(p) ? patched : rest).Add(p);
+        for (int p = 0; p < count; p++)
+            if (include?.Invoke(p) ?? true) (modulated(p) ? patched : rest).Add(p);
         foreach (int p in patched) n.Params.Add(cell(p));   // patched knobs first (at the top)
         bool expanded = _expanded.Contains(n.Id);
         if (expanded) foreach (int p in rest) n.Params.Add(cell(p));
@@ -855,7 +856,9 @@ public sealed partial class ModularView : UserControl
             case Slot.Instrument:
                 PopulateParams(n, _engine.PluginParamCount(t, -1), p => _engine.ParamModulated(1, t, -1, p), InstrumentParam); break;
             case Slot.Device:
-                PopulateParams(n, _engine.DeviceParamCount(t, i), p => _engine.DeviceParamModulated(t, i, p), p => DeviceParam(i, p)); break;
+                PopulateParams(n, _engine.DeviceParamCount(t, i), p => _engine.DeviceParamModulated(t, i, p),
+                    p => DeviceParam(i, p), p => !IsExcludedParam(t, 0, i, p));
+                break;
             case Slot.MidiFx:
                 PopulateParams(n, _engine.MidiEffectParamCount(t, i), p => _engine.ParamModulated(2, t, i, p), p => MidiEffectParam(i, p)); break;
         }
