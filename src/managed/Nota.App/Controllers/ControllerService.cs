@@ -965,18 +965,17 @@ public sealed class ControllerService
         if (c.State.BankFollow(trackIds.IndexOf(to), trackIds.Count)) BankChanged?.Invoke();
     }
 
-    /// <summary>Select <paramref name="trackId"/> as Track ◀ ▶ do — the selection, then every
-    /// controller's bank moved the least amount that keeps it inside (a phone's Macros arrows,
-    /// specs/114).</summary>
+    /// <summary>Select <paramref name="trackId"/> as Track ◀ ▶ do — the selection, then the bank of
+    /// the lead controller (the one Macros follows, as FocusSummary picks it) moved the least amount
+    /// that keeps it inside; other controllers keep their banks (a phone's Macros arrows, specs/114).</summary>
     public void SelectTrackFromRemote(int trackId)
     {
         SelectTrack?.Invoke(trackId);
         var ids = TrackIds();
         int at = ids.IndexOf(trackId);
         if (at < 0) return;
-        bool moved = false;
-        foreach (var c in _controllers.Values) moved |= c.State.BankFollow(at, ids.Count);
-        if (moved) BankChanged?.Invoke();
+        var lead = _controllers.Values.FirstOrDefault(c => c.Stage == ControllerStage.Active && c.HasKnobs);
+        if (lead is not null && lead.State.BankFollow(at, ids.Count)) BankChanged?.Invoke();
     }
 
     /// <summary>Put every controller's knobs that follow a device on <paramref name="page"/> of the
