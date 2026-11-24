@@ -13,9 +13,8 @@ knobs, where each page of each built-in device draws a simplified version of its
 frame is rendered by Nota and sent over the Remote protocol, clients only draw the dots. First
 wave: Volt and Reverb." Mockup: https://claude.ai/artifact/G2Wspdbj83aCbm5ybsxg4c.
 
-**Issue**: none yet. The user (maintainer) chose to open the issue and approve it when the pull
-request is ready; the PR will link it (`Closes #N`). This departs from constitution principle 0
-at the user's explicit request.
+**Issue**: [nota-daw/nota#1030](https://github.com/nota-daw/nota/issues/1030) (approved). It was opened
+together with the pull request, at the maintainer's request; the spec and code came first.
 
 ## Nota Context *(fill in — drives plan and tasks)*
 
