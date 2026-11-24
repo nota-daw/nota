@@ -284,6 +284,7 @@ class Color final : public Device {
     MidiKeyNotes midiStart_{};
     std::array<MidiEv, 1024> midiEvents_{};
     int32_t midiBlockSource_ = -1, midiEventCount_ = 0;
+    HeldMidiKeyReader heldKeys_; // it reads the held notes, also while its track is silent
 };
 
 } // namespace nota

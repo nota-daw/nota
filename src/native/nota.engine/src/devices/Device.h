@@ -33,6 +33,20 @@ struct MidiKeyBlock {
     int endMask = 0; // pitch classes held after the last event
 };
 
+// Devices that read MidiKeyBlock::start / endMask (the notes held before and after a block)
+// or override wantsMidiKeyWhenSilent hold one of these (Nota Color, #977). While none exists
+// in the process, the render keeps no held-note books and skips the silent tracks' MIDI-key
+// walk, so a project without such a device pays nothing for them (perf gate). Counting is
+// conservative: a device kept alive by the undo history still counts.
+inline std::atomic<int32_t> gHeldMidiKeyReaders{0};
+struct HeldMidiKeyReader {
+    HeldMidiKeyReader() noexcept { gHeldMidiKeyReaders.fetch_add(1, std::memory_order_relaxed); }
+    HeldMidiKeyReader(const HeldMidiKeyReader&) noexcept : HeldMidiKeyReader() {}
+    HeldMidiKeyReader& operator=(const HeldMidiKeyReader&) noexcept { return *this; }
+    ~HeldMidiKeyReader() { gHeldMidiKeyReaders.fetch_sub(1, std::memory_order_relaxed); }
+};
+inline bool heldMidiKeysRead() noexcept { return gHeldMidiKeyReaders.load(std::memory_order_relaxed) > 0; }
+
 class RackCore;
 
 // A new device's Device::lineage().
@@ -259,7 +273,8 @@ class Device {
     // returns true; the engine then hands it the sidechain source track's post-FX note
     // events for the block (offsets within the block) right before process(). Audio thread.
     virtual bool wantsMidiKey() const { return false; }
-    // A note display can consume its MIDI key even when its audio chain is skipped.
+    // A note display can consume its MIDI key even when its audio chain is skipped. A device
+    // returning true must hold a HeldMidiKeyReader, or the render never asks it.
     virtual bool wantsMidiKeyWhenSilent() const { return false; }
     virtual void setMidiKey(const MidiEv* /*evs*/, int32_t /*n*/) {}
     virtual void setMidiKeyBlock(const MidiKeyBlock& block) {
