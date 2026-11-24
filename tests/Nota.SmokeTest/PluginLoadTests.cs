@@ -79,6 +79,32 @@ internal static class PluginLoadTests
         return catalog;
     }
 
+    // On Linux, glibc's dlopen holds the process-wide loader lock while the probe's static
+    // initialiser sleeps, and .NET binds each P/Invoke with dlsym (same lock) on its first call:
+    // the first call of an engine function during the blocking load would wait for the whole load,
+    // and look like the host blocking on the binary. Bind every one the checks call while a load
+    // is out, once, on a throwaway engine (binding is per process). The app's own first-call
+    // bindings happen at start-up and while the user works, well before a plug-in's load.
+    private static void WarmUpInterop()
+    {
+        using var w = new NotaEngine();
+        w.RenderOffline(new float[256], 128, 48000);
+        int t = w.AddAudioTrack();
+        int d = w.AddBuiltinDevice(t, 0);
+        w.ServicePluginLoads();
+        w.WaitPluginLoads(0);
+        w.DevicePluginLoadState(t, d);
+        w.DevicePluginLoadReasonCode(t, d);
+        w.DevicePluginLoadReasonArg(t, d);
+        w.DevicePluginLoadAction(t, d, PluginLoadAction.KeepWaiting);
+        w.PluginParamCount(t, d);
+        w.TrackDeviceCount(t);
+        w.RemoveDevice(t, d);
+        w.Undo();
+        Thread.Sleep(1);
+        _ = Stopwatch.StartNew().ElapsedMilliseconds;
+    }
+
     // Removing a plug-in whose binary load doesn't come back: the loads behind it end, asking for
     // a restart, instead of waiting for a card that is gone; undo brings it back "couldn't load".
     public static IEnumerable<(bool Ok, string Label)> RunRemoval()
@@ -87,6 +113,7 @@ internal static class PluginLoadTests
         try
         {
             int catalog = ScanProbe(scratch, out _);
+            WarmUpInterop();   // before the blocking load (Linux: see WarmUpInterop)
             using var e = new NotaEngine();
             e.RenderOffline(new float[256], 128, 48000);
             int t = e.AddInstrumentTrack();
@@ -138,6 +165,7 @@ internal static class PluginLoadTests
         try
         {
             int catalog = ScanProbe(scratch, out _);
+            WarmUpInterop();   // before the blocking load (Linux: see WarmUpInterop)
             using var e = new NotaEngine();
             e.RenderOffline(new float[256], 128, 48000);
             int t = e.AddInstrumentTrack();
@@ -211,6 +239,7 @@ internal static class PluginLoadTests
                 "a device that couldn't load keeps its identity and saved state byte for byte");
 
             // ---- a binary that blocks while it loads (US1) --------------------------------
+            WarmUpInterop();   // after the freeze guard: the first engine reads the leftover record
             var sw = Stopwatch.StartNew();
             int fx = e.AddTrackEffectPlugin(t, catalog);
             long insertMs = sw.ElapsedMilliseconds;
