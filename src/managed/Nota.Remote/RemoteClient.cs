@@ -39,8 +39,26 @@ public sealed class RemoteClient
     public volatile bool Follow;
     /// <summary>The screen the phone shows: what state it needs pushed.</summary>
     public volatile string Screen = "";
-    /// <summary>The Macros screen's device (index into the track's macro devices).</summary>
+    /// <summary>The Macros screen's device (index into the track's chain as the phone lists it).</summary>
     public int MacroDevice;
+    /// <summary>The Macros screen's page of that device (specs/114).</summary>
+    public int MacroPage;
+    /// <summary>Macros follows the hardware controller — its track, device and page — and the
+    /// phone's Track / Device / Page buttons move the controller (specs/114). On unless the phone
+    /// turns it off.</summary>
+    public volatile bool FollowController = true;
+    /// <summary>The Macros knob held now and the parameter its touch started on (−1 / null: none).</summary>
+    internal int DragKnob = -1;
+    internal RemoteParam? DragParam;
+    internal string DragDevice = "";
+    /// <summary>The held touch started on a page the phone no longer showed: it drives nothing.</summary>
+    internal bool DragStale;
+    /// <summary>The phone walks devices and pages itself (`mac.pg` / `pgs`, `nav`); an older client
+    /// gets the flat list of "Device · 1/3" entries it picks with `sub` (specs/114).</summary>
+    public bool PagedMacros;
+    /// <summary>The last LED frame sent (RLE4 bytes) and what it showed; null off Macros (specs/114).</summary>
+    internal byte[]? SentLed;
+    internal string? SentLedKey;
     /// <summary>Round-trip time the phone measured, ms (−1 = not yet).</summary>
     public volatile int RttMs = -1;
     public long LastActivityTicks;

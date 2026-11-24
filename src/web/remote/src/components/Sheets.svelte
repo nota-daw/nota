@@ -112,7 +112,7 @@
     <div class="label head">Device on {app.track?.name ?? 'this track'}</div>
     <div class="list">
       {#each app.mac?.devs ?? [] as d, i}
-        <button class="row" class:on={i === (app.mac?.di ?? 0)} onclick={() => { app.macroDevice = i; app.sub(); app.sheet = null; }}>
+        <button class="row" class:on={i === (app.mac?.di ?? 0)} onclick={() => { app.nav('deviceAt', i); app.sheet = null; }}>
           <span class="names"><span class="n">{d}</span></span>
         </button>
       {/each}

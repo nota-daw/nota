@@ -240,7 +240,8 @@ internal static class RemoteTests
         public void Refresh() => Refreshes++;
         public bool LearnArmed => false;
         public string? LearnPendingName => null;
-        public PhoneControlResult PhoneControl(int controlId, int trackId, double norm) => PhoneControlResult.None;
+        public int PhoneControlCalls;   // specs/114: a stale touch must not reach MIDI Learn
+        public PhoneControlResult PhoneControl(int controlId, int trackId, double norm) { PhoneControlCalls++; return PhoneControlResult.None; }
         public string? PhoneMappingName(int controlId, int trackId) => null;
         public void DevicesChanged() { }
         public void Activity() { }
@@ -362,7 +363,7 @@ internal static class RemoteTests
         Thread.Sleep(80); hub.Tick();
         yield return (e.TryGetTrackInfo(0, out var t0) && t0.Muted == 0, "nothing is accepted before pairing");
 
-        Send(new { t = "pair", code = pairing.Code, name = "Anna's iPhone", screen = "Mixer" });
+        Send(new { t = "pair", code = pairing.Code, name = "Anna's iPhone", screen = "Mixer", pg = 1 });
         var welcome = Wait("welcome");
         yield return (welcome?.GetProperty("token").GetString()?.Length > 20 && welcome?.GetProperty("host").GetString() == "Test Mac",
             "the code pairs: welcome with a token and the host's name");
@@ -533,7 +534,89 @@ internal static class RemoteTests
             "Macros opened after the controller moved keep the controller's device");
         host.ControllerFocus = null;
         Send(new { t = "follow", on = false });
+
+        // specs/114: Macros walks the chain one device at a time with the controller's pages, and
+        // an LED frame comes with it; nav moves device and page, at the ends it stays.
+        Drain("mac"); Drain("led");
+        Send(new { t = "nav", s = "deviceAt", i = 1 });
+        var mDev = Wait("mac", 3000, m => m.GetProperty("di").GetInt32() == 1 && m.TryGetProperty("pgs", out var pgs) && pgs.GetArrayLength() == 2);
+        Send(new { t = "nav", s = "pageAt", i = 1 });
+        var mPage = Wait("mac", 3000, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() == 1);
+        yield return (mDev is { } md2 && md2.GetProperty("devs")[1].GetString() == e.DeviceName(inst, comp)
+                && mPage is { } mp && mp.GetProperty("pgs")[1].GetString() == "Sidechain" && mp.GetProperty("k")[0].GetProperty("n").GetString() == "SC HP",
+            "Macros: one entry per device; nav picks the Compressor and its Sidechain page, its knobs follow");
+        var led = Wait("led", 3000, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() == 1);
+        var ledFrame = led is { } lf ? Nota.Application.Displays.LedFrame.FromRle4(Convert.FromBase64String(lf.GetProperty("f").GetString()!)) : null;
+        yield return (led is { } l1 && l1.GetProperty("w").GetInt32() == 128 && l1.GetProperty("h").GetInt32() == 48 && l1.GetProperty("enc").GetString() == "rle4"
+                && ledFrame is not null && ledFrame.Dots.Count(d => d > 0) > 100,
+            "Macros: an LED frame of the page arrives, 128 × 48 RLE4 that decodes to a lit picture");
+        Drain("led");
+        Thread.Sleep(120); hub.Tick(); hub.Tick();
+        var ledStill = Wait("led", 300);
+        yield return (ledStill is null, "Macros: an unchanged frame is not sent again");
+        Send(new { t = "nav", s = "page", i = 1 });   // past the last page
+        Thread.Sleep(80); hub.Tick();
+        var mPast = Wait("mac", 300, m => m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() != 1);   // the Compressor, another page
+        yield return (mPast is null, "Macros: Page ▶ on the last page stays");
+
+        // A press that names a page the phone no longer shows drives nothing; the shown page does.
+        int scHp = Enumerable.Range(0, e.DeviceParamCount(inst, comp)).First(k => e.DeviceParamName(inst, comp, k) == "SC HP");
+        float scHp0 = e.DeviceGetParam(inst, comp, scHp);
+        int learnCalls0 = host.PhoneControlCalls;
+        Send(new { t = "mac", i = 0, v = 0.9, ph = 1, id = inst, di = 1, pg = 0 });
+        Send(new { t = "mac", i = 0, v = 0.95, ph = 2, id = inst, di = 1, pg = 0 });
+        Thread.Sleep(80); hub.Tick(); hub.Tick();
+        float scHpStale = e.DeviceGetParam(inst, comp, scHp);
+        int learnCallsStale = host.PhoneControlCalls - learnCalls0;
+        Send(new { t = "mac", i = 0, v = 0.9, ph = 1, id = inst, di = 1, pg = 1 });
+        Send(new { t = "mac", i = 0, v = 0.9, ph = 2, id = inst, di = 1, pg = 1 });
+        WaitFor(() => { hub.Tick(); return e.DeviceGetParam(inst, comp, scHp) != scHp0; }, 2000);
+        yield return (scHpStale == scHp0 && learnCallsStale == 0 && e.DeviceGetParam(inst, comp, scHp) != scHp0,
+            "Macros: a touch from a page the phone no longer shows changes nothing (not even MIDI Learn); one from the shown page does");
+        // A move and release with no press on this connection (the phone reconnected mid-touch) drive nothing.
+        int scLp = Enumerable.Range(0, e.DeviceParamCount(inst, comp)).First(k => e.DeviceParamName(inst, comp, k) == "SC LP");
+        float scLp0 = e.DeviceGetParam(inst, comp, scLp);
+        Send(new { t = "mac", i = 1, v = 0.05, ph = 0 });
+        Send(new { t = "mac", i = 1, v = 0.05, ph = 2 });
+        Thread.Sleep(80); hub.Tick(); hub.Tick();
+        yield return (e.DeviceGetParam(inst, comp, scLp) == scLp0, "Macros: a move without its press on this connection changes nothing");
+
+        // Macros follows the controller to another track (on by default), not when the phone turns
+        // it off, and catches up when it is turned back on.
+        RemoteControllerFocus FocusOn(int track) => new("KeyLab", "device", 0, track, "", "Synth", -1, 0, 1, "", 0, 0)
+            { Address = Nota.Application.Controllers.DeviceAddress.Instrument(track) };
+        Drain("mac");
+        host.ControllerFocus = FocusOn(m1);
+        var mFollowTrack = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == m1);
+        Send(new { t = "mfollow", on = false });
+        Drain("mac");
+        host.ControllerFocus = FocusOn(inst);
+        Thread.Sleep(80); hub.Tick(); hub.Tick();
+        var mStayed = Wait("mac", 400, m => m.GetProperty("id").GetInt32() == inst);
+        Send(new { t = "mfollow", on = true });
+        var mCaught = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst);
+        yield return (mFollowTrack is not null && mStayed is null && mCaught is not null,
+            "Macros follows the controller to another track; with Follow off it stays, turned on it catches up");
+
+        // Stepping back onto the track the controller is on takes the controller's device and page
+        // (its focus didn't move, so no foc arrives), not the track's instrument.
+        host.ControllerFocus = new RemoteControllerFocus("KeyLab", "device", 0, inst, "", e.DeviceName(inst, comp), comp, 1, 2, "Sidechain", 0, 0)
+            { Address = new Nota.Application.Controllers.DeviceAddress(inst, Nota.Application.Controllers.FocusSection.Audio, comp) };
+        Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst && m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() == 1);
+        var away = Enumerable.Range(0, e.TrackCount).Select(k => e.TryGetTrackInfo(k, out var ti) ? ti : default).Where(ti => !ti.IsReturn && ti.Id > 0).Select(ti => ti.Id).ToList();
+        int dir = away.IndexOf(inst) > 0 ? -1 : 1;
+        Send(new { t = "nav", s = "track", i = dir });
+        Wait("mac", 3000, m => m.GetProperty("id").GetInt32() != inst);
+        Drain("mac");
+        Send(new { t = "nav", s = "track", i = -dir });
+        var mBack = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst);
+        yield return (mBack is { } mb && mb.GetProperty("di").GetInt32() == 1 && mb.GetProperty("pg").GetInt32() == 1,
+            "Macros: stepping onto the controller's track lands on its device and page, not the instrument");
+        host.ControllerFocus = null;
         Send(new { t = "sub", s = "Scenes" });
+        Drain("led");
+        Thread.Sleep(120); hub.Tick(); hub.Tick();
+        yield return (Wait("led", 300) is null, "Macros closed: no LED frames");
         e.RemoveDevice(inst, eq3); e.RemoveDevice(inst, comp);
 
         // Holding a queued slot or scene cancels its launch (#480): launched one beat into a
@@ -649,7 +732,7 @@ internal static class RemoteTests
                 lock (inbox) inbox.Add(doc.RootElement.Clone());
             }
         });
-        Send(new { t = "hello", token, name = "Anna's iPhone", screen = "Mixer" });
+        Send(new { t = "hello", token, name = "Anna's iPhone", screen = "Mixer", pg = 1 });
         yield return (Wait("welcome") is not null && !Wait("welcome", 200).HasValue, "the token reconnects without a code");
         var mix = Wait("mix");
         yield return (mix is { } mx && mx.GetProperty("ch").GetArrayLength() == 1, "the Mixer screen gets channel state");
