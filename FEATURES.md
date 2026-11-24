@@ -662,7 +662,9 @@ own window — see
   audio's measured tail, delay taps, modulation sweeps, notes for MIDI effects — for every
   built-in device (plug-ins and racks show their knobs as bars); turning a knob puts its name
   and value on the top row. Nota renders the dots and sends them, so every client shows the
-  same picture.
+  same picture. **Follow** (per phone) makes Macros go wherever the controller goes; on its side
+  the phone lines the knobs up in one row under a larger display, and the display opens full
+  screen.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that

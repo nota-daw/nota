@@ -557,6 +557,24 @@ internal static class RemoteTests
         Thread.Sleep(80); hub.Tick();
         var mPast = Wait("mac", 300, m => m.GetProperty("pg").GetInt32() != 1);
         yield return (mPast is null, "Macros: Page ▶ on the last page stays");
+
+        // Macros follows the controller to another track (on by default), not when the phone turns
+        // it off, and catches up when it is turned back on.
+        RemoteControllerFocus FocusOn(int track) => new("KeyLab", "device", 0, track, "", "Synth", -1, 0, 1, "", 0, 0)
+            { Address = Nota.Application.Controllers.DeviceAddress.Instrument(track) };
+        Drain("mac");
+        host.ControllerFocus = FocusOn(m1);
+        var mFollowTrack = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == m1);
+        Send(new { t = "mfollow", on = false });
+        Drain("mac");
+        host.ControllerFocus = FocusOn(inst);
+        Thread.Sleep(80); hub.Tick(); hub.Tick();
+        var mStayed = Wait("mac", 400, m => m.GetProperty("id").GetInt32() == inst);
+        Send(new { t = "mfollow", on = true });
+        var mCaught = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst);
+        yield return (mFollowTrack is not null && mStayed is null && mCaught is not null,
+            "Macros follows the controller to another track; with Follow off it stays, turned on it catches up");
+        host.ControllerFocus = null;
         Send(new { t = "sub", s = "Scenes" });
         Drain("led");
         Thread.Sleep(120); hub.Tick(); hub.Tick();

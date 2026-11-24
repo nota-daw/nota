@@ -32,11 +32,13 @@ export interface Prefs {
   /** Scenes grid: as Nota's Session grid runs ('nota', specs/108), scenes as rows ('down', tracks
    *  across) or as columns ('across', tracks down). */
   sessionGrid: SessionGrid;
+  /** Macros follows the hardware controller's track, device and page, and its buttons move the controller (specs/113). */
+  macFollow: boolean;
 }
 
 const defaultPrefs: Prefs = {
   theme: 'nota', haptics: true, countIn: true, fullVel: false, keysMode: 'Scale', expressive: false, octave: 3, key: null,
-  xyHold: true, bank: 0, groupsOpen: [], sessionGrid: 'nota',
+  xyHold: true, bank: 0, groupsOpen: [], sessionGrid: 'nota', macFollow: true,
 };
 
 /** Saved prefs over the defaults; the old `sessionAxis` becomes `sessionGrid` (specs/108). */
@@ -149,7 +151,7 @@ export class App {
     this.ws = ws;
     const opened = Date.now();
     ws.onopen = () => {
-      const base = { v: 1, name: this.name, model: guessName(), track: Number(store.get('track', '0')), screen: this.screen, follow: store.get('follow') === '1' };
+      const base = { v: 1, name: this.name, model: guessName(), track: Number(store.get('track', '0')), screen: this.screen, follow: store.get('follow') === '1', fc: this.prefs.macFollow };
       if (this.pairCode) this.raw({ t: 'pair', code: this.pairCode, ...base });
       else if (this.token) this.raw({ t: 'hello', token: this.token, ...base });
       else { this.link = 'expired'; this.deny = 'new'; }
@@ -459,6 +461,12 @@ export class App {
   setFollow(on: boolean) {
     this.send({ t: 'follow', on });
     if (this.proj) this.proj = { ...this.proj, follow: on };
+  }
+
+  /** Macros follows the controller, or stays where the phone puts it (specs/113). */
+  setMacFollow(on: boolean) {
+    this.prefs.macFollow = on;
+    this.send({ t: 'mfollow', on });
   }
 
   /** The Macros screen's Track / Device / Page buttons (specs/113): a step (±1) or an index. */

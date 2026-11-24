@@ -47,6 +47,17 @@ know a field or a message ignores it.
   controller's page (page), so the controller follows; the phone gets a fresh `mac` either way.
 - At an end of its range a step does nothing.
 
+## `mfollow` (phone → Nota) and `fc` in `hello` / `pair`
+
+```jsonc
+{ "t": "mfollow", "on": false }   // Macros stops following the hardware controller
+```
+
+- `hello` / `pair` carry `"fc": true | false`; absent (an older phone) means on.
+- On: a controller move (track, device, page) moves the phone's Macros — another track only while
+  Macros shows, and opening Macros catches up; the phone's `nav` moves the controller. Off: neither.
+- Turning it on while Macros shows jumps to the controller at once. No control access needed.
+
 ## `foc` gains `ms`
 
 `"ms": "midi" | "inst" | "audio"` with `"mi"`: the focused device's section and index, so a phone

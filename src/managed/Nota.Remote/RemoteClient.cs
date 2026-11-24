@@ -43,6 +43,10 @@ public sealed class RemoteClient
     public int MacroDevice;
     /// <summary>The Macros screen's page of that device (specs/113).</summary>
     public int MacroPage;
+    /// <summary>Macros follows the hardware controller — its track, device and page — and the
+    /// phone's Track / Device / Page buttons move the controller (specs/113). On unless the phone
+    /// turns it off.</summary>
+    public volatile bool FollowController = true;
     /// <summary>The last LED frame sent (RLE4 bytes) and what it showed; null off Macros (specs/113).</summary>
     internal byte[]? SentLed;
     internal string? SentLedKey;

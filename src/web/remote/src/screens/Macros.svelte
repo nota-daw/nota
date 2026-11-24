@@ -13,7 +13,10 @@
   import Led from '../components/Led.svelte';
 
   let { form }: { form: Form } = $props();
-  const size = $derived(form === 'tablet' ? 96 : form === 'phoneLand' ? 44 : 52);
+  const land = $derived(form === 'phoneLand');
+  const size = $derived(form === 'tablet' ? 96 : land ? 40 : 52);
+  // The display alone on the whole screen (specs/113).
+  let full = $state(false);
   const m = $derived(app.mac?.id === app.proj?.you ? app.mac : null);
   const devName = $derived(m?.devs[m.di] ?? 'No devices');
   const pages = $derived(m?.pgs ?? []);
@@ -21,6 +24,7 @@
   // Values carry the playing track's colour (spec 090), neutral ink without a track.
   const tc = $derived(app.track?.color ?? 'var(--viz-ink)');
   const ledColor = $derived(app.track?.color ?? '');
+  const dimmed = $derived(app.link !== 'ok' && app.link !== 'weak');
   const led = $derived(app.led && app.led.id === app.proj?.you ? app.led : null);
   // The tracks Track ◀ ▶ walk on the phone: what can hold a device.
   const order = $derived(app.proj?.tracks.filter((t) => t.kind !== 'group' && t.kind !== 'return').map((t) => t.id) ?? []);
@@ -67,7 +71,7 @@
   const ARC = 98.9, CIRC = 131.9;
 </script>
 
-<div class="macros" class:land={form === 'phoneLand'} onpointermove={move} onpointerup={up} onpointercancel={up} role="group" aria-label="Macros">
+<div class="macros" class:land onpointermove={move} onpointerup={up} onpointercancel={up} role="group" aria-label="Macros">
   <div class="nav">
     <div class="step">
       <button aria-label="Previous track" disabled={at <= 0} onclick={() => app.nav('track', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
@@ -85,15 +89,23 @@
   </div>
 
   <div class="screen">
-    <Led {led} color={ledColor} dim={app.link !== 'ok' && app.link !== 'weak'} />
+    <Led {led} color={ledColor} dim={dimmed} fit={land} onexpand={() => (full = true)} />
 
-    {#if pages.length > 1}
-      <div class="pages" bind:this={pageRow} role="tablist" aria-label="Pages">
-        {#each pages as name, i (i)}
-          <button role="tab" aria-selected={i === pg} class:on={i === pg} onclick={() => app.nav('pageAt', i)}>{name}</button>
-        {/each}
-      </div>
-    {/if}
+    <div class="bar">
+      <!-- Macros follows the hardware controller (its track, device, page), or stays put. -->
+      <button class="follow" class:on={app.prefs.macFollow} aria-pressed={app.prefs.macFollow}
+        aria-label="Follow the controller" onclick={() => app.setMacFollow(!app.prefs.macFollow)}>
+        <svg viewBox="0 0 14 14"><path d="M5.5 8.5 L8.5 5.5 M6 3.8 L7.3 2.5 A2.5 2.5 0 0 1 11.5 6.7 L10.2 8 M8 10.2 L6.7 11.5 A2.5 2.5 0 0 1 2.5 7.3 L3.8 6" /></svg>
+        <span>Follow</span>
+      </button>
+      {#if pages.length > 1}
+        <div class="pages" bind:this={pageRow} role="tablist" aria-label="Pages">
+          {#each pages as name, i (i)}
+            <button role="tab" aria-selected={i === pg} class:on={i === pg} onclick={() => app.nav('pageAt', i)}>{name}</button>
+          {/each}
+        </div>
+      {/if}
+    </div>
   </div>
 
   {#if !m || m.devs.length === 0}
@@ -121,15 +133,58 @@
       {/each}
     </div>
   {/if}
+
+  {#if full}
+    <!-- The display alone, as large as the screen allows; the pages stay reachable under it. -->
+    <div class="full" role="dialog" aria-label="Device display">
+      <Led {led} color={ledColor} dim={dimmed} fit onclose={() => (full = false)} />
+      <div class="fullnav">
+        <button class="btn" aria-label="Previous page" disabled={pg <= 0} onclick={() => app.nav('page', -1)}><svg viewBox="0 0 10 10"><path d="M6.5 2 L3.5 5 L6.5 8" /></svg></button>
+        <span class="fulltitle">{devName}{pages.length > 1 ? ` · ${pages[pg] ?? ''}` : ''}</span>
+        <button class="btn" aria-label="Next page" disabled={pg >= pages.length - 1} onclick={() => app.nav('page', 1)}><svg viewBox="0 0 10 10"><path d="M3.5 2 L6.5 5 L3.5 8" /></svg></button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
   .macros { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; touch-action: none; }
-  /* A phone on its side: display and pages on the left, knobs on the right. */
-  .macros.land { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px 10px; }
-  .macros.land .nav { grid-column: 1; }
-  .macros.land .screen { grid-column: 1; grid-row: 2; }
-  .macros.land .grid, .macros.land .none { grid-column: 2; grid-row: 1 / span 2; }
+  /* A phone on its side (specs/113): the display as large as the height allows on the left, the
+     steppers, Follow and the pages beside it, the eight knobs in one row underneath. */
+  .macros.land { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 28%); grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'led nav' 'led bar' 'knobs knobs'; gap: 8px; }
+  .macros.land .screen { display: contents; }
+  .macros.land .screen > :global(.lcd) { grid-area: led; }
+  .macros.land .nav { grid-area: nav; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .macros.land .step { height: 40px; }
+  .macros.land .bar { grid-area: bar; flex-direction: column; align-items: stretch; min-height: 0; }
+  .macros.land .pages { flex-wrap: wrap; overflow-y: auto; touch-action: pan-y; }
+  .macros.land .pages > button { flex: 1 0 40%; height: 32px; min-width: 0; }
+  .macros.land .grid { grid-area: knobs; flex: none; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: auto; }
+  .macros.land .knob { padding: 5px 1px 4px; gap: 1px; }
+  .macros.land .kn { font-size: 9.5px; }
+  .macros.land .kv { font-size: 10.5px; }
+  .macros.land .none { grid-area: knobs; }
+
+  /* Follow and the page row under the display. */
+  .bar { display: flex; gap: 6px; align-items: center; }
+  .follow { flex: none; height: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border-radius: min(var(--r-group), 14px); background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel);
+    color: var(--text-secondary); font-size: 12px; font-weight: 500; transition: background-color var(--ease), color var(--ease); }
+  .follow.on { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--picked-ink); box-shadow: none; }
+  .follow svg { width: 14px; height: 14px; }
+  .follow path { fill: none; stroke: currentColor; stroke-width: 1.4; }
+  .bar .pages { flex: 1; min-width: 0; }
+
+  /* The display alone on the whole screen, the page steps under it. */
+  .full { position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column; gap: 10px; background: var(--bg-app);
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  .fullnav { flex: none; display: flex; align-items: center; gap: 10px; }
+  .fullnav .btn { width: 56px; }
+  .fullnav svg { width: 10px; height: 10px; }
+  .fullnav path { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .fullnav .btn:disabled { opacity: .4; }
+  .fulltitle { flex: 1; min-width: 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
   /* A stepper reads like a raised key with arrows at its ends. */
@@ -169,5 +224,5 @@
   .on .kn { color: var(--text-primary); }
   .knob.empty .kn { color: var(--text-faint); }
   .none { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary); }
-  @media (prefers-reduced-motion: reduce) { .knob > .tint, .pages > button { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .knob > .tint, .pages > button, .follow { transition: none; } }
 </style>

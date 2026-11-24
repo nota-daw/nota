@@ -36,6 +36,13 @@
 - [x] T033 Test: every catalog type key and page has a registered display; each renders on a fresh device without throwing and lights dots
 - [x] T034 Smoke test: render every built-in device's pages through the C ABI
 
+## Phase 4b — Follow, landscape, full screen (added 2026-11-24)
+
+- [x] T050 `FollowController` on the client, `mfollow` / `fc`, the controller moves the phone across tracks on Macros
+- [x] T051 Web: Follow switch, landscape layout with eight knobs in a row, `Led` fit mode
+- [x] T052 Web: full-screen display with page steps
+- [x] T053 Test: follow to another track, Follow off stays, on catches up (`RemoteTests`)
+
 ## Phase 5 — Polish
 
 - [x] T040 CHANGELOG `[Unreleased]`, FEATURES.md

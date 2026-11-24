@@ -19,7 +19,7 @@ public sealed partial class RemoteHub
     // Faders a phone is moving right now: another phone sees "Anna has it" on that fader.
     private readonly Dictionary<int, (int Conn, string Name, long Until)> _heldFaders = new();
 
-    private static bool NeedsControl(string t) => t is not ("track" or "follow" or "sub" or "name");
+    private static bool NeedsControl(string t) => t is not ("track" or "follow" or "mfollow" or "sub" or "name");
 
     private void Apply(IRemoteHost host, RemoteClient c, RemoteCommand cmd)
     {
@@ -44,15 +44,26 @@ public sealed partial class RemoteHub
                 if (cmd.On && host.SelectedTrackId > 0) c.TrackId = host.SelectedTrackId;
                 _devicesDirty = true;
                 break;
+            case "mfollow":
+                // Macros follows the hardware controller, or stays where the phone puts it (specs/113).
+                c.FollowController = cmd.On;
+                if (cmd.On && c.Screen == "Macros") FollowFocus(c, host.ControllerFocus);
+                c.SentScreenState = null;
+                break;
             case "sub":
+            {
                 // Opening Macros after the controller moved it (specs/107) keeps that device: the
                 // phone's index is its last pick. A sub on the screen already shown is a pick.
-                if (!(cmd.S != c.Screen && c.FollowedMacro) && cmd.I != c.MacroDevice) { c.MacroDevice = Math.Max(0, cmd.I); c.MacroPage = 0; }
+                bool opening = cmd.S != c.Screen;
+                if (!(opening && c.FollowedMacro) && cmd.I != c.MacroDevice) { c.MacroDevice = Math.Max(0, cmd.I); c.MacroPage = 0; }
                 if (cmd.S == "Macros") c.FollowedMacro = false;
                 c.Screen = cmd.S;
                 c.SentScreenState = null;
+                // Opening Macros catches up with a controller that went to another track meanwhile (specs/113).
+                if (opening && cmd.S == "Macros") FollowFocus(c, host.ControllerFocus, trackOnly: true);
                 _devicesDirty = true;
                 break;
+            }
             case "name":
                 if (c.Device is { } d)
                 {
@@ -166,7 +177,7 @@ public sealed partial class RemoteHub
             case "track":
             {
                 if (i == 0) return;
-                if (c.Follow)
+                if (c.Follow || c.FollowController)
                 {
                     if (!host.StepTrack(Math.Sign(i))) return;
                     if (host.SelectedTrackId > 0) c.TrackId = host.SelectedTrackId;
@@ -194,7 +205,7 @@ public sealed partial class RemoteHub
                 if (to < 0 || to >= devs.Count || to == c.MacroDevice) return;
                 c.MacroDevice = to;
                 c.MacroPage = 0;
-                if (c.Follow) host.FocusDevice(devs[to].Address);
+                if (c.FollowController) host.FocusDevice(devs[to].Address);
                 break;
             }
             case "page":
@@ -204,7 +215,7 @@ public sealed partial class RemoteHub
                 int to = what == "page" ? c.MacroPage + Math.Sign(i) : i;
                 if (to < 0 || to >= devs[c.MacroDevice].Pages.Count || to == c.MacroPage) return;
                 c.MacroPage = to;
-                if (c.Follow) host.SetDevicePage(to);
+                if (c.FollowController) host.SetDevicePage(to);
                 break;
             }
             default: return;

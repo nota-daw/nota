@@ -529,11 +529,22 @@ public sealed partial class RemoteHub
         w.WriteEndArray();
     });
 
-    // A phone that follows Nota's selection turns its Macros screen to the device the controller
-    // went to — only when the focus changes, so a pick on the phone stays until the next move.
-    private void FollowFocus(RemoteClient c, RemoteControllerFocus? f)
+    // A phone whose Macros follows the controller (specs/113, on by default) turns its Macros screen
+    // to the track, device and page the controller went to — only when the focus changes, so a pick
+    // on the phone stays until the next move. Another track is taken only while Macros shows (the
+    // track the phone plays on Pads or Keys stays the user's); opening Macros catches up
+    // (trackOnly: just a move to another track, a pick on this one stays).
+    private void FollowFocus(RemoteClient c, RemoteControllerFocus? f, bool trackOnly = false)
     {
-        if (!c.Follow || f is null || f.Mode != "device" || f.TrackId != c.TrackId || Host is not { } host) return;
+        if (!c.FollowController || f is null || f.Mode != "device" || f.TrackId <= 0 || Host is not { } host) return;
+        if (f.TrackId != c.TrackId)
+        {
+            if (c.Screen != "Macros" || !TrackExists(f.TrackId)) return;
+            c.TrackId = f.TrackId;
+            c.MacroDevice = -1;   // so the device below always lands
+            _devicesDirty = true;
+        }
+        else if (trackOnly) return;
         var devs = MacroDevicesFor(host, c.TrackId);
         int at = f.Address is { Rack: null } fa ? RemoteMacros.IndexOf(devs, fa)
                : f.MacroIndex is { } md ? devs.FindIndex(d => d.LegacyIndex == md)

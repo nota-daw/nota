@@ -213,6 +213,14 @@ client would re-implement every device view.
 - **FR-006**: A navigation button at the end of its range MUST be shown disabled and do nothing.
 - **FR-007**: Navigation MUST respect the phone's permission (notes-only phones cannot navigate
   devices, as they cannot turn knobs today).
+- **FR-008**: Macros MUST have a **Follow** switch, on by default and kept per phone. On, Macros
+  follows the hardware controller — to another track (while Macros shows; opening Macros catches
+  up), another device, another page — and the phone's Track / Device / Page buttons move the
+  controller. Off, Macros stays where the phone puts it and the controller is left alone.
+- **FR-009**: With the phone on its side, the eight knobs MUST sit in one row under the display, the
+  steppers, Follow and the pages beside it, so the display takes as much of the screen as it can.
+- **FR-017**: The display MUST open full screen (a corner button), with the page steps and the
+  device and page name under it, and close back to Macros.
 
 **Display**
 

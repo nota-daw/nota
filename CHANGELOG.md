@@ -36,6 +36,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     turns, its name and value take the top row.
   - Nota draws the picture and sends the dots (only when they change), so every phone on the
     same page sees the same frame.
+  - **Follow** (on by default, kept per phone): Macros goes where the controller goes — another
+    track, device or page — and the phone's buttons move the controller; off, the phone stays put.
+  - On its side the phone puts the eight knobs in one row so the display gets most of the screen;
+    the corner button opens the display full screen, with the page steps under it.
 - **Session: play the grid from the keyboard, and buttons you can hit** (#364, specs/112).
   - With the arrows on a slot, **Return** does what a click does: launches the clip, starts
     recording in an armed track's empty slot, and on a recording slot ends the take.
