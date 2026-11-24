@@ -115,8 +115,7 @@ public partial class MainWindow
 
         // Freeze takes over the engine (backend stopped) exactly like an export bounce, so
         // suspend the UI clock and show the modal progress dialog while it renders.
-        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
-        _vm.SuspendEnginePolling = true;
+        if (!await _vm.TryBeginRenderAsync()) return;   // another render holds the engine; this one settles plug-in loads first (specs/113)
         try
         {
             bool ok = false;
@@ -129,7 +128,7 @@ public partial class MainWindow
             _vm.StatusText = ok ? Loc.T("main.freeze.track_frozen_its_devices_are") : Loc.T("main.couldnt_freeze_this_track");
         }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.freeze.freeze_failed", ex.Message); }
-        finally { _vm.SuspendEnginePolling = false; }
+        finally { _vm.EndRender(); }
 
         AfterFreezeChange();
     }
@@ -229,8 +228,7 @@ public partial class MainWindow
         double endBeats = ProjectEndBeats();
         if (endBeats <= 0.0) { _vm.StatusText = Loc.T("main.nothing_to_freeze_the_arrangement"); return; }
 
-        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
-        _vm.SuspendEnginePolling = true;
+        if (!await _vm.TryBeginRenderAsync()) return;   // another render holds the engine; this one settles plug-in loads first (specs/113)
         int done = 0;
         try
         {
@@ -254,7 +252,7 @@ public partial class MainWindow
                 : Loc.F("main.freeze.froze_of_tracks", done, trackIds.Count);
         }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.freeze.freeze_failed", ex.Message); }
-        finally { _vm.SuspendEnginePolling = false; }
+        finally { _vm.EndRender(); }
 
         AfterFreezeChange();
     }

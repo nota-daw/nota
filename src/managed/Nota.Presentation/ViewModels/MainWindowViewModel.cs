@@ -74,20 +74,46 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// When true, the playhead clock stops touching the engine. Set during
     /// offline export (M6-4) so the render thread has exclusive engine access
     /// while the audio backend is stopped. While it is true no hosted plug-in attaches
-    /// (the clock services loads), so a render calls <see cref="SettlePluginLoadsAsync"/>
-    /// first (specs/113).
+    /// (the clock services loads), so a render starts with <see cref="TryBeginRenderAsync"/>
+    /// (specs/113).
     /// </summary>
     public bool SuspendEnginePolling { get; set; }
 
+    // A render (export, freeze, bounce) holds the engine from before it settles plug-in loads
+    // until it finishes, so a second one can't start while the first still waits.
+    private bool _renderReserved;
+
     /// <summary>
-    /// A render (export, freeze, bounce) is about to own the engine: give hosted plug-ins still
-    /// loading a bounded chance to land (up to 10 s), so the render hears them throughout. It
-    /// awaits between service ticks, so the window keeps drawing and a plug-in's own licence
-    /// dialog can be answered meanwhile. Any that don't make it stay as they are (pass-through /
-    /// silent) for the whole render, and the status bar says so. Call it before setting
-    /// <see cref="SuspendEnginePolling"/>.
+    /// Starts a render (export, freeze, bounce): reserves the engine, settles hosted plug-ins
+    /// still loading (<see cref="SettlePluginLoadsAsync"/>), then suspends the clock. False when
+    /// another render holds the engine (it may still be waiting for plug-ins, before its
+    /// progress dialog opens); the caller then does nothing. Every true is paired with
+    /// <see cref="EndRender"/> once the render is over.
     /// </summary>
-    public async Task SettlePluginLoadsAsync()
+    public async Task<bool> TryBeginRenderAsync()
+    {
+        if (_renderReserved) return false;
+        _renderReserved = true;
+        await SettlePluginLoadsAsync();
+        SuspendEnginePolling = true;
+        return true;
+    }
+
+    /// <summary>Ends a render <see cref="TryBeginRenderAsync"/> started: the clock runs again.</summary>
+    public void EndRender()
+    {
+        SuspendEnginePolling = false;
+        _renderReserved = false;
+    }
+
+    /// <summary>
+    /// A render is about to own the engine: give hosted plug-ins still loading a bounded chance
+    /// to land (up to 10 s), so the render hears them throughout. It awaits between service
+    /// ticks, so the window keeps drawing and a plug-in's own licence dialog can be answered
+    /// meanwhile. Any that don't make it stay as they are (pass-through / silent) for the whole
+    /// render, and the status bar says so.
+    /// </summary>
+    private async Task SettlePluginLoadsAsync()
     {
         try
         {

@@ -250,8 +250,7 @@ public partial class MainWindow
         if (endBeats <= 0.0) return null;
 
         bool ok = false;
-        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
-        _vm.SuspendEnginePolling = true;
+        if (!await _vm.TryBeginRenderAsync()) return null;   // another render holds the engine; this one settles plug-in loads first (specs/113)
         try
         {
             await RunBlockingAsync(title, Loc.T("main.rendering"), async prog =>
@@ -262,7 +261,7 @@ public partial class MainWindow
             });
         }
         catch (Exception ex) { _vm.StatusText = Loc.F("main.live_freeze.failed", title, ex.Message); }
-        finally { _vm.SuspendEnginePolling = false; }
+        finally { _vm.EndRender(); }
 
         if (!ok) { Engine.UnfreezeTrack(sourceId); return null; }
         byte[] blob = Engine.GetFreezeState(sourceId);
