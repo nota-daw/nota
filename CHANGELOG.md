@@ -268,6 +268,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Both card sizes show the total latency below the spectrum.
 
 ### Fixed
+- **Typing into a plug-in's text field on macOS** (#986). In a plug-in editor that draws
+  its own text fields (AmpliTube 5, JUCE-built plug-ins…), the keys of the computer-keyboard
+  note map played notes instead of typing, so `a w s e d f t g y h u j k` never reached the
+  field. Nota now sees when the plug-in has a text caret and leaves all typing to it; with
+  no text field focused, those keys play notes as before.
 - **A plug-in that hangs while it loads no longer freezes Nota** (#979, specs/113). SSL / Slate
   Digital plug-ins (VST3 and AU) froze Nota on macOS as soon as they were inserted: a plug-in's
   binary loaded on the main thread, and a copy-protection wrapper (PACE / iLok) that waits for the
