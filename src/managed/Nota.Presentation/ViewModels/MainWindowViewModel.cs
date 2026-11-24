@@ -73,33 +73,40 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>
     /// When true, the playhead clock stops touching the engine. Set during
     /// offline export (M6-4) so the render thread has exclusive engine access
-    /// while the audio backend is stopped. Setting it first settles hosted plug-ins
-    /// still loading (specs/113), so none attaches partway through the render.
+    /// while the audio backend is stopped. While it is true no hosted plug-in attaches
+    /// (the clock services loads), so a render calls <see cref="SettlePluginLoadsAsync"/>
+    /// first (specs/113).
     /// </summary>
-    public bool SuspendEnginePolling
-    {
-        get => _suspendEnginePolling;
-        set
-        {
-            if (value && !_suspendEnginePolling) SettlePluginLoads();
-            _suspendEnginePolling = value;
-        }
-    }
-    private bool _suspendEnginePolling;
+    public bool SuspendEnginePolling { get; set; }
 
-    // A render (export, freeze, bounce) is about to own the engine: give plug-ins still loading
-    // a bounded chance to land, so the render hears them throughout. Any that don't make it stay
-    // as they are (pass-through / silent) for the whole render, and the status bar says so.
-    private void SettlePluginLoads()
+    /// <summary>
+    /// A render (export, freeze, bounce) is about to own the engine: give hosted plug-ins still
+    /// loading a bounded chance to land (up to 10 s), so the render hears them throughout. It
+    /// awaits between service ticks, so the window keeps drawing and a plug-in's own licence
+    /// dialog can be answered meanwhile. Any that don't make it stay as they are (pass-through /
+    /// silent) for the whole render, and the status bar says so. Call it before setting
+    /// <see cref="SuspendEnginePolling"/>.
+    /// </summary>
+    public async Task SettlePluginLoadsAsync()
     {
         try
         {
-            int left = Engine.WaitPluginLoads(10000);
+            int left = Engine.WaitPluginLoads(0); // one service pass; usually nothing is loading
+            if (left == 0) return;
+            string before = StatusText;
+            StatusText = Loc.T("main.waiting_for_plugins_render");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (left > 0 && DateTime.UtcNow < until)
+            {
+                await Task.Delay(33);
+                left = Engine.WaitPluginLoads(0);
+            }
             if (left > 0)
             {
                 _log.Warn($"{left} plug-in(s) still loading when a render started");
                 StatusText = Loc.Plural("main.plugins_still_loading_render", left);
             }
+            else if (StatusText == Loc.T("main.waiting_for_plugins_render")) StatusText = before;
         }
         catch (Exception ex) { _log.Error("Couldn't settle plug-in loads before a render", ex); }
     }

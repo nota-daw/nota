@@ -36,6 +36,7 @@ internal static class PluginLoadTests
     {
         foreach (var r in Child("--plugin-load", LoadDelayMs, "isolated plug-in load checks (a binary that blocks while it loads)")) yield return r;
         foreach (var r in Child("--plugin-load-removal", RemovalDelayMs, "isolated plug-in load checks (removing a load that doesn't return)")) yield return r;
+        foreach (var r in Child("--plugin-load-retry", RetryDelayMs, "isolated plug-in load checks (Try again while the first load is still out)")) yield return r;
     }
 
     private const int RemovalDelayMs = 3000;
@@ -92,7 +93,7 @@ internal static class PluginLoadTests
             var clock = Stopwatch.StartNew();
             int stuck = e.AddTrackEffectPlugin(t, catalog);   // its binary blocks for RemovalDelayMs
             int behind = e.AddTrackEffectPlugin(t, catalog);
-            e.ServicePluginLoads();
+            AwaitLoaderTook(e, t, stuck);
             yield return (e.DevicePluginLoadState(t, behind) == PluginLoadState.Waiting
                           && e.DevicePluginLoadReasonCode(t, behind) == PluginLoadReason.WaitingFor
                           && e.DevicePluginLoadReasonArg(t, behind) == "Nota Render Probe",
@@ -126,6 +127,54 @@ internal static class PluginLoadTests
                 "once the load comes back, Try again loads both");
         }
         finally { NotaEngine.SetDataDir(null); }
+    }
+
+    // Removing a loading plug-in, undoing and choosing Try again before its deadline, while the
+    // first binary load is still out: that earlier load's result is stale when it comes back, so
+    // the device loads exactly once instead of attaching and then failing a second attach.
+    public static IEnumerable<(bool Ok, string Label)> RunRetry()
+    {
+        string scratch = Directory.CreateTempSubdirectory("nota-plugin-load-retry-").FullName;
+        try
+        {
+            int catalog = ScanProbe(scratch, out _);
+            using var e = new NotaEngine();
+            e.RenderOffline(new float[256], 128, 48000);
+            int t = e.AddInstrumentTrack();
+            var clock = Stopwatch.StartNew();
+            int fx = e.AddTrackEffectPlugin(t, catalog);   // its binary blocks for RetryDelayMs
+            AwaitLoaderTook(e, t, fx);   // its binary load is in flight, not just queued
+            e.RemoveDevice(t, fx);
+            e.Undo();
+            bool removed = e.DevicePluginLoadState(t, fx) == PluginLoadState.Failed
+                           && e.DevicePluginLoadReasonCode(t, fx) == PluginLoadReason.Removed;
+            e.DevicePluginLoadAction(t, fx, PluginLoadAction.TryAgain);
+            long retriedAt = clock.ElapsedMilliseconds;
+            yield return (removed && retriedAt < TimeoutMs, $"removed while loading, undone and tried again before its deadline ({retriedAt} ms)");
+            int left = e.WaitPluginLoads(10000);
+            yield return (left == 0 && clock.ElapsedMilliseconds >= RetryDelayMs
+                          && e.DevicePluginLoadState(t, fx) == PluginLoadState.Loaded && e.PluginParamCount(t, fx) > 0,
+                $"the retried plug-in loads once, after the first load returns ({e.DevicePluginLoadState(t, fx)}, {e.DevicePluginLoadReasonCode(t, fx)})");
+            for (int i = 0; i < 10; i++) { e.ServicePluginLoads(); Thread.Sleep(20); }
+            yield return (e.DevicePluginLoadState(t, fx) == PluginLoadState.Loaded, "…and stays loaded");
+        }
+        finally { NotaEngine.SetDataDir(null); }
+    }
+
+    private const int RetryDelayMs = 1500;
+
+    // Services loads until the loader thread has taken the device's binary load (it reads
+    // Loading): right after an insert the thread may not have woken yet, and the device is
+    // then only queued.
+    private static void AwaitLoaderTook(NotaEngine e, int trackId, int device)
+    {
+        var sw = Stopwatch.StartNew();
+        e.ServicePluginLoads();
+        while (e.DevicePluginLoadState(trackId, device) == PluginLoadState.Waiting && sw.ElapsedMilliseconds < 200)
+        {
+            Thread.Sleep(2);
+            e.ServicePluginLoads();
+        }
     }
 
     public static IEnumerable<(bool Ok, string Label)> Run()
@@ -241,6 +290,17 @@ internal static class PluginLoadTests
             e.WaitPluginLoads(10000);
             yield return (at >= 0 && Math.Abs(e.PluginParamGet(t, at, gain) - 0.25f) < 1e-3,
                 "a copied plug-in loads with its source's state");
+
+            // ---- grouping a loading plug-in into a rack moves it; its load goes on -----------
+            int rt = e.AddAudioTrack();
+            int rfx = e.AddTrackEffectPlugin(rt, catalog);   // attaches only when serviced
+            bool wasLoading = e.DevicePluginLoadState(rt, rfx) is PluginLoadState.Waiting or PluginLoadState.Loading;
+            int rack = e.GroupDevices(rt, -1, 0, false, rfx, 1);
+            e.WaitPluginLoads(10000);
+            int back = rack >= 0 ? e.UngroupRack(rt, DeviceFamily.Audio, rack, out _) : -1;
+            yield return (wasLoading && rack >= 0 && back >= 0
+                          && e.DevicePluginLoadState(rt, 0) == PluginLoadState.Loaded && e.PluginParamCount(rt, 0) > 0,
+                $"a plug-in grouped into a rack while it loads still loads there ({e.DevicePluginLoadState(rt, 0)})");
         }
         finally { NotaEngine.SetDataDir(null); }
     }

@@ -91,6 +91,10 @@ class LoadTicket {
     bool gaveUp_ = false;     // the user gave up on it
     bool binaryDone_ = false; // the loader thread is through with it
     std::string binaryError_;
+    // Bumped by every enqueue. Try again on a ticket whose earlier binary load is still in
+    // flight (given up or removed, then undone) queues it anew: the earlier load's result is
+    // stale when it returns and is dropped, so only one attempt ever reaches finish().
+    uint32_t attempt_ = 0;
 };
 
 class PluginLoader {

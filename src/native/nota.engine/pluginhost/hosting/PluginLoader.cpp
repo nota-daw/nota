@@ -222,6 +222,7 @@ void PluginLoader::enqueue(const std::shared_ptr<LoadTicket>& t) {
         const std::lock_guard<std::mutex> lock(mx_);
         t->cancelled_ = t->gaveUp_ = t->binaryDone_ = false;
         t->binaryError_.clear();
+        ++t->attempt_; // a load of an earlier attempt still in flight no longer counts
         queue_.push_back(t);
     }
     cv_.notify_one();
@@ -230,11 +231,13 @@ void PluginLoader::enqueue(const std::shared_ptr<LoadTicket>& t) {
 void PluginLoader::run() {
     for (;;) {
         std::shared_ptr<LoadTicket> t;
+        uint32_t attempt = 0;
         {
             std::unique_lock<std::mutex> lock(mx_);
             cv_.wait(lock, [this] { return !queue_.empty(); });
             t = queue_.front();
             queue_.pop_front();
+            attempt = t->attempt_;
             current_ = t;
             currentStarted_ = Clock::now();
         }
@@ -247,7 +250,8 @@ void PluginLoader::run() {
         const std::lock_guard<std::mutex> lock(mx_);
         current_.reset();
         stuck_ = false; // whatever it was, the loader thread is free again
-        if (!t->cancelled_ && !t->gaveUp_) {
+        // A ticket retried while this load was in flight is queued again: this result is stale.
+        if (!t->cancelled_ && !t->gaveUp_ && t->attempt_ == attempt) {
             t->binaryDone_ = true;
             t->binaryError_ = ok ? std::string{} : err;
             loaded_.push_back(t);

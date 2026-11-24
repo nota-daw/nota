@@ -250,6 +250,7 @@ public partial class MainWindow
         if (endBeats <= 0.0) return null;
 
         bool ok = false;
+        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
         _vm.SuspendEnginePolling = true;
         try
         {

@@ -35,6 +35,45 @@ int32_t pendingLaneIndex(const Track& t, const TrackLane& l) {
     return d ? d->pluginParamIndexOfId(l.paramId) : -1;
 }
 
+// Every instrument and audio device a rack's chains hold, at any nesting depth.
+template <class Fn>
+void forEachRackChild(const RackCore* r, Fn& fn) {
+    if (!r) return;
+    const RackCore::RackState* st = r->live();
+    if (!st) return;
+    for (const auto& c : st->chains) {
+        if (c.instrument) {
+            fn(c.instrument.get(), nullptr);
+            forEachRackChild(c.instrument->asRack(), fn);
+        }
+        for (const auto& d : c.devices)
+            if (d) {
+                fn(nullptr, d.get());
+                forEachRackChild(d->asRack(), fn);
+            }
+        for (const auto& m : c.midiDevices)
+            if (m) forEachRackChild(m->asRack(), fn);
+    }
+}
+
+// Every instrument and audio device a track holds, rack children included: grouping a
+// plug-in into a rack (or ungrouping it) moves the same instance, so a plug-in that only
+// changed place is still found after the edit.
+template <class Fn>
+void forEachTrackDevice(const Track& t, Fn fn) {
+    if (t.instrument) {
+        fn(t.instrument.get(), nullptr);
+        forEachRackChild(t.instrument->asRack(), fn);
+    }
+    for (const auto& d : t.devices)
+        if (d) {
+            fn(nullptr, d.get());
+            forEachRackChild(d->asRack(), fn);
+        }
+    for (const auto& m : t.midiEffects)
+        if (m) forEachRackChild(m->asRack(), fn);
+}
+
 } // namespace
 
 int32_t Engine::servicePluginLoads() {
@@ -83,17 +122,21 @@ void Engine::giveUpVanishedPluginLoads(const Graph& before, const Graph& after) 
     std::vector<Device*> devs;
     auto collect = [&](const std::shared_ptr<Track>& t) {
         if (!t) return;
-        if (t->instrument && loading(t->instrument->pluginLoadState())) insts.push_back(t->instrument.get());
-        for (const auto& d : t->devices)
-            if (d && loading(d->pluginLoadState())) devs.push_back(d.get());
+        forEachTrackDevice(*t, [&](Instrument* i, Device* d) {
+            if (i && loading(i->pluginLoadState())) insts.push_back(i);
+            if (d && loading(d->pluginLoadState())) devs.push_back(d);
+        });
     };
     for (const auto& t : before.tracks) collect(t);
     collect(before.masterTrack);
     if (insts.empty() && devs.empty()) return;
+    // Still in the project after the edit: at the top level, or moved into or out of a rack.
     auto drop = [&](const std::shared_ptr<Track>& t) {
         if (!t) return;
-        insts.erase(std::remove(insts.begin(), insts.end(), t->instrument.get()), insts.end());
-        for (const auto& d : t->devices) devs.erase(std::remove(devs.begin(), devs.end(), d.get()), devs.end());
+        forEachTrackDevice(*t, [&](Instrument* i, Device* d) {
+            if (i) insts.erase(std::remove(insts.begin(), insts.end(), i), insts.end());
+            if (d) devs.erase(std::remove(devs.begin(), devs.end(), d), devs.end());
+        });
     };
     for (const auto& t : after.tracks) drop(t);
     drop(after.masterTrack);

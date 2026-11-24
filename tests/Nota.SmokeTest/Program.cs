@@ -62,6 +62,11 @@ if (args.Length >= 2 && args[0] == "--profile-hosted")
         args.Length > 3 ? int.Parse(args[3]) : 48000);
     return 0;
 }
+if (args.Contains("--plugin-load-retry"))
+{
+    foreach (var (ok, label) in PluginLoadTests.RunRetry()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 if (args.Contains("--plugin-load-removal"))
 {
     foreach (var (ok, label) in PluginLoadTests.RunRemoval()) Check(ok, label);

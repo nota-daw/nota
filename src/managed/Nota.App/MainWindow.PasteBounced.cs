@@ -43,6 +43,7 @@ public partial class MainWindow
         string name = Engine.GetTrackName(sourceId);
 
         _bounceBusy = true;
+        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
         _vm.SuspendEnginePolling = true;
         float[]? pcm = null;
         try

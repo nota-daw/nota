@@ -103,6 +103,7 @@ public partial class MainWindow
         // has exclusive engine access (see MainWindowViewModel.SuspendEnginePolling).
         // A modal progress dialog blocks the UI for the bounce and shows its progress.
         string noun = opts.Stems ? "stems" : "master";
+        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
         _vm.SuspendEnginePolling = true;
         try
         {

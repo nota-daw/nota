@@ -115,6 +115,7 @@ public partial class MainWindow
 
         // Freeze takes over the engine (backend stopped) exactly like an export bounce, so
         // suspend the UI clock and show the modal progress dialog while it renders.
+        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
         _vm.SuspendEnginePolling = true;
         try
         {
@@ -228,6 +229,7 @@ public partial class MainWindow
         double endBeats = ProjectEndBeats();
         if (endBeats <= 0.0) { _vm.StatusText = Loc.T("main.nothing_to_freeze_the_arrangement"); return; }
 
+        await _vm.SettlePluginLoadsAsync();   // before the render owns the engine (specs/113)
         _vm.SuspendEnginePolling = true;
         int done = 0;
         try
