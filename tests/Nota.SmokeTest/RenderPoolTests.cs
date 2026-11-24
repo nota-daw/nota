@@ -124,6 +124,7 @@ internal static class RenderPoolTests
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
         foreach (var result in HostedRenderPoolTests.RunIsolated()) yield return result;
+        foreach (var result in PluginLoadTests.RunIsolated()) yield return result;
         int par = ParallelThreads();
 
         // 1. Idle: render threads park. A spinning pool costs ~1 s of CPU per thread per second.

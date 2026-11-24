@@ -63,27 +63,38 @@ public sealed class ExportTools(IAudioEngine engine, IEngineDispatch dispatch, I
         + "startBeat = where the render starts (default 0), "
         + "bitDepth = pcm16 | pcm24 | float32 (wav/flac), format = wav | flac | mp3 (default wav), "
         + "bitrateKbps = 128 | 192 | 256 | 320 (mp3 only, default 320). Stops playback first. Returns the output path.")]
-    public Task<string> ExportMaster(string path, double totalBeats, string bitDepth = "float32",
-                                     string format = "wav", int bitrateKbps = 320, double startBeat = 0) => Mutate(() =>
+    public async Task<string> ExportMaster(string path, double totalBeats, string bitDepth = "float32",
+                                           string format = "wav", int bitrateKbps = 320, double startBeat = 0)
     {
-        E.StopTransport();
-        var req = BuildRequest(path, totalBeats, bitDepth, format, bitrateKbps, startBeat);
-        _exporter.ExportMaster(E, req);
-        string note = req.Format == ExportFormat.Wav ? "" : $" ({format.ToLowerInvariant()})";
-        if (req.Format == ExportFormat.Mp3 && (int)Math.Round(E.SampleRate) > 48000)
-            note += " [rate capped at 48 kHz]";
-        return path + note;
-    });
+        // The render holds the UI thread, where plug-ins attach: let those still loading land first.
+        int loading = await SettlePluginLoadsAsync();
+        return await Mutate(() =>
+        {
+            E.StopTransport();
+            var req = BuildRequest(path, totalBeats, bitDepth, format, bitrateKbps, startBeat);
+            _exporter.ExportMaster(E, req);
+            string note = req.Format == ExportFormat.Wav ? "" : $" ({format.ToLowerInvariant()})";
+            if (req.Format == ExportFormat.Mp3 && (int)Math.Round(E.SampleRate) > 48000)
+                note += " [rate capped at 48 kHz]";
+            if (loading > 0)
+                note += $" [{loading} plug-in(s) were still loading: rendered unprocessed, instruments silent]";
+            return path + note;
+        });
+    }
 
     [McpServerTool(Name = "export_stems"), Description(
         "Render one file per non-return track (stems) into the given folder. folder = output directory, "
         + "totalBeats = how many beats to render, startBeat = where the render starts (default 0), bitDepth = pcm16 | pcm24 | float32 (wav/flac), "
         + "format = wav | flac | mp3 (default wav), bitrateKbps = 128 | 192 | 256 | 320 (mp3 only, default 320). "
         + "Returns the number of stems written.")]
-    public Task<int> ExportStems(string folder, double totalBeats, string bitDepth = "float32",
-                                 string format = "wav", int bitrateKbps = 320, double startBeat = 0) => Mutate(() =>
+    public async Task<int> ExportStems(string folder, double totalBeats, string bitDepth = "float32",
+                                       string format = "wav", int bitrateKbps = 320, double startBeat = 0)
     {
-        E.StopTransport();
-        return _exporter.ExportStems(E, BuildRequest(folder, totalBeats, bitDepth, format, bitrateKbps, startBeat));
-    });
+        await SettlePluginLoadsAsync();   // as export_master: plug-ins can't attach during the render
+        return await Mutate(() =>
+        {
+            E.StopTransport();
+            return _exporter.ExportStems(E, BuildRequest(folder, totalBeats, bitDepth, format, bitrateKbps, startBeat));
+        });
+    }
 }

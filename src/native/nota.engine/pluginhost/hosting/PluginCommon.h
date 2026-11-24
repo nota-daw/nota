@@ -90,8 +90,18 @@ constexpr int kPluginMaxBlock = 4096;
 // moves on while playing and wraps at the loop end.
 void advanceTransport(nota::TransportInfo& ti, int32_t frames, double sr);
 
-// Instantiate a full description in-process (message thread). Null on failure.
-std::unique_ptr<juce::AudioPluginInstance> createInstance(const juce::PluginDescription& desc, double sr, int maxBlock);
+// Instantiate a full description in-process (message thread). Null on failure, with the
+// format's reason in `error` when given.
+std::unique_ptr<juce::AudioPluginInstance> createInstance(
+    const juce::PluginDescription& desc, double sr, int maxBlock, std::string* error = nullptr);
+
+// Catalog entry `catalogIndex`, copied under one lock; false when the index is invalid or, with
+// `instrumentOnly`, the entry isn't an instrument (message thread).
+bool catalogDescription(int catalogIndex, bool instrumentOnly, juce::PluginDescription& desc);
+
+// The catalog's own description of a running instance's plug-in (the one that loaded it), else
+// the instance's (#454: a running VST3 on Linux names the .so inside its bundle).
+juce::PluginDescription catalogDescriptionOf(const juce::AudioPluginInstance& p);
 
 // Instantiate catalog entry `catalogIndex` in-process (message thread). With
 // `instrumentOnly`, an entry that isn't an instrument yields null — checked on the

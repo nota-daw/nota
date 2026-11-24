@@ -97,6 +97,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine_Tracks.cpp
     src/engine/Engine_Session.cpp
     src/engine/Engine_Devices.cpp
+    src/engine/Engine_PluginLoads.cpp
     src/engine/Engine_Rack.cpp
     src/engine/Engine_Recording.cpp
     src/engine/Engine_Takes.cpp
@@ -367,6 +368,7 @@ add_library(nota_pluginhost STATIC
     pluginhost/hosting/EditorSnapshot.cpp  # editor preview capture (specs/046)
     pluginhost/hosting/PluginInstrument.cpp
     pluginhost/hosting/PluginEffect.cpp
+    pluginhost/hosting/PluginLoader.cpp  # loads off the main thread (specs/113)
     pluginhost/scanner/abi_pluginscanner.cpp
     pluginhost/scanner/PluginCatalog.cpp  # thread-safe catalog
     pluginhost/scanner/OutOfProcessScanner.cpp  # scan coordinator

@@ -8,31 +8,81 @@
 
 #include "PluginEffect.h"
 
+#include "PluginLoader.h"
 #include "dsp/math/FastMath.h"
 #include "dsp/math/SimdAudio.h"
 
 namespace nota {
 namespace hosting {
 
-PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock)
-    : plugin_(std::move(p)) {
-    if (plugin_) name_ = plugin_->getName().toStdString();
-    // Per-instance VST3 buffers/playhead/sidechain data permit an exclusive worker
-    // process call. Initialization, state and editors remain on the message thread.
-    parallelRender_ = plugin_ && plugin_->getPluginDescription().pluginFormatName == "VST3";
+PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock) {
     empty_.ensureSize(256);
-    setSampleRate(sr, maxBlock);
-    if (plugin_) plugin_->addListener(this); // "Learn" (M9-B3)
     // The window's picture, taken each time it is hidden, goes on the card (specs/046).
     editor_.onPreview = [this](std::vector<uint8_t> jpeg) { setEditorPreview(nota::EditorPreview::make(std::move(jpeg))); };
+    sr_ = sr;
+    requestedBlock_ = maxBlock;
+    maxBlock_ = juce::jmin(maxBlock, kPluginMaxBlock);
+    if (p) attach(std::move(p));
+}
+
+PluginEffect::PluginEffect(const juce::PluginDescription& desc, double sr, int maxBlock) : desc_(desc) {
+    empty_.ensureSize(256);
+    editor_.onPreview = [this](std::vector<uint8_t> jpeg) { setEditorPreview(nota::EditorPreview::make(std::move(jpeg))); };
+    name_ = desc.name.toStdString();
+    sr_ = sr;
+    requestedBlock_ = maxBlock;
+    maxBlock_ = juce::jmin(maxBlock, kPluginMaxBlock);
+    // The ticket's finish runs on the message thread in PluginLoader::service(); the destructor
+    // cancels it first, so `this` is alive whenever it runs.
+    load_ = PluginLoader::instance().request(desc_, [this](std::string& error) {
+        auto inst = createInstance(desc_, sr_, juce::jmin(requestedBlock_, kPluginMaxBlock), &error);
+        return inst != nullptr && attach(std::move(inst));
+    });
 }
 
 PluginEffect::~PluginEffect() {
+    if (load_) PluginLoader::instance().cancel(load_);
     if (plugin_) plugin_->removeListener(this);
 }
 
+bool PluginEffect::attach(std::unique_ptr<juce::AudioPluginInstance> p) {
+    if (!p || plugin_) return false;
+    plugin_ = std::move(p);
+    name_ = plugin_->getName().toStdString();
+    setSampleRate(sr_, requestedBlock_);
+    if (!pendingState_.empty()) {
+        writeState(plugin_.get(), pendingState_.data(), (int32_t)pendingState_.size());
+        std::vector<uint8_t>().swap(pendingState_);
+    }
+    plugin_->addListener(this); // "Learn" (M9-B3)
+    // Per-instance VST3 buffers/playhead/sidechain data permit an exclusive worker
+    // process call. Initialization, state and editors remain on the message thread.
+    parallelRender_.store(plugin_->getPluginDescription().pluginFormatName == "VST3", std::memory_order_relaxed);
+    live_.store(true, std::memory_order_release); // everything above is visible to the audio thread
+    return true;
+}
+
+int32_t PluginEffect::pluginLoadState() const {
+    return load_ ? static_cast<int32_t>(load_->state()) : 0;
+}
+
+int32_t PluginEffect::pluginLoadReasonCode() const {
+    return load_ ? static_cast<int32_t>(load_->reason()) : 0;
+}
+
+std::string PluginEffect::pluginLoadReasonArg() const {
+    return load_ ? load_->reasonArg() : std::string{};
+}
+
+void PluginEffect::pluginLoadAction(int32_t action) {
+    if (load_) PluginLoader::instance().act(load_, static_cast<LoadAction>(action));
+}
+
 void PluginEffect::setSampleRate(double sr, int32_t maxBlock) {
+    sr_ = sr;
+    requestedBlock_ = maxBlock;
     maxBlock_ = juce::jmin(maxBlock, kPluginMaxBlock); // #447: a longer block is played in pieces
+    if (!plugin_) return;                              // prepared at attach, for these
     // Prefer stereo main I/O plus a sidechain input bus if the plugin exposes
     // one (input bus index 1, Phase C). Fall back to plain stereo I/O.
     hasSidechain_ = false;
@@ -73,14 +123,15 @@ void PluginEffect::setSampleRate(double sr, int32_t maxBlock) {
 }
 
 int32_t PluginEffect::latencySamples() const {
-    return plugin_ ? plugin_->getLatencySamples() : 0;
+    return live_.load(std::memory_order_acquire) ? plugin_->getLatencySamples() : 0;
 }
 
 void PluginEffect::process(float* buf, int32_t frames) {
-    if (frames <= 0 || plugin_ == nullptr) return;
     const float* sc = scBuf_;
     const int32_t scFrames = scFrames_;
     scBuf_ = nullptr; // consume once; the engine re-hands it each block if a source is set
+    // Not loaded yet (or couldn't load): the track's audio goes through untouched.
+    if (frames <= 0 || !live_.load(std::memory_order_acquire)) return;
     if (frames <= maxBlock_) {
         processPiece(buf, frames, sc, scFrames);
         return;
@@ -140,23 +191,28 @@ void PluginEffect::closeEditor() {
 }
 
 std::vector<uint8_t> PluginEffect::getState() const {
-    return readState(plugin_.get());
+    // Before the instance exists the saved state is kept as it came, so a project saved while
+    // a plug-in loads (or couldn't) keeps it byte for byte.
+    return plugin_ ? readState(plugin_.get()) : pendingState_;
 }
 
 void PluginEffect::setState(const uint8_t* data, int32_t size) {
-    writeState(plugin_.get(), data, size);
+    if (plugin_) writeState(plugin_.get(), data, size);
+    else if (data != nullptr && size > 0) pendingState_.assign(data, data + size);
 }
 
 std::string PluginEffect::pluginIdentifier() const {
-    return plugin_ ? plugin_->getPluginDescription().createIdentifierString().toStdString() : std::string{};
+    if (plugin_) return plugin_->getPluginDescription().createIdentifierString().toStdString();
+    return desc_.name.isNotEmpty() ? desc_.createIdentifierString().toStdString() : std::string{};
 }
 
 bool PluginEffect::hasTail() const {
-    return plugin_ != nullptr && plugin_->getTailLengthSeconds() > 0.0;
+    return live_.load(std::memory_order_acquire) && plugin_->getTailLengthSeconds() > 0.0;
 }
 
 int32_t PluginEffect::pluginParamCount() const {
-    return paramCountImpl(plugin_.get());
+    // The audio thread asks too (modulation targets): only once the instance is live.
+    return live_.load(std::memory_order_acquire) ? paramCountImpl(plugin_.get()) : 0;
 }
 std::string PluginEffect::pluginParamId(int32_t i) const {
     return paramIdImpl(plugin_.get(), i);
@@ -170,11 +226,12 @@ std::string PluginEffect::pluginParamText(int32_t i) const {
 float PluginEffect::pluginParamDefault(int32_t i) const {
     return paramDefaultImpl(plugin_.get(), i);
 }
+// Get / set also run block-rate on the audio thread (automation): only once the instance is live.
 float PluginEffect::pluginParamGet(int32_t i) const {
-    return paramGetImpl(plugin_.get(), i);
+    return live_.load(std::memory_order_acquire) ? paramGetImpl(plugin_.get(), i) : 0.0f;
 }
 void PluginEffect::pluginParamSet(int32_t i, float v) {
-    paramSetImpl(plugin_.get(), i, v);
+    if (live_.load(std::memory_order_acquire)) paramSetImpl(plugin_.get(), i, v);
 }
 int32_t PluginEffect::pluginParamIndexOfId(const std::string& id) const {
     return paramIndexOfIdImpl(plugin_.get(), id);
@@ -203,11 +260,16 @@ void PluginEffect::setSidechain(const float* interleaved, int32_t frames) {
 }
 
 std::shared_ptr<nota::Device> PluginEffect::clone() const {
-    if (!plugin_) return nullptr;
-    double sr = plugin_->getSampleRate() > 0 ? plugin_->getSampleRate() : 44100.0;
-    auto inst = cloneInstance(*plugin_, sr, maxBlock_);
-    if (!inst) return nullptr;
-    auto d = std::make_shared<PluginEffect>(std::move(inst), sr, maxBlock_);
+    // The copy loads like any insert (specs/113): unloaded, with this one's state to apply.
+    // The catalog entry that loaded this one is the description to load again (#454).
+    juce::PluginDescription desc = desc_;
+    if (desc.name.isEmpty()) {
+        if (!plugin_) return nullptr;
+        desc = catalogDescriptionOf(*plugin_);
+    }
+    auto d = std::make_shared<PluginEffect>(desc, sr_, requestedBlock_);
+    const auto st = getState();
+    if (!st.empty()) d->setState(st.data(), (int32_t)st.size());
     d->setSidechainSourceTrackId(scTrackId_.load(std::memory_order_relaxed));
     return d;
 }

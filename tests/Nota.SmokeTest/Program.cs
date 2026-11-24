@@ -62,6 +62,21 @@ if (args.Length >= 2 && args[0] == "--profile-hosted")
         args.Length > 3 ? int.Parse(args[3]) : 48000);
     return 0;
 }
+if (args.Contains("--plugin-load-retry"))
+{
+    foreach (var (ok, label) in PluginLoadTests.RunRetry()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+if (args.Contains("--plugin-load-removal"))
+{
+    foreach (var (ok, label) in PluginLoadTests.RunRemoval()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+if (args.Contains("--plugin-load"))
+{
+    foreach (var (ok, label) in PluginLoadTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 if (args.Contains("--hosted-render-pool"))
 {
     foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
@@ -1229,6 +1244,7 @@ if (args.Length >= 2 && args[0] == "--hostcheck")
     {
         Console.WriteLine($"instrument: {NotaEngine.PluginDescription(instIdx)}");
         int tid = eng.AddPluginInstrumentTrack(instIdx);
+        eng.WaitPluginLoads(60000); // plug-ins load after they are inserted (specs/113)
         Check(tid > 0, "load hosted instrument onto a new track");
         int c = eng.AddMidiClip(tid, 0.0, 4.0);
         eng.SetClipNotes(tid, c, new[] { new NotaNote(60, 0.0, 2.0, 1.0f) });
@@ -1253,6 +1269,7 @@ if (args.Length >= 2 && args[0] == "--hostcheck")
         {
             Console.WriteLine($"effect: {NotaEngine.PluginDescription(fxIdx)}");
             int di = eng.AddTrackEffectPlugin(tid, fxIdx);
+            eng.WaitPluginLoads(60000);
             Check(di >= 0, "add hosted effect to the track chain");
             Check(eng.TrackDeviceCount(tid) == 1, "device count == 1");
             eng.Seek(0);
@@ -1417,6 +1434,23 @@ Nota.SmokeTest.WavWriter.WriteSine(wav, seconds: 1.0, freq: 440.0, sampleRate: 4
 Console.WriteLine($"wrote test wav: {wav}");
 
 using var engine = new NotaEngine();
+
+// Plug-in load state (#979, specs/113) without a plug-in: built-ins and instruments read loaded,
+// with nothing to say, and the per-device calls refuse what isn't there.
+using (var loads = new NotaEngine())
+{
+    int lt = loads.AddInstrumentTrack();
+    int ld = loads.AddBuiltinDevice(lt, 0);
+    Check(loads.DevicePluginLoadState(lt, ld) == Nota.Application.PluginLoadState.Loaded
+          && loads.DevicePluginLoadState(lt, -1) == Nota.Application.PluginLoadState.Loaded
+          && loads.DevicePluginLoadReasonCode(lt, ld) == Nota.Application.PluginLoadReason.None
+          && loads.DevicePluginLoadReasonArg(lt, ld) == "",
+        "built-in devices and instruments report their plug-in load state as loaded");
+    Check(loads.DevicePluginLoadState(lt, 99) == Nota.Application.PluginLoadState.Loaded
+          && !loads.DevicePluginLoadAction(lt, 99, Nota.Application.PluginLoadAction.TryAgain),
+        "plug-in load calls on a missing device are harmless");
+    Check(loads.ServicePluginLoads() >= 0 && loads.WaitPluginLoads(10) >= 0, "plug-in load service and wait run with nothing to load");
+}
 
 int track = engine.AddAudioTrack();
 Check(track > 0, "add audio track");

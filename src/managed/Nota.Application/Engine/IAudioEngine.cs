@@ -672,6 +672,22 @@ public interface IAudioEngine : IDisposable
     /// given kind. Returns false for Racks/unknown kinds or non-instrument tracks.</summary>
     bool SetTrackBuiltinInstrument(int trackId, int kind);
     int AddTrackEffectPlugin(int trackId, int catalogIndex);
+    /// <summary>Hosted plug-ins load after they are inserted (#979, specs/113): attaches the ones
+    /// whose binary has loaded and marks overdue ones not responding. Returns how many devices'
+    /// load state changed. Call it from a UI timer.</summary>
+    int ServicePluginLoads();
+    /// <summary>Services plug-in loads until none is left or <paramref name="timeoutMs"/> passed;
+    /// returns how many still load. Blocks the caller — for tests and tools.</summary>
+    int WaitPluginLoads(int timeoutMs);
+    /// <summary>A device's load state (deviceIndex −1 = the track's instrument).</summary>
+    PluginLoadState DevicePluginLoadState(int trackId, int deviceIndex);
+    /// <summary>Why the device is waiting, not responding or couldn't load — the app words it.</summary>
+    PluginLoadReason DevicePluginLoadReasonCode(int trackId, int deviceIndex);
+    /// <summary>The reason's argument: the plug-in being waited for, this plug-in's name, or the
+    /// format's message (<see cref="PluginLoadReason"/>); empty otherwise.</summary>
+    string DevicePluginLoadReasonArg(int trackId, int deviceIndex);
+    /// <summary>Keep waiting / give up / try again on a device's load.</summary>
+    bool DevicePluginLoadAction(int trackId, int deviceIndex, PluginLoadAction action);
     int TrackDeviceCount(int trackId);
     /// <summary>Copies an audio clip's played region down-mixed to mono for offline audio→MIDI
     /// analysis. Pass null to query the frame count. Returns the frame count; sr = source rate.</summary>

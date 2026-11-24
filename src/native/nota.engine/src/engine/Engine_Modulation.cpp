@@ -132,6 +132,16 @@ static bool targetValid(Track& t, int32_t kind, int32_t dev, int32_t param, uint
     if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) return o.midi && param < o.midi->paramCount();
     return o.device && param < o.device->paramCount() && !o.device->isLatencyConfigurationParam(param);
 }
+// A link being made (a project open) onto a hosted instrument whose plug-in hasn't loaded yet
+// (specs/113): its params don't exist yet, so targetValid can't tell. The link is kept; the
+// audio thread's targetValid skips it until the plug-in attaches, and a save keeps it. Message
+// thread only (the load state is).
+static bool targetValidOrPending(Track& t, int32_t kind, int32_t dev, int32_t param, uint64_t uid = 0, int32_t slot = -1) {
+    if (targetValid(t, kind, dev, param, uid, slot)) return true;
+    if (param < 0 || kind != static_cast<int32_t>(CvTargetKind::Instrument)) return false;
+    const ParamOwner o = targetOwner(t, kind, dev, uid, slot);
+    return o.instrument && o.instrument->pluginLoadState() != 0;
+}
 // Current value + range of a target (instrument params are normalized 0..1). Call after targetValid.
 static float targetGet(Track& t, int32_t kind, int32_t dev, int32_t param, float& mn, float& mx, uint64_t uid = 0,
     int32_t slot = -1) {
@@ -173,7 +183,7 @@ int32_t Engine::addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId
         return -1;
     const int32_t tgt = targetTrack < 0 ? trackId : targetTrack;
     auto tgtTrack = findTrackAuthoring(tgt);
-    if (!tgtTrack || !targetValid(*tgtTrack, targetKind, targetDevice, targetParam)) return -1;
+    if (!tgtTrack || !targetValidOrPending(*tgtTrack, targetKind, targetDevice, targetParam)) return -1;
     const int32_t storedTarget = tgt == trackId ? -1 : tgt;
     for (auto& l : old->cvLinks)
         if (l.sourceChainUid == 0 && l.targetChainUid == 0 && l.sourceKind == sourceKind && l.sourceModId == modId && l.sourceDevice == srcDev &&
@@ -218,7 +228,7 @@ int32_t Engine::addNestedCvLink(int32_t trackId, int32_t sourceKind, int32_t mod
         const auto source = targetOwner(*old, 0, srcDev, su, srcSlot);
         if (source.device && source.device->isLatencyConfigurationParam(srcParam)) return -1;
     }
-    if (!targetValid(*tgtTrack, targetKind, targetDevice, targetParam, tu, tgtSlot)) return -1;
+    if (!targetValidOrPending(*tgtTrack, targetKind, targetDevice, targetParam, tu, tgtSlot)) return -1;
     auto nt = cloneTrack(*old);
     CvLink l;
     l.sourceKind = sourceKind;
