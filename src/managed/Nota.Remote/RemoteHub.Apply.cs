@@ -150,6 +150,9 @@ public sealed partial class RemoteHub
                 // nothing: no parameter, no MIDI Learn binding, no mapped target. The phone is
                 // re-sent the page and its next touch lands right.
                 bool held = cmd.Phase != 1 && c.DragKnob == knob;
+                // A phone that walks pages always sends its press first; a move or release without one on
+                // this connection (it reconnected mid-touch) can't say what it saw, so it drives nothing.
+                if (c.PagedMacros && cmd.Phase != 1 && !held) break;
                 if (!held)
                 {
                     c.DragKnob = knob;

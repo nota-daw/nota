@@ -573,6 +573,13 @@ internal static class RemoteTests
         WaitFor(() => { hub.Tick(); return e.DeviceGetParam(inst, comp, scHp) != scHp0; }, 2000);
         yield return (scHpStale == scHp0 && learnCallsStale == 0 && e.DeviceGetParam(inst, comp, scHp) != scHp0,
             "Macros: a touch from a page the phone no longer shows changes nothing (not even MIDI Learn); one from the shown page does");
+        // A move and release with no press on this connection (the phone reconnected mid-touch) drive nothing.
+        int scLp = Enumerable.Range(0, e.DeviceParamCount(inst, comp)).First(k => e.DeviceParamName(inst, comp, k) == "SC LP");
+        float scLp0 = e.DeviceGetParam(inst, comp, scLp);
+        Send(new { t = "mac", i = 1, v = 0.05, ph = 0 });
+        Send(new { t = "mac", i = 1, v = 0.05, ph = 2 });
+        Thread.Sleep(80); hub.Tick(); hub.Tick();
+        yield return (e.DeviceGetParam(inst, comp, scLp) == scLp0, "Macros: a move without its press on this connection changes nothing");
 
         // Macros follows the controller to another track (on by default), not when the phone turns
         // it off, and catches up when it is turned back on.
