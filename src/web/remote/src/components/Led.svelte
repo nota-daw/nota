@@ -98,9 +98,13 @@
   /* The bezel stays dark in every theme: an LED display is black glass on any synth. */
   .lcd { --lcd: color-mix(in srgb, var(--bg-sunken) 25%, black); position: relative; flex: none; padding: 8px 8px 7px; background: var(--lcd); border: 1px solid var(--seam); border-radius: min(var(--r-card), 12px); box-shadow: inset 0 2px 10px var(--shadow-modal); }
   .lcd.fit { flex: 1; min-height: 0; display: flex; }
-  .screen { width: 100%; }
+  /* The canvas carries a px size from the last layout; while the phone turns it must never stick
+     out of its box — iOS shifts the page for an overflowing element and taps land beside the
+     buttons until a reload. */
+  .lcd { min-width: 0; overflow: hidden; }
+  .screen { width: 100%; min-width: 0; overflow: hidden; }
   .fit .screen { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; }
+  canvas { display: block; max-width: 100%; max-height: 100%; }
   /* A quiet corner button over the glass; the dots stay the point. */
   .corner { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-muted); opacity: .55; border-radius: min(var(--r-cell), 10px); }
   .corner:active { opacity: 1; background: color-mix(in srgb, var(--text-muted) 18%, transparent); }

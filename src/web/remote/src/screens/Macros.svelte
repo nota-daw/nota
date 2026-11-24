@@ -66,7 +66,14 @@
   $effect(() => {
     void pg;
     const b = pageRow?.querySelector<HTMLElement>('button.on');
-    b?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // Scroll the row only: scrollIntoView would also scroll the page itself (specs/113 review).
+    const row = pageRow;
+    if (!b || !row) return;
+    const bl = b.offsetLeft, br = bl + b.offsetWidth, bt = b.offsetTop, bb = bt + b.offsetHeight;
+    if (bl < row.scrollLeft) row.scrollLeft = bl;
+    else if (br > row.scrollLeft + row.clientWidth) row.scrollLeft = br - row.clientWidth;
+    if (bt < row.scrollTop) row.scrollTop = bt;
+    else if (bb > row.scrollTop + row.clientHeight) row.scrollTop = bb - row.clientHeight;
   });
   const ARC = 98.9, CIRC = 131.9;
 </script>
@@ -157,9 +164,12 @@
   .macros.land .screen > :global(.lcd) { grid-area: led; }
   .macros.land .nav { grid-area: nav; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .macros.land .step { height: 40px; }
-  .macros.land .bar { grid-area: bar; flex-direction: column; align-items: stretch; min-height: 0; }
-  .macros.land .pages { flex-wrap: wrap; overflow-y: auto; touch-action: pan-y; }
-  .macros.land .pages > button { flex: 1 0 40%; height: 32px; min-width: 0; }
+  /* Beside the display the pages are a two-column grid of even keys from the top, as tall as
+     they need (it scrolls when a plug-in has many), never stretched over the free height. */
+  .macros.land .bar { grid-area: bar; flex-direction: column; align-items: stretch; justify-content: flex-start; min-height: 0; }
+  .macros.land .pages { flex: 0 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 34px;
+    align-content: start; min-height: 0; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; }
+  .macros.land .pages > button { height: auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; }
   .macros.land .grid { grid-area: knobs; flex: none; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: auto; }
   .macros.land .knob { padding: 5px 1px 4px; gap: 1px; }
   .macros.land .kn { font-size: 9.5px; }
@@ -202,7 +212,7 @@
 
   .screen { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
   /* The pages as a segment row; it scrolls sideways when there are many. */
-  .pages { display: flex; gap: 2px; padding: 2px; background: var(--bg-sunken); box-shadow: var(--sunken); border-radius: min(var(--r-group), 14px); overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+  .pages { position: relative; display: flex; gap: 2px; padding: 2px; background: var(--bg-sunken); box-shadow: var(--sunken); border-radius: min(var(--r-group), 14px); overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
   .pages::-webkit-scrollbar { display: none; }
   .pages > button { flex: 1 0 auto; min-width: 56px; height: 36px; padding: 0 10px; border-radius: min(var(--r-cell), 12px); color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background-color var(--ease), color var(--ease); }
   .pages > button.on { background: var(--accent-soft); color: var(--picked-ink); }
