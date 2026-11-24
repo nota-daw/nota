@@ -12,6 +12,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -30,6 +31,27 @@ struct MidiEv {
     float vel;        // 0..1 (note-on)
     float dur = 0.0f; // note-on from a clip: its length in beats (0 = unknown, e.g. played live).
                       // Lets a device that needs the length up front (Nota Length's Gate %) use it.
+};
+
+// Held notes immediately before a block's events. Repeated pitches and notes
+// in multiple octaves can overlap, so a pitch class stays set until its last off.
+struct MidiKeyNotes {
+    int mask = 0;
+    std::array<uint16_t, 128> held{};
+
+    void apply(const MidiEv& event) {
+        if (event.pitch < 0 || event.pitch >= int(held.size())) return;
+        auto& count = held[event.pitch];
+        const int pitchClass = event.pitch % 12;
+        if (event.on && event.vel > 0) {
+            if (count < UINT16_MAX) ++count;
+            mask |= 1 << pitchClass;
+        } else if (count && --count == 0) {
+            for (int pitch = pitchClass; pitch < int(held.size()); pitch += 12)
+                if (held[pitch]) return;
+            mask &= ~(1 << pitchClass);
+        }
+    }
 };
 
 class RackCore;

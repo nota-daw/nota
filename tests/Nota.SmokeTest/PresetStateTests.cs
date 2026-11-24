@@ -38,6 +38,19 @@ internal static class PresetStateTests
             "preset: a new device has no preset (Init)");
         yield return (eng.DevicePresetTag(t, Fx, 9) == -1 && eng.DevicePresetTag(9999, Fx, 0) == -1, "preset: no such device reads -1");
 
+        int color = eng.AddBuiltinDevice(t, 27);
+        eng.SetDevicePresetTag(t, Fx, color, "smoke:color", "Color");
+        eng.DeviceSetParam(t, color, 28, 0);
+        bool fftUnchanged = eng.DevicePresetModified(t, Fx, color) == 0;
+        eng.DeviceSetParam(t, color, 22, 1);
+        bool gateChanged = eng.DevicePresetModified(t, Fx, color) == 1;
+        eng.DeviceSetParam(t, color, 22, 0);
+        eng.DeviceSetParam(t, color, 31, 1);
+        bool preChanged = eng.DevicePresetModified(t, Fx, color) == 1;
+        yield return (fftUnchanged && gateChanged && preChanged,
+            "preset: Color FFT is excluded while Gate and Pre enable mark the preset changed");
+        eng.RemoveDevice(t, color);
+
         eng.ClearUndoHistory();
         string w = PresetEdit.Apply(eng, t, Fx, d, a.Id, a.DisplayName, () => cat.ApplyInPlace(eng, a.Id, t, d));
         yield return (w == "" && PresetEdit.Name(eng, t, Fx, d) == a.DisplayName && eng.DevicePresetModified(t, Fx, d) == 0,

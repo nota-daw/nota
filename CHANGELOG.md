@@ -23,6 +23,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Nota Color** (#977, specs/113) is a built-in audio effect for color bass. It combines
+  semitone shifts, tuned resonance and attack protection. Pick a scale or custom notes, set the
+  processing band, and see the input and shifted components on the live spectrum.
+  Morph and Gate shape the shifted components. The card has S and L sizes, and
+  Mute low and Mute high independently silence the sidebands in the wet signal.
+  Set the FFT to 512, 1024 (default), or 2048 samples during playback. Gate and
+  Pre pitch can also be switched live, with automatic delay compensation.
+  Pre pitch shifts the band before tuning, and Post pitch fine-tunes correction
+  and resonance.
+- **Nota Color** can follow another track's Arrangement notes and live MIDI after
+  its MIDI effects. The keyboard shows the active notes and correction fades
+  out when they are released.
 - **Session: play the grid from the keyboard, and buttons you can hit** (#364, specs/112).
   - With the arrows on a slot, **Return** does what a click does: launches the clip, starts
     recording in an armed track's empty slot, and on a recording slot ends the take.
@@ -231,11 +243,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   rather than four words, so the table keeps its LEVEL slider and the card its 700 × 260 size.
   Saved projects and factory presets read 0 st and are unchanged.
 
+### Changed
+- **Nota Color** uses a single HQ engine. Older prototype sessions keep their
+  control values and load into HQ, including sessions saved in Polyphonic mode.
+- **Nota Color Gate** follows the dry spectrum and gates the entire processed
+  band, including the resonance tail. Gate adds one FFT window of latency.
+  Both card sizes show the total latency below the spectrum.
+
 ### Fixed
 - **Nota starts in seconds on Linux with the MCP server on** (#966). Launched from the app
   menu, startup took 25–40 s: the MCP server's web host used the current folder — the home
   folder — as its content root and watched all of it for a settings file, one inotify watch
   per folder. It uses the app's own folder now.
+- **Samples in folders with accented names play on Windows** (#974). A WAV, FLAC or MP3
+  whose folder or file name had a character outside plain English — `Música`, `Canción`,
+  `ñ`, Cyrillic, CJK — couldn't be opened on Windows: it didn't sound, didn't show its
+  waveform and read as unsupported. Nota now opens these paths as Unicode.
+- **Play starts at once with a count-in set** (#988). The count-in also ran before plain Play
+  (the button, Space and ⇧Space), so Play lit up while the transport stood still for the
+  count-in bars — and with the clicks routed to Cue only, nothing seemed to happen at all. The
+  count-in is now for Record only: Record from stop (Arrangement or a Session slot) still
+  clicks it out first, Play rolls immediately.
+- **Nota Color** sleeps after its resonant tail fades, reducing DSP usage during silence.
+- **Nota Color** keeps the width and spacing of its spectrum lines consistent
+  across display scales. Tuned uses the inverse of the active accent and
+  follows theme changes. Dry and Tuned show nearby bass tones
+  as separate peaks, including with opposite stereo polarity.
 - **AI models install again** (#969). Every AI model (Separate Stems, Convert to MIDI, Manual
   search) failed with "Couldn't download ONNX runtime (404)": the repository Nota fetched ONNX
   Runtime 1.23.2 from is gone. The runtime now comes from Nota's own mirror on
