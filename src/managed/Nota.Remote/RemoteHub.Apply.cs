@@ -261,6 +261,10 @@ public sealed partial class RemoteHub
                 // Land on the track's instrument (or first device), as the controller's focus rule does.
                 int inst = now.FindIndex(d => d.Address.Section == Nota.Application.Controllers.FocusSection.Instrument);
                 if (inst >= 0) c.MacroDevice = inst;
+                // ...unless the controller's knobs are already on a device of that track (it was
+                // Nota's selected track, so its focus didn't move): the phone takes that device and
+                // page, so both turn the same knobs.
+                if (c.FollowController) FollowFocus(c, host.ControllerFocus, sameTrackOnly: true);
                 _devicesDirty = true;
                 break;
             }

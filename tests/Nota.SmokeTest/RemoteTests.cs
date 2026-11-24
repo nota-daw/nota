@@ -590,6 +590,21 @@ internal static class RemoteTests
         var mCaught = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst);
         yield return (mFollowTrack is not null && mStayed is null && mCaught is not null,
             "Macros follows the controller to another track; with Follow off it stays, turned on it catches up");
+
+        // Stepping back onto the track the controller is on takes the controller's device and page
+        // (its focus didn't move, so no foc arrives), not the track's instrument.
+        host.ControllerFocus = new RemoteControllerFocus("KeyLab", "device", 0, inst, "", e.DeviceName(inst, comp), comp, 1, 2, "Sidechain", 0, 0)
+            { Address = new Nota.Application.Controllers.DeviceAddress(inst, Nota.Application.Controllers.FocusSection.Audio, comp) };
+        Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst && m.GetProperty("di").GetInt32() == 1 && m.GetProperty("pg").GetInt32() == 1);
+        var away = Enumerable.Range(0, e.TrackCount).Select(k => e.TryGetTrackInfo(k, out var ti) ? ti : default).Where(ti => !ti.IsReturn && ti.Id > 0).Select(ti => ti.Id).ToList();
+        int dir = away.IndexOf(inst) > 0 ? -1 : 1;
+        Send(new { t = "nav", s = "track", i = dir });
+        Wait("mac", 3000, m => m.GetProperty("id").GetInt32() != inst);
+        Drain("mac");
+        Send(new { t = "nav", s = "track", i = -dir });
+        var mBack = Wait("mac", 3000, m => m.GetProperty("id").GetInt32() == inst);
+        yield return (mBack is { } mb && mb.GetProperty("di").GetInt32() == 1 && mb.GetProperty("pg").GetInt32() == 1,
+            "Macros: stepping onto the controller's track lands on its device and page, not the instrument");
         host.ControllerFocus = null;
         Send(new { t = "sub", s = "Scenes" });
         Drain("led");

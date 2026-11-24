@@ -558,9 +558,11 @@ public sealed partial class RemoteHub
     // on the phone stays until the next move. Another track is taken only while Macros shows (the
     // track the phone plays on Pads or Keys stays the user's); opening Macros catches up
     // (trackOnly: just a move to another track, a pick on this one stays).
-    private void FollowFocus(RemoteClient c, RemoteControllerFocus? f, bool trackOnly = false)
+    private void FollowFocus(RemoteClient c, RemoteControllerFocus? f, bool trackOnly = false, bool sameTrackOnly = false)
     {
         if (!c.FollowController || f is null || f.Mode != "device" || f.TrackId <= 0 || Host is not { } host) return;
+        // sameTrackOnly: after a phone step, a focus still on another track is stale, not a move.
+        if (sameTrackOnly && f.TrackId != c.TrackId) return;
         if (f.TrackId != c.TrackId)
         {
             if (c.Screen != "Macros" || !TrackExists(f.TrackId)) return;

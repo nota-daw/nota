@@ -213,7 +213,7 @@ public partial class MainWindow : IRemoteHost
     void IRemoteHost.SelectTrack(int trackId)
     {
         if (trackId <= 0) return;
-        if (_controllers?.SelectTrack is { } select) select(trackId);   // as Track ◀ ▶ select it (specs/107)
+        if (_controllers is { } svc) svc.SelectTrackFromRemote(trackId);   // as Track ◀ ▶ do: selection + banks (specs/107)
         else if (Timeline.SelectedTrackId != trackId) Timeline.SelectTrackFromOutside(trackId);
     }
 
