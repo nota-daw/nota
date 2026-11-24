@@ -220,26 +220,36 @@ Steps:
 
 ### P7. Release image
 
-Build a 16:9 poster in `../media/news/X.Y.Z-src/` (outside the repo). Start from the last
-release's `poster.html` (`ls -d ../media/news/*-src | sort -V | tail -1`) and copy its
-fonts.
+The poster has one look, kept in the repo: `release-notes/poster/poster.html` (Nota's own
+style in Studio Dark: the flat grey shell, one raised device card, orange for live and the
+soft tint for picked, Geist). A release only says what goes on it, and
+`scripts/release-poster.mjs` builds it in `../media/news/X.Y.Z-src/` (outside the repo) and
+renders `../media/news/X.Y.Z.png`, 1280 × 720 at 2×. Change the template itself only when
+the user asks for a new look; then it changes for every release after.
 
-- Header: the logo, `Nota X.Y.Z` (version in brass), a one-line subtitle taken from the
-  notes' lede, and a mono tag row with the 2–4 headline features.
-- Two or three cards with real screenshots of the headline features. Shoot them from the
-  app (see the UI-verify recipe, with an isolated `NOTA_DATA_DIR`) or reuse fresh shots
-  from `../nota-docs`. Use Ember Graphite colours (`nota-design`).
-- Render it at 2×:
-
-  ```bash
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
-    --hide-scrollbars --window-size=1280,720 --force-device-scale-factor=2 \
-    --screenshot="$PWD/../media/news/X.Y.Z.png" "file://$PWD/../media/news/X.Y.Z-src/poster.html"
-  ```
-
-- Look at the PNG (Read it) and check for overlaps, clipped text or empty space before
-  showing it to the user. Also save the rendered posts next to it as
-  `../media/news/X.Y.Z.en.md` and `X.Y.Z.ru.md` (the output of `post-en` / `post-ru`).
+1. Write `release-notes/X.Y.Z.poster.json` (committed with the release; format at the top of
+   the script):
+   - `subtitle`: one sentence from the notes' lede; `tags`: the 2–4 headline features, the
+     first one picked (tinted).
+   - `hero`: the feature to show as a device card or a window, with a real screenshot
+     (`image`, a file in the src folder).
+   - `leds` (optional): Nota Remote LED panels, each a built-in device page
+     (`device` = the kind key, e.g. `builtin:fx:reverb`, `page` = 1-based). They are the
+     real frames Nota draws: the script dumps every page with the smoke test's `--displays`
+     (`NOTA_DISPLAY_DUMP`). Pick pages whose picture reads well with no audio (Reverb,
+     Volt Filter, Compressor, Chord, EQ-8 Bands…); see the `.txt` dumps in `led/`.
+2. Shoot the hero with nota-docs' headless harness (the real app, Studio Dark): a job file
+   with `{"out": "<dir>", "theme": "dark", "shots": [{"id": "hero", "scene": "device",
+   "args": {"effect": <kind number>, "clip": "chords", "blocks": 120, "live": 40}}]}`
+   (scenes and args at the top of `../nota-docs/shots/manifest.yml`), then
+   `dotnet build ../nota-docs/shots/app/NotaDocsShots.csproj -p:NotaRepo=$PWD` and
+   `NOTA_DATA_DIR=<tmp> dotnet run --no-build --project ../nota-docs/shots/app/NotaDocsShots.csproj -- <job.json>`.
+   Copy the PNG into the src folder under the name the config gives.
+3. `node scripts/release-poster.mjs X.Y.Z` (`--fresh-leds` re-dumps the frames,
+   `--browser <path>` if it finds no Chrome / Chromium / Edge).
+4. Look at the PNG (Read it) and check for overlaps, clipped text or empty space before
+   showing it to the user. Also save the rendered posts next to it as
+   `../media/news/X.Y.Z.en.md` and `X.Y.Z.ru.md` (the output of `post-en` / `post-ru`).
 
 ### P8. Hand over to the user
 
@@ -247,7 +257,7 @@ Don't commit. Give the user:
 
 - the version change (`app a → b`, `engine c → d`) and the list of changed files:
   `CHANGELOG.md`, `VERSION`, `src/native/nota.engine/VERSION`, `FEATURES.md`,
-  `release-notes/X.Y.Z.{en,ru}.md`,
+  `release-notes/X.Y.Z.{en,ru}.md`, `release-notes/X.Y.Z.poster.json`,
 - the commit message `(chore) Release X.Y.Z` and the push command
   `git push -u origin release/X.Y.Z`,
 - the **PR into develop**: title `(chore) Release X.Y.Z` (it becomes the squash commit
