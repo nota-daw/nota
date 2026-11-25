@@ -198,7 +198,14 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.RackDevDuplicateChain(_handle, trackId, deviceIndex, chain); }
 
     public bool RackDevChainGrainSetSample(int trackId, int deviceIndex, int chain, string path, int rootNote = 60)
-    { ThrowIfDisposed(); return NativeMethods.RackDevChainGrainSetSample(_handle, trackId, deviceIndex, chain, path, rootNote) == 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.RackDevChainGrainSetSample(_handle, trackId, deviceIndex, chain, path, rootNote) == 0;
+        if (ok && RackDevChainGrainInfo(trackId, deviceIndex, chain, out var info)) RememberSampleName(info.SampleId, path);
+        return ok;
+    }
+    public bool RackDevChainGrainInfo(int trackId, int deviceIndex, int chain, out NotaSamplerInfo info)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainGrainInfo(_handle, trackId, deviceIndex, chain, out info) != 0; }
 
     public long RackDevChainId(int trackId, int deviceIndex, int chain)
     { ThrowIfDisposed(); return NativeMethods.RackDevChainId(_handle, trackId, deviceIndex, chain); }

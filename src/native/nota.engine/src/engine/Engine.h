@@ -1209,6 +1209,7 @@ class Engine {
     int64_t rackChainId(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     // Load a sample into a chain's Nota Grain (a factory Grain preset's source), one undo step.
     bool rackChainGrainSetSample(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& path, int32_t rootNote);
+    bool rackChainGrainInfo(int32_t trackId, int32_t deviceIndex, int32_t chain, NotaSamplerInfo* out) const;
     // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
     static constexpr int32_t kMidiRackBase = -1000;
     // A Drum Rack in chain c of the track's Instrument Rack is addressed as kNestedRackBase − c

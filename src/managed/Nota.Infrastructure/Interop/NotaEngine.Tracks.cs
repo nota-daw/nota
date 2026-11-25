@@ -1306,7 +1306,12 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.InstrumentSetStateUndoable(_handle, trackId, data, data.Length) != 0; }
 
     public bool SetTrackGrainSample(int trackId, string path, int rootNote = 60)
-    { ThrowIfDisposed(); return NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0; }
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0;
+        if (ok && TryGetGrainInfo(trackId, out var info)) RememberSampleName(info.SampleId, path);
+        return ok;
+    }
 
     public bool SetTrackGrainRoot(int trackId, int rootNote)
     { ThrowIfDisposed(); return NativeMethods.SetTrackGrainRoot(_handle, trackId, rootNote) != 0; }

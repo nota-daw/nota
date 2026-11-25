@@ -22,6 +22,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Presets:** Drum Rack, Instrument Rack and Audio Effect Rack now save and recall their
+  complete chains, devices, macros and mappings; Nota Grain user presets also restore their
+  referenced sample and root note (#1044).
+
 ## [0.61.1] — 2026-11-24
 
 ### Added

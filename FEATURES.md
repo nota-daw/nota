@@ -1366,7 +1366,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   A chain can hold **Nota Mosaic** (its full editor, program saved with the rack) or a **Drum
   Rack** — one level deep — whose card opens in a window with its pads, macros and factory kits;
   outer macros can drive its macros. MCP `get_rack` with `nestedChain` reads it. A new rack
-  starts empty: drop an instrument or a preset on it for the first chain.
+  starts empty: drop an instrument or a preset on it for the first chain. User presets retain
+  the complete rack: chains, devices, zones, macros and mappings.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer, Chain and Macro views,
   per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
   right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
@@ -1375,7 +1376,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   with draggable ranges per receiver. A pad plays Nota Sampler, a built-in synth or Nota Mosaic.
   A **kit picker** in the
   card header loads any factory kit in place and names the kit a rack holds. Its clips can
-  be stepped in the detail panel's **Pattern** tab (see below).
+  be stepped in the detail panel's **Pattern** tab (see below). User presets retain the kit's
+  pads, chains, devices, macros and mappings.
 - **25 factory kits** under Nota Drum Rack and Nota Rhythm in the browser and in their cards' kit pickers:
   *Volta* (warm analog boom), *Kompakt* (punchy analog house), *Micron* (small vintage
   rhythm box), *Linnwood* (80s PCM machine), *Atelier* (acoustic studio kit), *Cellar*
@@ -1396,7 +1398,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   selector (dragged, mapped to a macro, or following the input level) picks the chains whose
   select range holds it; Dry/wet, Gain, latency compensation; the add menu lists built-in
   effects and a Plug-ins submenu. ⌘G on selected audio effects groups them into a new rack
-  (**Group into rack**); ⌘⇧G puts a one-chain rack's devices back.
+  (**Group into rack**); ⌘⇧G puts a one-chain rack's devices back. User presets retain the
+  complete chain and macro setup.
 - **Nota MIDI Effect Rack** — a MIDI effect with up to 16 chains of MIDI effects (Arp, Chord,
   Scale, Length, Velocity, Random). Each chain takes the notes its key and velocity zone lets in
   (or, in Select mode, the chains whose select range holds the selector), can transpose them

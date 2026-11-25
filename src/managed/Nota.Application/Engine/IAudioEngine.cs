@@ -1200,6 +1200,8 @@ public interface IAudioEngine : IDisposable
     long RackDevChainId(int trackId, int deviceIndex, int chain);
     /// <summary>Loads a sample into a chain's Nota Grain (a Grain preset's source); one undo step.</summary>
     bool RackDevChainGrainSetSample(int trackId, int deviceIndex, int chain, string path, int rootNote = 60);
+    /// <summary>A chain Nota Grain's sample id and root note. False if it isn't Nota Grain.</summary>
+    bool RackDevChainGrainInfo(int trackId, int deviceIndex, int chain, out NotaSamplerInfo info);
     bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index);
     bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
     int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);

@@ -1293,6 +1293,17 @@ bool Engine::rackChainGrainSetSample(int32_t t, int32_t di, int32_t c, const std
     return fr && fr->replaceChainInstrument(c, std::move(fresh));
 }
 
+bool Engine::rackChainGrainInfo(int32_t t, int32_t di, int32_t c, NotaSamplerInfo* out) const {
+    if (!out) return false;
+    auto* r = rackCoreAt(t, di);
+    auto* gr = r ? dynamic_cast<GrainSynth*>(r->chainInstrument(c)) : nullptr;
+    if (!gr) return false;
+    out->sample_id = gr->sample() ? gr->sample()->id : 0;
+    out->root_note = gr->rootNote();
+    out->loop = 0;
+    return true;
+}
+
 std::string Engine::rackChainMosaicProgram(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
     auto* m = r ? dynamic_cast<Mosaic*>(r->chainInstrument(c)) : nullptr;
