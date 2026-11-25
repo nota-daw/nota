@@ -179,7 +179,7 @@ class RackInstrument : public Instrument, public RackCore {
     int32_t chainCount_[kMaxMidiChains] = {}, chainCursor_[kMaxMidiChains] = {};
     int32_t blockPos_ = 0;
     uint16_t evMask_[1024] = {}; // per input event: the MIDI chains it goes to (in block order)
-    void renderChunk(RackState& st, float* out, int32_t frames, int32_t tapAt);
+    NOTA_NOINLINE void renderChunk(RackState& st, float* out, int32_t frames, int32_t tapAt);
     bool midiChainAt(int32_t c) const;
 };
 

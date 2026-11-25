@@ -82,7 +82,7 @@ class RackDevice final : public Device, public RackCore {
     std::shared_ptr<Device> clone() const override;
 
   private:
-    void processChunk(RackState& st, float* buf, int32_t frames);
+    NOTA_NOINLINE void processChunk(RackState& st, float* buf, int32_t frames);
     dsp::StereoScratchArena<3> arena_;
 };
 

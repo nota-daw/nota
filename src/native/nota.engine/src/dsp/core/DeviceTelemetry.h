@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "dsp/core/RtAttributes.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -32,61 +34,73 @@ class DeviceTelemetry {
     static constexpr double kLeaseSeconds = 3.0;
 
     // RAII block timer placed at the entry of process()/render(). Measures Clock::now() only
-    // when active (OnDemand inside an active lease, or AlwaysOn); returns zero overhead while
-    // cards are closed.
+    // when active (OnDemand inside an active lease, or AlwaysOn); keeps owner_ == nullptr when
+    // idle so no `&this->telemetry_` alias escapes into the caller's hot DSP loop.
     class ScopedBlockTimer {
       public:
-        ScopedBlockTimer(DeviceTelemetry& owner, int32_t frames, double sampleRate, double smoothing = 0.1) noexcept
-            : owner_(owner), frames_(frames), sampleRate_(sampleRate > 0.0 ? sampleRate : 44100.0),
-              smoothing_(smoothing) {
-            if (frames_ <= 0) return;
-
-            const TelemetryMode mode = owner_.mode_.load(std::memory_order_relaxed);
-            const uint32_t req = owner_.observeRequests_.load(std::memory_order_relaxed);
-            if (mode == TelemetryMode::OnDemand && owner_.rtLeaseFrames_ == 0 && req == owner_.lastSeenObserve_
-                && owner_.smoothedCpu_ == 0.0) {
+        ScopedBlockTimer(DeviceTelemetry& owner, int32_t frames, double sampleRate, double smoothing = 0.1) noexcept {
+            if (frames <= 0) return;
+            const TelemetryMode mode = owner.mode_.load(std::memory_order_relaxed);
+            const uint32_t req = owner.observeRequests_.load(std::memory_order_relaxed);
+            if (mode == TelemetryMode::OnDemand && owner.rtLeaseFrames_ == 0 && req == owner.lastSeenObserve_
+                && owner.smoothedCpu_ == 0.0) {
                 return;
             }
-            if (req != owner_.lastSeenObserve_) {
-                owner_.lastSeenObserve_ = req;
-                owner_.rtLeaseFrames_ = leaseFramesFor(sampleRate_);
-            }
-
-            if (mode == TelemetryMode::AlwaysOn) {
-                active_ = true;
-            } else if (mode == TelemetryMode::OnDemand && owner_.rtLeaseFrames_ > 0) {
-                active_ = true;
-            } else if (owner_.smoothedCpu_ > 0.0 || mode == TelemetryMode::AlwaysOff) {
-                owner_.smoothedCpu_ = 0.0;
-                owner_.cpuLoad_.store(0.0f, std::memory_order_relaxed);
-            }
-
-            if (owner_.rtLeaseFrames_ > 0) {
-                owner_.rtLeaseFrames_ = std::max<int64_t>(0, owner_.rtLeaseFrames_ - frames_);
-            }
-
-            if (active_) startedAt_ = Clock::now();
+            beginSlow(owner, frames, sampleRate, smoothing, mode, req);
         }
 
         ~ScopedBlockTimer() noexcept {
-            if (!active_ || frames_ <= 0 || sampleRate_ <= 0.0) return;
-            const double elapsed = std::chrono::duration<double>(Clock::now() - startedAt_).count();
-            const double budget = static_cast<double>(frames_) / sampleRate_;
-            if (budget > 0.0) {
-                owner_.smoothedCpu_ += smoothing_ * ((elapsed / budget) - owner_.smoothedCpu_);
-                owner_.cpuLoad_.store(static_cast<float>(owner_.smoothedCpu_), std::memory_order_relaxed);
-            }
+            if (owner_) finishSlow();
         }
 
         ScopedBlockTimer(const ScopedBlockTimer&) = delete;
         ScopedBlockTimer& operator=(const ScopedBlockTimer&) = delete;
 
       private:
-        DeviceTelemetry& owner_;
+        NOTA_NOINLINE void beginSlow(DeviceTelemetry& owner, int32_t frames, double sampleRate, double smoothing,
+            TelemetryMode mode, uint32_t req) noexcept {
+            frames_ = frames;
+            sampleRate_ = sampleRate > 0.0 ? sampleRate : 44100.0;
+            smoothing_ = smoothing;
+            if (req != owner.lastSeenObserve_) {
+                owner.lastSeenObserve_ = req;
+                owner.rtLeaseFrames_ = leaseFramesFor(sampleRate_);
+            }
+
+            bool active = false;
+            if (mode == TelemetryMode::AlwaysOn) {
+                active = true;
+            } else if (mode == TelemetryMode::OnDemand && owner.rtLeaseFrames_ > 0) {
+                active = true;
+            } else if (owner.smoothedCpu_ > 0.0 || mode == TelemetryMode::AlwaysOff) {
+                owner.smoothedCpu_ = 0.0;
+                owner.cpuLoad_.store(0.0f, std::memory_order_relaxed);
+            }
+
+            if (owner.rtLeaseFrames_ > 0) {
+                owner.rtLeaseFrames_ = std::max<int64_t>(0, owner.rtLeaseFrames_ - frames_);
+            }
+
+            if (active) {
+                owner_ = &owner;
+                startedAt_ = Clock::now();
+            }
+        }
+
+        NOTA_NOINLINE void finishSlow() noexcept {
+            if (frames_ <= 0 || sampleRate_ <= 0.0) return;
+            const double elapsed = std::chrono::duration<double>(Clock::now() - startedAt_).count();
+            const double budget = static_cast<double>(frames_) / sampleRate_;
+            if (budget > 0.0) {
+                owner_->smoothedCpu_ += smoothing_ * ((elapsed / budget) - owner_->smoothedCpu_);
+                owner_->cpuLoad_.store(static_cast<float>(owner_->smoothedCpu_), std::memory_order_relaxed);
+            }
+        }
+
+        DeviceTelemetry* owner_ = nullptr;
         int32_t frames_ = 0;
         double sampleRate_ = 44100.0;
         double smoothing_ = 0.1;
-        bool active_ = false;
         Clock::time_point startedAt_{};
     };
 

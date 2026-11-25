@@ -712,127 +712,11 @@ void WavetableSynth::render(float* out, int32_t frames) {
     double f1base = std::exp2(f1Sm_), f2base = std::exp2(f2Sm_), reso1 = r1Sm_, reso2 = r2Sm_;
 
     float peak = 0.0f;
-    Voice* act[kVoices];
     int actN = 0;
-    for (auto& v : voices_)
-        if (v.active) act[actN++] = &v;
+    for (const auto& v : voices_)
+        if (v.active) ++actN;
 
-    auto evalVoiceSample = [&](Voice& v, double lfo1, double lfo2, double curF1, double curF2, double curR1,
-                               double curR2, float& mixL, float& mixR) -> bool {
-        stepEnv(v.env, v.stage, v.shape, atk, dec, sus, rel, bend1);
-        if (v.stage == Stage::Off) {
-            v.active = false;
-            return false;
-        }
-        stepEnv(v.env2, v.stage2, v.shape2, atk2, dec2, sus2, rel2, bend2);
-
-        double dst[kDests] = {
-            macroDst[0], macroDst[1], macroDst[2], macroDst[3], macroDst[4], macroDst[5], macroDst[6]};
-        if (amN) {
-            const double src[kSources] = {
-                v.env, v.env2, lfo1, lfo2, v.velocity, std::clamp(v.ktOct / 4.0, -1.0, 1.0), modWheel, v.rand};
-            for (int k = 0; k < amN; ++k) dst[amD[k]] += src[amS[k]] * amA[k];
-        }
-        v.ex.tick(exAdd, exprCoef_);
-        if (v.ex.bend() != v.exBendAt) {
-            v.exBendAt = v.ex.bend();
-            v.exBendMul = std::exp2(v.exBendAt / 12.0);
-        }
-        const float exPos = v.ex.slide() * 0.5f;
-        const double pMul = pitchStatic ? 1.0 : std::exp2(dst[0] * 2.0);
-        const float pos1 = std::clamp(basePos1 + (float)dst[2] + exPos, 0.0f, 1.0f);
-        const float pos2 = std::clamp(basePos2 + (float)dst[2] + exPos, 0.0f, 1.0f);
-        const double base = v.freq * invSr * pMul * bendMul * v.exBendMul;
-
-        float o1 = 0.0f, o2 = 0.0f, sd1 = 0.0f, sd2 = 0.0f;
-        if (lvl1 > 1e-5f) {
-            if (ct1)
-                o1 = oscStackCustom(
-                    v.ph1, base * m1, *ct1, pos1, wm1, warp1, uniN, uniDetF, uniMaxDet, uniPanL, uniPanR, uniNorm, sd1);
-            else
-                o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd1);
-        }
-        if (lvl2 > 1e-5f) {
-            const double inc2 = base * m2 * (osc2PitchStatic ? 1.0 : std::exp2(dst[1] * 2.0));
-            if (ct2)
-                o2 = oscStackCustom(
-                    v.ph2, inc2, *ct2, pos2, wm2, warp2, uniN, uniDetF, uniMaxDet, uniPanL, uniPanR, uniNorm, sd2);
-            else
-                o2 = oscStack(v.ph2, inc2, b2, pos2, wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
-        }
-        float sub = 0.0f;
-        if (subLvl > 1e-5f) {
-            sub = subOsc(subWave, v.subPh);
-            v.subPh += base * m1 * subMul;
-            if (v.subPh >= 1.0) v.subPh -= 1.0;
-        }
-        o1 *= lvl1;
-        o2 *= lvl2;
-        sub *= subLvl;
-
-        double in1 = 0, in2 = 0, dryS = 0;
-        routeAdd(r1, o1, in1, in2, dryS);
-        routeAdd(r2, o2, in1, in2, dryS);
-        routeAdd(rs, sub, in1, in2, dryS);
-
-        if (v.modCount-- <= 0) {
-            v.modCount = 15;
-            const double cutMod = dst[3] * 4.0 + v.ex.pressure() * 2.0, resoMod = dst[4];
-            double c1 = f1Env * 4.0 * v.env2 + f1Key * v.ktOct + f1Lfo * 2.0 * lfo1 + cutMod;
-            double c2 = f2Env * 4.0 * v.env2 + f2Key * v.ktOct + f2Lfo * 2.0 * lfo2 + cutMod;
-            setSvf(v.f[0], std::clamp(curF1 * std::exp2(c1), 20.0, sampleRate_ * 0.49), resoToK(curR1 + resoMod));
-            setSvf(v.f[1], std::clamp(curF2 * std::exp2(c2), 20.0, sampleRate_ * 0.49), resoToK(curR2 + resoMod));
-        }
-        double s =
-            filterPair(v.f, v.ic1L, v.ic2L, v.ic1R, v.ic2R, in1, in2, series, t1type, t2type, slope1, slope2) + dryS;
-        double side = 0.0;
-        if (stereoUni) {
-            double sIn1 = 0, sIn2 = 0, sDry = 0;
-            routeAdd(r1, sd1 * lvl1, sIn1, sIn2, sDry);
-            routeAdd(r2, sd2 * lvl2, sIn1, sIn2, sDry);
-            side = filterPair(v.f, v.sc1L, v.sc2L, v.sc1R, v.sc2R, sIn1, sIn2, series, t1type, t2type, slope1, slope2) +
-                   sDry;
-        }
-
-        float amp = v.env * v.velocity * (1.0f + (float)dst[5]) * (1.0f + 0.5f * v.ex.pressure());
-        float sigL = (float)(s + side) * amp, sigR = (float)(s - side) * amp;
-        const float pan = (float)std::clamp(dst[6], -1.0, 1.0);
-        mixL += sigL * (pan <= 0 ? 1.0f : 1.0f - pan);
-        mixR += sigR * (pan >= 0 ? 1.0f : 1.0f + pan);
-        return true;
-    };
-
-    auto applyGlobalFxAndWrite = [&](float mixL, float mixR, float* dstStereo) {
-        float l = mixL * 0.4f, r = mixR * 0.4f;
-        if (driveOn && drive > 1e-4f) {
-            l = driveSample(driveMode, l, drive, driveInvNorm);
-            r = driveSample(driveMode, r, drive, driveInvNorm);
-        }
-        if (driveOn && toneCoef != 0.0f) {
-            l = tone(toneL_, l, toneCoef);
-            r = tone(toneR_, r, toneCoef);
-        }
-        if (chorusOn && chAmt > 1e-4f) {
-            float cl, cr;
-            chorus(l, r, chAmt, chVoices, chRate, cl, cr);
-            l = cl;
-            r = cr;
-        }
-        if (reverbOn && rvAmt > 1e-4f) {
-            float rl, rr;
-            reverb(l, r, revFb, revDamp, rl, rr);
-            l += rl * rvAmt;
-            r += rr * rvAmt;
-        }
-
-        const float al = (l * opL) * gain, ar = (r * opR) * gain;
-        peak = std::max(peak, std::fabs(al));
-        peak = std::max(peak, std::fabs(ar));
-        dstStereo[0] += al;
-        dstStereo[1] += ar;
-    };
-
-    const bool useBatched = (actN >= 10 && frames >= 32 && voiceScratch_.capacityFrames() >= 32);
+    const bool useBatched = (actN >= 12 && frames >= 32 && voiceScratch_.capacityFrames() >= 32);
     if (!useBatched) {
         for (int32_t i = 0; i < frames; ++i) {
             if (!settled) {
@@ -859,13 +743,246 @@ void WavetableSynth::render(float* out, int32_t frames) {
             lfoPhase2_ += lfo2Inc;
 
             float mixL = 0.0f, mixR = 0.0f;
-            for (int vi = 0; vi < actN; ++vi) {
-                Voice& v = *act[vi];
-                if (v.active) evalVoiceSample(v, lfo1, lfo2, f1base, f2base, reso1, reso2, mixL, mixR);
+            for (auto& v : voices_) {
+                if (!v.active) continue;
+                stepEnv(v.env, v.stage, v.shape, atk, dec, sus, rel, bend1);
+                if (v.stage == Stage::Off) {
+                    v.active = false;
+                    continue;
+                }
+                stepEnv(v.env2, v.stage2, v.shape2, atk2, dec2, sus2, rel2, bend2);
+
+                double dst[kDests] = {
+                    macroDst[0], macroDst[1], macroDst[2], macroDst[3], macroDst[4], macroDst[5], macroDst[6]};
+                if (amN) {
+                    const double src[kSources] = {
+                        v.env, v.env2, lfo1, lfo2, v.velocity, std::clamp(v.ktOct / 4.0, -1.0, 1.0), modWheel, v.rand};
+                    for (int k = 0; k < amN; ++k) dst[amD[k]] += src[amS[k]] * amA[k];
+                }
+                v.ex.tick(exAdd, exprCoef_);
+                if (v.ex.bend() != v.exBendAt) {
+                    v.exBendAt = v.ex.bend();
+                    v.exBendMul = std::exp2(v.exBendAt / 12.0);
+                }
+                const float exPos = v.ex.slide() * 0.5f;
+                const double pMul = pitchStatic ? 1.0 : std::exp2(dst[0] * 2.0);
+                const float pos1 = std::clamp(basePos1 + (float)dst[2] + exPos, 0.0f, 1.0f);
+                const float pos2 = std::clamp(basePos2 + (float)dst[2] + exPos, 0.0f, 1.0f);
+                const double base = v.freq * invSr * pMul * bendMul * v.exBendMul;
+
+                // --- oscillators (unison stack on Osc1/Osc2, mono sub) ---
+                float o1 = 0.0f, o2 = 0.0f, sd1 = 0.0f, sd2 = 0.0f;
+                if (lvl1 > 1e-5f) {
+                    if (ct1)
+                        o1 = oscStackCustom(v.ph1, base * m1, *ct1, pos1, wm1, warp1, uniN, uniDetF, uniMaxDet,
+                            uniPanL, uniPanR, uniNorm, sd1);
+                    else
+                        o1 = oscStack(
+                            v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd1);
+                }
+                if (lvl2 > 1e-5f) {
+                    const double inc2 = base * m2 * (osc2PitchStatic ? 1.0 : std::exp2(dst[1] * 2.0));
+                    if (ct2)
+                        o2 = oscStackCustom(v.ph2, inc2, *ct2, pos2, wm2, warp2, uniN, uniDetF, uniMaxDet, uniPanL,
+                            uniPanR, uniNorm, sd2);
+                    else
+                        o2 = oscStack(v.ph2, inc2, b2, pos2, wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
+                }
+                float sub = 0.0f;
+                if (subLvl > 1e-5f) {
+                    sub = subOsc(subWave, v.subPh);
+                    v.subPh += base * m1 * subMul;
+                    if (v.subPh >= 1.0) v.subPh -= 1.0;
+                }
+                o1 *= lvl1;
+                o2 *= lvl2;
+                sub *= subLvl;
+
+                // --- source -> filter routing ---
+                double in1 = 0, in2 = 0, dryS = 0;
+                routeAdd(r1, o1, in1, in2, dryS);
+                routeAdd(r2, o2, in1, in2, dryS);
+                routeAdd(rs, sub, in1, in2, dryS);
+
+                // --- filters (control-rate coeff update) ---
+                if (v.modCount-- <= 0) {
+                    v.modCount = 15;
+                    const double cutMod = dst[3] * 4.0 + v.ex.pressure() * 2.0, resoMod = dst[4];
+                    double c1 = f1Env * 4.0 * v.env2 + f1Key * v.ktOct + f1Lfo * 2.0 * lfo1 + cutMod;
+                    double c2 = f2Env * 4.0 * v.env2 + f2Key * v.ktOct + f2Lfo * 2.0 * lfo2 + cutMod;
+                    setSvf(v.f[0], std::clamp(f1base * std::exp2(c1), 20.0, sampleRate_ * 0.49), resoToK(reso1 + resoMod));
+                    setSvf(v.f[1], std::clamp(f2base * std::exp2(c2), 20.0, sampleRate_ * 0.49), resoToK(reso2 + resoMod));
+                }
+                double s =
+                    filterPair(v.f, v.ic1L, v.ic2L, v.ic1R, v.ic2R, in1, in2, series, t1type, t2type, slope1, slope2) +
+                    dryS;
+                double side = 0.0;
+                if (stereoUni) {
+                    double sIn1 = 0, sIn2 = 0, sDry = 0;
+                    routeAdd(r1, sd1 * lvl1, sIn1, sIn2, sDry);
+                    routeAdd(r2, sd2 * lvl2, sIn1, sIn2, sDry);
+                    side = filterPair(
+                               v.f, v.sc1L, v.sc2L, v.sc1R, v.sc2R, sIn1, sIn2, series, t1type, t2type, slope1, slope2) +
+                           sDry;
+                }
+
+                float amp = v.env * v.velocity * (1.0f + (float)dst[5]) * (1.0f + 0.5f * v.ex.pressure());
+                float sigL = (float)(s + side) * amp, sigR = (float)(s - side) * amp;
+                const float pan = (float)std::clamp(dst[6], -1.0, 1.0);
+                mixL += sigL * (pan <= 0 ? 1.0f : 1.0f - pan);
+                mixR += sigR * (pan >= 0 ? 1.0f : 1.0f + pan);
             }
-            applyGlobalFxAndWrite(mixL, mixR, out + i * 2);
+
+            // --- global FX: drive -> chorus -> reverb ---
+            float l = mixL * 0.4f, r = mixR * 0.4f;
+            if (driveOn && drive > 1e-4f) {
+                l = driveSample(driveMode, l, drive, driveInvNorm);
+                r = driveSample(driveMode, r, drive, driveInvNorm);
+            }
+            if (driveOn && toneCoef != 0.0f) {
+                l = tone(toneL_, l, toneCoef);
+                r = tone(toneR_, r, toneCoef);
+            }
+            if (chorusOn && chAmt > 1e-4f) {
+                float cl, cr;
+                chorus(l, r, chAmt, chVoices, chRate, cl, cr);
+                l = cl;
+                r = cr;
+            }
+            if (reverbOn && rvAmt > 1e-4f) {
+                float rl, rr;
+                reverb(l, r, revFb, revDamp, rl, rr);
+                l += rl * rvAmt;
+                r += rr * rvAmt;
+            }
+
+            const float al = (l * opL) * gain, ar = (r * opR) * gain;
+            peak = std::max(peak, std::fabs(al));
+            peak = std::max(peak, std::fabs(ar));
+            out[i * 2] += al;
+            out[i * 2 + 1] += ar;
         }
     } else {
+        Voice* act[kVoices];
+        int batchedActN = 0;
+        for (auto& v : voices_)
+            if (v.active) act[batchedActN++] = &v;
+
+        auto evalVoiceSample = [&](Voice& v, double lfo1, double lfo2, double curF1, double curF2, double curR1,
+                                   double curR2, float& mixL, float& mixR) -> bool {
+            stepEnv(v.env, v.stage, v.shape, atk, dec, sus, rel, bend1);
+            if (v.stage == Stage::Off) {
+                v.active = false;
+                return false;
+            }
+            stepEnv(v.env2, v.stage2, v.shape2, atk2, dec2, sus2, rel2, bend2);
+
+            double dst[kDests] = {
+                macroDst[0], macroDst[1], macroDst[2], macroDst[3], macroDst[4], macroDst[5], macroDst[6]};
+            if (amN) {
+                const double src[kSources] = {
+                    v.env, v.env2, lfo1, lfo2, v.velocity, std::clamp(v.ktOct / 4.0, -1.0, 1.0), modWheel, v.rand};
+                for (int k = 0; k < amN; ++k) dst[amD[k]] += src[amS[k]] * amA[k];
+            }
+            v.ex.tick(exAdd, exprCoef_);
+            if (v.ex.bend() != v.exBendAt) {
+                v.exBendAt = v.ex.bend();
+                v.exBendMul = std::exp2(v.exBendAt / 12.0);
+            }
+            const float exPos = v.ex.slide() * 0.5f;
+            const double pMul = pitchStatic ? 1.0 : std::exp2(dst[0] * 2.0);
+            const float pos1 = std::clamp(basePos1 + (float)dst[2] + exPos, 0.0f, 1.0f);
+            const float pos2 = std::clamp(basePos2 + (float)dst[2] + exPos, 0.0f, 1.0f);
+            const double base = v.freq * invSr * pMul * bendMul * v.exBendMul;
+
+            float o1 = 0.0f, o2 = 0.0f, sd1 = 0.0f, sd2 = 0.0f;
+            if (lvl1 > 1e-5f) {
+                if (ct1)
+                    o1 = oscStackCustom(
+                        v.ph1, base * m1, *ct1, pos1, wm1, warp1, uniN, uniDetF, uniMaxDet, uniPanL, uniPanR, uniNorm, sd1);
+                else
+                    o1 = oscStack(v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd1);
+            }
+            if (lvl2 > 1e-5f) {
+                const double inc2 = base * m2 * (osc2PitchStatic ? 1.0 : std::exp2(dst[1] * 2.0));
+                if (ct2)
+                    o2 = oscStackCustom(
+                        v.ph2, inc2, *ct2, pos2, wm2, warp2, uniN, uniDetF, uniMaxDet, uniPanL, uniPanR, uniNorm, sd2);
+                else
+                    o2 = oscStack(v.ph2, inc2, b2, pos2, wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
+            }
+            float sub = 0.0f;
+            if (subLvl > 1e-5f) {
+                sub = subOsc(subWave, v.subPh);
+                v.subPh += base * m1 * subMul;
+                if (v.subPh >= 1.0) v.subPh -= 1.0;
+            }
+            o1 *= lvl1;
+            o2 *= lvl2;
+            sub *= subLvl;
+
+            double in1 = 0, in2 = 0, dryS = 0;
+            routeAdd(r1, o1, in1, in2, dryS);
+            routeAdd(r2, o2, in1, in2, dryS);
+            routeAdd(rs, sub, in1, in2, dryS);
+
+            if (v.modCount-- <= 0) {
+                v.modCount = 15;
+                const double cutMod = dst[3] * 4.0 + v.ex.pressure() * 2.0, resoMod = dst[4];
+                double c1 = f1Env * 4.0 * v.env2 + f1Key * v.ktOct + f1Lfo * 2.0 * lfo1 + cutMod;
+                double c2 = f2Env * 4.0 * v.env2 + f2Key * v.ktOct + f2Lfo * 2.0 * lfo2 + cutMod;
+                setSvf(v.f[0], std::clamp(curF1 * std::exp2(c1), 20.0, sampleRate_ * 0.49), resoToK(curR1 + resoMod));
+                setSvf(v.f[1], std::clamp(curF2 * std::exp2(c2), 20.0, sampleRate_ * 0.49), resoToK(curR2 + resoMod));
+            }
+            double s =
+                filterPair(v.f, v.ic1L, v.ic2L, v.ic1R, v.ic2R, in1, in2, series, t1type, t2type, slope1, slope2) + dryS;
+            double side = 0.0;
+            if (stereoUni) {
+                double sIn1 = 0, sIn2 = 0, sDry = 0;
+                routeAdd(r1, sd1 * lvl1, sIn1, sIn2, sDry);
+                routeAdd(r2, sd2 * lvl2, sIn1, sIn2, sDry);
+                side = filterPair(v.f, v.sc1L, v.sc2L, v.sc1R, v.sc2R, sIn1, sIn2, series, t1type, t2type, slope1, slope2) +
+                       sDry;
+            }
+
+            float amp = v.env * v.velocity * (1.0f + (float)dst[5]) * (1.0f + 0.5f * v.ex.pressure());
+            float sigL = (float)(s + side) * amp, sigR = (float)(s - side) * amp;
+            const float pan = (float)std::clamp(dst[6], -1.0, 1.0);
+            mixL += sigL * (pan <= 0 ? 1.0f : 1.0f - pan);
+            mixR += sigR * (pan >= 0 ? 1.0f : 1.0f + pan);
+            return true;
+        };
+
+        auto applyGlobalFxAndWrite = [&](float mixL, float mixR, float* dstStereo) {
+            float l = mixL * 0.4f, r = mixR * 0.4f;
+            if (driveOn && drive > 1e-4f) {
+                l = driveSample(driveMode, l, drive, driveInvNorm);
+                r = driveSample(driveMode, r, drive, driveInvNorm);
+            }
+            if (driveOn && toneCoef != 0.0f) {
+                l = tone(toneL_, l, toneCoef);
+                r = tone(toneR_, r, toneCoef);
+            }
+            if (chorusOn && chAmt > 1e-4f) {
+                float cl, cr;
+                chorus(l, r, chAmt, chVoices, chRate, cl, cr);
+                l = cl;
+                r = cr;
+            }
+            if (reverbOn && rvAmt > 1e-4f) {
+                float rl, rr;
+                reverb(l, r, revFb, revDamp, rl, rr);
+                l += rl * rvAmt;
+                r += rr * rvAmt;
+            }
+
+            const float al = (l * opL) * gain, ar = (r * opR) * gain;
+            peak = std::max(peak, std::fabs(al));
+            peak = std::max(peak, std::fabs(ar));
+            dstStereo[0] += al;
+            dstStereo[1] += ar;
+        };
+
         for (int32_t off = 0; off < frames;) {
             const int32_t chunk = std::min<int32_t>(frames - off, kModChunk);
             for (int32_t i = 0; i < chunk; ++i) {
@@ -895,7 +1012,7 @@ void WavetableSynth::render(float* out, int32_t frames) {
 
             Voice* chunkAct[kVoices];
             int chunkActN = 0;
-            for (int vi = 0; vi < actN; ++vi)
+            for (int vi = 0; vi < batchedActN; ++vi)
                 if (act[vi]->active) chunkAct[chunkActN++] = act[vi];
 
             auto renderVoiceRange = [&](Voice* const* vList, int vStart, int vCount, float* dstL, float* dstR) {
@@ -915,7 +1032,7 @@ void WavetableSynth::render(float* out, int32_t frames) {
             std::fill_n(mixL_, chunk, 0.0f);
             std::fill_n(mixR_, chunk, 0.0f);
             if (chunkActN > 0) {
-                if (chunkActN >= 10 && chunk >= 32 && voiceScratch_.capacityFrames() >= chunk) {
+                if (chunkActN >= 12 && chunk >= 32 && voiceScratch_.capacityFrames() >= chunk) {
                     std::array<dsp::PolyVoiceBatchRange, dsp::PolyVoiceScheduler::kMaxBatches> batches{};
                     const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(chunkActN, 4, batches);
                     dsp::RenderExecutor::parallelFor(batchesN, true, [&](int32_t b) {

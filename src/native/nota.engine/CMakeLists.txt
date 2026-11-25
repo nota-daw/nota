@@ -103,7 +103,6 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine_Takes.cpp
     src/engine/Engine_TakeRetry.cpp
     src/engine/Engine_Render.cpp
-    src/engine/RenderGraphExecutor.cpp
     src/engine/Audition.cpp
     src/engine/AudioThreadPool.cpp  # fork-join pool
     src/engine/HybridBufferController.cpp
@@ -295,7 +294,9 @@ target_include_directories(nota_engine SYSTEM PRIVATE
 target_compile_definitions(nota_engine PRIVATE
     NOTA_VERSION_STRING="${PROJECT_VERSION}")
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
+# Keep GCC on baseline -O3 math semantics so libm/auto-vectorization stays regression-free;
+# Clang/ThinLTO benefits cleanly from -fno-math-errno.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
     target_compile_options(nota_engine PRIVATE -fno-math-errno)
 endif()
 

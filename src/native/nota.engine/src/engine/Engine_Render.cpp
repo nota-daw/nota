@@ -9,6 +9,8 @@
 #include "RenderRoutingPlan.h"
 #include "TempoMap.h"
 #include "TimelineIndex.h"
+#include "dsp/core/AudioBufferView.h"
+#include "dsp/core/RenderExecutor.h"
 #include "dsp/core/ScopedNoDenormals.h"
 #include "dsp/math/SimdAudio.h"
 #include "devices/racks/DrumRack.h"
@@ -3969,5 +3971,7 @@ int32_t Engine::articulationSelfTest() {
     }
     return 0;
 }
+
+#include "RenderGraphExecutor.inl"
 
 } // namespace nota

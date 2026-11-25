@@ -103,7 +103,7 @@ internal static class Phase5RenderDagPlanarTests
                 e.AddBuiltinDevice(t, EqKind);
                 int comp = e.AddBuiltinDevice(t, CompKind);
                 if (i > 0) e.SetDeviceSidechainSource(t, comp, leaves[i - 1]);
-                if (i % 2 == 0) e.AddBuiltinDevice(t, ReverbKind);
+                e.AddBuiltinDevice(t, ReverbKind);
                 e.SetTrackSend(t, 0, 0.20f);
                 e.SetTrackSend(t, 1, 0.15f);
                 int clip = e.AddMidiClip(t, 0.0, 8.0);
@@ -111,13 +111,14 @@ internal static class Phase5RenderDagPlanarTests
                 [
                     new NotaNote(48 + i * 2, 0.0, 6.0, 0.8f),
                     new NotaNote(55 + i * 2, 0.0, 6.0, 0.7f),
-                    new NotaNote(60 + i, 0.25, 6.0, 0.75f)
+                    new NotaNote(60 + i, 0.25, 6.0, 0.75f),
+                    new NotaNote(64 + i, 0.5, 6.0, 0.75f)
                 ]);
             }
 
             e.Seek(0.0);
             e.Play();
-            return RenderOfflineMeasured(e, 512, 192);
+            return RenderOfflineMeasured(e, 512, 384);
         }
 
         var r0 = BuildAndRender(0);

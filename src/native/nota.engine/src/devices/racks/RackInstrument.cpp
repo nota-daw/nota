@@ -503,7 +503,7 @@ void RackInstrument::renderChunk(RackState& st, float* out, int32_t frames, int3
         const PartTap* tap = nullptr;
         bool silent = false;
     };
-    std::array<ChainWork, dsp::ChainScratchBank::kMaxSlots> work{};
+    std::array<ChainWork, dsp::ChainScratchBank::kMaxSlots> work;
     int32_t nWork = 0;
     int32_t nChainDevs = 0;
     bool allParallel = true;

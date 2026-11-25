@@ -169,7 +169,7 @@ void DrumRack::renderChunk(RackState& st, float* out, int32_t frames, int32_t ta
         const PartTap* tap = nullptr;
         bool silent = false;
     };
-    std::array<PadWork, dsp::ChainScratchBank::kMaxSlots> work{};
+    std::array<PadWork, dsp::ChainScratchBank::kMaxSlots> work;
     int32_t nWork = 0;
     int32_t nChainDevs = 0;
     bool allParallel = true;
@@ -208,13 +208,58 @@ void DrumRack::renderChunk(RackState& st, float* out, int32_t frames, int32_t ta
             if (!pw.silent) accumulatePad(*pw.chain, parallelArena_.buffer(w));
         }
     } else {
-        for (auto& c : st.chains) {
-            if (!c.instrument) continue;
-            const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
-            const bool silent = c.ctl->silentNow;
-            if (silent && !tap) continue;
-            renderPad(c, scratch, tap, silent);
-            if (!silent) accumulatePad(c, scratch);
+        for (int32_t w = 0; w < nWork; ++w) {
+            const PadWork& pw = work[static_cast<size_t>(w)];
+            RackChain& c = *pw.chain;
+            const PartTap* tap = pw.tap;
+            const bool silent = pw.silent;
+            if (!tap) {
+                std::memset(scratch, 0, sizeof(float) * frames * 2);
+                c.instrument->render(scratch, frames);
+                for (auto& d : c.devices)
+                    if (d && !d->bypassed()) d->process(scratch, frames);
+                const float g = c.ctl->gain.load(std::memory_order_relaxed);
+                const float pan = c.ctl->pan.load(std::memory_order_relaxed);
+                const float dec = c.ctl->decay.load(std::memory_order_relaxed);
+                const bool shaped = dec < 0.999f;
+                if (c.ctl->retrig) {
+                    c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
+                    c.ctl->retrig = false;
+                }
+                float env = c.ctl->ampEnv.load(std::memory_order_relaxed);
+                float coef = 1.0f;
+                if (shaped) {
+                    const double tauMs = 20.0 * std::pow(100.0, static_cast<double>(dec));
+                    coef = static_cast<float>(std::exp(-1.0 / (tauMs * 0.001 * sampleRate_)));
+                }
+                const float lg = g * rv * (pan > 0.0f ? 1.0f - pan : 1.0f);
+                const float rg = g * rv * (pan < 0.0f ? 1.0f + pan : 1.0f);
+                float peak = 0.0f;
+                if (shaped) {
+                    for (int32_t i = 0; i < frames; ++i) {
+                        const float l = scratch[i * 2] * env;
+                        const float r = scratch[i * 2 + 1] * env;
+                        env *= coef;
+                        out[i * 2] += l * lg;
+                        out[i * 2 + 1] += r * rg;
+                        const float a = std::max(std::fabs(l), std::fabs(r));
+                        if (a > peak) peak = a;
+                    }
+                    c.ctl->ampEnv.store(env, std::memory_order_relaxed);
+                } else {
+                    for (int32_t i = 0; i < frames; ++i) {
+                        const float l = scratch[i * 2], r = scratch[i * 2 + 1];
+                        out[i * 2] += l * lg;
+                        out[i * 2 + 1] += r * rg;
+                        const float a = std::max(std::fabs(l), std::fabs(r));
+                        if (a > peak) peak = a;
+                    }
+                }
+                c.ctl->meter.store(peak * g, std::memory_order_relaxed);
+            } else {
+                renderPad(c, scratch, tap, silent);
+                if (!silent) accumulatePad(c, scratch);
+            }
         }
     }
 }

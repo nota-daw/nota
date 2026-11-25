@@ -2,25 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // RenderGraphExecutor — parallel wave execution and deterministic bus reduction.
-
-#include "engine/RenderGraphExecutor.h"
-
-#include "devices/Device.h"
-#include "devices/Instrument.h"
-#include "devices/racks/RackCore.h"
-#include "dsp/core/AudioBufferView.h"
-#include "dsp/core/RenderExecutor.h"
-#include "dsp/math/SimdAudio.h"
-#include "engine/Engine.h"
-#include "engine/RenderRoutingPlan.h"
-
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
-#include <cstddef>
-
-namespace nota {
+// Included inside `namespace nota` at the end of Engine_Render.cpp so the mix graph
+// shares a single translation unit with renderLeafDry/processLeafDevices/playEvents.
 
 namespace {
 
@@ -1443,5 +1426,3 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
     runReturnWaves(ctx);
     finalizeMixBlock(ctx);
 }
-
-} // namespace nota

@@ -87,7 +87,7 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
             float lg = 0.0f;
             float rg = 0.0f;
         };
-        std::array<ActiveChain, dsp::ChainScratchBank::kMaxSlots> work{};
+        std::array<ActiveChain, dsp::ChainScratchBank::kMaxSlots> work;
         int32_t nActive = 0;
         int32_t nChainDevs = 0;
         bool allParallel = true;
