@@ -1,0 +1,7 @@
+date: 2026-11-25T16:04:52Z
+os: Darwin 25.6.0 arm64
+cpu: Apple M4 Max, 14 threads
+macos: 26.6.2
+runs: 3
+build: before=/private/tmp/nota-bug-batch-before/src/native/nota.engine/build
+build: after=/Users/egorkhindikaynen/repos/nota/nota-bug-batch/src/native/nota.engine/build
