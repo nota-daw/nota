@@ -18,7 +18,7 @@
 namespace nota {
 
 struct Graph;
-struct Track;
+class Track;
 class Device;
 class MidiDevice;
 class Instrument;

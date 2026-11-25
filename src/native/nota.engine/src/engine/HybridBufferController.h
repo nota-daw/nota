@@ -25,7 +25,7 @@ namespace nota {
 
 class Engine;
 struct Graph;
-struct Track;
+class Track;
 
 enum class HybridBufferMode : int32_t {
     Off = 0,

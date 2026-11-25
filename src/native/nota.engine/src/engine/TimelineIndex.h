@@ -18,7 +18,7 @@
 
 namespace nota {
 
-struct Track;
+class Track;
 
 class TimelineIndex {
   public:

@@ -24,7 +24,7 @@ class PlanarStereoBuffer;
 
 class Engine;
 struct Graph;
-struct Track;
+class Track;
 struct TransportInfo;
 
 namespace render_detail {
