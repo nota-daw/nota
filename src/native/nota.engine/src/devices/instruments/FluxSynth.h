@@ -156,6 +156,8 @@ class FluxSynth final : public Instrument {
     };
 
     // ---- React analysis: fast/slow envelope, transient, spectral tilt -----
+    bool hasActiveSidechainSignal(int32_t frames) const noexcept;
+    NOTA_NOINLINE bool renderBlock(float* out, int32_t frames);
     void analyzeSidechain(int32_t frames);
     // The followers run once per block with time constants, so they behave the same at any
     // block size (tuned at 512 frames / 48 kHz: attack ~12 ms, release ~130 ms, slow ~350 ms).

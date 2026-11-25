@@ -200,6 +200,7 @@ uint32_t RenderGraphExecutor::collectChainSidechainNeeds(
         if (s >= 0 && s < Engine::kMaxRoutes) mask |= (uint32_t{1} << s);
     };
     auto walkRackChildren = [&](const RackCore& r) {
+        if (!r.hasSidechainChild()) return;
         r.forEachChildDevice([&](Device& c) {
             if (!c.bypassed() && !c.asRack()) add(c.sidechainSourceTrackId(), c.sidechainPart());
         });
@@ -1453,7 +1454,10 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
     int32_t slotLeaf[Engine::kMaxRoutes] = {};
     int32_t maxLevel = 0;
     classifyLeaves(ctx, slotLeaf, maxLevel);
-    runLeafWaves(ctx, slotLeaf, maxLevel);
+    // A lone offline leaf has no sibling tracks to parallelize against; skipping the
+    // wave scratch avoids an 8 KB pre/post copy while sub-parallelism still fans out.
+    if (ctx.offline && g->tracks.size() == 1 && maxLevel == 0) ctx.parallelOk = false;
+    if (ctx.parallelOk) runLeafWaves(ctx, slotLeaf, maxLevel);
     reduceLeavesAndMeterInputs(ctx, slotLeaf);
     runGroupWaves(ctx);
     runReturnWaves(ctx);

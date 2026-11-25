@@ -134,19 +134,24 @@ void FluxSynth::allNotesOff() {
     wake();
 }
 
+bool FluxSynth::hasActiveSidechainSignal(int32_t frames) const noexcept {
+    return scTrackId_.load(std::memory_order_relaxed) >= 0 && scBuf_ != nullptr && scFrames_ > 0 &&
+           !dsp::SilenceGate::isBufferSilent(
+               scBuf_, std::min(frames, scFrames_) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+}
+
 void FluxSynth::render(float* out, int32_t frames) {
     bool skip = false;
     const uint32_t gateEpoch = gate_.beginBlock(&skip);
-    if (skip) {
-        const bool scActive = scTrackId_.load(std::memory_order_relaxed) >= 0 && scBuf_ != nullptr && scFrames_ > 0
-            && !dsp::SilenceGate::isBufferSilent(
-                scBuf_, std::min(frames, scFrames_) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
-        if (!scActive) {
-            scBuf_ = nullptr;
-            scFrames_ = 0;
-            return;
-        }
+    if (skip && !hasActiveSidechainSignal(frames)) {
+        scBuf_ = nullptr;
+        scFrames_ = 0;
+        return;
     }
+    gate_.observe(renderBlock(out, frames), frames, gateEpoch);
+}
+
+bool FluxSynth::renderBlock(float* out, int32_t frames) {
     // ---- 1) React: analyse the sidechain (or self) once per block ------
     analyzeSidechain(frames);
     const int target = std::clamp((int)std::lround(get(Target) * 3.0f), 0, 3);
@@ -278,10 +283,6 @@ void FluxSynth::render(float* out, int32_t frames) {
         if (v.active) ++active;
     activeVoices_.store(active, std::memory_order_relaxed);
 
-    // Auto-sleep flag only (the engine skips render while idle): no voice sounding
-    // and this block silent. noteOn/noteOff/setParam wake.
-    gate_.observe(active > 0 || peak > 1.0e-5f || scActiveBlock_, frames, gateEpoch);
-
     // Publish telemetry for the editor.
     scope_[S_Env].store(scFast_, std::memory_order_relaxed);
     scope_[S_Transient].store(scTransient_, std::memory_order_relaxed);
@@ -292,6 +293,10 @@ void FluxSynth::render(float* out, int32_t frames) {
     scope_[S_Active].store((float)active, std::memory_order_relaxed);
     scope_[S_Onsets].store((float)onsets_, std::memory_order_relaxed);
     scope_[S_Source].store(hasSource_ ? 1.0f : 0.0f, std::memory_order_relaxed);
+
+    // Auto-sleep flag only (the engine skips render while idle): no voice sounding
+    // and this block silent. noteOn/noteOff/setParam wake.
+    return active > 0 || peak > 1.0e-5f || scActiveBlock_;
 }
 
 FluxSynth::World FluxSynth::blend(double x, double y) {

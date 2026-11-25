@@ -3279,7 +3279,7 @@ void Engine::feedInstrumentKeys(Graph* g, Track& t, int32_t frames) {
 }
 
 void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames) {
-    if (!r.hasChains()) return;
+    if (!r.hasSidechainChild()) return;
     r.forEachChildDevice([&](Device& c) {
         if (!c.bypassed() && !c.asRack()) feedDeviceKey(g, c, ownTrackId, frames);
     });

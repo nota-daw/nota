@@ -147,6 +147,10 @@ void Synth::render(float* out, int32_t frames) {
     bool skip = false;
     const uint32_t gateEpoch = gate_.beginBlock(&skip);
     if (skip) return;
+    gate_.observe(renderBlock(out, frames), frames, gateEpoch);
+}
+
+bool Synth::renderBlock(float* out, int32_t frames) {
     // Snapshot params once per block (denormalise to musical units).
     const int wave = static_cast<int>(std::lround(pn_[Wave].load(std::memory_order_relaxed) * 3.0f));
     const float atkRate = static_cast<float>(1.0 / (secOf(Attack, 0.001, 2.0) * sampleRate_));
@@ -275,13 +279,9 @@ void Synth::render(float* out, int32_t frames) {
         }
     }
     // Sleep: no sounding voice means the loop above wrote nothing.
-    bool anyVoice = false;
     for (const auto& v : voices_)
-        if (v.active) {
-            anyVoice = true;
-            break;
-        }
-    gate_.observe(anyVoice, frames, gateEpoch);
+        if (v.active) return true;
+    return false;
 }
 
 void Synth::wake() {

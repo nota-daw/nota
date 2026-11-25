@@ -134,6 +134,8 @@ class RackCore {
 
     struct RackState {
         uint64_t generation = 0;
+        bool hasChildren = false;
+        bool hasSidechainChild = false;
         std::vector<RackChain> chains;
         std::vector<MacroMapping> mappings;
     };
@@ -164,6 +166,14 @@ class RackCore {
         const RackState* st = live();
         return st && !st->chains.empty();
     }
+    bool hasChildren() const noexcept {
+        const RackState* st = live();
+        return st && st->hasChildren;
+    }
+    bool hasSidechainChild() const noexcept {
+        const RackState* st = live();
+        return st && st->hasSidechainChild;
+    }
     uint64_t liveGeneration() const {
         const RackState* st = live();
         return st ? st->generation : 0;
@@ -173,7 +183,7 @@ class RackCore {
     // in a rack sync to the DAW clock too (the Instrument/Device overrides call this).
     void forwardTransport(const TransportInfo& ti) {
         RackState* st = live();
-        if (!st || st->chains.empty()) return;
+        if (!st || !st->hasChildren) return;
         forwardTransportSlow(*st, ti);
     }
 
@@ -181,7 +191,7 @@ class RackCore {
     // without it they ran on their free times inside a rack. Audio thread, once per block.
     void forwardTempo(double beatStart, double spb, bool playing) {
         RackState* st = live();
-        if (!st || st->chains.empty()) return;
+        if (!st || !st->hasChildren) return;
         forwardTempoSlow(*st, beatStart, spb, playing);
     }
 
@@ -549,7 +559,7 @@ class RackCore {
 
     bool chainsHaveTail() const {
         RackState* st = live();
-        if (!st) return false;
+        if (!st || !st->hasChildren) return false;
         for (const auto& c : st->chains) {
             if (c.instrument && !c.instrument->bypassed() && c.instrument->hasTail()) return true;
             for (const auto& d : c.devices)
@@ -569,7 +579,7 @@ class RackCore {
 
     bool chainsIdle(bool includeInstruments) const {
         RackState* st = live();
-        if (!st) return true;
+        if (!st || !st->hasChildren) return true;
         for (const auto& c : st->chains)
             if (!chainIdle(c, includeInstruments)) return false;
         return true;
@@ -577,7 +587,7 @@ class RackCore {
 
     bool chainsRequireActiveProcessing(bool includeInstruments) const {
         RackState* st = live();
-        if (!st) return false;
+        if (!st || !st->hasChildren) return false;
         for (const auto& c : st->chains) {
             if (includeInstruments && c.instrument && !c.instrument->bypassed() &&
                 c.instrument->requiresActiveProcessing())
@@ -596,7 +606,7 @@ class RackCore {
 
     bool allChainMidiDevicesIdle() const {
         RackState* st = live();
-        if (!st) return true;
+        if (!st || !st->hasChildren) return true;
         for (const auto& c : st->chains)
             if (!chainMidiDevicesIdle(c)) return false;
         return true;
@@ -604,7 +614,7 @@ class RackCore {
 
     void wakeChains(bool includeInstruments) {
         RackState* st = live();
-        if (!st) return;
+        if (!st || !st->hasChildren) return;
         for (auto& c : st->chains) {
             if (includeInstruments && c.instrument) c.instrument->wake();
             for (auto& d : c.devices)
@@ -653,6 +663,23 @@ class RackCore {
     void commit(std::shared_ptr<RackState> ns) {
         if (ns) {
             ns->generation = ++nextStateGen_;
+            bool hasChild = false;
+            bool hasSidechain = false;
+            for (const auto& c : ns->chains) {
+                if (c.instrument) {
+                    hasChild = true;
+                    if (c.instrument->acceptsSidechain() || c.instrument->asRack() != nullptr) hasSidechain = true;
+                }
+                if (!c.devices.empty()) {
+                    hasChild = true;
+                    for (const auto& d : c.devices) {
+                        if (d && (d->acceptsSidechain() || d->asRack() != nullptr)) hasSidechain = true;
+                    }
+                }
+                if (!c.midiDevices.empty()) hasChild = true;
+            }
+            ns->hasChildren = hasChild;
+            ns->hasSidechainChild = hasSidechain;
             propagateTelemetry(*ns);
             prepareParallelScratch(ns.get(), maxBlock_);
         }

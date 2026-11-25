@@ -22,7 +22,8 @@ void RackDevice::process(float* buf, int32_t frames) {
 }
 
 void RackDevice::processActive(RackState& st, float* buf, int32_t frames) {
-    if (isIdle() && dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold))
+    if (st.hasChildren && isIdle() &&
+        dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold))
         return;
 
     const int32_t cap = std::max(1, arena_.capacityFrames());
@@ -85,94 +86,106 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
     } else {
         // Parallel (0) / Select (2): fan the input to each active chain and sum.
         std::memset(acc, 0, sizeof(float) * frames * 2);
-        struct ActiveChain {
-            RackChain* chain = nullptr;
-            float lg = 0.0f;
-            float rg = 0.0f;
-        };
-        std::array<ActiveChain, dsp::ChainScratchBank::kMaxSlots> work;
-        int32_t nActive = 0;
-        int32_t nChainDevs = 0;
-        bool allParallel = true;
-        bool overflow = false;
-
-        for (auto& c : st.chains) {
+        auto chainSelected = [&](const RackChain& c) {
             const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
             const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
-            bool active = !(mute || (anySolo && !solo));
-            if (active && mode == 2) {
+            if (mute || (anySolo && !solo)) return false;
+            if (mode == 2) {
                 const float lo = c.ctl->velLo.load(std::memory_order_relaxed) / 127.0f;
                 const float hi = c.ctl->velHi.load(std::memory_order_relaxed) / 127.0f;
-                active = sel >= lo && sel <= hi; // chain-select zone covers the selector
+                return sel >= lo && sel <= hi; // chain-select zone covers the selector
             }
-            if (!active) {
-                c.ctl->meter.store(0.0f, std::memory_order_relaxed);
-                continue;
-            }
+            return true;
+        };
+        auto chainGains = [](const RackChain& c, float& lg, float& rg) {
             const float g = c.ctl->gain.load(std::memory_order_relaxed);
             const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-            const float lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
-            const float rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
-            if (nActive < dsp::ChainScratchBank::kMaxSlots) {
-                work[static_cast<size_t>(nActive++)] = {&c, lg, rg};
-                for (const auto& d : c.devices)
-                    if (d && !d->bypassed()) ++nChainDevs;
-                if (!chainSupportsParallel(c)) allParallel = false;
-            } else {
-                overflow = true;
+            lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
+            rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
+        };
+        auto mixChainBuffer = [&](RackChain& c, const float* src, float lg, float rg) {
+            float peak = 0.0f;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float l = src[i * 2] * lg, r = src[i * 2 + 1] * rg;
+                acc[i * 2] += l;
+                acc[i * 2 + 1] += r;
+                const float a = std::max(std::fabs(l), std::fabs(r));
+                if (a > peak) peak = a;
             }
-        }
+            c.ctl->meter.store(peak, std::memory_order_relaxed);
+        };
+        auto runSequentialChain = [&](RackChain& c, float lg, float rg) {
+            std::memcpy(scratch, input, sizeof(float) * frames * 2);
+            for (auto& d : c.devices)
+                if (d && !d->bypassed()) d->process(scratch, frames);
+            mixChainBuffer(c, scratch, lg, rg);
+        };
 
-        const bool fanOut = !overflow && (nActive >= 5 || (nActive >= 3 && nChainDevs >= 3)) && allParallel &&
-                            parallelArena_.slotCount() >= nActive && parallelArena_.capacityFrames() >= frames;
-        if (fanOut) {
-            dsp::RenderExecutor::parallelFor(nActive, true, [&](int32_t k) {
-                RackChain& c = *work[static_cast<size_t>(k)].chain;
-                float* bufSlot = parallelArena_.buffer(k);
-                std::memcpy(bufSlot, input, sizeof(float) * frames * 2);
-                for (auto& d : c.devices)
-                    if (d && !d->bypassed()) d->process(bufSlot, frames);
-            });
-            for (int32_t k = 0; k < nActive; ++k) {
-                const ActiveChain& w = work[static_cast<size_t>(k)];
-                const float* bufSlot = parallelArena_.buffer(k);
-                float peak = 0.0f;
-                for (int32_t i = 0; i < frames; ++i) {
-                    const float l = bufSlot[i * 2] * w.lg, r = bufSlot[i * 2 + 1] * w.rg;
-                    acc[i * 2] += l;
-                    acc[i * 2 + 1] += r;
-                    const float a = std::max(std::fabs(l), std::fabs(r));
-                    if (a > peak) peak = a;
+        if (st.chains.size() < 3) {
+            for (auto& c : st.chains) {
+                if (!chainSelected(c)) {
+                    c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+                    continue;
                 }
-                w.chain->ctl->meter.store(peak, std::memory_order_relaxed);
+                float lg = 0.0f, rg = 0.0f;
+                chainGains(c, lg, rg);
+                runSequentialChain(c, lg, rg);
             }
         } else {
+            struct ActiveChain {
+                RackChain* chain = nullptr;
+                float lg = 0.0f;
+                float rg = 0.0f;
+            };
+            std::array<ActiveChain, dsp::ChainScratchBank::kMaxSlots> work;
+            int32_t nActive = 0;
+            int32_t nChainDevs = 0;
+            bool allParallel = true;
+            bool overflow = false;
+
             for (auto& c : st.chains) {
-                const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
-                const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
-                bool active = !(mute || (anySolo && !solo));
-                if (active && mode == 2) {
-                    const float lo = c.ctl->velLo.load(std::memory_order_relaxed) / 127.0f;
-                    const float hi = c.ctl->velHi.load(std::memory_order_relaxed) / 127.0f;
-                    active = sel >= lo && sel <= hi;
+                if (!chainSelected(c)) {
+                    c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+                    continue;
                 }
-                if (!active) continue;
-                std::memcpy(scratch, input, sizeof(float) * frames * 2);
-                for (auto& d : c.devices)
-                    if (d && !d->bypassed()) d->process(scratch, frames);
-                const float g = c.ctl->gain.load(std::memory_order_relaxed);
-                const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-                const float lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
-                const float rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
-                float peak = 0.0f;
-                for (int32_t i = 0; i < frames; ++i) {
-                    const float l = scratch[i * 2] * lg, r = scratch[i * 2 + 1] * rg;
-                    acc[i * 2] += l;
-                    acc[i * 2 + 1] += r;
-                    const float a = std::max(std::fabs(l), std::fabs(r));
-                    if (a > peak) peak = a;
+                float lg = 0.0f, rg = 0.0f;
+                chainGains(c, lg, rg);
+                if (nActive < dsp::ChainScratchBank::kMaxSlots) {
+                    work[static_cast<size_t>(nActive++)] = {&c, lg, rg};
+                    for (const auto& d : c.devices)
+                        if (d && !d->bypassed()) ++nChainDevs;
+                    if (!chainSupportsParallel(c)) allParallel = false;
+                } else {
+                    overflow = true;
                 }
-                c.ctl->meter.store(peak, std::memory_order_relaxed);
+            }
+
+            const bool fanOut = !overflow && (nActive >= 5 || (nActive >= 3 && nChainDevs >= 3)) && allParallel &&
+                                parallelArena_.slotCount() >= nActive && parallelArena_.capacityFrames() >= frames;
+            if (fanOut) {
+                dsp::RenderExecutor::parallelFor(nActive, true, [&](int32_t k) {
+                    RackChain& c = *work[static_cast<size_t>(k)].chain;
+                    float* bufSlot = parallelArena_.buffer(k);
+                    std::memcpy(bufSlot, input, sizeof(float) * frames * 2);
+                    for (auto& d : c.devices)
+                        if (d && !d->bypassed()) d->process(bufSlot, frames);
+                });
+                for (int32_t k = 0; k < nActive; ++k) {
+                    const ActiveChain& w = work[static_cast<size_t>(k)];
+                    mixChainBuffer(*w.chain, parallelArena_.buffer(k), w.lg, w.rg);
+                }
+            } else if (!overflow) {
+                for (int32_t k = 0; k < nActive; ++k) {
+                    const ActiveChain& w = work[static_cast<size_t>(k)];
+                    runSequentialChain(*w.chain, w.lg, w.rg);
+                }
+            } else {
+                for (auto& c : st.chains) {
+                    if (!chainSelected(c)) continue;
+                    float lg = 0.0f, rg = 0.0f;
+                    chainGains(c, lg, rg);
+                    runSequentialChain(c, lg, rg);
+                }
             }
         }
     }

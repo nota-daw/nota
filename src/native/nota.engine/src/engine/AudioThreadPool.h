@@ -116,7 +116,7 @@ class AudioThreadPool {
     // a context switch, so wake only as many as the job's work pays for.
     template <typename F> void dispatch(int n, F&& fn, int helpers = -1) {
         if (n <= 0) return;
-        if (workers_.empty()) {
+        if (workers_.empty() || (n == 1 && (helpers == 0 || !dsp::RenderExecutor::isParallelAllowed()))) {
             for (int i = 0; i < n; ++i) fn(workerCount(), i);
             return;
         }

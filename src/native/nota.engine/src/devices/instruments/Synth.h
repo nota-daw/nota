@@ -121,6 +121,7 @@ class Synth final : public Instrument {
     void render(float* out, int32_t frames) override;
 
   private:
+    NOTA_NOINLINE bool renderBlock(float* out, int32_t frames);
     static constexpr double kPi = 3.14159265358979323846;
     static constexpr double kSqrt2 = 1.41421356237309504880; // equal-power pan back to unity at centre
     static constexpr int kMaxUnison = 7;

@@ -314,7 +314,7 @@ class WavetableSynth final : public Instrument {
     // and, through `sideOut`, the half-difference the spread opens up.
     // detF/panL/panR/norm are block-constant per-unison data prepared by render().
     float oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN,
-        const double* detF, const float* panL, const float* panR, float norm, float& sideOut);
+        const double* detF, const float* panL, const float* panR, float norm, float& sideOut) const;
     // Sub oscillator: the sine DEFINES pitch and stays std::-exact.
     static float subOsc(int wave, double ph) {
         switch (wave) {
@@ -349,7 +349,7 @@ class WavetableSynth final : public Instrument {
     // fastest unison voice's increment and the warp mode's harmonic bias (research R4),
     // so a bright table played high stays below Nyquist.
     float oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode, double warpAmt, int uniN,
-        const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut);
+        const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut) const;
     static float harmAmp(int bank, float t, int n);
     // The four banks × sixteen frames are the same read-only 512 KB for every instance and
     // every clone, so they are built once, on first use, and handed out as a pointer.
@@ -408,7 +408,17 @@ class WavetableSynth final : public Instrument {
 
     struct BatchParams;
     struct BatchWork;
-    NOTA_NOINLINE void renderBatched(const BatchParams& bp, Voice* const* act, int actN, float* out, int32_t frames, float& peak);
+    BatchParams snapshotBlockParams(int32_t frames);
+    bool publishBlockTelemetry(const BatchParams& bp) noexcept;
+    void stepFilterSmoothing(const BatchParams& bp, double& f1base, double& f2base, double& reso1, double& reso2) noexcept;
+    void stepLfos(const BatchParams& bp, double& lfo1, double& lfo2) noexcept;
+    float processFxAndMixSample(const BatchParams& bp, float mixL, float mixR, float* dstSample) noexcept;
+    bool renderVoiceSample(const BatchParams& bp, Voice& v, double lfo1, double lfo2, const BatchWork* bw, int32_t bwIdx,
+        double scalarF1, double scalarF2, double scalarR1, double scalarR2, float& outL, float& outR) const noexcept;
+    void renderVoiceBatch(const BatchParams& bp, const BatchWork& bw, int32_t chunk, Voice* const* vList, int vCount,
+        float* dstL, float* dstR) const;
+    NOTA_NOINLINE bool renderLinear(float* out, int32_t frames);
+    NOTA_NOINLINE bool renderBatched(float* out, int32_t frames);
 
     static constexpr int32_t kModChunk = 1024;
     Voice voices_[kVoices];
