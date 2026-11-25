@@ -136,6 +136,9 @@ public static class ProjectMigrations
         new Migration(33, MigrateTempoPoints),
         // v34 -> v35 (specs/103): Session slots gain FollowBypass. Absent = follow active — no-op.
         new Migration(34, _ => { }),
+        // v35 -> v36 (specs/115): tracks gain MidiInputs (absent = the legacy single input still
+        // applies), instruments ExternalMidi, the project MidiOutputRoles — all optional, no-op.
+        new Migration(35, _ => { }),
     };
 
     private static void MigrateTempoPoints(JsonObject root)

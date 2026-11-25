@@ -32,6 +32,34 @@ internal static class MidiInputFilterTests
         foreach (var r in SessionFirstSlotStops()) yield return r;
         foreach (var r in PedalSeedsItsOwnTrack()) yield return r;
         foreach (var r in SessionSceneInsertFollows()) yield return r;
+        foreach (var r in SeventeenthPortNeverShares()) yield return r;
+    }
+
+    // #1011 (specs/115 R7): past 16 enabled inputs a port gets no source index instead of sharing
+    // the last one, so a track listening to input 16 can never hear input 17.
+    private static IEnumerable<(bool, string)> SeventeenthPortNeverShares()
+    {
+        int st = NotaEngine.MidiIndexSelfTest(17);
+        yield return (st == 0, $"#1011: 17 enabled inputs → 16 distinct indices, the 17th over the limit (self-test {st})");
+        yield return (NotaEngine.MidiIndexSelfTest(40) == 0, "#1011: …and every later one too");
+        using var e = Engine();
+        var sources = new List<int>();
+        for (int i = 0; i < 17; i++) sources.Add(e.MidiTestPortAdd($"limit-{i}"));
+        bool distinct = sources.Take(16).Distinct().Count() == 16 && sources.Take(16).All(s => s >= 0);
+        yield return (distinct && sources[16] == -1,
+            $"#1011: the 17th port gets no source rather than another port's ({string.Join(",", sources)})");
+        int t = Instrument(e);
+        e.SetTrackMidiInputSourceForTest(t, sources[15], 0);
+        e.SetTrackArmed(t, true);
+        Record(e, () =>
+        {
+            e.MidiTestInject(sources[16], new byte[] { 0x90, 70, 100 }); // nothing to inject into
+            Beats(e, 0.25);
+            e.MidiTestInject(sources[16], new byte[] { 0x80, 70, 0 });
+            HwTap(e, sources[15], 0, 72);
+        });
+        var got = Pitches(e, t);
+        yield return (got.SequenceEqual(new[] { 72 }), $"#1011: a track on input 16 records only input 16 ({string.Join(",", got)})");
     }
 
     private static NotaEngine Engine()

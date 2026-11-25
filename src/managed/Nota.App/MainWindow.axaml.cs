@@ -51,6 +51,7 @@ public partial class MainWindow : Window
     /// <summary>The MIDI-learn service, so secondary windows can host their own learn glass.</summary>
     internal MidiLearnService? LearnService => _learn;
     private Nota.App.Controllers.ControllerService? _controllers;
+    private Nota.Application.Midi.MidiRouteResolver? _midiRoutes;   // specs/115: saved ports vs. connected ones
 
     // Bottom detail panel (Devices chain / Clip piano roll / Mixer).
     private DeviceChainView? _deviceChain;
@@ -190,6 +191,7 @@ public partial class MainWindow : Window
         applier.BeatsPerBar = () => Timeline.BeatsPerBar;
         applier.ToggleLoop = () => vm.Transport.LoopOn = !vm.Transport.LoopOn;
         _controllers = App.Services.GetRequiredService<Nota.App.Controllers.ControllerService>();
+        _midiRoutes = App.Services.GetRequiredService<Nota.Application.Midi.MidiRouteResolver>();
         _controllers.AttachLearn(_learn);
         _controllers.BankChanged += () =>
         {
@@ -325,6 +327,7 @@ public partial class MainWindow : Window
         vm.PlayheadUpdated += beats =>
         {
             _controllers?.Tick();    // connected controllers' roles (specs/051) — before Learn, which may take the message
+            _midiRoutes?.Refresh();  // MIDI routes follow devices coming and going (specs/115), after the port set is applied
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message
             SyncSceneTempo();        // a launched scene set tempo / signature
             EnsurePlayheadFrames();

@@ -251,8 +251,47 @@ public sealed partial class NotaEngine
                 Marshal.PtrToStringUTF8(NativeMethods.MidiPortUid(_handle, i)) ?? "",
                 Marshal.PtrToStringUTF8(NativeMethods.MidiPortName(_handle, i)) ?? "",
                 NativeMethods.MidiPortSource(_handle, i),
-                Marshal.PtrToStringUTF8(NativeMethods.MidiPortOutputUid(_handle, i)) ?? ""));
+                Marshal.PtrToStringUTF8(NativeMethods.MidiPortOutputUid(_handle, i)) ?? "",
+                NativeMethods.MidiPortOverLimit(_handle, i) != 0));
         return list;
+    }
+
+    public IReadOnlyList<MidiOutputInfo> MidiOutputs()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.MidiOutputCount(_handle);
+        var list = new List<MidiOutputInfo>(n);
+        for (int i = 0; i < n; i++)
+            list.Add(new MidiOutputInfo(
+                Marshal.PtrToStringUTF8(NativeMethods.MidiOutputUid(_handle, i)) ?? "",
+                Marshal.PtrToStringUTF8(NativeMethods.MidiOutputName(_handle, i)) ?? ""));
+        return list;
+    }
+
+    /// <summary>The source-index assignment self-test (#1011): 0 = pass.</summary>
+    public static int MidiIndexSelfTest(int simulatedPorts) => NativeMethods.MidiIndexSelfTest(simulatedPorts);
+
+    public bool MidiTestPortRemove(string name)
+    { ThrowIfDisposed(); return NativeMethods.MidiTestPortRemove(_handle, name ?? "") == NativeMethods.NotaResult.Ok; }
+
+    public IReadOnlyList<MidiSentMessage> MidiTestOutputRead(string name)
+    {
+        ThrowIfDisposed();
+        var all = new List<MidiSentMessage>();
+        var bytes = new byte[8192];
+        var due = new ulong[512];
+        var lens = new int[512];
+        while (true)
+        {
+            int n = NativeMethods.MidiTestOutputRead(_handle, name ?? "", bytes, bytes.Length, due, lens, lens.Length);
+            int at = 0;
+            for (int i = 0; i < n; i++)
+            {
+                all.Add(new MidiSentMessage(bytes.AsSpan(at, lens[i]).ToArray(), due[i]));
+                at += lens[i];
+            }
+            if (n < lens.Length) return all;
+        }
     }
 
     public unsafe bool SetMidiClaims(ReadOnlySpan<MidiClaim> claims)

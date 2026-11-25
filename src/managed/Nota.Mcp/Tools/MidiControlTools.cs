@@ -21,15 +21,17 @@ public sealed class MidiControlTools(
     public sealed record MidiInputInfo(
         [property: Description("Stable device id (uid) to pass to enable/disable")] string Uid,
         [property: Description("Human-readable device name")] string Name,
-        [property: Description("Whether Nota is currently listening to this input")] bool Enabled);
+        [property: Description("Whether Nota is currently listening to this input")] bool Enabled,
+        [property: Description("Enabled but past Nota's 16-input limit, so not connected: it sends nothing until another input is switched off")] bool OverLimit = false);
 
     [McpServerTool(Name = "list_midi_devices"), Description("List the connected MIDI input devices and whether Nota is listening to each.")]
     public Task<MidiInputInfo[]> ListMidiDevices() => Read(() =>
     {
         var devices = midiDevices.InputDevices();
+        var overLimit = E.MidiPorts().Where(p => p.OverLimit).Select(p => p.Uid).ToHashSet();
         var result = new MidiInputInfo[devices.Count];
         for (int i = 0; i < devices.Count; i++)
-            result[i] = new MidiInputInfo(devices[i].Uid, devices[i].Name, E.IsMidiInputEnabled(devices[i].Uid));
+            result[i] = new MidiInputInfo(devices[i].Uid, devices[i].Name, E.IsMidiInputEnabled(devices[i].Uid), overLimit.Contains(devices[i].Uid));
         return result;
     });
 

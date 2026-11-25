@@ -41,7 +41,18 @@ class MidiInput {
         std::string uid;
         std::string name;
         std::string outputUid; // empty = none
+        // Enabled and connected to the system, but past kMaxSources: not opened, so it sends
+        // nothing and has no source index (source = -1). Sharing the last index instead routed
+        // one port's notes as another's (#1011) and mixed their partial messages in one parser.
+        bool overLimit = false;
     };
+
+    // The source index of the enabled port at `enabledIndex` (0 = the first one opened), or -1
+    // when it is over the limit and must not be opened. Both backends assign indices only
+    // through this, so no two ports ever share one (specs/115 R7).
+    static int32_t sourceForPort(int32_t enabledIndex) {
+        return enabledIndex >= 0 && enabledIndex < kMaxSources ? enabledIndex : -1;
+    }
 
     MidiInput();
     ~MidiInput();
@@ -53,7 +64,7 @@ class MidiInput {
     bool open(MessageCallback cb, SysexCallback sysex, const std::vector<std::string>& disabledUids);
     void close();
     // The uid of each connected source by its index (specs/086), filled by open(). Sources
-    // past kMaxSources share the last index; that index then names the first of them.
+    // past kMaxSources are not connected and have no entry (#1011).
     const std::vector<std::string>& sourceUids() const { return uids_; }
 
     // The inputs connected by the last open() (empty after close()). Message thread.

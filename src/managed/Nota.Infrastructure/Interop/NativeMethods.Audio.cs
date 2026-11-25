@@ -231,4 +231,27 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_midi_test_take_sent")]
     internal static partial int MidiTestTakeSent(IntPtr engine, int source, [Out] byte[] buf, int cap);
+
+    // --- MIDI routing (specs/115) ---
+    [LibraryImport(Lib, EntryPoint = "nota_midi_port_over_limit")]
+    internal static partial int MidiPortOverLimit(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_midi_index_selftest")]
+    internal static partial int MidiIndexSelfTest(int simulatedPorts);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_output_count")]
+    internal static partial int MidiOutputCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_output_uid")]
+    internal static partial IntPtr MidiOutputUid(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_output_name")]
+    internal static partial IntPtr MidiOutputName(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_test_port_remove", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult MidiTestPortRemove(IntPtr engine, string name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_test_output_read", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int MidiTestOutputRead(IntPtr engine, string name, [Out] byte[] bytes, int bytesCap,
+        [Out] ulong[] dueNs, [Out] int[] lens, int maxMsgs);
 }

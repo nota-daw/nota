@@ -86,13 +86,16 @@ bool MidiInput::open(MessageCallback cb, SysexCallback sysex, const std::vector<
         const std::string uid = midiUidForEndpoint(src);
         // Skip sources the user has switched off (empty list = connect all).
         if (!uid.empty() && std::find(disabledUids.begin(), disabledUids.end(), uid) != disabledUids.end()) continue;
-        // The source's index rides along as the connection refCon (readProc's srcConn);
-        // past kMaxSources they share the last slot.
-        const intptr_t source = std::min<intptr_t>(index++, MidiInput::kMaxSources - 1);
-        if (source == static_cast<intptr_t>(uids_.size())) uids_.push_back(uid);
-        MIDIPortConnectSource(impl_->port, src, reinterpret_cast<void*>(source));
+        // The source's index rides along as the connection refCon (readProc's srcConn). Past
+        // kMaxSources a source is listed but not connected, so it never shares an index or a
+        // parser with another (#1011).
         PortInfo info;
-        info.source = static_cast<int32_t>(source);
+        info.source = MidiInput::sourceForPort(static_cast<int32_t>(index++));
+        info.overLimit = info.source < 0;
+        if (!info.overLimit) {
+            uids_.push_back(uid);
+            MIDIPortConnectSource(impl_->port, src, reinterpret_cast<void*>(static_cast<intptr_t>(info.source)));
+        }
         info.uid = uid;
         info.name = midiEndpointName(src);
         if (info.name.empty()) info.name = "MIDI input " + uid;

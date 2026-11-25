@@ -28,9 +28,9 @@ US3 MIDI routes panel, US4 output roles), so each story can be built and tested 
 
 **Purpose**: register the new files and fixtures the later phases fill in.
 
-- [ ] T001 Add `src/engine/MidiOutService.cpp` and `src/devices/instruments/ExternalMidi.cpp` (empty TUs with the SPDX two-line header and a "why this file exists" comment) to `src/native/nota.engine/CMakeLists.txt`
-- [ ] T002 [P] Create `tests/Nota.SmokeTest/MidiRoutingTests.cs` (SPDX header, empty test class) and register a `--midi-routing` filter next to the existing `--controllers` / `--palette` switches in the smoke-test entry point
-- [ ] T003 [P] Save a v35 fixture project with a legacy single-device + channel-3 MIDI input and an All-inputs track as `tests/Nota.SmokeTest/Fixtures/midi-input-v35.nota` (for SC-008)
+- [X] T001 Add `src/engine/MidiOutService.cpp` and `src/devices/instruments/ExternalMidi.cpp` (empty TUs with the SPDX two-line header and a "why this file exists" comment) to `src/native/nota.engine/CMakeLists.txt`
+- [X] T002 [P] Create `tests/Nota.SmokeTest/MidiRoutingTests.cs` (SPDX header, empty test class) and register a `--midi-routing` filter next to the existing `--controllers` / `--palette` switches in the smoke-test entry point
+- [X] T003 [P] v35 project for SC-008: `*.nota/` bundles are git-ignored, so the test saves a project, rewrites its `project.json` to `formatVersion: 35` with only the legacy `midiInputUid` / `midiInputChannel` fields, and loads that (in `tests/Nota.SmokeTest/MidiInputFilterTests.cs`, written with T034)
 
 ---
 
@@ -40,17 +40,17 @@ US3 MIDI routes panel, US4 output roles), so each story can be built and tested 
 
 **⚠️ CRITICAL**: no user-story work starts until this phase is green.
 
-- [ ] T004 Add `bool overLimit` to `MidiInput::PortInfo` and stop clamping source indices in `src/audio_io/MidiInput.h`: ports past `kMaxSources` are listed with `overLimit = true`, not connected, and get no index (R7, #1011)
-- [ ] T005 [P] Apply T004 in `src/audio_io/desktop/MidiInput_rtmidi.cpp` (line ~93: no `std::min(..., kMaxSources - 1)`; skip `openPort` for over-limit ports; `sourceUids()` never repeats)
-- [ ] T006 [P] Apply T004 in `src/audio_io/macos/MidiInput.mm` (lines ~39 and ~90: no clamp to the last slot; do not `MIDIPortConnectSource` an over-limit source, so `parsers[]` is never shared)
-- [ ] T007 Add `nota_midi_port_over_limit` and `nota_engine_midi_index_selftest(int32_t simulated_ports)` (factor the index assignment into a pure function both backends call) to `include/nota/nota_engine.h` and the MIDI ABI TU in `src/abi/`
-- [ ] T008 Add the test hooks `nota_midi_test_port_remove` (input and `test:<name>` output disappear, `portsGeneration` bumps) and `nota_midi_test_output_read` (messages with `dueNs`) per [contracts/c-abi.md](contracts/c-abi.md) § Test hooks in `include/nota/nota_engine.h`, `src/engine/Engine.h` (`TestMidiPort` gains a timestamped message log) and `src/engine/Engine.cpp`
-- [ ] T009 [P] P/Invoke + wrappers for T007/T008 in `Nota.Infrastructure/Interop/NativeMethods.Tracks.cs` and `Nota.Infrastructure/Interop/NotaEngine.Tracks.cs` (or the MIDI-specific partials where `nota_midi_port_*` already live), plus `IAudioEngine.cs`
-- [ ] T010 [P] Show over-limit inputs in Settings → Inputs as "Not connected — Nota listens to 16 inputs; switch one off" in `Nota.App/PreferencesWindow.AudioIo.cs`; add `overLimit` to MCP `list_midi_devices` in `Nota.Mcp/Tools/MidiTools.cs`
-- [ ] T011 Smoke test "#1011 index self-test, 17 ports" in `tests/Nota.SmokeTest/MidiInputFilterTests.cs`: indices are distinct, the 17th is over the limit, and a track on input 16 receives nothing from a 17th test port
-- [ ] T012 Bump `ProjectService.CurrentFormatVersion` 35 → 36 in `Nota.Infrastructure/Persistence/ProjectService.cs` (v35 load path untouched)
-- [ ] T013 Create `Nota.Application/Midi/MidiRouteResolver.cs`: `enum RouteAvailability { Available, Missing, Ambiguous, Unbound, OverLimit }`; resolve an input `{uid}` or output `{uid}` against the current port and output lists — exact uid → Available; no uid match → Missing **even when a port with the same name exists**; ≥ 2 connected with the uid → Ambiguous; a connected over-limit input → OverLimit. Re-run on the engine's `portsGeneration` change and raise `Changed`
-- [ ] T014 Add `nota_midi_output_count/uid/name` (every destination, paired or not) to `src/audio_io/MidiOutput.h` + `MidiOutput_rtmidi.cpp` + `macos/MidiOutput.mm`, `include/nota/nota_engine.h` and its ABI TU, the interop wrappers and `IAudioEngine.cs`; feed them to `MidiRouteResolver`
+- [X] T004 Add `bool overLimit` to `MidiInput::PortInfo` and stop clamping source indices in `src/audio_io/MidiInput.h`: ports past `kMaxSources` are listed with `overLimit = true`, not connected, and get no index (R7, #1011)
+- [X] T005 [P] Apply T004 in `src/audio_io/desktop/MidiInput_rtmidi.cpp` (line ~93: no `std::min(..., kMaxSources - 1)`; skip `openPort` for over-limit ports; `sourceUids()` never repeats)
+- [X] T006 [P] Apply T004 in `src/audio_io/macos/MidiInput.mm` (lines ~39 and ~90: no clamp to the last slot; do not `MIDIPortConnectSource` an over-limit source, so `parsers[]` is never shared)
+- [X] T007 Add `nota_midi_port_over_limit` and `nota_engine_midi_index_selftest(int32_t simulated_ports)` (factor the index assignment into a pure function both backends call) to `include/nota/nota_engine.h` and the MIDI ABI TU in `src/abi/`
+- [X] T008 Add the test hooks `nota_midi_test_port_remove` (input and `test:<name>` output disappear, `portsGeneration` bumps) and `nota_midi_test_output_read` (messages with `dueNs`) per [contracts/c-abi.md](contracts/c-abi.md) § Test hooks in `include/nota/nota_engine.h`, `src/engine/Engine.h` (`TestMidiPort` gains a timestamped message log) and `src/engine/Engine.cpp`
+- [X] T009 [P] P/Invoke + wrappers for T007/T008 in `Nota.Infrastructure/Interop/NativeMethods.Tracks.cs` and `Nota.Infrastructure/Interop/NotaEngine.Tracks.cs` (or the MIDI-specific partials where `nota_midi_port_*` already live), plus `IAudioEngine.cs`
+- [X] T010 [P] Show over-limit inputs in Settings → Inputs as "Not connected — Nota listens to 16 inputs; switch one off" in `Nota.App/PreferencesWindow.AudioIo.cs`; add `overLimit` to MCP `list_midi_devices` in `Nota.Mcp/Tools/MidiTools.cs`
+- [X] T011 Smoke test "#1011 index self-test, 17 ports" in `tests/Nota.SmokeTest/MidiInputFilterTests.cs`: indices are distinct, the 17th is over the limit, and a track on input 16 receives nothing from a 17th test port
+- [X] T012 Bump `ProjectService.CurrentFormatVersion` 35 → 36 in `Nota.Infrastructure/Persistence/ProjectService.cs` (v35 load path untouched)
+- [X] T013 Create `Nota.Application/Midi/MidiRouteResolver.cs`: `enum RouteAvailability { Available, Missing, Ambiguous, Unbound, OverLimit }`; resolve an input `{uid}` or output `{uid}` against the current port and output lists — exact uid → Available; no uid match → Missing **even when a port with the same name exists**; ≥ 2 connected with the uid → Ambiguous; a connected over-limit input → OverLimit. Re-run on the engine's `portsGeneration` change and raise `Changed`
+- [X] T014 Add `nota_midi_output_count/uid/name` (every destination, paired or not) to `src/audio_io/MidiOutput.h` + `MidiOutput_rtmidi.cpp` + `macos/MidiOutput.mm`, `include/nota/nota_engine.h` and its ABI TU, the interop wrappers and `IAudioEngine.cs`; feed them to `MidiRouteResolver`
 
 **Checkpoint**: #1011 is fixed and tested, the test hooks exist, and the resolver and output list are ready.
 

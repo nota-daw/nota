@@ -69,6 +69,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IBrowserLibrary, BrowserLibraryService>();
         services.AddSingleton<IAudioDeviceService, AudioDeviceService>();
         services.AddSingleton<IMidiDeviceService, MidiDeviceService>();
+        services.AddSingleton<Nota.Application.Midi.MidiRouteResolver>();   // specs/115
         services.AddSingleton<GamepadService>();
         services.AddSingleton<IGamepadService>(sp => sp.GetRequiredService<GamepadService>());
         services.AddSingleton<IAudioExporter, AudioExporter>();

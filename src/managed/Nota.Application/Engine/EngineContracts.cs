@@ -631,8 +631,18 @@ public readonly record struct MidiDevice(string Uid, string Name);
 
 /// <summary>A connected MIDI input as the engine's MIDI thread numbers it (specs/051): the
 /// source index its events carry, a stable uid, the display name, and the output of the same
-/// device ("" when it has none). Test ports have uids "test:&lt;name&gt;".</summary>
-public readonly record struct MidiPortInfo(string Uid, string Name, int Source, string OutputUid);
+/// device ("" when it has none). Test ports have uids "test:&lt;name&gt;". OverLimit (#1011,
+/// specs/115): enabled and connected but past the 16-input limit, so not opened — it sends
+/// nothing and has no source (-1).</summary>
+public readonly record struct MidiPortInfo(string Uid, string Name, int Source, string OutputUid, bool OverLimit = false);
+
+/// <summary>A MIDI output (destination) the system lists, paired with an input or not
+/// (specs/115). Test ports' outputs have uids "test:&lt;name&gt;".</summary>
+public readonly record struct MidiOutputInfo(string Uid, string Name);
+
+/// <summary>One message a test port's output received (specs/115) and when it was due, in ns on
+/// the engine's render clock (offline: frames rendered since the first block).</summary>
+public readonly record struct MidiSentMessage(byte[] Bytes, ulong DueNs);
 
 /// <summary>One claimed message (specs/051), blittable and matching NotaMidiClaim. A claimed
 /// message goes to the surface queue instead of the instruments. Status 0x80 note (on and

@@ -684,14 +684,18 @@ public sealed partial class PreferencesWindow : NotaWindow
         else
         {
             var rows = new List<Control>();
+            // Enabled past the 16-input limit: listed but not opened (#1011, specs/115).
+            var overLimit = engine.MidiPorts().Where(p => p.OverLimit).Select(p => p.Uid).ToHashSet();
             foreach (var dev in devices)
             {
                 string uid = dev.Uid;
                 bool on = engine.IsMidiInputEnabled(uid);
-                var dot = Dot(on ? NotaPalette.Success : BorderStrong);   // enabled: positive status
+                bool over = on && overLimit.Contains(uid);
+                var dot = Dot(on && !over ? NotaPalette.Success : BorderStrong);   // enabled: positive status
                 var name = new TextBlock
                 {
-                    Text = dev.Name, FontSize = 11, Foreground = on ? TextPrimary : TextTertiary,
+                    Text = over ? Loc.F("preferences.midi_input_over_limit", dev.Name) : dev.Name,
+                    FontSize = 11, Foreground = on && !over ? TextPrimary : TextTertiary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 };
                 var sw = new ToggleSwitch(on, large: true, shell: true) { VerticalAlignment = VerticalAlignment.Center };

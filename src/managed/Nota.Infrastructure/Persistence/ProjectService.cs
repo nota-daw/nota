@@ -45,7 +45,9 @@ public sealed class ProjectService
     /// v33 (specs/086) adds the optional tempo map and curve handles.
     /// v34 (specs/099) makes tempo the master track's Tempo automation lane.
     /// v35 (specs/103) adds FollowBypass on Session slots.
-    public const int CurrentFormatVersion = 35;
+    /// v36 (specs/115) adds MidiInputs on tracks, ExternalMidi on instruments and the project's
+    /// MidiOutputRoles.
+    public const int CurrentFormatVersion = 36;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";

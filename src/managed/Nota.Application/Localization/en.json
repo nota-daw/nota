@@ -3850,6 +3850,7 @@
     "preferences.measuring_5_s_left_play": "Measuring… 5 s left — play your project for a real-world figure.",
     "preferences.measuring_s_left_now": "Measuring… {0} s left · now {1:0} %",
     "preferences.midi_inputs": "MIDI inputs",
+    "preferences.midi_input_over_limit": "{0} — not connected: Nota listens to 16 MIDI inputs. Switch one off to use this one.",
     "preferences.midi_settings_are_unavailable_in": "MIDI settings are unavailable in this window.",
     "preferences.models.ai_models_that_run_on": "AI models that run on this computer: the audio you give them never leaves it. Each downloads once from where its authors publish it and is checked against the checksum Nota pins for it.",
     "preferences.models.comes_with_a_model": "Comes with a model",

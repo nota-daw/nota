@@ -1481,6 +1481,12 @@ public interface IAudioEngine : IDisposable
     int MidiTestPortAdd(string name);
     bool MidiTestInject(int source, ReadOnlySpan<byte> bytes);
     int MidiTestTakeSent(int source, byte[] buffer);
+    /// <summary>Every MIDI output, then the test ports' outputs (specs/115).</summary>
+    IReadOnlyList<MidiOutputInfo> MidiOutputs();
+    /// <summary>Unplug a test port (specs/115); <see cref="MidiTestPortAdd"/> plugs it back in.</summary>
+    bool MidiTestPortRemove(string name);
+    /// <summary>Drain what a test port's output received, oldest first, with due times.</summary>
+    IReadOnlyList<MidiSentMessage> MidiTestOutputRead(string name);
 
     // --- gamepad input (live note source) ----------------------------------
     // Poll-driven: the UI ticks PollGamepadEvents and turns each edge into

@@ -196,8 +196,73 @@ void Engine::onMidiSysex(int32_t source, const uint8_t* data, int32_t len) { mid
 
 const std::vector<MidiInput::PortInfo>& Engine::midiPorts() {
     midiPortRows_ = midiInput_ ? midiInput_->ports() : std::vector<MidiInput::PortInfo>{};
-    for (const auto& t : testMidiPorts_) midiPortRows_.push_back({t->source, "test:" + t->name, t->name, "test:" + t->name});
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (!t->removed.load(std::memory_order_relaxed))
+            midiPortRows_.push_back({t->source, "test:" + t->name, t->name, "test:" + t->name});
     return midiPortRows_;
+}
+
+const std::vector<MidiOutput::Destination>& Engine::midiOutputPorts() {
+    midiOutputRows_ = MidiOutput::list();
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (!t->removed.load(std::memory_order_relaxed)) midiOutputRows_.push_back({"test:" + t->name, t->name});
+    return midiOutputRows_;
+}
+
+namespace {
+std::atomic<uint32_t> gTestPortsGen{0};
+} // namespace
+
+uint32_t Engine::testPortsGeneration() { return gTestPortsGen.load(std::memory_order_relaxed); }
+
+bool Engine::deliverTestMidi(const std::string& outputUid, const uint8_t* data, int32_t len, uint64_t dueNs) {
+    if (outputUid.rfind("test:", 0) != 0 || !data || len <= 0) return false;
+    std::lock_guard lk(testPortsMx_);
+    for (auto& t : testMidiPorts_)
+        if ("test:" + t->name == outputUid) {
+            if (t->removed.load(std::memory_order_relaxed)) return false; // unplugged
+            t->sent.write(data, static_cast<size_t>(len));
+            std::lock_guard lg(t->logMx);
+            t->log.push_back({dueNs, std::vector<uint8_t>(data, data + len)});
+            return true;
+        }
+    return false;
+}
+
+bool Engine::removeTestMidiPort(const std::string& name) {
+    std::lock_guard lk(testPortsMx_);
+    for (auto& t : testMidiPorts_)
+        if (t->name == name && !t->removed.exchange(true)) {
+            gTestPortsGen.fetch_add(1, std::memory_order_relaxed);
+            return true;
+        }
+    return false;
+}
+
+int32_t Engine::readTestMidiOutput(const std::string& name, uint8_t* bytes, int32_t bytesCap, uint64_t* dueNs,
+    int32_t* lens, int32_t maxMsgs) {
+    if (!bytes || !lens || maxMsgs <= 0 || bytesCap <= 0) return 0;
+    std::lock_guard lk(testPortsMx_);
+    for (auto& t : testMidiPorts_) {
+        if (t->name != name) continue;
+        std::lock_guard lg(t->logMx);
+        int32_t n = 0, used = 0;
+        while (n < maxMsgs && !t->log.empty()) {
+            const auto& m = t->log.front();
+            const auto len = static_cast<int32_t>(m.bytes.size());
+            if (used + len > bytesCap) break;
+            std::copy(m.bytes.begin(), m.bytes.end(), bytes + used);
+            used += len;
+            lens[n] = len;
+            if (dueNs) dueNs[n] = m.dueNs;
+            ++n;
+            t->log.pop_front();
+        }
+        return n;
+    }
+    return 0;
 }
 
 bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t len) {
@@ -208,14 +273,7 @@ bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t
         if (data[i] == 0xF0 && data[i + 1] == 0x7E && data[i + 3] == 0x06 && data[i + 4] == 0x01 && data[i + 5] == 0xF7)
             for (const auto& p : midiPorts())
                 if (p.outputUid == outputUid) midiSurface_.armIdentity(p.source);
-    if (outputUid.rfind("test:", 0) == 0) {
-        for (auto& t : testMidiPorts_)
-            if ("test:" + t->name == outputUid) {
-                t->sent.write(data, static_cast<size_t>(len));
-                return true;
-            }
-        return false;
-    }
+    if (outputUid.rfind("test:", 0) == 0) return deliverTestMidi(outputUid, data, len, 0);
     auto it = midiOutputs_.find(outputUid);
     if (it == midiOutputs_.end()) {
         auto out = std::make_unique<MidiOutput>();
@@ -229,11 +287,21 @@ bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t
 
 int32_t Engine::addTestMidiPort(const std::string& name) {
     if (name.empty()) return -1;
-    for (const auto& t : testMidiPorts_)
-        if (t->name == name) return t->source;
-    // Take the highest source index no real or test port uses.
+    {
+        std::lock_guard lk(testPortsMx_);
+        for (const auto& t : testMidiPorts_)
+            if (t->name == name) {
+                if (t->removed.exchange(false)) gTestPortsGen.fetch_add(1, std::memory_order_relaxed); // plugged back in
+                return t->source;
+            }
+    }
+    // Take the highest source index no real or test port uses (a removed test port keeps its).
     std::array<bool, MidiInput::kMaxSources> used{};
-    for (const auto& p : midiPorts()) used[static_cast<size_t>(std::clamp(p.source, 0, MidiInput::kMaxSources - 1))] = true;
+    for (const auto& p : midiPorts())
+        if (p.source >= 0 && p.source < MidiInput::kMaxSources) used[static_cast<size_t>(p.source)] = true;
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (t->source >= 0 && t->source < MidiInput::kMaxSources) used[static_cast<size_t>(t->source)] = true;
     for (int32_t s = MidiInput::kMaxSources - 1; s >= 0; --s) {
         if (used[static_cast<size_t>(s)]) continue;
         auto t = std::make_unique<TestMidiPort>();
@@ -247,8 +315,9 @@ int32_t Engine::addTestMidiPort(const std::string& name) {
 
 bool Engine::injectTestMidi(int32_t source, const uint8_t* data, int32_t len) {
     if (!data || len <= 0) return false;
+    std::lock_guard lk(testPortsMx_);
     for (auto& t : testMidiPorts_)
-        if (t->source == source) {
+        if (t->source == source && !t->removed.load(std::memory_order_relaxed)) {
             t->parser.feed(
                 data, static_cast<size_t>(len),
                 [&](int status, int channel, int d1, int d2) { onMidiMessage(source, status, channel, d1, d2); },
@@ -259,6 +328,7 @@ bool Engine::injectTestMidi(int32_t source, const uint8_t* data, int32_t len) {
 }
 
 int32_t Engine::takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap) {
+    std::lock_guard lk(testPortsMx_);
     for (auto& t : testMidiPorts_)
         if (t->source == source) return t->sent.take(out, cap);
     return 0;

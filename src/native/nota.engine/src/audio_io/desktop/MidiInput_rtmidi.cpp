@@ -84,20 +84,25 @@ bool MidiInput::open(MessageCallback cb, SysexCallback sysex, const std::vector<
             if (!uid.empty() && std::find(disabledUids.begin(), disabledUids.end(), uid) != disabledUids.end())
                 continue; // user switched this source off (empty list = connect all)
 
+            PortInfo info;
+            info.uid = uid;
+            info.name = uid;
+            // The output of the same device carries the same port name on WinMM and ALSA.
+            if (std::find(outputs.begin(), outputs.end(), uid) != outputs.end()) info.outputUid = uid;
+            info.source = sourceForPort(static_cast<int32_t>(impl_->ports.size()));
+            if (info.source < 0) { // past the limit: listed, never opened (#1011)
+                info.overLimit = true;
+                impl_->info.push_back(std::move(info));
+                continue;
+            }
             auto port = std::make_unique<RtMidiIn>(RtMidi::UNSPECIFIED, "Nota In");
             port->openPort(i, "Nota In");
             port->ignoreTypes(false, true, true); // keep sysex (control surfaces); drop timing/sensing
             auto tag = std::make_unique<PortTag>();
             tag->cb = &impl_->cb;
             tag->sysex = &impl_->sysex;
-            tag->source = std::min<int32_t>(static_cast<int32_t>(impl_->ports.size()), kMaxSources - 1);
-            if (static_cast<int32_t>(uids_.size()) < kMaxSources) uids_.push_back(uid);
-            PortInfo info;
-            info.source = tag->source;
-            info.uid = uid;
-            info.name = uid;
-            // The output of the same device carries the same port name on WinMM and ALSA.
-            if (std::find(outputs.begin(), outputs.end(), uid) != outputs.end()) info.outputUid = uid;
+            tag->source = info.source;
+            uids_.push_back(uid);
             impl_->info.push_back(std::move(info));
             port->setCallback(&onMidiMessage, tag.get());
             impl_->tags.push_back(std::move(tag));

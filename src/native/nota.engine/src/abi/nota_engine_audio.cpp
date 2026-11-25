@@ -860,7 +860,7 @@ const nota::MidiInput::PortInfo* portRow(const NotaEngine* e, int32_t i) {
 } // namespace
 
 uint32_t nota_midi_ports_generation(void) {
-    return nota::MidiInput::portsGeneration();
+    return nota::MidiInput::portsGeneration() + nota::Engine::testPortsGeneration();
 }
 
 int32_t nota_midi_port_count(NotaEngine* e) {
@@ -881,6 +881,38 @@ const char* nota_midi_port_name(const NotaEngine* e, int32_t i) {
 const char* nota_midi_port_output_uid(const NotaEngine* e, int32_t i) {
     const auto* p = portRow(e, i);
     return p ? p->outputUid.c_str() : nullptr;
+}
+int32_t nota_midi_port_over_limit(const NotaEngine* e, int32_t i) {
+    const auto* p = portRow(e, i);
+    return p && p->overLimit ? 1 : 0;
+}
+int32_t nota_engine_midi_index_selftest(int32_t n) {
+    if (n < 0) return 1;
+    std::vector<bool> seen(nota::MidiInput::kMaxSources, false);
+    for (int32_t i = 0; i < n; ++i) {
+        const int32_t s = nota::MidiInput::sourceForPort(i);
+        if (i < nota::MidiInput::kMaxSources) {
+            if (s != i) return 2;                          // the first 16 keep their own index
+            if (seen[static_cast<size_t>(s)]) return 3;    // and never share one
+            seen[static_cast<size_t>(s)] = true;
+        } else if (s != -1) {
+            return 4;                                      // past the limit: no index (#1011)
+        }
+    }
+    return 0;
+}
+int32_t nota_midi_output_count(NotaEngine* e) {
+    return e ? static_cast<int32_t>(ENG(e)->midiOutputPorts().size()) : 0;
+}
+const char* nota_midi_output_uid(const NotaEngine* e, int32_t i) {
+    if (!e) return nullptr;
+    const auto& rows = CENG(e)->midiOutputRows();
+    return (i >= 0 && i < static_cast<int32_t>(rows.size())) ? rows[static_cast<size_t>(i)].uid.c_str() : nullptr;
+}
+const char* nota_midi_output_name(const NotaEngine* e, int32_t i) {
+    if (!e) return nullptr;
+    const auto& rows = CENG(e)->midiOutputRows();
+    return (i >= 0 && i < static_cast<int32_t>(rows.size())) ? rows[static_cast<size_t>(i)].name.c_str() : nullptr;
 }
 
 NotaResult nota_midi_set_claims(NotaEngine* e, const NotaMidiClaim* claims, int32_t count) {
@@ -929,6 +961,16 @@ NotaResult nota_midi_test_inject(NotaEngine* e, int32_t source, const uint8_t* b
 
 int32_t nota_midi_test_take_sent(NotaEngine* e, int32_t source, uint8_t* out, int32_t cap) {
     return e ? ENG(e)->takeTestMidiSent(source, out, cap) : 0;
+}
+
+NotaResult nota_midi_test_port_remove(NotaEngine* e, const char* name) {
+    if (!e || !name) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->removeTestMidiPort(name) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+
+int32_t nota_midi_test_output_read(NotaEngine* e, const char* name, uint8_t* bytes, int32_t bytesCap,
+    uint64_t* dueNs, int32_t* lens, int32_t maxMsgs) {
+    return (e && name) ? ENG(e)->readTestMidiOutput(name, bytes, bytesCap, dueNs, lens, maxMsgs) : 0;
 }
 
 } // extern "C"

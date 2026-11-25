@@ -3119,6 +3119,20 @@ NOTA_API const char* nota_midi_port_uid(const NotaEngine* engine, int32_t index)
 NOTA_API const char* nota_midi_port_name(const NotaEngine* engine, int32_t index);
 /* The output of the same device (CoreMIDI: same entity; RtMidi: same name). "" when none. */
 NOTA_API const char* nota_midi_port_output_uid(const NotaEngine* engine, int32_t index);
+/* 1 when the input at this index is enabled and connected to the system but past the 16-input
+ * limit: it is listed so the app can say so, but not opened — it sends nothing and has no
+ * source (nota_midi_port_source = -1). 0 otherwise or out of range (#1011, specs/115). */
+NOTA_API int32_t     nota_midi_port_over_limit(const NotaEngine* engine, int32_t index);
+/* Deterministic self-test of the source-index assignment both MIDI backends use, with
+ * `simulated_ports` enabled ports: the first 16 get distinct indices 0..15, every later one is
+ * over the limit. 0 = pass, else the first failed check (#1011). */
+NOTA_API int32_t     nota_engine_midi_index_selftest(int32_t simulated_ports);
+/* Every MIDI output the system lists, paired with an input or not, then the test ports'
+ * outputs (specs/115). count re-reads the list; the strings are engine-owned and valid until
+ * the next count call. NULL if out of range. Message thread. */
+NOTA_API int32_t     nota_midi_output_count(NotaEngine* engine);
+NOTA_API const char* nota_midi_output_uid(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_midi_output_name(const NotaEngine* engine, int32_t index);
 
 /* Claim table. whole_port = 1 claims every channel message of that source (MCU / HUI / the
  * setup wizard's capture) and ignores status/channel/data1. status: 0x80 note (on and off),
@@ -3171,6 +3185,15 @@ NOTA_API int32_t     nota_midi_surface_selftest(void);
 NOTA_API int32_t     nota_midi_test_port_add(NotaEngine* engine, const char* name);
 NOTA_API NotaResult  nota_midi_test_inject(NotaEngine* engine, int32_t source, const uint8_t* bytes, int32_t len);
 NOTA_API int32_t     nota_midi_test_take_sent(NotaEngine* engine, int32_t source, uint8_t* out, int32_t cap);
+/* specs/115 test hooks. remove: the test port's input and its "test:<name>" output disappear as
+ * if unplugged (nota_midi_ports_generation bumps); nota_midi_test_port_add with the same name
+ * plugs it back in on the same source. output_read: drain the messages delivered to
+ * "test:<name>", oldest first — bytes packed into bytes_out, each message's length in
+ * lens_out and its due time in due_ns_out (ns on the engine's render clock: the offline
+ * render counts frames from the first block). Returns the messages copied (<= max_msgs). */
+NOTA_API NotaResult  nota_midi_test_port_remove(NotaEngine* engine, const char* name);
+NOTA_API int32_t     nota_midi_test_output_read(NotaEngine* engine, const char* name, uint8_t* bytes_out,
+    int32_t bytes_cap, uint64_t* due_ns_out, int32_t* lens_out, int32_t max_msgs);
 
 /* --- Gamepad input (live note source) ---------------------------------------
  * A gamepad is polled on its own thread; button edges queue internally and are

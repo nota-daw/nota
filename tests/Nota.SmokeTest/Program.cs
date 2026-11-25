@@ -1069,6 +1069,15 @@ if (args.Length >= 1 && args[0] == "--midi-source")
     Console.WriteLine(failures == 0 ? "MIDI SOURCE PASSED" : $"MIDI SOURCE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// MIDI routing alone (fast iteration, specs/115): `--midi-routing`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--midi-routing")
+{
+    Console.WriteLine("-- MIDI routing --");
+    foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in MidiRoutingTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MIDI ROUTING PASSED" : $"MIDI ROUTING FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Main / Cue outputs alone (fast iteration): `--cue`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--cue")
 {
@@ -16356,6 +16365,8 @@ foreach (var (ok, label) in MultiInputSessionTests.Run()) Check(ok, label);
 foreach (var (ok, label) in MidiInputFilterTests.Run()) Check(ok, label);
 Console.WriteLine("-- MIDI In switch --");
 foreach (var (ok, label) in MidiSourceSwitchTests.Run()) Check(ok, label);
+Console.WriteLine("-- MIDI routing --");
+foreach (var (ok, label) in MidiRoutingTests.Run()) Check(ok, label);
 foreach (var (ok, label) in CancelLaunchTests.Run()) Check(ok, label);
 Console.WriteLine("-- clip launch keys --");
 foreach (var (ok, label) in ClipLaunchKeyTests.Run()) Check(ok, label);

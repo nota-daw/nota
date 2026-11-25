@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <deque>
 #include <functional>
 #include <cmath>
 #include <limits>
@@ -146,6 +147,10 @@ class Engine {
     // call; the strings stay valid until the next one. Message thread.
     const std::vector<MidiInput::PortInfo>& midiPorts();
     const std::vector<MidiInput::PortInfo>& midiPortRows() const { return midiPortRows_; } // last midiPorts()
+    // Every MIDI output (specs/115), then the test ports' outputs. Message thread; the rows stay
+    // valid until the next call.
+    const std::vector<MidiOutput::Destination>& midiOutputPorts();
+    const std::vector<MidiOutput::Destination>& midiOutputRows() const { return midiOutputRows_; }
     bool setMidiClaims(const MidiClaimEntry* claims, int32_t count) { return midiSurface_.setClaims(claims, count); }
     void setMidiLearnListening(bool on) { midiSurface_.setLearnListening(on); }
     int32_t pollSurfaceEvents(SurfaceEvent* out, int32_t max) { return midiSurface_.pollEvents(out, max); }
@@ -160,6 +165,17 @@ class Engine {
     int32_t addTestMidiPort(const std::string& name);
     bool injectTestMidi(int32_t source, const uint8_t* data, int32_t len);
     int32_t takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap);
+    // specs/115 test hooks. Remove: the port's input and output go away as if unplugged (adding
+    // it again by name brings both back on the same source). Read: drain the messages sent to
+    // its output, each with the time it was due (ns on the engine's render clock).
+    bool removeTestMidiPort(const std::string& name);
+    int32_t readTestMidiOutput(const std::string& name, uint8_t* bytes, int32_t bytesCap, uint64_t* dueNs,
+        int32_t* lens, int32_t maxMsgs);
+    // Called by whoever delivers to a "test:" output (the MIDI out thread, midiSend): false when
+    // there is no such port or it is removed. Any thread but the audio thread.
+    bool deliverTestMidi(const std::string& outputUid, const uint8_t* data, int32_t len, uint64_t dueNs);
+    // Test ports coming and going, added to MidiInput::portsGeneration (nota_midi_ports_generation).
+    static uint32_t testPortsGeneration();
 
     // --- gamepad input (live note source) ---
     // The pad runs on its own IOKit thread and queues button edges; the UI
@@ -1827,9 +1843,20 @@ class Engine {
         int32_t source = 0;
         MidiParser parser;
         MidiLoopback sent;
+        std::atomic<bool> removed{false}; // unplugged (specs/115): no input, no output
+        // Every message delivered to its output with its due time (specs/115). The MIDI out
+        // thread and the message thread both deliver; the lock is never taken on the audio thread.
+        struct Sent {
+            uint64_t dueNs;
+            std::vector<uint8_t> bytes;
+        };
+        std::mutex logMx;
+        std::deque<Sent> log;
     };
-    std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_;
+    std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_; // grows only; guarded by testPortsMx_
+    mutable std::mutex testPortsMx_;                          // message + MIDI out threads, never audio
     std::vector<MidiInput::PortInfo> midiPortRows_;
+    std::vector<MidiOutput::Destination> midiOutputRows_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
     std::unique_ptr<AudioBackend> backend_;
