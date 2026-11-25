@@ -1040,6 +1040,29 @@ void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
     }
 }
 
+namespace {
+
+bool graphNeedsRoutingPlan(const Graph& g) noexcept {
+    if (g.tracks.size() > 4) return true;
+    if (g.masterTrack && (!g.masterTrack->automation.empty() || !g.masterTrack->cvLinks.empty() ||
+                             (g.masterTrack->ccRoutes && !g.masterTrack->ccRoutes->empty()))) {
+        return true;
+    }
+    for (const auto& t : g.tracks) {
+        if (!t) continue;
+        if (t->type() == TrackType::Group || t->type() == TrackType::Return) return true;
+        if (!t->automation.empty() || !t->modulators.empty() || !t->cvLinks.empty()) return true;
+        if (t->ccRoutes && !t->ccRoutes->empty()) return true;
+        if (t->midiFromTrackId() >= 0) return true;
+        if (t->instrument && (t->instrument->acceptsSidechain() || t->instrument->asRack() != nullptr)) return true;
+        for (const auto& d : t->devices)
+            if (d && (d->acceptsSidechain() || d->asRack() != nullptr)) return true;
+    }
+    return false;
+}
+
+} // namespace
+
 void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     if (g && !restored && (!authoring_ || g->masterTrack != authoring_->masterTrack || g->tempoMap != authoring_->tempoMap))
         deriveTempoMap(*g); // specs/099: the master Tempo lane is the tempo
@@ -1085,8 +1108,14 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         };
         for (size_t idx = 0; idx < g->tracks.size(); ++idx) {
             auto& t = g->tracks[idx];
-            if (!t || playing(idx, t) || articulationsCurrent(*t)) continue; // O(1) shared check first
-            if (restored) t = cloneTrack(*t);
+            if (!t || (t->type() != TrackType::Instrument && !t->articulationTable && t->midiClips.empty()) ||
+                playing(idx, t) || articulationsCurrent(*t)) {
+                continue; // O(1) track/shared check first
+            }
+            if (restored) {
+                t = cloneTrack(*t);
+                g->routingPlan.reset();
+            }
             settleArticulations(*t);
         }
     }
@@ -1103,7 +1132,11 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
                 cache->inputs.sample == c.sample.get() && cache->inputs.markers == c.warpMarkers &&
                 cache->inputs.playStart == c.warpPlayStart && cache->inputs.playEnd == c.warpPlayEndEff() &&
                 cache->inputs.pitch == c.pitchSemitones && cache->inputs.mode == c.warpMode) continue;
-            if (!copied) { t = cloneTrack(*t); copied = true; }
+            if (!copied) {
+                t = cloneTrack(*t);
+                g->routingPlan.reset();
+                copied = true;
+            }
             configureTempoWarp(t->clips.write()[i], g->tempoMap, transport_.sampleRate());
         }
     }
@@ -1115,14 +1148,15 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
             const auto& t = g->tracks[i];
             if (!t) continue;
             if (authoring_ && i < authoring_->tracks.size() && authoring_->tracks[i] == t) continue;
-            if (t->instrument) t->instrument->setTelemetryMode(tmode);
+            if (t->instrument && t->instrument->telemetryMode() != tmode) t->instrument->setTelemetryMode(tmode);
             for (auto& d : t->devices)
-                if (d) d->setTelemetryMode(tmode);
+                if (d && d->telemetryMode() != tmode) d->setTelemetryMode(tmode);
         }
         if (g->masterTrack && (!authoring_ || authoring_->masterTrack != g->masterTrack)) {
-            if (g->masterTrack->instrument) g->masterTrack->instrument->setTelemetryMode(tmode);
+            if (g->masterTrack->instrument && g->masterTrack->instrument->telemetryMode() != tmode)
+                g->masterTrack->instrument->setTelemetryMode(tmode);
             for (auto& d : g->masterTrack->devices)
-                if (d) d->setTelemetryMode(tmode);
+                if (d && d->telemetryMode() != tmode) d->setTelemetryMode(tmode);
         }
     }
     auto prevGraph = authoring_;
@@ -1144,19 +1178,27 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         for (size_t i = 0; i < g->tracks.size(); ++i) {
             auto& t = g->tracks[i];
             if (!t) continue;
+            const bool wantsIndex = (t->clips.size() > 16 || t->midiClips.size() > 16);
             if (prevGraph && i < prevGraph->tracks.size() && prevGraph->tracks[i] == t &&
-                (t->timelineIndex || (t->clips.empty() && t->midiClips.empty())))
+                (t->timelineIndex || !wantsIndex))
                 continue; // shared with previously published graph: already indexed and sealed
-            if (t->timelineIndex && !t->timelineIndex->matchesTrack(*t)) t->timelineIndex.reset();
-            if (!t->timelineIndex && (!t->clips.empty() || !t->midiClips.empty()))
-                t->timelineIndex = TimelineIndex::buildForTrack(*t);
+            if (!wantsIndex) {
+                t->timelineIndex.reset();
+            } else {
+                if (t->timelineIndex && !t->timelineIndex->matchesTrack(*t)) t->timelineIndex.reset();
+                if (!t->timelineIndex) t->timelineIndex = TimelineIndex::buildForTrack(*t);
+            }
             t->sealContent();
         }
         if (g->masterTrack && (!prevGraph || prevGraph->masterTrack != g->masterTrack)) g->masterTrack->sealContent();
-        g->routingPlan = RenderRoutingPlan::build(*g);
+        if (!graphNeedsRoutingPlan(*g)) {
+            g->routingPlan.reset();
+        } else if (!restored || !g->routingPlan) {
+            g->routingPlan = RenderRoutingPlan::build(*g);
+        }
     }
     graphHist_.publish(g); // frees the graphs no render can still be walking
-    if (hybrid_) hybrid_->onGraphChanged(g);
+    if (hybrid_ && hybrid_->mode() != HybridBufferMode::Off) hybrid_->onGraphChanged(g);
     busState_.requestInvalidate();
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
@@ -1816,7 +1858,10 @@ void Engine::syncStreamingPlaybackState(bool playing, double beatHint) const {
 }
 
 void Engine::setHybridBufferingMode(HybridBufferMode mode) {
-    if (hybrid_) hybrid_->setMode(mode);
+    if (hybrid_) {
+        hybrid_->setMode(mode);
+        if (mode == HybridBufferMode::Auto) hybrid_->onGraphChanged(authoring_);
+    }
 }
 
 } // namespace nota

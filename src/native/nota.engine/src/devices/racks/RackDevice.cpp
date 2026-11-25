@@ -89,6 +89,7 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
         };
         std::array<ActiveChain, dsp::ChainScratchBank::kMaxSlots> work{};
         int32_t nActive = 0;
+        int32_t nChainDevs = 0;
         bool allParallel = true;
         bool overflow = false;
 
@@ -111,13 +112,15 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
             const float rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
             if (nActive < dsp::ChainScratchBank::kMaxSlots) {
                 work[static_cast<size_t>(nActive++)] = {&c, lg, rg};
+                for (const auto& d : c.devices)
+                    if (d && !d->bypassed()) ++nChainDevs;
                 if (!chainSupportsParallel(c)) allParallel = false;
             } else {
                 overflow = true;
             }
         }
 
-        const bool fanOut = !overflow && nActive >= 2 && allParallel &&
+        const bool fanOut = !overflow && (nActive >= 5 || (nActive >= 3 && nChainDevs >= 3)) && allParallel &&
                             parallelArena_.slotCount() >= nActive && parallelArena_.capacityFrames() >= frames;
         if (fanOut) {
             dsp::RenderExecutor::parallelFor(nActive, true, [&](int32_t k) {

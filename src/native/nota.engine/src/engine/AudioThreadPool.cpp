@@ -258,19 +258,24 @@ void AudioThreadPool::workerLoop(int id) {
                 tTopDispatchPool_ = prevPool;
                 return;
             }
-            if (tryHelpSubTask()) {
+            if (hasSubTask() && tryHelpSubTask()) {
                 spins = 0;
                 continue;
             }
             if (spins < kSpinPauses) {
-                if (++spins == kSpinPauses) idleSince = Clock::now();
+                ++spins;
                 NOTA_CPU_PAUSE();
                 continue;
             }
-            if (const int64_t ns = lingerNs_.load(std::memory_order_relaxed);
-                ns > 0 && Clock::now() - idleSince < std::chrono::nanoseconds(ns)) {
-                NOTA_CPU_PAUSE();
-                continue;
+            if (const int64_t ns = lingerNs_.load(std::memory_order_relaxed); ns > 0) {
+                if (spins == kSpinPauses) idleSince = Clock::now();
+                ++spins;
+                // Sample the monotonic clock every 16 pauses instead of every spin iteration.
+                if (((spins - kSpinPauses) & 15) != 0 ||
+                    Clock::now() - idleSince < std::chrono::nanoseconds(ns)) {
+                    NOTA_CPU_PAUSE();
+                    continue;
+                }
             }
             park(seen);
             spins = 0;

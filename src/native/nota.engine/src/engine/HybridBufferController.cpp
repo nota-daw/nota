@@ -128,6 +128,7 @@ void HybridBufferController::setMode(HybridBufferMode m) {
 }
 
 void HybridBufferController::onGraphChanged(const std::shared_ptr<Graph>& g) {
+    if (mode() == HybridBufferMode::Off && !worker_.joinable()) return;
     if (g) ensureCapacity(g->tracks.size());
     {
         std::lock_guard<std::mutex> lk(mu_);

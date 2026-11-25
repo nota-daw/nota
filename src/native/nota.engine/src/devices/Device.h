@@ -63,7 +63,10 @@ class Device {
     // The rack behind this device, if it is one (specs/044): a virtual call where the audio
     // thread walks rack chains every block, instead of a dynamic_cast per device.
     virtual const RackCore* asRack() const { return nullptr; }
-    virtual ~Device() = default;
+    virtual ~Device() {
+        if (countedNeverSleep_.exchange(false, std::memory_order_acq_rel))
+            dsp::gNeverSleepDevices.fetch_sub(1, std::memory_order_relaxed);
+    }
 
     // Which device this is, across the copies an edit swaps into its slot (a rack fork, a
     // loaded state): a new object gets a new id, a copy is given its source's. Take retry
@@ -226,6 +229,9 @@ class Device {
     virtual void wake() {}
     virtual void setSleepMode(dsp::PluginSleepMode mode) {
         sleepMode_.store(mode, std::memory_order_release);
+        const bool never = (mode == dsp::PluginSleepMode::Never);
+        const bool prev = countedNeverSleep_.exchange(never, std::memory_order_acq_rel);
+        if (prev != never) dsp::gNeverSleepDevices.fetch_add(never ? 1 : -1, std::memory_order_relaxed);
         wake();
     }
     virtual dsp::PluginSleepMode sleepMode() const {
@@ -372,6 +378,7 @@ class Device {
   private:
     mutable dsp::DeviceTelemetry telemetry_;
     std::atomic<dsp::PluginSleepMode> sleepMode_{dsp::PluginSleepMode::Auto};
+    std::atomic<bool> countedNeverSleep_{false};
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
     int32_t presetTag_ = 0;

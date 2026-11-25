@@ -19,6 +19,17 @@ enum class PluginSleepMode : int32_t {
     Never = 1,
 };
 
+inline std::atomic<int32_t> gOpenPluginEditors{0};
+inline std::atomic<int32_t> gNeverSleepDevices{0};
+
+inline bool anyOpenPluginEditor() noexcept {
+    return gOpenPluginEditors.load(std::memory_order_relaxed) > 0;
+}
+
+inline bool anyNeverSleepDevice() noexcept {
+    return gNeverSleepDevices.load(std::memory_order_relaxed) > 0;
+}
+
 class SilenceGate {
   public:
     // Threshold aligned with SilenceDetector release (-100 dBFS).
@@ -28,6 +39,10 @@ class SilenceGate {
 
     explicit SilenceGate(uint64_t initialHangoverSamples = 11025) noexcept
         : hangoverSamples_(initialHangoverSamples) {}
+    ~SilenceGate() {
+        if (holdAwake_.exchange(false, std::memory_order_acq_rel))
+            gOpenPluginEditors.fetch_sub(1, std::memory_order_relaxed);
+    }
 
     void prepare(double sampleRate, double hangoverSeconds = kDefaultHangoverSeconds,
                  float releaseThreshold = kDefaultReleaseThreshold) noexcept {
@@ -81,7 +96,8 @@ class SilenceGate {
 
     // Transient UI keep-awake (e.g. open plugin editor window) that preserves SleepMode policy.
     void setHoldAwake(bool hold) noexcept {
-        holdAwake_.store(hold, std::memory_order_release);
+        const bool prev = holdAwake_.exchange(hold, std::memory_order_release);
+        if (prev != hold) gOpenPluginEditors.fetch_add(hold ? 1 : -1, std::memory_order_relaxed);
         if (hold) wake();
     }
     bool holdAwake() const noexcept { return holdAwake_.load(std::memory_order_acquire); }

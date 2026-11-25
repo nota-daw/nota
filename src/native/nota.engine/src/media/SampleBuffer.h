@@ -47,7 +47,26 @@ struct SampleBuffer {
 
     // Read one frame at integer position, up-mixing/down-mixing to stereo.
     // Out-of-range positions yield silence.
-    void readStereo(int64_t frame, float& l, float& r) const;
+    void readStereo(int64_t frame, float& l, float& r) const noexcept {
+        if (frame < 0 || frame >= frames || channels <= 0) {
+            l = 0.0f;
+            r = 0.0f;
+            return;
+        }
+        if (!samples.empty()) {
+            const float* p = &samples[static_cast<size_t>(frame) * static_cast<size_t>(channels)];
+            if (channels == 1) {
+                l = r = p[0];
+            } else {
+                l = p[0];
+                r = p[1];
+            }
+            return;
+        }
+        readStereoFromSource(frame, l, r);
+    }
+
+    void readStereoFromSource(int64_t frame, float& l, float& r) const;
 
     // Hot-path stereo read: inline memory indexing when resident; wait-free hinted lookup when streamed.
     void readStereoFast(

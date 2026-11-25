@@ -43,6 +43,10 @@ class DeviceTelemetry {
 
             const TelemetryMode mode = owner_.mode_.load(std::memory_order_relaxed);
             const uint32_t req = owner_.observeRequests_.load(std::memory_order_relaxed);
+            if (mode == TelemetryMode::OnDemand && owner_.rtLeaseFrames_ == 0 && req == owner_.lastSeenObserve_
+                && owner_.smoothedCpu_ == 0.0) {
+                return;
+            }
             if (req != owner_.lastSeenObserve_) {
                 owner_.lastSeenObserve_ = req;
                 owner_.rtLeaseFrames_ = leaseFramesFor(sampleRate_);

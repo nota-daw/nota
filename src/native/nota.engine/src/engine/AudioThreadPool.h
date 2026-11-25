@@ -186,7 +186,7 @@ class AudioThreadPool {
         // the RMWs), so all workers' buffer writes are visible once the count is reached.
         const uint64_t need = doneBase_ + (uint64_t)n;
         while (done_.load(std::memory_order_acquire) < need) {
-            if (!tryHelpSubTask()) NOTA_CPU_PAUSE();
+            if (!(hasSubTask() && tryHelpSubTask())) NOTA_CPU_PAUSE();
         }
         tTopDispatchPool_ = prevPool;
         lastEnd_ = std::chrono::steady_clock::now();
@@ -195,7 +195,11 @@ class AudioThreadPool {
   private:
     static constexpr uint64_t kSlots = 8;
     static constexpr int64_t kLingerGapNs = 200'000; // gaps below this count as back-to-back
-    static constexpr int64_t kMaxLingerNs = 100'000;
+    static constexpr int64_t kMaxLingerNs = 40'000;
+
+    bool hasSubTask() const noexcept {
+        return (subState_.load(std::memory_order_relaxed) & kSubActiveBit) != 0;
+    }
 
     template <typename F> static void callTrampoline(void* ctx, int worker, int index) {
         (*static_cast<F*>(ctx))(worker, index);

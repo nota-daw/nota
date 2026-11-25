@@ -171,6 +171,7 @@ void DrumRack::renderChunk(RackState& st, float* out, int32_t frames, int32_t ta
     };
     std::array<PadWork, dsp::ChainScratchBank::kMaxSlots> work{};
     int32_t nWork = 0;
+    int32_t nChainDevs = 0;
     bool allParallel = true;
     bool overflow = false;
 
@@ -187,13 +188,15 @@ void DrumRack::renderChunk(RackState& st, float* out, int32_t frames, int32_t ta
         }
         if (nWork < dsp::ChainScratchBank::kMaxSlots) {
             work[static_cast<size_t>(nWork++)] = {&c, tap, silent};
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed()) ++nChainDevs;
             if (!chainSupportsParallel(c)) allParallel = false;
         } else {
             overflow = true;
         }
     }
 
-    const bool fanOut = !overflow && nWork >= 2 && allParallel &&
+    const bool fanOut = !overflow && (nWork >= 5 || (nWork >= 3 && nChainDevs >= 3)) && allParallel &&
                         parallelArena_.slotCount() >= nWork && parallelArena_.capacityFrames() >= frames;
     if (fanOut) {
         dsp::RenderExecutor::parallelFor(nWork, true, [&](int32_t w) {

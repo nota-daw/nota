@@ -35,7 +35,10 @@ class Instrument {
     // The rack behind this device, if it is one (specs/044): a virtual call where the audio
     // thread walks rack chains every block, instead of a dynamic_cast per device.
     virtual const RackCore* asRack() const { return nullptr; }
-    virtual ~Instrument() = default;
+    virtual ~Instrument() {
+        if (countedNeverSleep_.exchange(false, std::memory_order_acq_rel))
+            dsp::gNeverSleepDevices.fetch_sub(1, std::memory_order_relaxed);
+    }
 
     virtual void setSampleRate(double sr) = 0;
 
@@ -274,6 +277,9 @@ class Instrument {
     virtual void wake() {}
     virtual void setSleepMode(dsp::PluginSleepMode mode) {
         sleepMode_.store(mode, std::memory_order_release);
+        const bool never = (mode == dsp::PluginSleepMode::Never);
+        const bool prev = countedNeverSleep_.exchange(never, std::memory_order_acq_rel);
+        if (prev != never) dsp::gNeverSleepDevices.fetch_add(never ? 1 : -1, std::memory_order_relaxed);
         wake();
     }
     virtual dsp::PluginSleepMode sleepMode() const {
@@ -448,6 +454,7 @@ class Instrument {
   private:
     mutable dsp::DeviceTelemetry telemetry_;
     std::atomic<dsp::PluginSleepMode> sleepMode_{dsp::PluginSleepMode::Auto};
+    std::atomic<bool> countedNeverSleep_{false};
     static uint64_t nextUid() {
         static std::atomic<uint64_t> next{1};
         return next.fetch_add(1, std::memory_order_relaxed);

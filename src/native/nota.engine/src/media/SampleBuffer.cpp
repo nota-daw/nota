@@ -14,21 +14,7 @@ int64_t SampleBuffer::nextId() {
     return counter.fetch_add(1, std::memory_order_relaxed);
 }
 
-void SampleBuffer::readStereo(int64_t frame, float& l, float& r) const {
-    if (frame < 0 || frame >= frames || channels <= 0) {
-        l = r = 0.0f;
-        return;
-    }
-    if (!samples.empty()) {
-        const float* p = &samples[static_cast<size_t>(frame) * static_cast<size_t>(channels)];
-        if (channels == 1) {
-            l = r = p[0];
-        } else {
-            l = p[0];
-            r = p[1];
-        }
-        return;
-    }
+void SampleBuffer::readStereoFromSource(int64_t frame, float& l, float& r) const {
     if (source) {
         source->readStereo(frame, l, r);
         return;

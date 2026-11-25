@@ -45,6 +45,7 @@ ChainRest chainRest(const Track& t) noexcept {
 }
 
 bool trackRequiresActiveProcessing(const Track& t) noexcept {
+    if (!dsp::anyOpenPluginEditor() && !dsp::anyNeverSleepDevice()) return false;
     if (t.instrument && !t.instrument->bypassed() && t.instrument->requiresActiveProcessing()) return true;
     for (const auto& d : t.devices)
         if (d && !d->bypassed() && d->requiresActiveProcessing()) return true;
@@ -52,6 +53,7 @@ bool trackRequiresActiveProcessing(const Track& t) noexcept {
 }
 
 bool trackHasOpenEditor(const Track& t) noexcept {
+    if (!dsp::anyOpenPluginEditor()) return false;
     if (t.instrument && !t.instrument->bypassed()) {
         if (t.instrument->editorOpen()) return true;
         if (const auto* r = t.instrument->asRack(); r && r->chainsHaveOpenEditor(true)) return true;
@@ -766,7 +768,9 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
         }
     }
 
-    const bool allowSub = (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
+    // Allow nested rack/synth sub-parallelism only for single-leaf waves;
+    // multi-track waves already fan out across workers and would contend on the single SubSlot.
+    const bool allowSub = (m == 1) && (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
     const dsp::RenderExecutor::ScopedHost execScope(&ctx.execHost, allowSub);
 
     int64_t poolPhaseNs = 0;

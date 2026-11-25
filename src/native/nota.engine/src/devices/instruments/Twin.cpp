@@ -1438,9 +1438,10 @@ void Twin::renderSegment(float* out, int n) {
             if (V.pendNote >= 0) anyPending = true;
         }
         sounding = partCount > 0;
-        if (!anyPending && partCount >= 6 && n >= 16 && voiceScratch_.capacityFrames() >= n * os) {
+        if (!anyPending && partCount >= 6 && n >= 32 && voiceScratch_.capacityFrames() >= n * os) {
             std::array<dsp::PolyVoiceBatchRange, dsp::PolyVoiceScheduler::kMaxBatches> batches{};
-            const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(partCount, 4, batches);
+            const int32_t maxBatches = (n < 64 && partCount <= 12) ? 3 : 4;
+            const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(partCount, maxBatches, batches);
             dsp::RenderExecutor::parallelFor(batchesN, true, [&](int32_t b) {
                 voiceScratch_.clearBatch(b, n * os);
                 float* bL = voiceScratch_.left(b);

@@ -299,11 +299,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(nota_engine PRIVATE -fno-math-errno)
 endif()
 
-# Release-mode IPO (ThinLTO on Clang) for cross-TU inlining across DSP and ABI boundaries.
-include(CheckIPOSupported)
-check_ipo_supported(RESULT _nota_ipo_ok OUTPUT _nota_ipo_err LANGUAGES C CXX)
-if(_nota_ipo_ok)
-    set_property(TARGET nota_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+# Release-mode IPO (ThinLTO on Clang, LTCG on MSVC) for cross-TU inlining across DSP and ABI boundaries.
+# GCC's monolithic -flto hurts instruction counts across large polyphonic synth loops on Linux.
+if(MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT _nota_ipo_ok OUTPUT _nota_ipo_err LANGUAGES C CXX)
+    if(_nota_ipo_ok)
+        set_property(TARGET nota_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    endif()
 endif()
 
 # Output a stable name: libnota_engine.dylib / nota_engine.dll (consumed by P/Invoke).
