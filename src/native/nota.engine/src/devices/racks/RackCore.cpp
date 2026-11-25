@@ -124,6 +124,7 @@ void RackCore::forkFrom(const RackCore& o) {
     thru_.store(o.thru_.load(r), r);
     sampleRate_ = o.sampleRate_;
     maxBlock_ = o.maxBlock_;
+    inheritRackRuntime(o);
 }
 
 bool RackCore::setChainName(int32_t c, const std::string& name) {

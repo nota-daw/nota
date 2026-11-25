@@ -30,6 +30,38 @@ static float MonoRms(float[] buf)
 }
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
+if (args.Contains("--issue-1088"))
+{
+    foreach (var (ok, label) in CeilingTruePeakTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+if (args.Contains("--issue-1084"))
+{
+    using var e = new NotaEngine();
+    Check(e.RackDeviceSelfTest(), "#1084 Rack parallel and dry latency");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Contains("--issue-1071"))
+{
+    using var e = new NotaEngine();
+    int t = e.AddInstrumentTrack();
+    e.AddMidiClip(t, 0, 16);
+    int lane = e.AddAutomationLane(t, Nota.Application.AutomationTarget.Volume, -1, -1);
+    e.SetAutomationPoints(t, lane, new[] { new Nota.Application.AutomationPoint(0, 0), new Nota.Application.AutomationPoint(8, 1), new Nota.Application.AutomationPoint(12, 0.1f) });
+    e.InsertTime(6, 4, duplicate: true);
+    e.InsertTime(8, 4, duplicate: true);
+    var p = e.GetAutomationPoints(t, lane);
+    float At(double b)
+    {
+        for (int i = 1; i < p.Length; ++i)
+            if (b <= p[i].Beat)
+                return (float)(p[i - 1].Value + (p[i].Value - p[i - 1].Value) *
+                    Nota.Application.Editing.AutomationCurve.Shape((b - p[i - 1].Beat) / (p[i].Beat - p[i - 1].Beat), p[i - 1].Curve));
+        return p[^1].Value;
+    }
+    Check(Math.Abs(At(6.5) - At(10.5)) < 1e-4, $"#1071 repeated duplicate ({At(6.5)} / {At(10.5)})");
+    return failures == 0 ? 0 : 1;
+}
 if (args.Contains("--tempo"))
 {
     using (var tempoLane = new NotaEngine())
@@ -5887,6 +5919,7 @@ Console.WriteLine("-- Nota Dynamic EQ-8 --");
 
 // ============================ Nota Ceiling =================================
 Console.WriteLine("-- Nota Ceiling --");
+foreach (var (ok, label) in CeilingTruePeakTests.Run()) Check(ok, label);
 {
     using var le = new NotaEngine();
     le.SetBpm(120); le.SetTimeSignature(4, 4);
@@ -9931,6 +9964,33 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
         Check(!File.Exists(encTmp), "partial file is deletable after discard");
     }
     finally { if (File.Exists(encTmp)) File.Delete(encTmp); }
+
+    foreach (int sampleRate in new[] { 44100, 48000 })
+    foreach (int bitrate in new[] { 128, 192, 256, 320 })
+    {
+        string gapless = Path.Combine(Path.GetTempPath(), $"nota-gapless-{Guid.NewGuid():N}.mp3");
+        try
+        {
+            var impulse = new float[sampleRate * 2];
+            impulse[6000 * 2] = impulse[6000 * 2 + 1] = 0.8f;
+            using (var enc = new NativeEncoder(gapless, sampleRate, 2, bitrate))
+                enc.WriteFrames(impulse, sampleRate);
+            var decoded = NotaEngine.DecodeMono(gapless, 10, out _);
+            Check(decoded is not null && decoded.Length == sampleRate, $"MP3 {sampleRate}/{bitrate} gapless length ({decoded?.Length})");
+            using var importer = new NotaEngine();
+            using var imported = importer.OpenAudioImport(gapless);
+            Check(imported is not null && imported.TotalFrames == sampleRate,
+                  $"MP3 {sampleRate}/{bitrate} streaming import length ({imported?.TotalFrames})");
+            if (decoded is not null)
+            {
+                int peak = 0;
+                for (int i = 1; i < decoded.Length; i++)
+                    if (Math.Abs(decoded[i]) > Math.Abs(decoded[peak])) peak = i;
+                Check(peak == 6000, $"MP3 {sampleRate}/{bitrate} impulse stays aligned ({peak})");
+            }
+        }
+        finally { if (File.Exists(gapless)) File.Delete(gapless); }
+    }
 }
 
 // -- M7: FLAC master export — lossless vs WAV (deterministic audio clip) -----
@@ -13914,6 +13974,29 @@ Console.WriteLine("-- insert time --");
         }
         Check(worst < 1e-4f, $"{(dup ? "duplicate time" : "insert silence")}: a curved segment keeps its shape on both sides of the gap (off by {worst:0.0000})");
     }
+    foreach (float curve in new[] { 0f, -0.6f })
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.AddMidiClip(t, 0, 16);
+        int lane = e.AddAutomationLane(t, AutomationTarget.Volume, -1, -1);
+        e.SetAutomationPoints(t, lane, new[] { new Nota.Application.AutomationPoint(0, 0, curve), P(8, 1), P(12, 0.1f) });
+        e.InsertTime(6, 4, duplicate: true);
+        e.InsertTime(8, 4, duplicate: true);
+        var points = e.GetAutomationPoints(t, lane);
+        static float AtStep(Nota.Application.AutomationPoint[] p, double beat)
+        {
+            for (int i = 1; i < p.Length; ++i)
+                if (beat <= p[i].Beat)
+                    return (float)(p[i - 1].Value + (p[i].Value - p[i - 1].Value) *
+                        Nota.Application.Editing.AutomationCurve.Shape((beat - p[i - 1].Beat) / (p[i].Beat - p[i - 1].Beat), p[i - 1].Curve));
+            return p[^1].Value;
+        }
+        Check(Math.Abs(AtStep(points, 6.5) - AtStep(points, 10.5)) < 1e-4,
+              $"#1071 repeated duplicate preserves step, curve {curve} ({AtStep(points, 6.5)} / {AtStep(points, 10.5)})");
+        Check(e.Undo() && e.Redo() && e.GetAutomationPoints(t, lane).SequenceEqual(points),
+              $"#1071 repeated duplicate undo/redo, curve {curve}");
+    }
 }
 
 // ============ track/clip names + colour + track clipboard ==================
@@ -16004,6 +16087,23 @@ Console.WriteLine("-- background audio import --");
         ie.SetBpm(120); ie.SetTimeSignature(4, 4);
 
         Check(ie.OpenAudioImport(Path.Combine(dir, "missing.wav")) is null, "import: unreadable file → null");
+
+        string waveAlias = Path.Combine(dir, "swell.WAVE");
+        File.Copy(swell, waveAlias);
+        using (var aliasJob = ie.OpenAudioImport(waveAlias))
+        {
+            Check(aliasJob is not null && aliasJob.TotalFrames == 44100 * 30 && aliasJob.Channels == 2,
+                  "import: .WAVE uses the WAV decoder");
+            if (aliasJob is not null)
+            {
+                while (aliasJob.Step(1 << 16) == 1) { }
+                Check(aliasJob.IsDone && aliasJob.DecodedFrames == aliasJob.TotalFrames,
+                      "import: .WAVE decodes to completion");
+            }
+        }
+        string invalidWave = Path.Combine(dir, "invalid.wave");
+        File.WriteAllText(invalidWave, "not a WAV file");
+        Check(ie.OpenAudioImport(invalidWave) is null, "import: invalid .wave rejected");
 
         using (var job = ie.OpenAudioImport(swell)!)
         {

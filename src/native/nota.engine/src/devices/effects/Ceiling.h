@@ -165,6 +165,11 @@ class Ceiling : public Device {
     float b0_[2] = {}, b1_[2] = {}, b2_[2] = {}, a1_[2] = {}, a2_[2] = {};
     float z1_[2][2] = {}, z2_[2][2] = {};
     dsp::TruePeakMeter tpOut_[2], tpDet_[2];
+    dsp::TruePeakMeter tpGuard_[2];
+    float tpGuardPeak_ = 0.0f;
+    int tpGuardHold_ = 0;
+    bool tpGuardActive_ = false;
+    bool tpFilteredActive_ = false;
     float hb0_ = 1.0f, hb1_ = 0.0f, hb2_ = 0.0f, ha1_ = 0.0f, ha2_ = 0.0f, hpHz_ = -1.0f;
     std::array<std::array<float, 2>, 4> hpZ_{};
     // Auto-sleep hangover.

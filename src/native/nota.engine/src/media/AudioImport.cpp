@@ -61,7 +61,7 @@ std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, do
     uint32_t channels = 0;
     double rate = 0.0;
     uint64_t total = 0;
-    if (ext == "wav") {
+    if (ext == "wav" || ext == "wave") {
         dec->kind = Decoder::Kind::Wav;
 #ifdef _WIN32
         if (!drwav_init_file_w(&dec->wav, widePath(path).c_str(), nullptr)) return nullptr; // #974

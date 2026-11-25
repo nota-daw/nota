@@ -53,6 +53,11 @@ void Ceiling::setSampleRate(double sr, int32_t /*maxBlock*/) {
     lraHist_.assign(kHistBins, 0.0);
     for (auto& m : tpOut_) m.reset();
     for (auto& m : tpDet_) m.reset();
+    for (auto& m : tpGuard_) m.reset();
+    tpGuardPeak_ = 0.0f;
+    tpGuardHold_ = 0;
+    tpGuardActive_ = false;
+    tpFilteredActive_ = false;
     for (auto& s : hpZ_) s[0] = s[1] = 0.0f;
     hpHz_ = -1.0f;
     env_ = 1.0f;
@@ -72,7 +77,7 @@ void Ceiling::wake() {
 
 int Ceiling::lookaheadSamples() const {
     int la = (int)std::lround(get(Lookahead) * 0.001 * sr_);
-    if (get(TruePeak) > 0.5f) la = std::max(la, kTpDelay);
+    if (get(TruePeak) > 0.5f) la = std::max(la, 2 * kTpDelay);
     return std::clamp(la, 0, laMax_ - 1);
 }
 
@@ -168,6 +173,13 @@ void Ceiling::process(float* buf, int32_t frames) {
     const float link = std::clamp(get(StereoLink) * 0.01f, 0.0f, 1.0f);
     const float soft = chSoft[ch];
     const bool tpMode = get(TruePeak) > 0.5f;
+    if (tpMode != tpGuardActive_) {
+        tpGuardActive_ = tpMode;
+        tpGuardPeak_ = 0.0f;
+        tpGuardHold_ = 0;
+        tpGuard_[0].reset();
+        tpGuard_[1].reset();
+    }
     const bool delta = get(Delta) > 0.5f;
     const int la = lookaheadSamples();
 
@@ -175,6 +187,12 @@ void Ceiling::process(float* buf, int32_t frames) {
     const float hpHz = std::clamp(get(ScHp), 20.0f, 500.0f);
     const bool hpOn = hpHz > 20.5f;
     if (hpOn && std::fabs(hpHz - hpHz_) > 1e-3f) computeHp(hpHz);
+    const bool filteredDetector = tpMode && hpOn;
+    if (filteredDetector != tpFilteredActive_) {
+        tpFilteredActive_ = filteredDetector;
+        tpDet_[0].reset();
+        tpDet_[1].reset();
+    }
 
     const double atkC = std::exp(-1.0 / (std::max(0.05f, chAtk[ch]) * 0.001 * sr));
     double relC = std::exp(-1.0 / (relMs * 0.001 * sr));
@@ -241,8 +259,12 @@ void Ceiling::process(float* buf, int32_t frames) {
             xl = hp(0, xl);
             xr = hp(1, xr);
         }
-        float dL = tpMode ? tpDetect(0, xl) : std::fabs(xl);
-        float dR = tpMode ? tpDetect(1, xr) : std::fabs(xr);
+        const float guardL = tpMode ? tpGuard_[0].detect(l) : 0.0f;
+        const float guardR = tpMode ? tpGuard_[1].detect(r) : 0.0f;
+        // With the key high-pass off, the musical and safety detectors see the
+        // same input, so one interpolation serves both paths.
+        float dL = tpMode ? (hpOn ? tpDetect(0, xl) : guardL) : std::fabs(xl);
+        float dR = tpMode ? (hpOn ? tpDetect(1, xr) : guardR) : std::fabs(xr);
         float det = std::max(dL, dR);
         if (sc) {
             float kl = sc[i * 2] * scGain, kr = sc[i * 2 + 1] * scGain;
@@ -262,9 +284,6 @@ void Ceiling::process(float* buf, int32_t frames) {
             env_ = (float)(relC * env_ + (1.0 - relC) * det);
 
         float gain = env_ > ceilLin ? ceilLin / env_ : 1.0f; // linked target gain
-        grPrev_ = gain < 1.0f ? -20.0f * std::log10(std::max(1e-6f, gain)) : 0.0f;
-        if (grPrev_ > maxGr) maxGr = grPrev_;
-
         // Stereo link: 100 % = one gain for both; less = ease each channel toward
         // its own headroom so a hard pan doesn't pull the other side down.
         float gL = gain, gR = gain;
@@ -274,6 +293,24 @@ void Ceiling::process(float* buf, int32_t frames) {
             gL = link * gain + (1.0f - link) * std::min(gain < 1.0f ? gain : 1.0f, tL);
             gR = link * gain + (1.0f - link) * std::min(gain < 1.0f ? gain : 1.0f, tR);
         }
+
+        // A fast unfiltered safety detector protects short inter-sample peaks even
+        // when the musical detector has a slow attack or a filtered sidechain.
+        // Hold its maximum over the delay and reconstruction window, so the same
+        // attenuation covers all samples contributing to the detected peak.
+        if (tpMode) {
+            const float guard = std::max(guardL, guardR);
+            tpGuardPeak_ = std::max(tpGuardPeak_, guard);
+            if (guard > ceilLin) tpGuardHold_ = la + 2 * kTpDelay;
+            else if (tpGuardHold_ > 0) --tpGuardHold_;
+            else tpGuardPeak_ *= static_cast<float>(relC);
+            const float safe = tpGuardPeak_ > ceilLin ? ceilLin / tpGuardPeak_ : 1.0f;
+            gL = std::min(gL, safe);
+            gR = std::min(gR, safe);
+        }
+        const float appliedGain = std::min(gL, gR);
+        grPrev_ = appliedGain < 1.0f ? -20.0f * std::log10(std::max(1e-6f, appliedGain)) : 0.0f;
+        if (grPrev_ > maxGr) maxGr = grPrev_;
 
         // Look-ahead: apply the gain (already ducked) to the delayed sample.
         laBuf_[laW_ * 2] = l;

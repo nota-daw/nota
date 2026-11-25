@@ -258,9 +258,9 @@ public partial class MainWindow
     private bool _panLawLegacy;
 
     /// <summary>Loads a .nota bundle and applies it to the engine (menu + browser). M7-4b.</summary>
-    private void OpenProject(string dir)
+    private bool OpenProject(string dir)
     {
-        if (_vm is null) return;
+        if (_vm is null) return false;
         _warpBuildGen++;
         Engine.StopPreview();
         try
@@ -304,11 +304,13 @@ public partial class MainWindow
             if (result.TempoClamped) _vm.StatusText = Loc.T("project.tempo_clamped");   // specs/099, once: saving drops it
             _ = BuildWarpCachesAsync();   // fill the deferred warp caches in the background
             _ = OfferMissingPluginsAsync(dir, result.MissingPlugins);
+            return true;
         }
         catch (Exception ex)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Open project failed", ex);
             _vm.StatusText = Loc.F("main.files.open_failed", ex.Message);
+            return false;
         }
     }
 

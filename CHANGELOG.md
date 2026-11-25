@@ -22,6 +22,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Duplicate Time preserves automation steps and MIDI controller ramps** (#1071, #1072).
+- **MIDI clip controller ramps play at small audio buffer sizes** (#1073).
+- **MP3 exports keep their timing and duration on gapless-aware import** (#1074).
+- **Leaving a project notices plug-in state changes** (#1055).
+- **A failed recovery keeps its snapshot for another attempt** (#1035).
+- **WAV files named `.wave` import and preview** (#1003).
+- **Shift-modified keys stay with hosted plug-in editors** (#989).
+- **Audio Effect Rack aligns its parallel chains and dry path** when latency compensation is on (#1084).
+- **Nota Ceiling catches short inter-sample peaks** with True Peak enabled (#1088).
+
 ## [0.61.1] — 2026-11-24
 
 ### Added

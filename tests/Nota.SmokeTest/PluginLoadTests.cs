@@ -238,6 +238,15 @@ internal static class PluginLoadTests
             e.SetPluginState(t, frozen, blob);
             yield return (e.GetPluginState(t, frozen).SequenceEqual(blob) && e.TrackDevicePluginId(t, frozen) == id,
                 "a device that couldn't load keeps its identity and saved state byte for byte");
+            var store = new ProjectStore();
+            var transport = new TransportState(120, 1, false, false);
+            string savedFingerprint = store.Fingerprint(e, transport);
+            yield return (store.Fingerprint(e, transport) == savedFingerprint,
+                "#1055 unchanged plug-in state keeps the fingerprint stable");
+            e.SetPluginState(t, frozen, new byte[] { 7, 0, 255, 1, 42, 10 });
+            yield return (store.Fingerprint(e, transport) != savedFingerprint,
+                "#1055 a state-only plug-in edit changes the project fingerprint");
+            e.SetPluginState(t, frozen, blob);
 
             // ---- a binary that blocks while it loads (US1) --------------------------------
             WarmUpInterop();   // after the freeze guard: the first engine reads the leftover record

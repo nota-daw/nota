@@ -22,6 +22,7 @@ Builds keep the order given on the command line (else CSV order). Stdlib only.
 import csv
 import math
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -33,7 +34,7 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]
 SURFACE, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
-SCEN_NAME = {"audio": "audio", "inst": "synth", "keyed": "sidechained"}
+SCEN_NAME = {"audio": "audio", "inst": "synth", "keyed": "sidechained", "rack": "effect rack", "ceiling": "true-peak limiter"}
 
 
 def group_name(scenario, tracks, block="512", mode=""):
@@ -80,7 +81,7 @@ def fmt(v):
 
 def bar_chart(path, title, subtitle, unit, groups, labels, names):
     """groups: [(group label, {label: value})]."""
-    W, H = 960, 440
+    W, H = max(960, 88 + len(groups) * 200), 440
     left, right, top, bottom = 64, 24, 96, 56
     pw, ph = W - left - right, H - top - bottom
     peak = max((v for _, vals in groups for v in vals.values() if v is not None), default=1) * 1.08
@@ -137,6 +138,10 @@ def to_png(svg, w=960, h=440, scale=2):
                                shutil.which("google-chrome") or "", shutil.which("chromium") or "")
                    if c and os.path.exists(c)), None)
     if chrome:
+        with open(svg) as source:
+            size = re.search(r'width="(\d+)" height="(\d+)"', source.readline())
+        if size:
+            w, h = map(int, size.groups())
         subprocess.run([chrome, "--headless", "--disable-gpu", f"--window-size={w},{h}",
                         f"--force-device-scale-factor={scale}", f"--screenshot={png}", "file://" + os.path.abspath(svg)],
                        capture_output=True)

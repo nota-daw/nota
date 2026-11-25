@@ -108,7 +108,7 @@ bool PluginEditorWindow::keyPressed(const juce::KeyPress& key) {
     return false; // the NSEvent monitor has the keys on macOS
 #else
     const auto mods = key.getModifiers();
-    if (mods.isCommandDown() || mods.isCtrlDown() || mods.isAltDown()) return false;
+    if (mods.isCommandDown() || mods.isCtrlDown() || mods.isAltDown() || mods.isShiftDown()) return false;
     const int32_t ch = editorKeyCode(key);
     if (!editorkeys::claims(ch)) return false;
     if (held_.count(key.getKeyCode()) == 0) {
@@ -167,7 +167,7 @@ void PluginEditorWindow::installKeyMonitor() {
                                            return nil;
                                        }
                                        if (ev.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
-                                                                  NSEventModifierFlagOption))
+                                                                  NSEventModifierFlagOption | NSEventModifierFlagShift))
                                            return ev; // a shortcut chord, not a note
                                        if (takesTyping(ev.window.firstResponder))
                                            return ev; // typing into the plug-in's own field

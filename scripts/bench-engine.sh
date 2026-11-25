@@ -60,7 +60,12 @@ scenarios=(
     "inst 8 rt" "inst 32 rt"
     "audio 64 rt 128" "audio 128 rt 64" "audio 192 rt 64"
     "keyed 8 offline" "keyed 32 offline" "keyed 16 export" "keyed 8 rt" "keyed 32 rt"
+    "rack 8 offline" "rack 8 rt" "ceiling 8 offline" "ceiling 8 rt"
 )
+# Optional semicolon-separated subset for a focused rerun, e.g. after a DSP change.
+if [ -n "${NOTA_BENCH_SCENARIOS:-}" ]; then
+    IFS=';' read -r -a scenarios <<< "$NOTA_BENCH_SCENARIOS"
+fi
 
 {
     echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"

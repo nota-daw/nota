@@ -1482,7 +1482,6 @@ std::vector<AutomationPoint> laneSliceExact(const AutomationLane& lane, double a
     appendLaneFrom(out, lane, a, b, -a);
     for (const auto& q : lane.points)
         if (q.beat > a + eps && q.beat < b - eps) {
-            if (!out.empty() && q.beat - a <= out.back().beat + eps) continue;
             out.push_back({q.beat - a, q.value, AutomationLane::pieceCurve(lane.points, q.beat, b)});
         }
     out.push_back({b - a, lane.valueAt(b), 0.0f});

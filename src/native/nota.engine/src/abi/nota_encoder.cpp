@@ -189,6 +189,13 @@ NOTA_API NotaResult nota_encoder_close(NotaEncoder* enc) {
             int n = lame_encode_flush(enc->gfp, enc->mp3Buf.data(), (int)enc->mp3Buf.size());
             if (n > 0 && std::fwrite(enc->mp3Buf.data(), 1, (size_t)n, enc->file) != (size_t)n) n = -1;
             if (n < 0) result = NOTA_ERR_UNKNOWN;
+            if (result == NOTA_OK) {
+                const size_t tagSize = lame_get_lametag_frame(enc->gfp, enc->mp3Buf.data(), enc->mp3Buf.size());
+                if (tagSize > enc->mp3Buf.size() ||
+                    (tagSize > 0 && (std::fseek(enc->file, 0, SEEK_SET) != 0 ||
+                                     std::fwrite(enc->mp3Buf.data(), 1, tagSize, enc->file) != tagSize)))
+                    result = NOTA_ERR_UNKNOWN;
+            }
         }
         if (enc->file && std::fclose(enc->file) != 0 && result == NOTA_OK) result = NOTA_ERR_UNKNOWN;
         enc->file = nullptr;

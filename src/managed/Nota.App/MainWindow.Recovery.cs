@@ -22,6 +22,7 @@ namespace Nota.App;
 public partial class MainWindow
 {
     // --- crash recovery (M7-7) ---------------------------------------------
+    private bool _recoveryOpenFailed;
 
     /// <summary>Current transport values as a persistence snapshot.</summary>
     private TransportState TransportSnapshot()
@@ -34,6 +35,7 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         NoteDirtySince();
+        if (_recoveryOpenFailed) return;
         try { _recovery.Autosave(Engine, TransportSnapshot(), _projectPath); }
         catch { /* autosave is best-effort — never disrupt the session */ }
     }
@@ -57,7 +59,7 @@ public partial class MainWindow
         ShutdownGamepad();       // stop the IOKit pad thread before the engine dies
         ShutdownRemote();        // phones leave (their held notes released) before the engine dies
         _controllers?.ReleaseAll();   // controllers get their release messages (DAW mode off) (specs/051)
-        _recovery.EndSessionClean();
+        if (!_recoveryOpenFailed) _recovery.EndSessionClean();
     }
 
     // Save / Don't Save / Cancel before quitting with unsaved edits. Save that is cancelled
@@ -137,14 +139,23 @@ public partial class MainWindow
 
     /// <summary>Load the crash snapshot into the engine and point the next Save at the real
     /// bundle. Clears the snapshot so it isn't offered again.</summary>
-    private void ApplyPendingRecovery(RecoveryInfo info)
+    private bool ApplyPendingRecovery(RecoveryInfo info)
     {
-        OpenProject(info.BundlePath);
+        string? previousPath = _projectPath;
+        if (!OpenProject(info.BundlePath))
+        {
+            _recoveryOpenFailed = true; // do not overwrite the snapshot or hide it next launch
+            _projectPath = previousPath;
+            UpdateWindowTitle();
+            return false;
+        }
+        _recoveryOpenFailed = false;
         _projectPath = info.OriginalPath;   // next Save targets the real bundle (null → prompt)
         UpdateWindowTitle();
         _cleanFingerprint = null;           // recovered work is unsaved until the user saves it
         if (_vm is not null) _vm.StatusText = Loc.T("main.recovery.recovered_unsaved_work");
         try { _recovery.ClearRecovery(); } catch { }
+        return true;
     }
 
     // Fallback path when the welcome launcher is disabled: a modal Recover / Discard dialog.
