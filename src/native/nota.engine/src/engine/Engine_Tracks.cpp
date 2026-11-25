@@ -94,7 +94,7 @@ bool Engine::setClipGain(int32_t trackId, int32_t clipIndex, float gain) {
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    (*audioClipRef(*nt, clipIndex)).gain = gain < 0.0f ? 0.0f : gain;
+    (*audioClipWrite(*nt, clipIndex)).gain = gain < 0.0f ? 0.0f : gain;
     syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
@@ -126,7 +126,7 @@ bool Engine::setClipAdsr(int32_t trackId, int32_t clipIndex, const NotaClipAdsr&
     a.release = finite(in.release_beats);
     a.sustain = std::isfinite(in.sustain) ? std::clamp(in.sustain, 0.0f, 1.0f) : 1.0f;
     auto nt = cloneTrack(*old);
-    (*audioClipRef(*nt, clipIndex)).adsr = a;
+    (*audioClipWrite(*nt, clipIndex)).adsr = a;
     syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
@@ -140,10 +140,10 @@ bool Engine::setClipActive(int32_t trackId, int32_t clipIndex, bool active) {
     auto nt = cloneTrack(*old);
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return false;
-        nt->midiClips[clipIndex].active = active;
+        nt->midiClips.write()[clipIndex].active = active;
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
-        nt->clips[clipIndex].active = active;
+        nt->clips.write()[clipIndex].active = active;
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -534,7 +534,7 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
             auto old = findTrackAuthoring(wb_.trackId);
             if (old && audioClipRef(*old, wb_.clipIndex)) {
                 auto nt = cloneTrack(*old);
-                auto* built = audioClipRef(*nt, wb_.clipIndex);
+                auto* built = audioClipWrite(*nt, wb_.clipIndex);
                 if (wb_.tempoMap) {
                     built->tempoWarp = std::make_shared<const AudioClip::TempoWarp>(AudioClip::TempoWarp{
                         std::const_pointer_cast<const WarpCache>(wb_.cache), wb_.tempoMap, wb_.tempoStartBeat, wb_.reverseSource});
@@ -581,7 +581,7 @@ int64_t Engine::warpBuildPoll() {
         if (wj_->thread.joinable()) wj_->thread.join();
         if (valid && !wj_->cancel.load(std::memory_order_relaxed)) {
             auto nt = cloneTrack(*findTrackAuthoring(wj_->trackId));
-            auto* built = audioClipRef(*nt, wj_->clipIndex);
+            auto* built = audioClipWrite(*nt, wj_->clipIndex);
             if (wj_->tempoMap) {
                 built->tempoWarp = std::make_shared<const AudioClip::TempoWarp>(AudioClip::TempoWarp{
                     std::const_pointer_cast<const WarpCache>(wj_->cache), wj_->tempoMap, wj_->tempoStartBeat, wj_->reverseSource});
@@ -653,10 +653,20 @@ void Engine::reconfigureAllWarpStreams(double spb, double devSR) {
             continue;
         }
         auto nt = cloneTrack(*t);
-        for (auto& c : nt->clips)
-            if (c.warpEnabled && c.sample) configureClipWarp(c, spb, devSR);
-        for (auto& sl : nt->sessionSlots) // session audio slots warp like clips (S-06)
-            if (sl.hasClip && sl.audio.warpEnabled && sl.audio.sample) configureClipWarp(sl.audio, spb, devSR);
+        bool hasWarpedClip = false;
+        for (const auto& c : nt->clips)
+            if (c.warpEnabled && c.sample) { hasWarpedClip = true; break; }
+        if (hasWarpedClip) {
+            for (auto& c : nt->clips.write())
+                if (c.warpEnabled && c.sample) configureClipWarp(c, spb, devSR);
+        }
+        bool hasWarpedSlot = false;
+        for (const auto& sl : nt->sessionSlots)
+            if (sl.hasClip && sl.audio.warpEnabled && sl.audio.sample) { hasWarpedSlot = true; break; }
+        if (hasWarpedSlot) {
+            for (auto& sl : nt->sessionSlots.write()) // session audio slots warp like clips (S-06)
+                if (sl.hasClip && sl.audio.warpEnabled && sl.audio.sample) configureClipWarp(sl.audio, spb, devSR);
+        }
         g->tracks.push_back(std::move(nt));
         any = true;
     }
@@ -668,8 +678,9 @@ bool Engine::setClipPitch(int32_t trackId, int32_t clipIndex, float semitones) {
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    (*audioClipRef(*nt, clipIndex)).pitchSemitones = semitones;
-    configureClipWarp((*audioClipRef(*nt, clipIndex)), transport_.samplesPerBeat(),
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
+    c.pitchSemitones = semitones;
+    configureClipWarp(c, transport_.samplesPerBeat(),
         transport_.sampleRate()); // pitch is baked into the warp
     syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
@@ -684,7 +695,7 @@ bool Engine::setClipReverse(int32_t trackId, int32_t clipIndex, bool reversed) {
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    (*audioClipRef(*nt, clipIndex)).reversed = reversed;
+    (*audioClipWrite(*nt, clipIndex)).reversed = reversed;
     syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
     return true;
@@ -695,7 +706,7 @@ bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     // Off is a bypass (#310): the markers stay on the clip, stamped with the region they
@@ -723,7 +734,7 @@ double Engine::autoWarpClip(int32_t trackId, int32_t clipIndex, double knownBpm)
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
     const double bpm = seedAutoWarp(c, spb, devSR, knownBpm);
     if (bpm <= 0.0) return 0.0; // detection failed: leave the clip unchanged
@@ -741,7 +752,7 @@ double Engine::beatWarpClip(int32_t trackId, int32_t clipIndex) {
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
 
     // Establish the beat grid from the detected tempo (rounded musical length).
@@ -790,7 +801,7 @@ bool Engine::setClipWarpLength(int32_t trackId, int32_t clipIndex, double beats)
     if (!audioClipRef(*old, clipIndex)) return false;
     if (beats < 0.25) beats = 0.25;
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     c.warpBeats = beats;
     // The end marker owns the total length; keep interior markers within it.
     if (!c.warpMarkers.empty()) {
@@ -812,7 +823,7 @@ bool Engine::setClipWarpMarkers(
     if (!audioClipRef(*old, clipIndex)) return false;
     if (count < 2 || !srcFrames || !beats) return false;
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     c.warpMarkers.clear();
     c.warpMarkers.reserve(count);
     for (int32_t i = 0; i < count; ++i) c.warpMarkers.push_back({srcFrames[i], beats[i]});
@@ -841,7 +852,7 @@ bool Engine::setClipWarpTrim(int32_t trackId, int32_t clipIndex, double playStar
     double ps = std::clamp(playStart, 0.0, std::max(0.0, oc.warpBeats - kMinBeat));
     double pe = std::clamp(playEnd, ps + kMinBeat, oc.warpBeats);
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     c.warpPlayStart = ps;
     c.warpPlayEnd = pe;
     configureClipWarp(c, transport_.samplesPerBeat(), transport_.sampleRate()); // window is baked into the cache
@@ -881,7 +892,7 @@ int32_t Engine::addAudioClipEx(int32_t trackId, const std::string& path, double 
     clip.sourceOffsetFrames = sourceOffsetFrames;
     clip.lengthFrames = lengthFrames;
     clip.gain = gain;
-    nt->clips.push_back(clip);
+    nt->clips.write().push_back(clip);
     const int32_t idx = static_cast<int32_t>(nt->clips.size()) - 1;
     republishWithTrack(trackId, nt);
     return idx;
@@ -1090,7 +1101,7 @@ int32_t Engine::addAudioClipBuffer(int32_t trackId, std::shared_ptr<SampleBuffer
     AudioClip clip;
     clip.sample = sample;
     clip.startBeat = startBeat;
-    nt->clips.push_back(clip);
+    nt->clips.write().push_back(clip);
     const int32_t clipIndex = static_cast<int32_t>(nt->clips.size()) - 1;
     republishWithTrack(trackId, nt);
     return clipIndex;
@@ -1729,13 +1740,13 @@ int32_t Engine::pasteAudioFrames(
     auto nt = cloneTrack(*old);
     const double endBeat = tempoMap() ? secondsToBeat(beatToSeconds(startBeat) + frames / devSR)
         : startBeat + static_cast<double>(frames) / spb;
-    audioOverwriteRange(nt->clips, startBeat, endBeat, spb, devSR, tempoMap());
+    audioOverwriteRange(nt->clips.write(), startBeat, endBeat, spb, devSR, tempoMap());
     AudioClip clip;
     clip.sample = std::move(sb);
     clip.startBeat = startBeat;
     clip.lengthFrames = frames;
     clip.name = name;
-    nt->clips.push_back(std::move(clip));
+    nt->clips.write().push_back(std::move(clip));
     const int32_t idx = static_cast<int32_t>(nt->clips.size()) - 1;
     republishWithTrack(trackId, nt);
     lastPlaced_ = {{trackId, idx}};
@@ -1754,23 +1765,25 @@ bool Engine::moveClip(int32_t trackId, int32_t clipIndex, double newStartBeat) {
     double oldStart = 0, sourceLen = 0, len = 0; // separate lift and landing spans
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return false;
-        MidiClip moved = nt->midiClips[clipIndex];
+        auto& mc = nt->midiClips.write();
+        MidiClip moved = mc[clipIndex];
         oldStart = moved.startBeat;
         sourceLen = len = moved.lengthBeats;
         moved.startBeat = newStartBeat;
-        nt->midiClips.erase(nt->midiClips.begin() + clipIndex);
-        midiOverwriteRange(nt->midiClips, newStartBeat, newStartBeat + moved.lengthBeats);
-        nt->midiClips.push_back(moved);
+        mc.erase(mc.begin() + clipIndex);
+        midiOverwriteRange(mc, newStartBeat, newStartBeat + moved.lengthBeats);
+        mc.push_back(moved);
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
-        AudioClip moved = nt->clips[clipIndex];
+        auto& ac = nt->clips.write();
+        AudioClip moved = ac[clipIndex];
         oldStart = moved.startBeat;
         sourceLen = audioDisplayLenBeats(moved, spb, devSR, tempoMap());
         moved.startBeat = newStartBeat;
-        nt->clips.erase(nt->clips.begin() + clipIndex);
+        ac.erase(ac.begin() + clipIndex);
         len = audioDisplayLenBeats(moved, spb, devSR, tempoMap());
-        audioOverwriteRange(nt->clips, newStartBeat, newStartBeat + len, spb, devSR, tempoMap());
-        nt->clips.push_back(moved);
+        audioOverwriteRange(ac, newStartBeat, newStartBeat + len, spb, devSR, tempoMap());
+        ac.push_back(moved);
     }
     // Automation follows the clip within its span (req 8.3.1), unless envelopes are locked.
     if (!automationLock_ && sourceLen > 1e-6 && std::abs(newStartBeat - oldStart) > 1e-9) {
@@ -1799,23 +1812,27 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
     // The moved clip overwrites what it lands on at the destination.
     if (src->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nsrc->midiClips.size())) return false;
-        MidiClip clip = nsrc->midiClips[clipIndex]; // copy before erasing
+        auto& smc = nsrc->midiClips.write();
+        MidiClip clip = smc[clipIndex]; // copy before erasing
         oldStart = clip.startBeat;
         sourceLen = len = clip.lengthBeats;
         clip.startBeat = newStartBeat;
-        nsrc->midiClips.erase(nsrc->midiClips.begin() + clipIndex);
-        midiOverwriteRange(ndst->midiClips, newStartBeat, newStartBeat + clip.lengthBeats);
-        ndst->midiClips.push_back(clip);
+        smc.erase(smc.begin() + clipIndex);
+        auto& dmc = ndst->midiClips.write();
+        midiOverwriteRange(dmc, newStartBeat, newStartBeat + clip.lengthBeats);
+        dmc.push_back(clip);
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nsrc->clips.size())) return false;
-        AudioClip clip = nsrc->clips[clipIndex]; // copy before erasing
+        auto& sac = nsrc->clips.write();
+        AudioClip clip = sac[clipIndex]; // copy before erasing
         oldStart = clip.startBeat;
         sourceLen = audioDisplayLenBeats(clip, spb, devSR, tempoMap());
         clip.startBeat = newStartBeat;
-        nsrc->clips.erase(nsrc->clips.begin() + clipIndex);
+        sac.erase(sac.begin() + clipIndex);
         len = audioDisplayLenBeats(clip, spb, devSR, tempoMap());
-        audioOverwriteRange(ndst->clips, newStartBeat, newStartBeat + len, spb, devSR, tempoMap());
-        ndst->clips.push_back(clip);
+        auto& dac = ndst->clips.write();
+        audioOverwriteRange(dac, newStartBeat, newStartBeat + len, spb, devSR, tempoMap());
+        dac.push_back(clip);
     }
 
     // Automation follow across tracks (req 8.3.1/8.3.4). Identical device layout → everything
@@ -1835,14 +1852,19 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
                 }
             // Clear only the mix lanes from the source span; leave device/plugin points in place.
             constexpr double eps = 1e-6;
-            for (auto& lane : nsrc->automation) {
-                if (!isMixTarget(lane.target)) continue;
-                auto& pts = lane.points;
-                pts.erase(std::remove_if(pts.begin(), pts.end(),
-                              [&](const AutomationPoint& p) {
-                                  return p.beat >= oldStart - eps && p.beat <= oldStart + sourceLen + eps;
-                              }),
-                    pts.end());
+            bool anyMix = false;
+            for (const auto& lane : nsrc->automation)
+                if (isMixTarget(lane.target) && !lane.points.empty()) { anyMix = true; break; }
+            if (anyMix) {
+                for (auto& lane : nsrc->automation.write()) {
+                    if (!isMixTarget(lane.target)) continue;
+                    auto& pts = lane.points;
+                    pts.erase(std::remove_if(pts.begin(), pts.end(),
+                                  [&](const AutomationPoint& p) {
+                                      return p.beat >= oldStart - eps && p.beat <= oldStart + sourceLen + eps;
+                                  }),
+                        pts.end());
+                }
             }
             applyClipAutomation(*ndst, sourceTrackId, snips, newStartBeat, len, /*sameTrack*/ false);
         }
@@ -1952,9 +1974,9 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
             clips.swap(out);
         };
         if (nt->type() == TrackType::Instrument)
-            rebuild(nt->midiClips, [](std::vector<MidiClip>& v, double s, double e) { midiOverwriteRange(v, s, e); });
+            rebuild(nt->midiClips.write(), [](std::vector<MidiClip>& v, double s, double e) { midiOverwriteRange(v, s, e); });
         else
-            rebuild(nt->clips,
+            rebuild(nt->clips.write(),
                 [&](std::vector<AudioClip>& v, double s, double e) { audioOverwriteRange(v, s, e, spb, devSR, tempoMap()); });
     }
     for (size_t i = 0; i < items.size(); ++i) {
@@ -1962,10 +1984,10 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
         if (it.sameTrack) continue;
         Track& dst = *clones[it.req->dstTrackId];
         if (it.midi) {
-            dst.midiClips.push_back(it.mc);
+            dst.midiClips.write().push_back(it.mc);
             newIndex[i] = static_cast<int32_t>(dst.midiClips.size()) - 1;
         } else {
-            dst.clips.push_back(it.ac);
+            dst.clips.write().push_back(it.ac);
             newIndex[i] = static_cast<int32_t>(dst.clips.size()) - 1;
         }
     }
@@ -1986,14 +2008,19 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
                 lastMoveKeptDeviceAuto_ = true;
                 break;
             }
-        for (auto& lane : src.automation) {
-            if (!isMixTarget(lane.target)) continue;
-            auto& pts = lane.points;
-            pts.erase(std::remove_if(pts.begin(), pts.end(),
-                          [&](const AutomationPoint& p) {
-                              return p.beat >= it.oldStart - eps && p.beat <= it.oldStart + it.sourceLen + eps;
-                          }),
-                pts.end());
+        bool anyMix = false;
+        for (const auto& lane : src.automation)
+            if (isMixTarget(lane.target) && !lane.points.empty()) { anyMix = true; break; }
+        if (anyMix) {
+            for (auto& lane : src.automation.write()) {
+                if (!isMixTarget(lane.target)) continue;
+                auto& pts = lane.points;
+                pts.erase(std::remove_if(pts.begin(), pts.end(),
+                              [&](const AutomationPoint& p) {
+                                  return p.beat >= it.oldStart - eps && p.beat <= it.oldStart + it.sourceLen + eps;
+                              }),
+                    pts.end());
+            }
         }
     }
     for (auto& it : items)
@@ -2063,9 +2090,9 @@ bool Engine::deleteClipsInRange(const std::vector<int32_t>& trackIds, double sta
                 else
                     for (const auto& c : nt->clips) clear(c.startBeat, c.startBeat + audioDisplayLenBeats(c, spb, devSR, tempoMap()));
             }
-            if (nt->type() == TrackType::Instrument) midiOverwriteRange(nt->midiClips, start, end);
+            if (nt->type() == TrackType::Instrument) midiOverwriteRange(nt->midiClips.write(), start, end);
             else
-                audioOverwriteRange(nt->clips, start, end, spb, devSR, tempoMap());
+                audioOverwriteRange(nt->clips.write(), start, end, spb, devSR, tempoMap());
             g->tracks.push_back(nt);
             any = true;
         } else
@@ -2117,7 +2144,7 @@ bool Engine::splitClipsAtRange(const std::vector<int32_t>& trackIds, double star
                 out.push_back(midiSlice(c, a, ce));
                 split = true;
             }
-            if (split) nt->midiClips.swap(out);
+            if (split) nt->midiClips.replace(std::move(out));
         } else {
             std::vector<AudioClip> out;
             out.reserve(nt->clips.size() + 2);
@@ -2146,7 +2173,7 @@ bool Engine::splitClipsAtRange(const std::vector<int32_t>& trackIds, double star
                 pushPiece(a, ce);
                 split = true;
             }
-            if (split) nt->clips.swap(out);
+            if (split) nt->clips.replace(std::move(out));
         }
         if (split) {
             g->tracks.push_back(nt);
@@ -2200,11 +2227,12 @@ bool Engine::fadeTouchingSplits(const std::vector<std::pair<int32_t, int32_t>>& 
             return ds < 0.0 || (ds == 0.0 && a < b);
         });
         bool changed = false;
+        auto& ac = nt->clips.write();
         for (int i = 0; i + 1 < n; ++i) {
             const int li = order[i], ri = order[i + 1];
             if (!picked(t->id(), li) && !picked(t->id(), ri)) continue;
-            AudioClip& left = nt->clips[li];
-            AudioClip& right = nt->clips[ri];
+            AudioClip& left = ac[li];
+            AudioClip& right = ac[ri];
             const double llen = audioDisplayLenBeats(left, spb, devSR, tempoMap());
             const double rlen = audioDisplayLenBeats(right, spb, devSR, tempoMap());
             if (std::abs((left.startBeat + llen) - right.startBeat) > join) continue;
@@ -2249,8 +2277,9 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
                     slices.push_back(std::move(s));
                 }
             }
-            midiOverwriteRange(nt->midiClips, end, end + len); // the copy overwrites what it lands on (2.8)
-            for (auto& s : slices) nt->midiClips.push_back(std::move(s));
+            auto& mc = nt->midiClips.write();
+            midiOverwriteRange(mc, end, end + len); // the copy overwrites what it lands on (2.8)
+            for (auto& s : slices) mc.push_back(std::move(s));
         } else {
             std::vector<AudioClip> slices;
             bool changedSpan = false;
@@ -2267,13 +2296,14 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
             // Natural-rate copies can grow or shrink in beats after placement. Carve
             // their actual landing spans before inserting any copy. When lengths stay
             // the same, retain the selected range's existing silence/gap semantics.
+            auto& ac = nt->clips.write();
             if (changedSpan) {
                 for (const auto& s : slices)
-                    audioOverwriteRange(nt->clips, s.startBeat,
+                    audioOverwriteRange(ac, s.startBeat,
                         s.startBeat + audioDisplayLenBeats(s, spb, devSR, tempoMap()), spb, devSR, tempoMap());
             } else
-                audioOverwriteRange(nt->clips, end, end + len, spb, devSR, tempoMap());
-            for (auto& s : slices) nt->clips.push_back(std::move(s));
+                audioOverwriteRange(ac, end, end + len, spb, devSR, tempoMap());
+            for (auto& s : slices) ac.push_back(std::move(s));
         }
         g->tracks.push_back(nt);
         any = true;
@@ -2387,7 +2417,7 @@ bool Engine::insertTimeInto(Graph& g, double at, double len, bool duplicate) {
             }
             changed |= !copies.empty();
             for (auto& c : copies) out.push_back(std::move(c));
-            nt->midiClips.swap(out);
+            if (changed) nt->midiClips.replace(std::move(out));
         } else if (nt->type() == TrackType::Audio) {
             std::vector<AudioClip> out;
             out.reserve(nt->clips.size() + 2);
@@ -2417,11 +2447,17 @@ bool Engine::insertTimeInto(Graph& g, double at, double len, bool duplicate) {
             }
             changed |= !copies.empty();
             for (auto& c : copies) out.push_back(std::move(c));
-            nt->clips.swap(out);
+            if (changed) nt->clips.replace(std::move(out));
         }
         // The master Tempo lane (specs/099) is the ruler itself, not content on it: time and
         // section edits leave it where it is, as they left the tempo map before it was a lane.
-        for (auto& lane : nt->automation) if (lane.target != AutomationTarget::Tempo) changed |= shiftLane(lane);
+        bool hasShiftLanes = false;
+        for (const auto& lane : nt->automation)
+            if (lane.target != AutomationTarget::Tempo && !lane.points.empty()) { hasShiftLanes = true; break; }
+        if (hasShiftLanes) {
+            for (auto& lane : nt->automation.write())
+                if (lane.target != AutomationTarget::Tempo) changed |= shiftLane(lane);
+        }
         return changed ? nt : nullptr;
     };
 
@@ -2604,24 +2640,33 @@ void Engine::remapTimeline(double lo, double hi, const std::vector<TimeRegion>& 
     auto remapTrack = [&](const Track& t) -> std::shared_ptr<Track> {
         auto nt = cloneTrack(t);
         bool changed = false;
-        if (nt->type() == TrackType::Instrument)
+        if (nt->type() == TrackType::Instrument && !nt->midiClips.empty())
             changed |= remapClips(
-                nt->midiClips, lo, hi, rs, [](const MidiClip& c) { return c.lengthBeats; },
+                nt->midiClips.write(), lo, hi, rs, [](const MidiClip& c) { return c.lengthBeats; },
                 [](const MidiClip& c, double a, double b) { return midiSlice(c, a, b); });
-        else if (nt->type() == TrackType::Audio)
+        else if (nt->type() == TrackType::Audio && !nt->clips.empty())
             changed |= remapClips(
-                nt->clips, lo, hi, rs, [&](const AudioClip& c) { return audioDisplayLenBeats(c, spb, devSR, tempoMap()); },
+                nt->clips.write(), lo, hi, rs, [&](const AudioClip& c) { return audioDisplayLenBeats(c, spb, devSR, tempoMap()); },
                 [&](const AudioClip& c, double a, double b) { return audioSlice(c, a, b, spb, devSR, tempoMap()); });
-        for (auto& lane : nt->automation)   // not the master Tempo lane: the ruler stays (specs/099)
-            if (lane.target != AutomationTarget::Tempo) changed |= laneRemap(lane, lo, hi, rs);
+        {
+            bool hasLanes = false;
+            for (const auto& lane : nt->automation)
+                if (lane.target != AutomationTarget::Tempo && !lane.points.empty()) { hasLanes = true; break; }
+            if (hasLanes) {
+                for (auto& lane : nt->automation.write()) // not the master Tempo lane: the ruler stays (specs/099)
+                    if (lane.target != AutomationTarget::Tempo) changed |= laneRemap(lane, lo, hi, rs);
+            }
+        }
         // A take travels with the region its first played frame is in, so the comp sections
         // still where it put them stay on it (specs/067).
-        for (auto& k : nt->takes)
+        for (size_t ki = 0; ki < nt->takes.size(); ++ki) {
+            const auto& k = nt->takes[ki];
             if (const TimeRegion* r = regionAt(rs, k.beatAtFrame(k.sourceOffsetFrames));
                 r && !r->drop && r->offset != 0.0) {
-                shiftTake(k, r->offset);
+                shiftTake(nt->takes.write()[ki], r->offset);
                 changed = true;
             }
+        }
         return changed ? nt : nullptr;
     };
 
@@ -2730,7 +2775,7 @@ bool Engine::deleteSectionWithContent(int32_t index) {
         };
         if (std::none_of(t->takes.begin(), t->takes.end(), gone)) continue;
         auto nt = cloneTrack(*t);
-        std::erase_if(nt->takes, gone);
+        std::erase_if(nt->takes.write(), gone);
         t = nt;
         dropped = true;
     }
@@ -2752,9 +2797,10 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
         if (std::none_of(orig.automation.begin(), orig.automation.end(), [](const TrackLane& l) { return !l.points.empty(); }))
             return;
         auto nt = cloneTrack(*t);
-        for (size_t j = 0; j < nt->automation.size() && j < orig.automation.size(); ++j) {
-            nt->automation[j].points = orig.automation[j].points;
-            if (nt->automation[j].target != AutomationTarget::Tempo) laneDuplicate(nt->automation[j], a, b); // specs/099
+        auto& autos = nt->automation.write();
+        for (size_t j = 0; j < autos.size() && j < orig.automation.size(); ++j) {
+            autos[j].points = orig.automation[j].points;
+            if (autos[j].target != AutomationTarget::Tempo) laneDuplicate(autos[j], a, b); // specs/099
         }
         t = nt;
     };
@@ -2775,25 +2821,30 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
         int32_t number = 0;
         for (const auto& k : nt->takes) number = std::max(number, k.number);
         std::vector<AudioTake> copies;
-        for (auto& k : nt->takes) {
-            const double ks = takeStart(k);
-            if (ks >= b - kSecEps) shiftTake(k, len);
-            else if (ks >= a - kSecEps) {
-                AudioTake c = k;
-                c.id = ++nextTakeId_;
-                c.number = ++number;
-                shiftTake(c, len);
-                auto [git, fresh] = groups.try_emplace(k.group, 0);
-                if (fresh) git->second = ++nextTakeGroup_;
-                c.group = git->second;
-                copied[k.id] = c.id;
-                copies.push_back(std::move(c));
+        {
+            auto& takes = nt->takes.write();
+            for (auto& k : takes) {
+                const double ks = takeStart(k);
+                if (ks >= b - kSecEps) shiftTake(k, len);
+                else if (ks >= a - kSecEps) {
+                    AudioTake c = k;
+                    c.id = ++nextTakeId_;
+                    c.number = ++number;
+                    shiftTake(c, len);
+                    auto [git, fresh] = groups.try_emplace(k.group, 0);
+                    if (fresh) git->second = ++nextTakeGroup_;
+                    c.group = git->second;
+                    copied[k.id] = c.id;
+                    copies.push_back(std::move(c));
+                }
             }
+            for (auto& c : copies) takes.push_back(std::move(c));
         }
-        for (auto& c : copies) nt->takes.push_back(std::move(c));
-        for (auto& c : nt->clips) // the copies insertTimeInto laid in [b, b+len)
-            if (c.takeId != 0 && c.startBeat >= b - kSecEps && c.startBeat < b + len - kSecEps)
-                if (auto it = copied.find(c.takeId); it != copied.end()) c.takeId = it->second;
+        if (!copied.empty()) {
+            for (auto& c : nt->clips.write()) // the copies insertTimeInto laid in [b, b+len)
+                if (c.takeId != 0 && c.startBeat >= b - kSecEps && c.startBeat < b + len - kSecEps)
+                    if (auto it = copied.find(c.takeId); it != copied.end()) c.takeId = it->second;
+        }
         t = nt;
     }
     std::vector<Section> next;
@@ -3013,15 +3064,17 @@ bool Engine::consolidateRange(const std::vector<int32_t>& trackIds, double start
         }
         auto nt = cloneTrack(*t);
         if (nt->type() == TrackType::Instrument) {
-            MidiClip merged = consolidateMidiClips(nt->midiClips, start, end);
-            midiOverwriteRange(nt->midiClips, start, end);
-            nt->midiClips.push_back(std::move(merged));
-            placed.emplace_back(nt->id(), static_cast<int32_t>(nt->midiClips.size()) - 1);
+            MidiClip merged = consolidateMidiClips(nt->midiClips.read(), start, end);
+            auto& mc = nt->midiClips.write();
+            midiOverwriteRange(mc, start, end);
+            mc.push_back(std::move(merged));
+            placed.emplace_back(nt->id(), static_cast<int32_t>(mc.size()) - 1);
         } else {
-            AudioClip bounced = consolidateAudioClips(nt->clips, start, end);
-            audioOverwriteRange(nt->clips, start, end, spb, devSR, tempoMap());
-            nt->clips.push_back(std::move(bounced));
-            placed.emplace_back(nt->id(), static_cast<int32_t>(nt->clips.size()) - 1);
+            AudioClip bounced = consolidateAudioClips(nt->clips.read(), start, end);
+            auto& ac = nt->clips.write();
+            audioOverwriteRange(ac, start, end, spb, devSR, tempoMap());
+            ac.push_back(std::move(bounced));
+            placed.emplace_back(nt->id(), static_cast<int32_t>(ac.size()) - 1);
         }
         g->tracks.push_back(nt);
     }
@@ -3040,15 +3093,15 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
     auto nt = cloneTrack(*old);
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return false;
-        MidiClip& c = nt->midiClips[clipIndex];
+        MidiClip& c = nt->midiClips.write()[clipIndex];
         const double delta = newStartBeat - c.startBeat; // shift notes to stay put
         for (auto& n : c.notes) n.startBeat -= delta;
         c.shiftControllers(-delta); // and controllers (a point left of the new start still sets the value there)
         c.startBeat = newStartBeat;
         c.lengthBeats = newLengthBeats;
     } else {
-        if (!audioClipRef(*nt, clipIndex)) return false;
-        AudioClip& c = (*audioClipRef(*nt, clipIndex));
+        if (!audioClipRef(*old, clipIndex)) return false;
+        AudioClip& c = (*audioClipWrite(*nt, clipIndex));
         const double spb = transport_.samplesPerBeat();
         const double devSR = transport_.sampleRate();
         const double delta = newStartBeat - c.startBeat;
@@ -3083,7 +3136,7 @@ bool Engine::resizeAudioClip(int32_t trackId, int32_t clipIndex, double newStart
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
 
     if (c.warpEnabled) {
         // Warped: TRIM the played window — do NOT stretch (stretch is the
@@ -3169,7 +3222,7 @@ bool Engine::setClipSourceRegion(int32_t trackId, int32_t clipIndex, double offs
     const int64_t avail = total - static_cast<int64_t>(off);
     len = std::clamp<int64_t>(len, std::min<int64_t>(kMinFrames, avail), avail);
     auto nt = cloneTrack(*old);
-    AudioClip& c = (*audioClipRef(*nt, clipIndex));
+    AudioClip& c = (*audioClipWrite(*nt, clipIndex));
     c.sourceOffsetFrames = off;
     c.lengthFrames = len;
     syncSessionAudioSlot(*nt, clipIndex);
@@ -3183,7 +3236,7 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
     auto nt = cloneTrack(*old);
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return -1;
-        const MidiClip& src = nt->midiClips[clipIndex];
+        const MidiClip& src = old->midiClips[clipIndex];
         const double local = atBeat - src.startBeat;
         if (local <= 0 || local >= src.lengthBeats) return -1;
         // The overwrite's carves, so the halves keep the clip's name, and its deactivation
@@ -3194,8 +3247,9 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
             carryMidiPiece(left, src, 0.0, local);
             carryMidiPiece(right, src, local, src.lengthBeats);
         }
-        nt->midiClips[clipIndex] = std::move(left);
-        nt->midiClips.insert(nt->midiClips.begin() + clipIndex + 1, std::move(right));
+        auto& mc = nt->midiClips.write();
+        mc[clipIndex] = std::move(left);
+        mc.insert(mc.begin() + clipIndex + 1, std::move(right));
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return -1;
         const double spb = transport_.samplesPerBeat();
@@ -3221,8 +3275,9 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
             raiseSplitEdge(left, false, true, fade, local);
             raiseSplitEdge(right, true, false, fade, display - local);
         }
-        nt->clips[clipIndex] = std::move(left);
-        nt->clips.insert(nt->clips.begin() + clipIndex + 1, std::move(right));
+        auto& ac = nt->clips.write();
+        ac[clipIndex] = std::move(left);
+        ac.insert(ac.begin() + clipIndex + 1, std::move(right));
     }
     republishWithTrack(trackId, nt);
     return clipIndex + 1;
@@ -3241,8 +3296,11 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
         auto snips = captureClipAutomation(*nt, srcStart, srcStart + len);
         // Land right after the source, overwriting whatever sits there (like a drag).
         d.startBeat = srcStart + len;
-        midiOverwriteRange(nt->midiClips, d.startBeat, d.startBeat + len);
-        nt->midiClips.push_back(d);
+        {
+            auto& mc = nt->midiClips.write();
+            midiOverwriteRange(mc, d.startBeat, d.startBeat + len);
+            mc.push_back(d);
+        }
         newIdx = static_cast<int32_t>(nt->midiClips.size()) - 1;
         applyClipAutomation(*nt, trackId, snips, d.startBeat, len, /*sameTrack*/ true);
     } else {
@@ -3252,9 +3310,12 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
         const double srcStart = d.startBeat;
         auto snips = captureClipAutomation(*nt, srcStart, srcStart + len);
         d.startBeat = srcStart + len;
-        audioOverwriteRange(nt->clips, d.startBeat, d.startBeat + audioDisplayLenBeats(d, spb, devSR, tempoMap()), spb, devSR, tempoMap());
-        if (d.warpEnabled) configureClipWarp(d, spb, devSR); // shares the source's cache when it's current
-        nt->clips.push_back(d);
+        {
+            auto& ac = nt->clips.write();
+            audioOverwriteRange(ac, d.startBeat, d.startBeat + audioDisplayLenBeats(d, spb, devSR, tempoMap()), spb, devSR, tempoMap());
+            if (d.warpEnabled) configureClipWarp(d, spb, devSR); // shares the source's cache when it's current
+            ac.push_back(d);
+        }
         newIdx = static_cast<int32_t>(nt->clips.size()) - 1;
         applyClipAutomation(*nt, trackId, snips, d.startBeat, len, /*sameTrack*/ true);
     }
@@ -3293,7 +3354,14 @@ std::vector<TrackLane> Engine::captureClipAutomation(const Track& t, double star
 // pre-clear before a paste re-lands its points).
 void Engine::removeAutomationInRange(Track& t, double start, double end) {
     constexpr double eps = 1e-6;
-    for (auto& lane : t.automation) {
+    bool anyToRemove = false;
+    for (const auto& lane : t.automation) {
+        for (const auto& p : lane.points)
+            if (p.beat >= start - eps && p.beat <= end + eps) { anyToRemove = true; break; }
+        if (anyToRemove) break;
+    }
+    if (!anyToRemove) return;
+    for (auto& lane : t.automation.write()) {
         auto& pts = lane.points;
         pts.erase(std::remove_if(pts.begin(), pts.end(),
                       [&](const AutomationPoint& p) { return p.beat >= start - eps && p.beat <= end + eps; }),
@@ -3323,28 +3391,36 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
     for (const auto& snip : snips) {
         if (!sameTrack && !isMixTarget(snip.target)) continue;
         // Find the matching lane on nt, or create one bound to the same target.
-        TrackLane* lane = nullptr;
-        for (auto& l : nt.automation) {
-            if (l.target != snip.target || l.chainUid != snip.chainUid || l.slot != snip.slot) continue;
-            bool match = true;
-            switch (snip.target) {
-            case AutomationTarget::DeviceParam:
-            case AutomationTarget::MidiDeviceParam:
-                match = l.deviceIndex == snip.deviceIndex && l.paramIndex == snip.paramIndex;
-                break;
-            case AutomationTarget::PluginParam:
-                match = l.deviceIndex == snip.deviceIndex && l.paramId == snip.paramId;
-                break;
-            case AutomationTarget::Send: match = l.deviceIndex == snip.deviceIndex; break; // one lane per bus
-            default: break; // Volume / Pan: single lane
-            }
-            if (match) {
-                lane = &l;
-                break;
+        int32_t laneIdx = -1;
+        {
+            const auto& autos = nt.automation.read();
+            for (int32_t li = 0; li < static_cast<int32_t>(autos.size()); ++li) {
+                const auto& l = autos[li];
+                if (l.target != snip.target || l.chainUid != snip.chainUid || l.slot != snip.slot) continue;
+                bool match = true;
+                switch (snip.target) {
+                case AutomationTarget::DeviceParam:
+                case AutomationTarget::MidiDeviceParam:
+                    match = l.deviceIndex == snip.deviceIndex && l.paramIndex == snip.paramIndex;
+                    break;
+                case AutomationTarget::PluginParam:
+                    match = l.deviceIndex == snip.deviceIndex && l.paramId == snip.paramId;
+                    break;
+                case AutomationTarget::Send: match = l.deviceIndex == snip.deviceIndex; break; // one lane per bus
+                default: break; // Volume / Pan: single lane
+                }
+                if (match) {
+                    laneIdx = li;
+                    break;
+                }
             }
         }
-        if (!lane) {
-            if (pass == ClipAutomationPass::Clear) continue;
+        if (laneIdx < 0 && pass == ClipAutomationPass::Clear) continue;
+        TrackLane* lane = nullptr;
+        auto& autos = nt.automation.write();
+        if (laneIdx >= 0) {
+            lane = &autos[laneIdx];
+        } else {
             TrackLane nl;
             nl.target = snip.target;
             nl.deviceIndex = snip.deviceIndex;
@@ -3354,8 +3430,8 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
             nl.paramIndex = snip.target == AutomationTarget::PluginParam && !snip.nested()
                                 ? pluginParamIndexOfId(trackId, snip.deviceIndex, snip.paramId)
                                 : snip.paramIndex;
-            nt.automation.push_back(std::move(nl));
-            lane = &nt.automation.back();
+            autos.push_back(std::move(nl));
+            lane = &autos.back();
         }
         auto& pts = lane->points;
         constexpr double eps = 1e-6;
@@ -3409,14 +3485,16 @@ bool Engine::cutClip(int32_t trackId, int32_t clipIndex) {
         clipboardKind_ = 1;
         start = clipboardMidi_.startBeat;
         len = clipboardMidi_.lengthBeats;
-        nt->midiClips.erase(nt->midiClips.begin() + clipIndex);
+        auto& mc = nt->midiClips.write();
+        mc.erase(mc.begin() + clipIndex);
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
         clipboardAudio_ = nt->clips[clipIndex];
         clipboardKind_ = 0;
         start = clipboardAudio_.startBeat;
         len = audioDisplayLenBeats(clipboardAudio_, spb, devSR, tempoMap());
-        nt->clips.erase(nt->clips.begin() + clipIndex);
+        auto& ac = nt->clips.write();
+        ac.erase(ac.begin() + clipIndex);
     }
     clipboardAuto_ = captureClipAutomation(*nt, start, start + len);
     clipboardAutoTrack_ = trackId;
@@ -3443,7 +3521,7 @@ int32_t Engine::pasteClip(int32_t sourceTrackId, double atBeat) {
     if (clipboardKind_ == 1) {
         MidiClip m = clipboardMidi_;
         m.startBeat = placeMidiNonOverlap(*nt, start, m.lengthBeats);
-        nt->midiClips.push_back(m);
+        nt->midiClips.write().push_back(m);
         applyClipAutomation(*nt, sourceTrackId, clipboardAuto_, m.startBeat, m.lengthBeats, sameTrack);
         republishWithTrack(sourceTrackId, nt);
         return static_cast<int32_t>(nt->midiClips.size()) - 1;
@@ -3452,7 +3530,7 @@ int32_t Engine::pasteClip(int32_t sourceTrackId, double atBeat) {
     a.startBeat = placeAudioNonOverlap(*nt, a, start, spb, devSR, tempoMap());
     const double len = audioDisplayLenBeats(a, spb, devSR, tempoMap());
     if (a.warpEnabled) configureClipWarp(a, spb, devSR);
-    nt->clips.push_back(a);
+    nt->clips.write().push_back(a);
     applyClipAutomation(*nt, sourceTrackId, clipboardAuto_, a.startBeat, len, sameTrack);
     republishWithTrack(sourceTrackId, nt);
     return static_cast<int32_t>(nt->clips.size()) - 1;
@@ -3534,9 +3612,9 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
             auto it = clones.find(b.trackId);
             if (it == clones.end()) continue;
             const double s = placedStart + b.relStart, e = s + lengthAt(b, s);
-            if (b.kind == 1) midiOverwriteRange(it->second->midiClips, s, e);
+            if (b.kind == 1) midiOverwriteRange(it->second->midiClips.write(), s, e);
             else
-                audioOverwriteRange(it->second->clips, s, e, spb, devSR, tempoMap());
+                audioOverwriteRange(it->second->clips.write(), s, e, spb, devSR, tempoMap());
         }
     }
     while (moved) {
@@ -3592,13 +3670,13 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
         if (b.kind == 1) {
             MidiClip m = b.midi;
             m.startBeat = start;
-            nt.midiClips.push_back(m);
+            nt.midiClips.write().push_back(m);
             newIdx = static_cast<int32_t>(nt.midiClips.size()) - 1;
         } else {
             AudioClip a = b.audio;
             a.startBeat = start;
             if (a.warpEnabled) configureClipWarp(a, spb, devSR); // reuses the copied cache when it is current
-            nt.clips.push_back(a);
+            nt.clips.write().push_back(a);
             newIdx = static_cast<int32_t>(nt.clips.size()) - 1;
         }
         applyClipAutomation(nt, b.trackId, b.autom, start, lengthAt(b, start), b.sameTrack,
@@ -3699,14 +3777,16 @@ bool Engine::cutClipBlock(const std::vector<std::pair<int32_t, int32_t>>& sel) {
         for (int32_t ci : idxs) {
             if (nt->type() == TrackType::Instrument) {
                 if (ci < 0 || ci >= static_cast<int32_t>(nt->midiClips.size())) continue;
-                const auto& m = nt->midiClips[ci];
+                const MidiClip m = nt->midiClips[ci];
                 removeAutomationInRange(*nt, m.startBeat, m.startBeat + m.lengthBeats);
-                nt->midiClips.erase(nt->midiClips.begin() + ci);
+                auto& mc = nt->midiClips.write();
+                mc.erase(mc.begin() + ci);
             } else {
                 if (ci < 0 || ci >= static_cast<int32_t>(nt->clips.size())) continue;
-                const auto& a = nt->clips[ci];
+                const AudioClip a = nt->clips[ci];
                 removeAutomationInRange(*nt, a.startBeat, a.startBeat + audioDisplayLenBeats(a, spb, devSR, tempoMap()));
-                nt->clips.erase(nt->clips.begin() + ci);
+                auto& ac = nt->clips.write();
+                ac.erase(ac.begin() + ci);
             }
         }
         clones[tid] = nt;
@@ -3814,10 +3894,10 @@ bool Engine::setClipName(int32_t trackId, int32_t clipIndex, const std::string& 
     auto nt = cloneTrack(*old);
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return false;
-        nt->midiClips[clipIndex].name = name;
+        nt->midiClips.write()[clipIndex].name = name;
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
-        nt->clips[clipIndex].name = name;
+        nt->clips.write()[clipIndex].name = name;
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -3893,10 +3973,12 @@ bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
     auto nt = cloneTrack(*old);
     if (nt->type() == TrackType::Instrument) {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->midiClips.size())) return false;
-        nt->midiClips.erase(nt->midiClips.begin() + clipIndex);
+        auto& mc = nt->midiClips.write();
+        mc.erase(mc.begin() + clipIndex);
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
-        nt->clips.erase(nt->clips.begin() + clipIndex);
+        auto& ac = nt->clips.write();
+        ac.erase(ac.begin() + clipIndex);
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -3944,8 +4026,13 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
         if (auto nd = cloneDevice(*d)) nt->devices.push_back(nd);
     // Warped clips must not share a stretcher across tracks — rebuild per clip.
     const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
-    for (auto& c : nt->clips)
-        if (c.warpEnabled && c.sample) configureClipWarp(c, spb, devSR);
+    bool hasWarped = false;
+    for (const auto& c : nt->clips)
+        if (c.warpEnabled && c.sample) { hasWarped = true; break; }
+    if (hasWarped) {
+        for (auto& c : nt->clips.write())
+            if (c.warpEnabled && c.sample) configureClipWarp(c, spb, devSR);
+    }
     return nt;
 }
 
@@ -4216,12 +4303,17 @@ void Engine::compactReturns(Graph& g) const {
         if (!changed) continue;
         auto nt = cloneTrack(*t);
         for (int32_t b = 0; b < kMaxReturns; ++b) nt->setSend(b, sends[b]);
-        auto& lanes = nt->automation;
-        for (auto& l : lanes)
-            if (l.target == AutomationTarget::Send && !l.nested()) l.deviceIndex = busOf(l);
-        lanes.erase(std::remove_if(lanes.begin(), lanes.end(),
-                        [](const TrackLane& l) { return l.target == AutomationTarget::Send && l.deviceIndex < 0; }),
-            lanes.end());
+        bool anySendLane = false;
+        for (const auto& l : nt->automation)
+            if (l.target == AutomationTarget::Send && !l.nested()) { anySendLane = true; break; }
+        if (anySendLane) {
+            auto& lanes = nt->automation.write();
+            for (auto& l : lanes)
+                if (l.target == AutomationTarget::Send && !l.nested()) l.deviceIndex = busOf(l);
+            lanes.erase(std::remove_if(lanes.begin(), lanes.end(),
+                            [](const TrackLane& l) { return l.target == AutomationTarget::Send && l.deviceIndex < 0; }),
+                lanes.end());
+        }
         t = std::move(nt);
     }
 }
@@ -4352,7 +4444,7 @@ int32_t Engine::addMidiClip(int32_t trackId, double startBeat, double lengthBeat
     MidiClip c;
     c.startBeat = startBeat;
     c.lengthBeats = lengthBeats;
-    nt->midiClips.push_back(c);
+    nt->midiClips.write().push_back(c);
     const int32_t idx = static_cast<int32_t>(nt->midiClips.size()) - 1;
     republishWithTrack(trackId, nt);
     return idx;
@@ -4362,7 +4454,7 @@ bool Engine::setClipNotes(int32_t trackId, int32_t clipIndex, const NotaNoteData
     auto old = findTrackAuthoring(trackId);
     if (!old || clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->midiClips.size())) return false;
     auto nt = cloneTrack(*old);
-    MidiClip& clip = nt->midiClips[clipIndex];
+    MidiClip& clip = nt->midiClips.write()[clipIndex];
     clip.notes.clear();
     clip.notes.reserve(count);
     for (int32_t i = 0; i < count; ++i) { clip.notes.push_back(noteFromData(notes[i])); }
@@ -4374,7 +4466,7 @@ bool Engine::setClipNotesLive(int32_t trackId, int32_t clipIndex, const NotaNote
     auto old = findTrackAuthoring(trackId);
     if (!old || clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->midiClips.size())) return false;
     auto nt = cloneTrack(*old);
-    MidiClip& clip = nt->midiClips[clipIndex];
+    MidiClip& clip = nt->midiClips.write()[clipIndex];
     clip.notes.clear();
     clip.notes.reserve(count);
     for (int32_t i = 0; i < count; ++i) { clip.notes.push_back(noteFromData(notes[i])); }

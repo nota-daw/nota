@@ -17,6 +17,7 @@
 #include <algorithm>
 
 #include "RackCore.h"
+#include "dsp/core/ScratchArena.h"
 
 #include <cstring>
 
@@ -31,6 +32,10 @@ class RackInstrument : public Instrument, public RackCore {
     bool hostsPlugin() const override { return chainsHostPlugin(); } // Drum Rack too
 
     void setSampleRate(double sr) override { setRates(sr, kMaxBlock); }
+    void ensureBlockCapacity(int32_t frames) override {
+        arena_.ensureCapacity(frames);
+        ensureChainBlockCapacity(frames);
+    }
     void setTelemetryMode(dsp::TelemetryMode mode) override {
         Instrument::setTelemetryMode(mode);
         RackCore::setTelemetryMode(mode);
@@ -106,12 +111,13 @@ class RackInstrument : public Instrument, public RackCore {
     std::vector<uint8_t> getState() const override { return serialize(); }
     void setState(const uint8_t* data, int32_t size) override {
         deserialize(data, size);
+        ensureChainBlockCapacity(arena_.capacityFrames());
         wake();
     }
     std::shared_ptr<Instrument> clone() const override;
 
   protected:
-    float scratch_[kMaxBlock * 2]; // per-chain render buffer (DrumRack reuses it)
+    dsp::StereoScratchArena<1> arena_; // per-chain render buffer (DrumRack reuses it)
 
     // Where this block's keyed chains go (specs/050): audio thread, set by the engine around a
     // block's renders. A short scan — at most one entry per route slot.
@@ -170,6 +176,7 @@ class RackInstrument : public Instrument, public RackCore {
     int32_t chainCount_[kMaxMidiChains] = {}, chainCursor_[kMaxMidiChains] = {};
     int32_t blockPos_ = 0;
     uint16_t evMask_[1024] = {}; // per input event: the MIDI chains it goes to (in block order)
+    void renderChunk(RackState& st, float* out, int32_t frames, int32_t tapAt);
     bool midiChainAt(int32_t c) const;
 };
 

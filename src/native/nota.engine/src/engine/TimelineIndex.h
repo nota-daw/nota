@@ -72,6 +72,7 @@ class TimelineIndex {
     bool hasAnyMidiVolumeEnvelope() const noexcept { return anyMidiVolumeEnvelope_; }
     double minArtOffsetMs() const noexcept { return minArtOffsetMs_; }
     double maxArtOffsetMs() const noexcept { return maxArtOffsetMs_; }
+    bool matchesTrack(const Track& track) const noexcept;
 
     // Visit original Track::midiClips indices (sorted ascending) that could intersect
     // [winStartBeat, winEndBeat] or the optional seam beat (>= 0).
@@ -260,6 +261,10 @@ class TimelineIndex {
     std::vector<size_t> audioClipOrigOrder_; // maps compact sorted list if needed
     std::vector<AudioTreeNode> audioClipTree_;
     size_t audioClipTreeBase_ = 0;
+
+    const void* clipsToken_ = nullptr;
+    const void* midiClipsToken_ = nullptr;
+    const void* artTableToken_ = nullptr;
 };
 
 // ---- inline template tree walkers (allocation-free RT queries) ----

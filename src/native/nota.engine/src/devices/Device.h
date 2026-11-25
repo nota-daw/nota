@@ -74,6 +74,9 @@ class Device {
     // changes). maxBlock is the largest frame count a process() call may pass.
     virtual void setSampleRate(double sr, int32_t maxBlock) = 0;
 
+    // Pre-allocate scratch capacity for blocks up to `frames` (non-RT preparation; no-op by default).
+    virtual void ensureBlockCapacity(int32_t /*frames*/) {}
+
     // Process `frames` of interleaved stereo in place. Audio thread; no locks.
     virtual void process(float* buf, int32_t frames) = 0;
 

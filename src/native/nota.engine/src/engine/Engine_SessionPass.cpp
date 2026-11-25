@@ -280,27 +280,35 @@ void Engine::writePassTrack(int32_t trackId, const std::vector<const PlayedSpan*
                 pts.insert(pts.end(), take.begin(), take.end());
                 w.setController(ctl, std::move(pts));
             }
-            overwriteMidiClipsInRange(nt->midiClips, a, b);
-            nt->midiClips.push_back(std::move(w));
+            auto& midiW = nt->midiClips.write();
+            overwriteMidiClipsInRange(midiW, a, b);
+            midiW.push_back(std::move(w));
         } else {
             if (!s.audio.sample) continue;
-            overwriteAudioClipsInRange(nt->clips, a, b, spb);
+            auto& clipsW = nt->clips.write();
+            overwriteAudioClipsInRange(clipsW, a, b, spb);
             for (double r : slotRepetitions(L, s.loop, *sp)) {
                 AudioClip c = s.audio;
                 c.startBeat = r;
                 c.name = s.name;
                 c.active = true;
                 c.gain *= sp->gain;
-                nt->clips.push_back(sliceAudioClip(c, std::max(r, a), std::min(r + L, b)));
+                clipsW.push_back(sliceAudioClip(c, std::max(r, a), std::min(r + L, b)));
             }
         }
         changed = true;
     }
     if (!changed) return;
-    std::stable_sort(nt->midiClips.begin(), nt->midiClips.end(),
-        [](const MidiClip& x, const MidiClip& y) { return x.startBeat < y.startBeat; });
-    std::stable_sort(nt->clips.begin(), nt->clips.end(),
-        [](const AudioClip& x, const AudioClip& y) { return x.startBeat < y.startBeat; });
+    {
+        auto& mc = nt->midiClips.write();
+        std::stable_sort(mc.begin(), mc.end(),
+            [](const MidiClip& x, const MidiClip& y) { return x.startBeat < y.startBeat; });
+    }
+    {
+        auto& ac = nt->clips.write();
+        std::stable_sort(ac.begin(), ac.end(),
+            [](const AudioClip& x, const AudioClip& y) { return x.startBeat < y.startBeat; });
+    }
     republishWithTrackRaw(trackId, nt);
 }
 

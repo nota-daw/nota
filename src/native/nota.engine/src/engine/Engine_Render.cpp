@@ -723,7 +723,7 @@ bool Engine::foldSessionLane(MidiTakeLane& l, int32_t lane, const std::vector<Re
         if (x.lane == lane) ctlBatch_.push_back(x);
     ctlStopPending_ = stop;
     auto nt = cloneTrack(*st);
-    SessionSlot& s = nt->sessionSlots[l.scene];
+    SessionSlot& s = nt->sessionSlots.write()[l.scene];
     const double L = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
     for (auto& r : batch) {
         if (r.lane != lane) continue;
@@ -785,7 +785,7 @@ bool Engine::foldMidiLane(MidiTakeLane& l, int32_t lane, const std::vector<Recor
     ctlStopPending_ = stop;
 
     auto nt = cloneTrack(*t);
-    MidiClip& clip = nt->midiClips[l.clipIndex];
+    MidiClip& clip = nt->midiClips.write()[l.clipIndex];
     for (auto& r : batch) {
         if (r.lane != lane) continue;
         if (r.pass < replaceUpTo) { // its pass was already replaced: drop it (and its curves)
@@ -1213,6 +1213,8 @@ void Engine::renderOffline(float* out, int32_t frames) {
         recomputePdc();
         preparedSR_ = sr;
     }
+    const int32_t need = std::clamp(frames, 1, kMaxBlock);
+    if (need > preparedBlockCap_) ensureBlockCapacity(need);
     deviceBlock_ = false; // export/freeze: no deadline, every render thread
     processBlock(out, nullptr, frames); // no Cue in a bounce (specs/089 FR-016)
 }
@@ -2196,7 +2198,7 @@ void Engine::renderInstrumentRaw(
         ab.chaseStart = articulationChaseStart_;
         ab.seamOffs = seamOffs_;
         ab.seamEnd = seamEndSamples_;
-        an = scheduleArticulations(t.midiClips, *t.articulationTable, ab, aev, kMaxBlockArt);
+        an = scheduleArticulations(t.midiClips.read(), *t.articulationTable, ab, aev, kMaxBlockArt);
     }
     playEvents(*inst, dst, frames, evs, n, xev, xn, aev, an, spb > 0.0 ? blockStart / spb : 0.0, spb, playing, [&] {
         if (liveExprCount_ > 0) applyLiveExpression(g, t, *inst);
@@ -2404,7 +2406,7 @@ void Engine::renderAudioClipsRaw(
 void Engine::renderTrackAudioClipsRaw(
     const Track& t, float* dst, int32_t frames, double blockStart, double spb) {
     if (!t.timelineIndex || spb <= 0.0) {
-        renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb);
+        renderAudioClipsRaw(t.clips.read(), dst, frames, blockStart, spb);
         return;
     }
     std::fill_n(dst, static_cast<size_t>(frames) * 2, 0.0f);
@@ -4868,9 +4870,9 @@ int32_t Engine::articulationSelfTest() {
     Track track(1, TrackType::Instrument);
     auto probe = std::make_shared<Probe>();
     track.instrument = probe;
-    track.sessionSlots.resize(1);
+    track.sessionSlots.write().resize(1);
     track.sessionPlayer->playing.store(0);
-    auto& slot = track.sessionSlots[0];
+    auto& slot = track.sessionSlots.write()[0];
     slot.hasClip = true;
     slot.lengthBeats = 1.0;
     Note note;
@@ -5015,8 +5017,9 @@ int32_t Engine::articulationSelfTest() {
         const ArticulationEntry entries[] = {{1, ArticulationTrigger::Latching, 0, 0, 0, 1},
             {2, ArticulationTrigger::Momentary, 0, 0, 0, 1}};
         target->articulationTable = ArticulationTable::build(0, entries, 2, &key, 1);
-        target->sessionSlots.resize(1);
-        auto& clip = target->sessionSlots[0];
+        auto& slots = target->sessionSlots.write();
+        slots.resize(1);
+        auto& clip = slots[0];
         clip.hasClip = true;
         clip.lengthBeats = 4;
         clip.midi.notes = makeClip({{0.0, 1}, {0.046875, 2}}, 1.0).notes; // momentary starts at frame 1125

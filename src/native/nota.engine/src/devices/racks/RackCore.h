@@ -178,6 +178,9 @@ class RackCore {
     // Sample rate + max block; forwarded to every child. Message thread.
     void setRates(double sr, int32_t maxBlock);
 
+    // Grow chain child device/instrument scratch capacity before large offline/device blocks.
+    void ensureChainBlockCapacity(int32_t frames);
+
     // Telemetry mode propagation across chain instruments, devices, and nested racks. Message thread.
     void setTelemetryMode(dsp::TelemetryMode mode);
 

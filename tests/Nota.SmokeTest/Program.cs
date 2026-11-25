@@ -16417,6 +16417,8 @@ Console.WriteLine("-- phase 2 silence gate & active buses --");
 foreach (var (ok, label) in Phase2SleepGateTests.Run()) Check(ok, label);
 Console.WriteLine("-- phase 3 timeline index & routing plan --");
 foreach (var (ok, label) in Phase3TimelineRoutingTests.Run()) Check(ok, label);
+Console.WriteLine("-- phase 4 CoW, ScratchArena & SIMD --");
+foreach (var (ok, label) in Phase4CowArenaSimdTests.Run()) Check(ok, label);
 Console.WriteLine("-- render pool --");
 foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 

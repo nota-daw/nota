@@ -139,6 +139,9 @@ class Eq : public Device {
     static double magDb(const dsp::BiquadCoeffs& k, double w);
     static double averageDb(
         const bool* on, const int* ty, const int* ch, const dsp::BiquadCoeffs (*c)[kMaxSec], double sr);
+    static void runFlatStereoChain(
+        float* buf, int32_t frames, dsp::BiquadSection* chL, dsp::BiquadSection* chR, int n) noexcept;
+    static void writeMidRing(float* ring, uint32_t mask, uint32_t w0, const float* buf, int32_t frames) noexcept;
 
     bool analyse() const;
     int analyzerMode() const { return std::clamp((int)std::lround(get(Analyzer)), 0, 2); }
@@ -146,9 +149,23 @@ class Eq : public Device {
         return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
+    struct BandCache {
+        bool valid = false;
+        bool settled = false;
+        double sr = -1.0;
+        double scale = -1.0;
+        float rawOn = 0.0f, rawType = 0.0f, rawFreq = 0.0f, rawGain = 0.0f, rawQ = 0.0f;
+        float rawSlope = 0.0f, rawCh = 0.0f;
+        bool on = false;
+        int ty = 0, ch = 0, sl = 0, nSec = 0;
+        double tF = 0.0, tG = 0.0, tQ = 0.0;
+        dsp::BiquadCoeffs coeffs[kMaxSec]{};
+    };
+
     double sr_ = 44100.0;
     std::atomic<float> p_[kNumParams] = {};
     dsp::BiquadCascade bands_[kBands]; // per-band cascade (Stereo L/R banks inside)
+    BandCache bandCache_[kBands]{};
     int cfgKey_[kBands] = {};          // type / slope / channel the state belongs to
     float autoKey_[kAutoKeys] = {};    // auto gain: the params it was measured for
     double autoSr_ = -1.0, autoDb_ = 0.0;

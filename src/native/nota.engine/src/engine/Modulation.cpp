@@ -74,7 +74,7 @@ float Modulator::get(ModField f) const {
     return 0.0f;
 }
 
-void Modulator::set(ModField f, float v) {
+void Modulator::set(ModField f, float v) const {
     switch (f) {
     case ModField::Waveform: waveform.store((int32_t)std::lround(v), std::memory_order_relaxed); break;
     case ModField::TempoSync: tempoSync.store(v > 0.5f ? 1 : 0, std::memory_order_relaxed); break;
@@ -117,7 +117,7 @@ float Modulator::mathEval(float a, float b) const {
     }
 }
 
-void Modulator::updateEnv(float level, double dt) {
+void Modulator::updateEnv(float level, double dt) const {
     const float target = std::clamp(level, 0.0f, 1.0f);
     const float cur = envValue.load(std::memory_order_relaxed);
     const float tc =
@@ -126,7 +126,7 @@ void Modulator::updateEnv(float level, double dt) {
     envValue.store(cur + (target - cur) * a, std::memory_order_relaxed);
 }
 
-void Modulator::updateAdsr(bool gate, double dt) {
+void Modulator::updateAdsr(bool gate, double dt) const {
     int32_t stage = adsrStage.load(std::memory_order_relaxed);
     const bool pg = prevGate.load(std::memory_order_relaxed) != 0;
     if (gate && !pg) stage = 1; // note-on  → attack

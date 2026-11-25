@@ -405,7 +405,7 @@ void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const
     std::vector<TrackLane> kept;
     kept.reserve(nt->automation.size());
     for (size_t i = 0; i < nt->automation.size(); ++i) {
-        TrackLane& l = nt->automation[i];
+        TrackLane l = nt->automation[i];
         const Ref r = laneRef(l);
         if (r.fam >= 0) {
             const Ref n = map(r);
@@ -418,7 +418,7 @@ void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const
         laneMap[i] = static_cast<int32_t>(kept.size());
         kept.push_back(std::move(l));
     }
-    nt->automation = std::move(kept);
+    nt->automation.replace(std::move(kept));
     auto laneGone = [&](int32_t& li) {
         if (li < 0 || li >= static_cast<int32_t>(laneMap.size())) return true;
         li = laneMap[li];
@@ -433,7 +433,7 @@ void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const
     auto rewriteLinks = [&](Track& t, bool own) {
         std::vector<CvLink> keep;
         keep.reserve(t.cvLinks.size());
-        for (auto& l : t.cvLinks) {
+        for (CvLink l : t.cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? t.id() : l.targetTrack;
             if (tgt == trackId) {
                 const Ref n = map(cvTargetRef(l));
@@ -450,7 +450,7 @@ void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const
             }
             keep.push_back(l);
         }
-        t.cvLinks = std::move(keep);
+        t.cvLinks.replace(std::move(keep));
     };
     rewriteLinks(*nt, true);
     auto g = std::make_shared<Graph>();
@@ -839,7 +839,7 @@ void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const Neste
             std::vector<TrackLane> kept;
             kept.reserve(nt->automation.size());
             for (size_t i = 0; i < nt->automation.size(); ++i) {
-                TrackLane& l = nt->automation[i];
+                TrackLane l = nt->automation[i];
                 if (into(l.chainUid, l.deviceIndex)) {
                     const auto [u, sl] = map(l.chainUid, l.slot);
                     if (u == 0) {
@@ -852,7 +852,7 @@ void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const Neste
                 laneMap[i] = static_cast<int32_t>(kept.size());
                 kept.push_back(std::move(l));
             }
-            nt->automation = std::move(kept);
+            nt->automation.replace(std::move(kept));
             auto laneGone = [&](int32_t& li) {
                 if (li < 0 || li >= static_cast<int32_t>(laneMap.size())) return true;
                 li = laneMap[li];
@@ -873,7 +873,7 @@ void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const Neste
         }
         std::vector<CvLink> keptLinks;
         keptLinks.reserve(nt->cvLinks.size());
-        for (auto& l : nt->cvLinks) {
+        for (CvLink l : nt->cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? nt->id() : l.targetTrack;
             if (tgt == trackId && into(l.targetChainUid, l.targetDevice)) {
                 const auto [u, sl] = map(l.targetChainUid, l.targetSlot);
@@ -889,7 +889,7 @@ void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const Neste
             }
             keptLinks.push_back(l);
         }
-        nt->cvLinks = std::move(keptLinks);
+        nt->cvLinks.replace(std::move(keptLinks));
         any = true;
         g->tracks.push_back(nt);
     }

@@ -76,6 +76,17 @@ void RackCore::setRates(double sr, int32_t maxBlock) {
     }
 }
 
+void RackCore::ensureChainBlockCapacity(int32_t frames) {
+    if (frames <= 0) return;
+    auto st = authoring_;
+    if (!st) return;
+    for (auto& c : st->chains) {
+        if (c.instrument) c.instrument->ensureBlockCapacity(frames);
+        for (auto& d : c.devices)
+            if (d) d->ensureBlockCapacity(frames);
+    }
+}
+
 void RackCore::forkFrom(const RackCore& o) {
     auto ns = o.copyState();
     for (auto& c : ns->chains) {

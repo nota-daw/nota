@@ -39,6 +39,9 @@ class Instrument {
 
     virtual void setSampleRate(double sr) = 0;
 
+    // Pre-allocate scratch capacity for blocks up to `frames` (non-RT preparation; no-op by default).
+    virtual void ensureBlockCapacity(int32_t /*frames*/) {}
+
     // MIDI effects inside the instrument (an Instrument Rack chain's, issue #329). An instrument
     // that wants the block's notes up front says so; the engine then hands it the block's sorted
     // events once, with the clock the track's own MIDI effects ran on (the arrangement's, or a

@@ -11,6 +11,8 @@
 #include "engine/EditorKeys.h"
 #include "bridge/PluginHostBridge.h"
 
+#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/FastMath.h"
 #include "dsp/primitives/CompensationDelay.h"
 #include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
@@ -600,7 +602,94 @@ int32_t nota_fx_selftest(void) {
     const double aliasDrop = alias1 > 1e-9 ? 20.0 * std::log10(alias8 / alias1) : 0.0;
     std::fprintf(stderr, "  Forge oversampling: alias 1x=%.5f  8x=%.5f  (%.1f dB)\n", alias1, alias8, aliasDrop);
 
-    const bool ok = flat > in * 0.7 && flat < in * 1.3 && cut < in * 0.7 && cut > in * 0.02 && comp > in * 0.1 &&
+    // Phase 4: runtime SIMD dispatch self-test + static/gliding/MS Eq vs scalar RBJ reference (< -120 dBFS).
+    bool p4Ok = nota::simd::simdDispatchSelfTest();
+    {
+        nota::Eq eqP4;
+        eqP4.setSampleRate(sr, 512);
+        auto cfgBand = [&](int b, float on, int ty, float freq, float gain, float q, int slope) {
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::On, on);
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Type, static_cast<float>(ty));
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Freq, freq);
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Gain, gain);
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Q, q);
+            eqP4.setParam(nota::Eq::SlopeBase + b, static_cast<float>(slope));
+            eqP4.setParam(nota::Eq::ChannelBase + b, static_cast<float>(nota::Eq::ChStereo));
+        };
+        cfgBand(0, 1.0f, nota::Eq::LowCut, 120.0f, 0.0f, 1.0f, 1);
+        cfgBand(1, 1.0f, nota::Eq::LowShelf, 250.0f, -3.5f, 0.7f, 0);
+        cfgBand(2, 1.0f, nota::Eq::Bell, 1200.0f, 5.5f, 1.4f, 0);
+        cfgBand(3, 1.0f, nota::Eq::Notch, 3500.0f, 0.0f, 3.0f, 0);
+        cfgBand(4, 1.0f, nota::Eq::HighShelf, 7500.0f, 2.5f, 0.7f, 0);
+        cfgBand(5, 1.0f, nota::Eq::HighCut, 14000.0f, 0.0f, 0.707f, 1);
+        cfgBand(6, 0.0f, nota::Eq::Bell, 800.0f, 0.0f, 0.7f, 0);
+        cfgBand(7, 0.0f, nota::Eq::Bell, 5000.0f, 0.0f, 0.7f, 0);
+
+        // Build independent scalar reference using Eq's FastMath-quantized f0/q + RBJ calculators.
+        std::vector<nota::dsp::BiquadSection> refL, refR;
+        auto pushBandRef = [&](int ty, double f, double g, double q, int slope) {
+            const float f0 = nota::fast_math::exp2f(nota::fast_math::log2f(static_cast<float>(f)));
+            const float q0 = nota::fast_math::exp2f(nota::fast_math::log2f(static_cast<float>(q)));
+            if ((ty == nota::Eq::LowCut || ty == nota::Eq::HighCut) && slope > 0) {
+                double bq[4];
+                const int n = nota::dsp::BiquadCascade::butterworthQs(bq, slope);
+                const double res = q0 / 0.70710678;
+                for (int k = 0; k < n; ++k) {
+                    const double qk = std::clamp(k == n - 1 ? bq[k] * res : bq[k], 0.1, 40.0);
+                    nota::dsp::BiquadSection s;
+                    s.c = ty == nota::Eq::LowCut ? nota::dsp::BiquadCascade::highpass(sr, f0, qk)
+                                                 : nota::dsp::BiquadCascade::lowpass(sr, f0, qk);
+                    refL.push_back(s);
+                    refR.push_back(s);
+                }
+            } else {
+                nota::dsp::BiquadSection s;
+                switch (ty) {
+                case nota::Eq::LowCut: s.c = nota::dsp::BiquadCascade::highpass(sr, f0, q0); break;
+                case nota::Eq::LowShelf: s.c = nota::dsp::BiquadCascade::lowShelf(sr, f0, g); break;
+                case nota::Eq::Notch: s.c = nota::dsp::BiquadCascade::notch(sr, f0, q0); break;
+                case nota::Eq::HighShelf: s.c = nota::dsp::BiquadCascade::highShelf(sr, f0, g); break;
+                case nota::Eq::HighCut: s.c = nota::dsp::BiquadCascade::lowpass(sr, f0, q0); break;
+                default: s.c = nota::dsp::BiquadCascade::bell(sr, f0, g, q0); break;
+                }
+                refL.push_back(s);
+                refR.push_back(s);
+            }
+        };
+        pushBandRef(nota::Eq::LowCut, 120.0, 0.0, 1.0, 1);
+        pushBandRef(nota::Eq::LowShelf, 250.0, -3.5, 0.7, 0);
+        pushBandRef(nota::Eq::Bell, 1200.0, 5.5, 1.4, 0);
+        pushBandRef(nota::Eq::Notch, 3500.0, 0.0, 3.0, 0);
+        pushBandRef(nota::Eq::HighShelf, 7500.0, 2.5, 0.7, 0);
+        pushBandRef(nota::Eq::HighCut, 14000.0, 0.0, 0.707, 1);
+
+        double maxDiff = 0.0;
+        for (int blk = 0; blk < 4; ++blk) { // 4 blocks: exercises cold compute + BandCache hit blocks
+            std::vector<float> test(static_cast<size_t>(512) * 2), ref(static_cast<size_t>(512) * 2);
+            for (int i = 0; i < 512; ++i) {
+                const int idx = blk * 512 + i;
+                const float sl = 0.25f * std::sin(2.0 * kPi * 1100.0 * idx / sr) +
+                                 0.15f * std::sin(2.0 * kPi * 240.0 * idx / sr);
+                const float rr = 0.20f * std::cos(2.0 * kPi * 6000.0 * idx / sr) +
+                                 0.10f * std::sin(2.0 * kPi * 3500.0 * idx / sr);
+                test[static_cast<size_t>(i) * 2] = sl;
+                test[static_cast<size_t>(i) * 2 + 1] = rr;
+                double l = sl, r = rr;
+                for (auto& sec : refL) l = sec.run(l);
+                for (auto& sec : refR) r = sec.run(r);
+                ref[static_cast<size_t>(i) * 2] = static_cast<float>(l);
+                ref[static_cast<size_t>(i) * 2 + 1] = static_cast<float>(r);
+            }
+            eqP4.process(test.data(), 512);
+            for (size_t k = 0; k < test.size(); ++k) {
+                if (!std::isfinite(test[k])) p4Ok = false;
+                maxDiff = std::max(maxDiff, static_cast<double>(std::fabs(test[k] - ref[k])));
+            }
+        }
+        p4Ok = p4Ok && maxDiff < 1.0e-6; // < -120 dBFS
+    }
+
+    const bool ok = p4Ok && flat > in * 0.7 && flat < in * 1.3 && cut < in * 0.7 && cut > in * 0.02 && comp > in * 0.1 &&
                     compGr > 0.5f // compressor reports gain reduction
                     && rev > in * 0.02 && del > in * 0.3 && util > in * 1.5 && forgeRms > 0.05 &&
                     std::isfinite(forgeRms)   // Forge emits sane audio

@@ -187,7 +187,7 @@ bool Engine::automationSelfTest() {
     auto g = std::make_shared<Graph>();
     auto t = std::make_shared<Track>(9999, TrackType::Instrument);
     t->setVolume(1.0f);
-    t->automation.push_back(lane);
+    t->automation.write().push_back(lane);
     g->tracks.push_back(t);
     applyAutomation(g.get(), 2.0);
     return std::fabs(t->volume() - 0.5f) <= 1e-4f;
@@ -343,7 +343,7 @@ int32_t Engine::addPluginAutomationLane(int32_t trackId, int32_t deviceIndex, co
     lane.deviceIndex = deviceIndex;
     lane.paramId = id;
     lane.paramIndex = pluginParamIndexOfId(trackId, deviceIndex, id); // resolve now; -1 if absent
-    nt->automation.push_back(std::move(lane));
+    nt->automation.write().push_back(std::move(lane));
     const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;
     republishWithTrack(trackId, nt);
     return index;
@@ -402,7 +402,7 @@ int32_t Engine::addNestedAutomationLane(int32_t trackId, int32_t target, int32_t
             return static_cast<int32_t>(i);
     }
     auto nt = cloneTrack(*old);
-    nt->automation.push_back(std::move(lane));
+    nt->automation.write().push_back(std::move(lane));
     const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;
     republishWithTrack(trackId, nt);
     return index;
@@ -457,7 +457,7 @@ void Engine::setLaneSuppressRead(int32_t trackId, int32_t laneIndex, bool suppre
     if (!old || laneIndex < 0 || laneIndex >= static_cast<int32_t>(old->automation.size())) return;
     if (old->automation[laneIndex].suppressRead == suppress) return;
     auto nt = cloneTrack(*old);
-    nt->automation[laneIndex].suppressRead = suppress;
+    nt->automation.write()[laneIndex].suppressRead = suppress;
     republishWithTrackRaw(trackId, nt); // transient flag — never an undo step
 }
 
@@ -624,7 +624,7 @@ void Engine::sampleAutomationWritesAt(double beat) {
         if (!old || aw.laneIndex < 0 || aw.laneIndex >= static_cast<int32_t>(old->automation.size())) continue;
         const float v = currentTargetValue(*old, aw.target, aw.deviceIndex, aw.paramIndex);
         auto nt = cloneTrack(*old);
-        auto& pts = nt->automation[aw.laneIndex].points;
+        auto& pts = nt->automation.write()[aw.laneIndex].points;
         // Overwrite-sweep: drop points the playhead just passed over, then add the
         // fresh one. Backward motion (loop wrap / seek) resets the sweep origin.
         const double lo = std::min(aw.lastBeat, beat), hi = std::max(aw.lastBeat, beat);
@@ -649,7 +649,7 @@ void Engine::recordAutomationClick(const ActiveWrite& aw, double beat) {
     const float v = currentTargetValue(*old, aw.target, aw.deviceIndex, aw.paramIndex);
     const auto& was = old->automation[aw.laneIndex].points;
     auto nt = cloneTrack(*old);
-    auto& pts = nt->automation[aw.laneIndex].points;
+    auto& pts = nt->automation.write()[aw.laneIndex].points;
     // The step starts from what the lane plays there, or — a fresh lane — what the target was.
     // The segment the click cuts keeps its shape on both sides: the piece before it ends at the
     // step with the curve of that piece (AutomationLane::pieceCurve), so nothing before the
@@ -741,7 +741,7 @@ bool Engine::pluginAutomationSelfTest() {
     lane.paramIndex = 0;
     lane.paramId = "test-param";
     lane.points = {{0.0, 0.0f}, {4.0, 1.0f}};
-    t->automation.push_back(lane);
+    t->automation.write().push_back(lane);
     g->tracks.push_back(t);
     applyAutomation(g.get(), 2.0); // must not crash
     return t->automation.size() == 1 && t->automation[0].target == AutomationTarget::PluginParam &&
@@ -774,7 +774,7 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     lane.target = tgt;
     lane.deviceIndex = usesDev ? deviceIndex : -1;
     lane.paramIndex = usesDev ? paramIndex : -1;
-    nt->automation.push_back(std::move(lane));
+    nt->automation.write().push_back(std::move(lane));
     const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;
     republishWithTrack(trackId, nt);
     return index;
@@ -807,21 +807,24 @@ void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t remo
     std::vector<int32_t> laneMap(nt.automation.size());
     std::vector<TrackLane> kept;
     kept.reserve(nt.automation.size());
-    for (size_t i = 0; i < nt.automation.size(); ++i) {
-        TrackLane& l = nt.automation[i];
-        if (onChain(l)) {
-            const bool midiRack = l.nested() && midi;
-            const int32_t ni = remap(midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
-            if (ni < 0) {
-                laneMap[i] = -1;
-                continue;
+    {
+        auto& autos = nt.automation.write();
+        for (size_t i = 0; i < autos.size(); ++i) {
+            TrackLane& l = autos[i];
+            if (onChain(l)) {
+                const bool midiRack = l.nested() && midi;
+                const int32_t ni = remap(midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
+                if (ni < 0) {
+                    laneMap[i] = -1;
+                    continue;
+                }
+                l.deviceIndex = midiRack ? midiHost(ni) : ni;
             }
-            l.deviceIndex = midiRack ? midiHost(ni) : ni;
+            laneMap[i] = static_cast<int32_t>(kept.size());
+            kept.push_back(std::move(l));
         }
-        laneMap[i] = static_cast<int32_t>(kept.size());
-        kept.push_back(std::move(l));
     }
-    nt.automation = std::move(kept);
+    nt.automation.replace(std::move(kept));
 
     // In-flight gestures on this track address lanes by index and targets by device.
     const int32_t trackId = nt.id();
@@ -961,7 +964,7 @@ bool Engine::setAutomationPointsImpl(
         if (distinct > TempoMap::kMaxPoints) return false;
     }
     auto nt = cloneTrack(*old);
-    auto& lane = nt->automation[laneIndex];
+    auto& lane = nt->automation.write()[laneIndex];
     lane.points.clear();
     lane.points.reserve(count);
     for (int32_t i = 0; i < count; ++i) {
@@ -982,7 +985,8 @@ bool Engine::removeAutomationLane(int32_t trackId, int32_t laneIndex) {
     auto old = findTrackAuthoring(trackId);
     if (!old || laneIndex < 0 || laneIndex >= static_cast<int32_t>(old->automation.size())) return false;
     auto nt = cloneTrack(*old);
-    nt->automation.erase(nt->automation.begin() + laneIndex);
+    auto& autos = nt->automation.write();
+    autos.erase(autos.begin() + laneIndex);
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -1059,7 +1063,7 @@ int32_t Engine::tempoLaneSelfTest() {
         auto t = e.findTrackAuthoring(audio);
         auto nt = e.cloneTrack(*t);
         AudioClip c; c.startBeat = 16; c.warpEnabled = false;
-        nt->clips.push_back(c);
+        nt->clips.write().push_back(c);
         e.republishWithTrack(audio, nt);
     }
     const double clipSeconds = e.beatToSeconds(16);
@@ -1136,7 +1140,7 @@ bool Engine::setAudioClipVolumeEnvelope(
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    auto& lane = (*audioClipRef(*nt, clipIndex)).volumeEnvelope;
+    auto& lane = (*audioClipWrite(*nt, clipIndex)).volumeEnvelope;
     lane.points.clear();
     lane.points.reserve(count);
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
@@ -1169,7 +1173,7 @@ bool Engine::setAudioClipPanEnvelope(
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     auto nt = cloneTrack(*old);
-    auto& lane = (*audioClipRef(*nt, clipIndex)).panEnvelope;
+    auto& lane = (*audioClipWrite(*nt, clipIndex)).panEnvelope;
     lane.points.clear();
     lane.points.reserve(count);
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
@@ -1201,7 +1205,8 @@ bool Engine::setMidiClipEnvelope(
     auto old = findTrackAuthoring(trackId);
     if (!old || clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->midiClips.size())) return false;
     auto nt = cloneTrack(*old);
-    auto& lane = (kind == 1 ? nt->midiClips[clipIndex].volumeEnvelope : nt->midiClips[clipIndex].velocityEnvelope);
+    auto& clip = nt->midiClips.write()[clipIndex];
+    auto& lane = (kind == 1 ? clip.volumeEnvelope : clip.velocityEnvelope);
     lane.points.clear();
     lane.points.reserve(count);
     for (int32_t i = 0; i < count; ++i) lane.points.push_back({pts[i].beat, pts[i].value, pts[i].curve});
@@ -1258,7 +1263,7 @@ bool Engine::ctlSet(
     auto old = findTrackAuthoring(trackId);
     if (!old || !ctlClipOf(*old, slot, index)) return false;
     auto nt = cloneTrack(*old);
-    MidiClip& c = slot ? nt->sessionSlots[index].midi : nt->midiClips[index];
+    MidiClip& c = slot ? nt->sessionSlots.write()[index].midi : nt->midiClips.write()[index];
     std::vector<AutomationPoint> p;
     p.reserve(count);
     for (int32_t i = 0; i < count; ++i)

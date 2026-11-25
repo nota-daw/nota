@@ -38,8 +38,11 @@ bool Engine::addSessionAudioClip(int32_t trackId, int32_t scene, const std::stri
     auto old = findTrackAuthoring(trackId);
     if (!old) return false;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) <= scene) nt->sessionSlots.resize(scene + 1);
-    SessionSlot& sl = nt->sessionSlots[scene];
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) <= scene) slots.resize(scene + 1);
+    }
+    SessionSlot& sl = nt->sessionSlots.write()[scene];
     sl.hasClip = true;
     sl.lengthBeats = lengthBeats;
     sl.audio = AudioClip{};
@@ -66,8 +69,11 @@ bool Engine::addSessionAudioFile(int32_t trackId, int32_t scene, const std::stri
     if (!(beats > 0.0)) beats = 4.0;
 
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) <= scene) nt->sessionSlots.resize(scene + 1);
-    SessionSlot& sl = nt->sessionSlots[scene];
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) <= scene) slots.resize(scene + 1);
+    }
+    SessionSlot& sl = nt->sessionSlots.write()[scene];
     sl.hasClip = true;
     sl.lengthBeats = beats;
     sl.audio = AudioClip{};
@@ -95,7 +101,7 @@ bool Engine::clearSessionSlot(int32_t trackId, int32_t scene) {
         if (p == scene || q == scene) old->sessionPlayer->requestStop();
     }
     auto nt = cloneTrack(*old);
-    replaceSlotContent(nt->sessionSlots[scene], SessionSlot{}); // empty the slot; its next-take length stays (#503)
+    replaceSlotContent(nt->sessionSlots.write()[scene], SessionSlot{}); // empty the slot; its next-take length stays (#503)
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -111,8 +117,9 @@ std::shared_ptr<Graph> Engine::rebuildScenes(
     g->tracks.reserve(authoring_->tracks.size());
     for (auto& t : authoring_->tracks) {
         auto nt = cloneTrack(*t);
-        mutate(nt->sessionSlots);
-        if (static_cast<int32_t>(nt->sessionSlots.size()) != newCount) nt->sessionSlots.resize(newCount);
+        auto& slots = nt->sessionSlots.write();
+        mutate(slots);
+        if (static_cast<int32_t>(slots.size()) != newCount) slots.resize(newCount);
         g->tracks.push_back(nt);
     }
     return g;
@@ -700,7 +707,7 @@ void Engine::cancelSessionCountIn() {
                 was = &bt->sessionSlots[sc];
         if (auto old = findTrackAuthoring(tid); old && sc >= 0 && sc < static_cast<int32_t>(old->sessionSlots.size())) {
             auto nt = cloneTrack(*old);
-            nt->sessionSlots[sc] = was ? *was : SessionSlot{};
+            nt->sessionSlots.write()[sc] = was ? *was : SessionSlot{};
             republishWithTrackRaw(tid, nt);
         }
     }
@@ -728,7 +735,7 @@ int32_t Engine::sessionSlotToArrangement(int32_t trackId, int32_t scene, double 
         AudioClip c = s.audio;
         c.startBeat = startBeat < 0.0 ? 0.0 : startBeat;
         c.name = s.name;
-        nt->clips.push_back(c);
+        nt->clips.write().push_back(c);
         const int32_t idx = static_cast<int32_t>(nt->clips.size()) - 1;
         republishWithTrack(trackId, nt);
         return idx;
@@ -738,7 +745,7 @@ int32_t Engine::sessionSlotToArrangement(int32_t trackId, int32_t scene, double 
     c.startBeat = startBeat < 0.0 ? 0.0 : startBeat;
     c.lengthBeats = s.lengthBeats > 0 ? s.lengthBeats : 4.0;
     c.active = true;
-    nt->midiClips.push_back(c);
+    nt->midiClips.write().push_back(c);
     const int32_t idx = static_cast<int32_t>(nt->midiClips.size()) - 1;
     republishWithTrack(trackId, nt);
     return idx;
@@ -750,9 +757,12 @@ bool Engine::arrangementClipToSession(int32_t trackId, int32_t clipIndex, int32_
     if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->midiClips.size())) return false;
     if (scene < 0 || scene >= authoring_->sceneCount) return false;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    replaceSlotContent(nt->sessionSlots[scene], slotFromMidiClip(old->midiClips[clipIndex]));
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        replaceSlotContent(slots[scene], slotFromMidiClip(old->midiClips[clipIndex]));
+    }
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -764,9 +774,12 @@ bool Engine::arrangementAudioClipToSession(int32_t trackId, int32_t clipIndex, i
     if (scene < 0 || scene >= authoring_->sceneCount) return false;
     if (!old->clips[clipIndex].sample) return false;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    replaceSlotContent(nt->sessionSlots[scene], slotFromAudioClip(old->clips[clipIndex]));
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        replaceSlotContent(slots[scene], slotFromAudioClip(old->clips[clipIndex]));
+    }
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -806,13 +819,16 @@ bool Engine::addSessionMidiClip(int32_t trackId, int32_t scene, double lengthBea
     if (!old || old->type() != TrackType::Instrument) return false;
     if (scene < 0 || scene >= authoring_->sceneCount) return false;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    SessionSlot& s = nt->sessionSlots[scene];
-    s.hasClip = true;
-    s.lengthBeats = lengthBeats > 0 ? lengthBeats : 4.0;
-    s.midi.lengthBeats = s.lengthBeats;
-    s.midi.notes.clear();
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        SessionSlot& s = slots[scene];
+        s.hasClip = true;
+        s.lengthBeats = lengthBeats > 0 ? lengthBeats : 4.0;
+        s.midi.lengthBeats = s.lengthBeats;
+        s.midi.notes.clear();
+    }
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -829,7 +845,7 @@ bool Engine::setSessionSlotLength(int32_t trackId, int32_t scene, double lengthB
     if (!old || scene < 0 || scene >= static_cast<int32_t>(old->sessionSlots.size())) return false;
     if (!old->sessionSlots[scene].hasClip || lengthBeats <= 0.0) return false;
     auto nt = cloneTrack(*old);
-    SessionSlot& s = nt->sessionSlots[scene];
+    SessionSlot& s = nt->sessionSlots.write()[scene];
     s.lengthBeats = lengthBeats;
     s.midi.lengthBeats = lengthBeats;
     republishWithTrack(trackId, nt);
@@ -853,7 +869,7 @@ bool Engine::setSessionSlotGain(int32_t trackId, int32_t scene, float gain) {
     if (!old || scene < 0 || scene >= static_cast<int32_t>(old->sessionSlots.size())) return false;
     if (!old->sessionSlots[scene].hasClip || !old->sessionSlots[scene].audio.sample) return false;
     auto nt = cloneTrack(*old);
-    nt->sessionSlots[scene].audio.gain = gain < 0.0f ? 0.0f : gain;
+    nt->sessionSlots.write()[scene].audio.gain = gain < 0.0f ? 0.0f : gain;
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -890,7 +906,7 @@ bool Engine::setSessionNotes(int32_t trackId, int32_t scene, const NotaNoteData*
     if (!old || scene < 0 || scene >= static_cast<int32_t>(old->sessionSlots.size())) return false;
     if (!old->sessionSlots[scene].hasClip) return false;
     auto nt = cloneTrack(*old);
-    MidiClip& clip = nt->sessionSlots[scene].midi;
+    MidiClip& clip = nt->sessionSlots.write()[scene].midi;
     clip.notes.clear();
     clip.notes.reserve(count);
     for (int32_t i = 0; i < count; ++i) { clip.notes.push_back(noteFromData(notes[i])); }
@@ -930,8 +946,9 @@ double Engine::audioClipBeats(const AudioClip& c) const {
 void Engine::syncSessionAudioSlot(Track& t, int32_t clipIndex) const {
     const int32_t scene = sessionSceneOfClip(clipIndex);
     if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return;
-    SessionSlot& s = t.sessionSlots[scene];
-    if (!s.hasClip || !s.audio.sample) return;
+    const SessionSlot& cs = t.sessionSlots[scene];
+    if (!cs.hasClip || !cs.audio.sample) return;
+    SessionSlot& s = t.sessionSlots.write()[scene];
     s.audio.startBeat = 0.0;
     const double beats = audioClipBeats(s.audio);
     if (beats > 0.0) s.lengthBeats = beats;
@@ -940,9 +957,6 @@ void Engine::syncSessionAudioSlot(Track& t, int32_t clipIndex) const {
 // --- Session P0: clip + scene properties --------------------------------------
 
 namespace {
-SessionSlot* slotAt(Track& t, int32_t scene) {
-    return (scene >= 0 && scene < static_cast<int32_t>(t.sessionSlots.size())) ? &t.sessionSlots[scene] : nullptr;
-}
 const SessionSlot* slotAt(const Track& t, int32_t scene) {
     return (scene >= 0 && scene < static_cast<int32_t>(t.sessionSlots.size())) ? &t.sessionSlots[scene] : nullptr;
 }
@@ -973,7 +987,7 @@ bool Engine::setSessionClipProps(int32_t trackId, int32_t scene, const NotaSessi
     const SessionSlot* cur = old ? slotAt(*old, scene) : nullptr;
     if (!cur || !cur->hasClip) return false;
     auto nt = cloneTrack(*old);
-    SessionSlot& s = nt->sessionSlots[scene];
+    SessionSlot& s = nt->sessionSlots.write()[scene];
     s.color = p.color < 0 ? -1 : p.color;
     s.launchMode = static_cast<LaunchMode>(std::clamp(p.launch_mode, 0, 3));
     s.quantBeats = p.quant_beats < 0.0 ? -1.0 : p.quant_beats;
@@ -1009,7 +1023,7 @@ bool Engine::setSessionClipName(int32_t trackId, int32_t scene, const std::strin
     if (!cur || !cur->hasClip) return false;
     if (cur->name == name) return true;
     auto nt = cloneTrack(*old);
-    nt->sessionSlots[scene].name = name;
+    nt->sessionSlots.write()[scene].name = name;
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -1025,9 +1039,12 @@ bool Engine::setSessionSlotStopButton(int32_t trackId, int32_t scene, bool on) {
     if (!old || scene < 0 || scene >= authoring_->sceneCount) return false;
     if (sessionSlotStopButton(trackId, scene) == on) return true;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    nt->sessionSlots[scene].stopButton = on;
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        slots[scene].stopButton = on;
+    }
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -1067,9 +1084,12 @@ bool Engine::setSessionSlotTakeLength(int32_t trackId, int32_t scene, const Next
     sessionSlotTakeLength(trackId, scene, cur);
     if (cur == n) return true;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    nt->sessionSlots[scene].nextTake = n;
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        slots[scene].nextTake = n;
+    }
     republishWithTrack(trackId, nt); // one undo step, like the Stop button
     return true;
 }
@@ -1127,9 +1147,12 @@ bool Engine::setSessionSlotLandingRule(int32_t trackId, int32_t scene, const Lan
     sessionSlotLandingRule(trackId, scene, cur);
     if (cur == n) return true;
     auto nt = cloneTrack(*old);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    nt->sessionSlots[scene].landing = n;
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        slots[scene].landing = n;
+    }
     republishWithTrack(trackId, nt); // one undo step, like the take length
     return true;
 }
@@ -1137,13 +1160,18 @@ bool Engine::setSessionSlotLandingRule(int32_t trackId, int32_t scene, const Lan
 // A rule names its target scene by index: a row insert / move / delete moves the index with the
 // scene, and a deleted target turns the rule Off (FR-012). `g` holds freshly cloned tracks.
 void Engine::remapLandingScenes(Graph& g, const std::function<int32_t(int32_t)>& map) {
-    for (auto& t : g.tracks)
-        for (auto& s : t->sessionSlots)
+    for (auto& t : g.tracks) {
+        bool hasSceneRule = false;
+        for (const auto& s : t->sessionSlots)
+            if (s.landing.action == LandingAction::Scene) { hasSceneRule = true; break; }
+        if (!hasSceneRule) continue;
+        for (auto& s : t->sessionSlots.write())
             if (s.landing.action == LandingAction::Scene) {
                 const int32_t n = map(s.landing.scene);
                 if (n < 0) s.landing = LandingRule{};
                 else s.landing.scene = n;
             }
+    }
 }
 
 // A fresh take into (trackId, scene) has become a playable clip. Only noted here — the rule is
@@ -1204,9 +1232,12 @@ bool Engine::copySessionSlot(int32_t srcTrack, int32_t srcScene, int32_t dstTrac
     if (srcTrack == dstTrack && srcScene == dstScene) return true;
     const SessionSlot copy = *from; // before cloning: src may be dst
     auto nt = cloneTrack(*dst);
-    if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-        nt->sessionSlots.resize(authoring_->sceneCount);
-    replaceSlotContent(nt->sessionSlots[dstScene], copy); // the destination keeps its next-take length (#503)
+    {
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        replaceSlotContent(slots[dstScene], copy); // the destination keeps its next-take length (#503)
+    }
     republishWithTrack(dstTrack, nt);
     return true;
 }
@@ -1310,10 +1341,11 @@ int32_t Engine::landBlockInSession(const std::vector<BlockClip>& items, int32_t 
         auto old = findTrackAuthoring(tid);
         if (!old) continue;
         auto nt = cloneTrack(*old);
-        if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-            nt->sessionSlots.resize(authoring_->sceneCount);
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
         for (int32_t i = 0; i < static_cast<int32_t>(v.size()); ++i) // the slots keep their next-take length (#503)
-            replaceSlotContent(nt->sessionSlots[first + i],
+            replaceSlotContent(slots[first + i],
                 v[i]->kind == 1 ? slotFromMidiClip(v[i]->midi) : slotFromAudioClip(v[i]->audio));
         republishWithTrack(tid, nt);
     }
@@ -1449,7 +1481,7 @@ int32_t Engine::insertSceneRow(int32_t at, int32_t copyFrom, bool capturePlaying
     g->tracks.reserve(authoring_->tracks.size());
     for (auto& t : authoring_->tracks) {
         auto nt = cloneTrack(*t);
-        auto& slots = nt->sessionSlots;
+        auto& slots = nt->sessionSlots.write();
         if (static_cast<int32_t>(slots.size()) < count) slots.resize(count);
         SessionSlot row;
         if (copyFrom >= 0) row = slots[copyFrom];

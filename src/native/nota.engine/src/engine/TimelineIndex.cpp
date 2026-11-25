@@ -37,6 +37,9 @@ size_t TimelineIndex::audioClipUpperBound(double maxStartBeat) const noexcept {
 
 std::shared_ptr<const TimelineIndex> TimelineIndex::buildForTrack(const Track& track) {
     auto idx = std::make_shared<TimelineIndex>();
+    idx->clipsToken_ = track.clips.storageToken();
+    idx->midiClipsToken_ = track.midiClips.storageToken();
+    idx->artTableToken_ = track.articulationTable.get();
 
     // Collect articulation min/max shift bounds if present (track-wide immutable table).
     if (track.articulationTable) {
@@ -214,6 +217,12 @@ std::shared_ptr<const TimelineIndex> TimelineIndex::buildForTrack(const Track& t
     }
 
     return idx;
+}
+
+bool TimelineIndex::matchesTrack(const Track& track) const noexcept {
+    return clipsToken_ == track.clips.storageToken() &&
+           midiClipsToken_ == track.midiClips.storageToken() &&
+           artTableToken_ == track.articulationTable.get();
 }
 
 } // namespace nota

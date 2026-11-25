@@ -53,6 +53,7 @@ class DrumRack final : public RackInstrument {
     // same sample, and a choke group does not cut a pad struck at that very moment (#644).
     uint32_t renderSerial_ = 1;
     NOTA_NOINLINE void beginRender(RackState& st, int32_t frames);
+    void renderChunk(RackState& st, float* out, int32_t frames, int32_t tapAt);
     static int32_t tunedNote(const ChainControls& ctl, int32_t pitch) {
         return std::clamp(pitch + ctl.tune.load(std::memory_order_relaxed), 0, 127);
     }

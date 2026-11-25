@@ -70,8 +70,9 @@ void DrumRack::beginRender(RackState& st, int32_t frames) {
         c.ctl->silentNow = silent;
         if (!silent || (taps_.any() && taps_.find(c.uid))) continue; // heard, or a ghost key's pad
         if (!c.instrument->isIdle()) {
-            std::memset(scratch_, 0, sizeof(float) * frames * 2);
-            c.instrument->render(scratch_, frames);
+            float* const scratch = arena_.buffer(0);
+            std::memset(scratch, 0, sizeof(float) * frames * 2);
+            c.instrument->render(scratch, frames);
         }
         if (c.ctl->retrig) {
             c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);
@@ -91,9 +92,19 @@ void DrumRack::render(float* out, int32_t frames) {
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock || isIdle()) return;
-    beginRender(*st, frames);
+    const int32_t cap = std::max(1, arena_.capacityFrames());
+    for (int32_t off = 0; off < frames;) {
+        const int32_t sub = std::min(frames - off, cap);
+        renderChunk(*st, out + off * 2, sub, tapAt + off * 2);
+        off += sub;
+    }
+}
+
+void DrumRack::renderChunk(RackState& st, float* out, int32_t frames, int32_t tapAt) {
+    float* const scratch = arena_.buffer(0);
+    beginRender(st, frames);
     const float rv = rackVolume_.load(std::memory_order_relaxed);
-    for (auto& c : st->chains) {
+    for (auto& c : st.chains) {
         if (!c.instrument) continue;
         // A pad a sidechain key listens to (specs/050) renders even when muted or solo-gated:
         // the "ghost kick" drives the key without being heard.
@@ -104,11 +115,11 @@ void DrumRack::render(float* out, int32_t frames) {
             c.ctl->retrig = false;
             continue;
         }
-        std::memset(scratch_, 0, sizeof(float) * frames * 2);
-        c.instrument->render(scratch_, frames);
-        if (tap) addTap(tap->pre + tapAt, scratch_, frames); // Pre: the raw hit, before inserts and decay
+        std::memset(scratch, 0, sizeof(float) * frames * 2);
+        c.instrument->render(scratch, frames);
+        if (tap) addTap(tap->pre + tapAt, scratch, frames); // Pre: the raw hit, before inserts and decay
         for (auto& d : c.devices)
-            if (d && !d->bypassed()) d->process(scratch_, frames);
+            if (d && !d->bypassed()) d->process(scratch, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
         const float pan = c.ctl->pan.load(std::memory_order_relaxed);
         const float lg = g * rv * (pan > 0.0f ? 1.0f - pan : 1.0f);
@@ -140,8 +151,8 @@ void DrumRack::render(float* out, int32_t frames) {
             float* post = tap->post + tapAt;
             for (int32_t i = 0; i < frames; ++i) {
                 const float k = shaped ? e : 1.0f;
-                post[i * 2] += scratch_[i * 2] * k * pl;
-                post[i * 2 + 1] += scratch_[i * 2 + 1] * k * pr;
+                post[i * 2] += scratch[i * 2] * k * pl;
+                post[i * 2 + 1] += scratch[i * 2 + 1] * k * pr;
                 if (shaped) e *= coef;
             }
             if (silent) {
@@ -153,7 +164,7 @@ void DrumRack::render(float* out, int32_t frames) {
 
         float peak = 0.0f;
         for (int32_t i = 0; i < frames; ++i) {
-            float l = scratch_[i * 2], r = scratch_[i * 2 + 1];
+            float l = scratch[i * 2], r = scratch[i * 2 + 1];
             if (shaped) {
                 l *= env;
                 r *= env;
@@ -174,6 +185,7 @@ std::shared_ptr<Instrument> DrumRack::clone() const {
     r->setSampleRate(sampleRate_);
     auto blob = serialize();
     r->setState(blob.data(), static_cast<int32_t>(blob.size()));
+    r->ensureBlockCapacity(arena_.capacityFrames());
     return r;
 }
 

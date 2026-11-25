@@ -1717,7 +1717,7 @@ class Engine {
     bool cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const;
     int32_t addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcParam,
         int32_t targetKind, int32_t targetTrack, int32_t targetDevice, int32_t targetParam);
-    Modulator* modulatorPtr(Track& t, int32_t modId);
+    const Modulator* modulatorPtr(const Track& t, int32_t modId);
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
     // midi: the edit was on the MIDI-effect chain — fix up MidiFx-target links (param sources
@@ -2907,6 +2907,7 @@ class Engine {
     // render can still hold it (AR-6).
     struct RenderScratch {
         size_t tracks = 0; // capacity in tracks (every vector below is sized for it)
+        int32_t frameCapacity = 0; // allocated frame capacity of leafBuf
         std::vector<LeafWork> leafWork;
         // Pass 1 render storage (two halves per track: dry pre-device + post).
         // NOTE: pool worker slots can NOT back per-track renders — tracks outnumber
@@ -2970,7 +2971,8 @@ class Engine {
     SnapshotHistory<RenderScratch> scratchHist_;
     RenderScratch* rs_ = nullptr; // audio thread: this block's scratch (set in processBlock)
     float* leafBase(size_t li, size_t stride) { return rs_->leafBuf.data() + li * stride * 2; }
-    void ensureRenderScratch(size_t tracks); // message thread: publish scratch for `tracks` (AR-6)
+    void ensureRenderScratch(size_t tracks, int32_t minFrames = 0); // message thread: publish scratch for tracks/frames (AR-6)
+    void ensureBlockCapacity(int32_t frames);                       // message/offline thread: grow scratch & rack arenas before large blocks
     // Per-leaf DSP (Pass 1 steps 1/2/2b): render dry + device chain + PDC.
     // Split in two so the serial accumulate can tap the pre-device signal
     // (Phase D) while the fader reads the post-device one: parallel tasks
@@ -3000,6 +3002,7 @@ class Engine {
     // Sample rate every node was last prepared at (propagateSampleRate). The offline render
     // re-prepares only when it changes, so a chunked export doesn't reset DSP state per block.
     double preparedSR_ = 0.0;
+    int32_t preparedBlockCap_ = 2048;
     // Warp-cache build deferral (project load): when set, configureClipWarp skips the heavy
     // stretch so Apply stays fast; warpBuildStep then fills caches incrementally with a bar.
     bool deferWarpBuild_ = false;

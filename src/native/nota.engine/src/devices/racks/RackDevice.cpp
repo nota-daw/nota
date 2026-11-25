@@ -19,13 +19,25 @@ void RackDevice::process(float* buf, int32_t frames) {
     if (isIdle() && dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold))
         return;
 
+    const int32_t cap = std::max(1, arena_.capacityFrames());
+    for (int32_t off = 0; off < frames;) {
+        const int32_t sub = std::min(frames - off, cap);
+        processChunk(*st, buf + off * 2, sub);
+        off += sub;
+    }
+}
+
+void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
+    float* const input = arena_.buffer(0);
+    float* const acc = arena_.buffer(1);
+    float* const scratch = arena_.buffer(2);
     const int32_t mode = mode_.load(std::memory_order_relaxed);
     const float gain = rackVolume_.load(std::memory_order_relaxed);
     const float dw = dryWet_.load(std::memory_order_relaxed);
-    std::memcpy(input_, buf, sizeof(float) * frames * 2);
+    std::memcpy(input, buf, sizeof(float) * frames * 2);
 
     bool anySolo = false;
-    for (auto& c : st->chains)
+    for (auto& c : st.chains)
         if (c.ctl->solo.load(std::memory_order_relaxed)) {
             anySolo = true;
             break;
@@ -35,7 +47,7 @@ void RackDevice::process(float* buf, int32_t frames) {
     float sel = chainSelect_.load(std::memory_order_relaxed);
     if (mode == 2 && selFollow_.load(std::memory_order_relaxed)) {
         double sum = 0.0;
-        for (int32_t i = 0; i < frames * 2; ++i) sum += (double)input_[i] * input_[i];
+        for (int32_t i = 0; i < frames * 2; ++i) sum += (double)input[i] * input[i];
         const double rms = std::sqrt(sum / std::max(1, frames * 2));
         const double db = rms > 1e-6 ? 20.0 * std::log10(rms) : -60.0;
         sel = (float)std::clamp((db + 48.0) / 48.0, 0.0, 1.0); // −48..0 dB → 0..1
@@ -44,8 +56,8 @@ void RackDevice::process(float* buf, int32_t frames) {
 
     if (mode == 1) {
         // Series: one running buffer flows through each chain in order.
-        std::memcpy(acc_, input_, sizeof(float) * frames * 2);
-        for (auto& c : st->chains) {
+        std::memcpy(acc, input, sizeof(float) * frames * 2);
+        for (auto& c : st.chains) {
             const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
             const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
             if (mute || (anySolo && !solo)) {
@@ -53,21 +65,21 @@ void RackDevice::process(float* buf, int32_t frames) {
                 continue;
             }
             for (auto& d : c.devices)
-                if (d && !d->bypassed()) d->process(acc_, frames);
+                if (d && !d->bypassed()) d->process(acc, frames);
             const float g = c.ctl->gain.load(std::memory_order_relaxed);
             float peak = 0.0f;
             for (int32_t i = 0; i < frames; ++i) {
-                acc_[i * 2] *= g;
-                acc_[i * 2 + 1] *= g;
-                const float a = std::max(std::fabs(acc_[i * 2]), std::fabs(acc_[i * 2 + 1]));
+                acc[i * 2] *= g;
+                acc[i * 2 + 1] *= g;
+                const float a = std::max(std::fabs(acc[i * 2]), std::fabs(acc[i * 2 + 1]));
                 if (a > peak) peak = a;
             }
             c.ctl->meter.store(peak, std::memory_order_relaxed);
         }
     } else {
         // Parallel (0) / Select (2): fan the input to each active chain and sum.
-        std::memset(acc_, 0, sizeof(float) * frames * 2);
-        for (auto& c : st->chains) {
+        std::memset(acc, 0, sizeof(float) * frames * 2);
+        for (auto& c : st.chains) {
             const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
             const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
             bool active = !(mute || (anySolo && !solo));
@@ -80,18 +92,18 @@ void RackDevice::process(float* buf, int32_t frames) {
                 c.ctl->meter.store(0.0f, std::memory_order_relaxed);
                 continue;
             }
-            std::memcpy(scratch_, input_, sizeof(float) * frames * 2);
+            std::memcpy(scratch, input, sizeof(float) * frames * 2);
             for (auto& d : c.devices)
-                if (d && !d->bypassed()) d->process(scratch_, frames);
+                if (d && !d->bypassed()) d->process(scratch, frames);
             const float g = c.ctl->gain.load(std::memory_order_relaxed);
             const float pan = c.ctl->pan.load(std::memory_order_relaxed);
             const float lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
             const float rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
             float peak = 0.0f;
             for (int32_t i = 0; i < frames; ++i) {
-                const float l = scratch_[i * 2] * lg, r = scratch_[i * 2 + 1] * rg;
-                acc_[i * 2] += l;
-                acc_[i * 2 + 1] += r;
+                const float l = scratch[i * 2] * lg, r = scratch[i * 2 + 1] * rg;
+                acc[i * 2] += l;
+                acc[i * 2 + 1] += r;
                 const float a = std::max(std::fabs(l), std::fabs(r));
                 if (a > peak) peak = a;
             }
@@ -101,7 +113,7 @@ void RackDevice::process(float* buf, int32_t frames) {
 
     // Rack output stage: dry/wet mix against the input, then rack gain.
     const float wet = dw, dry = 1.0f - dw;
-    for (int32_t i = 0; i < frames * 2; ++i) buf[i] = (input_[i] * dry + acc_[i] * wet) * gain;
+    for (int32_t i = 0; i < frames * 2; ++i) buf[i] = (input[i] * dry + acc[i] * wet) * gain;
 }
 
 int32_t RackDevice::latencySamples() const {
@@ -123,6 +135,7 @@ std::shared_ptr<Device> RackDevice::clone() const {
     r->setSampleRate(sampleRate_, maxBlock_);
     auto blob = serialize();
     r->setState(blob.data(), static_cast<int32_t>(blob.size()));
+    r->ensureBlockCapacity(arena_.capacityFrames());
     return r;
 }
 

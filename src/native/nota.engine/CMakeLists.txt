@@ -204,6 +204,8 @@ set(NOTA_ENGINE_SOURCES
     src/devices/instruments/TwinVoice.cpp
     src/dsp/core/SilenceDetector.cpp  # hysteresis silence detection
     src/dsp/core/Parameter.cpp  # param mappings + smoothing
+    src/dsp/math/SimdDispatch.cpp
+    src/dsp/math/SimdAvx2.cpp
     src/dsp/primitives/SvfFilter.cpp  # TPT SVF + LR4
     src/dsp/primitives/BiquadCascade.cpp  # DF2T cascade + RBJ
     src/dsp/primitives/LadderFilter.cpp  # Moog ladder
@@ -289,6 +291,17 @@ target_include_directories(nota_engine SYSTEM PRIVATE
 
 target_compile_definitions(nota_engine PRIVATE
     NOTA_VERSION_STRING="${PROJECT_VERSION}")
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
+    target_compile_options(nota_engine PRIVATE -fno-math-errno)
+endif()
+
+# Release-mode IPO (ThinLTO on Clang) for cross-TU inlining across DSP and ABI boundaries.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT _nota_ipo_ok OUTPUT _nota_ipo_err LANGUAGES C CXX)
+if(_nota_ipo_ok)
+    set_property(TARGET nota_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+endif()
 
 # Output a stable name: libnota_engine.dylib / nota_engine.dll (consumed by P/Invoke).
 set_target_properties(nota_engine PROPERTIES

@@ -16,6 +16,7 @@
 #include <algorithm>
 
 #include "RackCore.h"
+#include "dsp/core/ScratchArena.h"
 
 #include <cstring>
 
@@ -29,6 +30,10 @@ class RackDevice final : public Device, public RackCore {
     bool hostsPlugin() const override { return chainsHostPlugin(); }
 
     void setSampleRate(double sr, int32_t maxBlock) override { setRates(sr, maxBlock); }
+    void ensureBlockCapacity(int32_t frames) override {
+        arena_.ensureCapacity(frames);
+        ensureChainBlockCapacity(frames);
+    }
     void setTelemetryMode(dsp::TelemetryMode mode) override {
         Device::setTelemetryMode(mode);
         RackCore::setTelemetryMode(mode);
@@ -68,14 +73,14 @@ class RackDevice final : public Device, public RackCore {
     std::vector<uint8_t> getState() const override { return serialize(); }
     void setState(const uint8_t* data, int32_t size) override {
         deserialize(data, size);
+        ensureChainBlockCapacity(arena_.capacityFrames());
         wake();
     }
     std::shared_ptr<Device> clone() const override;
 
   private:
-    float input_[kMaxBlock * 2];
-    float acc_[kMaxBlock * 2];
-    float scratch_[kMaxBlock * 2];
+    void processChunk(RackState& st, float* buf, int32_t frames);
+    dsp::StereoScratchArena<3> arena_;
 };
 
 } // namespace nota

@@ -68,35 +68,35 @@ enum class ModField : int32_t {
 struct Modulator {
     int32_t id = 0;
     ModulatorKind kind = ModulatorKind::LFO;
-    std::atomic<int32_t> waveform{0};       // 0 sine · 1 tri · 2 saw · 3 square · 4 random (S&H)
-    std::atomic<int32_t> tempoSync{1};      // 1 = beats/cycle, 0 = free Hz
-    std::atomic<float> rateHz{1.0f};        // free-run rate
-    std::atomic<float> rateSyncBeats{0.5f}; // beats per cycle when synced (0.5 = 1/8)
-    std::atomic<float> depth{1.0f};         // 0..1 output amplitude (Math: gain 0..2)
-    std::atomic<float> phase01{0.0f};       // 0..1 phase offset
-    std::atomic<float> attackMs{10.0f};     // env follower / ADSR rise time
-    std::atomic<float> releaseMs{120.0f};   // env follower / ADSR fall time
-    std::atomic<float> decayMs{200.0f};     // ADSR decay time
-    std::atomic<float> sustain{0.7f};       // ADSR sustain level 0..1
-    std::atomic<float> envValue{0.0f};      // runtime: current envelope 0..1
-    std::atomic<int32_t> adsrStage{0};      // runtime: 0 idle, 1 A, 2 D, 3 S, 4 R
-    std::atomic<int32_t> prevGate{0};       // runtime: last gate (edge detection)
-    std::atomic<int32_t> inputA{-1};        // Math: source modulator ids
-    std::atomic<int32_t> inputB{-1};
-    std::atomic<float> mathOffset{0.0f}; // Math: Scale offset
-    std::atomic<float> outValue{0.0f};   // runtime: this block's output (read by links + Math)
-    std::atomic<float> scopeWindowMs{1000.0f}; // Scope view settings (UI-only, saved)
-    std::atomic<int32_t> scopeSync{0};
-    std::atomic<float> scopeWindowBeats{4.0f};
-    std::atomic<int32_t> scopeZoom{1};
-    std::atomic<int32_t> scopeTrigger{0};
-    std::atomic<float> scopeHeight{76.0f};
+    mutable std::atomic<int32_t> waveform{0};       // 0 sine · 1 tri · 2 saw · 3 square · 4 random (S&H)
+    mutable std::atomic<int32_t> tempoSync{1};      // 1 = beats/cycle, 0 = free Hz
+    mutable std::atomic<float> rateHz{1.0f};        // free-run rate
+    mutable std::atomic<float> rateSyncBeats{0.5f}; // beats per cycle when synced (0.5 = 1/8)
+    mutable std::atomic<float> depth{1.0f};         // 0..1 output amplitude (Math: gain 0..2)
+    mutable std::atomic<float> phase01{0.0f};       // 0..1 phase offset
+    mutable std::atomic<float> attackMs{10.0f};     // env follower / ADSR rise time
+    mutable std::atomic<float> releaseMs{120.0f};   // env follower / ADSR fall time
+    mutable std::atomic<float> decayMs{200.0f};     // ADSR decay time
+    mutable std::atomic<float> sustain{0.7f};       // ADSR sustain level 0..1
+    mutable std::atomic<float> envValue{0.0f};      // runtime: current envelope 0..1
+    mutable std::atomic<int32_t> adsrStage{0};      // runtime: 0 idle, 1 A, 2 D, 3 S, 4 R
+    mutable std::atomic<int32_t> prevGate{0};       // runtime: last gate (edge detection)
+    mutable std::atomic<int32_t> inputA{-1};        // Math: source modulator ids
+    mutable std::atomic<int32_t> inputB{-1};
+    mutable std::atomic<float> mathOffset{0.0f}; // Math: Scale offset
+    mutable std::atomic<float> outValue{0.0f};   // runtime: this block's output (read by links + Math)
+    mutable std::atomic<float> scopeWindowMs{1000.0f}; // Scope view settings (UI-only, saved)
+    mutable std::atomic<int32_t> scopeSync{0};
+    mutable std::atomic<float> scopeWindowBeats{4.0f};
+    mutable std::atomic<int32_t> scopeZoom{1};
+    mutable std::atomic<int32_t> scopeTrigger{0};
+    mutable std::atomic<float> scopeHeight{76.0f};
     // Scope: rolling history, allocated on the message thread for Scope nodes only and
     // shared by the track's snapshot copies (so the trace survives a republish). The
     // audio thread only writes into it.
     std::shared_ptr<ScopeHistory> scope;
 
-    void pushScope(float v, float dt) {
+    void pushScope(float v, float dt) const {
         if (!scope) return;
         const int64_t w = scope->write.load(std::memory_order_relaxed);
         scope->value[w & (kScopeLen - 1)] = v;
@@ -112,18 +112,18 @@ struct Modulator {
     Modulator& operator=(const Modulator& o);
 
     float get(ModField f) const;
-    void set(ModField f, float v);
+    void set(ModField f, float v) const;
 
     // Math: combine two input values by the op (op = waveform field, gain = depth field).
     float mathEval(float a, float b) const;
 
     // Envelope follower: smooth the source level toward `envValue` with attack/release
     // (called once per audio block from the engine; `dt` = block seconds).
-    void updateEnv(float level, double dt);
+    void updateEnv(float level, double dt) const;
 
     // ADSR: a gated A/D/S/R envelope. `gate` = a note is held; on its rising edge the
     // envelope attacks, on its falling edge it releases. Exponential stage approaches.
-    void updateAdsr(bool gate, double dt);
+    void updateAdsr(bool gate, double dt) const;
 
     // LFO: bipolar output in [-depth, +depth]. Env / MIDI→CV / ADSR: unipolar
     // envValue*depth (they update envValue outside eval).
@@ -153,11 +153,11 @@ struct CvLink {
     int32_t sourceSlot = -1;
     uint64_t targetChainUid = 0;
     int32_t targetSlot = -1;
-    std::atomic<float> depth{1.0f}; // -1..1
-    std::atomic<int32_t> mode{0};   // CvMode
+    mutable std::atomic<float> depth{1.0f}; // -1..1
+    mutable std::atomic<int32_t> mode{0};   // CvMode
     // The target param's *base* value (the centre the modulation swings around). The
     // device atomic holds the live modulated value; the UI edits this base instead.
-    std::atomic<float> base{0.0f};
+    mutable std::atomic<float> base{0.0f};
 
     CvLink() = default;
     CvLink(const CvLink& o) { *this = o; }

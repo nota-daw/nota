@@ -125,9 +125,10 @@ bool Engine::mayHaveTakeJoins(const Track& t) {
 bool Engine::settleTakeJoins(Track& nt) const {
     if (!mayHaveTakeJoins(nt)) return false;
     const auto off = takeJoinEdges(nt);
+    auto& clipsW = nt.clips.write();
     bool changed = false;
     for (size_t i = 0; i < off.size(); ++i) {
-        AudioClip& c = nt.clips[i];
+        AudioClip& c = clipsW[i];
         const uint8_t joined = off[i] & 3;
         const bool head = !(off[i] & 4), tail = !(off[i] & 8);
         if (c.joinedEdges == joined && c.fadeHead == head && c.fadeTail == tail) continue;
@@ -175,13 +176,13 @@ void Engine::placeTakesForTempo() {
         }
         auto nt = cloneTrack(*t);
         // Warped sections already follow the tempo from where they start; moved ones stay put.
-        for (auto& c : nt->clips) {
+        for (auto& c : nt->clips.write()) {
             const AudioTake* k = c.takeId != 0 && !c.warpEnabled ? findTake(*nt, c.takeId) : nullptr;
             if (k && k->sample && atTakePosition(c, *k))
                 c.startBeat = tempoMap() ? secondsToBeat(beatToSeconds(k->originBeat) + c.sourceOffsetFrames / k->sample->sourceSampleRate)
                     : k->originBeat + c.sourceOffsetFrames * beatsPerSourceFrame(k->sample->sourceSampleRate);
         }
-        for (auto& k : nt->takes)
+        for (auto& k : nt->takes.write())
             if (k.sample) { k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate); k.tempoMap = authoring_->tempoMap; }
         g->tracks.push_back(std::move(nt)); // publishRaw settles joins on this clone
         any = true;
@@ -245,14 +246,15 @@ bool Engine::compTake(int32_t trackId, int32_t takeId, double startBeat, double 
 
     auto nt = cloneTrack(*old);
     const double ns = k->beatAtFrame(f0), ne = k->beatAtFrame(f1);
-    overwriteAudioClipsInRange(nt->clips, ns, ne, authoringSamplesPerBeat());
+    auto& clipsW = nt->clips.write();
+    overwriteAudioClipsInRange(clipsW, ns, ne, authoringSamplesPerBeat());
     AudioClip clip;
     clip.sample = k->sample;
     clip.startBeat = ns;
     clip.sourceOffsetFrames = f0;
     clip.lengthFrames = static_cast<int64_t>(f1 - f0);
     clip.takeId = k->id;
-    nt->clips.push_back(std::move(clip));
+    clipsW.push_back(std::move(clip));
     republishWithTrack(trackId, nt);
     return true;
 }
@@ -261,9 +263,10 @@ bool Engine::deleteTake(int32_t trackId, int32_t takeId) {
     auto old = findTrackAuthoring(trackId);
     if (!old || !findTake(*old, takeId)) return false;
     auto nt = cloneTrack(*old);
-    nt->takes.erase(std::remove_if(nt->takes.begin(), nt->takes.end(), [&](const AudioTake& k) { return k.id == takeId; }),
-                    nt->takes.end());
-    for (auto& c : nt->clips)
+    auto& takesW = nt->takes.write();
+    takesW.erase(std::remove_if(takesW.begin(), takesW.end(), [&](const AudioTake& k) { return k.id == takeId; }),
+                 takesW.end());
+    for (auto& c : nt->clips.write())
         if (c.takeId == takeId) c.takeId = 0; // keeps playing, no longer a section of a take
     republishWithTrack(trackId, nt);
     return true;
@@ -310,11 +313,12 @@ bool Engine::flattenTakes(int32_t trackId) {
             return bpf > 0.0 && std::abs(c.startBeat - first->beatAtFrame(off)) < 1e-6;
         };
 
-        std::vector<const AudioClip*> merged; // into nt->clips, which `kept` leaves them in
+        std::vector<const AudioClip*> merged; // into `srcClips`, kept in place while assembling `kept`
         int64_t lo = frames, hi = 0;
         std::vector<AudioClip> kept;
         kept.reserve(nt->clips.size());
-        for (auto& c : nt->clips) {
+        auto& srcClips = nt->clips.write();
+        for (auto& c : srcClips) {
             if (c.takeId == 0 || !inGroup(c.takeId)) {
                 kept.push_back(std::move(c));
                 continue;
@@ -351,7 +355,7 @@ bool Engine::flattenTakes(int32_t trackId) {
                 for (int32_t m = 0; m < ch; ++m) dst[j * ch + m] += src[j * ch + m] * g;
             }
         }
-        nt->clips = std::move(kept);
+        nt->clips.replace(std::move(kept));
         if (hi > lo) {
             auto sb = std::make_shared<SampleBuffer>();
             sb->channels = ch;
@@ -372,10 +376,11 @@ bool Engine::flattenTakes(int32_t trackId) {
                 if ((kpt.joinedEdges & 2) && std::abs(kEnd - clip.startBeat) < 1e-6) clip.joinedEdges |= 1;
                 if ((kpt.joinedEdges & 1) && std::abs(kpt.startBeat - mergedEnd) < 1e-6) clip.joinedEdges |= 2;
             }
-            nt->clips.push_back(std::move(clip));
+            nt->clips.write().push_back(std::move(clip));
         }
-        nt->takes.erase(std::remove_if(nt->takes.begin(), nt->takes.end(), [&](const AudioTake& k) { return k.group == g; }),
-                        nt->takes.end());
+        auto& takesW = nt->takes.write();
+        takesW.erase(std::remove_if(takesW.begin(), takesW.end(), [&](const AudioTake& k) { return k.group == g; }),
+                     takesW.end());
     }
     republishWithTrack(trackId, nt);
     return true;
@@ -405,7 +410,7 @@ int32_t Engine::restoreTake(int32_t trackId, const std::string& path, int32_t nu
     k.lengthFrames = std::clamp<int64_t>(lengthFrames, 0, k.sample->frames - static_cast<int64_t>(k.sourceOffsetFrames));
     k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
     k.tempoMap = authoring_->tempoMap;
-    nt->takes.push_back(std::move(k));
+    nt->takes.write().push_back(std::move(k));
     republishWithTrackRaw(trackId, nt);
     return nextTakeId_;
 }
@@ -414,7 +419,7 @@ bool Engine::setClipTakeId(int32_t trackId, int32_t clipIndex, int32_t takeId) {
     auto old = findTrackAuthoring(trackId);
     if (!old || clipIndex < 0 || clipIndex >= static_cast<int32_t>(old->clips.size())) return false;
     auto nt = cloneTrack(*old);
-    AudioClip& c = nt->clips[clipIndex];
+    AudioClip& c = nt->clips.write()[clipIndex];
     c.takeId = takeId;
     // A reopened comp section decodes its own copy of the take's file: share the take's buffer
     // instead, as a freshly recorded comp does.
@@ -439,9 +444,10 @@ bool Engine::restoreJoinedEdges(int32_t trackId, const int32_t* edges, int32_t c
     if (!old || count < 0 || (count > 0 && !edges)) return false;
     auto nt = cloneTrack(*old);
     const size_t n = std::min(nt->clips.size(), static_cast<size_t>(count));
+    auto& clipsW = nt->clips.write();
     for (size_t i = 0; i < n; ++i) {
         if (edges[i] & 3) joinedEdgesRestored_ = true;
-        nt->clips[i].joinedEdges = static_cast<uint8_t>(edges[i] & 3);
+        clipsW[i].joinedEdges = static_cast<uint8_t>(edges[i] & 3);
     }
     republishWithTrackRaw(trackId, nt); // publishRaw keeps the pairs that still meet
     return true;

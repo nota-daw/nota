@@ -58,6 +58,7 @@
 #include "devices/effects/Utility.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <vector>
 
@@ -1149,8 +1150,9 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         // An instrument lane for a parameter the new track already automates takes that lane's
         // place, so there is one lane per parameter (edits and recording find the first one).
         TrackLane* same = nullptr;
+        auto& dstLanes = nd->automation.write();
         if (inst && !l.nested())
-            for (auto& d : nd->automation)
+            for (auto& d : dstLanes)
                 if (!d.nested() && d.target == AutomationTarget::PluginParam && d.deviceIndex < 0
                     && (l.paramId.empty() ? d.paramId.empty() && d.paramIndex == l.paramIndex : d.paramId == l.paramId)) {
                     same = &d;
@@ -1160,7 +1162,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
             same->paramIndex = l.paramIndex;
             same->points = std::move(l.points);
         } else
-            nd->automation.push_back(std::move(l));
+            dstLanes.push_back(std::move(l));
     }
 
     const bool dropSource = inst && !keepSource;
@@ -1778,28 +1780,51 @@ bool Engine::instrumentAcceptsSidechain(int32_t trackId) const {
 // instrument pointers are stable across snapshots, so the table the audio thread reads
 // stays valid).
 void Engine::recomputeRouting() {
-    // Slots at and past the count are always free, so only the used ones need clearing.
-    const int32_t used = routeSlotCount_.load(std::memory_order_relaxed);
-    routeSlotCount_.store(0, std::memory_order_release);
-    for (int32_t s = 0; s < used; ++s) routeSlotTrackId_[s].store(-1, std::memory_order_relaxed);
+    // Compute candidate slot assignments first; if identical to live table, skip atomic clears
+    // and avoid invalidating audio-thread routeSlot caches unnecessarily.
+    struct Candidate {
+        int32_t src = -1;
+        uint64_t part = 0;
+    };
+    Candidate nextList[kMaxRoutes];
     int32_t next = 0;
-    // A source that is not in the graph (its track was deleted; undo brings it back) gets no
-    // slot, so its consumers see no key at all rather than a silent one. A part key whose part
-    // is gone (the pad deleted, the rack replaced; specs/050) likewise.
+
     auto exists = [&](int32_t id, uint64_t part) {
         for (auto& t : authoring_->tracks)
             if (t->id() == id) return part == 0 || (t->instrument && t->instrument->partIndex(part) >= 0);
         return false;
     };
+    auto already = [&](int32_t src, uint64_t part) {
+        for (int32_t s = 0; s < next; ++s)
+            if (nextList[s].src == src && nextList[s].part == part) return true;
+        return false;
+    };
     auto claim = [&](int32_t src, uint64_t part) {
-        if (src < 0 || routeSlotFor(src, part) >= 0 || !exists(src, part)) return; // none / already assigned / gone
-        if (next < kMaxRoutes) {
-            routeSlotPart_[next].store(part, std::memory_order_relaxed);
-            routeSlotTrackId_[next++].store(src, std::memory_order_relaxed);
-            routeSlotCount_.store(next, std::memory_order_release); // claim() looks up as it goes
-        }
+        if (src < 0 || next >= kMaxRoutes || already(src, part) || !exists(src, part)) return;
+        nextList[next++] = {src, part};
     };
     forEachRouteKey([&](int32_t src, uint64_t part) { claim(src, part); });
+
+    const int32_t used = routeSlotCount_.load(std::memory_order_relaxed);
+    if (next == used) {
+        bool unchanged = true;
+        for (int32_t s = 0; s < used; ++s) {
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) != nextList[s].src ||
+                routeSlotPart_[s].load(std::memory_order_relaxed) != nextList[s].part) {
+                unchanged = false;
+                break;
+            }
+        }
+        if (unchanged) return;
+    }
+
+    routeSlotCount_.store(0, std::memory_order_release);
+    for (int32_t s = 0; s < used; ++s) routeSlotTrackId_[s].store(-1, std::memory_order_relaxed);
+    for (int32_t s = 0; s < next; ++s) {
+        routeSlotPart_[s].store(nextList[s].part, std::memory_order_relaxed);
+        routeSlotTrackId_[s].store(nextList[s].src, std::memory_order_relaxed);
+    }
+    routeSlotCount_.store(next, std::memory_order_release);
     routingEpoch_.fetch_add(1, std::memory_order_release);
 }
 
@@ -2123,10 +2148,25 @@ int32_t Engine::trackLatencySamples(int32_t trackId) const {
 
 // Delay every track by (maxLatency - itsOwnLatency) so all outputs stay aligned.
 void Engine::recomputePdc(bool resetChangedDelays) {
+    const size_t n = authoring_->tracks.size();
+    std::array<int32_t, 512> stackLat{};
+    std::vector<int32_t> heapLat;
+    int32_t* lats = n <= stackLat.size() ? stackLat.data() : (heapLat.resize(n), heapLat.data());
     int32_t maxLat = 0;
-    for (auto& t : authoring_->tracks) maxLat = std::max(maxLat, trackLatency(*t));
-    for (auto& t : authoring_->tracks)
-        if (t->pdc) t->pdc->setDelay(maxLat - trackLatency(*t), resetChangedDelays);
+    for (size_t i = 0; i < n; ++i) {
+        const auto& t = authoring_->tracks[i];
+        const int32_t lat = t ? trackLatency(*t) : 0;
+        lats[i] = lat;
+        if (lat > maxLat) maxLat = lat;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        const auto& t = authoring_->tracks[i];
+        if (t && t->pdc) {
+            const int32_t target = maxLat - lats[i];
+            if (resetChangedDelays || t->pdc->delay() != target)
+                t->pdc->setDelay(target, resetChangedDelays);
+        }
+    }
 }
 
 } // namespace nota

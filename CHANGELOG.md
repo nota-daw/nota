@@ -22,6 +22,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Engine performance (#1050, specs/117 — Phase 4)**: Copy-on-Write (`CowSlice`) backing for track clip/automation/slot snapshots with incremental `publishRaw()` / single-pass `recomputePdc()` / unchanged `recomputeRouting()` skipping, session-sized `StereoScratchArena` & `RenderScratch` buffers (`2048` live frames growing safely for offline bounces), `Eq` per-band coefficient caching + `double2` stereo SIMD filter chains (`float64x2_t` NEON / `__m128d` SSE2), runtime AVX2+FMA `SimdDispatch`, `-fno-math-errno`, and Release ThinLTO.
+
 ### Changed
 - **Timeline indexing and precompiled render routing plans** (#1050, specs/116) replace linear
   per-block arrangement scans and track-graph lookups with immutable snapshot indices.
