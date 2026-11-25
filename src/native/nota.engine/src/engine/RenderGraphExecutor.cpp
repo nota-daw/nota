@@ -44,11 +44,23 @@ ChainRest chainRest(const Track& t) noexcept {
     return r;
 }
 
-bool hasNeverSleepDevice(const Track& t) noexcept {
-    if (t.instrument && !t.instrument->bypassed() && t.instrument->sleepMode() == dsp::PluginSleepMode::Never)
-        return true;
+bool trackRequiresActiveProcessing(const Track& t) noexcept {
+    if (t.instrument && !t.instrument->bypassed() && t.instrument->requiresActiveProcessing()) return true;
     for (const auto& d : t.devices)
-        if (d && !d->bypassed() && d->sleepMode() == dsp::PluginSleepMode::Never) return true;
+        if (d && !d->bypassed() && d->requiresActiveProcessing()) return true;
+    return false;
+}
+
+bool trackHasOpenEditor(const Track& t) noexcept {
+    if (t.instrument && !t.instrument->bypassed()) {
+        if (t.instrument->editorOpen()) return true;
+        if (const auto* r = t.instrument->asRack(); r && r->chainsHaveOpenEditor(true)) return true;
+    }
+    for (const auto& d : t.devices) {
+        if (!d || d->bypassed()) continue;
+        if (d->editorOpen()) return true;
+        if (const auto* r = d->asRack(); r && r->chainsHaveOpenEditor(false)) return true;
+    }
     return false;
 }
 
@@ -59,13 +71,13 @@ bool midiEffectsIdle(const Track& t) noexcept {
 }
 
 bool canSkipInactiveBus(Track& t) noexcept {
-    return t.tailQuiet() < 0 && chainRest(t) == ChainRest::Settled && !hasNeverSleepDevice(t);
+    return t.tailQuiet() < 0 && chainRest(t) == ChainRest::Settled && !trackRequiresActiveProcessing(t);
 }
 
 void settleInactiveBus(Track& t, const float* buf, int32_t frames, double sr, float tailFloor,
     double tailQuietSec, double tailMaxQuietSec) noexcept {
     int64_t& quiet = t.tailQuiet();
-    if (simd_audio::peakAbs(buf, frames * 2) > tailFloor || hasNeverSleepDevice(t)) {
+    if (simd_audio::peakAbs(buf, frames * 2) > tailFloor || trackRequiresActiveProcessing(t)) {
         quiet = 0;
         return;
     }
@@ -286,7 +298,7 @@ bool RenderGraphExecutor::instrumentHasBlockInput(const MixContext& ctx, const T
 }
 
 bool RenderGraphExecutor::instrumentLeafCanSkip(const MixContext& ctx, const Track& t, size_t trackPos, bool capturing) {
-    if (capturing || hasNeverSleepDevice(t)) return false;
+    if (capturing || trackRequiresActiveProcessing(t)) return false;
     if (t.instrument) {
         if (t.instrument->bypassed()) {
             if (!t.instrument->offSettled.load(std::memory_order_relaxed)) return false;
@@ -484,7 +496,8 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
             sessionActive = !frozenActive && !capturing && !monitoring &&
                             sp->playing.load(std::memory_order_relaxed) >= 0;
         }
-        if (!audible && !capturing && !feeding && !keying && !cueing) {
+        const bool keepEditorAlive = !frozenActive && trackHasOpenEditor(t);
+        if (!audible && !capturing && !feeding && !keying && !cueing && !keepEditorAlive) {
             if (sessionActive) {
                 if (t.instrument && !t.sessionSilentReleased) {
                     t.instrument->allNotesOff();
@@ -538,7 +551,7 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
             w.path = Engine::LeafPath::Instrument;
         } else if (ctx.playing && ctx.arrangementActive) {
             w.path = Engine::LeafPath::AudioClips;
-        } else if (t.tailQuiet() >= 0 && hasLiveDevice(t)) {
+        } else if (trackRequiresActiveProcessing(t) || (t.tailQuiet() >= 0 && hasLiveDevice(t))) {
             w.path = Engine::LeafPath::Tail;
         } else {
             t.tailQuiet() = -1;
@@ -551,7 +564,7 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
         const int destSlot = ctx.plan ? ctx.plan->leafParentGroupSlot(li) : ctx.groupSlotOf(t.groupId());
         w.destSlot = static_cast<int8_t>(destSlot);
         w.dest = destSlot >= 0 ? eng.groupBus_[destSlot].data() : ctx.out;
-        const int32_t routeSlot = ctx.cachedRouteSlot(li, t.id());
+        const int32_t routeSlot = (audible || keying || feeding) ? ctx.cachedRouteSlot(li, t.id()) : -1;
         w.route = routeSlot >= 0 ? eng.routeBusNext_[routeSlot].data() : nullptr;
         w.anySend = false;
         for (int b = 0; b < ctx.numReturns; ++b) {
@@ -901,8 +914,10 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
 
         if (w.path == Engine::LeafPath::Tail) {
             int64_t& quiet = t.tailQuiet();
-            if (simd_audio::peakAbs(post, ctx.frames * 2) > Engine::kTailFloor) quiet = 0;
-            else quiet += ctx.frames;
+            if (simd_audio::peakAbs(post, ctx.frames * 2) > Engine::kTailFloor || trackRequiresActiveProcessing(t))
+                quiet = 0;
+            else
+                quiet += ctx.frames;
             if (quiet > 0) {
                 const ChainRest rest = chainRest(t);
                 if (rest == ChainRest::Settled ||

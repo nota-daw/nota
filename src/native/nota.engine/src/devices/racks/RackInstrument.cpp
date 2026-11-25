@@ -396,7 +396,7 @@ bool RackInstrument::supportsMpe() const {
 }
 
 bool RackInstrument::isIdle() const {
-    if (sleepMode() == dsp::PluginSleepMode::Never) return false;
+    if (requiresActiveProcessing()) return false;
     const auto& m = *mono_;
     if (m.heldN > 0 || m.glideLeft > 0) return false;
     for (int32_t c = 0; c < kMaxMidiChains; ++c) {
@@ -517,7 +517,7 @@ void RackInstrument::renderChunk(RackState& st, float* out, int32_t frames, int3
         const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
         const bool silent = mute || (anySolo && !solo);
         const int32_t ci = static_cast<int32_t>(&c - st.chains.data());
-        if (silent && !tap && !midiChainAt(ci) && c.instrument->isIdle()) {
+        if (silent && !tap && !midiChainAt(ci) && chainIdle(c, true)) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
             continue;
         }
@@ -549,7 +549,7 @@ void RackInstrument::renderChunk(RackState& st, float* out, int32_t frames, int3
             const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
             const bool silent = mute || (anySolo && !solo);
             const int32_t ci = static_cast<int32_t>(&c - st.chains.data());
-            if (silent && !tap && !midiChainAt(ci) && c.instrument->isIdle()) {
+            if (silent && !tap && !midiChainAt(ci) && chainIdle(c, true)) {
                 c.ctl->meter.store(0.0f, std::memory_order_relaxed);
                 continue;
             }

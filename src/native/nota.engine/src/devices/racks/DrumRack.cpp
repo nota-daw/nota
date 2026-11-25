@@ -72,10 +72,12 @@ void DrumRack::beginRender(RackState& st, int32_t frames) {
                             (anySolo && !c.ctl->solo.load(std::memory_order_relaxed));
         c.ctl->silentNow = silent;
         if (!silent || (taps_.any() && taps_.find(c.uid))) continue; // heard, or a ghost key's pad
-        if (!c.instrument->isIdle()) {
+        if (!chainIdle(c, true)) {
             float* const scratch = arena_.buffer(0);
             std::memset(scratch, 0, sizeof(float) * frames * 2);
             c.instrument->render(scratch, frames);
+            for (auto& d : c.devices)
+                if (d && !d->bypassed() && (!d->isIdle() || d->requiresActiveProcessing())) d->process(scratch, frames);
         }
         if (c.ctl->retrig) {
             c.ctl->ampEnv.store(1.0f, std::memory_order_relaxed);

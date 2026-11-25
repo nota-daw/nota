@@ -280,6 +280,22 @@ class RackCore {
         for (auto& c : st->chains)
             if (c.instrument) fn(*c.instrument);
     }
+    bool chainsHaveOpenEditor(bool includeInstruments) const {
+        RackState* st = live();
+        if (!st) return false;
+        for (const auto& c : st->chains) {
+            if (includeInstruments && c.instrument && !c.instrument->bypassed()) {
+                if (c.instrument->editorOpen()) return true;
+                if (const auto* r = c.instrument->asRack(); r && r->chainsHaveOpenEditor(true)) return true;
+            }
+            for (const auto& d : c.devices) {
+                if (!d || d->bypassed()) continue;
+                if (d->editorOpen()) return true;
+                if (const auto* r = d->asRack(); r && r->chainsHaveOpenEditor(false)) return true;
+            }
+        }
+        return false;
+    }
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;
@@ -529,16 +545,34 @@ class RackCore {
         return false;
     }
 
+    static bool chainIdle(const RackChain& c, bool includeInstrument) {
+        if (includeInstrument && c.instrument && !c.instrument->bypassed() &&
+            (!c.instrument->isIdle() || c.instrument->requiresActiveProcessing()))
+            return false;
+        for (const auto& d : c.devices)
+            if (d && !d->bypassed() && (!d->isIdle() || d->requiresActiveProcessing())) return false;
+        return true;
+    }
+
     bool chainsIdle(bool includeInstruments) const {
         RackState* st = live();
         if (!st) return true;
-        for (const auto& c : st->chains) {
-            if (includeInstruments && c.instrument && !c.instrument->bypassed() && !c.instrument->isIdle())
-                return false;
-            for (const auto& d : c.devices)
-                if (d && !d->bypassed() && !d->isIdle()) return false;
-        }
+        for (const auto& c : st->chains)
+            if (!chainIdle(c, includeInstruments)) return false;
         return true;
+    }
+
+    bool chainsRequireActiveProcessing(bool includeInstruments) const {
+        RackState* st = live();
+        if (!st) return false;
+        for (const auto& c : st->chains) {
+            if (includeInstruments && c.instrument && !c.instrument->bypassed() &&
+                c.instrument->requiresActiveProcessing())
+                return true;
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed() && d->requiresActiveProcessing()) return true;
+        }
+        return false;
     }
 
     static bool chainMidiDevicesIdle(const RackChain& c) {

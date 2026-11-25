@@ -334,6 +334,7 @@ internal static class HostedRenderPoolTests
             e.RenderOffline(new float[Block * 2], Block, Rate);
             e.SetBpm(120);
             int t = e.AddPluginInstrumentTrack(catalog);
+            e.WaitPluginLoads(60000);
             e.SetTrackVolume(t, 0.5f);
             e.PluginParamSet(t, -1, Param(e, t, -1, "Work"), 1.0f);
             e.PluginParamSet(t, -1, Param(e, t, -1, "Gain"), 1.0f);
@@ -354,6 +355,7 @@ internal static class HostedRenderPoolTests
             e.RenderOffline(new float[Block * 2], Block, Rate);
             e.SetBpm(120);
             int t = e.AddPluginInstrumentTrack(cat);
+            e.WaitPluginLoads(60000);
             e.PluginParamSet(t, -1, Param(e, t, -1, "Work"), 0.5f); // 2048 trig ops/sample
             e.SetPluginSleepMode(t, -1, mode);
             var buf = new float[Block * 2];
@@ -391,6 +393,7 @@ internal static class HostedRenderPoolTests
                 int src = e.AddBassSynthTrack();
                 int main = e.AddInstrumentTrack();
                 int eff = e.AddTrackEffectPlugin(main, cat);
+                e.WaitPluginLoads(60000);
                 e.PluginParamSet(main, eff, Param(e, main, eff, "Work"), 0.0f);
                 e.PluginParamSet(main, eff, Param(e, main, eff, "Gain"), 1.0f);
                 e.SetDeviceSidechainSource(main, eff, src);
@@ -408,6 +411,10 @@ internal static class HostedRenderPoolTests
             yield return (quietPeak == 0f && scWakePeak > 0.001f && f0.SequenceEqual(f4) && f0.All(float.IsFinite),
                 $"VST3 PluginEffect sleeps past hangover (quiet={quietPeak:0.0000}) and wakes on sidechain audio (peak={scWakePeak:0.000})");
         }
+
+        int edCode = NotaEngine.PluginEditorSleepSelfTest(catalog);
+        yield return (edCode == 0,
+            $"VST3 open editor keeps PluginInstrument, Audio/Muted/Group PluginEffect, Hybrid Auto, and Racks awake (code={edCode})");
     }
 
     private static IEnumerable<(bool Ok, string Label)> BufferChecks(int catalog)
@@ -457,6 +464,7 @@ internal static class HostedRenderPoolTests
                 for (int k = 0; k < 4; k++)
                 {
                     int fx = e.AddTrackEffectPlugin(tr, cat);
+                    e.WaitPluginLoads(60000);
                     e.PluginParamSet(tr, fx, Param(e, tr, fx, "Work"), 0.02f);
                     e.PluginParamSet(tr, fx, Param(e, tr, fx, "Gain"), 1.0f);
                 }
@@ -536,6 +544,7 @@ internal static class HostedRenderPoolTests
                     int clip = e.AddMidiClip(tr, 0, 8);
                     e.SetClipNotes(tr, clip, [new NotaNote(48 + t * 3, 0, 2, 0.8f), new NotaNote(60 + t, 0.25, 2, 0.7f)]);
                 }
+                e.WaitPluginLoads(60000);
                 e.Seek(0);
                 e.Play();
                 double cpu0 = e.RenderThreadsCpuSeconds;
@@ -555,6 +564,9 @@ internal static class HostedRenderPoolTests
             for (int i = 0; i < au0.Pcm.Length; i++) maxDiff = Math.Max(maxDiff, Math.Abs(au0.Pcm[i] - au4.Pcm[i]));
             bool ok = au0.Pcm.Any(v => Math.Abs(v) > 0.001f) && au0.Pcm.All(float.IsFinite) && maxDiff < 1e-5 && au4.WorkerMs > 0.0;
             yield return (ok, $"macOS real AUDelay+AUBandpass planar+parallel 4-track parity (maxDiff={maxDiff:0.0e0}, worker={au4.WorkerMs:0.0} ms)");
+
+            int auEdCode = NotaEngine.PluginEditorSleepSelfTest(bpasIdx);
+            yield return (auEdCode == 0, $"macOS real AudioUnit open editor keeps Audio/Muted/Group/Rack chains active past hangover (code={auEdCode})");
         }
         finally
         {

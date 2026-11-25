@@ -390,6 +390,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_plugin_sleep_mode")]
     internal static partial int PluginSleepMode(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_plugin_editor_sleep_selftest")]
+    internal static partial int PluginEditorSleepSelfTest(int catalogIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_device_folded")]
     internal static partial void SetDeviceFolded(IntPtr engine, int trackId, int deviceIndex, int folded);
 

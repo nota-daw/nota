@@ -1105,6 +1105,7 @@ class Engine {
     // Auto-sleep policy (Phase 2): deviceIndex == -1 targets the instrument; >= 0 an insert.
     bool setPluginSleepMode(int32_t trackId, int32_t deviceIndex, int32_t mode);
     int32_t pluginSleepMode(int32_t trackId, int32_t deviceIndex) const;
+    static int32_t pluginEditorSleepSelftest(int32_t catalogIndex);
     // Device fold (specs/022): a view flag on the device; deviceIndex -1 = the instrument.
     void setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded);
     bool trackDeviceFolded(int32_t trackId, int32_t deviceIndex) const;

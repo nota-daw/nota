@@ -211,20 +211,26 @@ bool HybridBufferController::isTrackAnticipativeEligible(
     if (trackHasNonMixerAutomation(t) || trackParticipatesInModulation(g, t)) return false;
     if (t.instrument) {
         if (!t.instrument->supportsParallelRender()) return false;
+        if (t.instrument->editorOpen()) return false;
         if (t.instrument->sidechainSourceTrackId() >= 0) return false;
         if (const auto* r = t.instrument->asRack()) {
+            if (r->chainsHaveOpenEditor(true)) return false;
             bool blocked = false;
             r->forEachChildDevice([&](const Device& c) {
-                if (!c.bypassed() && (!c.supportsParallelRender() || c.sidechainSourceTrackId() >= 0)) blocked = true;
+                if (!c.bypassed() &&
+                    (!c.supportsParallelRender() || c.sidechainSourceTrackId() >= 0 || c.editorOpen()))
+                    blocked = true;
             });
             r->forEachChildInstrument([&](const Instrument& i) {
-                if (!i.supportsParallelRender() || i.sidechainSourceTrackId() >= 0) blocked = true;
+                if (!i.supportsParallelRender() || i.sidechainSourceTrackId() >= 0 || i.editorOpen()) blocked = true;
             });
             if (blocked) return false;
         }
     }
     for (const auto& d : t.devices)
-        if (d && deviceHasDynamicKeyOrNonParallel(*d)) return false;
+        if (d && (deviceHasDynamicKeyOrNonParallel(*d) || d->editorOpen() ||
+                     (d->asRack() && d->asRack()->chainsHaveOpenEditor(false))))
+            return false;
     return true;
 }
 

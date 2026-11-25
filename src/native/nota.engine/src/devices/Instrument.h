@@ -268,6 +268,9 @@ class Instrument {
     virtual bool isIdle() const { return false; }
     // True when a sleeping instrument still needs render() called for cheap phase/clock continuity.
     virtual bool needsIdleRender() const { return false; }
+    virtual bool requiresActiveProcessing() const {
+        return sleepMode() == dsp::PluginSleepMode::Never || editorOpen();
+    }
     virtual void wake() {}
     virtual void setSleepMode(dsp::PluginSleepMode mode) {
         sleepMode_.store(mode, std::memory_order_release);
@@ -327,8 +330,9 @@ class Instrument {
     // open/hide their editor window. Must be called on the message thread.
     virtual void openEditor() {}
     virtual void closeEditor() {}
-    // Whether the editor window is on screen (hidden by its close button counts as closed).
+    // Whether the editor window is on screen (hidden by its close button counts as closed; audio-thread safe).
     virtual bool editorOpen() const { return false; }
+    virtual void setEditorOpenForTest(bool /*open*/) {}
 
     // Opaque plugin state (M3-5), for project save/restore. Empty for built-ins.
     // Message thread only.

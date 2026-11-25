@@ -48,6 +48,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   measurements behind `DeviceTelemetry` (`OnDemand` by default with a 3-second card-open lease,
   plus `AlwaysOff` and `AlwaysOn`).
 
+### Fixed
+- **Open VST3 and AudioUnit plugin editor keep-awake (#1050)**: Native VST3 and AudioUnit plugin UIs no longer freeze when the plugin goes silent, sits on a stopped audio track, muted track, group/return bus, or nested rack, or runs inside the Hybrid anticipative pool (`SilenceGate::holdAwake_`, lock-free `EditorHost::open_`, track/bus/rack active-editor propagation, and live Hybrid bypass without overwriting `PluginSleepMode`).
+
 ## [0.61.1] — 2026-11-24
 
 ### Added

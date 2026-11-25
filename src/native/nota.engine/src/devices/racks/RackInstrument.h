@@ -81,6 +81,9 @@ class RackInstrument : public Instrument, public RackCore {
     bool hasTail() const override { return true; }
     bool isIdle() const override;
     bool needsIdleRender() const override { return hasPendingRetire(); }
+    bool requiresActiveProcessing() const override {
+        return Instrument::requiresActiveProcessing() || chainsRequireActiveProcessing(true);
+    }
     void wake() override { wakeChains(true); }
     void setSleepMode(dsp::PluginSleepMode mode) override {
         Instrument::setSleepMode(mode);

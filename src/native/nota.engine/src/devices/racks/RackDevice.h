@@ -47,8 +47,11 @@ class RackDevice final : public Device, public RackCore {
     void process(float* buf, int32_t frames) override;
 
     bool hasTail() const override { return chainsHaveTail(); }
+    bool requiresActiveProcessing() const override {
+        return Device::requiresActiveProcessing() || chainsRequireActiveProcessing(false);
+    }
     bool isIdle() const override {
-        if (sleepMode() == dsp::PluginSleepMode::Never || hasPendingRetire()) return false;
+        if (requiresActiveProcessing() || hasPendingRetire()) return false;
         return chainsIdle(false);
     }
     void wake() override { wakeChains(false); }

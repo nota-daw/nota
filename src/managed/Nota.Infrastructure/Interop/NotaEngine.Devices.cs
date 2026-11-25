@@ -556,6 +556,9 @@ public sealed partial class NotaEngine
     /// <summary>Deterministic self-test of the delay-compensation line. True if correct.</summary>
     public static bool PdcSelfTest() => NativeMethods.PdcSelfTest() != 0;
 
+    /// <summary>Verifies open plugin editors keep VST3/AU processing active without mutating SleepMode (0 = pass).</summary>
+    public static int PluginEditorSleepSelfTest(int catalogIndex) => NativeMethods.PluginEditorSleepSelfTest(catalogIndex);
+
     /// <summary>Instrument identity: 0=Synth, 1=Sampler, -1=plugin/unknown, -2=no instrument.</summary>
     public int TrackInstrumentKind(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentKind(_handle, trackId); }
     public long TrackInstrumentId(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentId(_handle, trackId); }

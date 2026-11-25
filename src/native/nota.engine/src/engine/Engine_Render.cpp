@@ -185,7 +185,8 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         return;
     }
     if (off) n = xn = an = 0; // nothing new starts on the way out
-    if (!off && n == 0 && xn == 0 && an == 0 && inst.isIdle() && !inst.needsIdleRender()) {
+    if (!off && n == 0 && xn == 0 && an == 0 && inst.isIdle() && !inst.needsIdleRender() &&
+        !inst.requiresActiveProcessing()) {
         live();
         if (inst.isIdle()) {
             inst.tapSilence(frames);

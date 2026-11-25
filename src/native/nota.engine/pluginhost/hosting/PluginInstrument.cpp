@@ -40,6 +40,7 @@ PluginInstrument::PluginInstrument(const juce::PluginDescription& desc, double s
     };
     // The window's picture, taken each time it is hidden, goes on the card (specs/046).
     editor_.onPreview = [this](std::vector<uint8_t> jpeg) { editorPreview = nota::EditorPreview::make(std::move(jpeg)); };
+    editor_.onOpenChanged = [this](bool open) { gate_.setHoldAwake(open); };
     if (desc.name.isEmpty()) return; // the instance comes from the other constructor
     // The ticket's finish runs on the message thread in PluginLoader::service(); the destructor
     // cancels it first, so `this` is alive whenever it runs.

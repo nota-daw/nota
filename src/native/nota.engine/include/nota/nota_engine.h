@@ -2817,6 +2817,8 @@ typedef enum NotaPluginSleepMode {
  * track's instrument; >= 0 targets an insert device). Lock-free across the audio thread. */
 NOTA_API NotaResult nota_plugin_set_sleep_mode(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t mode);
 NOTA_API int32_t    nota_plugin_sleep_mode(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* Device-free selftest verifying open editors hold SilenceGate and audio/rack paths active. 0 = pass. */
+NOTA_API int32_t    nota_engine_plugin_editor_sleep_selftest(int32_t catalog_index);
 
 /* Device fold (specs/022): a view flag the Devices panel draws as a narrow strip. Saved with
  * the project, never read by the audio thread. Kept on the device, so it follows moves and

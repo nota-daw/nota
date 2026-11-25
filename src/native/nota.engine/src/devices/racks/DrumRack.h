@@ -42,7 +42,7 @@ class DrumRack final : public RackInstrument {
     void render(float* out, int32_t frames) override;
 
     bool isIdle() const override {
-        if (sleepMode() == dsp::PluginSleepMode::Never) return false;
+        if (requiresActiveProcessing()) return false;
         return chainsIdle(true);
     }
 

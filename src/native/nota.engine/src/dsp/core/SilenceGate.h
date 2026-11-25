@@ -79,6 +79,13 @@ class SilenceGate {
 
     void setSleepMode(PluginSleepMode mode) noexcept { setNeverSleep(mode == PluginSleepMode::Never); }
 
+    // Transient UI keep-awake (e.g. open plugin editor window) that preserves SleepMode policy.
+    void setHoldAwake(bool hold) noexcept {
+        holdAwake_.store(hold, std::memory_order_release);
+        if (hold) wake();
+    }
+    bool holdAwake() const noexcept { return holdAwake_.load(std::memory_order_acquire); }
+
     PluginSleepMode sleepMode() const noexcept {
         return neverSleep() ? PluginSleepMode::Never : PluginSleepMode::Auto;
     }
@@ -91,7 +98,8 @@ class SilenceGate {
 
     // Read by Engine / render path to decide whether processing can be skipped.
     bool isSleeping() const noexcept {
-        if (neverSleep_.load(std::memory_order_acquire) || infiniteTail_.load(std::memory_order_acquire))
+        if (neverSleep_.load(std::memory_order_acquire) || infiniteTail_.load(std::memory_order_acquire)
+            || holdAwake_.load(std::memory_order_acquire))
             return false;
         if (!sleeping_.load(std::memory_order_acquire)) return false;
         return wakeEpoch_.load(std::memory_order_acquire) == seenEpoch_.load(std::memory_order_acquire);
@@ -103,6 +111,7 @@ class SilenceGate {
         const uint32_t epoch = wakeEpoch_.load(std::memory_order_acquire);
         const bool skip = !neverSleep_.load(std::memory_order_acquire)
             && !infiniteTail_.load(std::memory_order_acquire)
+            && !holdAwake_.load(std::memory_order_acquire)
             && sleeping_.load(std::memory_order_acquire)
             && epoch == seenEpoch_.load(std::memory_order_relaxed);
         if (skip) {
@@ -127,7 +136,7 @@ class SilenceGate {
     void observe(bool stillActive, int32_t frames, uint32_t blockEpoch) noexcept {
         const uint32_t currentEpoch = wakeEpoch_.load(std::memory_order_acquire);
         if (currentEpoch != blockEpoch || stillActive || neverSleep_.load(std::memory_order_acquire)
-            || infiniteTail_.load(std::memory_order_acquire)) {
+            || infiniteTail_.load(std::memory_order_acquire) || holdAwake_.load(std::memory_order_acquire)) {
             quietSamples_ = 0;
             sleeping_.store(false, std::memory_order_release);
             seenEpoch_.store(currentEpoch, std::memory_order_release);
@@ -171,6 +180,7 @@ class SilenceGate {
     std::atomic<uint32_t> seenEpoch_{0};
     std::atomic<bool> sleeping_{false};
     std::atomic<bool> neverSleep_{false};
+    std::atomic<bool> holdAwake_{false};
     std::atomic<bool> infiniteTail_{false};
 };
 

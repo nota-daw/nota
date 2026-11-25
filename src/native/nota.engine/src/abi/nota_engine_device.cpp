@@ -762,6 +762,9 @@ NotaResult nota_plugin_set_sleep_mode(NotaEngine* e, int32_t track_id, int32_t d
 int32_t nota_plugin_sleep_mode(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->pluginSleepMode(track_id, device_index) : NOTA_PLUGIN_SLEEP_AUTO;
 }
+int32_t nota_engine_plugin_editor_sleep_selftest(int32_t catalog_index) {
+    return nota::Engine::pluginEditorSleepSelftest(catalog_index);
+}
 void nota_track_set_device_folded(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t folded) {
     if (e) ENG(e)->setTrackDeviceFolded(track_id, device_index, folded != 0);
 }

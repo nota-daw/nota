@@ -19,6 +19,7 @@ PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double 
     empty_.ensureSize(256);
     // The window's picture, taken each time it is hidden, goes on the card (specs/046).
     editor_.onPreview = [this](std::vector<uint8_t> jpeg) { setEditorPreview(nota::EditorPreview::make(std::move(jpeg))); };
+    editor_.onOpenChanged = [this](bool open) { gate_.setHoldAwake(open); };
     sr_ = sr;
     requestedBlock_ = maxBlock;
     maxBlock_ = juce::jmin(maxBlock, kPluginMaxBlock);
@@ -28,6 +29,7 @@ PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double 
 PluginEffect::PluginEffect(const juce::PluginDescription& desc, double sr, int maxBlock) : desc_(desc) {
     empty_.ensureSize(256);
     editor_.onPreview = [this](std::vector<uint8_t> jpeg) { setEditorPreview(nota::EditorPreview::make(std::move(jpeg))); };
+    editor_.onOpenChanged = [this](bool open) { gate_.setHoldAwake(open); };
     name_ = desc.name.toStdString();
     sr_ = sr;
     requestedBlock_ = maxBlock;

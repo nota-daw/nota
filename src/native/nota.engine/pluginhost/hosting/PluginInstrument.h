@@ -61,6 +61,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     void openEditor() override;
     void closeEditor() override;
     bool editorOpen() const override { return editor_.isOpen(); }
+    void setEditorOpenForTest(bool open) override { editor_.setSimulatedOpenForTest(open); }
 
     std::vector<uint8_t> getState() const override;
     void setState(const uint8_t* data, int32_t size) override;

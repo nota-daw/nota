@@ -89,10 +89,11 @@ class Device {
     // Reported processing latency, for future PDC (M3-7).
     virtual int32_t latencySamples() const { return 0; }
 
-    // Native editor GUI (M3-4). Message thread only.
+    // Native editor GUI (M3-4). Message thread to open/close; editorOpen() is audio-thread safe.
     virtual void openEditor() {}
     virtual void closeEditor() {}
     virtual bool editorOpen() const { return false; }
+    virtual void setEditorOpenForTest(bool /*open*/) {}
 
     // Opaque plugin state (M3-5), for project save/restore. Message thread only.
     virtual std::vector<uint8_t> getState() const { return {}; }
@@ -219,6 +220,9 @@ class Device {
     // existing device keeps rendering until it opts in. Audio thread.
     virtual bool hasTail() const { return false; }
     virtual bool isIdle() const { return false; }
+    virtual bool requiresActiveProcessing() const {
+        return sleepMode() == dsp::PluginSleepMode::Never || editorOpen();
+    }
     virtual void wake() {}
     virtual void setSleepMode(dsp::PluginSleepMode mode) {
         sleepMode_.store(mode, std::memory_order_release);

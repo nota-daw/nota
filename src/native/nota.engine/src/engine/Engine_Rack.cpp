@@ -12,6 +12,7 @@
 // stable across graph snapshots.
 
 #include "Engine.h"
+#include "HybridBufferController.h"
 #include "media/AudioFile.h"
 #include "bridge/PluginHostBridge.h"
 #include "ParamPath.h"
@@ -1236,12 +1237,18 @@ void Engine::rackChainInstrumentAction(int32_t t, int32_t di, int32_t c, int32_t
 void Engine::rackOpenChainInstrumentEditor(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
     Instrument* inst = r ? r->chainInstrument(c) : nullptr;
-    if (inst) inst->openEditor();
+    if (inst) {
+        inst->openEditor();
+        if (hybrid_ && hybrid_->mode() == HybridBufferMode::Auto) hybrid_->invalidate(true);
+    }
 }
 void Engine::rackOpenChainDeviceEditor(int32_t t, int32_t di, int32_t c, int32_t d) {
     auto* r = rackCoreAt(t, di);
     Device* dev = r ? r->chainDeviceAt(c, d) : nullptr;
-    if (dev) dev->openEditor();
+    if (dev) {
+        dev->openEditor();
+        if (hybrid_ && hybrid_->mode() == HybridBufferMode::Auto) hybrid_->invalidate(true);
+    }
 }
 std::string Engine::rackChainInstrumentPluginId(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
