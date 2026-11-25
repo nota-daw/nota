@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "dsp/core/RtAttributes.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -40,7 +42,7 @@ class SilenceGate {
     explicit SilenceGate(uint64_t initialHangoverSamples = 11025) noexcept
         : hangoverSamples_(initialHangoverSamples) {}
     ~SilenceGate() {
-        if (holdAwake_.exchange(false, std::memory_order_acq_rel))
+        if ((flags_.fetch_and(~kHoldAwake, std::memory_order_acq_rel) & kHoldAwake) != 0)
             gOpenPluginEditors.fetch_sub(1, std::memory_order_relaxed);
     }
 
@@ -54,18 +56,18 @@ class SilenceGate {
 
     void setHangoverSeconds(double seconds) noexcept {
         if (!std::isfinite(seconds) || seconds >= 1.0e6) {
-            infiniteTail_.store(true, std::memory_order_release);
+            flags_.fetch_or(kInfiniteTail, std::memory_order_release);
             hangoverSamples_ = 0;
             wake();
             return;
         }
-        infiniteTail_.store(false, std::memory_order_release);
+        flags_.fetch_and(~kInfiniteTail, std::memory_order_release);
         const double clamped = std::max(0.0, seconds);
         hangoverSamples_ = static_cast<uint64_t>(std::llround(sampleRate_ * clamped));
     }
 
     void setHangoverSamples(uint64_t samples) noexcept {
-        infiniteTail_.store(false, std::memory_order_release);
+        flags_.fetch_and(~kInfiniteTail, std::memory_order_release);
         hangoverSamples_ = samples;
     }
 
@@ -73,12 +75,12 @@ class SilenceGate {
     // with a 250 ms safety floor; infinite/huge tails disable auto-sleep).
     void setPluginTailSeconds(double tailSeconds) noexcept {
         if (!std::isfinite(tailSeconds) || tailSeconds >= 1.0e6) {
-            infiniteTail_.store(true, std::memory_order_release);
+            flags_.fetch_or(kInfiniteTail, std::memory_order_release);
             hangoverSamples_ = 0;
             wake();
             return;
         }
-        infiniteTail_.store(false, std::memory_order_release);
+        flags_.fetch_and(~kInfiniteTail, std::memory_order_release);
         const double clamped = tailSeconds > 0.0
             ? std::clamp(tailSeconds, kDefaultHangoverSeconds, kMaxAutoHangoverSeconds)
             : kDefaultHangoverSeconds;
@@ -86,21 +88,26 @@ class SilenceGate {
     }
 
     void setNeverSleep(bool never) noexcept {
-        neverSleep_.store(never, std::memory_order_release);
+        if (never) flags_.fetch_or(kNeverSleep, std::memory_order_release);
+        else
+            flags_.fetch_and(~kNeverSleep, std::memory_order_release);
         wake();
     }
 
-    bool neverSleep() const noexcept { return neverSleep_.load(std::memory_order_relaxed); }
+    bool neverSleep() const noexcept { return (flags_.load(std::memory_order_relaxed) & kNeverSleep) != 0; }
 
     void setSleepMode(PluginSleepMode mode) noexcept { setNeverSleep(mode == PluginSleepMode::Never); }
 
     // Transient UI keep-awake (e.g. open plugin editor window) that preserves SleepMode policy.
     void setHoldAwake(bool hold) noexcept {
-        const bool prev = holdAwake_.exchange(hold, std::memory_order_release);
-        if (prev != hold) gOpenPluginEditors.fetch_add(hold ? 1 : -1, std::memory_order_relaxed);
+        const uint32_t prev = hold
+            ? flags_.fetch_or(kHoldAwake, std::memory_order_acq_rel)
+            : flags_.fetch_and(~kHoldAwake, std::memory_order_acq_rel);
+        const bool was = (prev & kHoldAwake) != 0;
+        if (was != hold) gOpenPluginEditors.fetch_add(hold ? 1 : -1, std::memory_order_relaxed);
         if (hold) wake();
     }
-    bool holdAwake() const noexcept { return holdAwake_.load(std::memory_order_acquire); }
+    bool holdAwake() const noexcept { return (flags_.load(std::memory_order_acquire) & kHoldAwake) != 0; }
 
     PluginSleepMode sleepMode() const noexcept {
         return neverSleep() ? PluginSleepMode::Never : PluginSleepMode::Auto;
@@ -108,36 +115,25 @@ class SilenceGate {
 
     // Thread-safe wake callable from UI, preset, or audio threads.
     void wake() noexcept {
-        wakeEpoch_.fetch_add(1, std::memory_order_release);
-        sleeping_.store(false, std::memory_order_release);
+        wakeEpoch_.fetch_add(1, std::memory_order_seq_cst);
+        sleeping_.store(false, std::memory_order_seq_cst);
     }
 
     // Read by Engine / render path to decide whether processing can be skipped.
     bool isSleeping() const noexcept {
-        if (neverSleep_.load(std::memory_order_acquire) || infiniteTail_.load(std::memory_order_acquire)
-            || holdAwake_.load(std::memory_order_acquire))
-            return false;
         if (!sleeping_.load(std::memory_order_acquire)) return false;
+        if ((flags_.load(std::memory_order_acquire) & kKeepAwakeMask) != 0) return false;
         return wakeEpoch_.load(std::memory_order_acquire) == seenEpoch_.load(std::memory_order_acquire);
     }
 
     // Audio-thread block start: returns the epoch token to pass to observe(), and sets
     // *outSkip = true if the gate is currently asleep with no unconsumed wake request.
     uint32_t beginBlock(bool* outSkip = nullptr) noexcept {
-        const uint32_t epoch = wakeEpoch_.load(std::memory_order_acquire);
-        const bool skip = !neverSleep_.load(std::memory_order_acquire)
-            && !infiniteTail_.load(std::memory_order_acquire)
-            && !holdAwake_.load(std::memory_order_acquire)
-            && sleeping_.load(std::memory_order_acquire)
-            && epoch == seenEpoch_.load(std::memory_order_relaxed);
-        if (skip) {
-            if (outSkip) *outSkip = true;
-            return epoch;
+        if (!sleeping_.load(std::memory_order_relaxed)) [[likely]] {
+            if (outSkip) *outSkip = false;
+            return wakeEpoch_.load(std::memory_order_relaxed);
         }
-        if (outSkip) *outSkip = false;
-        sleeping_.store(false, std::memory_order_relaxed);
-        seenEpoch_.store(epoch, std::memory_order_relaxed);
-        return epoch;
+        return beginBlockSlow(outSkip);
     }
 
     bool shouldSkip(uint32_t* outBlockEpoch = nullptr) noexcept {
@@ -150,19 +146,11 @@ class SilenceGate {
     // Audio-thread block end: enters sleep only if !stillActive past hangoverSamples_ AND
     // no concurrent wake() occurred since beginBlock().
     void observe(bool stillActive, int32_t frames, uint32_t blockEpoch) noexcept {
-        const uint32_t currentEpoch = wakeEpoch_.load(std::memory_order_acquire);
-        if (currentEpoch != blockEpoch || stillActive || neverSleep_.load(std::memory_order_acquire)
-            || infiniteTail_.load(std::memory_order_acquire) || holdAwake_.load(std::memory_order_acquire)) {
+        if (stillActive) [[likely]] {
             quietSamples_ = 0;
-            sleeping_.store(false, std::memory_order_release);
-            seenEpoch_.store(currentEpoch, std::memory_order_release);
             return;
         }
-        quietSamples_ += static_cast<uint64_t>(std::max<int32_t>(0, frames));
-        if (quietSamples_ > hangoverSamples_) {
-            seenEpoch_.store(blockEpoch, std::memory_order_release);
-            sleeping_.store(true, std::memory_order_release);
-        }
+        observeQuietSlow(frames, blockEpoch);
     }
 
     void observe(bool stillActive, int32_t frames) noexcept {
@@ -187,6 +175,46 @@ class SilenceGate {
     }
 
   private:
+    static constexpr uint32_t kNeverSleep = 1u << 0;
+    static constexpr uint32_t kInfiniteTail = 1u << 1;
+    static constexpr uint32_t kHoldAwake = 1u << 2;
+    static constexpr uint32_t kKeepAwakeMask = kNeverSleep | kInfiniteTail | kHoldAwake;
+
+    NOTA_NOINLINE uint32_t beginBlockSlow(bool* outSkip) noexcept {
+        const uint32_t epoch = wakeEpoch_.load(std::memory_order_acquire);
+        const uint32_t f = flags_.load(std::memory_order_acquire);
+        if ((f & kKeepAwakeMask) == 0 && sleeping_.load(std::memory_order_acquire) &&
+            epoch == seenEpoch_.load(std::memory_order_relaxed)) {
+            if (outSkip) *outSkip = true;
+            return epoch;
+        }
+        if (outSkip) *outSkip = false;
+        sleeping_.store(false, std::memory_order_relaxed);
+        seenEpoch_.store(epoch, std::memory_order_relaxed);
+        quietSamples_ = 0;
+        return epoch;
+    }
+
+    NOTA_NOINLINE void observeQuietSlow(int32_t frames, uint32_t blockEpoch) noexcept {
+        const uint32_t currentEpoch = wakeEpoch_.load(std::memory_order_acquire);
+        const uint32_t f = flags_.load(std::memory_order_acquire);
+        if (currentEpoch != blockEpoch || (f & kKeepAwakeMask) != 0) {
+            quietSamples_ = 0;
+            seenEpoch_.store(currentEpoch, std::memory_order_release);
+            return;
+        }
+        quietSamples_ += static_cast<uint64_t>(std::max<int32_t>(0, frames));
+        if (quietSamples_ > hangoverSamples_) {
+            seenEpoch_.store(blockEpoch, std::memory_order_release);
+            sleeping_.store(true, std::memory_order_seq_cst);
+            if (wakeEpoch_.load(std::memory_order_seq_cst) != blockEpoch ||
+                (flags_.load(std::memory_order_acquire) & kKeepAwakeMask) != 0) {
+                sleeping_.store(false, std::memory_order_release);
+                quietSamples_ = 0;
+            }
+        }
+    }
+
     double sampleRate_ = 44100.0;
     uint64_t hangoverSamples_ = 11025; // 0.25 s at 44.1 kHz
     float releaseThreshold_ = kDefaultReleaseThreshold;
@@ -194,10 +222,8 @@ class SilenceGate {
 
     std::atomic<uint32_t> wakeEpoch_{1};
     std::atomic<uint32_t> seenEpoch_{0};
+    std::atomic<uint32_t> flags_{0};
     std::atomic<bool> sleeping_{false};
-    std::atomic<bool> neverSleep_{false};
-    std::atomic<bool> holdAwake_{false};
-    std::atomic<bool> infiniteTail_{false};
 };
 
 } // namespace nota::dsp

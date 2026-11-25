@@ -2,6 +2,30 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // RenderGraphExecutor — parallel wave execution and deterministic bus reduction.
+
+#include "engine/RenderGraphExecutor.h"
+
+#include "devices/Device.h"
+#include "devices/Instrument.h"
+#include "devices/racks/RackCore.h"
+#include "dsp/core/AudioBufferView.h"
+#include "dsp/core/RenderExecutor.h"
+#include "dsp/math/SimdAudio.h"
+#include "engine/Engine.h"
+#include "engine/RenderRoutingPlan.h"
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+
+namespace nota {
+
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// RenderGraphExecutor — parallel wave execution and deterministic bus reduction.
 // Included inside `namespace nota` at the end of Engine_Render.cpp so the mix graph
 // shares a single translation unit with renderLeafDry/processLeafDevices/playEvents.
 
@@ -764,11 +788,15 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
         const auto t0 = !ctx.offline ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         w.wid = wid;
         float* base = eng.leafBase(i, stride);
+        const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc);
+        w.copyPost = hasFxOrPdc;
         eng.renderLeafDry(
             *w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti, ctx.arrangementActive, i);
-        std::copy_n(base, stride, base + stride);
-        RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, wid, ctx.frames, ctx.blockStart,
-            ctx.spb, ctx.playing, ctx.ti, w.frozenActive);
+        if (hasFxOrPdc) {
+            std::copy_n(base, stride, base + stride);
+            RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, wid, ctx.frames, ctx.blockStart,
+                ctx.spb, ctx.playing, ctx.ti, w.frozenActive);
+        }
         if (!ctx.offline)
             w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - t0).count();
@@ -780,11 +808,15 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
             if (!w.t || w.path == Engine::LeafPath::Skip || w.level != L) continue;
             float* base = eng.leafBase(li, stride);
             if (!w.eligible && !w.preRendered) {
+                const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc);
+                w.copyPost = hasFxOrPdc;
                 eng.renderLeafDry(*w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti,
                     ctx.arrangementActive, li);
-                std::copy_n(base, stride, base + stride);
-                RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, eng.pool_->workerCount(),
-                    ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti, w.frozenActive);
+                if (hasFxOrPdc) {
+                    std::copy_n(base, stride, base + stride);
+                    RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, eng.pool_->workerCount(),
+                        ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti, w.frozenActive);
+                }
             }
             w.preRendered = true;
         }
@@ -792,7 +824,7 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
             Engine::LeafWork& w = eng.rs_->leafWork[li];
             if (!w.t || w.path == Engine::LeafPath::Skip || w.level != L) continue;
             float* base = eng.leafBase(li, stride);
-            writeLeafTaps(ctx, li, base, base + stride);
+            writeLeafTaps(ctx, li, base, w.copyPost ? (base + stride) : base);
         }
         for (int s = 0; s < ctx.nRoutes; ++s)
             if (slotLeaf[s] >= 0 && eng.rs_->leafWork[static_cast<size_t>(slotLeaf[s])].level == L)
@@ -873,7 +905,7 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
         if ((w.eligible && ctx.parallelOk) || w.preRendered) {
             float* base = eng.leafBase(li, stride);
             pre = base;
-            post = base + stride;
+            post = w.copyPost ? (base + stride) : base;
             parallelDsp = true;
         } else {
             const bool allowSub = (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
@@ -889,7 +921,7 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
             if (preSlot >= 0)
                 simd_audio::addStereoScaled(eng.routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, ctx.frames);
         }
-        if (!parallelDsp) {
+        if (!parallelDsp && (!t.devices.empty() || (!w.frozenActive && t.pdc))) {
             const bool allowSub = (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
             const dsp::RenderExecutor::ScopedHost execScope(&ctx.execHost, allowSub);
             RenderGraphExecutor::processDeviceChain(eng, g, t, eng.scratch_.data(), callerWid, ctx.frames,
@@ -1363,7 +1395,8 @@ void RenderGraphExecutor::finalizeMixBlock(MixContext& ctx) {
 void RenderGraphExecutor::processDeviceChain(Engine& eng, Graph* g, Track& t, float* buf, int32_t wid, int32_t frames,
     double blockStart, double spb, bool playing, const TransportInfo& ti, bool frozenActive,
     dsp::PlanarStereoBuffer* overridePlanar) {
-    if (!frozenActive) runLeafDeviceList(eng, g, t, buf, wid, frames, blockStart, spb, playing, ti, overridePlanar);
+    if (!frozenActive && !t.devices.empty())
+        runLeafDeviceList(eng, g, t, buf, wid, frames, blockStart, spb, playing, ti, overridePlanar);
     if (!frozenActive && t.pdc) t.pdc->process(buf, frames);
 }
 
@@ -1426,3 +1459,5 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
     runReturnWaves(ctx);
     finalizeMixBlock(ctx);
 }
+
+} // namespace nota

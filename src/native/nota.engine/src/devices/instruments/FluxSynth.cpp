@@ -137,13 +137,15 @@ void FluxSynth::allNotesOff() {
 void FluxSynth::render(float* out, int32_t frames) {
     bool skip = false;
     const uint32_t gateEpoch = gate_.beginBlock(&skip);
-    const bool sidechainActive = scTrackId_.load(std::memory_order_relaxed) >= 0 && scBuf_ != nullptr && scFrames_ > 0
-        && !dsp::SilenceGate::isBufferSilent(
-            scBuf_, std::min(frames, scFrames_) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
-    if (skip && !sidechainActive) {
-        scBuf_ = nullptr;
-        scFrames_ = 0;
-        return;
+    if (skip) {
+        const bool scActive = scTrackId_.load(std::memory_order_relaxed) >= 0 && scBuf_ != nullptr && scFrames_ > 0
+            && !dsp::SilenceGate::isBufferSilent(
+                scBuf_, std::min(frames, scFrames_) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+        if (!scActive) {
+            scBuf_ = nullptr;
+            scFrames_ = 0;
+            return;
+        }
     }
     // ---- 1) React: analyse the sidechain (or self) once per block ------
     analyzeSidechain(frames);
@@ -278,7 +280,7 @@ void FluxSynth::render(float* out, int32_t frames) {
 
     // Auto-sleep flag only (the engine skips render while idle): no voice sounding
     // and this block silent. noteOn/noteOff/setParam wake.
-    gate_.observe(active > 0 || peak > 1.0e-5f || sidechainActive, frames, gateEpoch);
+    gate_.observe(active > 0 || peak > 1.0e-5f || scActiveBlock_, frames, gateEpoch);
 
     // Publish telemetry for the editor.
     scope_[S_Env].store(scFast_, std::memory_order_relaxed);
@@ -307,6 +309,8 @@ void FluxSynth::analyzeSidechain(int32_t frames) {
     hasSource_ = scTrackId_.load(std::memory_order_relaxed) >= 0;
     if (hasSource_ && scBuf_ && scFrames_ > 0) {
         const int n = std::min(frames, scFrames_);
+        scActiveBlock_ = !dsp::SilenceGate::isBufferSilent(
+            scBuf_, n * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
         for (int i = 0; i < n; ++i) {
             const float m = 0.5f * (scBuf_[i * 2] + scBuf_[i * 2 + 1]);
             const float lp = scLp_ + 0.06f * (m - scLp_);
@@ -321,6 +325,7 @@ void FluxSynth::analyzeSidechain(int32_t frames) {
         updateFollowers(rms, tilt, frames);
     } else {
         // No source (or a silent one): the followers fall to rest, tilt to neutral.
+        scActiveBlock_ = false;
         updateFollowers(0.0f, 0.5f, frames);
     }
     // consume the buffer (only valid for this block).

@@ -63,6 +63,10 @@ void Flanger::wake() {
 
 void Flanger::process(float* buf, int32_t frames) {
     const auto cpuTimer = blockTimer(frames, sr_);
+    processDsp(buf, frames);
+}
+
+void Flanger::processDsp(float* buf, int32_t frames) {
     if (restartReq_.exchange(false, std::memory_order_acquire)) {
         cycle_ = 0;
         frac_ = 0.0;

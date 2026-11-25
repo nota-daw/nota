@@ -217,6 +217,7 @@ class FluxSynth final : public Instrument {
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
     dsp::SilenceGate gate_{kIdleSamples};
+    bool scActiveBlock_ = false;
 };
 
 } // namespace nota

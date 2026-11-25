@@ -39,6 +39,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/RtAttributes.h"
 #include "engine/TransportInfo.h"
 
 #include <algorithm>
@@ -151,6 +152,8 @@ class Flanger : public Device {
     static constexpr int kBuf = 16384; // ≥ 15.4 ms at 768 kHz
     static constexpr int kMask = kBuf - 1;
     static constexpr uint64_t kIdleSamples = 16384; // hangover before sleep
+
+    NOTA_NOINLINE void processDsp(float* buf, int32_t frames);
 
     struct Comb {
         double notchTheta, nullDb, peakDb;

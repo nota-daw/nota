@@ -18,6 +18,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "dsp/core/RtAttributes.h"
 #include "dsp/core/ScratchArena.h"
 #include "engine/SnapshotHistory.h"
 #include "devices/Device.h"
@@ -159,6 +160,10 @@ class RackCore {
     // Audio-thread view of the current snapshot (raw pointer, retained by states_
     // until the renders that could still hold it have finished).
     RackState* live() const { return states_.live(); }
+    bool hasChains() const noexcept {
+        const RackState* st = live();
+        return st && !st->chains.empty();
+    }
     uint64_t liveGeneration() const {
         const RackState* st = live();
         return st ? st->generation : 0;
@@ -166,11 +171,19 @@ class RackCore {
 
     // Fan the transport snapshot out to every chain child so hosted plugins nested
     // in a rack sync to the DAW clock too (the Instrument/Device overrides call this).
-    void forwardTransport(const TransportInfo& ti);
+    void forwardTransport(const TransportInfo& ti) {
+        RackState* st = live();
+        if (!st || st->chains.empty()) return;
+        forwardTransportSlow(*st, ti);
+    }
 
     // The DAW tempo for tempo-synced chain children (a synced Delay, Auto Filter, Auto Pan …):
     // without it they ran on their free times inside a rack. Audio thread, once per block.
-    void forwardTempo(double beatStart, double spb, bool playing);
+    void forwardTempo(double beatStart, double spb, bool playing) {
+        RackState* st = live();
+        if (!st || st->chains.empty()) return;
+        forwardTempoSlow(*st, beatStart, spb, playing);
+    }
 
     // Whether any chain child (instrument or insert, at any nesting depth) is a hosted
     // plugin. Walks the live snapshot: reads only. Audio thread safe.
@@ -629,6 +642,8 @@ class RackCore {
     dsp::ChainScratchBank parallelArena_;
 
   private:
+    NOTA_NOINLINE void forwardTransportSlow(RackState& st, const TransportInfo& ti);
+    NOTA_NOINLINE void forwardTempoSlow(RackState& st, double beatStart, double spb, bool playing);
     void propagateTelemetry(RackState& st) const;
     // duplicateChain: the keys and Arp targets the blob doesn't carry, from src to its copy.
     static void copyExternalLinks(const RackChain& src, RackChain& dst);

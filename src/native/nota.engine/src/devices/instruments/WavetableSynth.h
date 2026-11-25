@@ -157,6 +157,7 @@ class WavetableSynth final : public Instrument {
     static int macroIdx(int m, int f) { return MacroBase + m * 3 + f; }
 
     WavetableSynth();
+    ~WavetableSynth() override;
 
     int32_t kind() const override { return 5; }
     const char* displayName() const override { return "Nota Aurora"; }
@@ -405,6 +406,10 @@ class WavetableSynth final : public Instrument {
         int idx = 0;
     };
 
+    struct BatchParams;
+    struct BatchWork;
+    NOTA_NOINLINE void renderBatched(const BatchParams& bp, Voice* const* act, int actN, float* out, int32_t frames, float& peak);
+
     static constexpr int32_t kModChunk = 1024;
     Voice voices_[kVoices];
     double sampleRate_ = 44100.0, spb_ = 0.0;
@@ -448,10 +453,7 @@ class WavetableSynth final : public Instrument {
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
     dsp::SilenceGate gate_{kIdleSamples};
-    dsp::PolyVoiceScratchBank voiceScratch_{kModChunk};
-    double lfo1Buf_[kModChunk] = {}, lfo2Buf_[kModChunk] = {};
-    double f1Buf_[kModChunk] = {}, f2Buf_[kModChunk] = {}, r1Buf_[kModChunk] = {}, r2Buf_[kModChunk] = {};
-    float mixL_[kModChunk] = {}, mixR_[kModChunk] = {};
+    std::unique_ptr<BatchWork> batchWork_;
 };
 
 } // namespace nota

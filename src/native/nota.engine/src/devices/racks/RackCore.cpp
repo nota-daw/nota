@@ -31,10 +31,8 @@
 
 namespace nota {
 
-void RackCore::forwardTransport(const TransportInfo& ti) {
-    RackState* st = live();
-    if (!st) return;
-    for (auto& c : st->chains) {
+void RackCore::forwardTransportSlow(RackState& st, const TransportInfo& ti) {
+    for (auto& c : st.chains) {
         if (c.instrument) c.instrument->setTransportInfo(ti);
         for (auto& d : c.devices)
             if (d) d->setTransportInfo(ti);
@@ -52,10 +50,8 @@ bool RackCore::chainsHostPlugin() const {
     return false;
 }
 
-void RackCore::forwardTempo(double beatStart, double spb, bool playing) {
-    RackState* st = live();
-    if (!st) return;
-    for (auto& c : st->chains) {
+void RackCore::forwardTempoSlow(RackState& st, double beatStart, double spb, bool playing) {
+    for (auto& c : st.chains) {
         if (c.instrument) c.instrument->setTransport(beatStart, spb, playing);
         for (auto& d : c.devices)
             if (d) d->setTransport(beatStart, spb, playing);

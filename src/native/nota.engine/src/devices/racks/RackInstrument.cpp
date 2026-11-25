@@ -397,6 +397,8 @@ bool RackInstrument::supportsMpe() const {
 
 bool RackInstrument::isIdle() const {
     if (requiresActiveProcessing()) return false;
+    RackState* st = live();
+    if (!st || st->chains.empty()) return !hasPendingRetire();
     const auto& m = *mono_;
     if (m.heldN > 0 || m.glideLeft > 0) return false;
     for (int32_t c = 0; c < kMaxMidiChains; ++c) {

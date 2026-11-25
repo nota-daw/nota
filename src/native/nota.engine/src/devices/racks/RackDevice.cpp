@@ -17,15 +17,18 @@ namespace nota {
 void RackDevice::process(float* buf, int32_t frames) {
     const auto done = renderScope();
     RackState* st = live();
-    if (!st || frames <= 0 || frames > kMaxBlock) return;
-    if (st->chains.empty()) return; // pass-through until chains exist
+    if (!st || frames <= 0 || frames > kMaxBlock || st->chains.empty()) return;
+    processActive(*st, buf, frames);
+}
+
+void RackDevice::processActive(RackState& st, float* buf, int32_t frames) {
     if (isIdle() && dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold))
         return;
 
     const int32_t cap = std::max(1, arena_.capacityFrames());
     for (int32_t off = 0; off < frames;) {
         const int32_t sub = std::min(frames - off, cap);
-        processChunk(*st, buf + off * 2, sub);
+        processChunk(st, buf + off * 2, sub);
         off += sub;
     }
 }

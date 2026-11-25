@@ -2928,7 +2928,7 @@ class Engine {
         // its pre-FX and post-fader taps are already written (at that fader: vol / pan).
         uint32_t keyNeeds = 0;
         int level = 0;
-        bool preRendered = false, tapsDone = false;
+        bool preRendered = false, tapsDone = false, copyPost = true;
         bool hybridEligible = false, hybridServed = false, hybridDropTick = false;
         float vol = 1.0f, pan = 0.0f;
     };

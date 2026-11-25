@@ -1630,14 +1630,52 @@ int Engine::gatherInstrumentNotes(
                 processClip(clip, ci, true, qStart - clip.startBeat, qEnd - clip.startBeat);
             });
         } else {
-            // Fallback (loop seam boundary / unindexed / zero-tempo edge): linear verbatim traversal.
-            if (xev)
-                for (const MidiClip& clip : t.midiClips)
-                    if (clip.active)
-                        clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb), renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart,
-                            frames, xev, *xn, kMaxBlockExpr);
-            for (size_t ci = 0; ci < t.midiClips.size(); ++ci)
-                processClip(t.midiClips[ci], static_cast<int32_t>(ci), false, 0.0, 0.0);
+            // Fast direct traversal for normal (<= 16 clip) / loop-seam tracks without per-clip lambda overhead.
+            const auto& clips = t.midiClips.read();
+            for (const MidiClip& clip : clips) {
+                const bool clipActive = clip.active;
+                const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
+                const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
+                if (xev && clipActive)
+                    clipCtlEndResets(clip, clipStart, clipEnd, blockStart, frames, xev, *xn, kMaxBlockExpr);
+                const bool hasVel = !clip.velocityEnvelope.points.empty();
+                for (const Note& note : clip.notes) {
+                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
+                    const double shiftS = unshifted
+                        ? 0.0
+                        : (artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS
+                                    : trackShiftS);
+                    const double nominalOn = mapped
+                        ? renderSampleAtBeat(clip.startBeat + std::max(0.0, note.startBeat), blockStart, spb)
+                        : clipStart + std::max(0.0, note.startBeat) * spb;
+                    double nominalOff = mapped
+                        ? renderSampleAtBeat(clip.startBeat + note.startBeat + note.lengthBeats, blockStart, spb)
+                        : clipStart + (note.startBeat + note.lengthBeats) * spb;
+                    if (nominalOff > clipEnd) nominalOff = clipEnd;
+                    const double onS = nominalOn + shiftS;
+                    const double offS = nominalOff + shiftS;
+                    float vel = note.velocity;
+                    if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
+                    if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
+                        evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
+                            static_cast<float>((offS - onS) / spb)};
+                    if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
+                        evs[n++] = {0, false, note.pitch, 0.0f};
+                    if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
+                        evs[n++] = {0, true, note.pitch, vel};
+                    if (offS >= blockStart && offS < blockStart + frames && n < 1024)
+                        evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+                    if (xev && note.expr && clipActive) {
+                        const double noteAt = mapped ? renderSampleAtBeat(clip.startBeat + note.startBeat, blockStart, spb)
+                                                     : clipStart + note.startBeat * spb;
+                        noteExprEvents(note, noteAt + shiftS - blockStart, offS - blockStart, frames, spb, xev, *xn,
+                            kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS);
+                    }
+                }
+                if (xev && clipActive)
+                    clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn,
+                        kMaxBlockExpr, transport_.tempoMap(), transport_.sampleRate(), transport_.playheadSamples());
+            }
         }
     }
     // Notes a loop record replace removed from this track's take: release them (once), unless
@@ -1933,82 +1971,97 @@ void Engine::renderInstrumentRaw(
             n = releaseRouted(*held, evs, n);
             held->routedFrom = srcId;
         }
-        bool srcFound = false;
-        // Per pitch: the offset of the latest event that sets or clears its routed bit, valid
-        // where `decided` has its bit. Only a track with a route or saved routed notes tracks
-        // anything, so the others pay nothing per block.
         const bool trackRouted = held && (srcId >= 0 || (held->routedBits[0] | held->routedBits[1]) != 0);
-        uint64_t decided[2] = {0, 0};
-        int32_t decidedAt[128];
-        bool decidedSet[128];
         const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
-        auto visitSource = [&](size_t j) {
-            Track* p = g->tracks[j].get();
-            if (!p) return;
-            const bool self = (p == &t);
-            const bool routed = !self && srcId >= 0 && p->type() == TrackType::Instrument && p->id() == srcId;
-            if (!self && !routed) return;
-            const int m = rs_->blockMidiN[j];
-            const MidiEv* srcEvs = rs_->blockMidi[j].data();
-            if (routed) srcFound = true;
-            for (int k = 0; k < m && n < 1024; ++k) {
-                evs[n++] = srcEvs[k];
-                const int pitch = srcEvs[k].pitch;
-                if (!trackRouted || pitch < 0 || pitch >= 128) continue;
-                if (!routed && !srcEvs[k].on) continue; // an own note-off changes nothing
-                const uint64_t bit = 1ull << (pitch & 63);
-                if ((decided[pitch >> 6] & bit) && srcEvs[k].off < decidedAt[pitch]) continue;
-                decided[pitch >> 6] |= bit;
-                decidedAt[pitch] = srcEvs[k].off;
-                decidedSet[pitch] = routed && srcEvs[k].on;
+        if (!trackRouted && trackIdx < nt && g->tracks[trackIdx] && g->tracks[trackIdx].get() == &t) {
+            const int m = rs_->blockMidiN[trackIdx];
+            const MidiEv* srcEvs = rs_->blockMidi[trackIdx].data();
+            const int copyN = std::min(m, 1024 - n);
+            if (copyN > 0) {
+                std::memcpy(evs + n, srcEvs, static_cast<size_t>(copyN) * sizeof(MidiEv));
+                n += copyN;
             }
-            if (j < rs_->blockExprN.size())
-                for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
-            if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
-            if (routed && captureRouted) {
-                captureRoutedNotes(recLane, srcEvs, m, blockStart, spb, countInClockOffset());
-                if (j < rs_->blockExprN.size())
-                    for (int k = 0; k < rs_->blockExprN[j]; ++k) {
-                        const ExprEv& x = rs_->blockExpr[j][k];
-                        if (x.dim < kCtlDimBase) continue;
-                        RecordedCtl rc{x.dim - kCtlDimBase, (blockStart + x.off) / spb + countInClockOffset(),
-                            x.value, recordPass_};
-                        rc.lane = recLane;
-                        pushRecordedCtl(rc);
-                    }
-            }
-        };
-        if (const RenderRoutingPlan* plan = g->routingPlan.get()) {
-            const int32_t selfIdx =
-                (trackIdx < nt) ? static_cast<int32_t>(trackIdx) : plan->findTrackIndex(t.id());
-            const int32_t routedIdx = (srcId >= 0) ? ((selfIdx >= 0)
-                    ? plan->resolveMidiSourceIndex(static_cast<size_t>(selfIdx), srcId)
-                    : plan->findTrackIndex(srcId))
-                    : -1;
-            if (selfIdx >= 0 && static_cast<size_t>(selfIdx) < nt &&
-                routedIdx >= 0 && static_cast<size_t>(routedIdx) < nt && routedIdx != selfIdx) {
-                visitSource(static_cast<size_t>(std::min(selfIdx, routedIdx)));
-                visitSource(static_cast<size_t>(std::max(selfIdx, routedIdx)));
-            } else {
-                if (selfIdx >= 0 && static_cast<size_t>(selfIdx) < nt) visitSource(static_cast<size_t>(selfIdx));
-                if (routedIdx >= 0 && static_cast<size_t>(routedIdx) < nt && routedIdx != selfIdx)
-                    visitSource(static_cast<size_t>(routedIdx));
+            if (trackIdx < rs_->blockExprN.size()) {
+                const int copyX = std::min(rs_->blockExprN[trackIdx], kMaxBlockExpr - xn);
+                if (copyX > 0) {
+                    std::memcpy(xev + xn, rs_->blockExpr[trackIdx].data(), static_cast<size_t>(copyX) * sizeof(ExprEv));
+                    xn += copyX;
+                }
             }
         } else {
-            for (size_t j = 0; j < nt; ++j) visitSource(j);
-        }
-        for (int h = 0; h < 2; ++h)
-            for (uint64_t bits = decided[h]; bits; bits &= bits - 1) {
-                const int pitch = h * 64 + std::countr_zero(bits);
-                const uint64_t bit = 1ull << (pitch & 63);
-                if (decidedSet[pitch]) held->routedBits[h] |= bit;
-                else held->routedBits[h] &= ~bit;
+            bool srcFound = false;
+            uint64_t decided[2] = {0, 0};
+            int32_t decidedAt[128];
+            bool decidedSet[128];
+            auto visitSource = [&](size_t j) {
+                Track* p = g->tracks[j].get();
+                if (!p) return;
+                const bool self = (p == &t);
+                const bool routed = !self && srcId >= 0 && p->type() == TrackType::Instrument && p->id() == srcId;
+                if (!self && !routed) return;
+                const int m = rs_->blockMidiN[j];
+                const MidiEv* srcEvs = rs_->blockMidi[j].data();
+                if (routed) srcFound = true;
+                for (int k = 0; k < m && n < 1024; ++k) {
+                    evs[n++] = srcEvs[k];
+                    const int pitch = srcEvs[k].pitch;
+                    if (!trackRouted || pitch < 0 || pitch >= 128) continue;
+                    if (!routed && !srcEvs[k].on) continue; // an own note-off changes nothing
+                    const uint64_t bit = 1ull << (pitch & 63);
+                    if ((decided[pitch >> 6] & bit) && srcEvs[k].off < decidedAt[pitch]) continue;
+                    decided[pitch >> 6] |= bit;
+                    decidedAt[pitch] = srcEvs[k].off;
+                    decidedSet[pitch] = routed && srcEvs[k].on;
+                }
+                if (j < rs_->blockExprN.size())
+                    for (int k = 0; k < rs_->blockExprN[j] && xn < kMaxBlockExpr; ++k) xev[xn++] = rs_->blockExpr[j][k];
+                if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
+                if (routed && captureRouted) {
+                    captureRoutedNotes(recLane, srcEvs, m, blockStart, spb, countInClockOffset());
+                    if (j < rs_->blockExprN.size())
+                        for (int k = 0; k < rs_->blockExprN[j]; ++k) {
+                            const ExprEv& x = rs_->blockExpr[j][k];
+                            if (x.dim < kCtlDimBase) continue;
+                            RecordedCtl rc{x.dim - kCtlDimBase, (blockStart + x.off) / spb + countInClockOffset(),
+                                x.value, recordPass_};
+                            rc.lane = recLane;
+                            pushRecordedCtl(rc);
+                        }
+                }
+            };
+            if (const RenderRoutingPlan* plan = g->routingPlan.get()) {
+                const int32_t selfIdx =
+                    (trackIdx < nt) ? static_cast<int32_t>(trackIdx) : plan->findTrackIndex(t.id());
+                const int32_t routedIdx = (srcId >= 0) ? ((selfIdx >= 0)
+                        ? plan->resolveMidiSourceIndex(static_cast<size_t>(selfIdx), srcId)
+                        : plan->findTrackIndex(srcId))
+                        : -1;
+                if (selfIdx >= 0 && static_cast<size_t>(selfIdx) < nt &&
+                    routedIdx >= 0 && static_cast<size_t>(routedIdx) < nt && routedIdx != selfIdx) {
+                    visitSource(static_cast<size_t>(std::min(selfIdx, routedIdx)));
+                    visitSource(static_cast<size_t>(std::max(selfIdx, routedIdx)));
+                } else {
+                    if (selfIdx >= 0 && static_cast<size_t>(selfIdx) < nt) visitSource(static_cast<size_t>(selfIdx));
+                    if (routedIdx >= 0 && static_cast<size_t>(routedIdx) < nt && routedIdx != selfIdx)
+                        visitSource(static_cast<size_t>(routedIdx));
+                }
+            } else {
+                for (size_t j = 0; j < nt; ++j) visitSource(j);
             }
-        // MIDI In names a track that is gone (deleted): its notes end too (#504).
-        if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
-        // A switched-off instrument drops this block's events (playEvents), so nothing the route
-        // started is sounding on it: forget those notes rather than release them later (#504).
-        if (held && inst->bypassed()) held->forgetRouted();
+            for (int h = 0; h < 2; ++h)
+                for (uint64_t bits = decided[h]; bits; bits &= bits - 1) {
+                    const int pitch = h * 64 + std::countr_zero(bits);
+                    const uint64_t bit = 1ull << (pitch & 63);
+                    if (decidedSet[pitch]) held->routedBits[h] |= bit;
+                    else
+                        held->routedBits[h] &= ~bit;
+                }
+            // MIDI In names a track that is gone (deleted): its notes end too (#504).
+            if (held && srcId >= 0 && !srcFound) n = releaseRouted(*held, evs, n);
+            // A switched-off instrument drops this block's events (playEvents), so nothing the route
+            // started is sounding on it: forget those notes rather than release them later (#504).
+            if (held && inst->bypassed()) held->forgetRouted();
+        }
     } else {
         n = computeInstrumentMidi(t, evs, frames, blockStart, spb, playing,
             arrangementActive_.load(std::memory_order_relaxed), xev, &xn); // fallback: no graph
@@ -3226,6 +3279,7 @@ void Engine::feedInstrumentKeys(Graph* g, Track& t, int32_t frames) {
 }
 
 void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames) {
+    if (!r.hasChains()) return;
     r.forEachChildDevice([&](Device& c) {
         if (!c.bypassed() && !c.asRack()) feedDeviceKey(g, c, ownTrackId, frames);
     });
@@ -3971,7 +4025,5 @@ int32_t Engine::articulationSelfTest() {
     }
     return 0;
 }
-
-#include "RenderGraphExecutor.inl"
 
 } // namespace nota
