@@ -881,8 +881,9 @@ int32_t Engine::clipWarpMarkers(
 
 int32_t Engine::addAudioClipEx(int32_t trackId, const std::string& path, double startBeat, double sourceOffsetFrames,
     int64_t lengthFrames, float gain) {
-    auto sample = decodeAudioFile(path);
+    auto sample = decodeAudioFile(path, decodeOptions());
     if (!sample || sample->empty()) return -1;
+    if (sample->source) sample->source->primeAround(static_cast<int64_t>(std::max(0.0, sourceOffsetFrames)), false);
     auto old = findTrackAuthoring(trackId);
     if (!old) return -1;
     auto nt = cloneTrack(*old);
@@ -911,12 +912,7 @@ bool Engine::sampleInfo(int64_t sampleId, NotaSampleInfo* out) const {
 int64_t Engine::sampleRead(int64_t sampleId, float* out, int64_t cap) const {
     auto s = findSampleById(sampleId);
     if (!s) return 0;
-    const int64_t total = static_cast<int64_t>(s->samples.size());
-    if (out && cap > 0) {
-        const int64_t n = cap < total ? cap : total;
-        std::copy_n(s->samples.data(), n, out);
-    }
-    return total;
+    return s->readAllInterleaved(out, cap);
 }
 
 bool Engine::samplerInfo(int32_t trackId, NotaSamplerInfo* out) const {
@@ -1089,11 +1085,12 @@ int32_t Engine::addAudioTrack() {
 }
 
 int32_t Engine::addAudioClip(int32_t trackId, const std::string& path, double startBeat) {
-    return addAudioClipBuffer(trackId, decodeAudioFile(path), startBeat);
+    return addAudioClipBuffer(trackId, decodeAudioFile(path, decodeOptions()), startBeat);
 }
 
 int32_t Engine::addAudioClipBuffer(int32_t trackId, std::shared_ptr<SampleBuffer> sample, double startBeat) {
     if (!sample || sample->empty()) return -1;
+    if (sample->source) sample->source->primeAround(0, false);
     auto old = findTrackAuthoring(trackId);
     if (!old) return -1;
 

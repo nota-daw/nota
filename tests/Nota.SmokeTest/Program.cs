@@ -466,6 +466,8 @@ if (args.Length >= 1 && args[0] == "--perf")
     foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
     Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
     foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
+    Console.WriteLine("-- phase 6 streaming sources & hybrid buffering --");
+    foreach (var (ok, label) in Phase6StreamingHybridTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PERF PASSED" : $"PERF FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -474,6 +476,13 @@ if (args.Length >= 1 && args[0] == "--phase5")
     Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
     foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PHASE 5 PASSED" : $"PHASE 5 FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 1 && args[0] == "--phase6")
+{
+    Console.WriteLine("-- phase 6 streaming sources & hybrid buffering --");
+    foreach (var (ok, label) in Phase6StreamingHybridTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PHASE 6 PASSED" : $"PHASE 6 FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Process CPU readout alone: `--cpu`. Also part of the full run.
@@ -16435,6 +16444,8 @@ Console.WriteLine("-- phase 4 CoW, ScratchArena & SIMD --");
 foreach (var (ok, label) in Phase4CowArenaSimdTests.Run()) Check(ok, label);
 Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
 foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
+Console.WriteLine("-- phase 6 streaming sources & hybrid buffering --");
+foreach (var (ok, label) in Phase6StreamingHybridTests.Run()) Check(ok, label);
 Console.WriteLine("-- render pool --");
 foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 

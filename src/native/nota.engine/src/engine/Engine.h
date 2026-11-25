@@ -33,6 +33,7 @@
 #include "engine/MidiSurface.h"
 #include "audio_io/GamepadInput.h"
 #include "media/SampleBuffer.h"
+#include "engine/HybridBufferController.h"
 #include "Transport.h"
 #include "nota/nota_engine.h" // NotaNoteData
 #include "devices/instruments/AuroraTable.h"
@@ -60,9 +61,11 @@ class WavetableSynth;
 class RackCore;       // shared rack guts (RackInstrument / RackDevice; see RackCore.h)
 class ClipWarpStream; // offline warp-cache builder (WarpStream.h); held by unique_ptr in wb_
 class RenderGraphExecutor;
+class HybridBufferController;
 
 class Engine {
     friend class RenderGraphExecutor;
+    friend class HybridBufferController;
   public:
     Engine();
     ~Engine();
@@ -216,6 +219,27 @@ class Engine {
     bool setRenderThreads(int n);
     int renderThreads() const { return pool_->workerCount(); }
     double renderThreadsCpuSeconds() const { return pool_->workersCpuSeconds(); }
+
+    // --- Streaming disk audio sources & hybrid anticipative buffering (Phase 6, #1050) ---
+    void setStreamThresholdBytes(int64_t bytes);
+    int64_t streamThresholdBytes() const { return streamThresholdBytes_.load(std::memory_order_acquire); }
+    void setSampleLoadPolicy(SampleLoadPolicy policy);
+    SampleLoadPolicy sampleLoadPolicy() const {
+        return static_cast<SampleLoadPolicy>(sampleLoadPolicy_.load(std::memory_order_acquire));
+    }
+    AudioDecodeOptions decodeOptions() const noexcept {
+        return {sampleLoadPolicy(), streamThresholdBytes()};
+    }
+    bool isSampleStreaming(int64_t sampleId) const;
+    void streamingStats(NotaStreamingStats& out) const;
+
+    void setHybridBufferingMode(HybridBufferMode mode);
+    HybridBufferMode hybridBufferingMode() const {
+        return hybrid_ ? hybrid_->mode() : HybridBufferMode::Off;
+    }
+    HybridBufferStats hybridStats() const {
+        return hybrid_ ? hybrid_->stats() : HybridBufferStats{};
+    }
 
     // --- parameter automation (M9) ---
     // Device-free: interpolation + block-rate apply write the target atomic.
@@ -1681,6 +1705,10 @@ class Engine {
     void renderAudioClipsRaw(
         const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb);
     void renderTrackAudioClipsRaw(const Track& t, float* dst, int32_t frames, double blockStart, double spb);
+    void renderTrackAudioClipsUnmapped(
+        const Track& t, float* dst, int32_t frames, double blockStart, double spb, double sr);
+    void renderAnticipativeInstrumentBlock(Graph* g, Track& t, size_t trackIdx, float* dst, int32_t frames,
+        double blockStart, double spb, double sr, MidiEv* midiScratch, ExprEv* exprScratch, ArtEv* artScratch);
     void renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
         const Transport& clock);
     // Consolidate (audio): bounce the clips covering [start,end) into one new clip.
@@ -2289,7 +2317,7 @@ class Engine {
     template <bool Mapped = false>
     void mixAudioClip(
         const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
-        const Transport& clock);
+        const Transport& clock, bool forceSyncFill = false);
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
     std::atomic<int32_t> recordTrackRt_{-1}; // recordTrackId_ for the audio thread
@@ -2900,6 +2928,7 @@ class Engine {
         uint32_t keyNeeds = 0;
         int level = 0;
         bool preRendered = false, tapsDone = false;
+        bool hybridEligible = false, hybridServed = false, hybridDropTick = false;
         float vol = 1.0f, pan = 0.0f;
     };
     struct NOTA_CACHE_ALIGNED BusWork {
@@ -3017,6 +3046,11 @@ class Engine {
     // Replaced only while the device is stopped (setRenderThreads), so the audio
     // thread never sees it change.
     std::unique_ptr<AudioThreadPool> pool_ = std::make_unique<AudioThreadPool>();
+    std::unique_ptr<HybridBufferController> hybrid_;
+    std::atomic<int64_t> streamThresholdBytes_{kDefaultStreamThresholdBytes};
+    std::atomic<int32_t> sampleLoadPolicy_{static_cast<int32_t>(SampleLoadPolicy::Auto)};
+    double pendingSeekBeat_ = -1.0;
+    void syncStreamingPlaybackState(bool playing, double beatHint = -1.0) const;
     // Freeze capture (M7): while armed, mixGraph stashes the target track's post-device
     // pre-fader signal into freezeCaptureBuf_. Filled sequentially from a seek(0) render;
     // only touched on the render thread, which is the message thread while capturing (the

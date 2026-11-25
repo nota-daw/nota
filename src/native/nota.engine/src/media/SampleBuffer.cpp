@@ -15,17 +15,34 @@ int64_t SampleBuffer::nextId() {
 }
 
 void SampleBuffer::readStereo(int64_t frame, float& l, float& r) const {
-    if (frame < 0 || frame >= frames) {
+    if (frame < 0 || frame >= frames || channels <= 0) {
         l = r = 0.0f;
         return;
     }
-    const float* p = &samples[frame * channels];
-    if (channels == 1) {
-        l = r = p[0];
-    } else {
-        l = p[0];
-        r = p[1];
+    if (!samples.empty()) {
+        const float* p = &samples[static_cast<size_t>(frame) * static_cast<size_t>(channels)];
+        if (channels == 1) {
+            l = r = p[0];
+        } else {
+            l = p[0];
+            r = p[1];
+        }
+        return;
     }
+    if (source) {
+        source->readStereo(frame, l, r);
+        return;
+    }
+    l = r = 0.0f;
+}
+
+int64_t SampleBuffer::readAllInterleaved(float* out, int64_t capFloats) const {
+    if (!samples.empty()) {
+        const int64_t total = static_cast<int64_t>(samples.size());
+        if (out && capFloats > 0) std::copy_n(samples.data(), std::min(total, capFloats), out);
+        return total;
+    }
+    return source ? source->readAllInterleaved(out, capFloats) : 0;
 }
 
 void SampleBuffer::buildPeakTable() {
@@ -104,9 +121,10 @@ float SampleBuffer::rmsRange(int64_t f0, int64_t f1) const {
 
 double SampleBuffer::scanSquares(int64_t f0, int64_t f1) const {
     double sum = 0.0;
+    int32_t hint = -1;
     for (int64_t f = f0; f < f1; ++f) {
         float l, r;
-        readStereo(f, l, r);
+        readStereoFast(f, hint, /*allowSyncFill=*/true, l, r);
         const double mid = 0.5 * (static_cast<double>(l) + r);
         sum += mid * mid;
     }
@@ -116,9 +134,10 @@ double SampleBuffer::scanSquares(int64_t f0, int64_t f1) const {
 void SampleBuffer::scanRange(int64_t f0, int64_t f1, float& mn, float& mx) const {
     mn = 1.0f;
     mx = -1.0f;
+    int32_t hint = -1;
     for (int64_t f = f0; f < f1; ++f) {
         float l, r;
-        readStereo(f, l, r);
+        readStereoFast(f, hint, /*allowSyncFill=*/true, l, r);
         const float mid = 0.5f * (l + r);
         mn = std::min(mn, mid);
         mx = std::max(mx, mid);

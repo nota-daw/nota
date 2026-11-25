@@ -44,11 +44,15 @@ Engine::Engine()
     for (auto& s : trackTapRingTrack_) s = -1;
     ensureRenderScratch(authoring_->tracks.size());
     graphHist_.publish(authoring_);
+    hybrid_ = std::make_unique<HybridBufferController>(*this);
+    hybrid_->onGraphChanged(authoring_);
     installRackPluginFactory(); // lets rack blobs rebuild hosted-plugin children on load
 }
 
 Engine::~Engine() {
     cancelWarpJob(); // a background warp build must not outlive the engine
+    if (hybrid_) hybrid_->setStopped();
+    syncStreamingPlaybackState(false);
     stop();
     if (input_) input_->stop(); // monitoring can keep the capture device open until teardown
 }
@@ -301,6 +305,8 @@ int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const 
 }
 
 void Engine::stop() {
+    if (hybrid_) hybrid_->setStopped();
+    syncStreamingPlaybackState(false);
     if (midiInput_) midiInput_->close();
     midiOutputs_.clear();
     setPluginAudioWorkgroup(nullptr); // before the device (and its workgroup) goes
@@ -681,6 +687,13 @@ void Engine::playClock() { enqueueTransportStart(0); }
 // Main Play (and arrangement record) roll the Arrangement; session launches use playClock().
 void Engine::transportPlay() {
     arrangementActive_.store(true, std::memory_order_relaxed);
+    const double hint = pendingSeekBeat_ >= 0.0 ? pendingSeekBeat_ : transport_.uiPositionBeats();
+    pendingSeekBeat_ = -1.0;
+    syncStreamingPlaybackState(true, hint);
+    if (hybrid_) {
+        hybrid_->invalidate(true);
+        hybrid_->onPlayRequested();
+    }
     playClock();
 }
 // Play preceded by the count-in (when one is set and the transport is stopped). The audio
@@ -691,6 +704,13 @@ void Engine::transportPlayCountIn() {
     if (bars <= 0 || transport_.uiIsPlaying()) {
         transportPlay();
         return;
+    }
+    const double hint = pendingSeekBeat_ >= 0.0 ? pendingSeekBeat_ : transport_.uiPositionBeats();
+    pendingSeekBeat_ = -1.0;
+    syncStreamingPlaybackState(true, hint);
+    if (hybrid_) {
+        hybrid_->invalidate(true);
+        hybrid_->onPlayRequested();
     }
     arrangementActive_.store(true, std::memory_order_relaxed);
     startCountIn(bars);
@@ -706,6 +726,8 @@ void Engine::startCountIn(int32_t bars) {
     }
 }
 void Engine::transportStop() {
+    if (hybrid_) hybrid_->setStopped();
+    syncStreamingPlaybackState(false);
     arrangementActive_.store(false, std::memory_order_relaxed);
     {
         LandingMute mute(*this);      // a global stop never fires a landing rule (#481)
@@ -753,6 +775,7 @@ bool Engine::setBpm(double bpm) {
         authoringBpm_ = bpm;
         placeTakesForTempo(); // take lanes + their comp keep one mapping (specs/067)
     }
+    if (hybrid_) hybrid_->invalidate(true);
     return true;
 }
 double Engine::bpm() const {
@@ -769,6 +792,7 @@ void Engine::setLoop(bool enabled, double s, double e) {
     loopEnabled_ = enabled && e > s; // message-thread mirror for the UI
     loopStart_ = s;
     loopEnd_ = e;
+    if (hybrid_) hybrid_->invalidate(true);
     Command c;
     c.type = CommandType::SetLoop;
     c.i0 = enabled ? 1 : 0;
@@ -783,6 +807,9 @@ void Engine::setMetronome(bool on) {
     commands_.push(c);
 }
 void Engine::seekBeats(double beat) {
+    if (hybrid_) hybrid_->invalidate(true);
+    pendingSeekBeat_ = beat;
+    syncStreamingPlaybackState(transport_.uiIsPlaying(), beat);
     Command c;
     c.type = CommandType::Seek;
     c.d0 = beat;
@@ -1129,6 +1156,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         g->routingPlan = RenderRoutingPlan::build(*g);
     }
     graphHist_.publish(g); // frees the graphs no render can still be walking
+    if (hybrid_) hybrid_->onGraphChanged(g);
     busState_.requestInvalidate();
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
@@ -1711,6 +1739,84 @@ void Engine::masterMeter(float& peakL, float& peakR, float& rmsL, float& rmsR) c
     peakR = masterPeakR_.load(std::memory_order_relaxed);
     rmsL = masterRmsL_.load(std::memory_order_relaxed);
     rmsR = masterRmsR_.load(std::memory_order_relaxed);
+}
+
+void Engine::setStreamThresholdBytes(int64_t bytes) {
+    streamThresholdBytes_.store(std::max<int64_t>(0, bytes), std::memory_order_release);
+}
+
+void Engine::setSampleLoadPolicy(SampleLoadPolicy policy) {
+    sampleLoadPolicy_.store(static_cast<int32_t>(policy), std::memory_order_release);
+}
+
+bool Engine::isSampleStreaming(int64_t sampleId) const {
+    auto s = findSampleById(sampleId);
+    return s && s->isStreaming();
+}
+
+void Engine::streamingStats(NotaStreamingStats& out) const {
+    out = NotaStreamingStats{};
+    out.stream_threshold_bytes = streamThresholdBytes();
+    if (!authoring_) return;
+
+    std::vector<int64_t> seen;
+    auto visit = [&](const std::shared_ptr<SampleBuffer>& sb) {
+        if (!sb) return;
+        for (int64_t id : seen)
+            if (id == sb->id) return;
+        seen.push_back(sb->id);
+        const int64_t mem = sb->memoryBytes();
+        out.resident_sample_bytes += mem;
+        if (sb->isStreaming()) {
+            ++out.active_streams;
+            const StreamRuntimeStats rs = sb->source->runtimeStats();
+            out.stream_cache_bytes += rs.cacheBytes;
+            out.pages_faulted += rs.pagesFaulted;
+            out.pages_served_async += rs.pagesServedAsync;
+            out.pages_served_sync += rs.pagesServedSync;
+            out.rt_underruns += rs.rtUnderruns;
+        }
+    };
+
+    for (const auto& t : authoring_->tracks) {
+        if (!t) continue;
+        for (const auto& c : t->clips) visit(c.sample);
+        for (const auto& k : t->takes) visit(k.sample);
+        for (const auto& sl : t->sessionSlots) visit(sl.audio.sample);
+    }
+}
+
+void Engine::syncStreamingPlaybackState(bool playing, double beatHint) const {
+    if (!authoring_) return;
+    const double sr = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
+    const double spb = authoringBpm_ > 0.0 ? (sr * 60.0 / authoringBpm_) : transport_.samplesPerBeat();
+    for (const auto& t : authoring_->tracks) {
+        if (!t) continue;
+        for (const auto& c : t->clips) {
+            if (!c.sample || !c.sample->source) continue;
+            c.sample->source->setPlaybackActive(playing);
+            if (beatHint >= 0.0 && spb > 0.0) {
+                const double ratio = c.sample->sourceSampleRate / sr * c.pitchRatio();
+                const int64_t len = c.effectiveLength();
+                const double clipBeats = len / std::max(1e-9, ratio * spb);
+                if (beatHint >= c.startBeat - 1.0 && beatHint <= c.startBeat + clipBeats) {
+                    const double relFrames = std::max(0.0, (beatHint - c.startBeat) * spb * ratio);
+                    const int64_t targetFrame = c.reversed
+                        ? static_cast<int64_t>(c.sourceOffsetFrames + std::max(0.0, len - 1 - relFrames))
+                        : static_cast<int64_t>(c.sourceOffsetFrames + relFrames);
+                    c.sample->source->primeAround(targetFrame, c.reversed);
+                }
+            }
+        }
+        for (const auto& sl : t->sessionSlots) {
+            if (sl.audio.sample && sl.audio.sample->source)
+                sl.audio.sample->source->setPlaybackActive(playing);
+        }
+    }
+}
+
+void Engine::setHybridBufferingMode(HybridBufferMode mode) {
+    if (hybrid_) hybrid_->setMode(mode);
 }
 
 } // namespace nota

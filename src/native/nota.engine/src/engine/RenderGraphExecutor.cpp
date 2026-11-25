@@ -199,13 +199,16 @@ uint32_t RenderGraphExecutor::collectChainSidechainNeeds(
 }
 
 void RenderGraphExecutor::runLeafDeviceList(Engine& eng, Graph* g, Track& t, float* buf, int32_t wid, int32_t frames,
-    double blockStart, double spb, bool playing, const TransportInfo& ti) {
+    double blockStart, double spb, bool playing, const TransportInfo& ti,
+    dsp::PlanarStereoBuffer* overridePlanar) {
     const int32_t nd = static_cast<int32_t>(t.devices.size());
-    dsp::PlanarStereoBuffer* planar =
-        (wid >= 0 && static_cast<size_t>(wid) < eng.rs_->workerPlanarCount &&
-            eng.rs_->workerPlanar[static_cast<size_t>(wid)].readyFor(frames))
-            ? &eng.rs_->workerPlanar[static_cast<size_t>(wid)]
-            : nullptr;
+    dsp::PlanarStereoBuffer* planar = nullptr;
+    if (overridePlanar && overridePlanar->readyFor(frames)) {
+        planar = overridePlanar;
+    } else if (wid >= 0 && eng.rs_ && static_cast<size_t>(wid) < eng.rs_->workerPlanarCount &&
+               eng.rs_->workerPlanar[static_cast<size_t>(wid)].readyFor(frames)) {
+        planar = &eng.rs_->workerPlanar[static_cast<size_t>(wid)];
+    }
 
     for (int32_t i = 0; i < nd; ++i) {
         auto& d = t.devices[static_cast<size_t>(i)];
@@ -573,54 +576,105 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
     }
 
     outMaxLevel = 0;
-    if (ctx.nRoutes <= 0) return;
-
-    for (int s = 0; s < ctx.nRoutes; ++s) slotLeaf[s] = -1;
-    for (size_t li = 0; li < ntracks; ++li) {
-        Engine::LeafWork& w = eng.rs_->leafWork[li];
-        if (!w.t || w.path == Engine::LeafPath::Skip) continue;
-        for (int s = 0; s < ctx.nRoutes; ++s)
-            if (eng.routeSlotTrackId_[s].load(std::memory_order_relaxed) == w.t->id()) slotLeaf[s] = static_cast<int>(li);
-    }
-    if (!ctx.parallelOk) return;
-
-    if (ctx.plan) {
-        for (int32_t si : ctx.plan->sidechainConsumerLeaves()) {
-            Engine::LeafWork& w = eng.rs_->leafWork[static_cast<size_t>(si)];
-            if (w.t && w.path != Engine::LeafPath::Skip) {
-                const bool inst =
-                    w.path == Engine::LeafPath::Instrument || w.path == Engine::LeafPath::SessionInst;
-                w.keyNeeds = collectChainSidechainNeeds(eng, *w.t, inst, !w.frozenActive);
-            }
-        }
-    } else {
+    if (ctx.nRoutes > 0) {
+        for (int s = 0; s < ctx.nRoutes; ++s) slotLeaf[s] = -1;
         for (size_t li = 0; li < ntracks; ++li) {
             Engine::LeafWork& w = eng.rs_->leafWork[li];
-            if (w.t && w.path != Engine::LeafPath::Skip) {
-                const bool inst =
-                    w.path == Engine::LeafPath::Instrument || w.path == Engine::LeafPath::SessionInst;
-                w.keyNeeds = collectChainSidechainNeeds(eng, *w.t, inst, !w.frozenActive);
-            }
+            if (!w.t || w.path == Engine::LeafPath::Skip) continue;
+            for (int s = 0; s < ctx.nRoutes; ++s)
+                if (eng.routeSlotTrackId_[s].load(std::memory_order_relaxed) == w.t->id())
+                    slotLeaf[s] = static_cast<int>(li);
         }
-    }
-    for (int pass = 0; pass < Engine::kMaxKeyLevels; ++pass) {
-        bool changed = false;
-        for (size_t li = 0; li < ntracks; ++li) {
-            Engine::LeafWork& w = eng.rs_->leafWork[li];
-            if (w.keyNeeds == 0) continue;
-            for (int s = 0; s < ctx.nRoutes; ++s) {
-                const int p = slotLeaf[s];
-                if (!((w.keyNeeds >> s) & 1u) || p < 0 || p == static_cast<int>(li)) continue;
-                const int nl = eng.rs_->leafWork[static_cast<size_t>(p)].level + 1;
-                if (nl > w.level && nl <= Engine::kMaxKeyLevels) {
-                    w.level = nl;
-                    changed = true;
+        if (ctx.parallelOk) {
+            if (ctx.plan) {
+                for (int32_t si : ctx.plan->sidechainConsumerLeaves()) {
+                    Engine::LeafWork& w = eng.rs_->leafWork[static_cast<size_t>(si)];
+                    if (w.t && w.path != Engine::LeafPath::Skip) {
+                        const bool inst =
+                            w.path == Engine::LeafPath::Instrument || w.path == Engine::LeafPath::SessionInst;
+                        w.keyNeeds = collectChainSidechainNeeds(eng, *w.t, inst, !w.frozenActive);
+                    }
+                }
+            } else {
+                for (size_t li = 0; li < ntracks; ++li) {
+                    Engine::LeafWork& w = eng.rs_->leafWork[li];
+                    if (w.t && w.path != Engine::LeafPath::Skip) {
+                        const bool inst =
+                            w.path == Engine::LeafPath::Instrument || w.path == Engine::LeafPath::SessionInst;
+                        w.keyNeeds = collectChainSidechainNeeds(eng, *w.t, inst, !w.frozenActive);
+                    }
                 }
             }
+            for (int pass = 0; pass < Engine::kMaxKeyLevels; ++pass) {
+                bool changed = false;
+                for (size_t li = 0; li < ntracks; ++li) {
+                    Engine::LeafWork& w = eng.rs_->leafWork[li];
+                    if (w.keyNeeds == 0) continue;
+                    for (int s = 0; s < ctx.nRoutes; ++s) {
+                        const int p = slotLeaf[s];
+                        if (!((w.keyNeeds >> s) & 1u) || p < 0 || p == static_cast<int>(li)) continue;
+                        const int nl = eng.rs_->leafWork[static_cast<size_t>(p)].level + 1;
+                        if (nl > w.level && nl <= Engine::kMaxKeyLevels) {
+                            w.level = nl;
+                            changed = true;
+                        }
+                    }
+                }
+                if (!changed) break;
+            }
+            for (size_t li = 0; li < ntracks; ++li) outMaxLevel = std::max(outMaxLevel, eng.rs_->leafWork[li].level);
         }
-        if (!changed) break;
     }
-    for (size_t li = 0; li < ntracks; ++li) outMaxLevel = std::max(outMaxLevel, eng.rs_->leafWork[li].level);
+
+    if (!ctx.offline && eng.hybrid_ && eng.hybrid_->beginRtActive()) {
+        int32_t liveCount = 0;
+        int32_t antCount = 0;
+        for (size_t li = 0; li < ntracks; ++li) {
+            Engine::LeafWork& w = eng.rs_->leafWork[li];
+            const Track* tr = ctx.g->tracks[li].get();
+            if (!tr || tr->type() == TrackType::Group || tr->type() == TrackType::Return) continue;
+            if (!w.t || w.path == Engine::LeafPath::Skip) {
+                ++liveCount;
+                eng.hybrid_->reclaimOwnershipRt(li, tr->id());
+                continue;
+            }
+            const bool canAnt = (w.path == Engine::LeafPath::AudioClips || w.path == Engine::LeafPath::Instrument ||
+                                    w.path == Engine::LeafPath::Frozen);
+            const bool feedsKey = eng.trackFeedsRoute(w.t->id());
+            bool feedsMidiKey = false;
+            for (const auto& other : ctx.g->tracks) {
+                if (other && other->midiFromTrackId() == w.t->id()) {
+                    feedsMidiKey = true;
+                    break;
+                }
+            }
+            if (canAnt && eng.hybrid_->isTrackAnticipativeEligible(
+                              *ctx.g, *w.t, ctx.capTrackId, ctx.recSrc, w.keyNeeds, feedsKey || feedsMidiKey)) {
+                w.hybridEligible = true;
+                ++antCount;
+                if (ctx.parallelOk) {
+                    float* base = eng.leafBase(li, stride);
+                    bool dropTick = false;
+                    if (eng.hybrid_->tryConsumePreRendered(li, w.t->id(), ctx.blockStart, ctx.frames, base + stride,
+                            dropTick)) {
+                        w.hybridServed = true;
+                        w.preRendered = true;
+                        w.eligible = false;
+                        std::copy_n(base + stride, stride, base);
+                    } else if (dropTick) {
+                        w.hybridDropTick = true;
+                        w.preRendered = true;
+                        w.eligible = false;
+                        std::fill_n(base, stride * 2, 0.0f);
+                    }
+                }
+            } else {
+                ++liveCount;
+                eng.hybrid_->reclaimOwnershipRt(li, w.t->id());
+            }
+        }
+        eng.hybrid_->setTrackCountsRt(liveCount, antCount);
+    }
 }
 
 void RenderGraphExecutor::writeLeafTaps(MixContext& ctx, size_t leafIndex, const float* pre, const float* post) {
@@ -725,7 +779,7 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
             Engine::LeafWork& w = eng.rs_->leafWork[li];
             if (!w.t || w.path == Engine::LeafPath::Skip || w.level != L) continue;
             float* base = eng.leafBase(li, stride);
-            if (!w.eligible) {
+            if (!w.eligible && !w.preRendered) {
                 eng.renderLeafDry(*w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti,
                     ctx.arrangementActive, li);
                 std::copy_n(base, stride, base + stride);
@@ -840,6 +894,9 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
             const dsp::RenderExecutor::ScopedHost execScope(&ctx.execHost, allowSub);
             RenderGraphExecutor::processDeviceChain(eng, g, t, eng.scratch_.data(), callerWid, ctx.frames,
                 ctx.blockStart, ctx.spb, ctx.playing, ctx.ti, w.frozenActive);
+        }
+        if (!ctx.offline && w.hybridEligible && !w.hybridServed && !w.hybridDropTick && eng.hybrid_) {
+            eng.hybrid_->handoffToWorkerAfterRtBlock(li, t.id(), ctx.blockStart + ctx.frames);
         }
 
         if (w.path == Engine::LeafPath::Tail) {
@@ -1302,8 +1359,9 @@ void RenderGraphExecutor::finalizeMixBlock(MixContext& ctx) {
 }
 
 void RenderGraphExecutor::processDeviceChain(Engine& eng, Graph* g, Track& t, float* buf, int32_t wid, int32_t frames,
-    double blockStart, double spb, bool playing, const TransportInfo& ti, bool frozenActive) {
-    if (!frozenActive) runLeafDeviceList(eng, g, t, buf, wid, frames, blockStart, spb, playing, ti);
+    double blockStart, double spb, bool playing, const TransportInfo& ti, bool frozenActive,
+    dsp::PlanarStereoBuffer* overridePlanar) {
+    if (!frozenActive) runLeafDeviceList(eng, g, t, buf, wid, frames, blockStart, spb, playing, ti, overridePlanar);
     if (!frozenActive && t.pdc) t.pdc->process(buf, frames);
 }
 
@@ -1324,6 +1382,12 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
     }
 
     const double srLaw = eng.transport_.sampleRate() > 0 ? eng.transport_.sampleRate() : 44100.0;
+    if (eng.hybrid_ && eng.deviceBlock_) {
+        const bool hybridPool = eng.pool_ && eng.pool_->workerCount() > 0;
+        eng.hybrid_->beginRtBlock(g, blockStart, frames, spb, srLaw,
+            playing && eng.arrangementActive_.load(std::memory_order_relaxed) && !eng.countInActive_,
+            eng.transport_.isLooping(), eng.transport_.loopStartSamples(), eng.transport_.loopEndSamples(), hybridPool);
+    }
     if (spb > 0.0) eng.applyAutomation(g, blockStart / spb, (blockStart + frames) / spb);
     if (spb > 0.0) {
         eng.updateModulators(g, blockStart / spb, elapsedStart / srLaw, frames / srLaw);

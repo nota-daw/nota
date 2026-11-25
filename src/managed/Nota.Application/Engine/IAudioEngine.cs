@@ -1619,6 +1619,14 @@ public interface IAudioEngine : IDisposable
     /// <summary>Controls how built-in devices measure per-block CPU usage on the audio thread.</summary>
     DeviceTelemetryMode DeviceTelemetry { get; set; }
 
+    // --- Streaming disk audio sources & hybrid anticipative buffering (Phase 6, #1050) ---
+    long StreamThresholdBytes { get; set; }
+    SampleLoadPolicy SampleLoadPolicy { get; set; }
+    bool IsSampleStreaming(long sampleId);
+    NotaStreamingStats GetStreamingStats();
+    HybridBufferMode HybridBuffering { get; set; }
+    NotaHybridBufferStats GetHybridStats();
+
     // --- CV modulation (Phase 3, Modular editor) ---------------------------
     // Modulator (LFO) sources + CV links to built-in device params on the same track.
     // Modulator field selector: 0 waveform, 1 tempoSync, 2 rateHz, 3 rateSyncBeats,

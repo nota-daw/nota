@@ -387,6 +387,49 @@ public enum DeviceTelemetryMode
     AlwaysOn = 2,
 }
 
+/// <summary>Policy for decoding vs disk streaming of long audio files (matches native NotaSampleLoadPolicy).</summary>
+public enum SampleLoadPolicy
+{
+    Auto = 0,
+    MemoryOnly = 1,
+    StreamAlways = 2,
+}
+
+/// <summary>Native disk-streaming statistics returned by <see cref="IAudioEngine.GetStreamingStats"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaStreamingStats
+{
+    public int ActiveStreams;
+    public long StreamThresholdBytes;
+    public long StreamCacheBytes;
+    public long ResidentSampleBytes;
+    public long PagesFaulted;
+    public long PagesServedAsync;
+    public long PagesServedSync;
+    public long RtUnderruns;
+}
+
+/// <summary>Hybrid low-latency live + background anticipative buffering mode (matches native NotaHybridBufferMode).</summary>
+public enum HybridBufferMode
+{
+    Off = 0,
+    Auto = 1,
+}
+
+/// <summary>Native hybrid lookahead buffer statistics returned by <see cref="IAudioEngine.GetHybridStats"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaHybridBufferStats
+{
+    public int Active;
+    public int LiveTracks;
+    public int AnticipativeTracks;
+    public int LookaheadFrames;
+    public int ChunkFrames;
+    public long CacheHits;
+    public long CacheMisses;
+    public long Invalidations;
+}
+
 /// <summary>Auto-sleep policy for hosted plugins and instruments (matches native NotaPluginSleepMode).</summary>
 public enum PluginSleepMode
 {

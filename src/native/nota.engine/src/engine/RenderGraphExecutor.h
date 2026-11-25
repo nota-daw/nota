@@ -18,6 +18,10 @@
 
 namespace nota {
 
+namespace dsp {
+class PlanarStereoBuffer;
+}
+
 class Engine;
 struct Graph;
 struct Track;
@@ -94,7 +98,8 @@ class RenderGraphExecutor {
         bool playing, double spb);
 
     static void processDeviceChain(Engine& eng, Graph* g, Track& t, float* buf, int32_t wid, int32_t frames,
-        double blockStart, double spb, bool playing, const TransportInfo& ti, bool frozenActive);
+        double blockStart, double spb, bool playing, const TransportInfo& ti, bool frozenActive,
+        dsp::PlanarStereoBuffer* overridePlanar = nullptr);
 
   private:
     struct MixContext;
@@ -102,7 +107,8 @@ class RenderGraphExecutor {
     static uint32_t collectChainSidechainNeeds(
         const Engine& eng, const Track& t, bool includeInstrument, bool includeDevices);
     static void runLeafDeviceList(Engine& eng, Graph* g, Track& t, float* buf, int32_t wid, int32_t frames,
-        double blockStart, double spb, bool playing, const TransportInfo& ti);
+        double blockStart, double spb, bool playing, const TransportInfo& ti,
+        dsp::PlanarStereoBuffer* overridePlanar = nullptr);
     static bool instrumentHasBlockInput(const MixContext& ctx, const Track& t, size_t trackPos);
     static bool instrumentLeafCanSkip(const MixContext& ctx, const Track& t, size_t trackPos, bool capturing);
     static void initGroupsAndBuses(MixContext& ctx);

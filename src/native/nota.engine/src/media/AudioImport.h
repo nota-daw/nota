@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "AudioSource.h"
 #include "SampleBuffer.h"
 #include <cstdint>
 #include <memory>
@@ -23,7 +24,8 @@ class AudioImportJob {
     // Opens `path` and reads its header. Null when the file can't be opened/decoded.
     // maxSeconds > 0 decodes only the file's head (analysis): the buffer holds at most that
     // much and the job is done once it is in; sourceFrames() keeps the real length.
-    static std::unique_ptr<AudioImportJob> open(const std::string& path, double maxSeconds = 0.0);
+    static std::unique_ptr<AudioImportJob> open(
+        const std::string& path, double maxSeconds = 0.0, const AudioDecodeOptions& opts = {});
 
     // Decodes up to maxFrames more. Returns 1 while frames remain, 0 once done, -1 on error.
     int32_t step(int64_t maxFrames);
@@ -55,6 +57,11 @@ class AudioImportJob {
     int64_t sourceFrames_ = 0;
     bool done_ = false;
     bool seeded_ = false;
+    bool streaming_ = false;
+    std::string path_;
+    std::vector<float> streamCarry_;
+    int64_t streamCarryFrames_ = 0;
+    std::vector<float> streamScratch_;
 };
 
 } // namespace nota

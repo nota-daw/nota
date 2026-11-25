@@ -1115,10 +1115,17 @@ void Engine::drainCommands(Graph* g) {
         case CommandType::TransportStop:
             endCountIn();
             transport_.stop();
+            if (hybrid_) hybrid_->invalidate(false);
             break;
-        case CommandType::SetBpm: transport_.setBpm(c.d0); break;
+        case CommandType::SetBpm:
+            transport_.setBpm(c.d0);
+            if (hybrid_) hybrid_->invalidate(false);
+            break;
         case CommandType::SetTimeSignature: transport_.setTimeSignature(c.i0, c.i1); break;
-        case CommandType::SetLoop: transport_.setLoop(c.i0 != 0, c.d0, c.d1); break;
+        case CommandType::SetLoop:
+            transport_.setLoop(c.i0 != 0, c.d0, c.d1);
+            if (hybrid_) hybrid_->invalidate(false);
+            break;
         case CommandType::SetMetronome: transport_.setMetronome(c.i0 != 0); break;
         case CommandType::ReleaseNote:
             if (c.i1 >= 0 && c.i1 < 128) {
@@ -1143,6 +1150,7 @@ void Engine::drainCommands(Graph* g) {
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
             seekedThisBlock_ = true;
+            if (hybrid_) hybrid_->invalidate(false);
             break;
         case CommandType::TakeRestart: // specs/078: the blocks from here belong to the retried take
             if ((c.i1 & 4) != 0) { // a take started normally: the current epoch, nothing waits
@@ -1820,10 +1828,12 @@ void Engine::computeBlockMidi(
         return;
     }
     const bool keepHeld = heldMidiKeysRead(); // a Nota Color somewhere reads held notes
+    const bool hybridActive = hybrid_ && hybrid_->beginRtActive();
     for (size_t i = 0; i < nt; ++i) {
         rs_->blockMidiN[i] = 0;
         rs_->blockExprN[i] = 0;
         Track& t = *g->tracks[i];
+        if (hybridActive && hybrid_->isRtBlockWorkerServed(i, t.id())) continue;
         auto& held = t.liveHeld->midiKey;
         const bool timeline = playing && arrangementActive;
         if (t.liveHeld->midiKeyArrangement && !timeline) held = {};
@@ -2250,6 +2260,145 @@ void Engine::renderTrackAudioClipsRaw(
     });
 }
 
+void Engine::renderTrackAudioClipsUnmapped(
+    const Track& t, float* dst, int32_t frames, double blockStart, double spb, double sr) {
+    std::fill_n(dst, static_cast<size_t>(frames) * 2, 0.0f);
+    Transport clock;
+    clock.setSampleRate(sr > 0.0 ? sr : 44100.0);
+    if (spb > 0.0) clock.setBpm((clock.sampleRate() * 60.0) / spb);
+    if (!t.timelineIndex || spb <= 0.0) {
+        for (const AudioClip& clip : t.clips.read())
+            mixAudioClip<false>(clip, dst, frames, blockStart, spb, 1.0f, clock, /*forceSyncFill=*/true);
+        return;
+    }
+    const double b0 = blockStart / spb;
+    const double b1 = (blockStart + frames) / spb;
+    const double maxBps = clock.sampleRate() / spb;
+    t.timelineIndex->forEachAudioClipInWindow(std::min(b0, b1), std::max(b0, b1), maxBps, [&](int32_t ci) {
+        mixAudioClip<false>(t.clips[static_cast<size_t>(ci)], dst, frames, blockStart, spb, 1.0f, clock, true);
+    });
+}
+
+void Engine::renderAnticipativeInstrumentBlock(Graph* g, Track& t, size_t trackIdx, float* dst, int32_t frames,
+    double blockStart, double spb, double sr, MidiEv* midiScratch, ExprEv* exprScratch, ArtEv* artScratch) {
+    std::fill_n(dst, static_cast<size_t>(frames) * 2, 0.0f);
+    Instrument* inst = t.instrument.get();
+    if (!inst || spb <= 0.0) return;
+    inst->setTransport(blockStart / spb, spb, true);
+
+    int n = 0;
+    int xn = 0;
+    const double tsr = sr > 0.0 ? sr : 44100.0;
+    const double msToS = tsr / 1000.0;
+    const double trackShiftS = t.midiOffsetMs() * msToS;
+    const ArticulationTable* artTable = t.articulationTable.get();
+    const TimelineIndex* idx = t.timelineIndex.get();
+
+    auto processClip = [&](const MidiClip& clip, int32_t clipIdx, bool indexedNotes, double clipLocalStartB,
+                           double clipLocalEndB) {
+        const bool clipActive = clip.active;
+        const double clipStart = clip.startBeat * spb;
+        const double clipEnd = (clip.startBeat + clip.lengthBeats) * spb;
+        const bool hasVel = !clip.velocityEnvelope.points.empty();
+        auto handleNote = [&](const Note& note) {
+            if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
+            const double shiftS =
+                artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS : trackShiftS;
+            const double onS = clipStart + std::max(0.0, note.startBeat) * spb + shiftS;
+            const double offS = std::min(clipEnd, clipStart + (note.startBeat + note.lengthBeats) * spb) + shiftS;
+            float vel = note.velocity;
+            if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
+            if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
+                midiScratch[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
+                    static_cast<float>((offS - onS) / spb)};
+            if (offS >= blockStart && offS < blockStart + frames && n < 1024)
+                midiScratch[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+            if (note.expr && clipActive)
+                noteExprEvents(note, clipStart + note.startBeat * spb + shiftS - blockStart, offS - blockStart, frames,
+                    spb, exprScratch, xn, kMaxBlockExpr);
+        };
+        if (indexedNotes && idx) {
+            idx->forEachNoteInClip(clipIdx, clipLocalStartB, clipLocalEndB, -1.0,
+                [&](int32_t noteIdx) { handleNote(clip.notes[static_cast<size_t>(noteIdx)]); });
+        } else {
+            for (const Note& note : clip.notes) handleNote(note);
+        }
+        if (clipActive)
+            clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, false, exprScratch, xn, kMaxBlockExpr);
+    };
+
+    if (idx) {
+        const double minShiftMs = t.midiOffsetMs() + idx->minArtOffsetMs();
+        const double maxShiftMs = t.midiOffsetMs() + idx->maxArtOffsetMs();
+        const double maxBeatsPerMs = (tsr / spb) / 1000.0;
+        const double padBefore = std::max(0.0, maxShiftMs) * maxBeatsPerMs + 0.05;
+        const double padAfter = std::max(0.0, -minShiftMs) * maxBeatsPerMs + 0.05;
+        const double rawStart = blockStart / spb;
+        const double rawEnd = (blockStart + frames) / spb;
+        idx->forEachMidiClipInWindow(rawStart - 0.05, rawEnd + 0.05, -1.0, [&](int32_t ci) {
+            const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
+            if (clip.active)
+                clipCtlEndResets(clip, clip.startBeat * spb, (clip.startBeat + clip.lengthBeats) * spb, blockStart,
+                    frames, exprScratch, xn, kMaxBlockExpr);
+        });
+        idx->forEachMidiClipInWindow(rawStart - padBefore, rawEnd + padAfter, -1.0, [&](int32_t ci) {
+            const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
+            processClip(clip, ci, true, (rawStart - padBefore) - clip.startBeat, (rawEnd + padAfter) - clip.startBeat);
+        });
+    } else {
+        for (const MidiClip& clip : t.midiClips)
+            if (clip.active)
+                clipCtlEndResets(clip, clip.startBeat * spb, (clip.startBeat + clip.lengthBeats) * spb, blockStart,
+                    frames, exprScratch, xn, kMaxBlockExpr);
+        for (size_t ci = 0; ci < t.midiClips.size(); ++ci)
+            processClip(t.midiClips[ci], static_cast<int32_t>(ci), false, 0.0, 0.0);
+    }
+
+    std::sort(midiScratch, midiScratch + n, midiEvLess);
+    if (!t.midiEffects.empty()) {
+        MidiEv fxScratch[1024];
+        n = applyMidiEffects(t, midiScratch, n, fxScratch, frames, blockStart / spb, spb, true);
+        applyMidiCcRouting(t, g, trackIdx);
+        std::sort(midiScratch, midiScratch + n, midiEvLess);
+    } else if (t.instrument && t.instrument->asRack()) {
+        applyMidiCcRouting(t, g, trackIdx);
+    }
+    std::stable_sort(exprScratch, exprScratch + xn, [](const ExprEv& a, const ExprEv& b) { return a.off < b.off; });
+
+    int an = 0;
+    if (artTable && inst->takesArticulations()) {
+        ArticulationBlock ab;
+        ab.frames = frames;
+        ab.blockStart = blockStart;
+        ab.spb = spb;
+        ab.sampleRate = tsr;
+        ab.trackOffsetMs = t.midiOffsetMs();
+        an = scheduleArticulations(t.midiClips.read(), *artTable, ab, artScratch, kMaxBlockArt);
+    }
+    playEvents(*inst, dst, frames, midiScratch, n, exprScratch, xn, artScratch, an, blockStart / spb, spb, true, [] {});
+
+    auto applyEnv = [&](const MidiClip& clip) {
+        if (!clip.active || clip.volumeEnvelope.points.empty()) return;
+        const double cs = clip.startBeat * spb;
+        const double ce = (clip.startBeat + clip.lengthBeats) * spb;
+        for (int32_t i = 0; i < frames; ++i) {
+            const double p = blockStart + i;
+            if (p < cs || p >= ce) continue;
+            const float gEnv = std::clamp(clip.volumeEnvelope.valueAt((p - cs) / spb), 0.0f, 1.0f);
+            dst[i * 2] *= gEnv;
+            dst[i * 2 + 1] *= gEnv;
+        }
+    };
+    if (idx && idx->hasAnyMidiVolumeEnvelope()) {
+        const double b0 = blockStart / spb;
+        const double b1 = (blockStart + frames) / spb;
+        idx->forEachMidiEnvelopeClipInWindow(b0 - 0.05, b1 + 0.05,
+            [&](int32_t ci) { applyEnv(t.midiClips[static_cast<size_t>(ci)]); });
+    } else {
+        for (const MidiClip& clip : t.midiClips) applyEnv(clip);
+    }
+}
+
 // Consolidation owns this clock; rendering must neither attach to nor advance the live one.
 void Engine::renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
     const Transport& clock) {
@@ -2265,7 +2414,7 @@ void Engine::renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst,
 template <bool mapped>
 void Engine::mixAudioClip(
     const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
-    const Transport& clock) {
+    const Transport& clock, bool forceSyncFill) {
     if (!clip.active) return; // deactivated clip (key 0): stays on the timeline but silent
     const double sr = clock.sampleRate();
     double startSamples;
@@ -2406,6 +2555,24 @@ void Engine::mixAudioClip(
     const double clipDeviceLen = len / ratio;
     if constexpr (mapped) lenBeats = clock.beatAtSamples(startSamples + clipDeviceLen) - clip.startBeat;
     else lenBeats = clipDeviceLen / spb;
+
+    const double blkLo = std::max(blockStart, startSamples);
+    const double blkHi = std::min(blockStart + frames, startSamples + clipDeviceLen);
+    if (!(blkHi > blkLo)) return;
+
+    const bool allowSyncFill = forceSyncFill || !deviceBlock_;
+    if (sb.isStreaming()) {
+        auto posAt = [&](double p) {
+            double s = clip.reversed ? clip.sourceOffsetFrames + (len - 1) - (p - startSamples) * ratio
+                                     : clip.sourceOffsetFrames + (p - startSamples) * ratio;
+            return std::max(clip.sourceOffsetFrames, s);
+        };
+        const int64_t fA = static_cast<int64_t>(posAt(blkLo));
+        const int64_t fB = static_cast<int64_t>(posAt(blkHi - 1.0)) + 1;
+        sb.source->preparePlaybackWindow(std::min(fA, fB), std::max(fA, fB), clip.reversed, allowSyncFill);
+    }
+
+    int32_t slotHint = -1;
     for (int32_t i = 0; i < frames; ++i) {
         const double p = blockStart + i;
         if (p < startSamples || p >= startSamples + clipDeviceLen) continue;
@@ -2417,8 +2584,8 @@ void Engine::mixAudioClip(
         const int64_t i0 = static_cast<int64_t>(srcPos);
         const double frac = srcPos - i0;
         float l0, r0, l1, r1;
-        sb.readStereo(i0, l0, r0);
-        sb.readStereo(i0 + 1, l1, r1);
+        sb.readStereoFast(i0, slotHint, allowSyncFill, l0, r0);
+        sb.readStereoFast(i0 + 1, slotHint, allowSyncFill, l1, r1);
         float l = static_cast<float>(l0 + (l1 - l0) * frac) * clip.gain * extraGain;
         float r = static_cast<float>(r0 + (r1 - r0) * frac) * clip.gain * extraGain;
         // Short edge fade (~3 ms) so a clip that starts/ends mid-waveform doesn't click.
@@ -2686,6 +2853,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
             // segment (seamOffs_), so live-held keys keep sounding and tails ring out (#29).
             seamEndSamples_ = transport_.playheadSamples();
             transport_.wrapToLoopStart();
+            if (hybrid_) hybrid_->invalidate(false);
             if (spb > 0.0) onLoopWrap(g, transport_.beatAtSamples(transport_.loopStartSamples()), transport_.beatAtSamples(seamEndSamples_));
             lastBeatEmitted_ = static_cast<int64_t>(std::ceil(transport_.positionBeats() * transport_.timeSigDenom() / 4.0 - 1e-8)) - 1;
             seamOffs_ = true;

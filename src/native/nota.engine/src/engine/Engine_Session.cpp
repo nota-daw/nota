@@ -33,8 +33,9 @@ bool Engine::sessionAudioSlotInfo(int32_t trackId, int32_t scene, NotaSessionAud
 bool Engine::addSessionAudioClip(int32_t trackId, int32_t scene, const std::string& path, double lengthBeats,
     double sourceOffsetFrames, int64_t lengthFrames, float gain) {
     if (scene < 0) return false;
-    auto sample = decodeAudioFile(path);
+    auto sample = decodeAudioFile(path, decodeOptions());
     if (!sample || sample->empty()) return false;
+    if (sample->source) sample->source->primeAround(static_cast<int64_t>(std::max(0.0, sourceOffsetFrames)), false);
     auto old = findTrackAuthoring(trackId);
     if (!old) return false;
     auto nt = cloneTrack(*old);
@@ -56,8 +57,9 @@ bool Engine::addSessionAudioClip(int32_t trackId, int32_t scene, const std::stri
 
 bool Engine::addSessionAudioFile(int32_t trackId, int32_t scene, const std::string& path) {
     if (scene < 0) return false;
-    auto sample = decodeAudioFile(path);
+    auto sample = decodeAudioFile(path, decodeOptions());
     if (!sample || sample->empty()) return false;
+    if (sample->source) sample->source->primeAround(0, false);
     auto old = findTrackAuthoring(trackId);
     if (!old) return false;
 

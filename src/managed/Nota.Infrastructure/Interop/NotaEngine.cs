@@ -438,6 +438,44 @@ public sealed partial class NotaEngine : IAudioEngine
     public double RenderThreadsCpuSeconds
     { get { ThrowIfDisposed(); return NativeMethods.RenderThreadsCpuSeconds(_handle); } }
 
+    public long StreamThresholdBytes
+    {
+        get { ThrowIfDisposed(); return NativeMethods.StreamThresholdBytes(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetStreamThresholdBytes(_handle, value)); }
+    }
+
+    public SampleLoadPolicy SampleLoadPolicy
+    {
+        get { ThrowIfDisposed(); return (SampleLoadPolicy)NativeMethods.SampleLoadPolicy(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetSampleLoadPolicy(_handle, (int)value)); }
+    }
+
+    public bool IsSampleStreaming(long sampleId)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.IsSampleStreaming(_handle, sampleId) != 0;
+    }
+
+    public NotaStreamingStats GetStreamingStats()
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.StreamingStats(_handle, out var st));
+        return st;
+    }
+
+    public HybridBufferMode HybridBuffering
+    {
+        get { ThrowIfDisposed(); return (HybridBufferMode)NativeMethods.HybridBuffering(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetHybridBuffering(_handle, (int)value)); }
+    }
+
+    public NotaHybridBufferStats GetHybridStats()
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.HybridStats(_handle, out var st));
+        return st;
+    }
+
     public void Dispose()
     {
         if (_handle != IntPtr.Zero)

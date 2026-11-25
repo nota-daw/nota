@@ -15,6 +15,7 @@ namespace nota {
 
 // --- live MIDI, arming, recording ------------------------------------------
 void Engine::setTrackArmed(int32_t trackId, bool armed) {
+    if (hybrid_) hybrid_->invalidate(true);
     auto t = findTrackAuthoring(trackId);
     const bool wasArmed = t && t->armed();
     if (t) t->setArmed(armed);
@@ -187,6 +188,7 @@ const CaptureLayoutSnapshot* Engine::layoutFor(uint32_t generation) const {
 
 // --- live input monitoring ---------------------------------------------------
 void Engine::setTrackMonitor(int32_t trackId, bool on) {
+    if (hybrid_) hybrid_->invalidate(true);
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return;
     t->setMonitor(on);
@@ -641,6 +643,7 @@ static MidiEvent liveEvent(bool on, int32_t pitch, float v, int32_t expr, int32_
 }
 
 void Engine::noteOn(int32_t pitch, float velocity, int32_t source, int32_t channel) {
+    if (hybrid_) hybrid_->invalidate(true);
     {
         std::lock_guard<std::mutex> lk(liveMidiMx_);
         liveMidi_.push(liveEvent(true, pitch, velocity, -1, source, channel));
@@ -648,6 +651,7 @@ void Engine::noteOn(int32_t pitch, float velocity, int32_t source, int32_t chann
     if (pitch >= 0 && pitch < 128) liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
 }
 void Engine::noteOff(int32_t pitch, float releaseVelocity, int32_t source, int32_t channel) {
+    if (hybrid_) hybrid_->invalidate(true);
     {
         std::lock_guard<std::mutex> lk(liveMidiMx_);
         liveMidi_.push(liveEvent(false, pitch, std::clamp(releaseVelocity, 0.0f, 1.0f), -1, source, channel));

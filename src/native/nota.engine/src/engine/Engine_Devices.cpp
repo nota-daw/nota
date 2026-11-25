@@ -1455,6 +1455,7 @@ float Engine::midiEffectGetParam(int32_t t, int32_t i, int32_t p) const {
 void Engine::midiEffectSetParam(int32_t t, int32_t i, int32_t p, float v) {
     routeCvBaseEdit(2, t, i, p, v);
     if (auto* m = midiDeviceAt(t, i)) m->setParam(p, v);
+    if (hybrid_) hybrid_->invalidate(true);
 }
 std::vector<uint8_t> Engine::midiEffectGetState(int32_t t, int32_t i) const {
     auto* m = midiDeviceAt(t, i);
@@ -1628,6 +1629,7 @@ void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramI
     if (auto* d = deviceAt(trackId, deviceIndex)) {
         if (d->isLatencyConfigurationParam(paramIndex)) {
             setLatencyConfigurationParam(*d, paramIndex, value);
+            if (hybrid_) hybrid_->invalidate(true);
             return;
         }
         // Keep the CV base and the immediately visible value in step.
@@ -1636,6 +1638,7 @@ void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramI
         const int32_t latBefore = d->latencySamples();
         d->setParam(paramIndex, value);
         if (d->latencySamples() != latBefore) recomputePdc();
+        if (hybrid_) hybrid_->invalidate(true);
     }
 }
 
@@ -1645,6 +1648,7 @@ void Engine::setLatencyConfigurationParam(Device& device, int32_t param, float v
     const auto oldLatency = device.latencySamples();
     device.setParam(param, value);
     if (device.latencySamples() != oldLatency) recomputePdc(true);
+    if (hybrid_) hybrid_->invalidate(true);
 }
 float Engine::deviceGainReduction(int32_t trackId, int32_t deviceIndex) const {
     auto* d = deviceAt(trackId, deviceIndex);

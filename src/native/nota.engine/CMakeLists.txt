@@ -106,11 +106,13 @@ set(NOTA_ENGINE_SOURCES
     src/engine/RenderGraphExecutor.cpp
     src/engine/Audition.cpp
     src/engine/AudioThreadPool.cpp  # fork-join pool
+    src/engine/HybridBufferController.cpp
     src/media/WarpStream.cpp
     src/media/TempoDetect.cpp
     src/media/SampleAnalysis.cpp
     src/media/AudioFile.cpp
     src/media/AudioImport.cpp
+    src/media/StreamingAudioSource.cpp
     src/media/SampleBuffer.cpp  # peak-table math (.h/.cpp)
     src/audio_io/AudioBackendFactory.cpp   # platform-selected backend construction
     src/audio_io/NotaConfigFile.cpp        # per-user data dir + atomic file IO (all platforms)

@@ -391,4 +391,31 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_threads_cpu_seconds")]
     internal static partial double RenderThreadsCpuSeconds(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_stream_threshold_bytes")]
+    internal static partial NotaResult SetStreamThresholdBytes(IntPtr engine, long bytes);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_stream_threshold_bytes")]
+    internal static partial long StreamThresholdBytes(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_sample_load_policy")]
+    internal static partial NotaResult SetSampleLoadPolicy(IntPtr engine, int policy);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_sample_load_policy")]
+    internal static partial int SampleLoadPolicy(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sample_is_streaming")]
+    internal static partial int IsSampleStreaming(IntPtr engine, long sampleId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_streaming_stats")]
+    internal static partial NotaResult StreamingStats(IntPtr engine, out NotaStreamingStats stats);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_hybrid_buffering")]
+    internal static partial NotaResult SetHybridBuffering(IntPtr engine, int mode);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_hybrid_buffering")]
+    internal static partial int HybridBuffering(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_hybrid_stats")]
+    internal static partial NotaResult HybridStats(IntPtr engine, out NotaHybridBufferStats stats);
 }
