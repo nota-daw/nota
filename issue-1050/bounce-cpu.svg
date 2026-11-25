@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="456" viewBox="0 0 1160 456" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="1160" height="456" fill="#fcfcfb"/>
+<text x="28" y="32" font-size="18" font-weight="600" fill="#0b0b0b">CPU work during an offline render</text>
+<text x="28" y="53" font-size="13" fill="#52514e">CPU time summed over all threads, per second of audio. Lower uses less energy.</text>
+<rect x="28" y="68" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="46" y="79" font-size="13" fill="#52514e">develop (5989d60a)</text>
+<rect x="199.0" y="68" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="217.0" y="79" font-size="13" fill="#52514e">This PR (#1050)</text>
+<line x1="68" x2="1132" y1="400.0" y2="400.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="60" y="404.0" font-size="12" fill="#898781" text-anchor="end">0</text>
+<line x1="68" x2="1132" y1="324.0" y2="324.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="328.0" font-size="12" fill="#898781" text-anchor="end">100</text>
+<line x1="68" x2="1132" y1="248.0" y2="248.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="252.0" font-size="12" fill="#898781" text-anchor="end">200</text>
+<line x1="68" x2="1132" y1="172.0" y2="172.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="176.0" font-size="12" fill="#898781" text-anchor="end">300</text>
+<line x1="68" x2="1132" y1="96.0" y2="96.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="100.0" font-size="12" fill="#898781" text-anchor="end">400</text>
+<text x="16" y="248" font-size="12" fill="#898781" transform="rotate(-90 16 248)" text-anchor="middle">CPU ms per second of audio</text>
+<path d="M105.0,400.0 V396.8 Q105.0,393.7 108.2,393.7 H139.8 Q143.0,393.7 143.0,396.8 V400.0 Z" fill="#2a78d6"/>
+<text x="124.0" y="388.7" font-size="11.5" fill="#52514e" text-anchor="middle">8.3</text>
+<path d="M145.0,400.0 V397.3 Q145.0,394.6 147.7,394.6 H180.3 Q183.0,394.6 183.0,397.3 V400.0 Z" fill="#eb6834"/>
+<text x="164.0" y="389.6" font-size="11.5" fill="#52514e" text-anchor="middle">7.1</text>
+<text x="144.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">1 audio track</text>
+<path d="M257.0,400.0 V355.7 Q257.0,351.7 261.0,351.7 H291.0 Q295.0,351.7 295.0,355.7 V400.0 Z" fill="#2a78d6"/>
+<text x="276.0" y="346.7" font-size="11.5" fill="#52514e" text-anchor="middle">63.6</text>
+<path d="M297.0,400.0 V356.3 Q297.0,352.3 301.0,352.3 H331.0 Q335.0,352.3 335.0,356.3 V400.0 Z" fill="#eb6834"/>
+<text x="316.0" y="347.3" font-size="11.5" fill="#52514e" text-anchor="middle">62.8</text>
+<text x="296.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">8 audio tracks</text>
+<path d="M409.0,400.0 V216.6 Q409.0,212.6 413.0,212.6 H443.0 Q447.0,212.6 447.0,216.6 V400.0 Z" fill="#2a78d6"/>
+<text x="428.0" y="207.6" font-size="11.5" fill="#52514e" text-anchor="middle">247</text>
+<path d="M449.0,400.0 V217.4 Q449.0,213.4 453.0,213.4 H483.0 Q487.0,213.4 487.0,217.4 V400.0 Z" fill="#eb6834"/>
+<text x="468.0" y="208.4" font-size="11.5" fill="#52514e" text-anchor="middle">246</text>
+<text x="448.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">32 audio tracks</text>
+<path d="M561.0,400.0 V393.7 Q561.0,389.7 565.0,389.7 H595.0 Q599.0,389.7 599.0,393.7 V400.0 Z" fill="#2a78d6"/>
+<text x="580.0" y="384.7" font-size="11.5" fill="#52514e" text-anchor="middle">13.6</text>
+<path d="M601.0,400.0 V393.7 Q601.0,389.7 605.0,389.7 H635.0 Q639.0,389.7 639.0,393.7 V400.0 Z" fill="#eb6834"/>
+<text x="620.0" y="384.7" font-size="11.5" fill="#52514e" text-anchor="middle">13.5</text>
+<text x="600.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">8 synth tracks</text>
+<path d="M713.0,400.0 V362.1 Q713.0,358.1 717.0,358.1 H747.0 Q751.0,358.1 751.0,362.1 V400.0 Z" fill="#2a78d6"/>
+<text x="732.0" y="353.1" font-size="11.5" fill="#52514e" text-anchor="middle">55.1</text>
+<path d="M753.0,400.0 V362.1 Q753.0,358.1 757.0,358.1 H787.0 Q791.0,358.1 791.0,362.1 V400.0 Z" fill="#eb6834"/>
+<text x="772.0" y="353.1" font-size="11.5" fill="#52514e" text-anchor="middle">55.1</text>
+<text x="752.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">32 synth tracks</text>
+<path d="M865.0,400.0 V349.5 Q865.0,345.5 869.0,345.5 H899.0 Q903.0,345.5 903.0,349.5 V400.0 Z" fill="#2a78d6"/>
+<text x="884.0" y="340.5" font-size="11.5" fill="#52514e" text-anchor="middle">71.7</text>
+<path d="M905.0,400.0 V349.7 Q905.0,345.7 909.0,345.7 H939.0 Q943.0,345.7 943.0,349.7 V400.0 Z" fill="#eb6834"/>
+<text x="924.0" y="340.7" font-size="11.5" fill="#52514e" text-anchor="middle">71.5</text>
+<text x="904.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">8 sidechained tracks</text>
+<path d="M1017.0,400.0 V198.2 Q1017.0,194.2 1021.0,194.2 H1051.0 Q1055.0,194.2 1055.0,198.2 V400.0 Z" fill="#2a78d6"/>
+<text x="1036.0" y="189.2" font-size="11.5" fill="#52514e" text-anchor="middle">271</text>
+<path d="M1057.0,400.0 V200.5 Q1057.0,196.5 1061.0,196.5 H1091.0 Q1095.0,196.5 1095.0,200.5 V400.0 Z" fill="#eb6834"/>
+<text x="1076.0" y="191.5" font-size="11.5" fill="#52514e" text-anchor="middle">268</text>
+<text x="1056.0" y="422" font-size="12.5" fill="#52514e" text-anchor="middle">32 sidechained tracks</text>
+</svg>

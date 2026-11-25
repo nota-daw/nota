@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="456" viewBox="0 0 960 456" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="960" height="456" fill="#fcfcfb"/>
+<text x="28" y="32" font-size="18" font-weight="600" fill="#0b0b0b">CPU work during an export</text>
+<text x="28" y="53" font-size="13" fill="#52514e">CPU time summed over all threads, per second of audio. Lower uses less energy.</text>
+<rect x="28" y="68" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="46" y="79" font-size="13" fill="#52514e">develop (5989d60a)</text>
+<rect x="199.0" y="68" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="217.0" y="79" font-size="13" fill="#52514e">This PR (#1050)</text>
+<line x1="68" x2="932" y1="400.0" y2="400.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="60" y="404.0" font-size="12" fill="#898781" text-anchor="end">0</text>
+<line x1="68" x2="932" y1="324.0" y2="324.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="328.0" font-size="12" fill="#898781" text-anchor="end">200</text>
+<line x1="68" x2="932" y1="248.0" y2="248.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="252.0" font-size="12" fill="#898781" text-anchor="end">400</text>
+<line x1="68" x2="932" y1="172.0" y2="172.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="176.0" font-size="12" fill="#898781" text-anchor="end">600</text>
+<line x1="68" x2="932" y1="96.0" y2="96.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="100.0" font-size="12" fill="#898781" text-anchor="end">800</text>
+<text x="16" y="248" font-size="12" fill="#898781" transform="rotate(-90 16 248)" text-anchor="middle">CPU ms per second of audio</text>
+<path d="M137.0,400.0 V358.4 Q137.0,354.4 141.0,354.4 H171.0 Q175.0,354.4 175.0,358.4 V400.0 Z" fill="#2a78d6"/>
+<text x="156.0" y="349.4" font-size="11.5" fill="#52514e" text-anchor="middle">120</text>
+<path d="M177.0,400.0 V358.7 Q177.0,354.7 181.0,354.7 H211.0 Q215.0,354.7 215.0,358.7 V400.0 Z" fill="#eb6834"/>
+<text x="196.0" y="349.7" font-size="11.5" fill="#52514e" text-anchor="middle">119</text>
+<text x="176.0" y="420" font-size="12.5" fill="#52514e" text-anchor="middle">16 audio tracks</text>
+<text x="176.0" y="436" font-size="11.5" fill="#898781" text-anchor="middle">8192-frame chunks</text>
+<path d="M353.0,400.0 V392.7 Q353.0,388.7 357.0,388.7 H387.0 Q391.0,388.7 391.0,392.7 V400.0 Z" fill="#2a78d6"/>
+<text x="372.0" y="383.7" font-size="11.5" fill="#52514e" text-anchor="middle">29.8</text>
+<path d="M393.0,400.0 V388.2 Q393.0,384.2 397.0,384.2 H427.0 Q431.0,384.2 431.0,388.2 V400.0 Z" fill="#eb6834"/>
+<text x="412.0" y="379.2" font-size="11.5" fill="#52514e" text-anchor="middle">41.6</text>
+<text x="392.0" y="420" font-size="12.5" fill="#52514e" text-anchor="middle">16 synth tracks</text>
+<text x="392.0" y="436" font-size="11.5" fill="#898781" text-anchor="middle">8192-frame chunks</text>
+<path d="M569.0,400.0 V223.2 Q569.0,219.2 573.0,219.2 H603.0 Q607.0,219.2 607.0,223.2 V400.0 Z" fill="#2a78d6"/>
+<text x="588.0" y="214.2" font-size="11.5" fill="#52514e" text-anchor="middle">476</text>
+<path d="M609.0,400.0 V223.6 Q609.0,219.6 613.0,219.6 H643.0 Q647.0,219.6 647.0,223.6 V400.0 Z" fill="#eb6834"/>
+<text x="628.0" y="214.6" font-size="11.5" fill="#52514e" text-anchor="middle">475</text>
+<text x="608.0" y="420" font-size="12.5" fill="#52514e" text-anchor="middle">64 audio tracks</text>
+<text x="608.0" y="436" font-size="11.5" fill="#898781" text-anchor="middle">8192-frame chunks</text>
+<path d="M785.0,400.0 V353.5 Q785.0,349.5 789.0,349.5 H819.0 Q823.0,349.5 823.0,353.5 V400.0 Z" fill="#2a78d6"/>
+<text x="804.0" y="344.5" font-size="11.5" fill="#52514e" text-anchor="middle">133</text>
+<path d="M825.0,400.0 V353.3 Q825.0,349.3 829.0,349.3 H859.0 Q863.0,349.3 863.0,353.3 V400.0 Z" fill="#eb6834"/>
+<text x="844.0" y="344.3" font-size="11.5" fill="#52514e" text-anchor="middle">134</text>
+<text x="824.0" y="420" font-size="12.5" fill="#52514e" text-anchor="middle">16 sidechained tracks</text>
+<text x="824.0" y="436" font-size="11.5" fill="#898781" text-anchor="middle">8192-frame chunks</text>
+</svg>

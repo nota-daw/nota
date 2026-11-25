@@ -1,0 +1,7 @@
+date: 2026-11-25T18:31:16Z
+os: Darwin 27.2.0 arm64
+cpu: Apple M2, 8 threads
+macos: 27.2.1
+runs: 3
+build: before=/tmp/bench-1050/before
+build: after=/tmp/bench-1050/after

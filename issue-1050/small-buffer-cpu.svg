@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="960" height="440" fill="#fcfcfb"/>
+<text x="64" y="34" font-size="18" font-weight="600" fill="#0b0b0b">CPU at small buffers (heavy sessions)</text>
+<text x="64" y="56" font-size="13" fill="#52514e">Process CPU while playing in real time. Lower is better.</text>
+<rect x="64" y="70" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="82" y="80" font-size="13" fill="#52514e">develop (5989d60a)</text>
+<rect x="229.0" y="70" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="247.0" y="80" font-size="13" fill="#52514e">This PR (#1050)</text>
+<line x1="64" x2="936" y1="384.0" y2="384.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="56" y="388.0" font-size="12" fill="#898781" text-anchor="end">0</text>
+<line x1="64" x2="936" y1="288.0" y2="288.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="292.0" font-size="12" fill="#898781" text-anchor="end">100</text>
+<line x1="64" x2="936" y1="192.0" y2="192.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="196.0" font-size="12" fill="#898781" text-anchor="end">200</text>
+<line x1="64" x2="936" y1="96.0" y2="96.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="100.0" font-size="12" fill="#898781" text-anchor="end">300</text>
+<text x="14" y="240" font-size="12" fill="#898781" transform="rotate(-90 14 240)" text-anchor="middle">% of one core</text>
+<path d="M168.3,384.0 V303.9 Q168.3,299.9 172.3,299.9 H204.3 Q208.3,299.9 208.3,303.9 V384.0 Z" fill="#2a78d6"/>
+<text x="188.3" y="294.9" font-size="11" fill="#52514e" text-anchor="middle">87.6</text>
+<path d="M210.3,384.0 V301.8 Q210.3,297.8 214.3,297.8 H246.3 Q250.3,297.8 250.3,301.8 V384.0 Z" fill="#eb6834"/>
+<text x="230.3" y="292.8" font-size="11" fill="#52514e" text-anchor="middle">89.8</text>
+<text x="209.3" y="406" font-size="13" fill="#52514e" text-anchor="middle">64 audio tracks · 128-sample buffer</text>
+<path d="M459.0,384.0 V211.7 Q459.0,207.7 463.0,207.7 H495.0 Q499.0,207.7 499.0,211.7 V384.0 Z" fill="#2a78d6"/>
+<text x="479.0" y="202.7" font-size="11" fill="#52514e" text-anchor="middle">184</text>
+<path d="M501.0,384.0 V184.9 Q501.0,180.9 505.0,180.9 H537.0 Q541.0,180.9 541.0,184.9 V384.0 Z" fill="#eb6834"/>
+<text x="521.0" y="175.9" font-size="11" fill="#52514e" text-anchor="middle">212</text>
+<text x="500.0" y="406" font-size="13" fill="#52514e" text-anchor="middle">128 audio tracks · 64-sample buffer</text>
+<path d="M749.7,384.0 V128.5 Q749.7,124.5 753.7,124.5 H785.7 Q789.7,124.5 789.7,128.5 V384.0 Z" fill="#2a78d6"/>
+<text x="769.7" y="119.5" font-size="11" fill="#52514e" text-anchor="middle">270</text>
+<path d="M791.7,384.0 V142.0 Q791.7,138.0 795.7,138.0 H827.7 Q831.7,138.0 831.7,142.0 V384.0 Z" fill="#eb6834"/>
+<text x="811.7" y="133.0" font-size="11" fill="#52514e" text-anchor="middle">256</text>
+<text x="790.7" y="406" font-size="13" fill="#52514e" text-anchor="middle">192 audio tracks · 64-sample buffer</text>
+</svg>
