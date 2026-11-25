@@ -76,6 +76,9 @@
       {"name": "Main", "params": ["Filter Cutoff", "Filter Resonance", "Filter Env Amount", "Pitch Transpose", "Env Attack", "Env Decay", "Env Sustain", "Env Release"]},
       {"name": "Voice", "params": ["Pitch Detune", "Voice Glide", "Out Volume", "Out Pan", "Release Volume", "Release Length", "Voice Velocity", "Filter Keytrack"]}
     ],
+    "builtin:inst:external-midi": [
+      {"name": "External", "params": [null, null, null, null, null, null, null, null]}
+    ],
     "builtin:inst:twin": [
       {"name": "Main", "params": ["Lower · Morph", "Pad X", "Pad Y", "Pad Z", "Lower · Macros Macro1", "Lower · Macros Macro2", "Lower · Macros Macro3", "Lower · Macros Macro4"]},
       {"name": "Macros", "params": ["Lower · Macros Macro5", "Lower · Macros Macro6", "Lower · Macros Macro7", "Lower · Macros Macro8", "Lower · Out Volume", "Lower · Voice Glide", "Arp Gate", "Sequencer Rate"]},

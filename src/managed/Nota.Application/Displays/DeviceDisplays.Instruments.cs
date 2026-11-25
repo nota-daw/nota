@@ -365,6 +365,23 @@ public static partial class DeviceDisplays
             }),
         };
 
+        // External MIDI (specs/115): no knobs to picture — its destination, as a cable to a port.
+        d["builtin:inst:external-midi"] = new[]
+        {
+            Page("External", (c, f) =>
+            {
+                var dest = c.Engine.GetExternalMidi(c.Address.TrackId);
+                string port = dest is null || dest.Value.OutputUid.Length == 0 ? "NO OUTPUT"
+                    : dest.Value.OutputName.Length > 0 ? dest.Value.OutputName : dest.Value.OutputUid;
+                string ch = dest is { Channel: 0 } ? "MPE" : $"CH {dest?.Channel ?? 1}";
+                int mid = (LedFrame.Top + LedFrame.Bottom) / 2;
+                f.Box(4, mid - 8, 16, 16, Widgets.Hot);                 // the track
+                f.Line(20, mid, 100, mid, Widgets.Dim);                  // the cable
+                f.Box(100, mid - 8, 24, 16, c.Engine.ExternalMidiStatus(c.Address.TrackId) == 1 ? Widgets.Hot : Widgets.Dim);   // the port
+                f.Text(LedFrame.Normalize(ch), 104, mid - 2, Widgets.Hot);
+                f.Text(LedFrame.Normalize(port), 4, LedFrame.Bottom - 6, Widgets.Hot);
+            }),
+        };
         d["builtin:inst:keys"] = new[]
         {
             Page("Main", (c, f) =>

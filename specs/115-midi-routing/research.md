@@ -175,3 +175,30 @@ to the repository root.
   `nota_midi_test_output_read` (drain captured bytes with timestamps). Every acceptance
   scenario that does not need real hardware runs there (see quickstart.md). The rest
   (hardware synth, real unplug, WinMM exclusivity) is a manual checklist in quickstart.md.
+
+## As built (implementation notes)
+
+Where the code settled differently from the decisions above:
+
+- **R2 timing:** every platform waits on the MIDI out thread until a message is due (1 ms loop,
+  `timeBeginPeriod(1)` on Windows) and sends then; CoreMIDI timestamps are not used. An offline
+  render (export, bounce) never reaches a real port — only test ports take it.
+- **R2/R4 config:** a destination never changes inside an instance. `setExternalMidi` and a role
+  rebind publish a new `ExternalMidi`; the old instance leaving the graph is what releases its
+  book (after a 100 ms grace, at once in `pump()`), and undo restores the old instance. No
+  `Config` events in the ring. `allNotesOff` (any thread) sets a flag the audio thread turns into
+  a flush, so the ring keeps one producer.
+- **R3:** `midiSend` calls the service synchronously under its mutex (it returns the real result);
+  the service owns every `MidiOutput`.
+- **R5:** the MPE Configuration Message (RPN 6, 15 members) goes out before the first event in
+  Keep channels mode.
+- **R6:** the filter is `MidiInputFilter` (every input on a channel mask, or per-source masks);
+  the input generation is unique across all track versions, so a clone or undo is always checked.
+  Input changes are a new track version — one undo step (FR-022). The legacy index-only pick is
+  stored as the pseudo uid `source:N`.
+- **R8:** the engine keeps the saved uid (and name) itself; it treats a uid listed twice as not
+  present, so ambiguity needs no managed hold. `MidiRouteResolver` serves the UI and MCP.
+- **R9:** the panel's toggle is in the Mixer footer's Show row (the Mixer has no header bar), plus
+  View ▸ MIDI routes.
+- **Roles** live in the engine's graph (`Graph::midiRoles`) so a rebind and its tracks are one undo
+  step; the project document saves them as `MidiOutputRoles`.

@@ -54,6 +54,14 @@ public partial class MainWindow
             settings.Current.MixerCompact = compact;
             settings.Save();
         };
+        _mixer.MidiRoutesVisible = MixerSettings.Current.MixerMidiRoutes;   // specs/115
+        _mixer.MidiRoutesChanged += open =>
+        {
+            var settings = MixerSettings;
+            settings.Current.MixerMidiRoutes = open;
+            settings.Save();
+            SyncMixerMenu();
+        };
         Timeline.TrackSelected += id => _mixer?.FollowSelection(id);
         _mixer.TrackPicked += id => Timeline.SelectTrackFromOutside(id);   // a strip click selects its track (#538)
         Timeline.SelectionCleared += () => _mixer?.FollowSelection(-1);
@@ -147,6 +155,20 @@ public partial class MainWindow
     private void SyncMixerMenu()
     {
         if (MenuItemFor("view.mixerFloat") is { } mi) mi.IsChecked = MixerFloating;
+        if (MenuItemFor("view.midiRoutes") is { } mr) mr.IsChecked = _mixer?.MidiRoutesVisible == true;
+    }
+
+    // View ▸ MIDI routes (specs/115 US3): the Mixer's side panel, opening the Mixer with it.
+    private void ToggleMidiRoutes()
+    {
+        if (_mixer is null) return;
+        bool open = !_mixer.MidiRoutesVisible;
+        if (open && !IsMixerVisible) ShowMixer();
+        _mixer.MidiRoutesVisible = open;
+        var settings = MixerSettings;
+        settings.Current.MixerMidiRoutes = open;
+        settings.Save();
+        SyncMixerMenu();
     }
 
     private static MixerViewMode MixerViewFromSettings()

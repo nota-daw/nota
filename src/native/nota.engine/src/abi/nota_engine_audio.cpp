@@ -951,7 +951,10 @@ int32_t nota_midi_surface_selftest(void) {
 }
 
 int32_t nota_midi_test_port_add(NotaEngine* e, const char* name) {
-    return (e && name) ? ENG(e)->addTestMidiPort(name) : -1;
+    if (!e || !name) return -1;
+    const int32_t s = ENG(e)->addTestMidiPort(name);
+    ENG(e)->resolveAllMidiInputs(); // a track listing it by uid hears it now (specs/115)
+    return s;
 }
 
 NotaResult nota_midi_test_inject(NotaEngine* e, int32_t source, const uint8_t* bytes, int32_t len) {
@@ -965,7 +968,9 @@ int32_t nota_midi_test_take_sent(NotaEngine* e, int32_t source, uint8_t* out, in
 
 NotaResult nota_midi_test_port_remove(NotaEngine* e, const char* name) {
     if (!e || !name) return NOTA_ERR_INVALID_ARG;
-    return ENG(e)->removeTestMidiPort(name) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+    const bool ok = ENG(e)->removeTestMidiPort(name);
+    ENG(e)->resolveAllMidiInputs(); // its listeners stop hearing it, their held notes end (FR-005)
+    return ok ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 
 int32_t nota_midi_test_output_read(NotaEngine* e, const char* name, uint8_t* bytes, int32_t bytesCap,

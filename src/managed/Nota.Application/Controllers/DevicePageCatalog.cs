@@ -56,6 +56,7 @@ public static class DevicePageCatalog
         new(FocusSection.Instrument, 16, "keys"),
         new(FocusSection.Instrument, 17, "mosaic"),
         new(FocusSection.Instrument, 18, "twin"),
+        new(FocusSection.Instrument, 19, "external-midi"),
         new(FocusSection.Audio, 0, "eq-8"),
         new(FocusSection.Audio, 1, "compressor"),
         new(FocusSection.Audio, 2, "reverb"),

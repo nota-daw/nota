@@ -790,6 +790,39 @@ NOTA_API int32_t nota_engine_add_physical_synth_track(NotaEngine* engine);
 NOTA_API int32_t nota_engine_add_wavetable_synth_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Volt (virtual analog). id (>0). */
 NOTA_API int32_t nota_engine_add_volt_synth_track(NotaEngine* engine);
+/* Adds an instrument track with External MIDI (kind 19, specs/115): it plays a synth over a MIDI
+ * output instead of making sound. No destination yet (nota_external_midi_set). id (>0). */
+NOTA_API int32_t nota_engine_add_external_midi_track(NotaEngine* engine);
+/* External MIDI's destination (specs/115): an output uid (from nota_midi_output_uid; "" = none,
+ * nothing is sent), the name it had when chosen (shown while it is missing), the project output
+ * role it follows ("" = the port itself), and a channel 1-16 every message goes on, or 0 = Keep
+ * channels (each note on its own MPE member channel 2-16, instrument-wide messages on 1). Only
+ * that exact uid is ever sent to — never a port with a similar name, nor one of two listed under
+ * the same uid. Makes a new instance — one undo step; the old one releases the notes it holds at
+ * its output. NOTA_OK, or NOTA_ERR_INVALID_ARG (not External MIDI, channel out of range). */
+NOTA_API NotaResult nota_external_midi_set(NotaEngine* engine, int32_t track_id, const char* output_uid,
+    const char* output_name, const char* role_id, int32_t channel);
+/* One text field of the destination — 0 output uid, 1 output name, 2 role id — into out (cap
+ * bytes, NUL-terminated); returns its full length, or -1 if the track isn't External MIDI. */
+NOTA_API int32_t    nota_external_midi_text(const NotaEngine* engine, int32_t track_id, int32_t field, char* out, int32_t cap);
+/* The channel: 1-16, 0 = Keep channels, -1 if the track isn't External MIDI. */
+NOTA_API int32_t    nota_external_midi_channel(const NotaEngine* engine, int32_t track_id);
+/* 0 no destination, 1 sending, 2 unavailable (missing, ambiguous, unplugged), -1 not External MIDI. Any thread. */
+NOTA_API int32_t    nota_external_midi_status(const NotaEngine* engine, int32_t track_id);
+/* Messages dropped because the track's output ring was full (diagnostic). Any thread. */
+NOTA_API uint32_t   nota_external_midi_dropped(const NotaEngine* engine, int32_t track_id);
+/* Project MIDI output roles (specs/115 US4), saved in the undo snapshot. set: the whole table —
+ * per role its id, name, bound output uid ("" = unbound) and that output's name; one undo step.
+ * count / text: field 0 id, 1 name, 2 output uid, 3 output name (cap bytes, NUL-terminated; the
+ * full length, or -1 out of range). rebind: the role's output and every External MIDI track that
+ * follows it, channels kept, one undo step; NOTA_ERR_INVALID_ARG for an unknown role or while the
+ * transport plays (FR-015). */
+NOTA_API NotaResult nota_midi_roles_set(NotaEngine* engine, const char* const* ids, const char* const* names,
+    const char* const* output_uids, const char* const* output_names, int32_t count);
+NOTA_API int32_t    nota_midi_role_count(const NotaEngine* engine);
+NOTA_API int32_t    nota_midi_role_text(const NotaEngine* engine, int32_t index, int32_t field, char* out, int32_t cap);
+NOTA_API NotaResult nota_midi_role_rebind(NotaEngine* engine, const char* role_id, const char* output_uid,
+    const char* output_name);
 /* Adds an instrument track with the built-in Nota Bass (bass synthesizer). id (>0). */
 NOTA_API int32_t nota_engine_add_bass_synth_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Pendulum (generative keys). id (>0). */
@@ -1811,6 +1844,22 @@ NOTA_API int32_t    nota_track_get_midi_input(const NotaEngine* engine, int32_t 
  * `out` and returns its length. */
 NOTA_API NotaResult nota_track_set_midi_input_uid(NotaEngine* engine, int32_t track_id, const char* uid, int32_t channel);
 NOTA_API int32_t    nota_track_get_midi_input_uid(const NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
+/* specs/115: an instrument track's live MIDI input as a list. all = 1: every input (the computer
+ * keyboard, gamepad, Nota Remote and every device) on all_channels (bit n = channel n+1; 0 =
+ * all). all = 0: the `count` ports uids[i], each on masks[i] (an entry with mask 0 is dropped; a
+ * port listed twice takes both). A port that isn't connected keeps its place, unheard, until it
+ * is. Held notes from an input no longer listed end at once, with that input's pedal (FR-005).
+ * NOTA_OK, or NOTA_ERR_INVALID_ARG (not an instrument track). */
+NOTA_API NotaResult nota_track_set_midi_inputs(NotaEngine* engine, int32_t track_id, int32_t all,
+    uint16_t all_channels, const char* const* uids, const char* const* names, const uint16_t* masks, int32_t count);
+/* The saved list: -1 = every input (channels in nota_track_midi_input_all_channels), else the
+ * number of ports; -2 if the track isn't an instrument track. */
+NOTA_API int32_t    nota_track_midi_input_count(const NotaEngine* engine, int32_t track_id);
+NOTA_API uint16_t   nota_track_midi_input_all_channels(const NotaEngine* engine, int32_t track_id);
+/* Port `index`: its uid (field 0) or the name it had when picked (field 1) into out (cap bytes,
+ * NUL-terminated) and its channels into *mask_out; returns the text's full length, or -1 out of range. */
+NOTA_API int32_t    nota_track_midi_input_at(const NotaEngine* engine, int32_t track_id, int32_t index, int32_t field,
+    char* out, int32_t cap, uint16_t* mask_out);
 /* The source index of a connected MIDI input by its uid (nota_midi_input_device_uid);
  * -1 when it is not connected or switched off. Indices change when the inputs re-open. */
 NOTA_API int32_t    nota_midi_source_of_uid(const NotaEngine* engine, const char* uid);

@@ -33,6 +33,9 @@ public sealed class ProjectDocument
     /// files from before Session P0 = defaults.</summary>
     public SessionDto? Session { get; set; }
     public List<TrackDto> Tracks { get; set; } = new();
+    /// <summary>Named project MIDI output roles (format v36, specs/115): External MIDI tracks that
+    /// follow a role are rebound together. Null = none.</summary>
+    public List<MidiOutputRoleDto>? MidiOutputRoles { get; set; }
     /// <summary>Master-volume automation points (graph-level, format v7).</summary>
     public List<AutomationPointDto> MasterVolumeAutomation { get; set; } = new();
     /// <summary>Master effect chain (devices on the master bus) + its name/colour.</summary>
@@ -160,6 +163,10 @@ public sealed class TrackDto
     // channel (absent / 0 = all, 1–16).
     public string? MidiInputUid { get; set; }
     public int? MidiInputChannel { get; set; }
+    // specs/115 (v36): a list of ports, each on its own channels — set when the input is more than
+    // specs/086 could say (two ports, or a set of channels). Absent = the two fields above apply
+    // (so v35 projects load unchanged); present = they hold its first port, for an older reader.
+    public List<MidiInputRouteDto>? MidiInputs { get; set; }
     // MIDI playback offset in ms (negative = earlier; playback only, notes don't move). Omitted = 0. v30.
     public double? MidiOffsetMs { get; set; }
     // The track's articulation map (specs/085), embedded as Nota's map JSON
@@ -360,6 +367,42 @@ public sealed class PresetTagDto
     public float[] Loaded { get; set; } = System.Array.Empty<float>();
 }
 
+/// <summary>One port of an instrument track's input list (format v36, specs/115): matched by uid
+/// alone; Name is only shown while the port is missing. Channels: bit n = channel n + 1, never 0
+/// (an entry without a channel is dropped on load); a uid listed twice merges into the first.</summary>
+public sealed class MidiInputRouteDto
+{
+    public string Uid { get; set; } = "";
+    public string? Name { get; set; }
+    public int Channels { get; set; } = 0xFFFF;
+}
+
+/// <summary>A named project MIDI output role (format v36, specs/115), such as "Stage Synth": bound to
+/// one output by uid, so the External MIDI tracks that follow it move together when it is rebound.</summary>
+public sealed class MidiOutputRoleDto
+{
+    /// <summary>Stable across renames (a GUID).</summary>
+    public string Id { get; set; } = "";
+    /// <summary>Unique in the project (case-insensitive), 1–40 characters.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>The bound output; null = unbound.</summary>
+    public string? OutputUid { get; set; }
+    public string? OutputName { get; set; }
+}
+
+/// <summary>An External MIDI instrument's destination (format v36, specs/115). Exactly one of
+/// OutputUid / RoleId is set, or neither (no destination yet). The port is matched by uid alone —
+/// OutputName is only shown while it is missing, never used to find a stand-in (FR-006).</summary>
+public sealed class ExternalMidiDto
+{
+    public string? OutputUid { get; set; }
+    public string? OutputName { get; set; }
+    /// <summary>The project output role it follows (MidiOutputRoleDto.Id); its port then comes from the role.</summary>
+    public string? RoleId { get; set; }
+    /// <summary>1–16 = every message on that channel; 0 = Keep channels (MPE member channels). Default 1.</summary>
+    public int Channel { get; set; } = 1;
+}
+
 public sealed class InstrumentDto
 {
     /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
@@ -388,6 +431,8 @@ public sealed class InstrumentDto
     /// <summary>Nota Aurora (Kind == 5) imported wavetables, one per oscillator that holds one
     /// (format v29, specs/053); null = none.</summary>
     public List<WavetableDto>? Wavetables { get; set; }
+    /// <summary>External MIDI's destination (Kind == 19, format v36, specs/115); null otherwise.</summary>
+    public ExternalMidiDto? ExternalMidi { get; set; }
     /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
     public bool Bypassed { get; set; }
 

@@ -164,6 +164,7 @@ public sealed class DeviceInsertService
                 16 => _engine.AddKeysTrack(),
                 17 => _engine.AddMosaicTrack(),
                 18 => _engine.AddTwinTrack(),
+                19 => _engine.AddExternalMidiTrack(),   // External MIDI (specs/115): no destination yet
                 1 => _engine.AddSamplerInstrumentTrack(),
                 _ => _engine.AddInstrumentTrack(),
             };

@@ -22,6 +22,54 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **External MIDI: play a hardware or software synth from a track** (specs/115, #690). A new
+  built-in instrument, picked like any other (browser, **Replace…**), sends what the track
+  plays — clips in the Arrangement and Session, live input, after the track's MIDI effects,
+  with articulations — to a MIDI output instead of making sound.
+  - Its card picks the output and the channel: one channel 1–16 for everything, or **Keep
+    channels (MPE)**, which gives each note its own channel so an MPE synth keeps per-note
+    bend, pressure and slide.
+  - Notes sent in time with Nota's own audio (the output latency is allowed for). A stop, a
+    muted track, a stopped clip, a removed track, a new destination or undo ends exactly the
+    notes the track started, at the output it started them on.
+  - Only the chosen port is ever used: a missing one stays chosen, shown as not connected, and
+    a port with a similar name never stands in. Unplugged with notes held and plugged back in,
+    the synth gets their Note Offs, Sustain off and All Notes Off before anything new.
+  - An export or a bounce sends nothing to a real synth.
+- **MIDI input: several ports, each on its own channels** (specs/115, #762, #732). An
+  instrument track's MIDI input menu has **Ports and channels…**: pick any set of channels
+  on as many ports as you like — two keyboards on one instrument, or zones 3, 7 and 11 of one
+  controller. What the track records is exactly what it plays. Taking a port or a channel off
+  ends the notes (and the pedal) held on it, and only those; the same key held on two listed
+  ports sounds once and ends with the last to let go. A port that isn't connected keeps its
+  place, by name, until it is.
+- **MIDI routes** (specs/115, #847): a side panel beside the Mixer's strips (the **MIDI routes**
+  key under them, or View ▸ MIDI routes) lists every instrument track's inputs and channels,
+  the track it takes MIDI from and where it sends, marking any port, role or track that isn't
+  there. Filter by source or destination; click a row to pick its track.
+- **MIDI output roles** (specs/115, #946): name a destination once — "Stage Synth" — and let
+  External MIDI tracks follow it. When the interface changes, rebind the role (with the
+  transport stopped, after a look at which tracks move): every track moves, each keeping its
+  channel, in one undo step. **Manage roles…** in the External MIDI card's output menu.
+- MCP: `list_midi_outputs`, `set_external_midi`, `get_external_midi`, `set_external_midi_role`,
+  `get_midi_routes`, `list_midi_output_roles`, `create_midi_output_role`,
+  `rename_midi_output_role`, `rebind_midi_output_role`, `delete_midi_output_role`;
+  `set_track_midi_input` / `get_track_midi_input` take and report a list of ports with their
+  channels.
+
+### Changed
+- MIDI controller feedback (LEDs, motor faders, SysEx) and External MIDI share one owner of
+  each MIDI output, so a port that is both works on Windows, which opens an output for one
+  program part at a time.
+- Projects are saved as format 36; earlier projects open unchanged.
+
+### Fixed
+- **More than 16 MIDI inputs no longer play as one another** (#1011). Nota listens to 16 MIDI
+  inputs; a 17th used to share the 16th's place, so a track listening to one heard the other
+  (and their half-sent messages could mix). Now an input past the limit isn't connected, and
+  Settings ▸ MIDI and MCP `list_midi_devices` say so — switch another off to use it.
+
 ## [0.61.1] — 2026-11-24
 
 ### Added

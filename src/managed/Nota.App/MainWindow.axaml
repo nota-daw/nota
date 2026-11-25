@@ -80,6 +80,7 @@
             <NativeMenuItem Header="{app:T 'common.mixer'}" app:Commands.Id="view.mixer"/>
             <NativeMenuItem Header="{app:T 'assistant.title'}" app:Commands.Id="view.assistant"/>
             <NativeMenuItem Header="{app:T 'main.mixer_in_its_own_window'}" app:Commands.Id="view.mixerFloat" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="{app:T 'midi_routes.title'}" app:Commands.Id="view.midiRoutes" ToggleType="CheckBox"/>
             <NativeMenuItem Header="{app:T 'main.connect_phone'}" app:Commands.Id="view.connectPhone"/>
             <NativeMenuItem Header="{app:T 'main.articulation_maps'}" app:Commands.Id="view.articulationMaps"/>
             <NativeMenuItemSeparator/>

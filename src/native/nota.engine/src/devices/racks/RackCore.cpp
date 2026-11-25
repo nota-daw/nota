@@ -971,6 +971,7 @@ std::shared_ptr<Instrument> RackCore::makeInstrument(int32_t kind) {
     case 17: return std::make_shared<Mosaic>(); // empty: the program rides its state or the engine
     case 18: return std::make_shared<Twin>();
     case 4: return std::make_shared<DrumRack>(); // nested Drum Rack (specs/041)
+    // 19 External MIDI never goes in a chain (specs/115): a chain's notes are the rack's own.
     default: return nullptr; // -1 = no instrument (effect rack); plugins are a follow-up
     }
 }

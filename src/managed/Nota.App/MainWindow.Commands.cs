@@ -76,6 +76,7 @@ public partial class MainWindow
         B("view.mixer", ToggleMixer);
         B("view.assistant", ToggleAssistant);
         B("view.mixerFloat", () => SetMixerFloating(!MixerFloating));
+        B("view.midiRoutes", ToggleMidiRoutes);   // specs/115
         B("view.connectPhone", ShowConnectPhone);
         B("view.articulationMaps", ShowArticulationMaps);
         B("view.toggleBrowser", () => OnMenuToggleBrowser(this, e));

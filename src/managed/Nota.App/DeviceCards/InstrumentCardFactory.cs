@@ -6,6 +6,7 @@
 // Drum Rack 4) are still built inline by the view.
 
 using System.Collections.Generic;
+using Nota.Application;
 
 namespace Nota.App;
 
@@ -13,6 +14,7 @@ internal sealed class InstrumentCardFactory
 {
     private readonly IInstrumentCard _generic = new GenericInstrumentCard();
     private readonly IInstrumentCard _sampler = new SamplerInstrumentCard();
+    private readonly IInstrumentCard _external = new ExternalMidiInstrumentCard();   // specs/115: no params, its own card
     private readonly Dictionary<int, IInstrumentCard> _byKind = new()
     {
         [0] = new SynthInstrumentCard(),
@@ -39,6 +41,7 @@ internal sealed class InstrumentCardFactory
     /// Open-GUI card is used.</summary>
     public IInstrumentCard Resolve(int instrumentKind, bool hasParams)
         => instrumentKind == 1 ? _sampler
+         : instrumentKind == ExternalMidiDestination.Kind ? _external
          : hasParams && _byKind.TryGetValue(instrumentKind, out var card) ? card
          : _generic;
 }

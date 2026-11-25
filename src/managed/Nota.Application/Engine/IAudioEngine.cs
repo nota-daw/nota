@@ -410,6 +410,10 @@ public interface IAudioEngine : IDisposable
     /// connected it receives nothing from hardware. False for a non-instrument track.</summary>
     bool SetTrackMidiInput(int trackId, string? uid, int channel);
     TrackMidiInput GetTrackMidiInput(int trackId);
+    /// <summary>specs/115: every input on a set of channels, or a list of ports each on its own
+    /// channels. Held notes from an input no longer listed end at once. False for a non-instrument track.</summary>
+    bool SetTrackMidiInputs(int trackId, MidiInputList inputs);
+    MidiInputList GetTrackMidiInputs(int trackId);
     /// <summary>The capture device's input channels (0 when none is open) and their names
     /// ("" where the device gives none).</summary>
     int AudioInputChannelCount();
@@ -503,6 +507,25 @@ public interface IAudioEngine : IDisposable
     int AddWavetableSynthTrack();
     /// <summary>Adds an instrument track with the built-in Nota Volt (virtual-analog) synth.</summary>
     int AddVoltSynthTrack();
+    /// <summary>Adds an instrument track with External MIDI (specs/115): it plays a synth over a
+    /// MIDI output; no destination yet.</summary>
+    int AddExternalMidiTrack();
+    /// <summary>External MIDI's destination: an output uid ("" = none) and a channel 1-16, or
+    /// 0 = Keep channels (MPE member channels). One undo step; false if the track isn't External MIDI.</summary>
+    bool SetExternalMidi(int trackId, string outputUid, int channel, string outputName = "", string roleId = "");
+    /// <summary>The destination, or null when the track isn't External MIDI.</summary>
+    ExternalMidiDestination? GetExternalMidi(int trackId);
+    /// <summary>0 no destination, 1 sending, 2 unavailable, -1 not External MIDI.</summary>
+    int ExternalMidiStatus(int trackId);
+    /// <summary>Messages lost to a full output ring (diagnostic).</summary>
+    uint ExternalMidiDropped(int trackId);
+    /// <summary>Project MIDI output roles (specs/115 US4), in the undo snapshot.</summary>
+    IReadOnlyList<MidiOutputRole> MidiRoles();
+    /// <summary>Replaces the whole role table: one undo step.</summary>
+    bool SetMidiRoles(IReadOnlyList<MidiOutputRole> roles);
+    /// <summary>Binds a role to an output and moves every External MIDI track that follows it there
+    /// (channels kept), one undo step. False for an unknown role or while the transport plays.</summary>
+    bool RebindMidiRole(string roleId, string outputUid, string outputName);
     /// <summary>Adds an instrument track with the built-in Nota Bass synth.</summary>
     int AddBassSynthTrack();
     /// <summary>Adds an instrument track with the built-in Nota Pendulum synth.</summary>

@@ -697,29 +697,91 @@ void Engine::controller(int32_t ctl, float value, int32_t source, int32_t channe
     liveMidi_.push(liveEvent(false, -1, value, kCtlDimBase + ctl, source, channel));
 }
 
+namespace {
+uint16_t channelMask(int32_t channel) {
+    return channel >= 1 && channel <= 16 ? static_cast<uint16_t>(1u << (channel - 1)) : MidiInputFilter::kAllChannels;
+}
+} // namespace
+
+// specs/086's pick by source index (tests, the legacy C ABI): one source, or every input.
 bool Engine::setTrackMidiInput(int32_t trackId, int32_t source, int32_t channel) {
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Instrument) return false;
-    if (source != Track::kMidiAllInputs && (source < 0 || source >= MidiInput::kMaxSources)) source = -1; // nothing
     channel = std::clamp(channel, 0, 16);
-    if (source == Track::kMidiAllInputs) t->midiInputUid.clear();
-    t->setMidiInput(source, channel);
-    if (const int32_t k = midiLaneOf(trackId); k >= 0) { // recording now: the lane follows
-        midiLaneSrc_[static_cast<size_t>(k)].store(source, std::memory_order_relaxed);
-        midiLaneCh_[static_cast<size_t>(k)].store(channel, std::memory_order_relaxed);
+    if (source == Track::kMidiAllInputs) return setTrackMidiInputs(trackId, true, channelMask(channel), {});
+    if (source < 0 || source >= MidiInput::kMaxSources) return setTrackMidiInputs(trackId, false, MidiInputFilter::kAllChannels, {});
+    // The port by its uid when one is open there; else the bare index ("source:N"), which keeps
+    // filtering by index (tests drive sources no port has).
+    std::string uid = uidOfMidiSource(source);
+    if (uid.empty()) uid = "source:" + std::to_string(source);
+    return setTrackMidiInputs(trackId, false, MidiInputFilter::kAllChannels, {{uid, {}, channelMask(channel)}});
+}
+
+// specs/086's pick by device uid ("" = every input), one channel (0 = all).
+bool Engine::setTrackMidiInputUid(int32_t trackId, const std::string& uid, int32_t channel) {
+    channel = std::clamp(channel, 0, 16);
+    if (uid.empty()) return setTrackMidiInputs(trackId, true, channelMask(channel), {});
+    return setTrackMidiInputs(trackId, false, MidiInputFilter::kAllChannels, {{uid, {}, channelMask(channel)}});
+}
+
+// specs/115: every input on `allChannels`, or the listed ports, each on its own channels. A port
+// listed twice takes both entries' channels; an entry with no channel is dropped (FR-002).
+bool Engine::setTrackMidiInputs(int32_t trackId, bool all, uint16_t allChannels, std::vector<Track::InputRoute> routes) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Instrument) return false;
+    std::vector<Track::InputRoute> merged;
+    for (auto& r : routes) {
+        if (r.uid.empty() || r.channels == 0) continue;
+        auto it = std::find_if(merged.begin(), merged.end(), [&](const Track::InputRoute& m) { return m.uid == r.uid; });
+        if (it != merged.end()) it->channels = static_cast<uint16_t>(it->channels | r.channels);
+        else merged.push_back(std::move(r));
     }
+    const uint16_t allCh = allChannels != 0 ? allChannels : MidiInputFilter::kAllChannels;
+    const bool same = t->midiInputAll == all && t->midiInputAllChannels == allCh &&
+                      (all || (t->midiInputRoutes.size() == merged.size() &&
+                                  std::equal(merged.begin(), merged.end(), t->midiInputRoutes.begin(),
+                                      [](const Track::InputRoute& a, const Track::InputRoute& b) {
+                                          return a.uid == b.uid && a.channels == b.channels;
+                                      })));
+    if (same) return true;
+    // A routing change is one undo step (specs/115 FR-022): a new version of the track. Undo
+    // brings the old filter back, and its held notes are checked against it again.
+    auto nt = cloneTrack(*t);
+    nt->midiInputAll = all;
+    nt->midiInputAllChannels = allCh;
+    nt->midiInputRoutes = all ? std::vector<Track::InputRoute>{} : std::move(merged);
+    nt->setMidiInput(resolveMidiInput(*nt));
+    republishWithTrack(trackId, nt);
+    if (const int32_t k = midiLaneOf(trackId); k >= 0) midiLaneFilter_[static_cast<size_t>(k)].store(nt->midiInput());
     return true;
 }
 
-bool Engine::setTrackMidiInputUid(int32_t trackId, const std::string& uid, int32_t channel) {
-    auto t = findTrackAuthoring(trackId);
-    if (!t || t->type() != TrackType::Instrument) return false;
-    t->midiInputUid = uid;
-    return setTrackMidiInput(trackId, uid.empty() ? Track::kMidiAllInputs : midiSourceOfUid(uid), channel);
+// The saved list against the ports open now: each uid's source index, or nothing for a port that
+// isn't connected (or is over the limit) — it keeps its place in the list, unheard (FR-006).
+MidiInputFilter Engine::resolveMidiInput(const Track& t) const {
+    MidiInputFilter f;
+    if (t.midiInputAll) {
+        f.allMask = t.midiInputAllChannels;
+        return f;
+    }
+    f.allMask = 0;
+    for (const auto& r : t.midiInputRoutes) {
+        const int32_t s = midiSourceOfUid(r.uid);
+        if (s >= 0 && s < MidiInput::kMaxSources) f.mask[static_cast<size_t>(s)] |= r.channels;
+    }
+    return f;
 }
+
+// To the audio thread: the track's filter (bumping its generation, so held notes whose input is
+// gone end on its next render — FR-005), and a lane recording it right now (FR-004).
+void Engine::publishTrackMidiInput(Track& t, const MidiInputFilter& f) {
+    t.setMidiInput(f);
+    if (const int32_t k = midiLaneOf(t.id()); k >= 0) midiLaneFilter_[static_cast<size_t>(k)].store(f);
+}
+
 std::string Engine::trackMidiInputUid(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
-    return t ? t->midiInputUid : std::string{};
+    return t && !t->midiInputAll && !t->midiInputRoutes.empty() ? t->midiInputRoutes.front().uid : std::string{};
 }
 
 // MIDI take lanes (specs/086): one per recording instrument track, published to the audio
@@ -731,8 +793,7 @@ void Engine::publishMidiLanes(const std::vector<int32_t>& trackIds) {
         const size_t i = static_cast<size_t>(k);
         midiLanes_[i].trackId = trackIds[i];
         auto t = findTrackAuthoring(trackIds[i]);
-        midiLaneSrc_[i].store(t ? t->midiInputSource() : Track::kMidiAllInputs, std::memory_order_relaxed);
-        midiLaneCh_[i].store(t ? t->midiInputChannel() : 0, std::memory_order_relaxed);
+        midiLaneFilter_[i].store(t ? t->midiInput() : MidiInputFilter{});
         midiLaneTrack_[i].store(trackIds[i], std::memory_order_relaxed);
     }
     midiLaneCount_.store(n, std::memory_order_release);
@@ -798,8 +859,7 @@ bool Engine::addSessionMidiLane(int32_t trackId, int32_t scene) {
     l.player = t->sessionPlayer;
     const size_t k = midiLanes_.size();
     midiLanes_.push_back(std::move(l));
-    midiLaneSrc_[k].store(t->midiInputSource(), std::memory_order_relaxed);
-    midiLaneCh_[k].store(t->midiInputChannel(), std::memory_order_relaxed);
+    midiLaneFilter_[k].store(t->midiInput());
     midiLaneTrack_[k].store(trackId, std::memory_order_relaxed);
     publishSessionLaneSlots(); // its clock is there before the lane is
     midiLaneCount_.store(static_cast<int32_t>(k) + 1, std::memory_order_release);
@@ -876,9 +936,17 @@ int32_t Engine::trackMidiInputSource(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->midiInputSource() : Track::kMidiAllInputs;
 }
+// specs/086's channel, from the saved pick (a port that isn't connected keeps its channel).
 int32_t Engine::trackMidiInputChannel(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
-    return t ? t->midiInputChannel() : 0;
+    if (!t) return 0;
+    const uint16_t m = t->midiInputAll ? t->midiInputAllChannels
+                       : t->midiInputRoutes.empty() ? MidiInputFilter::kAllChannels
+                                                    : t->midiInputRoutes.front().channels;
+    if (m == MidiInputFilter::kAllChannels || m == 0) return 0;
+    for (int32_t c = 0; c < 16; ++c)
+        if ((m >> c) & 1u) return c + 1;
+    return 0;
 }
 
 void Engine::trackController(int32_t trackId, int32_t ctl, float value) {

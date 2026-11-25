@@ -112,6 +112,8 @@ public sealed class Settings
     /// <summary>The Mixer's strip layout (specs/070): false = regular strips, true = compact
     /// 72 px strips. Shared by the docked panel and the pop-out window.</summary>
     public bool MixerCompact { get; set; }
+    /// <summary>The Mixer's MIDI routes panel is open (specs/115).</summary>
+    public bool MixerMidiRoutes { get; set; }
     /// <summary>Record a project version on every save (the History tab). On by default.</summary>
     public bool KeepVersionHistory { get; set; } = true;
     /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from

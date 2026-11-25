@@ -23,6 +23,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
         (8, "Nota Pendulum"), (9, "Nota Operator"), (10, "Nota Grain"), (11, "Nota Flux"),
         (12, "Nota Rhythm"), (13, "Nota Monolith"), (14, "Nota Pentad"), (15, "Nota Consort"),
         (16, "Nota Keys"), (17, "Nota Mosaic"), (18, "Nota Twin"),
+        (19, "External MIDI"),   // plays a synth over a MIDI output (specs/115): set_external_midi picks it
     };
 
     public sealed record InstrumentKind(int Kind, string Name);
@@ -63,6 +64,7 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
             16 => E.AddKeysTrack(),
             17 => E.AddMosaicTrack(),
             18 => E.AddTwinTrack(),
+            19 => E.AddExternalMidiTrack(),
             _ => E.AddVoltSynthTrack(),    // the default instrument
         };
         // Recorded for "Add track ▸ Recent" (spec 034), like an add from the browser: the

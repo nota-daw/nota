@@ -34,6 +34,17 @@ struct Section {
     bool operator==(const Section&) const = default;
 };
 
+// A project MIDI output role (specs/115 US4): a stable id, its name, and the output it is bound
+// to ("" = unbound) with that output's name when it was bound. Authoring data: the audio thread
+// never reads it.
+struct MidiOutputRole {
+    std::string id;
+    std::string name;
+    std::string outputUid;
+    std::string outputName;
+    bool operator==(const MidiOutputRole&) const = default;
+};
+
 // One span of a whole-arrangement time remap (specs/073): what lies in [start,end) moves by
 // `offset` beats, or is removed when `drop`. The spans of one remap tile a window exactly.
 struct TimeRegion {
@@ -64,6 +75,10 @@ struct Graph {
     // Arrangement sections (specs/016), sorted by start. In the snapshot so undo/redo
     // restore them and the project saves them.
     std::vector<Section> sections;
+    // Project MIDI output roles (specs/115 US4): a named destination, such as "Stage Synth", bound
+    // to one output. External MIDI instruments that follow a role carry its id; rebinding it
+    // republishes them with the new output in the same graph — one undo step.
+    std::vector<MidiOutputRole> midiRoles;
 };
 
 // Graph-level fields (everything except `tracks`). A fresh graph built from scratch must

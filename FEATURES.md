@@ -345,6 +345,11 @@ own window — see
     screen, with the same controls — one-line I/O, A/B send bars, a pan bar, a wide stereo
     meter that is also the fader (drag anywhere on it; a triangle marks the volume on the
     meter's scale), the dB value, and full-width M / S / Arm.
+  - **MIDI routes** (footer **MIDI routes**, or **View → MIDI routes**; remembered): a side
+    panel beside the strips with a row per instrument track — what it listens to (every input,
+    or ports with their channels), the track it takes MIDI from, and its instrument or External
+    MIDI's port or role and channel — marking any port, role or track that isn't there. Filter by
+    source or destination; click a row to pick its track. Read-only. MCP `get_midi_routes`.
 - **Cue — a private mix on its own outputs**: with a Cue pair set in **Settings →
   Outputs**, every track gets a **Cue** key (headphones) on its mixer strip, Session mixer
   strip, header and inspector. Any number of tracks, groups and returns can be in Cue. Each is
@@ -710,9 +715,14 @@ own window — see
   centred) or a stereo pair (**In 3/4**), named as the device names them; new tracks take
   In 1. MCP `list_audio_inputs`, `set_track_input`, `get_track_input`.
 - **MIDI input per instrument track**: All inputs (every device, the computer keyboard,
-  gamepad and Nota Remote) or one MIDI device, and a channel (all or 1–16); every armed
-  instrument track records its own MIDI clip in one take. MCP `set_track_midi_input`,
-  `get_track_midi_input`.
+  gamepad and Nota Remote) or one MIDI device, and a channel (all or 1–16) — or **Ports and
+  channels…**: any set of channels on as many ports as you like (two keyboards on one
+  instrument, zones 3, 7 and 11 of one controller), each port's channels apart from another's.
+  The track records exactly what it plays; taking a port or channel off ends the notes and pedal
+  held on it, and only those; the same key on two listed ports sounds once. A port that isn't
+  connected keeps its place by name. Every armed instrument track records its own MIDI clip in
+  one take. Nota listens to 16 MIDI inputs; one past that isn't connected and Settings → MIDI
+  says so. MCP `set_track_midi_input`, `get_track_midi_input` (with port lists).
 - **Several tracks in one pass**: Record records every armed audio track, each its own input,
   aligned, one undo step; a mono input records a mono file.
 - **Inputs setup** (Settings → Inputs): switch inputs off and name inputs and stereo
@@ -1067,6 +1077,21 @@ audio effects after it keep running and keep their settings; saved with the proj
   `set_mosaic_group`, `import_sfz`, `create_multisample`, `list_mosaic_presets`,
   `load_mosaic_preset` (also into an Instrument Rack chain), `scan_sample_packs`. Also plays as
   an Instrument Rack chain or a Drum Rack pad, with the same editor.
+- **External MIDI** — plays a hardware or software synth instead of making sound: what the
+  track plays (Arrangement and Session clips, live input, after its MIDI effects, with
+  articulations) goes to a MIDI output, timed to land with Nota's own audio. The card picks the
+  output — or a project **MIDI output role** — and the channel: one of 1–16 for everything, or
+  **Keep channels (MPE)**, each note on its own member channel with its bend, pressure and
+  slide. A stop, mute, stopped clip, removed track, new destination or undo ends exactly the
+  notes the track started, where it started them; a port that goes away is shown as not
+  connected and gets its held notes ended (plus Sustain off and All Notes Off) when it returns.
+  Only the chosen port is used — never one with a similar name. Exports send nothing to it; it
+  doesn't freeze and isn't a rack chain instrument. **Roles** ("Stage Synth", **Manage roles…**
+  in the output menu) are bound to one output; rebinding one with the transport stopped moves
+  every track that follows it, channels kept, in one undo step. MCP `list_midi_outputs`,
+  `set_external_midi`, `get_external_midi`, `set_external_midi_role`, `list_midi_output_roles`,
+  `create_midi_output_role`, `rename_midi_output_role`, `rebind_midi_output_role`,
+  `delete_midi_output_role`.
 
 ### Audio effects
 
@@ -1777,7 +1802,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   Main plays on 1/2. Other outputs stay silent.
 - **Inputs**: the input device (under ASIO, the driver's input channel pair) and the inputs
   setup — switch inputs off and name inputs and stereo pairs per device.
-- **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by
+- **MIDI**: which MIDI inputs are enabled (the house checkboxes; an input past the 16 Nota listens
+  to is marked not connected); **MPE** on/off (on by
   default) and the per-note bend range (±12 / 24 / 48 / 96 semitones).
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
@@ -1926,6 +1952,9 @@ Coverage:
   samples by name, list and load its factory and pack presets (see Nota Mosaic above).
 - **Sample library**: `search_samples` (kind, BPM range, key, words in the path),
   `get_sample_info`, `find_similar_samples`, `get_project_key` / `set_project_key`.
+- **MIDI routing over MCP**: External MIDI destinations and channels, project output roles
+  (create, rename, rebind, delete), track MIDI inputs as port lists, and the MIDI routes
+  overview (`get_midi_routes`).
 - **MIDI devices and MIDI Learn over MCP**: list connected MIDI inputs, toggle listening,
   survey the controller's CCs and notes, view and edit bindings (range, inversion,
   deletion), and enter learn mode.

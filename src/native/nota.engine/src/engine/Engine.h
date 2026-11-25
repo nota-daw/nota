@@ -24,6 +24,7 @@
 #include "audio_io/MidiConfig.h"
 #include "audio_io/MidiInput.h"
 #include "audio_io/MidiOutput.h"
+#include "engine/MidiOutService.h"
 #include "audio_io/MidiParser.h"
 #include "audio_io/MpeInput.h"
 #include "engine/MidiSurface.h"
@@ -931,6 +932,24 @@ class Engine {
     int32_t addPluginInstrumentTrack(int32_t catalogIndex); // new track, plugin as instrument
     bool setTrackInstrumentPlugin(int32_t trackId, int32_t catalogIndex);
     bool setTrackBuiltinInstrument(int32_t trackId, int32_t kind);       // replace with a built-in synth
+    // External MIDI (specs/115): a track that plays a synth over a MIDI output. Setting the
+    // destination makes a new instance (one undo step); the old one, leaving the graph, releases
+    // its notes at its output. uid "" = no destination; channel 1-16, or 0 = Keep channels.
+    int32_t addExternalMidiTrack();
+    bool setExternalMidi(int32_t trackId, const std::string& uid, int32_t channel, const std::string& name = {},
+        const std::string& roleId = {});
+    // The instance itself (message thread), for the destination's name and role; null if not External MIDI.
+    std::shared_ptr<const ExternalMidi> externalMidiAt(int32_t trackId) const;
+    bool externalMidi(int32_t trackId, std::string* uid, int32_t* channel) const;
+    int32_t externalMidiStatus(int32_t trackId) const; // 0 none, 1 sending, 2 unavailable, -1 not External MIDI
+    uint32_t externalMidiDropped(int32_t trackId) const;
+    // Project MIDI output roles (specs/115 US4), in the graph so undo restores them. Set: the
+    // whole table (one undo step). Rebind: the role's output, and every External MIDI track that
+    // follows it to that output (channels kept), in one publish — refused (false) while the
+    // transport plays (FR-015) or for an unknown role.
+    const std::vector<MidiOutputRole>& midiRoles() const { return authoring_->midiRoles; }
+    bool setMidiRoles(std::vector<MidiOutputRole> roles);
+    bool rebindMidiRole(const std::string& roleId, const std::string& uid, const std::string& name);
     int32_t addTrackEffectPlugin(int32_t trackId, int32_t catalogIndex); // returns device index or -1
     // Hosted plug-ins load after they are inserted (#979, specs/113). Message thread.
     // servicePluginLoads attaches loaded plug-ins (then realigns PDC and resolves plug-in-param
@@ -1433,6 +1452,14 @@ class Engine {
     // device not connected leaves the track receiving nothing from hardware until it is.
     bool setTrackMidiInputUid(int32_t trackId, const std::string& uid, int32_t channel);
     std::string trackMidiInputUid(int32_t trackId) const;
+    // specs/115: every input on a set of channels, or a list of ports each on its own channels.
+    bool setTrackMidiInputs(int32_t trackId, bool all, uint16_t allChannels, std::vector<Track::InputRoute> routes);
+    // The saved list (message thread): all, the channels for all, and the routes by uid.
+    std::shared_ptr<const Track> trackForMidiInput(int32_t trackId) const { return findTrackAuthoring(trackId); }
+    std::string uidOfMidiSource(int32_t source) const; // "" when no open port has that index
+    MidiInputFilter resolveMidiInput(const Track& t) const;
+    void publishTrackMidiInput(Track& t, const MidiInputFilter& f);
+    void resolveAllMidiInputs(); // ports came or went: every track picks its list up again by uid
     int32_t trackMidiInputSource(int32_t trackId) const;
     int32_t trackMidiInputChannel(int32_t trackId) const;
     // Input monitoring (audio tracks): hear the record-input source live through the track.
@@ -1837,7 +1864,6 @@ class Engine {
     void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2);
     void onMidiSysex(int32_t source, const uint8_t* data, int32_t len);
     MidiSurface midiSurface_;
-    std::map<std::string, std::unique_ptr<MidiOutput>> midiOutputs_; // by output uid (message thread)
     struct TestMidiPort {
         std::string name;
         int32_t source = 0;
@@ -1855,6 +1881,13 @@ class Engine {
     };
     std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_; // grows only; guarded by testPortsMx_
     mutable std::mutex testPortsMx_;                          // message + MIDI out threads, never audio
+    // MIDI out (specs/115): the block clock External MIDI stamps its messages with, the frames an
+    // offline render has counted, and the thread that owns every MIDI output. Declared after the
+    // test ports, so it stops (and releases what it holds) before they go.
+    MidiRenderClock midiClock_;
+    uint64_t offlineFrames_ = 0;
+    MidiOutService midiOut_;
+    void syncExternalMidi(const Graph& g);
     std::vector<MidiInput::PortInfo> midiPortRows_;
     std::vector<MidiOutput::Destination> midiOutputRows_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
@@ -2306,8 +2339,7 @@ class Engine {
     // stored last (release), after the lanes it covers.
     static constexpr int32_t kMaxMidiTakeLanes = 16;
     std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneTrack_{};
-    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneSrc_{};
-    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneCh_{};
+    std::array<AtomicMidiInputFilter, kMaxMidiTakeLanes> midiLaneFilter_{}; // specs/115
     std::atomic<int32_t> midiLaneCount_{0};
     // Message-thread side of a lane: its clip and its share of the take's fold state (the
     // fold works on takeNotes_ / ctlFold_ / takeCtls_; each lane's are swapped in for it).
@@ -2570,7 +2602,7 @@ class Engine {
     };
     std::array<RtMidiLane, 16> rtMidiLanes_{};
     int32_t rtMidiLaneCount_ = 0; // this block's lanes (drainLiveMidi)
-    int32_t rtLaneSrc_[16] = {}, rtLaneCh_[16] = {};
+    MidiInputFilter rtLaneFilter_[16] = {};
     bool laneTakes(int32_t lane, const MidiEvent& e) const; // audio thread, this block's lanes
     int32_t midiLaneOfRt(int32_t trackId) const;           // audio thread: lane recording this track, or -1
     void captureRoutedNotes(int32_t lane, const MidiEv* evs, int n, double blockStart, double spb, double clockOffset);
