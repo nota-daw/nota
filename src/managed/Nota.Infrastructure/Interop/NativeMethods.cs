@@ -123,6 +123,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_track_meter")]
     internal static partial int TrackMeter(IntPtr engine, int trackId, out NotaMeter meter);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_read_track_meters")]
+    internal static unsafe partial int ReadTrackMeters(IntPtr engine, TrackMeterReading* outEntries, int capacity);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_master_meter")]
     internal static partial NotaResult MasterMeter(IntPtr engine, out NotaMeter meter);
 
@@ -373,6 +376,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_cpu_load")]
     internal static partial float CpuLoad(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_device_telemetry")]
+    internal static partial NotaResult SetDeviceTelemetry(IntPtr engine, int mode);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_device_telemetry")]
+    internal static partial int DeviceTelemetry(IntPtr engine);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_render_threads")]
     internal static partial NotaResult SetRenderThreads(IntPtr engine, int count);

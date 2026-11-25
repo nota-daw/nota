@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "devices/EditorPreview.h"
+#include "dsp/core/DeviceTelemetry.h"
 #include "engine/MidiController.h"
 #include "engine/NoteExpression.h"
 #include "engine/TransportInfo.h"
@@ -414,7 +415,21 @@ class Instrument {
     uint64_t uid() const { return uid_; }
     void adoptUid(const Instrument& from) { uid_ = from.uid_; }
 
+    // Per-instrument CPU telemetry (on-demand clock gating on the audio thread).
+    dsp::TelemetryMode telemetryMode() const noexcept { return telemetry_.mode(); }
+    virtual void setTelemetryMode(dsp::TelemetryMode mode) { telemetry_.setMode(mode); }
+    void observeTelemetry() const noexcept { telemetry_.observe(); }
+    float telemetryCpuLoad() const noexcept { return telemetry_.cpuLoad(); }
+
+  protected:
+    dsp::DeviceTelemetry::ScopedBlockTimer blockTimer(int32_t frames, double sampleRate, double smoothing = 0.1) noexcept {
+        return dsp::DeviceTelemetry::ScopedBlockTimer(telemetry_, frames, sampleRate, smoothing);
+    }
+    float readScopeCpuLoad() const noexcept { return telemetry_.observeAndReadCpu(); }
+    void resetTelemetry() noexcept { telemetry_.reset(); }
+
   private:
+    mutable dsp::DeviceTelemetry telemetry_;
     static uint64_t nextUid() {
         static std::atomic<uint64_t> next{1};
         return next.fetch_add(1, std::memory_order_relaxed);

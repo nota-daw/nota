@@ -238,12 +238,11 @@ class BeatRepeat : public Device {
     std::vector<float> wave_ = std::vector<float>(kWave, 0.0f);
     int cell_ = -1, waveCol_ = -1, lastKindCell_ = -1;
     float cellPeak_ = 0.0f, winPhase_ = 0.0f, bar_ = 1.0f, beatInBar_ = 1.0f;
-    double cpuS_ = 0.0;
     std::atomic<bool> resetReq_{false}, triggerReq_{false};
     std::atomic<float> phasePub_{0.0f};
     std::atomic<float> inDb_{-120.0f}, repDb_{-120.0f}, outDb_{-120.0f}, stateA_{0.0f}, passA_{0.0f}, passesA_{0.0f},
         winPhaseA_{0.0f}, winBeatsA_{8.0f}, intervalA_{4.0f}, sliceBeatsA_{0.25f}, bpmA_{120.0f}, barA_{1.0f},
-        beatA_{1.0f}, srA_{44100.0f}, cpuA_{0.0f}, forcedA_{0.0f}, gainA_{0.0f}, pitchA_{0.0f}, fHzA_{949.0f},
+        beatA_{1.0f}, srA_{44100.0f}, forcedA_{0.0f}, gainA_{0.0f}, pitchA_{0.0f}, fHzA_{949.0f},
         fOctA_{2.0f}, trigA_{0.0f}, skipA_{0.0f}, playA_{0.0f}, tsA_{4.0f}, barBeatsA_{4.0f};
 
     // Auto-sleep hangover.

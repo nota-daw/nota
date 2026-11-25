@@ -83,7 +83,7 @@ void Utility::wake() {
 }
 
 void Utility::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_relaxed)) resetMeters();
 
     const int mode = std::clamp((int)std::lround(get(ChannelMode)), 0, 3);
@@ -159,11 +159,6 @@ void Utility::process(float* buf, int32_t frames) {
         const float fall = std::exp(-(float)frames / (float)(0.3 * sr_)); // ~300 ms peak fall
         inPkA_.store(inPkA_.load(std::memory_order_relaxed) * fall, std::memory_order_relaxed);
         outPkA_.store(outPkA_.load(std::memory_order_relaxed) * fall, std::memory_order_relaxed);
-        if (frames > 0) {
-            const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-            cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-            cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-        }
         return;
     }
 
@@ -281,11 +276,6 @@ void Utility::process(float* buf, int32_t frames) {
     const float fall = std::exp(-(float)frames / (float)(0.3 * sr_)); // ~300 ms peak fall
     inPkA_.store(std::max(inPk, inPkA_.load(std::memory_order_relaxed) * fall), std::memory_order_relaxed);
     outPkA_.store(std::max(outPk, outPkA_.load(std::memory_order_relaxed) * fall), std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 // Telemetry, the histories, the bands and the configured width (see the header note).
@@ -295,7 +285,7 @@ int32_t Utility::scopeRead(float* out, int32_t maxSamples) const {
     float t[kTele] = {};
     t[S_InPk] = inPkA_.load(std::memory_order_relaxed);
     t[S_OutPk] = outPkA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
     t[S_Corr] = corr_.load(std::memory_order_relaxed);
     t[S_InLufs] = inLufsA_.load(std::memory_order_relaxed);

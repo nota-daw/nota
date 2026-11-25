@@ -57,6 +57,7 @@ public sealed partial class MixerView : UserControl
     private readonly GroupBandsLayer _bands = new();
     // Meters fed each UI tick: the control (to skip hidden strips) and its Push.
     private readonly List<(int trackId, Control ctl, Action<NotaMeter> push)> _meters = new();
+    private readonly TrackMeterBatch _meterBatch = new();
     private readonly List<(int trackId, int bus, MiniFader fader)> _sendFaders = new();
     // Sends / I/O sections are collapsible across every strip (mockup 1f header
     // toggles); we keep the section borders so a toggle can hide them all at once.
@@ -495,8 +496,9 @@ public sealed partial class MixerView : UserControl
     }
 
     // A folded group's dots: a hidden member is soloed, armed, or peaked at 0 dBFS since the fold.
-    private void UpdateHiddenState()
+    private void UpdateHiddenState(bool refreshMeters = true)
     {
+        if (refreshMeters) _meterBatch.Refresh(_engine);
         foreach (var g in _strips)
         {
             if (g.SoloDot is null) continue;
@@ -508,7 +510,7 @@ public sealed partial class MixerView : UserControl
                     if (_engine.TryGetTrackInfo(idx, out var ti)) { solo |= ti.Soloed != 0; arm |= ti.Armed != 0; }
                 if (!_clipLatched.Contains(g.Id))
                     foreach (int id in g.HiddenIds)
-                        if (_engine.TryGetTrackMeter(id, out var m) && (m.PeakL >= 1f || m.PeakR >= 1f)) { _clipLatched.Add(g.Id); break; }
+                        if (_meterBatch.TryGet(id, out var m) && (m.PeakL >= 1f || m.PeakR >= 1f)) { _clipLatched.Add(g.Id); break; }
             }
             g.SoloDot.IsVisible = solo;
             g.ArmDot!.IsVisible = arm;
@@ -522,12 +524,13 @@ public sealed partial class MixerView : UserControl
         // A track added or removed while the mixer is open gets (or loses) its strip; a track
         // moved into or out of a group, or a group renamed or recoloured, moves its band.
         if (_builtTrackCount >= 0 && (_engine.TrackCount != _builtTrackCount || ShapeChanged())) Refresh();
+        _meterBatch.Refresh(_engine);
         foreach (var (id, ctl, push) in _meters)
         {
             if (!ctl.IsEffectivelyVisible) continue;   // a folded strip reads nothing
             if (id == CueMeterId) push(_engine.CueMeter());
             else if (id < 0) push(_engine.MasterMeter());
-            else if (_engine.TryGetTrackMeter(id, out var m)) push(m);
+            else if (_meterBatch.TryGet(id, out var m)) push(m);
         }
         UpdateCue();
         // Follow master volume changes made elsewhere (MST, Master row, Remote, project load).
@@ -547,7 +550,7 @@ public sealed partial class MixerView : UserControl
             if (Math.Abs(send.Value - v) > 1e-3) send.Value = v;
         }
         FollowStrips();
-        UpdateHiddenState();
+        UpdateHiddenState(refreshMeters: false);
         SyncPanLaw();   // undo/redo or a load elsewhere may have changed it
     }
 

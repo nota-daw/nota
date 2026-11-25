@@ -1223,6 +1223,7 @@ public interface IAudioEngine : IDisposable
 
     // --- Level meters (M6-2) -----------------------------------------------
     bool TryGetTrackMeter(int trackId, out NotaMeter meter);
+    int ReadTrackMeters(Span<TrackMeterReading> destination);
     NotaMeter MasterMeter();
     /// <summary>The Cue bus after the Cue level (specs/089).</summary>
     NotaMeter CueMeter();
@@ -1612,6 +1613,8 @@ public interface IAudioEngine : IDisposable
 
     /// <summary>Smoothed real-time DSP load, 0..1 (0 when no live device runs).</summary>
     float CpuLoad { get; }
+    /// <summary>Controls how built-in devices measure per-block CPU usage on the audio thread.</summary>
+    DeviceTelemetryMode DeviceTelemetry { get; set; }
 
     // --- CV modulation (Phase 3, Modular editor) ---------------------------
     // Modulator (LFO) sources + CV links to built-in device params on the same track.

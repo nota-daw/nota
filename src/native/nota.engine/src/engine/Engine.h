@@ -15,6 +15,7 @@
 #include "audio_io/AudioConfig.h"
 #include "audio_io/AudioInput.h"
 #include "CommandQueue.h"
+#include "dsp/core/DeviceTelemetry.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
 #include "engine/SessionPass.h"
@@ -201,6 +202,10 @@ class Engine {
 
     // --- DSP load (Phase 11): RT render time / block budget, smoothed 0..1 ---
     float cpuLoad() const { return cpuLoad_.load(std::memory_order_relaxed); }
+
+    // --- built-in device CPU telemetry mode (message thread writes, RT reads atomically) ---
+    void setTelemetryMode(dsp::TelemetryMode mode);
+    dsp::TelemetryMode telemetryMode() const { return telemetryMode_.load(std::memory_order_relaxed); }
     // Parallel render threads (the audio thread helps too): n < 0 = default, 0 = none.
     // Device stopped only (message thread); false while it runs.
     bool setRenderThreads(int n);
@@ -1366,6 +1371,7 @@ class Engine {
     // Level metering (M6-2). Post-fader block peak/RMS per channel, updated on
     // the audio thread. Reads the live graph (== authoring graph between edits).
     bool trackMeter(int32_t trackId, float& peakL, float& peakR, float& rmsL, float& rmsR) const;
+    int32_t readTrackMeters(NotaTrackMeterEntry* out, int32_t capacity) const;
     void masterMeter(float& peakL, float& peakR, float& rmsL, float& rmsR) const;
     int32_t addMidiClip(int32_t trackId, double startBeat, double lengthBeats);
     bool setClipNotes(int32_t trackId, int32_t clipIndex, const NotaNoteData* notes, int32_t count);
@@ -1739,6 +1745,7 @@ class Engine {
     // before (undo, redo, a take retry) that a render may still be reading, so a track whose
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
+    static void applyTelemetryMode(const Graph& g, dsp::TelemetryMode mode);
     // Releases the clip notes an edit took away while they sounded (#649); see Engine.cpp.
     void releaseVanishedClipNotes(const Graph& before, const Graph& after);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
@@ -2109,6 +2116,7 @@ class Engine {
     std::atomic<bool> recording_{false};
     std::atomic<int32_t> xruns_{0};    // device dropouts since launch (M7-8)
     std::atomic<float> cpuLoad_{0.0f}; // smoothed RT DSP load 0..1 (Phase 11)
+    std::atomic<dsp::TelemetryMode> telemetryMode_{dsp::TelemetryMode::OnDemand};
     // Set by start() before the device opens, cleared (release) once every node is re-prepared
     // at the negotiated rate: while set, render() outputs silence and never touches the graph.
     std::atomic<bool> renderSuspended_{false};

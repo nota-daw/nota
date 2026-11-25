@@ -140,8 +140,8 @@ double Eq::averageDb(const bool* on, const int* ty, const int* ch, const dsp::Bi
 }
 
 void Eq::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
     if (frames <= 0) return;
+    const auto cpuTimer = blockTimer(frames, sr_);
     const double sr = sr_;
     const double scale = clampd(get(Scale), 0.0, 200.0) / 100.0;
 
@@ -345,11 +345,6 @@ void Eq::process(float* buf, int32_t frames) {
     inPkA_.store(db(inPk_), std::memory_order_relaxed);
     outPkA_.store(db(outPk_), std::memory_order_relaxed);
     autoA_.store(autoOn ? (float)autoDb_ : 0.0f, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / blockS) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 void Eq::setBand(int b, float on, int type, float freq, float gain, float q) {
@@ -434,7 +429,7 @@ int32_t Eq::scopeRead(float* out, int32_t maxSamples) const {
     t[S_OutPeak] = outPkA_.load(std::memory_order_relaxed);
     t[S_AutoGain] = autoA_.load(std::memory_order_relaxed);
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = 0.0f;
     t[S_Bands] = (float)kSpec;
     int32_t n = 0;

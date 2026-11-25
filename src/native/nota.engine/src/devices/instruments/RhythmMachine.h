@@ -139,6 +139,7 @@ class RhythmMachine final : public Instrument {
     bool handlesSustain() const override { return true; } // drums ignore the pedal (#99)
 
     void setSampleRate(double sr) override;
+    void setTelemetryMode(dsp::TelemetryMode mode) override;
     void setTransport(double beatStart, double spb, bool playing) override;
     void setTransportInfo(const TransportInfo& ti) override;
 

@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "devices/EditorPreview.h"
+#include "dsp/core/DeviceTelemetry.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
@@ -334,7 +335,21 @@ class Device {
     const EditorPreview& editorPreview() const { return preview_; }
     void setEditorPreview(EditorPreview p) { preview_ = std::move(p); }
 
+    // Per-device CPU telemetry (on-demand clock gating on the audio thread).
+    dsp::TelemetryMode telemetryMode() const noexcept { return telemetry_.mode(); }
+    virtual void setTelemetryMode(dsp::TelemetryMode mode) { telemetry_.setMode(mode); }
+    void observeTelemetry() const noexcept { telemetry_.observe(); }
+    float telemetryCpuLoad() const noexcept { return telemetry_.cpuLoad(); }
+
+  protected:
+    dsp::DeviceTelemetry::ScopedBlockTimer blockTimer(int32_t frames, double sampleRate, double smoothing = 0.1) noexcept {
+        return dsp::DeviceTelemetry::ScopedBlockTimer(telemetry_, frames, sampleRate, smoothing);
+    }
+    float readScopeCpuLoad() const noexcept { return telemetry_.observeAndReadCpu(); }
+    void resetTelemetry() noexcept { telemetry_.reset(); }
+
   private:
+    mutable dsp::DeviceTelemetry telemetry_;
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
     int32_t presetTag_ = 0;

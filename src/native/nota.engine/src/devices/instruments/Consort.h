@@ -826,7 +826,6 @@ class Consort final : public Instrument {
     uint64_t quietSamples_ = 0;
     float chunkOutPeak_ = 0.0f; // our peak contribution across this render's chunks
     bool idle_ = false;
-    double cpu_ = 0.0;
     mutable std::atomic<float> tele_[kScopeN] = {};
     std::atomic<float> pn_[kNumParams];
 };

@@ -163,8 +163,7 @@ class Eq : public Device {
 
     // Meters (audio thread) and their published values.
     float inPk_ = 0.0f, outPk_ = 0.0f;
-    double cpuS_ = 0.0;
-    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, autoA_{0.0f}, cpuA_{0.0f}, srA_{44100.0f};
+    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, autoA_{0.0f}, srA_{44100.0f};
     std::atomic<bool> resetPk_{false};
 
     // Spectra: pre / post rings written by the audio thread, the analysis state under mx_.

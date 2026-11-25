@@ -88,7 +88,7 @@ void Shutter::wake() {
 }
 
 void Shutter::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetMetersReq_.exchange(false, std::memory_order_relaxed)) {
         peakGr_ = 0.0f;
         trigTotal_ = 0;
@@ -189,11 +189,6 @@ void Shutter::process(float* buf, int32_t frames) {
         midiEvs_ = nullptr;
         midiN_ = 0;
         tFed_ = false;
-        if (frames > 0) {
-            const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-            cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-            cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-        }
         return;
     }
 
@@ -430,11 +425,6 @@ void Shutter::process(float* buf, int32_t frames) {
     patGainA_.store(patT == 1 ? patOut : 1.0f, std::memory_order_relaxed);
     patValA_.store(patOut, std::memory_order_relaxed);
     patBeatsA_.store(pSync ? (float)patBeats : 0.0f, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 // Telemetry block, then the three histories (oldest first). Writes as much of that layout
@@ -454,7 +444,7 @@ int32_t Shutter::scopeRead(float* out, int32_t maxSamples) const {
     t[S_TrigPerBar] = trigBarA_.load(std::memory_order_relaxed);
     t[S_Triggers] = trigTotA_.load(std::memory_order_relaxed);
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = (float)laSamples();
     t[S_ExtKey] = extA_.load(std::memory_order_relaxed);
     t[S_KeyDb] = keyDb_.load(std::memory_order_relaxed);

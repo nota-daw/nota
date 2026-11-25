@@ -259,8 +259,7 @@ class Amp : public Device {
     std::atomic<bool> resetReq_{false};
 
     // Telemetry.
-    double cpuS_ = 0.0;
-    std::atomic<float> inPkA_{0}, outPkA_{0}, cpuA_{0}, srA_{44100.0f}, compA_{1}, gateA_{1};
+    std::atomic<float> inPkA_{0}, outPkA_{0}, srA_{44100.0f}, compA_{1}, gateA_{1};
 
     // Auto-sleep hangover.
     uint64_t quietSamples_ = 0;

@@ -126,6 +126,19 @@ void RackCore::forkFrom(const RackCore& o) {
     maxBlock_ = o.maxBlock_;
 }
 
+void RackCore::propagateTelemetry(RackState& st) const {
+    for (auto& c : st.chains) {
+        if (c.instrument) c.instrument->setTelemetryMode(telemetryMode_);
+        for (auto& d : c.devices)
+            if (d) d->setTelemetryMode(telemetryMode_);
+    }
+}
+
+void RackCore::setTelemetryMode(dsp::TelemetryMode mode) {
+    telemetryMode_ = mode;
+    if (authoring_) propagateTelemetry(*authoring_);
+}
+
 bool RackCore::setChainName(int32_t c, const std::string& name) {
     auto ns = copyState();
     if (c < 0 || c >= static_cast<int32_t>(ns->chains.size())) return false;

@@ -31,6 +31,10 @@ class RackInstrument : public Instrument, public RackCore {
     bool hostsPlugin() const override { return chainsHostPlugin(); } // Drum Rack too
 
     void setSampleRate(double sr) override { setRates(sr, kMaxBlock); }
+    void setTelemetryMode(dsp::TelemetryMode mode) override {
+        Instrument::setTelemetryMode(mode);
+        RackCore::setTelemetryMode(mode);
+    }
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }

@@ -134,6 +134,14 @@ int32_t nota_engine_graph_retire_selftest(NotaEngine* e) {
 float nota_engine_cpu_load(const NotaEngine* e) {
     return e ? CENG(e)->cpuLoad() : 0.0f;
 }
+NotaResult nota_engine_set_device_telemetry(NotaEngine* e, int32_t mode) {
+    if (!e || mode < NOTA_TELEMETRY_ON_DEMAND || mode > NOTA_TELEMETRY_ALWAYS_ON) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setTelemetryMode(static_cast<::nota::dsp::TelemetryMode>(mode));
+    return NOTA_OK;
+}
+int32_t nota_engine_device_telemetry(const NotaEngine* e) {
+    return e ? static_cast<int32_t>(CENG(e)->telemetryMode()) : NOTA_TELEMETRY_ON_DEMAND;
+}
 NotaResult nota_engine_set_render_threads(NotaEngine* e, int32_t count) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setRenderThreads(count) ? NOTA_OK : NOTA_ERR_ALREADY_RUNNING;
@@ -494,6 +502,9 @@ void nota_engine_reset(NotaEngine* e) {
 int32_t nota_engine_track_meter(const NotaEngine* e, int32_t track_id, NotaMeter* out) {
     if (!e || !out) return 0;
     return CENG(e)->trackMeter(track_id, out->peak_l, out->peak_r, out->rms_l, out->rms_r) ? 1 : 0;
+}
+int32_t nota_engine_read_track_meters(const NotaEngine* e, NotaTrackMeterEntry* out_entries, int32_t capacity) {
+    return e ? CENG(e)->readTrackMeters(out_entries, capacity) : 0;
 }
 NotaResult nota_engine_master_meter(const NotaEngine* e, NotaMeter* out) {
     if (!e || !out) return NOTA_ERR_INVALID_ARG;

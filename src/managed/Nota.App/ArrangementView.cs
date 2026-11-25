@@ -67,6 +67,7 @@ public sealed partial class ArrangementView : UserControl
     private readonly List<TrackVM> _tracks = new();   // audio + instrument (scrolling)
     private readonly List<TrackVM> _returns = new();  // return buses (pinned footer)
     private readonly Dictionary<int, MeterBar> _meters = new(); // per-track header meters (M6-2)
+    private readonly TrackMeterBatch _meterBatch = new();
     // Per-track header vol/pan controls, refreshed each tick so automation moves them live.
     private readonly Dictionary<int, MiniFader> _volFaders = new();
     private readonly List<(int Track, int Bus, MiniFader Fader)> _sendFaders = new();   // Large headers' sends
@@ -994,14 +995,15 @@ public sealed partial class ArrangementView : UserControl
     public void UpdateMeters()
     {
         if (_engine is not { } eng) return;
+        _meterBatch.Refresh(eng);
         foreach (var (id, bar) in _meters)
         {
-            if (eng.TryGetTrackMeter(id, out var m)) bar.Push(m);
+            if (_meterBatch.TryGet(id, out var m)) bar.Push(m);
             else bar.Reset();
         }
         foreach (var (id, bar) in _footerMeters)
         {
-            if (eng.TryGetTrackMeter(id, out var m)) bar.Push(m);
+            if (_meterBatch.TryGet(id, out var m)) bar.Push(m);
             else bar.Reset();
         }
         // The master level is the engine's master meter; the master *track* is only its effect chain.

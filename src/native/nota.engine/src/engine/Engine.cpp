@@ -1033,6 +1033,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     }
     if (g && authoring_ && transport_.uiIsPlaying()) releaseVanishedClipNotes(*authoring_, *g);
     if (g && authoring_) giveUpVanishedPluginLoads(*authoring_, *g);
+    if (g) applyTelemetryMode(*g, telemetryMode());
     authoring_ = g;
     if (g) ensureRenderScratch(g->tracks.size());
     // Fresh track objects only: the audio thread never sees them change. Before any CC target
@@ -1579,6 +1580,45 @@ bool Engine::trackMeter(int32_t trackId, float& peakL, float& peakR, float& rmsL
     rmsL = t->meterRmsL();
     rmsR = t->meterRmsR();
     return true;
+}
+
+int32_t Engine::readTrackMeters(NotaTrackMeterEntry* out, int32_t capacity) const {
+    if (!authoring_) return 0;
+    const auto& tracks = authoring_->tracks;
+    const int32_t total = static_cast<int32_t>(tracks.size());
+    if (out && capacity > 0) {
+        const int32_t n = std::min(total, capacity);
+        for (int32_t i = 0; i < n; ++i) {
+            const auto& t = tracks[i];
+            if (!t) {
+                out[i] = {};
+                out[i].track_id = -1;
+                continue;
+            }
+            out[i].track_id = t->id();
+            out[i].meter.peak_l = t->meterPeakL();
+            out[i].meter.peak_r = t->meterPeakR();
+            out[i].meter.rms_l = t->meterRmsL();
+            out[i].meter.rms_r = t->meterRmsR();
+        }
+    }
+    return total;
+}
+
+void Engine::applyTelemetryMode(const Graph& g, dsp::TelemetryMode mode) {
+    auto applyTrack = [mode](Track& t) {
+        if (t.instrument) t.instrument->setTelemetryMode(mode);
+        for (auto& d : t.devices)
+            if (d) d->setTelemetryMode(mode);
+    };
+    for (const auto& t : g.tracks)
+        if (t) applyTrack(*t);
+    if (g.masterTrack) applyTrack(*g.masterTrack);
+}
+
+void Engine::setTelemetryMode(dsp::TelemetryMode mode) {
+    telemetryMode_.store(mode, std::memory_order_relaxed);
+    if (authoring_) applyTelemetryMode(*authoring_, mode);
 }
 
 void Engine::masterMeter(float& peakL, float& peakR, float& rmsL, float& rmsR) const {

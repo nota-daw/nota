@@ -149,8 +149,8 @@ class AutoFilter : public Device {
         int lfoWave, float lfoMorph, double divBeats, bool retrig, double lfoDep, double smCoef, double baseOct,
         double resBase, double glide, bool toFreq, bool toRes, double nyq);
     // Shared telemetry tail (normal path and idle-skip path).
-    void publishTelemetry(std::chrono::steady_clock::time_point t0, double fcLast, double fcRLast, double resLast,
-        double lastLfoL, double lastPhase, bool held, bool lfoOn, float inPk, float outPk, int32_t frames, double sr);
+    void publishTelemetry(double fcLast, double fcRLast, double resLast, double lastLfoL, double lastPhase, bool held,
+        bool lfoOn, float inPk, float outPk, int32_t frames, double sr);
 
     // LFO shape at a given phase; morph skews the waveform (pulse width / slope).
     double lfoValue(int wave, float morph, double ph) const;
@@ -191,9 +191,8 @@ class AutoFilter : public Device {
     double histAcc_ = 0.0;
     float histEnvMax_ = 0.0f;
     std::atomic<uint32_t> onsets_{0};
-    double cpuS_ = 0.0;
     std::atomic<float> cutA_{0.5f}, cutRA_{0.5f}, resA_{0.1f}, envA_{0}, lfoA_{0}, lfoPhA_{0}, inPkA_{0}, outPkA_{0},
-        cpuA_{0}, srA_{44100.0f}, bpmA_{0}, heldA_{0};
+        srA_{44100.0f}, bpmA_{0}, heldA_{0};
 
     // Sidechain (engine hands the source buffer just before process()).
     std::atomic<int32_t> scTrackId_{-1};

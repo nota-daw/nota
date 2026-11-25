@@ -166,8 +166,7 @@ class Eq3 : public Device {
 
     // Meters (audio thread) and their published values.
     float inPk_ = 0.0f, outPk_ = 0.0f, bandPk_[3] = {};
-    double cpuS_ = 0.0;
-    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, cpuA_{0.0f}, srA_{44100.0f}, f1A_{250.0f}, f2A_{2500.0f};
+    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, srA_{44100.0f}, f1A_{250.0f}, f2A_{2500.0f};
     std::atomic<float> lvlA_[3];
     std::atomic<float> gA_[3];
     std::atomic<bool> resetPk_{false};

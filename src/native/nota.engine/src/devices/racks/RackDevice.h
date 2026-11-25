@@ -29,6 +29,10 @@ class RackDevice final : public Device, public RackCore {
     bool hostsPlugin() const override { return chainsHostPlugin(); }
 
     void setSampleRate(double sr, int32_t maxBlock) override { setRates(sr, maxBlock); }
+    void setTelemetryMode(dsp::TelemetryMode mode) override {
+        Device::setTelemetryMode(mode);
+        RackCore::setTelemetryMode(mode);
+    }
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }

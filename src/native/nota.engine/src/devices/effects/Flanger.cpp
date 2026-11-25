@@ -62,7 +62,7 @@ void Flanger::wake() {
 }
 
 void Flanger::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (restartReq_.exchange(false, std::memory_order_acquire)) {
         cycle_ = 0;
         frac_ = 0.0;
@@ -204,11 +204,6 @@ void Flanger::process(float* buf, int32_t frames) {
     playingA_.store(playing_ ? 1 : 0, std::memory_order_relaxed);
     lockedA_.store(locked ? 1 : 0, std::memory_order_relaxed);
     barA_.store((float)barBeats_, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 void Flanger::deviceAction(int32_t id, int32_t /*iarg*/, float /*farg*/) {
@@ -250,7 +245,7 @@ int32_t Flanger::scopeRead(float* out, int32_t maxSamples) const {
     t[S_PeakDb] = (float)cb.peakDb;
     t[S_DivBeats] = (float)kDivBeats[divIndex()];
     t[S_BarBeats] = barA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Signal] = t[S_InPeak] > -70.0f ? 1.0f : 0.0f;
     t[S_Cycles] = (float)cyc;
     int32_t n = 0;

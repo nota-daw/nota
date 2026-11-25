@@ -22,6 +22,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Changed
+- **Large-project meter polling and built-in device CPU timing** (#1050, specs/114) cut idle and UI
+  overhead without changing audio output. Desktop views (`ArrangementView`, `MixerView`,
+  `SessionView`) read all post-fader track meters in one engine snapshot (`nota_engine_read_track_meters`)
+  instead of per-track C ABI calls, and built-in devices and synths gate per-block clock
+  measurements behind `DeviceTelemetry` (`OnDemand` by default with a 3-second card-open lease,
+  plus `AlwaysOff` and `AlwaysOn`).
+
 ## [0.61.1] — 2026-11-24
 
 ### Added

@@ -224,6 +224,20 @@ typedef struct NotaMeter {
     float rms_r;
 } NotaMeter;
 
+/* Single track's post-fader level meter entry returned by nota_engine_read_track_meters. */
+typedef struct NotaTrackMeterEntry {
+    int32_t   track_id;
+    NotaMeter meter;
+} NotaTrackMeterEntry;
+
+/* Controls how built-in devices measure per-block CPU usage on the audio thread.
+ * On-demand (default) skips OS clock reads whenever no device card or scope is observing. */
+typedef enum NotaTelemetryMode {
+    NOTA_TELEMETRY_ON_DEMAND = 0,
+    NOTA_TELEMETRY_ALWAYS_OFF = 1,
+    NOTA_TELEMETRY_ALWAYS_ON = 2
+} NotaTelemetryMode;
+
 /* Library version string, e.g. "0.2.5" (from nota.engine/VERSION). Never NULL. */
 NOTA_API const char* nota_engine_version(void);
 
@@ -540,6 +554,11 @@ NOTA_API int32_t nota_engine_automation_overridden(const NotaEngine* engine);
  * Smoothed real-time render load, 0..1 (render time / audio block budget).
  * 0 when no live device is running. */
 NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
+
+/* Controls per-device CPU telemetry on the audio thread (NotaTelemetryMode).
+ * Safe to call while running; updates are lock-free (AR-6). */
+NOTA_API NotaResult nota_engine_set_device_telemetry(NotaEngine* engine, int32_t mode);
+NOTA_API int32_t    nota_engine_device_telemetry(const NotaEngine* engine);
 
 /* ---- Render threads -------------------------------------------------------
  * Dedicated threads that render tracks in parallel (the audio thread helps too).
@@ -2757,6 +2776,7 @@ NOTA_API int32_t    nota_pdc_selftest(void);
  * peak + RMS over the last processed block. track_meter returns 0 for an unknown
  * track id, else 1; master_meter always succeeds. Poll from the UI (~30 Hz). */
 NOTA_API int32_t    nota_engine_track_meter(const NotaEngine* engine, int32_t track_id, NotaMeter* out);
+NOTA_API int32_t    nota_engine_read_track_meters(const NotaEngine* engine, NotaTrackMeterEntry* out_entries, int32_t capacity);
 NOTA_API NotaResult nota_engine_master_meter(const NotaEngine* engine, NotaMeter* out);
 
 /* Cue (specs/089): a private mix for the performer on its own output pair (see

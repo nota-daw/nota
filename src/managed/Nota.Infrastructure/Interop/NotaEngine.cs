@@ -129,6 +129,15 @@ public sealed partial class NotaEngine : IAudioEngine
         return NativeMethods.TrackMeter(_handle, trackId, out meter) != 0;
     }
 
+    public unsafe int ReadTrackMeters(Span<TrackMeterReading> destination)
+    {
+        ThrowIfDisposed();
+        if (destination.IsEmpty)
+            return NativeMethods.ReadTrackMeters(_handle, null, 0);
+        fixed (TrackMeterReading* p = destination)
+            return NativeMethods.ReadTrackMeters(_handle, p, destination.Length);
+    }
+
     /// <summary>Post-fader peak/RMS of the master bus over the last block.</summary>
     public NotaMeter MasterMeter()
     {
@@ -408,6 +417,12 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Smoothed real-time DSP load, 0..1 (render time / block budget).</summary>
     public float CpuLoad
     { get { ThrowIfDisposed(); return NativeMethods.CpuLoad(_handle); } }
+
+    public DeviceTelemetryMode DeviceTelemetry
+    {
+        get { ThrowIfDisposed(); return (DeviceTelemetryMode)NativeMethods.DeviceTelemetry(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetDeviceTelemetry(_handle, (int)value)); }
+    }
 
     /// <summary>
     /// Dedicated parallel render threads (the audio thread helps too). Set while the device

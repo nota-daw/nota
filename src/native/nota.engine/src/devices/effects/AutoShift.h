@@ -319,10 +319,9 @@ class AutoShift : public Device {
     std::array<std::atomic<float>, 12> pcPub_{};
     std::array<std::array<float, kHist>, 3> hist_{};
     std::atomic<int> histW_{0};
-    std::atomic<float> pitchPub_{0.0f}, srA_{44100.0f}, cpuA_{0.0f}, ratioA_{1.0f}, midiLiveA_{0.0f};
+    std::atomic<float> pitchPub_{0.0f}, srA_{44100.0f}, ratioA_{1.0f}, midiLiveA_{0.0f};
     std::atomic<bool> resetReq_{false};
     std::atomic<int> learnReq_{0};
-    double cpuS_ = 0.0;
 };
 
 } // namespace nota

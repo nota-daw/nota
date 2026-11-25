@@ -152,9 +152,9 @@ void Prism::wake() {
 }
 
 void Prism::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
     if (frames <= 0) return;
     const double sr = sr_;
+    const auto cpuTimer = blockTimer(frames, sr);
 
     // ---- block parameters ----
     const float amount = get(Amount);
@@ -415,9 +415,6 @@ void Prism::process(float* buf, int32_t frames) {
     scActA_.store(sc != nullptr, std::memory_order_relaxed);
     xlA_.store(std::exp(xl_), std::memory_order_relaxed);
     xhA_.store(std::exp(xh_), std::memory_order_relaxed);
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    cpuS_ = cpuS_ * 0.9 + (el / (frames / sr)) * 0.1;
-    cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
 }
 
 const char* Prism::paramName(int32_t i) const {
@@ -458,7 +455,7 @@ int32_t Prism::scopeRead(float* out, int32_t maxSamples) const {
     out[S_OutL] = mOutL_.load(std::memory_order_relaxed);
     out[S_OutR] = mOutR_.load(std::memory_order_relaxed);
     out[S_InPeak] = mIn_.load(std::memory_order_relaxed);
-    out[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    out[S_Cpu] = readScopeCpuLoad();
     out[S_SampleRate] = srA_.load(std::memory_order_relaxed);
     out[S_Latency] = static_cast<float>(latencySamples());
     out[S_ScActive] = scActA_.load(std::memory_order_relaxed) ? 1.0f : 0.0f;

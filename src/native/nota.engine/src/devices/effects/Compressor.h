@@ -137,14 +137,14 @@ class Compressor : public Device {
     Chan ch_[2];
     std::vector<float> laBuf_;
     int laSize_ = 0, laW_ = 0;
-    double inMs_ = 0.0, outMs_ = 0.0, cpuS_ = 0.0;
+    double inMs_ = 0.0, outMs_ = 0.0;
     int envDecim_ = 44, envCnt_ = 0;
     float envIn_ = 0.0f, envGr_ = 0.0f;
     float envRing_[kEnvN] = {}, grRing_[kEnvN] = {}, keyRing_[kKeyN] = {};
     std::atomic<int> envW_{0}, keyW_{0};
     std::atomic<float> gr_{0.0f};
     std::atomic<float> inPkA_{0}, outPkA_{0}, keyPkA_{0}, inRmsA_{0}, outRmsA_{0}, extA_{0}, atkA_{0}, relA_{0},
-        srA_{44100.0f}, bpmA_{0}, cpuA_{0};
+        srA_{44100.0f}, bpmA_{0};
     std::atomic<int32_t> scTrackId_{-1};
     const float* scBuf_ = nullptr;
     int32_t scFrames_ = 0;

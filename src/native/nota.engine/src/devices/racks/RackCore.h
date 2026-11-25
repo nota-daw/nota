@@ -173,6 +173,9 @@ class RackCore {
     // Sample rate + max block; forwarded to every child. Message thread.
     void setRates(double sr, int32_t maxBlock);
 
+    // Telemetry mode propagation across chain instruments, devices, and nested racks. Message thread.
+    void setTelemetryMode(dsp::TelemetryMode mode);
+
     // ---- chain name (message thread; UI metadata) -------------------------
     std::string chainName(int32_t c) const {
         RackState* st = live();
@@ -527,14 +530,17 @@ class RackCore {
     std::atomic<float> liveSel_{0.5f};     // runtime selector position (audio writes, UI reads)
     double sampleRate_ = 44100.0;
     int32_t maxBlock_ = kMaxBlock;
+    dsp::TelemetryMode telemetryMode_ = dsp::TelemetryMode::OnDemand;
 
   private:
+    void propagateTelemetry(RackState& st) const;
     // duplicateChain: the keys and Arp targets the blob doesn't carry, from src to its copy.
     static void copyExternalLinks(const RackChain& src, RackChain& dst);
     std::shared_ptr<RackState> copyState() const {
         return authoring_ ? std::make_shared<RackState>(*authoring_) : std::make_shared<RackState>();
     }
     void commit(std::shared_ptr<RackState> ns) {
+        if (ns) propagateTelemetry(*ns);
         authoring_ = ns;
         states_.publish(std::move(ns));
     }

@@ -124,6 +124,7 @@ void Consort::controller(int32_t ctl, float value) {
 int32_t Consort::scopeRead(float* out, int32_t maxN) const {
     const int n = std::min<int>(maxN, kScopeN);
     for (int i = 0; i < n; ++i) out[i] = tele_[i].load(std::memory_order_relaxed);
+    if (n > ScCpu) out[ScCpu] = readScopeCpuLoad();
     return n;
 }
 
@@ -281,8 +282,8 @@ void Consort::noteOff(int32_t pitch) {
 
 void Consort::render(float* out, int32_t frames) {
     dsp::ScopedNoDenormals noDenormals;
-    const auto t0 = std::chrono::steady_clock::now();
     const double pr = pendingRate_.load(std::memory_order_relaxed);
+    const auto cpuTimer = blockTimer(frames, pr, 0.05);
     if (pr != sampleRate_) { // voices keep playing; only rate-derived state restarts
         sampleRate_ = pr;
         fadeLen_ = std::max(1, static_cast<int>(0.004 * sampleRate_));
@@ -311,9 +312,6 @@ void Consort::render(float* out, int32_t frames) {
     }
     if (quietSamples_ > (uint64_t)flight + kIdleSamples) idle_ = true;
     chunkOutPeak_ = 0.0f;
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    const double avail = frames / sampleRate_;
-    if (avail > 0.0) cpu_ += 0.05 * (el / avail - cpu_);
     publishTelemetry();
 }
 
@@ -1417,7 +1415,7 @@ void Consort::publishTelemetry() {
     tele_[ScActive].store(static_cast<float>(activeCount_), std::memory_order_relaxed);
     tele_[ScPeakL].store(peakL_, std::memory_order_relaxed);
     tele_[ScPeakR].store(peakR_, std::memory_order_relaxed);
-    tele_[ScCpu].store(static_cast<float>(cpu_), std::memory_order_relaxed);
+    tele_[ScCpu].store(telemetryCpuLoad(), std::memory_order_relaxed);
     tele_[ScOs].store(static_cast<float>(osCur_), std::memory_order_relaxed);
     tele_[ScRate].store(static_cast<float>(sampleRate_), std::memory_order_relaxed);
     tele_[ScStep].store(seqRun_ ? static_cast<float>(curIdx_) : -1.0f, std::memory_order_relaxed);
